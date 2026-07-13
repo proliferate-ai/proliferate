@@ -292,6 +292,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/github-app/connected": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Github App Connected Page Endpoint */
+        get: operations["github_app_connected_page_endpoint_auth_github_app_connected_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/integrations/github/callback": {
         parameters: {
             query?: never;
@@ -1681,6 +1698,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/runtime/download/{target}/{asset}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Runtime Artifact Download Endpoint
+         * @description 302 to the pinned AnyHarness binary (or its ``.sha256``) on the downloads CDN.
+         *
+         *     Unauthenticated by design, like the worker artifact redirect: the sandbox
+         *     worker fetches the runtime binary over a public CDN URL behind this 302, so
+         *     the sandbox never needs GitHub egress or credentials.
+         */
+        get: operations["runtime_artifact_download_endpoint_v1_cloud_runtime_download__target___asset__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/integration-gateway/mcp": {
         parameters: {
             query?: never;
@@ -2017,6 +2058,23 @@ export interface paths {
         put?: never;
         /** Complete Support Report Upload Endpoint */
         post: operations["complete_support_report_upload_endpoint_v1_support_reports__report_id__complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/support/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Support Report Feed */
+        get: operations["list_support_report_feed_internal_support_reports_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4070,6 +4128,22 @@ export interface components {
             /** Path */
             path: string;
         };
+        /**
+         * DeploymentIdentity
+         * @description How this control plane identifies itself.
+         *
+         *     ``mode`` mirrors the desktop telemetry runtime modes. ``displayName`` is the
+         *     operator's instance name; empty means "use the connected origin" so the
+         *     desktop never mislabels a self-managed server as the vendor product.
+         */
+        DeploymentIdentity: {
+            /** Mode */
+            mode: string;
+            /** Displayname */
+            displayName: string;
+            /** Logourl */
+            logoUrl: string | null;
+        };
         /** DesktopWorkerEnrollmentRequest */
         DesktopWorkerEnrollmentRequest: {
             /** Desktopinstallid */
@@ -4420,6 +4494,7 @@ export interface components {
             workerVersion: string;
             /** Mindesktopversion */
             minDesktopVersion: string;
+            capabilities: components["schemas"]["ServerCapabilities"];
         };
         /** OAuthAvailabilityResponse */
         OAuthAvailabilityResponse: {
@@ -5004,6 +5079,16 @@ export interface components {
             proBillingEnabled: boolean;
         };
         /**
+         * PricingCapability
+         * @description Whether a vendor pricing page is meaningful for this deployment.
+         */
+        PricingCapability: {
+            /** Available */
+            available: boolean;
+            /** Url */
+            url: string | null;
+        };
+        /**
          * ProfileUpdateRequest
          * @description Editable fields on the authenticated user's own profile.
          *
@@ -5154,6 +5239,30 @@ export interface components {
              */
             runCommand: string;
         };
+        /**
+         * ServerCapabilities
+         * @description Versioned, conservative declaration of what this deployment offers.
+         *
+         *     Defaults are disabled: a capability is true only when the operator
+         *     configured the underlying feature. The desktop treats an absent contract
+         *     (older servers) as all-off + self-managed.
+         */
+        ServerCapabilities: {
+            /** Contractversion */
+            contractVersion: number;
+            deployment: components["schemas"]["DeploymentIdentity"];
+            /** Billing */
+            billing: boolean;
+            /** Usagemetering */
+            usageMetering: boolean;
+            /** Cloudworkspaces */
+            cloudWorkspaces: boolean;
+            /** Agentgateway */
+            agentGateway: boolean;
+            webApp: components["schemas"]["WebAppCapability"];
+            support: components["schemas"]["SupportCapability"];
+            pricing: components["schemas"]["PricingCapability"];
+        };
         /** SetIntegrationEnabledRequest */
         SetIntegrationEnabledRequest: {
             /** Enabled */
@@ -5287,6 +5396,77 @@ export interface components {
             /** Livemode */
             livemode?: boolean | null;
         };
+        /**
+         * SupportCapability
+         * @description Where a user of this deployment should go for support.
+         *
+         *     ``vendor`` is the hosted product's own support; ``operator`` is a
+         *     self-managed operator's configured destination; ``none`` means the desktop
+         *     offers no support-email affordance for this server.
+         */
+        SupportCapability: {
+            /** Kind */
+            kind: string;
+            /** Email */
+            email: string | null;
+            /** Url */
+            url: string | null;
+        };
+        /** SupportFeedItem */
+        SupportFeedItem: {
+            /** Reportid */
+            reportId: string;
+            /**
+             * Submittedat
+             * Format: date-time
+             */
+            submittedAt: string;
+            /**
+             * Completedat
+             * Format: date-time
+             */
+            completedAt: string;
+            /** Owneruserid */
+            ownerUserId: string;
+            /** Kind */
+            kind: string;
+            /** Summary */
+            summary?: string | null;
+            /** Releaseid */
+            releaseId?: string | null;
+            /** Releasewarning */
+            releaseWarning?: string | null;
+            /** Notifyme */
+            notifyMe: boolean;
+            /** Creditconsent */
+            creditConsent: boolean;
+            /** Creditname */
+            creditName?: string | null;
+            /** Outreachoverride */
+            outreachOverride?: string | null;
+            /** Privatecasereference */
+            privateCaseReference: string;
+            /** Sentryevents */
+            sentryEvents?: components["schemas"]["SupportFeedSentryEvent"][];
+            /** Cursor */
+            cursor: string;
+        };
+        /** SupportFeedPage */
+        SupportFeedPage: {
+            /** Items */
+            items: components["schemas"]["SupportFeedItem"][];
+            /** Nextcursor */
+            nextCursor?: string | null;
+            /** Hasmore */
+            hasMore: boolean;
+        };
+        /** SupportFeedSentryEvent */
+        SupportFeedSentryEvent: {
+            /** Project */
+            project: string;
+            /** Eventid */
+            eventId: string;
+        };
         /** SupportMessageContext */
         SupportMessageContext: {
             /**
@@ -5408,6 +5588,8 @@ export interface components {
             creditConsent: boolean;
             /** Creditname */
             creditName?: string | null;
+            /** Clientreleaseid */
+            clientReleaseId?: string | null;
             /**
              * Urgent
              * @default false
@@ -5485,6 +5667,8 @@ export interface components {
             posthogDistinctId?: string | null;
             /** Posthogsessionid */
             posthogSessionId?: string | null;
+            /** Sentryevents */
+            sentryEvents?: components["schemas"]["SupportSentryEventReference"][];
             /** Sentryeventids */
             sentryEventIds?: string[];
         };
@@ -5531,6 +5715,9 @@ export interface components {
             creditConsent: boolean;
             /** Creditname */
             creditName?: string | null;
+            /** Clientreleaseid */
+            clientReleaseId?: string | null;
+            telemetryRefs?: components["schemas"]["SupportReportTelemetryReferences"] | null;
         };
         /** SupportReportUploadResponse */
         SupportReportUploadResponse: {
@@ -5603,6 +5790,13 @@ export interface components {
             kind: "most_recent_workspace" | "choose_workspace" | "app_only";
             /** Workspaceids */
             workspaceIds?: string[];
+        };
+        /** SupportSentryEventReference */
+        SupportSentryEventReference: {
+            /** Project */
+            project: string;
+            /** Eventid */
+            eventId: string;
         };
         /** TeamCheckoutIntentResponse */
         TeamCheckoutIntentResponse: {
@@ -5732,10 +5926,7 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            /**
-             * Email
-             * Format: email
-             */
+            /** Email */
             email: string;
             /**
              * Is Active
@@ -5782,6 +5973,19 @@ export interface components {
             ctx?: Record<string, never>;
         };
         /**
+         * WebAppCapability
+         * @description Whether a hosted web app exists for this deployment, and where it lives.
+         *
+         *     Self-managed deployments have no hosted web app (users connect the signed
+         *     desktop app), so ``available`` is false and the desktop hides web handoffs.
+         */
+        WebAppCapability: {
+            /** Available */
+            available: boolean;
+            /** Baseurl */
+            baseUrl: string | null;
+        };
+        /**
          * WorkerDesiredVersions
          * @description The component versions this server pins; workers converge onto these.
          */
@@ -5789,7 +5993,7 @@ export interface components {
             /** Worker */
             worker?: string | null;
             /** Anyharness */
-            anyharness: string;
+            anyharness?: string | null;
             /** Catalogversion */
             catalogVersion?: string | null;
         };
@@ -6610,10 +6814,10 @@ export interface operations {
     };
     github_app_installation_callback_endpoint_auth_github_app_installation_callback_get: {
         parameters: {
-            query: {
+            query?: {
                 installation_id?: string | null;
                 setup_action?: string | null;
-                state: string;
+                state?: string | null;
             };
             header?: never;
             path?: never;
@@ -6641,12 +6845,32 @@ export interface operations {
             };
         };
     };
+    github_app_connected_page_endpoint_auth_github_app_connected_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+        };
+    };
     github_app_setup_callback_endpoint_integrations_github_callback_get: {
         parameters: {
-            query: {
+            query?: {
                 installation_id?: string | null;
                 setup_action?: string | null;
-                state: string;
+                state?: string | null;
             };
             header?: never;
             path?: never;
@@ -9603,6 +9827,38 @@ export interface operations {
             };
         };
     };
+    runtime_artifact_download_endpoint_v1_cloud_runtime_download__target___asset__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target: string;
+                asset: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     integration_gateway_mcp_get_v1_cloud_integration_gateway_mcp_get: {
         parameters: {
             query?: never;
@@ -10301,6 +10557,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SupportReportCompleteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_support_report_feed_internal_support_reports_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportFeedPage"];
                 };
             };
             /** @description Validation Error */

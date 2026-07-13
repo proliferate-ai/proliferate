@@ -7,11 +7,34 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.db.models.auth import User
 from proliferate.db.models.support import SupportReport
 from proliferate.utils.time import utcnow
+
+
+@dataclass(frozen=True)
+class SupportFeedReportRow:
+    """Privacy-safe projection of a completed report for the internal feed.
+
+    Only fields the feed may expose are read. The account email is never
+    selected; ``owner_outreach_email`` is the explicit outreach override only.
+    """
+
+    id: str
+    owner_user_id: UUID
+    kind: str
+    tracker_summary: str | None
+    client_release_id: str | None
+    notify_me: bool
+    credit_consent: bool
+    credit_name: str | None
+    owner_outreach_email: str | None
+    telemetry_refs: dict[str, object]
+    created_at: datetime
+    completed_at: datetime
 
 
 @dataclass(frozen=True)
@@ -35,6 +58,8 @@ class SupportReportSnapshot:
     kind: str
     credit_consent: bool
     credit_name: str | None
+    client_release_id: str | None
+    tracker_summary: str | None
     urgent: bool
     notify_me: bool
     request_id: str | None
@@ -117,6 +142,8 @@ async def create_report(
     kind: str,
     credit_consent: bool,
     credit_name: str | None = None,
+    client_release_id: str | None = None,
+    tracker_summary: str | None = None,
     urgent: bool = False,
     notify_me: bool = False,
     request_id: str | None = None,
@@ -143,6 +170,8 @@ async def create_report(
         kind=kind,
         credit_consent=credit_consent,
         credit_name=credit_name,
+        client_release_id=client_release_id,
+        tracker_summary=tracker_summary,
         urgent=urgent,
         notify_me=notify_me,
         request_id=request_id,
@@ -381,6 +410,55 @@ async def mark_tracker_slack_notified(
     return _snapshot(row)
 
 
+async def list_completed_reports_for_feed(
+    db: AsyncSession,
+    *,
+    after_completed_at: datetime | None,
+    after_id: str | None,
+    limit: int,
+) -> list[SupportFeedReportRow]:
+    """Return completed reports ordered by ``(completed_at, id)``.
+
+    An empty cursor (both bounds ``None``) starts from the oldest completion.
+    The caller reads ``limit + 1`` to determine ``hasMore``.
+    """
+
+    query = (
+        select(SupportReport, User.outreach_email)
+        .join(User, User.id == SupportReport.owner_user_id)
+        .where(
+            SupportReport.status == "completed",
+            SupportReport.completed_at.is_not(None),
+        )
+        .order_by(SupportReport.completed_at.asc(), SupportReport.id.asc())
+        .limit(limit)
+    )
+    if after_completed_at is not None and after_id is not None:
+        query = query.where(
+            tuple_(SupportReport.completed_at, SupportReport.id) > (after_completed_at, after_id)
+        )
+    rows = (await db.execute(query)).all()
+    return [_feed_row(report, outreach_email) for report, outreach_email in rows]
+
+
+def _feed_row(row: SupportReport, owner_outreach_email: str | None) -> SupportFeedReportRow:
+    assert row.completed_at is not None
+    return SupportFeedReportRow(
+        id=row.id,
+        owner_user_id=row.owner_user_id,
+        kind=row.kind,
+        tracker_summary=row.tracker_summary,
+        client_release_id=row.client_release_id,
+        notify_me=row.notify_me,
+        credit_consent=row.credit_consent,
+        credit_name=row.credit_name,
+        owner_outreach_email=owner_outreach_email,
+        telemetry_refs=_dict_json(row.telemetry_refs_json),
+        created_at=row.created_at,
+        completed_at=row.completed_at,
+    )
+
+
 async def _require_report_row(db: AsyncSession, report_id: str) -> SupportReport:
     row = await db.get(SupportReport, report_id)
     if row is None:
@@ -415,6 +493,8 @@ def _snapshot(row: SupportReport) -> SupportReportSnapshot:
         kind=row.kind,
         credit_consent=row.credit_consent,
         credit_name=row.credit_name,
+        client_release_id=row.client_release_id,
+        tracker_summary=row.tracker_summary,
         urgent=row.urgent,
         notify_me=row.notify_me,
         request_id=row.request_id,

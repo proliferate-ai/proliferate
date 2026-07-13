@@ -6,7 +6,14 @@ from types import SimpleNamespace
 from proliferate.server.support.domain.report_records import support_request_record
 
 
-def _fake_report(*, urgent: bool, notify_me: bool) -> SimpleNamespace:
+def _fake_report(
+    *,
+    urgent: bool,
+    notify_me: bool,
+    kind: str = "bug",
+    credit_consent: bool = False,
+    credit_name: str | None = None,
+) -> SimpleNamespace:
     return SimpleNamespace(
         id="report_abc",
         client_job_id="job_abc",
@@ -18,6 +25,9 @@ def _fake_report(*, urgent: bool, notify_me: bool) -> SimpleNamespace:
         object_manifest={},
         expected_uploads={"diagnostics": True, "attachmentCount": 0},
         public_content_consent=False,
+        kind=kind,
+        credit_consent=credit_consent,
+        credit_name=credit_name,
         urgent=urgent,
         notify_me=notify_me,
     )
@@ -36,6 +46,27 @@ def test_support_request_record_includes_urgent_and_notify_me() -> None:
     assert record["urgent"] is True
     assert record["notifyMe"] is True
     assert record["message"] == "Prod is down."
+
+
+def test_support_request_record_includes_kind_and_credit_fields() -> None:
+    record = support_request_record(
+        report=_fake_report(
+            urgent=False,
+            notify_me=False,
+            kind="feature",
+            credit_consent=True,
+            credit_name="Ada Lovelace",
+        ),
+        sender_email="support@example.com",
+        sender_display_name="Support Tester",
+        message="Please add this.",
+        scope={"kind": "app_only", "workspaceIds": []},
+        correlation={"reportId": "report_abc"},
+    )
+
+    assert record["kind"] == "feature"
+    assert record["creditConsent"] is True
+    assert record["creditName"] == "Ada Lovelace"
 
 
 def test_support_request_record_defaults_capture_flags_false() -> None:

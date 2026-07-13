@@ -943,6 +943,18 @@
   description: Internal support-report viewer URL prefix; Slack, GitHub, and Linear receive only this report URL or report ID, never S3 keys
   tags: [production]
 
+- name: SUPPORT_FEED_BEARER_TOKEN
+  secret: true
+  default: ""
+  description: Dedicated Bearer key for the private completed-report feed (GET /internal/support/reports); empty rejects every request so the route is dark-deployable
+  tags: [production]
+
+- name: SUPPORT_REPORT_REQUIRE_CLIENT_RELEASE
+  secret: false
+  default: "false"
+  description: When true, report completion rejects a missing or malformed canonical client release ID; off by default until clients emit their release IDs
+  tags: [production]
+
 - name: SUPPORT_TRACKER_ENABLED
   secret: false
   default: "false"

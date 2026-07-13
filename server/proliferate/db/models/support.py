@@ -98,6 +98,13 @@ class SupportReport(Base):
     kind: Mapped[str] = mapped_column(String(32), server_default="bug", default="bug")
     credit_consent: Mapped[bool] = mapped_column(Boolean, server_default="false", default=False)
     credit_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # Immutable canonical client release ID (<component>@<semver>+<12-char-sha>)
+    # captured with the report intent. NULL for legacy/malformed values, which
+    # remain feedable with a visible warning.
+    client_release_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Server-produced, scrubbed, bounded (<=240 char) summary derived from the
+    # report message. It never substitutes for the private report body.
+    tracker_summary: Mapped[str | None] = mapped_column(String(240), nullable=True)
     urgent: Mapped[bool] = mapped_column(Boolean, server_default="false", default=False)
     notify_me: Mapped[bool] = mapped_column(Boolean, server_default="false", default=False)
     request_id: Mapped[str | None] = mapped_column(String(128), nullable=True)

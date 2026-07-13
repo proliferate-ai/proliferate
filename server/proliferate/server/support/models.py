@@ -68,6 +68,11 @@ class SupportReportWorkspaceReference(BaseModel):
     sandbox_type: str | None = Field(default=None, alias="sandboxType", max_length=128)
 
 
+class SupportSentryEventReference(BaseModel):
+    project: str = Field(min_length=1, max_length=128)
+    event_id: str = Field(alias="eventId", min_length=1, max_length=128)
+
+
 class SupportReportTelemetryReferences(BaseModel):
     posthog_distinct_id: str | None = Field(
         default=None,
@@ -79,6 +84,13 @@ class SupportReportTelemetryReferences(BaseModel):
         alias="posthogSessionId",
         max_length=255,
     )
+    # Canonical {project, eventId} Sentry references. Clients should send these
+    # so the tracker can resolve the exact Sentry issue.
+    sentry_events: list[SupportSentryEventReference] = Field(
+        default_factory=list, alias="sentryEvents", max_length=20
+    )
+    # Legacy project-less event IDs. Insufficient to form a pair; retained for
+    # later bounded backfill and never guessed into a project.
     sentry_event_ids: list[str] = Field(
         default_factory=list, alias="sentryEventIds", max_length=20
     )
@@ -115,6 +127,9 @@ class SupportReportCreateRequest(BaseModel):
     kind: Literal["bug", "feature"] = Field(default="bug")
     credit_consent: bool = Field(default=False, alias="creditConsent")
     credit_name: str | None = Field(default=None, alias="creditName", max_length=200)
+    # Canonical client release ID (<component>@<semver>+<12-char-sha>) captured
+    # with the immutable report intent. Malformed/absent values store as NULL.
+    client_release_id: str | None = Field(default=None, alias="clientReleaseId", max_length=255)
     urgent: bool = Field(default=False, alias="urgent")
     notify_me: bool = Field(default=False, alias="notifyMe")
 
@@ -171,6 +186,11 @@ class SupportReportUploadRequest(BaseModel):
     kind: Literal["bug", "feature"] = Field(default="bug")
     credit_consent: bool = Field(default=False, alias="creditConsent")
     credit_name: str | None = Field(default=None, alias="creditName", max_length=200)
+    client_release_id: str | None = Field(default=None, alias="clientReleaseId", max_length=255)
+    telemetry_refs: SupportReportTelemetryReferences | None = Field(
+        default=None,
+        alias="telemetryRefs",
+    )
 
 
 class SupportReportUploadTargetsRequest(BaseModel):
