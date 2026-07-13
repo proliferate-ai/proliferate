@@ -38,10 +38,15 @@ import { COLLECTOR_REGISTRY, type CollectorRegistryEntry } from "./registry.js";
 function collectorCellSpecs(
   scenarioId: string,
   registry: readonly CollectorRegistryEntry[],
+  requireCore: boolean,
 ): CellSpec[] {
   const specs: CellSpec[] = [];
   for (const entry of registry) {
     if (entry.scenarioId !== scenarioId) continue;
+    // A foundation-partial collector can never satisfy a collected/enforced
+    // manifest row: presence is not coverage, and an honest vertical slice
+    // (narrower scope or superseded semantics) must not promote the core row.
+    if (requireCore && entry.coverage !== "core") continue;
     for (const cell of entry.cells) {
       specs.push({
         scenarioId: cell.scenarioId,
@@ -117,11 +122,15 @@ export function resolveMergeSelection(
   for (const row of parsed.manifest.requiredScenarios) {
     if (row.tier !== 2) continue;
     if (isCollectedOrEnforced(row.implementation.status)) {
-      const specs = collectorCellSpecs(row.id, registry);
+      const specs = collectorCellSpecs(row.id, registry, true);
       if (specs.length === 0) {
+        const partialOnly = registry.some((e) => e.scenarioId === row.id);
         problems.push(
-          `Tier 2 row "${row.id}" claims ${row.implementation.status} but no collector is registered; ` +
-            "selection cannot fabricate its cell identity",
+          partialOnly
+            ? `Tier 2 row "${row.id}" claims ${row.implementation.status} but only foundation-partial ` +
+              "collectors exist; a partial vertical slice cannot satisfy the core row"
+            : `Tier 2 row "${row.id}" claims ${row.implementation.status} but no collector is registered; ` +
+              "selection cannot fabricate its cell identity",
         );
         continue;
       }
@@ -185,7 +194,7 @@ export function resolveReleaseSelection(
         );
         continue;
       }
-      const specs = collectorCellSpecs(row.id, registry);
+      const specs = collectorCellSpecs(row.id, registry, true);
       if (specs.length > 0) {
         // Exact executable identities from the collector; every emitted cell
         // must sit in a journey-derived world for this guarantee.
@@ -232,7 +241,7 @@ export function resolveReleaseSelection(
     // Collected/enforced: the registered collector owns the exact executable
     // cell identity (host + dimensions). A coverage claim without a collector
     // cannot be selected — selection never fabricates identity.
-    const specs = collectorCellSpecs(trigger.scenarioId, registry);
+    const specs = collectorCellSpecs(trigger.scenarioId, registry, true);
     if (specs.length === 0) {
       problems.push(
         `triggered Tier 4 id "${trigger.scenarioId}" is ${status} but no collector is registered; ` +

@@ -255,7 +255,17 @@ test("release deferred derivation is exact and rides through the plan + evidence
   const provisioners = new Map<WorldId, WorldProvisioner>([["tier-2", new FakeTier2Provisioner()]]);
   const cellRunners: CellRunner[] = [greenRunner(cell)];
   const collectorRegistry = [
-    { scenarioId: "T3-CHAT-1", cells: [cell], cellKeys: [cellKey(cell)], collectorRef: "fixture://chat" },
+    {
+      scenarioId: "T3-CHAT-1",
+      cells: [cell],
+      cellKeys: [cellKey(cell)],
+      collectorRef: "fixture://chat",
+      coverage: "core" as const,
+      gate: "release" as const,
+      evidence: "fixture",
+      world: "tier-2" as const,
+      createRunners: () => [],
+    },
   ];
   const result = await runFoundationCli(
     ["--selector", "release", "--behavior", "strict", "--candidate-manifest", manifestPath, "--output-dir", outputDir],

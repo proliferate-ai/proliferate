@@ -24,7 +24,7 @@ import { buildPlan } from "../foundation/runner/plan-builder.js";
 import { loadScenarioManifest } from "../foundation/manifest/load.js";
 import { defaultScenarioManifestPath } from "../foundation/manifest/paths.js";
 import { resolveSelection, type Tier4Trigger } from "../foundation/manifest/selectors.js";
-import type { CollectorRegistryEntry } from "../foundation/manifest/registry.js";
+import { runnersForPlan, COLLECTOR_DEFINITIONS, type CollectorRegistryEntry } from "../foundation/manifest/registry.js";
 import { createRunIdentity, createShardIdentity } from "../foundation/runner/identity.js";
 import { FileCleanupLedger } from "../foundation/ledger/file-ledger.js";
 import { CleanupRunner } from "../foundation/ledger/reconcile.js";
@@ -170,6 +170,15 @@ export async function runFoundationCli(
     availableArtifactSlots: availableCandidateSlots(candidate, isPlatformKey(hostPlatform) ? hostPlatform : undefined),
   };
 
+  // Default cell runners come from the canonical executable collector
+  // definitions — the production CLI is never an empty registry when
+  // definitions exist for the selected cells. Tests may still inject.
+  const defaultRunners = runnersForPlan(
+    new Set(fullPlan.cells.map((c) => c.cellKey)),
+    { run, shard, candidate, retained },
+    deps.collectorRegistry ?? COLLECTOR_DEFINITIONS,
+  );
+
   const { evaluation, evidence: emitted, aggregate } = await runFoundation({
     run,
     shard,
@@ -177,7 +186,7 @@ export async function runFoundationCli(
     candidate,
     retained,
     provisioners: deps.provisioners ?? new Map(),
-    cellRunners: deps.cellRunners ?? [],
+    cellRunners: deps.cellRunners ?? defaultRunners,
     preflightSource,
     ledger,
     evidence,

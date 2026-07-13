@@ -26,14 +26,24 @@ function main(): void {
       `${COLLECTOR_REGISTRY.length} registered collectors`,
   );
 
+  // Truthful coverage breakdown — printed on every run so honest gaps are
+  // never hidden behind a bare "OK".
+  console.log(`  core-covered (collected/enforced + core collector): ${fmt(report.coreCoveredScenarioIds)}`);
+  console.log(`  planned rows with a core collector awaiting a deliberate status flip: ${fmt(report.plannedCoreCollectors)}`);
+  console.log(`  foundation-partial collectors (diagnostic slices, never row coverage): ${fmt(report.foundationPartial)}`);
+
   if (report.ok) {
-    console.log("  OK: manifest and collector registry agree.");
+    console.log("  OK: no coverage claim is unbacked and no collector is orphaned/duplicated.");
     return;
   }
 
   console.log(`\n${report.defects.length} defect(s):`);
   for (const defect of report.defects) console.log(`  - ${defect}`);
   process.exitCode = 1;
+}
+
+function fmt(ids: readonly string[]): string {
+  return ids.length === 0 ? "none" : `${ids.length} [${ids.join(", ")}]`;
 }
 
 main();

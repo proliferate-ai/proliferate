@@ -5,7 +5,9 @@ import { parseScenarioManifest } from "./load.js";
 import type { ParsedManifest } from "./types.js";
 import { auditCollectors } from "./audit.js";
 import type { CollectorRegistryEntry } from "./registry.js";
-import { COLLECTOR_REGISTRY } from "./registry.js";
+import type { WorldId, ProductHost } from "../contracts/identity.js";
+import { COLLECTOR_DEFINITIONS } from "./registry.js";
+import { resolveMergeSelection } from "./selectors.js";
 import { loadScenarioManifest } from "./load.js";
 import { defaultScenarioManifestPath } from "./paths.js";
 import { cellKey } from "../contracts/identity.js";
@@ -40,13 +42,33 @@ function manifestWith(statuses: {
   });
 }
 
+
+function fixtureDef(
+  scenarioId: string,
+  cells: readonly { scenarioId: string; world: WorldId; productHost: ProductHost | null; dimensions: Record<string, string> }[],
+  collectorRef: string,
+  coverage: "core" | "foundation-partial" = "core",
+): CollectorRegistryEntry {
+  return {
+    scenarioId,
+    cells,
+    cellKeys: cells.map((c) => cellKey(c)),
+    collectorRef,
+    coverage,
+    gate: "merge",
+    evidence: "fixture",
+    world: cells[0]?.world ?? "tier-2",
+    createRunners: () => [],
+  };
+}
+
 const CHAT_CELL = { scenarioId: "T3-CHAT-1", world: "managed-cloud", productHost: "hosted-web", dimensions: {} } as const;
 const CHAT_KEY = cellKey(CHAT_CELL);
 
 test("audit passes when a collected row has a matching collector", () => {
   const parsed = manifestWith({ chat: "collected" });
   const registry: CollectorRegistryEntry[] = [
-    { scenarioId: "T3-CHAT-1", cells: [CHAT_CELL], cellKeys: [CHAT_KEY], collectorRef: "src/.../chat.ts" },
+    fixtureDef("T3-CHAT-1", [CHAT_CELL], "src/.../chat.ts"),
   ];
   const report = auditCollectors(parsed, registry);
   assert.ok(report.ok, report.defects.join("; "));
@@ -68,7 +90,7 @@ test("(a) a planned row without a collector is fine (planned means no collector)
 test("(a) a collected journey without a collector fails the audit", () => {
   const parsed = manifestWith({ chat: "collected", journey: "collected" });
   const registry: CollectorRegistryEntry[] = [
-    { scenarioId: "T3-CHAT-1", cells: [CHAT_CELL], cellKeys: [CHAT_KEY], collectorRef: "src/.../chat.ts" },
+    fixtureDef("T3-CHAT-1", [CHAT_CELL], "src/.../chat.ts"),
   ];
   const report = auditCollectors(parsed, registry);
   assert.equal(report.ok, false);
@@ -78,13 +100,12 @@ test("(a) a collected journey without a collector fails the audit", () => {
 test("(b) a collector naming an unknown scenario id fails the audit", () => {
   const parsed = manifestWith({ chat: "collected" });
   const registry: CollectorRegistryEntry[] = [
-    { scenarioId: "T3-CHAT-1", cells: [CHAT_CELL], cellKeys: [CHAT_KEY], collectorRef: "src/.../chat.ts" },
-    {
-      scenarioId: "T3-GHOST-1",
-      cells: [{ scenarioId: "T3-GHOST-1", world: "managed-cloud", productHost: null, dimensions: {} }],
-      cellKeys: ["managed-cloud/T3-GHOST-1/-/-"],
-      collectorRef: "src/.../ghost.ts",
-    },
+    fixtureDef("T3-CHAT-1", [CHAT_CELL], "src/.../chat.ts"),
+    fixtureDef(
+      "T3-GHOST-1",
+      [{ scenarioId: "T3-GHOST-1", world: "managed-cloud", productHost: null, dimensions: {} }],
+      "src/.../ghost.ts",
+    ),
   ];
   const report = auditCollectors(parsed, registry);
   assert.equal(report.ok, false);
@@ -94,8 +115,8 @@ test("(b) a collector naming an unknown scenario id fails the audit", () => {
 test("(c) two collectors claiming one cell key fail the audit", () => {
   const parsed = manifestWith({ chat: "collected" });
   const registry: CollectorRegistryEntry[] = [
-    { scenarioId: "T3-CHAT-1", cells: [CHAT_CELL], cellKeys: [CHAT_KEY], collectorRef: "src/.../chat-a.ts" },
-    { scenarioId: "T3-CHAT-1", cells: [CHAT_CELL], cellKeys: [CHAT_KEY], collectorRef: "src/.../chat-b.ts" },
+    fixtureDef("T3-CHAT-1", [CHAT_CELL], "src/.../chat-a.ts"),
+    fixtureDef("T3-CHAT-1", [CHAT_CELL], "src/.../chat-b.ts"),
   ];
   const report = auditCollectors(parsed, registry);
   assert.equal(report.ok, false);
@@ -108,8 +129,82 @@ test("the shipped registry agrees with the real manifest", () => {
   // two collectors may claim one cell — the guarantee `pnpm run manifest-audit`
   // gives, asserted in a test so it cannot regress silently.
   const parsed = loadScenarioManifest(defaultScenarioManifestPath());
-  const report = auditCollectors(parsed, COLLECTOR_REGISTRY);
+  const report = auditCollectors(parsed, COLLECTOR_DEFINITIONS);
   assert.equal(report.orphanCollectorScenarioIds.length, 0, report.defects.join("; "));
   assert.equal(report.duplicateCellKeys.length, 0, report.defects.join("; "));
   assert.ok(report.ok, report.defects.join("; "));
+});
+
+// ── Truthful coverage classification (post-review acceptance) ──
+
+test("a collected row backed ONLY by a foundation-partial collector is a defect, never OK", () => {
+  const parsed = manifestWith({ chat: "collected" });
+  const registry: CollectorRegistryEntry[] = [
+    fixtureDef("T3-CHAT-1", [CHAT_CELL], "src/.../chat.ts", "foundation-partial"),
+  ];
+  const report = auditCollectors(parsed, registry);
+  assert.equal(report.ok, false);
+  assert.deepEqual(report.partialOnlyCoreClaims, ["T3-CHAT-1"]);
+  assert.ok(report.defects.some((d) => d.includes("partial slice cannot satisfy the core row")));
+});
+
+test("a core collector pointing at a planned row is visible, not hidden behind OK", () => {
+  const parsed = manifestWith({ chat: "planned" });
+  const registry: CollectorRegistryEntry[] = [
+    fixtureDef("T3-CHAT-1", [CHAT_CELL], "src/.../chat.ts", "core"),
+  ];
+  const report = auditCollectors(parsed, registry);
+  // Not a defect (planned means planned), but enumerated.
+  assert.equal(report.ok, true);
+  assert.deepEqual(report.plannedCoreCollectors, ["T3-CHAT-1"]);
+  assert.deepEqual(report.coreCoveredScenarioIds, []);
+});
+
+// ── REAL-manifest regressions: the actual build-out state stays honest. ──
+
+test("REAL MANIFEST: every row is currently planned, so nothing is core-covered and every collector is visible", () => {
+  const parsed = loadScenarioManifest(defaultScenarioManifestPath());
+  const report = auditCollectors(parsed, COLLECTOR_DEFINITIONS);
+  assert.equal(report.ok, true, report.defects.join("; "));
+  // No row claims collected/enforced yet, so the core-covered set is empty …
+  assert.deepEqual(report.coreCoveredScenarioIds, []);
+  // … the T2-AUTH-1 core collector is visibly waiting on a deliberate status
+  // flip rather than silently 'agreeing' …
+  assert.ok(report.plannedCoreCollectors.includes("T2-AUTH-1"));
+  // … and both partial slices are enumerated as diagnostics, never coverage.
+  assert.ok(report.foundationPartial.includes("T2-BILL-1"));
+  assert.ok(report.foundationPartial.includes("LOCAL-2"));
+});
+
+test("REAL MANIFEST: a foundation-partial collector cannot promote its core guarantee even if the row were flipped", () => {
+  // Simulate the wrong flip: T2-BILL-1 marked collected while only the
+  // partial checkout-to-grant slice exists. The audit must reject it and the
+  // merge selector must refuse to resolve it.
+  const parsed = loadScenarioManifest(defaultScenarioManifestPath());
+  const flipped = parseScenarioManifest({
+    schemaVersion: parsed.manifest.schemaVersion,
+    qualificationPolicy: parsed.manifest.qualificationPolicy,
+    requiredScenarios: parsed.manifest.requiredScenarios.map((r) =>
+      r.id === "T2-BILL-1" ? { ...r, implementation: { status: "collected" } } : r,
+    ),
+    composedJourneys: parsed.manifest.composedJourneys,
+  });
+  const report = auditCollectors(flipped, COLLECTOR_DEFINITIONS);
+  assert.equal(report.ok, false);
+  assert.deepEqual(report.partialOnlyCoreClaims, ["T2-BILL-1"]);
+  assert.throws(
+    () => resolveMergeSelection(flipped, COLLECTOR_DEFINITIONS),
+    /partial vertical slice cannot satisfy the core row/,
+  );
+});
+
+test("REAL MANIFEST: merge keeps every planned Tier 2 row as a fail-closed placeholder (visibly unqualified)", () => {
+  const parsed = loadScenarioManifest(defaultScenarioManifestPath());
+  const sel = resolveMergeSelection(parsed, COLLECTOR_DEFINITIONS);
+  const tier2Rows = parsed.manifest.requiredScenarios.filter((r) => r.tier === 2);
+  // One bare placeholder per planned row: nothing expanded, nothing dropped.
+  assert.equal(sel.cells.length, tier2Rows.length);
+  assert.ok(sel.cells.every((c) => c.productHost === undefined || c.productHost === null));
+  // A strict merge run against this plan can only report missing finals —
+  // planned rows have no execution claim and remain visibly unqualified.
 });

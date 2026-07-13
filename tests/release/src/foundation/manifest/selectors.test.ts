@@ -66,12 +66,31 @@ test("merge selects every Tier 2 row as required, even planned ones", () => {
 
 
 /** Fixture registry matching the fixture manifest's collected rows. */
+function fixtureEntry(
+  scenarioId: string,
+  cells: readonly CollectorRegistryEntry["cells"][number][],
+  collectorRef: string,
+  coverage: CollectorRegistryEntry["coverage"] = "core",
+): CollectorRegistryEntry {
+  return {
+    scenarioId,
+    cells,
+    cellKeys: cells.map((c) => cellKey(c)),
+    collectorRef,
+    coverage,
+    gate: "release",
+    evidence: "fixture",
+    world: cells[0]?.world ?? "tier-2",
+    createRunners: () => [],
+  };
+}
+
 function fixtureRegistry(): CollectorRegistryEntry[] {
   const chat = { scenarioId: "T3-CHAT-1", world: "managed-cloud", productHost: null, dimensions: {} } as const;
   const up = { scenarioId: "T4-UP-1", world: "desktop-upgrade", productHost: null, dimensions: {} } as const;
   return [
-    { scenarioId: "T3-CHAT-1", cells: [chat], cellKeys: [cellKey(chat)], collectorRef: "fixture://chat" },
-    { scenarioId: "T4-UP-1", cells: [up], cellKeys: [cellKey(up)], collectorRef: "fixture://up" },
+    fixtureEntry("T3-CHAT-1", [chat], "fixture://chat"),
+    fixtureEntry("T4-UP-1", [up], "fixture://up"),
   ];
 }
 
@@ -232,7 +251,7 @@ test("REGRESSION: merge selects the collector's EXACT cell identity for collecte
     dimensions: { slice: "checkout-to-grant" },
   } as const;
   const registry: CollectorRegistryEntry[] = [
-    { scenarioId: "T2-BILL-1", cells: [billCell], cellKeys: [cellKey(billCell)], collectorRef: "fixture://bill" },
+    fixtureEntry("T2-BILL-1", [billCell], "fixture://bill"),
   ];
   const sel = resolveMergeSelection(parsed, registry);
   const bill = sel.cells.find((c) => c.scenarioId === "T2-BILL-1");
