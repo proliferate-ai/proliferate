@@ -147,6 +147,25 @@ async def spend_logs(token_id: str, since_seconds: int) -> dict:
     return {"tokenId": token_id, "rows": matched, "totalRowsScanned": len(entries)}
 
 
+async def delete_key(token_id: str) -> dict:
+    """Cleanup seam: delete a run-scoped virtual key by its ``token_id`` (hash).
+
+    LOCAL-2 registers the minted virtual key in the cleanup ledger; this is the
+    reconciliation executor. Uses the server's own configured admin client, so
+    the runner never holds the LiteLLM master key. Tolerant of an
+    already-absent key (idempotent cleanup)."""
+    if not settings.agent_gateway_litellm_base_url or not settings.agent_gateway_litellm_master_key:
+        return {"error": "litellm_unconfigured", "deleted": False}
+    from proliferate.integrations.litellm.client import _admin_request  # noqa: PLC2701
+    from proliferate.integrations.litellm import LiteLLMIntegrationError
+
+    try:
+        await _admin_request("POST", "/key/delete", json_body={"keys": [token_id]})
+    except LiteLLMIntegrationError as error:
+        return {"tokenId": token_id, "deleted": False, "error": error.code, "detail": error.message}
+    return {"tokenId": token_id, "deleted": True}
+
+
 async def import_and_reconcile(email: str, since_seconds: int) -> dict:
     from proliferate.server.cloud.agent_gateway.usage_import import run_usage_import
 
@@ -221,11 +240,16 @@ if __name__ == "__main__":
     p_import.add_argument("email")
     p_import.add_argument("--since-seconds", type=int, default=3600)
 
+    p_delete = sub.add_parser("delete-key")
+    p_delete.add_argument("token_id")
+
     args = parser.parse_args()
     if args.command == "enrollment":
         out = asyncio.run(enrollment(args.email))
     elif args.command == "spend-logs":
         out = asyncio.run(spend_logs(args.token_id, args.since_seconds))
+    elif args.command == "delete-key":
+        out = asyncio.run(delete_key(args.token_id))
     else:
         out = asyncio.run(import_and_reconcile(args.email, args.since_seconds))
     print(json.dumps(out))
