@@ -129,9 +129,7 @@ class SupportReportCreateRequest(BaseModel):
     credit_name: str | None = Field(default=None, alias="creditName", max_length=200)
     # Canonical client release ID (<component>@<semver>+<12-char-sha>) captured
     # with the immutable report intent. Malformed/absent values store as NULL.
-    client_release_id: str | None = Field(
-        default=None, alias="clientReleaseId", max_length=255
-    )
+    client_release_id: str | None = Field(default=None, alias="clientReleaseId", max_length=255)
     urgent: bool = Field(default=False, alias="urgent")
     notify_me: bool = Field(default=False, alias="notifyMe")
 
@@ -188,9 +186,7 @@ class SupportReportUploadRequest(BaseModel):
     kind: Literal["bug", "feature"] = Field(default="bug")
     credit_consent: bool = Field(default=False, alias="creditConsent")
     credit_name: str | None = Field(default=None, alias="creditName", max_length=200)
-    client_release_id: str | None = Field(
-        default=None, alias="clientReleaseId", max_length=255
-    )
+    client_release_id: str | None = Field(default=None, alias="clientReleaseId", max_length=255)
     telemetry_refs: SupportReportTelemetryReferences | None = Field(
         default=None,
         alias="telemetryRefs",

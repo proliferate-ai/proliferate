@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.config import settings
 from proliferate.db.store import support_reports
 from proliferate.integrations.aws import (
     AwsIntegrationError,
@@ -18,13 +19,7 @@ from proliferate.middleware.request_context import (
     set_resource_tenant_context,
     set_support_report_context,
 )
-from proliferate.config import settings
 from proliferate.server.support.domain.message import normalize_support_message
-from proliferate.server.support.domain.tracker_intent import (
-    build_tracker_summary,
-    normalize_telemetry_refs,
-    parse_client_release_id,
-)
 from proliferate.server.support.domain.report_records import (
     expected_manifest_entries,
     expected_manifest_keys,
@@ -37,6 +32,11 @@ from proliferate.server.support.domain.report_records import (
     tenant_context_for_report,
     trusted_workspace_refs_for_report,
     workspace_refs_for_create,
+)
+from proliferate.server.support.domain.tracker_intent import (
+    build_tracker_summary,
+    normalize_telemetry_refs,
+    parse_client_release_id,
 )
 from proliferate.server.support.errors import (
     SupportMessageEmpty,

@@ -25,9 +25,7 @@ class SupportFeedItem(BaseModel):
     credit_name: str | None = Field(default=None, alias="creditName")
     outreach_override: str | None = Field(default=None, alias="outreachOverride")
     private_case_reference: str = Field(alias="privateCaseReference")
-    sentry_events: list[SupportFeedSentryEvent] = Field(
-        default_factory=list, alias="sentryEvents"
-    )
+    sentry_events: list[SupportFeedSentryEvent] = Field(default_factory=list, alias="sentryEvents")
     cursor: str
 
     model_config = {"populate_by_name": True}

@@ -435,8 +435,7 @@ async def list_completed_reports_for_feed(
     )
     if after_completed_at is not None and after_id is not None:
         query = query.where(
-            tuple_(SupportReport.completed_at, SupportReport.id)
-            > (after_completed_at, after_id)
+            tuple_(SupportReport.completed_at, SupportReport.id) > (after_completed_at, after_id)
         )
     rows = (await db.execute(query)).all()
     return [_feed_row(report, outreach_email) for report, outreach_email in rows]
