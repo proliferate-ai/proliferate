@@ -823,19 +823,23 @@ cancelled run may already have acted. Once overrides are armed, gate
 restoration (with read-back verification) remains prompt in every case, but
 the landing hold may release only after ALL of the following are proven:
 every cancellation-requested run — a source main-CI run or any deploy run —
-is confirmed terminal; EVERY cancellation-requested source main-CI run —
+is confirmed terminal; for EVERY cancellation-requested source main-CI run —
 regardless of its terminal conclusion, including one that wins the race and
-completes SUCCESS despite the cancellation request — is proven, across a
-bounded event-propagation barrier, to have emitted no downstream Deploy
-Staging run (any run it emitted routes through the abnormal-staging clause of
-this rule); and every abnormal, failed, cancelled, timed-out, or
+completes SUCCESS despite the cancellation request — every downstream Deploy
+Staging run it emitted is enumerated and accounted for across a bounded
+event-propagation barrier (zero emissions is acceptable; each emitted run
+routes through the abnormal-staging clause of this rule and must be fully
+handled), with the barrier proving that no late or otherwise unaccounted
+downstream emission remains before hold release; and every abnormal, failed,
+cancelled, timed-out, or
 unverifiable staging execution — including the expected exact-landing-SHA
 staging run executing unexpected lanes — is confirmed terminal AND its
 per-lane/deploy-summary/log evidence proves it produced no side effects, or
 every possibly affected staging surface is restored to its recorded
 pre-landing staging baseline with artifact/health/routes re-verified. Any
-unproven terminality, downstream-emission absence, side-effect assessment, or
-recovery retains the hold and hard-stops production with escalation. A fully
+unproven terminality, any unaccounted, late, or unhandled downstream
+emission, and any unproven side-effect assessment or recovery retains the
+hold and hard-stops production with escalation. A fully
 proven failure path releases the hold only into halted-for-review, never into
 promotion. The failure and recovery evidence is recorded per the standing
 failure-evidence requirements (Phase V / incident record). The full mechanics

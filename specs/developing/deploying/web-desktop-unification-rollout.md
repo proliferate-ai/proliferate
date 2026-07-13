@@ -296,12 +296,14 @@ the landing hold may release only after ALL of the following are proven:
 
 - every cancellation-requested run — a source main-CI run or any deploy run —
   is confirmed terminal;
-- EVERY cancellation-requested source main-CI run — regardless of its
+- for EVERY cancellation-requested source main-CI run — regardless of its
   terminal conclusion, including a run that wins the race and completes
-  SUCCESS despite the cancellation request — is proven, across a bounded
-  event-propagation barrier, to have emitted NO downstream Deploy Staging
-  run; any run it emitted is handled under the next bullet like any other
-  staging execution;
+  SUCCESS despite the cancellation request — every downstream Deploy Staging
+  run it emitted is enumerated and accounted for across a bounded
+  event-propagation barrier: zero emissions is acceptable; each emitted run
+  is handled under the next bullet like any other staging execution and must
+  be fully handled; the barrier must prove that no late or otherwise
+  unaccounted downstream emission remains before hold release;
 - every abnormal, failed, cancelled, timed-out, or unverifiable staging
   execution — including the expected exact-landing-SHA staging run executing
   unexpected lanes — is confirmed terminal AND its per-lane enabled/skipped
@@ -310,10 +312,11 @@ the landing hold may release only after ALL of the following are proven:
   recorded pre-landing staging baseline and its artifact/health/routes are
   re-verified.
 
-Any unproven terminality, downstream-emission absence, side-effect
-assessment, or recovery retains the hold and hard-stops production with
-escalation. A fully proven failure path releases the hold only into
-halted-for-review — never directly into promotion. The failure and recovery
+Any unproven terminality, any unaccounted, late, or unhandled downstream
+emission, and any unproven side-effect assessment or recovery retains the
+hold and hard-stops production with escalation. A fully proven failure path
+releases the hold only into halted-for-review — never directly into
+promotion. The failure and recovery
 evidence is retained per the standing failure-evidence requirements (§5.2
 item 6 / a non-completing incident record).
 
