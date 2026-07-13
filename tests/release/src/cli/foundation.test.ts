@@ -174,3 +174,93 @@ test("--help prints usage and exits 0", async () => {
   assert.equal(result.exitCode, 0);
   assert.match(result.message, /Foundation runner/);
 });
+
+// --- Manifest-bound selector resolution (the reproduced false-green fix) -----
+
+test("explicit --cells with an id absent from the manifest is a hard error", async () => {
+  // Reproduced issue: the runner never loaded the manifest, so an arbitrary
+  // --cells id was accepted. Now it is rejected before any execution.
+  const { dir, manifestPath, outputDir } = setup();
+  await assert.rejects(
+    () =>
+      runFoundationCli(
+        ["--world", "tier-2", "--cells", "NOT-A-REAL-ID", "--candidate-manifest", manifestPath, "--output-dir", outputDir],
+        baseDeps(dir),
+      ),
+    /unknown scenario id "NOT-A-REAL-ID"/,
+  );
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("release with arbitrary --cells cannot smuggle unknown ids into a qualifying plan", async () => {
+  // The exact reproduced false-green: --cells <garbage> + --selector release.
+  // Release ignores --cells and resolves from the manifest; against the real
+  // (all-planned) manifest that resolution is empty and rejected.
+  const { dir, manifestPath, outputDir } = setup();
+  await assert.rejects(
+    () =>
+      runFoundationCli(
+        [
+          "--selector", "release", "--behavior", "strict",
+          "--cells", "GARBAGE-1,GARBAGE-2",
+          "--candidate-manifest", manifestPath, "--output-dir", outputDir,
+        ],
+        baseDeps(dir),
+      ),
+    /empty selection cannot qualify/,
+  );
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("release deferred derivation is exact and rides through the plan + evidence", async () => {
+  const { dir, manifestPath, outputDir } = setup();
+  // A fixture manifest with one collected+referenced Tier 3 guarantee (required
+  // in a tier-2 world so the fake provisioner/collector suffice) and one
+  // collected-but-unreferenced guarantee (must derive as deferred).
+  const scenarioManifestPath = path.join(dir, "scenario-manifest.json");
+  writeFileSync(
+    scenarioManifestPath,
+    JSON.stringify({
+      schemaVersion: 4,
+      qualificationPolicy: {
+        tier3StandingSelection: {
+          includeComposedJourneyReferences: true,
+          standaloneScenarioIds: [],
+          unreferencedDisposition: "deferred",
+          fullCoreQualificationRequiresNoDeferred: true,
+        },
+      },
+      requiredScenarios: [
+        { id: "T3-CHAT-1", tier: 3, implementation: { status: "collected" } },
+        { id: "T3-DEFER-1", tier: 3, implementation: { status: "collected" } },
+      ],
+      composedJourneys: [
+        {
+          id: "J-CHAT",
+          tier: 3,
+          world: "tier-2",
+          requiredHosts: ["hosted-web"],
+          targetScenarioRefs: ["T3-CHAT-1"],
+          implementation: { status: "collected" },
+        },
+      ],
+    }),
+  );
+  const cell: CellIdentity = { scenarioId: "T3-CHAT-1", world: "tier-2", productHost: null, dimensions: {} };
+  const provisioners = new Map<WorldId, WorldProvisioner>([["tier-2", new FakeTier2Provisioner()]]);
+  const cellRunners: CellRunner[] = [greenRunner(cell)];
+  const result = await runFoundationCli(
+    ["--selector", "release", "--behavior", "strict", "--candidate-manifest", manifestPath, "--output-dir", outputDir],
+    baseDeps(dir, { provisioners, cellRunners, scenarioManifestPath }),
+  );
+  assert.equal(result.exitCode, 0, result.message);
+  assert.match(result.message, /QUALIFYING \(partial\)/);
+  assert.match(result.message, /deferred=1 \[T3-DEFER-1\]/);
+  const evidencePath = path.join(outputDir, "local-0123456789ab-nonce", "shard-1-of-1", "evidence.json");
+  const doc = JSON.parse(readFileSync(evidencePath, "utf8"));
+  assert.deepEqual(doc.plan.deferredScenarioIds, ["T3-DEFER-1"], "the unreferenced guarantee is deferred, never dropped");
+  assert.equal(doc.plan.cells.filter((c: { disposition: string }) => c.disposition === "required").length, 1);
+  assert.equal(doc.qualifying, true);
+  assert.equal(typeof doc.plan.scenarioManifestHash, "string");
+  rmSync(dir, { recursive: true, force: true });
+});

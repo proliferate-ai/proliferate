@@ -10,6 +10,8 @@
     "vertical-slice:tier2": "tsx src/foundation/worlds/tier2/run-vertical-slice.ts",
     "vertical-slice:local2": "tsx src/foundation/worlds/local-runtime/run-local2-slice.ts",
     "foundation": "tsx src/cli/foundation.ts",
+    "aggregate": "tsx src/cli/aggregate.ts",
+    "manifest-audit": "tsx src/foundation/manifest/audit-cli.ts",
     "access-audit": "tsx src/foundation/access/cli.ts",
     "build:dev-candidate-manifest": "tsx src/foundation/artifacts/dev-candidate-builder.ts"
   },

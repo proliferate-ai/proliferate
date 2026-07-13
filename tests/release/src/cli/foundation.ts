@@ -20,7 +20,10 @@ import type { WorldId } from "../foundation/contracts/identity.js";
 import type { WorldProvisioner } from "../foundation/contracts/world.js";
 import type { CellRunner } from "../foundation/runner/cell.js";
 import { resolveManifestHash, availableCandidateSlots } from "../foundation/runner/artifacts.js";
-import { buildPlan, type CellSpec } from "../foundation/runner/plan-builder.js";
+import { buildPlan } from "../foundation/runner/plan-builder.js";
+import { loadScenarioManifest } from "../foundation/manifest/load.js";
+import { defaultScenarioManifestPath } from "../foundation/manifest/paths.js";
+import { resolveSelection, type Tier4Trigger } from "../foundation/manifest/selectors.js";
 import { createRunIdentity, createShardIdentity } from "../foundation/runner/identity.js";
 import { FileCleanupLedger } from "../foundation/ledger/file-ledger.js";
 import { CleanupRunner } from "../foundation/ledger/reconcile.js";
@@ -28,6 +31,7 @@ import { JsonlEvidenceSink } from "../foundation/evidence/jsonl-sink.js";
 import type { PreflightSource } from "../foundation/preflight/engine.js";
 import { loadReleaseEnvironment } from "../foundation/preflight/env-loader.js";
 import { runFoundation } from "../foundation/runner/engine.js";
+import { runAggregateCli } from "./aggregate.js";
 
 export interface FoundationCliDeps {
   env?: NodeJS.ProcessEnv;
@@ -39,6 +43,12 @@ export interface FoundationCliDeps {
   /** Injectable clock/nonce for deterministic identity. */
   now?: () => Date;
   localNonce?: string;
+  /** Override the scenario-manifest path (tests point at a fixture manifest). */
+  scenarioManifestPath?: string;
+  /** --cells ids allowed even when absent from the manifest (test fixtures only). */
+  fixtureNamespaceIds?: readonly string[];
+  /** Change-triggered Tier 4 rows supplied to the release selector. */
+  triggeredTier4?: readonly Tier4Trigger[];
 }
 
 export interface FoundationCliResult {
@@ -101,15 +111,28 @@ export async function runFoundationCli(
   const candidateManifestHash = resolveManifestHash(candidate);
   const retainedManifestHash = retained ? resolveManifestHash(retained) : null;
 
-  const cellSpecs: CellSpec[] = args.cells.map((scenarioId) => ({
-    scenarioId,
+  // Load + strictly validate the REAL core-release scenario manifest before any
+  // --cells selection can be trusted, then resolve the selector against it. An
+  // unknown --cells id, an empty explicit/release resolution, or a malformed
+  // manifest is a hard error HERE — never a silently-accepted (and possibly
+  // qualifying) plan. Every manifest-bound plan carries the real canonical hash.
+  const parsedManifest = loadScenarioManifest(
+    deps.scenarioManifestPath ?? defaultScenarioManifestPath(),
+  );
+  const resolved = resolveSelection(parsedManifest, {
+    selector: args.selector,
+    cellIds: args.cells,
     world: args.world,
     productHost: args.productHost,
-  }));
+    fixtureNamespaceIds: deps.fixtureNamespaceIds,
+    triggeredTier4: deps.triggeredTier4,
+  });
   const fullPlan = buildPlan({
     selector: args.selector,
     behavior: args.behavior,
-    cells: cellSpecs,
+    cells: resolved.cells,
+    deferredScenarioIds: resolved.deferredScenarioIds,
+    scenarioManifestHash: resolved.scenarioManifestHash,
   });
 
   const run = createRunIdentity({
@@ -179,6 +202,11 @@ export async function runFoundationCli(
   const lines = [
     `foundation: world=${args.world} selector=${args.selector} behavior=${args.behavior} shard=${shard.shardId} dryRun=${args.dryRun}`,
     `run=${run.runId} origin=${run.origin} host=${run.executionHost}`,
+    `plan: manifestHash=${fullPlan.scenarioManifestHash ?? "none"} required=${
+      fullPlan.cells.filter((c) => c.disposition === "required").length
+    } deferred=${fullPlan.deferredScenarioIds.length}${
+      fullPlan.deferredScenarioIds.length > 0 ? ` [${fullPlan.deferredScenarioIds.join(", ")}]` : ""
+    }`,
     `env-file: ${envLoad.status} (${envLoad.filePath})`,
     `evidence: ${evidence.evidencePath}`,
     verdictLine,
@@ -228,13 +256,21 @@ function secretValuesFromLoad(
 // Script guard: run only when invoked directly (not when imported by a test).
 const invokedDirectly = process.argv[1] !== undefined && process.argv[1].endsWith("foundation.ts");
 if (invokedDirectly) {
-  runFoundationCli(process.argv.slice(2))
-    .then((result) => {
-      console.log(result.message);
-      process.exitCode = result.exitCode;
-    })
-    .catch((error) => {
-      console.error(error instanceof Error ? error.message : String(error));
-      process.exitCode = 2;
-    });
+  const argv = process.argv.slice(2);
+  if (argv[0] === "aggregate") {
+    // Cross-shard fan-in subcommand: the only path to a qualifying verdict.
+    const result = runAggregateCli(argv.slice(1));
+    console.log(result.message);
+    process.exitCode = result.exitCode;
+  } else {
+    runFoundationCli(argv)
+      .then((result) => {
+        console.log(result.message);
+        process.exitCode = result.exitCode;
+      })
+      .catch((error) => {
+        console.error(error instanceof Error ? error.message : String(error));
+        process.exitCode = 2;
+      });
+  }
 }
