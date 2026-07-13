@@ -835,7 +835,8 @@ The following are known implementation differences, not alternate contracts:
 - all six currently provisioned Grafana rules lack the required UID/component
   labels; none has the log-enrichment annotations, and no webhook health canary
   exists;
-- the support feed endpoint/key do not exist and production sync is disabled;
+- the private support feed endpoint and its dedicated key exist and are
+  dark-deployable, but tracker-side production sync is still disabled;
 - release identity is not deterministic on every component: server release is
   reused for target processes, mobile can fall back, supervisor has no runtime
   build stamp, and structured logs do not consistently emit `release_id`;

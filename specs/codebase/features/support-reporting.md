@@ -192,9 +192,19 @@ POST /v1/support/reports/{reportId}/upload-targets
 POST /v1/support/reports/{reportId}/complete
 POST /v1/support/report-uploads                 legacy compatibility wrapper
 POST /v1/support/messages                       zero-upload compatibility shim
+GET  /internal/support/reports                   private completed-report feed
 ```
 
 There is no active `/tracker` endpoint.
+
+`GET /internal/support/reports` is a private machine route (externally
+`/api/internal/support/reports`), separate from user/web auth. It requires a
+dedicated `SUPPORT_FEED_BEARER_TOKEN` compared in constant time; an unset token
+rejects every request so the feed is dark-deployable. It returns only completed
+reports ordered by `(completed_at, id)` behind a versioned authenticated opaque
+cursor, and never exposes the message, diagnostics, attachments, object keys,
+signed URLs, account email, or log bodies. The downstream contract lives in
+[`support-system.md`](support-system.md).
 
 ### Create
 
@@ -261,6 +271,17 @@ include owner/client identity, lifecycle, S3 location, source/scope/reference
 JSON, expected and actual object manifests, kind/credit/urgent/notify intent,
 request IDs, timestamps, and Slack receipt state.
 
+Two immutable capture columns feed the downstream tracker projection:
+
+- `client_release_id` — the canonical `<component>@<semver>+<12-char-sha>`
+  release the client was running. A missing or malformed value stores NULL; the
+  row stays feedable with a visible warning. `telemetry_refs_json` normalizes
+  Sentry references to `{"sentryEvents": [{"project", "eventId"}]}`; project-less
+  event IDs are insufficient to form a pair and are never guessed.
+- `tracker_summary` — a server-produced, redacted, whitespace-collapsed summary
+  capped at 240 characters. It is a safe internal projection and never a
+  substitute for the private report body.
+
 Default object layout:
 
 ```text
@@ -316,6 +337,7 @@ cloud/sdk/src/client/support.ts
 cloud/sdk-react/src/hooks/support.ts
 
 server/proliferate/server/support/**
+server/proliferate/server/support/feed/**
 server/proliferate/db/models/support.py
 server/proliferate/db/store/support_reports.py
 
