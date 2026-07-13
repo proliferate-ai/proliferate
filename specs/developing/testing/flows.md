@@ -107,10 +107,11 @@ Spec of record + scenario definitions: `specs/developing/testing/self-hosting.md
 | Operator update motion: `./update.sh` migrates + restarts, `/meta` reports N, data intact | 4 | tests/release/src/scenarios/upgrade/t4-sh-1.ts (T4-SH-1; boots a box at N-1, claims, runs ./update.sh to N, asserts migrations + health + /meta == N + the pre-update admin still logs in. Gated behind RELEASE_E2E_SELFHOST_PROVISION) |
 | Desktop artifact chain valid per release (server redirect follows, CDN manifest fresh, every platform artifact HEAD 200, tag contains the SHA) | 4 | tests/release/src/scenarios/upgrade/t4-sh-2.ts (T4-SH-2; the 2026-07-09 incident test — pure HTTP + git, no box, so it runs in the release gate via .github/workflows/release-e2e-selfhost.yml, self-hosting.md §5) |
 
-## Workflows — PARKED (surface being reworked; tests land with the rework PRs)
+## Workflows
 
 | Flow | Tier | Test pointer |
 | --- | --- | --- |
+| Create, save, reload, reopen, edit, and delete a validated workflow definition through the Desktop web UI — API-seeded repo selected, exact ordered inputs/stages/steps asserted at every reload | 2 | `tests/intent/specs/workflow-definitions.spec.ts` (`T2-WFDEF-1`; real server + Postgres, AnyHarness skipped; fail-closed in the CI/deploy spine via the "Workflow definition lifecycle (tier-2)" job in ci.yml, eligible for a future required-status rule — the broad intent lane stays provisional) |
 | Create/edit/trigger workflow via UI → run created, plan resolved, delivery attempted (up to the sandbox seam) | 2 | parked |
 | Workflow run reaches terminal state with a real agent | 3 | parked |
 | Poll trigger against stub feed: replay-safe, invalid items surfaced | 2 | parked |

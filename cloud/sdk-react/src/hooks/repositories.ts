@@ -7,6 +7,7 @@ import {
   type SaveRepoEnvironmentRequest,
 } from "@proliferate/cloud-sdk";
 import {
+  actorRepositoriesKey,
   cloudGitRepositoriesRootKey,
   repositoriesKey,
   githubAppRootKey,
@@ -15,10 +16,12 @@ import {
 } from "../lib/query-keys.js";
 import { useCloudClient } from "../context/CloudClientProvider.js";
 
-export function useRepositories(enabled = true) {
+export function useRepositories(enabled = true, authCacheScope?: string) {
   const client = useCloudClient();
   return useQuery<RepoConfigsListResponse>({
-    queryKey: repositoriesKey(),
+    queryKey: authCacheScope
+      ? actorRepositoriesKey(client.baseUrl, authCacheScope)
+      : repositoriesKey(),
     queryFn: () => listRepositories(client),
     enabled,
   });

@@ -2,11 +2,15 @@ name: Intent Tests
 
 # Tier-2 "mocked intent" suite (specs/developing/testing/README.md §Tier 2):
 # real server + real desktop web frontend + real Postgres, Playwright driving
-# a browser. PROVISIONAL: this job is explicitly NON-blocking while the
-# harness earns trust — do NOT add it to branch-protection required checks
-# yet. Failures are signal to read, not a merge gate. The tier-2 suite joins
-# the merge gate (per the testing standard's CI mapping) once it has a
-# demonstrated flake-free record.
+# a browser. Both jobs here are PROVISIONAL and NON-blocking while the harness
+# earns trust — do NOT add them to required checks yet. Failures are signal to
+# read, not a merge gate; the broad suite joins the merge gate (per the
+# testing standard's CI mapping) once it has a demonstrated flake-free record.
+#
+# The fail-closed exception lives elsewhere: the focused "Workflow definition
+# lifecycle (tier-2)" job in ci.yml runs exactly one spec (T2-WFDEF-1) with no
+# continue-on-error, so it fails CI — and therefore blocks the Deploy Staging
+# workflow_run spine — on a red result.
 
 on:
   pull_request:

@@ -14,4 +14,5 @@ export * from "./hooks/repos.js";
 export * from "./hooks/sso.js";
 export * from "./hooks/support.js";
 export * from "./hooks/workspaces.js";
+export * from "./hooks/workflows.js";
 export * from "./lib/query-keys.js";

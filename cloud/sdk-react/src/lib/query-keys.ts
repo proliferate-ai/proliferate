@@ -258,6 +258,15 @@ export function repositoriesKey() {
   return [...cloudRootKey(), "repositories"] as const;
 }
 
+export function actorRepositoriesKey(apiBaseUrl: string, authCacheScope: string) {
+  return [
+    ...repositoriesKey(),
+    "actor",
+    apiBaseUrl,
+    authCacheScope,
+  ] as const;
+}
+
 export function repoEnvironmentKey(
   gitOwner: string,
   gitRepoName: string,
@@ -396,6 +405,37 @@ export function isCloudWorkspaceConnectionQueryKey(
 
 export function automationsRootKey() {
   return ["automations"] as const;
+}
+
+export function workflowDefinitionsRootKey(
+  apiBaseUrl: string,
+  authCacheScope: string,
+) {
+  return [
+    ...cloudRootKey(),
+    "workflow-definitions",
+    apiBaseUrl,
+    authCacheScope,
+  ] as const;
+}
+
+export function workflowDefinitionsListKey(
+  apiBaseUrl: string,
+  authCacheScope: string,
+) {
+  return [...workflowDefinitionsRootKey(apiBaseUrl, authCacheScope), "list"] as const;
+}
+
+export function workflowDefinitionDetailKey(
+  apiBaseUrl: string,
+  authCacheScope: string,
+  workflowDefinitionId: string | null,
+) {
+  return [
+    ...workflowDefinitionsRootKey(apiBaseUrl, authCacheScope),
+    "detail",
+    workflowDefinitionId,
+  ] as const;
 }
 
 export interface AutomationsListKeyOptions {

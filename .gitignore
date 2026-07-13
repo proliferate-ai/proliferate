@@ -86,3 +86,7 @@ design-system/
 
 # Stray local debug log dumps
 /logs*.json
+
+# Python bytecode from running scripts/*.py locally
+__pycache__/
+*.pyc
