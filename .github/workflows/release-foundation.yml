@@ -84,6 +84,16 @@ on:
     # Schedule events carry no `inputs`, so this always resolves to
     # behavior=diagnostic, worlds=tier-2, shard-count=1 below — never strict.
     - cron: "17 6 * * *"
+  push:
+    # Migration-only trigger: workflow_dispatch is unregisterable until this
+    # file lands on the default branch, so foundation branches self-prove the
+    # identical Actions path on push. Remove once the workflow is on main.
+    branches:
+      - "test-foundation/**"
+    paths:
+      - ".github/workflows/release-foundation.yml"
+      - "tests/release/**"
+      - "tests/intent/**"
 
 permissions:
   contents: read
