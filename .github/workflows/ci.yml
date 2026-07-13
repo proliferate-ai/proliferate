@@ -66,7 +66,9 @@ jobs:
           node --check scripts/ci-cd/detect-deploy-surfaces.mjs
           node --check scripts/ci-cd/prepare-artifact-release.mjs
           node --check scripts/ci-cd/publish-product-release.mjs
+          node --check scripts/ci-cd/pr-metadata.mjs
           node --check scripts/ci-cd/resolve-deploy-base.mjs
+          node --check scripts/ci-cd/validate-pr-metadata.mjs
           node --check scripts/agent-catalog/build-catalog.mjs
           node --check scripts/agent-catalog/check-version-discipline.mjs
           node --check scripts/agent-catalog/resolve-pins.mjs
