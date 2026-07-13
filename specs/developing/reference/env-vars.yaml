@@ -957,8 +957,8 @@
 
 - name: SUPPORT_REPORT_REQUIRE_CLIENT_RELEASE
   secret: false
-  default: "true"
-  description: When true, report completion rejects a missing or malformed canonical client release ID for new reports (web/desktop clients now emit one). Set false on local/self-hosted deployments whose clients cannot stamp a canonical release
+  default: "false"
+  description: When true, report completion rejects a NEW report whose client provided a release value that failed canonical validation; legacy clients that never send the field still complete with a warning. Off by default — production enablement is an explicit ops flip once desktop client adoption of canonical release IDs is confirmed
   tags: [production]
 
 - name: PROLIFERATE_REQUIRE_RELEASE_IDENTITY

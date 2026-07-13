@@ -309,13 +309,14 @@ class Settings(BaseSettings):
     # (GET /internal/support/reports). Empty disables the feed (every request is
     # rejected); the route still exists so the feed is dark-deployable.
     support_feed_bearer_token: str = ""
-    # When true, report completion rejects a missing/malformed canonical client
-    # release ID for NEW reports. Enabled by default now that web and desktop
-    # clients emit their canonical `<component>@<version>+<sha>` release IDs
-    # (P2); legacy rows with a null release stay feedable with a warning.
-    # A local/self-hosted deployment whose clients cannot stamp a canonical
-    # release (no build SHA) may set SUPPORT_REPORT_REQUIRE_CLIENT_RELEASE=false.
-    support_report_require_client_release: bool = True
+    # When true, report completion rejects a NEW report whose client PROVIDED a
+    # release value that failed canonical validation (captured at create time
+    # as `client_release_provided`). Reports from old/legacy clients that never
+    # sent the field complete normally and stay feedable with a visible
+    # warning. Defaults off: production enablement is an explicit ops flip once
+    # desktop client adoption of the canonical `<component>@<version>+<sha>`
+    # release ID is confirmed (old installed desktop builds send no release).
+    support_report_require_client_release: bool = False
     signups_slack_webhook_url: str = ""
     billing_positive_slack_webhook_url: str = ""
     billing_negative_slack_webhook_url: str = ""
