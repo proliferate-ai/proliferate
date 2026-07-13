@@ -711,10 +711,12 @@ collapse the stack to main.
 
 Reviewed states are preserved as plainly named evidence branches under
 `refs/heads/wdu-evidence/**` (fetchable with ordinary `git fetch origin`,
-never force-pushed, deleted only per the final verification PR's branch
-index), with commit SHA, tree SHA, and stable patch hash recorded in the PR
-body/ledger. Consumers fetch and assert existence + recorded-hash equality
-before comparing. Committed ledgers contain no secret values — secrets are
+never force-pushed). Evidence branches are deleted only AFTER the docs-only
+post-cutover verification PR (Phase V) has merged, and only according to the
+branch index committed in its release record — never earlier at any
+intermediate checkpoint. Commit SHA, tree SHA, and stable patch hash are
+recorded in the PR body/ledger. Consumers fetch and assert existence +
+recorded-hash equality before comparing. Committed ledgers contain no secret values — secrets are
 referenced by name/location only.
 
 ### 10.3 Intake and freeze gates
@@ -767,11 +769,15 @@ staging/production deploy bases:
   promote workflow.
 
 Every DETECTED surface is explicitly dispositioned: PRODUCTION; reviewed
-staging-only (ungated lanes — Server, Web, E2B, LiteLLM — cannot be suppressed
-on the automatic path, so an ungated exclusion is reviewed staging-only or the
-chain stops); gate-suppressed (only actually gated lanes); or a separate
-reviewed artifact-release disposition (a detected Runtime surface has no
-hosted deploy lane). If Desktop is included, the release-prep version bump
+staging-only (ungated lanes — Server, Web, and E2B — cannot be suppressed on
+the automatic path, so an ungated exclusion is reviewed staging-only or the
+chain stops); gate-suppressed (only actually gated lanes: Mobile build via
+`MOBILE_DEPLOY_ENABLED`, Desktop via `DESKTOP_DEPLOY_ENABLED`, Workers via
+`WORKERS_DEPLOY_ENABLED`, and LiteLLM via `LITELLM_DEPLOY_ENABLED` in
+`.github/workflows/_deploy-litellm.yml`; gate lists are verified against the
+actual workflow files, never assumed); or a separate reviewed
+artifact-release disposition (a detected Runtime surface has no hosted deploy
+lane). If Desktop is included, the release-prep version bump
 (covering every canonical owning coordinate) is a distinct reviewed commit
 inside the replay list, with the exact-SHA tag and a new draft release created
 and published only at production promotion per the canonical desktop release
@@ -782,11 +788,23 @@ landing hold before the reviewed staging environment-gate overrides are set
 and read back; the merge happens only then; merge-SHA tree equality plus green
 main CI gates the automatic staging path; the automatic staging run is
 verified to have executed exactly EFFECTIVE_STAGING; gates are restored to
-their recorded prior state; and only then is the exact landing merge SHA
-promoted to production with the exact PRODUCTION `only_surfaces` and
-`require_staging_success=true`. No failure path leaves temporary overrides
-active. The full mechanics, including the failure-handling invariant, live in
-the rollout ledger.
+their recorded prior state with the restoration read back and verified; and
+only then is the exact landing merge SHA promoted to production with the exact
+PRODUCTION `only_surfaces` and `require_staging_success=true`.
+
+**Override cleanup invariant.** From the first override mutation onward, every
+failure, non-success, or unverifiable outcome enters a finally-style cleanup:
+restore EVERY gate to its recorded prior value or prior absence, read the
+restoration back and verify it, then release the landing hold and halt. This
+covers a partial override write or read-back failure, a failed merge, a
+merge-SHA tree mismatch, an exact-landing-SHA main CI failure/cancellation/
+timeout, an automatic staging failure/cancellation/timeout, an unexpected lane
+execution, and any state that cannot be verified. If restoration itself fails,
+production promotion is hard-stopped and the landing hold remains in place
+while the failure is escalated — the hold is never released over unrestored
+gates. Only verified automatic staging success plus verified gate restoration
+may proceed to production promotion. The full mechanics live in the rollout
+ledger.
 
 **External configuration is mutated only after the landing merges, every
 PRODUCTION surface deploys at the exact merge SHA, and old + canonical routes
@@ -795,18 +813,60 @@ classified, and recorded only. After deploy verification, items are applied
 one producer at a time: source change → activation (redeploy/restart/rebuild
 at the same landing SHA per the item's recorded mechanism) → secret-safe
 live-consumption proof → that producer's smoke. A source edit without
-activation is never an update. A failed smoke triggers immediate source
-restore, re-activation, live rollback proof, a recovery smoke, and a halt.
-Every item — changed or unchanged — closes only with live proof plus a
-successful mapped smoke. The per-item schema is defined in the rollout ledger.
+activation is never an update. **Any failure after a producer's
+source-of-truth mutation** — a failed or unverifiable activation, a failed or
+unverifiable live-consumption proof, or a failed smoke — triggers immediate
+source restore, re-activation at the same landing SHA, live rollback proof,
+the item's mapped recovery smoke, recorded evidence of both the failure and
+the recovery, and a halt. If the recovery itself cannot be proven, the
+sequence remains halted until it is. Every item — changed or unchanged —
+closes only with live proof plus a successful mapped smoke. The per-item
+schema is defined in the rollout ledger.
 
-The migration completes only when a docs-only post-cutover verification PR
-commits the immutable release record at
+### 10.6 Release-surface closure and the Phase V release record
+
+Before the accepted PR 4 head freezes, Phase H inventories and explicitly
+dispositions every required user-facing release surface: the landing page,
+public docs, changelog/release notes, in-app release notes/copy,
+install/download surfaces, support/runbook surfaces, and any further release
+surface the sweep discovers. Each disposition is exactly one of
+update-in-this-landing (the change enters the replay list),
+update-post-landing (with a named owner and deadline), or no-change-needed
+(with the reason recorded). These dispositions and their evidence carry into
+the landing's release plan and the Phase V record.
+
+The migration completes only when the docs-only post-cutover verification PR
+(Phase V) commits the immutable release record at
 `specs/developing/deploying/web-desktop-unification-release-record.md` and
-merges. There is no recovered-stable completion path: a halted external
-sequence blocks verification, evidence-branch cleanup, and completion.
+merges. That record seals, at minimum:
 
-### 10.6 Rollback
+- the exact landing merge SHA and per-surface deployed SHAs, with the reviewed
+  DETECTED / EFFECTIVE_STAGING / PRODUCTION sets and per-surface dispositions;
+- the landing-ordering evidence: quiescence proof, prior gate state, override
+  set/read-back, merge-SHA tree-equality + main-CI proof, EFFECTIVE_STAGING
+  per-lane execution proof, verified gate restoration, and the production
+  promotion record (`only_surfaces`, `require_staging_success=true`,
+  non-dry-run deploy-summary `headSha` evidence per surface);
+- per-surface artifact/health verification and old + canonical inbound route
+  verification;
+- each release-surface disposition and its outcome/evidence (if Desktop
+  shipped: the released version and exact SHA, the exact-SHA tag, the
+  published GitHub Release, and stable updater-manifest verification at that
+  version/SHA);
+- the complete external-item table: every item, changed or unchanged, with
+  activation mechanism used, secret-safe live-consumption proof, and mapped
+  smoke evidence (secrets redacted by name/location);
+- all failure and recovery evidence (source restores, re-activations, live
+  rollback proofs, recovery smokes, resolutions);
+- the requirement-by-requirement audit against this spec's definition of done;
+- the `wdu-evidence/**` branch index (names + recorded hashes) authorizing
+  their cleanup.
+
+No evidence branch is deleted before Phase V merges. There is no
+recovered-stable completion path: a halted external sequence blocks
+verification, evidence-branch cleanup, and completion.
+
+### 10.7 Rollback
 
 PR 0b, PR 0c, the docs/intake phases, PR 1, the browser removal, and PR 2 are
 each independently reversible merged units at their boundary. PR 3/PR 4 never

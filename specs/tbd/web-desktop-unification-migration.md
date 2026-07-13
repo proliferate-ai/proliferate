@@ -1987,17 +1987,19 @@ The migration is intentionally sequenced around the active launch work:
 
 The initial 2026-07-13 snapshot and dispositions are recorded in
 [web-desktop-unification-intake-ledger.md](web-desktop-unification-intake-ledger.md).
-Refresh that ledger rather than treating its branch statuses as permanent.
-The **binding** PR-1 intake snapshot and PR-2 freeze ledger are appended as
-committed docs-only phases to the rollout ledger at
-`specs/developing/deploying/web-desktop-unification-rollout.md`; the tbd
-ledger is historical sweep input only.
+That tbd ledger is frozen history and is never refreshed. ALL future
+intake refreshes, readiness checks, and freeze gating happen exclusively in
+the binding rollout ledger at
+`specs/developing/deploying/web-desktop-unification-rollout.md`, where the
+PR-1 intake snapshot and PR-2 freeze ledger are appended as committed
+docs-only phases; do not treat the tbd ledger's branch statuses as current.
 
-- before PR 0b/0c or PR 1 starts, create the first intake ledger from **all**
-  open PRs plus local dirty, detached, and unpushed worktrees—not only GitHub
-  branches. Give each item `{owner, head SHA, touched slice,
-  merge|salvage|retarget|supersede|cancel}`. Refresh status at execution time;
-  the document does not permanently assume an item remains open;
+- the first intake ledger was created (2026-07-13) from **all** open PRs plus
+  local dirty, detached, and unpushed worktrees—not only GitHub branches—with
+  each item recorded as `{owner, head SHA, touched slice,
+  merge|salvage|retarget|supersede|cancel}`. Status is re-derived at
+  execution time in the rollout ledger's snapshots; no document permanently
+  assumes an item remains open;
 - now through the July 22, 2026 launch window: land PR 0b, PR 0c, and the
   in-place PR 1 stack; ordinary Desktop product UI branches may continue
   because paths do not move, while PR 1's root/auth/telemetry/Cloud/native
@@ -2281,9 +2283,11 @@ Each PR stays buildable at its boundary.
 
 ## 20. Canonical docs and tooling changed during PR 1/PR 2
 
-PR 1 promotes the host/package contract and installs loud structural checks.
-PR 2 updates path-specific law as the source moves. Together they must
-reconcile, not silently violate, at least:
+The A2 docs preflight promoted the host/package contract to the canonical
+feature spec; PR 1 refines that canonical spec with the implementation
+inventory and installs loud structural checks. PR 2 updates path-specific law
+as the source moves. Together they must reconcile, not silently violate, at
+least:
 
 - `specs/codebase/structures/frontend/README.md`;
 - `specs/codebase/structures/frontend/packages/README.md`;

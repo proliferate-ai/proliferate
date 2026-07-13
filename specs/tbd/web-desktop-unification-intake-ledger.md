@@ -17,28 +17,31 @@ worktree remains open. Items may already be resolved — for example, PR #1143
 merged to `main` as `5e86a7faf` on 2026-07-13, satisfying its "merge before
 PR 1" disposition below.
 
-## 1. Outcome
+## 1. Outcome (as assessed at the 2026-07-13 snapshot)
 
-The repository does not need a broad merge freeze before PR 0b/0c or the
-in-place PR 1. It needs four concrete actions:
+At the snapshot, the repository did not need a broad merge freeze before
+PR 0b/0c or the in-place PR 1. It needed four concrete actions, recorded here
+as the point-in-time assessment:
 
 1. Fix the repository-shape failures in PR #1143, rebase it onto current
-   `main`, and merge it before PR 1.
-2. Do not merge PR #1142. Continue the clean test-only replacement on the
+   `main`, and merge it before PR 1. (Since completed: #1143 merged to `main`
+   as `5e86a7faf` on 2026-07-13.)
+2. Do not merge PR #1142; continue the clean test-only replacement on the
    `test-foundation/v2-*` branch family, selectively absorb the useful six
    commits from `codex/test-foundation-combined` and the test-only tail of
    #1142, then close #1142.
-3. Protect the current uncommitted planning work, the detached support work,
-   and the dirty UI/runtime programs named below. Each must land, be
+3. Protect the then-current uncommitted planning work, the detached support
+   work, and the dirty UI/runtime programs named below, each to land, be
    explicitly cancelled, or be retargeted before the mechanical PR 2 move.
 4. Close the stale PR/worktree swarms instead of carrying them into the
-   migration. Their still-valid guarantees belong in the test specification or
-   a fresh implementation, not in old integration branches.
+   migration, with still-valid guarantees preserved in the test specification
+   or a fresh implementation, not in old integration branches.
 
-The only current product PR that blocks starting PR 1 is #1143. Resolving
-#1142 means choosing and recording its replacement; the replacement test work
-may continue alongside PR 0b/0c and PR 1 because those PRs do not move product
-paths.
+At the snapshot, the only product PR blocking the start of PR 1 was #1143
+(now merged). Resolving #1142 meant choosing and recording its replacement;
+the replacement test work could continue alongside PR 0b/0c and PR 1 because
+those PRs do not move product paths. Current readiness state lives exclusively
+in the binding rollout ledger, not here.
 
 ## 2. Disposition vocabulary
 
@@ -54,6 +57,12 @@ paths.
 No cleanup disposition authorizes discarding uncommitted work. A dirty
 worktree remains protected until its diff is reviewed.
 
+The disposition cells in every table below are the snapshot's recorded
+decisions, written in the imperative voice of the time. They are historical
+record, not current instructions: the binding, current dispositions for any
+item are made only in the rollout ledger's PR-1 intake snapshot and PR-2
+freeze ledger.
+
 ## 3. Open GitHub PRs
 
 There were 46 open PRs at the snapshot. Every one is accounted for below.
@@ -67,8 +76,10 @@ There were 46 open PRs at the snapshot. Every one is accounted for below.
 
 ### 3.2 Independent current work
 
-These do not block PR 0b/0c or PR 1. They should be resolved before the PR 2
-freeze so the mechanical move starts from a quiet `main`.
+At the snapshot, these did not block PR 0b/0c or PR 1 and were assessed as
+work to resolve before the PR 2 freeze so the mechanical move would start
+from a quiet `main`. Their live status is tracked, if at all, in the binding
+rollout ledger's snapshots — not here.
 
 | PR | Owner / head | Disposition |
 | --- | --- | --- |
@@ -159,8 +170,11 @@ worktrees inherit their PR's disposition above.
 
 ### 4.4 Protected dirty product work
 
-These branches do not prevent in-place PR 1. They must receive a named owner
-and a land/cancel/retarget decision before PR 2 moves Desktop paths.
+At the snapshot, these branches did not prevent in-place PR 1 but were each
+assessed as needing a named owner and a land/cancel/retarget decision before
+PR 2 moves Desktop paths. The binding dispositions are made in the rollout
+ledger's PR-1 intake snapshot and PR-2 freeze ledger, which use this table as
+sweep input.
 
 | Work | Head / dirty state | Touched slice | Required decision |
 | --- | --- | --- | --- |
@@ -201,35 +215,43 @@ PRs #1128, #1130, #1131, #1133, #1136–#1139, and #1144 are also cleanup
 candidates. Actual removal is a separate housekeeping action after this ledger
 is accepted.
 
-## 5. Execution order
+## 5. Execution order (as recorded at the snapshot)
 
-1. Fix/rebase/merge #1143.
+This was the execution order recommended at the 2026-07-13 snapshot. It is
+history: the live chain order, gates, and readiness checks are owned
+exclusively by the binding rollout ledger.
+
+1. Fix/rebase/merge #1143. (Since completed: merged as `5e86a7faf` on
+   2026-07-13.)
 2. Resolve the small independent merge batch (#1140, #1141, #807, #1104,
    #1114, and the #1105 product decision).
-3. Keep `test-foundation/v2-*` as the only active test-foundation line. Port
-   accepted behavior from `test-foundation-combined` and the test-only tail of
-   #1142, validate it, open a clean PR, and close #1142.
-4. Implement PR 0b/0c and in-place PR 1. Fresh-port only the accepted WDU
-   security/lifecycle tests; do not merge the obsolete WDU branches.
-5. In parallel, split current Workflow work into reviewable slices and audit
-   the protected dirty product work.
-6. Immediately before PR 2, refresh this ledger, require every hot-surface
-   item to be merged/cancelled/retargeted, remove the embedded browser, and
-   begin the one-to-two-day Desktop path freeze.
+3. Keep `test-foundation/v2-*` as the only active test-foundation line,
+   porting accepted behavior from `test-foundation-combined` and the test-only
+   tail of #1142, validating it, opening a clean PR, and closing #1142.
+4. Implement PR 0b/0c and in-place PR 1, fresh-porting only the accepted WDU
+   security/lifecycle tests and never merging the obsolete WDU branches.
+5. In parallel, split then-current Workflow work into reviewable slices and
+   audit the protected dirty product work.
+6. Immediately before PR 2, re-inventory every hot-surface item as
+   merged/cancelled/retargeted, remove the embedded browser, and begin the
+   one-to-two-day Desktop path freeze. (That re-inventory is now the rollout
+   ledger's PR-2 freeze section — this tbd file is never refreshed.)
 
-## 6. Gate to start PR 1
+## 6. Gate to start PR 1 (as recorded at the snapshot)
 
-PR 1 may start when:
+At the snapshot, the assessed preconditions for starting PR 1 were:
 
-- #1143 is merged;
-- #1142 is recorded as superseded and V2 is the single canonical test line;
-- PR 0b/0c owners do not use the rejected WDU deployment-UUID design;
-- all dirty worktrees in Section 4 are protected from cleanup; and
-- queued structure-alignment work that assumes app-owned product pages or a
-  separate Web product is cancelled or retargeted.
+- #1143 merged (since satisfied: `5e86a7faf`);
+- #1142 recorded as superseded and V2 the single canonical test line;
+- PR 0b/0c owners not using the rejected WDU deployment-UUID design;
+- all dirty worktrees in Section 4 protected from cleanup; and
+- queued structure-alignment work that assumed app-owned product pages or a
+  separate Web product cancelled or retargeted.
 
-The dirty product programs do not all need to land before PR 1 because PR 1
-does not move their files. They do need final dispositions before PR 2.
+The dirty product programs did not all need to land before PR 1 because PR 1
+does not move their files; they needed final dispositions before PR 2. The
+BINDING readiness check for PR 1 is the committed PR-1 intake snapshot in the
+rollout ledger — not this section.
 
 ## 7. Raw active-worktree snapshot
 
