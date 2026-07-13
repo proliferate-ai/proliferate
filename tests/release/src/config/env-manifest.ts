@@ -256,19 +256,27 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     lanes: ["local"],
   },
   {
-    name: "RELEASE_E2E_STAGING_ECS_PIN_BUMP",
+    name: "RELEASE_E2E_RETAINED_MANIFEST_PATH",
     description:
-      "Opt-in switch (set to `1`) authorizing T4-CLOUD-1 to bump the advertised AnyHarness runtime " +
-      "pin on the STAGING server by overriding RUNTIME_VERSION in the proliferate-staging-server ECS " +
-      "task definition and rolling the service — the only knob that moves desiredVersions.anyharness " +
-      "without cutting a release (RUNTIME_VERSION is a baked-in image ENV; ECS task env overrides it). " +
-      "The scenario restores the original task definition in a finally. Absent -> the scenario reports " +
-      "blocked rather than mutating ECS. Staging-only and guarded (assertNotProduction); never touches " +
-      "proliferate-prod*. AWS credentials come from the ambient environment (aws CLI), not a repo var.",
+      "Path to the retained production N-1 manifest JSON that T4-RUNTIME-1 provisions against (the " +
+      "immutable production E2B template + component versions). Captured by " +
+      "scripts/capture-retained-production-manifest.mjs from the currently-deployed production release — " +
+      "N-1 is resolved by manifest/digest, never inferred by patch decrement or a rolling `stable` tag.",
     whereItLives:
-      "Operator sets it explicitly for a nightly/on-demand staging run once AWS creds able to " +
-      "register-task-definition + update-service on proliferate-staging are present. Never set in CI " +
-      "without a dedicated staging-scoped role.",
+      "A checked-in or run-local fixture produced by capture-retained-production-manifest.mjs, e.g. " +
+      "tests/release/fixtures/retained-production/<version>.json.",
+    secret: false,
+    lanes: ["sandbox"],
+  },
+  {
+    name: "RELEASE_E2E_CANDIDATE_MANIFEST_PATH",
+    description:
+      "Path to the candidate-N manifest JSON (content-addressed artifact receipts built once during " +
+      "candidate preparation). T4-RUNTIME-1 reads the immutable candidate Linux AnyHarness slot + " +
+      "source SHA from it to build the run-scoped immutable artifact route; it never rebuilds artifacts.",
+    whereItLives:
+      "Produced by candidate preparation (prepare-candidate) and downloaded by digest. Local runs point " +
+      "at the same content-addressed candidate-manifest.json CI uses.",
     secret: false,
     lanes: ["sandbox"],
   },

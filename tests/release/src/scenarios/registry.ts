@@ -13,7 +13,7 @@ import { t3Bill1 } from "./t3-bill-1.js";
 import { t3Bill2 } from "./t3-bill-2.js";
 import { t3Bill3 } from "./t3-bill-3.js";
 import { t3Bill4 } from "./t3-bill-4.js";
-import { t4Cloud1 } from "./upgrade/t4-cloud-1.js";
+import { t4Runtime1 } from "./upgrade/t4-runtime-1.js";
 import { t4Desktop1 } from "./upgrade/t4-desktop-1.js";
 import { t4Sh1 } from "./upgrade/t4-sh-1.js";
 import { t4Sh2 } from "./upgrade/t4-sh-2.js";
@@ -49,7 +49,7 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
   t3Sh3,
   t3Sh4,
   t3Sh5,
-  t4Cloud1,
+  t4Runtime1,
   t4Desktop1,
   t4Sh1,
   t4Sh2,

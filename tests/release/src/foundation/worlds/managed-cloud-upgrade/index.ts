@@ -10,3 +10,5 @@ export * from "./ownership.js";
 export * from "./provisioner.js";
 export * from "./scenario.js";
 export * from "./support.js";
+export * from "./guards.js";
+export * from "./secure-env.js";
