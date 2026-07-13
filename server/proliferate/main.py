@@ -18,6 +18,7 @@ import proliferate.db.models.automations  # noqa: F401
 import proliferate.db.models.cloud  # noqa: F401
 import proliferate.db.models.organizations  # noqa: F401
 import proliferate.db.models.support  # noqa: F401
+import proliferate.db.models.workflows  # noqa: F401
 from proliferate.auth.api import router as auth_viewer_router
 from proliferate.auth.desktop.api import router as desktop_router
 from proliferate.auth.identity.api import router as identity_auth_router
@@ -78,6 +79,7 @@ from proliferate.server.setup.api import router as first_run_setup_router
 from proliferate.server.setup.lifecycle import ensure_first_run_setup_token
 from proliferate.server.support.api import router as support_router
 from proliferate.server.version import server_version
+from proliferate.server.workflows.api import router as workflows_router
 from proliferate.utils.logging import configure_server_logging
 
 
@@ -286,6 +288,7 @@ def create_app() -> FastAPI:
     app.include_router(cloud_router, prefix=f"{api_prefix}/v1", tags=["cloud"])
     app.include_router(gateway_router, prefix=f"{api_prefix}/v1/gateway", tags=["gateway"])
     app.include_router(catalogs_router, prefix=f"{api_prefix}/v1", tags=["catalogs"])
+    app.include_router(workflows_router, prefix=f"{api_prefix}/v1", tags=["workflows"])
     app.include_router(ai_magic_router, prefix=f"{api_prefix}/v1", tags=["ai_magic"])
     app.include_router(support_router, prefix=f"{api_prefix}/v1", tags=["support"])
     app.include_router(billing_router, prefix=f"{api_prefix}/v1", tags=["billing"])

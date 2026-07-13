@@ -1,0 +1,60 @@
+{
+  "id": "10000000-0000-4000-8000-000000000002",
+  "userId": "20000000-0000-4000-8000-000000000002",
+  "title": "Diagnose and propose a fix",
+  "description": "Investigate a ticket, then prepare an implementation proposal.",
+  "schemaVersion": 1,
+  "revision": 4,
+  "validatedCatalogVersion": "2026-07-11.2",
+  "defaultRepoConfigId": "40000000-0000-4000-8000-000000000001",
+  "inputs": [
+    {
+      "name": "ticket",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "includeTests",
+      "type": "boolean",
+      "required": false
+    }
+  ],
+  "stages": [
+    {
+      "harnessConfig": {
+        "agentKind": "claude",
+        "modelId": "sonnet",
+        "effort": "high"
+      },
+      "steps": [
+        {
+          "kind": "agent.prompt",
+          "prompt": "Investigate {{inputs.ticket}} in the repository.",
+          "goal": {
+            "objective": "Produce an evidence-backed diagnosis."
+          }
+        },
+        {
+          "kind": "agent.prompt",
+          "prompt": "Identify the smallest safe fix and relevant tests."
+        }
+      ]
+    },
+    {
+      "harnessConfig": {
+        "agentKind": "codex",
+        "modelId": "gpt-5.5",
+        "effort": "high"
+      },
+      "steps": [
+        {
+          "kind": "agent.prompt",
+          "prompt": "Review the diagnosis and produce the implementation proposal. Include tests: {{inputs.includeTests}}."
+        }
+      ]
+    }
+  ],
+  "createdAt": "2026-07-12T12:00:00Z",
+  "updatedAt": "2026-07-12T12:30:00Z",
+  "deletedAt": null
+}

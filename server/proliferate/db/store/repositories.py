@@ -151,6 +151,26 @@ async def get_repo_config_for_user(
     return await _repo_value(db, row) if row is not None else None
 
 
+async def get_repo_config_by_id_for_user(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    repo_config_id: UUID,
+) -> RepoConfigValue | None:
+    """Load an active repository only when it belongs to the acting user."""
+
+    row = (
+        await db.execute(
+            select(RepoConfig).where(
+                RepoConfig.id == repo_config_id,
+                RepoConfig.user_id == user_id,
+                RepoConfig.deleted_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+    return await _repo_value(db, row) if row is not None else None
+
+
 async def get_cloud_repo_environment(
     db: AsyncSession,
     *,
