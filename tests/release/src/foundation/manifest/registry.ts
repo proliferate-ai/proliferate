@@ -136,13 +136,19 @@ export function defineCollector(input: CollectorDefinitionInput): CollectorDefin
   const cellKeys = cells.map(cellKey);
   // The proof requirement is derived from the SAME indivisible definition —
   // buildProofRequirement throws on empty/duplicate/blank assertion ids.
-  const proofRequirements = new Map<string, CellProofRequirement>();
+  const requirementEntries = new Map<string, CellProofRequirement>();
   for (const def of input.cellDefinitions) {
-    proofRequirements.set(
+    // buildProofRequirement returns a frozen requirement with a frozen,
+    // cloned assertion-id array — the definition never exposes the caller's
+    // mutable inputs.
+    requirementEntries.set(
       cellKey(def.cell),
       buildProofRequirement(def.cell, input.collectedTestId, def.assertionIds),
     );
   }
+  // Expose an immutable Map surface: mutators throw instead of silently
+  // diverging the trusted requirements from the definition inputs.
+  const proofRequirements = freezeMap(requirementEntries);
   const definition: CollectorDefinition = {
     ...input,
     cells: deepFreeze(cells),
@@ -162,6 +168,20 @@ export function defineCollector(input: CollectorDefinitionInput): CollectorDefin
     },
   };
   return deepFreeze(definition);
+}
+
+/** Returns a Map whose mutators throw — the trusted requirement surface. */
+function freezeMap<K, V>(source: Map<K, V>): ReadonlyMap<K, V> {
+  const frozen = new Map(source);
+  const reject = (op: string) => () => {
+    throw new TypeError(`proofRequirements is immutable; ${op} is not allowed`);
+  };
+  Object.defineProperties(frozen, {
+    set: { value: reject("set") },
+    delete: { value: reject("delete") },
+    clear: { value: reject("clear") },
+  });
+  return frozen;
 }
 
 /** Recursively freezes plain objects/arrays (leaves functions/Maps intact). */

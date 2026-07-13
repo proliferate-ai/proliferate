@@ -15,6 +15,7 @@ import type { PreflightSource } from "../preflight/engine.js";
 import { candidateManifest } from "../fakes/manifests.js";
 import { FakeTier2Provisioner, fakeProvisioner, type FakeProvisionerOptions } from "../fakes/provisioners.js";
 import { greenRunner, failingRunner, fakeProofRequirement } from "../fakes/cells.js";
+import { buildProofRequirement } from "../contracts/proof.js";
 import type { CellRunner } from "./cell.js";
 import type { WorldId, CellIdentity } from "../contracts/identity.js";
 import { cellKey } from "../contracts/identity.js";
@@ -415,9 +416,14 @@ test("ADVERSARIAL: a no-op collector (returns success, records nothing) is FAILE
 
 test("ADVERSARIAL: recording only SOME required assertions is FAILED", async () => {
   const cell: CellIdentity = { scenarioId: "T2-AUTH-1", world: "tier-2", productHost: null, dimensions: {} };
-  const twoAssertions = fakeProofRequirement(cell); // requires exactly FAKE assertion
+  // A proper two-assertion contract (validated at plan time); the runner
+  // records only one of the two.
+  const twoAssertions = buildProofRequirement(cell, "fixture://fake-runner", [
+    "fixture-assertion",
+    "second-assertion",
+  ]);
   const h = harness({
-    cells: [{ ...tier2("T2-AUTH-1"), proofRequirement: { ...twoAssertions, assertionIds: ["fixture-assertion", "second-assertion"] } }],
+    cells: [{ ...tier2("T2-AUTH-1"), proofRequirement: twoAssertions }],
     behavior: "strict",
     runners: () => [
       {

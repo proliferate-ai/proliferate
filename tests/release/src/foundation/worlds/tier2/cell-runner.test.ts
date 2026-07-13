@@ -13,6 +13,7 @@ function memoryEvidenceSink() {
     events,
     async append(event: Readonly<Record<string, unknown>>) {
       events.push(event);
+      return { eventId: `mem-${events.length}`, sequence: events.length, digest: "0".repeat(64) };
     },
     async finalize(_evidence: RunEvidence) {
       throw new Error("not used in this test");

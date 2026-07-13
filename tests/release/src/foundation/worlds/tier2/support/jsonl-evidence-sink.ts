@@ -11,7 +11,8 @@
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import type { EvidenceSink, RunEvidence } from "../../../contracts/evidence.js";
+import type { AppendedEventRef, EvidenceSink, RunEvidence } from "../../../contracts/evidence.js";
+import { EnvelopeCounter } from "../../../evidence/envelope.js";
 
 // Defense in depth: reject anything that looks like it could carry a secret
 // value, even though every caller in this codebase is expected to have
@@ -48,9 +49,13 @@ export class JsonlEvidenceSink implements EvidenceSink {
     mkdirSync(path.dirname(baseFilePath), { recursive: true });
   }
 
-  async append(event: Readonly<Record<string, unknown>>): Promise<void> {
+  private readonly envelopes = new EnvelopeCounter();
+
+  async append(event: Readonly<Record<string, unknown>>): Promise<AppendedEventRef> {
     assertNoRedactedKeys(event, "event");
-    appendFileSync(this.eventsPath, `${JSON.stringify({ ...event, recordedAt: new Date().toISOString() })}\n`, "utf8");
+    const [envelope, ref] = this.envelopes.wrap("tier2-local", "shard-1-of-1", event);
+    appendFileSync(this.eventsPath, `${JSON.stringify(envelope)}\n`, "utf8");
+    return ref;
   }
 
   async finalize(evidence: RunEvidence): Promise<void> {

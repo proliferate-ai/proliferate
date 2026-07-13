@@ -47,9 +47,12 @@ function inMemoryLedger(): CleanupLedger {
 }
 
 function consoleEvidenceSink(secrets: readonly (string | undefined)[]): EvidenceSink {
+  let sequence = 0;
   return {
     append: async (event) => {
       console.log(`[evidence] ${redactSecrets(JSON.stringify(event), { secrets })}`);
+      sequence += 1;
+      return { eventId: `console-${sequence}`, sequence, digest: "0".repeat(64) };
     },
     finalize: async (evidence) => {
       console.log(`[evidence:final] ${redactSecrets(JSON.stringify(evidence), { secrets })}`);

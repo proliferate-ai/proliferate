@@ -12,7 +12,8 @@
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
-import type { EvidenceSink, RunEvidence } from "../../contracts/evidence.js";
+import type { AppendedEventRef, EvidenceSink, RunEvidence } from "../../contracts/evidence.js";
+import { EnvelopeCounter } from "../../evidence/envelope.js";
 
 /** Key names whose values are never written, regardless of nesting depth. */
 const REDACTED_KEY_PATTERN = /token|secret|password|api[_-]?key|credential|refresh|bearer/i;
@@ -37,10 +38,13 @@ export class LocalJsonlEvidenceSink implements EvidenceSink {
     this.filePath = filePath;
   }
 
-  async append(event: Readonly<Record<string, unknown>>): Promise<void> {
+  private readonly envelopes = new EnvelopeCounter();
+
+  async append(event: Readonly<Record<string, unknown>>): Promise<AppendedEventRef> {
     await mkdir(dirname(this.filePath), { recursive: true });
-    const line = JSON.stringify({ ts: new Date().toISOString(), ...scrub(event) as object });
-    await appendFile(this.filePath, `${line}\n`, "utf8");
+    const [envelope, ref] = this.envelopes.wrap("self-host-local", "shard-1-of-1", scrub(event) as Record<string, unknown>);
+    await appendFile(this.filePath, `${JSON.stringify(envelope)}\n`, "utf8");
+    return ref;
   }
 
   async finalize(evidence: RunEvidence): Promise<void> {

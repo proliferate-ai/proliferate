@@ -77,12 +77,62 @@ export function buildProofRequirement(
   if (problems.length > 0) {
     throw new ProofContractError(`invalid proof contract for ${computeCellKey(cell)}`, problems);
   }
-  const sorted = [...assertionIds].sort();
+  const sorted = Object.freeze([...assertionIds].sort());
   const key = computeCellKey(cell);
   const contractHash = createHash("sha256")
     .update(canonicalJson({ cellKey: key, collectedTestId, assertionIds: sorted }), "utf8")
     .digest("hex");
-  return { collectedTestId, assertionIds: sorted, contractHash };
+  return Object.freeze({ collectedTestId, assertionIds: sorted, contractHash });
+}
+
+/**
+ * Independently validates a requirement AGAINST the cell it claims to govern:
+ * nonempty/unique/nonblank assertion ids, stable test id, sorted canonical
+ * set, and — critically — the contractHash recomputed from
+ * cellKey + collectedTestId + assertionIds must match. A forged requirement
+ * (edited ids, emptied set, transplanted hash) fails here regardless of any
+ * receipt presented with it. Returns problems; empty means valid.
+ */
+export function validateProofRequirement(
+  expectedCellKey: string,
+  requirement: CellProofRequirement | null | undefined,
+): string[] {
+  if (!requirement) return ["cell has no proof requirement"];
+  const problems: string[] = [];
+  if (!requirement.collectedTestId || requirement.collectedTestId.trim().length === 0) {
+    problems.push("requirement collectedTestId is blank");
+  }
+  if (requirement.assertionIds.length === 0) {
+    problems.push("requirement has zero assertion ids; an empty contract proves nothing");
+  }
+  const unique = new Set(requirement.assertionIds);
+  if (unique.size !== requirement.assertionIds.length) {
+    problems.push("requirement assertion ids are not unique");
+  }
+  for (const id of requirement.assertionIds) {
+    if (!id || id.trim().length === 0) problems.push("requirement contains a blank assertion id");
+  }
+  const sorted = [...requirement.assertionIds].sort();
+  if (JSON.stringify(sorted) !== JSON.stringify([...requirement.assertionIds])) {
+    problems.push("requirement assertion ids are not in canonical sorted order");
+  }
+  if (problems.length > 0) return problems;
+  const recomputed = createHash("sha256")
+    .update(
+      canonicalJson({
+        cellKey: expectedCellKey,
+        collectedTestId: requirement.collectedTestId,
+        assertionIds: sorted,
+      }),
+      "utf8",
+    )
+    .digest("hex");
+  if (recomputed !== requirement.contractHash) {
+    problems.push(
+      `requirement contractHash ${requirement.contractHash.slice(0, 12)}… does not recompute from cellKey+testId+assertionIds (${recomputed.slice(0, 12)}…)`,
+    );
+  }
+  return problems;
 }
 
 /** Canonical digest of an evidence event envelope (what ProofEventRef binds). */

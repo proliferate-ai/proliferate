@@ -15,7 +15,7 @@ import { assignShards } from "../contracts/plan.js";
 import type { PlannedCell, SelectedCellPlan } from "../contracts/plan.js";
 import type { CellIdentity, ProductHost, ResultBehavior, WorldId } from "../contracts/identity.js";
 import { cellKey } from "../contracts/identity.js";
-import type { CellProofRequirement } from "../contracts/proof.js";
+import { validateProofRequirement, type CellProofRequirement } from "../contracts/proof.js";
 import type { ShardIdentity } from "../contracts/identity.js";
 
 /**
@@ -69,12 +69,27 @@ export function buildPlan(input: BuildPlanInput): SelectedCellPlan {
       dimensions: spec.dimensions ?? {},
     };
     const key = cellKey(cell);
+    // Validate + clone + freeze the requirement at plan construction: the
+    // trusted plan owns an immutable copy, so later mutation of the source
+    // registry object cannot alter what strict evaluation compares against.
+    let proofRequirement: CellProofRequirement | null = null;
+    if (spec.proofRequirement) {
+      const problems = validateProofRequirement(key, spec.proofRequirement);
+      if (problems.length > 0) {
+        throw new Error(`invalid proof requirement for ${key}: ${problems.join("; ")}`);
+      }
+      proofRequirement = Object.freeze({
+        collectedTestId: spec.proofRequirement.collectedTestId,
+        assertionIds: Object.freeze([...spec.proofRequirement.assertionIds]),
+        contractHash: spec.proofRequirement.contractHash,
+      });
+    }
     return {
       cell,
       cellKey: key,
       disposition: spec.disposition ?? "required",
       legacy: spec.legacy ?? isLegacyScenarioId(spec.scenarioId),
-      proofRequirement: spec.proofRequirement ?? null,
+      proofRequirement,
     };
   });
 

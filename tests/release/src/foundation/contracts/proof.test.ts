@@ -9,6 +9,7 @@ import test from "node:test";
 
 import {
   buildProofRequirement,
+  validateProofRequirement,
   validateProofReceipt,
   proofEventDigest,
   ProofContractError,
@@ -96,4 +97,56 @@ test("ADVERSARIAL: malformed event digest is rejected", () => {
 
 test("a complete, exact receipt validates cleanly", () => {
   assert.deepEqual(validateProofReceipt(req(), receipt(), KEY), []);
+});
+
+// ── validateProofRequirement: independent requirement validation ──
+
+test("ADVERSARIAL: a forged EMPTY requirement + empty receipt can never validate", () => {
+  const forged = { collectedTestId: "fixture://test", assertionIds: [] as string[], contractHash: "f".repeat(64) };
+  // Requirement itself is invalid — regardless of what receipt accompanies it.
+  const problems = validateProofRequirement(KEY, forged);
+  assert.ok(problems.some((p) => p.includes("zero assertion ids")));
+  // Even if a caller skipped requirement validation, an empty receipt against
+  // the real validator still catches the transplanted hash.
+  const emptyReceipt: CellProofReceipt = {
+    contractHash: forged.contractHash,
+    collectedTestId: forged.collectedTestId,
+    cellKey: KEY,
+    attemptId: "att-1",
+    passed: [],
+  };
+  // validateProofReceipt over the forged requirement trivially "matches", which
+  // is exactly why validateProofRequirement must run first everywhere.
+  assert.deepEqual(validateProofReceipt(forged, emptyReceipt, KEY), []);
+});
+
+test("ADVERSARIAL: a mutated requirement (edited ids) fails hash recomputation", () => {
+  const real = req(["a1", "a2"]);
+  const mutated = { ...real, assertionIds: ["a1"] };
+  const problems = validateProofRequirement(KEY, mutated);
+  assert.ok(problems.some((p) => p.includes("does not recompute")));
+});
+
+test("ADVERSARIAL: unsorted assertion ids are non-canonical and rejected", () => {
+  const real = req(["a1", "a2"]);
+  const unsorted = { ...real, assertionIds: ["a2", "a1"] };
+  const problems = validateProofRequirement(KEY, unsorted);
+  assert.ok(problems.some((p) => p.includes("canonical sorted order")));
+});
+
+test("a genuine requirement validates cleanly against its cell key and fails against another", () => {
+  const real = req();
+  assert.deepEqual(validateProofRequirement(KEY, real), []);
+  const other = validateProofRequirement("tier-2/OTHER/-/-", real);
+  assert.ok(other.some((p) => p.includes("does not recompute")));
+});
+
+test("built requirements are frozen: assertion ids and the object reject mutation", () => {
+  const real = req();
+  assert.throws(() => {
+    (real.assertionIds as string[]).push("injected");
+  }, TypeError);
+  assert.throws(() => {
+    (real as { contractHash: string }).contractHash = "f".repeat(64);
+  }, TypeError);
 });

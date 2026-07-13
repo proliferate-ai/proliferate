@@ -39,7 +39,7 @@ import { shardScopedPlan } from "./plan-builder.js";
 import { verifyReadyHandle } from "./readiness.js";
 import { CellBlockedError, CellExpectedFailError, type CellExecutionContext, type CellRunner } from "./cell.js";
 import { ScopedProofRecorder } from "./proof-recorder.js";
-import { validateProofReceipt, type CellProofReceipt } from "../contracts/proof.js";
+import { validateProofReceipt, validateProofRequirement, type CellProofReceipt } from "../contracts/proof.js";
 import { redactSecrets } from "../preflight/redaction.js";
 
 export interface FoundationRunInput {
@@ -356,20 +356,29 @@ async function executeCell(
         "collector returned success but the planned cell carries no proof requirement; " +
         "a cell without a trusted proof contract can never be green";
     } else {
-      const candidateReceipt: CellProofReceipt = {
-        contractHash: planned.proofRequirement.contractHash,
-        collectedTestId: planned.proofRequirement.collectedTestId,
-        cellKey: planned.cellKey,
-        attemptId: attempt.attemptId,
-        passed: refs,
-      };
-      const problems = validateProofReceipt(planned.proofRequirement, candidateReceipt, planned.cellKey);
-      if (problems.length > 0) {
+      // Independent requirement validation before trusting it for a receipt:
+      // a forged empty/mutated requirement fails here even if an "empty"
+      // receipt would trivially match it.
+      const requirementProblems = validateProofRequirement(planned.cellKey, planned.proofRequirement);
+      if (requirementProblems.length > 0) {
         status = "failed";
-        detail = `proof contract unsatisfied: ${problems.join("; ")}`;
+        detail = `proof requirement invalid: ${requirementProblems.join("; ")}`;
       } else {
-        status = "green";
-        proof = candidateReceipt;
+        const candidateReceipt: CellProofReceipt = {
+          contractHash: planned.proofRequirement.contractHash,
+          collectedTestId: planned.proofRequirement.collectedTestId,
+          cellKey: planned.cellKey,
+          attemptId: attempt.attemptId,
+          passed: refs,
+        };
+        const problems = validateProofReceipt(planned.proofRequirement, candidateReceipt, planned.cellKey);
+        if (problems.length > 0) {
+          status = "failed";
+          detail = `proof contract unsatisfied: ${problems.join("; ")}`;
+        } else {
+          status = "green";
+          proof = candidateReceipt;
+        }
       }
     }
   } catch (error) {

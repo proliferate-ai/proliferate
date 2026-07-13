@@ -26,7 +26,7 @@ import { shardOwnedCellKeys } from "./plan.js";
 import type { CellAttempt, FinalCellResult, RunEvaluation } from "./results.js";
 import { cellKey as computeCellKey } from "./identity.js";
 import { evaluateCells } from "./evaluate.js";
-import { validateProofReceipt } from "./proof.js";
+import { validateProofReceipt, validateProofRequirement } from "./proof.js";
 
 /** Trusted identities the caller resolved independently of any shard. */
 export interface ExpectedRunIdentity {
@@ -202,6 +202,17 @@ export function evaluateAggregate(input: AggregateInput): AggregateEvaluation {
       defects.push(
         `green final ${final.cellKey} has no trusted proof requirement in the plan; a bare placeholder cell can never be green`,
       );
+      continue;
+    }
+    // Independently re-validate the requirement itself: a forged/mutated
+    // requirement (empty ids, transplanted hash) is rejected before any
+    // receipt comparison — an empty receipt matching an empty forged
+    // requirement can never qualify.
+    const requirementProblems = validateProofRequirement(final.cellKey, planned.proofRequirement);
+    if (requirementProblems.length > 0) {
+      for (const problem of requirementProblems) {
+        defects.push(`green final ${final.cellKey} requirement: ${problem}`);
+      }
       continue;
     }
     const active = final.attempts.filter((a) => !a.superseded);

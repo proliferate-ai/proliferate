@@ -50,8 +50,11 @@ class InMemoryLedger implements CleanupLedger {
 class InMemoryEvidence implements EvidenceSink {
   readonly events: Array<Record<string, unknown>> = [];
   finalized: RunEvidence | null = null;
-  async append(event: Readonly<Record<string, unknown>>): Promise<void> {
+  private sequence = 0;
+  async append(event: Readonly<Record<string, unknown>>) {
+    this.sequence += 1;
     this.events.push({ ...event });
+    return { eventId: `mem-${this.sequence}`, sequence: this.sequence, digest: "0".repeat(64) };
   }
   async finalize(evidence: RunEvidence): Promise<void> {
     this.finalized = evidence;

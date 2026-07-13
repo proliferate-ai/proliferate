@@ -11,6 +11,15 @@ import type { RetainedProductionManifest } from "../../contracts/artifacts.js";
 import { DesktopUpgradeWorldProvisioner } from "./provisioner.js";
 import { createIsolatedHome, removeIsolatedHome, assertNotRealLibrary } from "./install.js";
 
+
+// Minimal EvidenceSink stub satisfying the AppendedEventRef contract.
+function stubEvidence() {
+  let seq = 0;
+  return {
+    append: async () => ({ eventId: `e-${(seq += 1)}`, sequence: seq, digest: "0".repeat(64) }),
+    finalize: async () => {},
+  };
+}
 class FakeLedger implements CleanupLedger {
   readonly registered: Omit<CleanupEntry, "sequence" | "state" | "attempts" | "registeredAt" | "updatedAt" | "lastError">[] = [];
   private seq = 0;
@@ -62,7 +71,7 @@ function ctx(ledger: CleanupLedger, ret: RetainedProductionManifest | null): Wor
     candidate: {} as WorldContext["candidate"],
     retained: ret,
     ledger,
-    evidence: { append: async () => {}, finalize: async () => {} },
+    evidence: stubEvidence(),
   };
 }
 

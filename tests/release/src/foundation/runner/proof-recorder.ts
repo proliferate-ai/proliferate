@@ -12,7 +12,6 @@
 import type { AttemptIdentity } from "../contracts/identity.js";
 import type { EvidenceSink } from "../contracts/evidence.js";
 import type { ProofEventRef } from "../contracts/proof.js";
-import { proofEventDigest } from "../contracts/proof.js";
 
 export interface ProofRecorder {
   /** Records one passed assertion with a sanitized observation string. */
@@ -36,18 +35,16 @@ export class ScopedProofRecorder implements ProofRecorder {
         `proof recorder for attempt ${this.attempt.attemptId} is sealed; a collector cannot record assertions after returning`,
       );
     }
-    const envelope = {
+    // The SINK owns event id/sequence/timestamp/digest; the recorder only
+    // supplies the assertion payload and stores the returned persisted ref.
+    const ref = await this.evidence.append({
       event: "proof-assertion-pass",
-      runId: this.attempt.runId,
-      shardId: this.attempt.shardId,
       cellKey: this.attempt.cellKey,
       attemptId: this.attempt.attemptId,
       assertionId,
       observation: this.redact(observation),
-      recordedAt: this.now(),
-    };
-    await this.evidence.append(envelope);
-    this.refs.push({ assertionId, eventDigest: proofEventDigest(envelope) });
+    });
+    this.refs.push({ assertionId, eventDigest: ref.digest });
   }
 
   /** Engine-only: stops further recording and returns what was recorded. */

@@ -13,7 +13,8 @@ import type {
   CleanupReconciliation,
   CleanupState,
 } from "../../contracts/cleanup.js";
-import type { EvidenceSink, RunEvidence } from "../../contracts/evidence.js";
+import type { AppendedEventRef, EvidenceSink, RunEvidence } from "../../contracts/evidence.js";
+import { EnvelopeCounter } from "../../evidence/envelope.js";
 
 /** Keys that must never appear in a ledger entry or evidence payload. */
 const SECRET_KEY = /(secret|password|passwd|token|bearer|authorization|private[_-]?key|access[_-]?key|api[_-]?key|refresh)/i;
@@ -114,9 +115,13 @@ export class InMemoryEvidenceSink implements EvidenceSink {
   readonly events: Readonly<Record<string, unknown>>[] = [];
   finalized: RunEvidence | null = null;
 
-  async append(event: Readonly<Record<string, unknown>>): Promise<void> {
+  private readonly envelopes = new EnvelopeCounter();
+
+  async append(event: Readonly<Record<string, unknown>>): Promise<AppendedEventRef> {
     assertNoSecretKeys(event, "evidence event");
-    this.events.push(event);
+    const [envelope, ref] = this.envelopes.wrap("in-memory", "shard-1-of-1", event);
+    this.events.push(envelope);
+    return ref;
   }
 
   async finalize(evidence: RunEvidence): Promise<void> {

@@ -49,9 +49,27 @@ export interface RunEvidence {
  * Actions artifact staging dir) and must reject any payload containing a key
  * matched by the redaction policy.
  */
+/**
+ * Reference to the exact persisted canonical event envelope. The SINK owns
+ * event id, sequence, timestamp, and the canonical digest — recomputable from
+ * the persisted JSONL line, so a tampered journal no longer matches.
+ */
+export interface AppendedEventRef {
+  readonly eventId: string;
+  /** Monotonically increasing per sink instance, starting at 1. */
+  readonly sequence: number;
+  /** Canonical sha256 digest of the persisted envelope. */
+  readonly digest: string;
+}
+
 export interface EvidenceSink {
-  /** Record an intermediate observation (readiness, attempt, ledger event). */
-  append(event: Readonly<Record<string, unknown>>): Promise<void>;
+  /**
+   * Record an intermediate observation (readiness, attempt, ledger event).
+   * The sink binds run/shard identity, event id, sequence, and timestamp into
+   * the persisted envelope and returns the reference to EXACTLY what was
+   * persisted.
+   */
+  append(event: Readonly<Record<string, unknown>>): Promise<AppendedEventRef>;
   /** Write the single immutable final evidence document. Exactly once per run. */
   finalize(evidence: RunEvidence): Promise<void>;
 }

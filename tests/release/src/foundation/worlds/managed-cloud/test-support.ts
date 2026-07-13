@@ -36,7 +36,10 @@ export function recordingEvidenceSink(): { sink: EvidenceSink; events: Record<st
   const events: Record<string, unknown>[] = [];
   const finalized: RunEvidence[] = [];
   const sink: EvidenceSink = {
-    append: async (event) => { events.push(event as Record<string, unknown>); },
+    append: async (event) => {
+      events.push(event as Record<string, unknown>);
+      return { eventId: `mem-${events.length}`, sequence: events.length, digest: "0".repeat(64) };
+    },
     finalize: async (evidence) => { finalized.push(evidence); },
   };
   return { sink, events, finalized };
