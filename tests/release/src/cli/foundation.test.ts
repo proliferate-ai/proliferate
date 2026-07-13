@@ -129,7 +129,7 @@ test("strict with a ready world and one green collector qualifies and exits 0", 
     baseDeps(dir, { provisioners, cellRunners }),
   );
   assert.equal(result.exitCode, 0);
-  assert.match(result.message, /QUALIFYING \(full\)/);
+  assert.match(result.message, /QUALIFYING \(partial\)/);
   const evidencePath = path.join(outputDir, "local-0123456789ab-nonce", "shard-1-of-1", "evidence.json");
   const doc = JSON.parse(readFileSync(evidencePath, "utf8"));
   assert.equal(doc.qualifying, true);

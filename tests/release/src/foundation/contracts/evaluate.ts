@@ -64,6 +64,10 @@ export function evaluateRun(input: EvaluationInput): RunEvaluation {
   if (reasons.length > 0) {
     return { behavior: behavior, verdict: { qualifying: false, reasons }, ...base };
   }
-  const label = plan.deferredScenarioIds.length > 0 ? "partial" : "full";
+  // "full" is reserved for full core-release qualification: the release
+  // selector with no deferred Tier 3 guarantees. Any explicit/subset selector
+  // is a foundation baseline and stays "partial" no matter how green it is.
+  const label =
+    plan.selector === "release" && plan.deferredScenarioIds.length === 0 ? "full" : "partial";
   return { behavior: behavior, verdict: { qualifying: true, label }, ...base };
 }

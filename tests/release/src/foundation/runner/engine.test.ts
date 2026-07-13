@@ -32,6 +32,7 @@ interface HarnessOptions {
   provisioners?: ReadonlyMap<WorldId, WorldProvisioner>;
   previousBlocked?: readonly string[];
   deferredScenarioIds?: readonly string[];
+  selector?: string;
 }
 
 function harness(opts: HarnessOptions) {
@@ -49,7 +50,7 @@ function harness(opts: HarnessOptions) {
   });
   const shard = createShardIdentity({ runId: run.runId, shardIndex: 1, shardCount: 1 });
   const fullPlan = buildPlan({
-    selector: "explicit",
+    selector: opts.selector ?? "explicit",
     behavior: opts.behavior,
     cells: opts.cells,
     deferredScenarioIds: opts.deferredScenarioIds,
@@ -328,14 +329,25 @@ test("strict qualification is labelled partial when the plan enumerates deferred
   );
   cleanup(withDeferred.dir);
 
-  const full = harness({ cells: [tier2("T2-AUTH-1")], behavior: "strict" });
-  const fullResult = await runFoundation(full.input);
+  // An explicit selector is a foundation baseline; even fully green with no
+  // deferred guarantees it never earns the full core-release label.
+  const explicit = harness({ cells: [tier2("T2-AUTH-1")], behavior: "strict" });
+  const explicitResult = await runFoundation(explicit.input);
   assert.equal(
-    fullResult.evaluation.verdict.qualifying === true && fullResult.evaluation.verdict.label,
-    "full",
-    "no deferred guarantees => full qualification label",
+    explicitResult.evaluation.verdict.qualifying === true && explicitResult.evaluation.verdict.label,
+    "partial",
+    "explicit selector => partial baseline label even with no deferred guarantees",
   );
-  cleanup(full.dir);
+  cleanup(explicit.dir);
+
+  const release = harness({ cells: [tier2("T2-AUTH-1")], behavior: "strict", selector: "release" });
+  const releaseResult = await runFoundation(release.input);
+  assert.equal(
+    releaseResult.evaluation.verdict.qualifying === true && releaseResult.evaluation.verdict.label,
+    "full",
+    "release selector with no deferred guarantees => full core-release label",
+  );
+  cleanup(release.dir);
 });
 
 test("not_required cells never demand a result and do not block strict qualification", async () => {

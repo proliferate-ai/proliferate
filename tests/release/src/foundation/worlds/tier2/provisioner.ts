@@ -33,8 +33,12 @@ import { toPostgresDriverUrl } from "./support/postgres-url.js";
 import { resolveStripeTestSecretKey } from "./secret-preflight.js";
 import { provisionStripeTestBillingEnv } from "./support/stripe-price-catalog.js";
 
-/** Never the default port shortcuts — one dedicated profile for this workstream. */
-export const DEFAULT_TIER2_PROFILE = "tf-tier2";
+/**
+ * Never the default port shortcuts — one dedicated profile per invoking
+ * worktree. Profiles are bound to a worktree by scripts/dev.mjs, so the
+ * default must follow TIER2_INTENT_PROFILE rather than one hardcoded name.
+ */
+export const DEFAULT_TIER2_PROFILE = process.env.TIER2_INTENT_PROFILE ?? "tf-tier2";
 
 export interface Tier2WorldProvisionerOptions {
   /** Dedicated dev profile (never default ports, never `main`). */
