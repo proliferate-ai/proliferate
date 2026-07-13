@@ -72,9 +72,32 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: .
 
+      # Canonical mobile release identity (support-system "Release identity"):
+      # proliferate-mobile@<version>+<12-char sha>. The version source is
+      # apps/mobile/app.config.ts, which must equal apps/mobile/package.json; the
+      # SHA is the EAS build commit. Exported as EXPO_PUBLIC_PROLIFERATE_RELEASE
+      # so the telemetry config bakes it into the bundle instead of falling back
+      # to the version-only literal. See the product-lane note in the R2 PR: the
+      # apps/mobile eas.json build profile must forward this env into the EAS
+      # remote build for it to reach the shipped bundle.
+      - name: Resolve mobile release identity
+        id: release
+        if: ${{ steps.switch.outputs.enabled == 'true' }}
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          short_sha="${GIT_SHA:0:12}"
+          release="proliferate-mobile@${version}+${short_sha}"
+          echo "EXPO_PUBLIC_PROLIFERATE_RELEASE=$release" >> "$GITHUB_ENV"
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+        env:
+          GIT_SHA: ${{ inputs.git_sha }}
+
       - name: Build iOS app
         id: build
         if: ${{ steps.switch.outputs.enabled == 'true' }}
+        env:
+          EXPO_PUBLIC_PROLIFERATE_RELEASE: ${{ steps.release.outputs.release }}
         run: |
           set -euo pipefail
           pnpm dlx eas-cli@18.13.0 build \

@@ -205,7 +205,15 @@ jobs:
           server_version="$(cat VERSION)"
           short_sha="${GIT_SHA:0:12}"
 
+          # Production fails closed on a missing/degraded server release identity
+          # (support-system "Release identity"). Staging stays permissive.
+          require_release_identity=""
+          case "$DEPLOY_ENVIRONMENT" in
+            production|Production) require_release_identity="1" ;;
+          esac
+
           jq -n \
+            --arg require_release_identity "$require_release_identity" \
             --arg api_url "$API_URL" \
             --arg api_base "$API_BASE_URL" \
             --arg frontend "$WEB_URL" \
@@ -248,10 +256,13 @@ jobs:
               {"name":"PROLIFERATE_TELEMETRY_MODE","value":"hosted_product"},
               {"name":"SENTRY_ENVIRONMENT","value":$environment},
               {"name":"SENTRY_RELEASE","value":$release},
+              (
+                if $require_release_identity == "" then empty else
+                {"name":"PROLIFERATE_REQUIRE_RELEASE_IDENTITY","value":$require_release_identity}
+                end
+              ),
               {"name":"CLOUD_RUNTIME_SENTRY_ENVIRONMENT","value":$environment},
-              {"name":"CLOUD_RUNTIME_SENTRY_RELEASE","value":$release},
               {"name":"CLOUD_TARGET_SENTRY_ENVIRONMENT","value":$environment},
-              {"name":"CLOUD_TARGET_SENTRY_RELEASE","value":$release},
               {"name":"SUPPORT_REPORT_S3_BUCKET","value":$support_report_bucket},
               {"name":"SUPPORT_REPORT_S3_PREFIX","value":$support_report_prefix},
               {"name":"SUPPORT_REPORT_S3_REGION","value":$support_report_region},
@@ -309,10 +320,19 @@ jobs:
                 (.environment // []) as $current
                 | ($updates[0] | map(.name)) as $updated_names
                 | ["SUPPORT_GITHUB_APP_PRIVATE_KEY", "SUPPORT_LINEAR_API_KEY"] as $secret_names
+                # Names the control plane no longer wires: the shared target
+                # release override could not distinguish worker from supervisor,
+                # and the server release must never stamp a runtime/target
+                # process. Each target binary self-stamps its own release ID;
+                # these stay empty in normal operation, so drop any stale value
+                # left on the live task definition. PROLIFERATE_REQUIRE_RELEASE_IDENTITY
+                # is dropped here and re-added only for production above.
+                | ["CLOUD_RUNTIME_SENTRY_RELEASE", "CLOUD_TARGET_SENTRY_RELEASE", "PROLIFERATE_TARGET_SENTRY_RELEASE", "PROLIFERATE_REQUIRE_RELEASE_IDENTITY"] as $drop_names
                 | ($current | map(select(
                     .name as $name
                     | ($updated_names | index($name) | not)
                     and ($secret_names | index($name) | not)
+                    and ($drop_names | index($name) | not)
                   ))) + $updates[0];
 
               def merge_secrets($updates):

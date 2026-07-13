@@ -161,10 +161,22 @@ jobs:
           aws ssm put-parameter --name "${parameter_prefix}/xai-api-key" \
             --type SecureString --value "$AGENT_GATEWAY_MANAGED_XAI_API_KEY" --overwrite >/dev/null
 
+          # Canonical LiteLLM release identity (support-system "Release
+          # identity"): proliferate-litellm@<root VERSION>+<12-char image commit>.
+          # The version source is the root VERSION file; the SHA is the deployed
+          # image commit (same short SHA used for the image tag above).
+          litellm_version="$(cat VERSION)"
+          short_sha="${GIT_SHA:0:12}"
+          litellm_release="proliferate-litellm@${litellm_version}+${short_sha}"
+
           jq -n \
             --arg region "${AWS_BEDROCK_REGION:-us-east-1}" \
+            --arg release "$litellm_release" \
+            --arg environment "$DEPLOY_ENVIRONMENT" \
             '[
-              {"name":"AWS_BEDROCK_REGION","value":$region}
+              {"name":"AWS_BEDROCK_REGION","value":$region},
+              {"name":"SENTRY_RELEASE","value":$release},
+              {"name":"SENTRY_ENVIRONMENT","value":$environment}
             ]' > env-updates.json
 
           jq -n \
