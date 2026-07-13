@@ -41,8 +41,16 @@ export interface DesktopRuntimeBridge {
 // --- Local files and repositories -----------------------------------------
 
 export type EditorIconId = "cursor" | "vscode" | "windsurf" | "zed" | "sublime";
+export type PathKind = "directory" | "file";
 export type OpenTargetKind = "editor" | "finder" | "terminal" | "copy";
 export type OpenTargetIconId = EditorIconId | "finder" | "terminal";
+
+export interface EditorInfo {
+  id: string;
+  label: string;
+  shortcut: string | null;
+  iconId: EditorIconId;
+}
 
 /** A local open destination. Mirrors Desktop's open-target model, including the
  * copy-path action, icon id, and keyboard shortcut. */
@@ -63,8 +71,9 @@ export interface DesktopFilesBridge {
   getHomeDirectory(): Promise<string>;
   isDirectory(path: string): Promise<boolean>;
 
-  listOpenTargets(path: string): Promise<OpenTarget[]>;
-  openTarget(target: OpenTarget, path: string): Promise<void>;
+  listAvailableEditors(): Promise<EditorInfo[]>;
+  listOpenTargets(pathKind?: PathKind): Promise<OpenTarget[]>;
+  openTarget(targetId: string, path: string): Promise<void>;
 
   reveal(path: string): Promise<void>;
   openTerminal(path: string): Promise<void>;
@@ -147,6 +156,7 @@ export interface DesktopNativeUiBridge {
   showContextMenu(items: NativeMenuItem[], position?: MenuPosition): Promise<boolean>;
   subscribeMenuCommands(listener: (command: ProductCommand) => void): () => void;
 
+  setRunningAgentCount(count: number): Promise<void>;
   setWorkspaceActivity(payload: WorkspaceActivityPayload): Promise<void>;
   setZoom(scale: number): Promise<void>;
 }
@@ -166,6 +176,8 @@ export interface DesktopUpdate {
 }
 
 export interface DesktopUpdaterBridge {
+  /** False in unpackaged Desktop builds unless the development updater is active. */
+  isSupported(): boolean;
   getVersion(): Promise<string>;
   check(): Promise<DesktopUpdate | null>;
   /** `onProgress` receives download completion as a 0..1 fraction. */
@@ -284,12 +296,21 @@ export interface AttachmentInput {
   dataBase64: string;
 }
 
+/** A narrow lifecycle marker written to Desktop's renderer-event log. */
+export interface RendererEventPayload {
+  source: string;
+  message: string;
+  route?: string | null;
+  elapsedMs?: number | null;
+}
+
 /**
  * Support UI can use native logs and attachments without importing Tauri.
  * Collection and staging return `null` outside a working native host, matching
  * Desktop's current nullability.
  */
 export interface DesktopDiagnosticsBridge {
+  logEvent(payload: RendererEventPayload): Promise<void>;
   collectSupportBundle(): Promise<SupportBundle | null>;
   saveJson(input: SaveJsonInput): Promise<string | null>;
 

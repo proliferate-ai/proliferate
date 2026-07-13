@@ -12,6 +12,7 @@ function makeHost(overrides: Partial<ProductHost> = {}): ProductHost {
     surface: "web",
     deployment: { apiBaseUrl: "https://api.example.test" },
     auth: {
+      authRequired: true,
       state: { status: "loading" },
       restoreSession: async () => {},
       startLogin: async () => {},
@@ -27,6 +28,7 @@ function makeHost(overrides: Partial<ProductHost> = {}): ProductHost {
     },
     links: {
       openExternal: async () => {},
+      buildReturnUrl: () => "https://app.example.test/callback",
       observeInboundEntries: () => () => {},
     },
     clipboard: { writeText: async () => {} },
@@ -34,6 +36,9 @@ function makeHost(overrides: Partial<ProductHost> = {}): ProductHost {
       track: () => {},
       captureException: () => {},
       setUser: () => {},
+      setTag: () => {},
+      routeChanged: () => {},
+      getSupportContext: () => ({ clientReleaseId: "web@test" }),
     },
     desktop: null,
     ...overrides,
@@ -64,6 +69,44 @@ describe("ProductHostProvider", () => {
     expect(result.current).toBe(host);
     expect(result.current.auth).toBe(host.auth);
     expect(result.current.cloud).toBe(host.cloud);
+  });
+
+  it("updates consumers when the host replaces its immutable snapshot", () => {
+    const firstHost = makeHost({
+      auth: {
+        ...makeHost().auth,
+        state: { status: "anonymous", methods: [] },
+      },
+    });
+    const nextHost = makeHost({
+      deployment: { apiBaseUrl: "https://self-hosted.example.test" },
+      auth: {
+        ...firstHost.auth,
+        state: {
+          status: "authenticated",
+          user: { id: "user-1", email: "user@example.test" },
+        },
+      },
+    });
+    let currentHost = firstHost;
+    const Wrapper = ({ children }: { children: ReactNode }) => (
+      <ProductHostProvider host={currentHost}>{children}</ProductHostProvider>
+    );
+    const { result, rerender } = renderHook(() => useProductHost(), {
+      wrapper: Wrapper,
+    });
+
+    expect(result.current).toBe(firstHost);
+    expect(result.current.auth.state.status).toBe("anonymous");
+
+    currentHost = nextHost;
+    rerender();
+
+    expect(result.current).toBe(nextHost);
+    expect(result.current.auth.state.status).toBe("authenticated");
+    expect(result.current.deployment.apiBaseUrl).toBe(
+      "https://self-hosted.example.test",
+    );
   });
 
   it("works with desktop: null", () => {

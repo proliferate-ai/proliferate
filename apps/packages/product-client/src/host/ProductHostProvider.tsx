@@ -13,6 +13,8 @@ export interface ProductHostProviderProps {
  * The single provider for the one host contract. It supplies the host object
  * verbatim — it does not mutate, clone, or reconstruct it — so consumers of
  * {@link useProductHost} receive the exact object the host passed in.
+ * ProductHost is an immutable reactive snapshot: the host replaces this value
+ * when auth, Cloud client, or deployment state changes.
  *
  * There is deliberately one context, not a context per capability.
  */
