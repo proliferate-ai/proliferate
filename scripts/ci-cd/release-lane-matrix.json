@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "_comment": "Checked-in v1 component-to-production-lane matrix. Authoritative source: specs/codebase/features/support-system.md 'Release manifest'. Release tooling and the tracker both derive required lanes from THIS file; it is never caller-supplied. The disabled hosted 'workers' surface is not a production lane in v1 and has no entry.",
+  "components": {
+    "proliferate-server": ["hosted-server", "self-hosted-release"],
+    "proliferate-litellm": ["hosted-litellm", "self-hosted-release"],
+    "proliferate-web": ["hosted-web"],
+    "proliferate-mobile": ["mobile-production"],
+    "proliferate-desktop": ["desktop-updater"],
+    "proliferate-desktop-native": ["desktop-updater"],
+    "anyharness": ["runtime-artifacts", "e2b-production", "desktop-updater", "self-hosted-release"],
+    "proliferate-worker": ["runtime-artifacts", "e2b-production", "self-hosted-release"],
+    "proliferate-supervisor": ["runtime-artifacts", "e2b-production", "self-hosted-release"]
+  },
+  "lanes": {
+    "hosted-server": { "provider": "oci" },
+    "hosted-litellm": { "provider": "oci" },
+    "hosted-web": { "provider": "vercel" },
+    "mobile-production": { "provider": "eas" },
+    "desktop-updater": { "provider": "checksum" },
+    "runtime-artifacts": { "provider": "checksum" },
+    "e2b-production": { "provider": "e2b" },
+    "self-hosted-release": { "provider": "checksum" }
+  }
+}
