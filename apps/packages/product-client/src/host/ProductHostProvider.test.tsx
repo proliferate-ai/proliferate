@@ -16,6 +16,7 @@ function makeHost(overrides: Partial<ProductHost> = {}): ProductHost {
       restoreSession: async () => {},
       startLogin: async () => {},
       finishLogin: async () => {},
+      cancelLogin: async () => {},
       logout: async () => {},
     },
     cloud: { client: null },
@@ -24,7 +25,10 @@ function makeHost(overrides: Partial<ProductHost> = {}): ProductHost {
       setItem: async () => {},
       removeItem: async () => {},
     },
-    links: { openExternal: async () => {} },
+    links: {
+      openExternal: async () => {},
+      observeInboundEntries: () => () => {},
+    },
     clipboard: { writeText: async () => {} },
     telemetry: {
       track: () => {},

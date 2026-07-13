@@ -1,6 +1,5 @@
 import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
 import type { AuthMethod } from "@proliferate/product-domain/auth/model";
-import type { ProductUser } from "@proliferate/product-domain/chats/model";
 
 import type { DesktopBridge } from "./desktop-bridge";
 
@@ -37,12 +36,30 @@ export interface ProductHost {
 
 /**
  * API selection. Hosted Web receives one configured base URL; Desktop may
- * optionally switch to another deployment for self-hosting. This is distinct
- * from local AnyHarness access, which is a Desktop bridge capability.
+ * optionally switch to another deployment for self-hosting and reset back to
+ * its default server. This is distinct from local AnyHarness access, which is a
+ * Desktop bridge capability.
  */
 export interface ProductDeploymentHost {
   apiBaseUrl: string;
+  /** Desktop-only: point the product at a different deployment. */
   switchDeployment?: (apiBaseUrl: string) => Promise<void>;
+  /** Desktop-only: return to the host's built-in default deployment. */
+  resetDeployment?: () => Promise<void>;
+}
+
+/**
+ * The authenticated product identity. Richer than `product-domain`'s minimal
+ * chat `ProductUser`: it carries the account fields Desktop already surfaces
+ * (email, avatar, GitHub login) so account/settings/telemetry consumers do not
+ * lose data through the host boundary.
+ */
+export interface ProductAuthUser {
+  id: string;
+  displayName?: string | null;
+  email?: string | null;
+  avatarUrl?: string | null;
+  githubLogin?: string | null;
 }
 
 /**
@@ -52,15 +69,26 @@ export interface ProductDeploymentHost {
 export type AuthState =
   | { status: "loading" }
   | { status: "anonymous"; methods: AuthMethod[] }
-  | { status: "authenticated"; user: ProductUser };
+  | { status: "authenticated"; user: ProductAuthUser };
 
-/** A shared login intent. Password completes in `startLogin`; provider flows
- * complete out of band and resume through `finishLogin`. */
+/**
+ * A shared login intent. Password completes in `startLogin`; provider flows
+ * complete out of band and resume through `finishLogin`. SSO carries the
+ * organization/connection/slug inputs the login screen collects; every method
+ * exposed by {@link AuthMethod} (including Apple) can be started.
+ */
 export type LoginRequest =
   | { kind: "password"; email: string; password: string }
   | { kind: "github" }
   | { kind: "google" }
-  | { kind: "sso"; email?: string };
+  | { kind: "apple" }
+  | {
+      kind: "sso";
+      email?: string;
+      organizationId?: string;
+      connection?: string;
+      slug?: string;
+    };
 
 /** Host-decoded provider callback. The raw callback URL and OAuth/PKCE state
  * never cross this boundary. */
@@ -80,6 +108,8 @@ export interface ProductAuthHost {
   restoreSession(): Promise<void>;
   startLogin(request: LoginRequest): Promise<void>;
   finishLogin(callback: AuthCallback): Promise<void>;
+  /** Abandon an in-flight provider/OAuth login before it completes. */
+  cancelLogin(): Promise<void>;
   logout(): Promise<void>;
 }
 
@@ -104,11 +134,20 @@ export type ProductEntry =
   | { kind: "invitation"; token: string }
   | { kind: "billing-return" };
 
-/** External-link and Desktop-handoff transport. Internal routing is shared and
- * owned by ProductClient. */
+/**
+ * External-link, Desktop-handoff, and inbound-deep-link transport. Internal
+ * routing is shared and owned by ProductClient; only host transport differs.
+ */
 export interface ProductLinks {
   openExternal(url: string): Promise<void>;
   openInDesktop?: (entry: ProductEntry) => Promise<void>;
+  /**
+   * Deliver host-decoded inbound entries (initial + live) to shared routing.
+   * The listener receives any entry that arrived before subscription as well
+   * as every subsequent one; returns an unsubscribe function. This is how
+   * Desktop OS deep links and Web callback entries reach ProductClient.
+   */
+  observeInboundEntries(listener: (entry: ProductEntry) => void): () => void;
 }
 
 export interface ProductClipboard {
@@ -136,5 +175,5 @@ export interface ErrorContext {
 export interface ProductTelemetry {
   track(event: ProductEvent): void;
   captureException(error: unknown, context?: ErrorContext): void;
-  setUser(user: ProductUser | null): void;
+  setUser(user: ProductAuthUser | null): void;
 }

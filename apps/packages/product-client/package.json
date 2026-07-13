@@ -19,8 +19,8 @@
     }
   },
   "scripts": {
-    "build": "pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/product-domain build && tsc -p tsconfig.json",
-    "typecheck": "pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/product-domain build && tsc -p tsconfig.json --noEmit",
+    "build": "pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/product-domain build && tsc -p tsconfig.json",
+    "typecheck": "pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/product-domain build && tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
   "dependencies": {

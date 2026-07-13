@@ -129,8 +129,8 @@ The shared connected Desktop/Web application, per
 [`../../../features/web-desktop-client-unification.md`](../../../features/web-desktop-client-unification.md).
 Desktop is the baseline; Desktop and Web become thin hosts that each construct
 one typed `ProductHost` and mount the same product through `ProductHostProvider`.
-It differs from the other packages: it is **source-consumed** (each host's Vite
-build compiles its source directly) rather than consumed as built `dist`.
+Like the other shared packages, it builds to `dist` and is consumed through
+`dist` export-map subpaths.
 
 ```text
 product-client/src/host/**   # ProductHost + DesktopBridge types, ProductHostProvider

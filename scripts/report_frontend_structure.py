@@ -30,6 +30,9 @@ APP_ROOTS = [
     REPO_ROOT / "apps" / "desktop" / "src",
     REPO_ROOT / "apps" / "web" / "src",
     REPO_ROOT / "apps" / "mobile" / "src",
+    # product-client is app-shaped (components/, hooks/, stores/), so the
+    # component-.tsx-only and hook-responsibility-folder rules apply to it too.
+    REPO_ROOT / "apps" / "packages" / "product-client" / "src",
 ]
 
 DOM_APP_AND_PACKAGE_ROOTS = [

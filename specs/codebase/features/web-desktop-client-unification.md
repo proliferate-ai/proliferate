@@ -56,8 +56,9 @@ At completion:
   access a user's local machine;
 - the old Web chat client, polling loop, stores, pages, and controllers no
   longer exist;
-- `@proliferate/product-surfaces` is absorbed by and replaced with
-  `product-client`; there are not two connected shared-product packages.
+- `@proliferate/product-surfaces` remains a separate package during this
+  migration; `product-client` may consume its connected surfaces. Absorbing it
+  is an optional later cleanup, not a migration prerequisite.
 
 Hosts answer "how do I authenticate here?", "can this device access a local
 runtime?", and "how do I open this link?" They do not reimplement product
@@ -68,8 +69,9 @@ behavior.
 1. **Desktop is the baseline.** Preserve its UI, interaction model, stores,
    warm workspace shell, and product workflows. Extraction and host cutover,
    not redesign.
-2. **The package is `@proliferate/product-client`.** It absorbs
-   `product-surfaces`; neither both packages nor the old name survives.
+2. **The package is `@proliferate/product-client`.** `product-surfaces`
+   remains a separate package; `product-client` may consume it, and absorbing
+   it is an optional later cleanup, not a prerequisite of this migration.
 3. **The connected product is shared.** The package owns React pages, product
    routes, connected hooks, scoped stores, lifecycle orchestration, Cloud SDK
    React wiring, and AnyHarness SDK React wiring.
@@ -950,7 +952,6 @@ AST/path checks:
 rg -F '"@/' apps/packages/product-client/src
 rg -F '"#product/' apps/desktop/src apps/web/src
 rg -F '#product/' apps/desktop/dist apps/web/dist
-rg -F '@proliferate/product-surfaces' apps package.json pnpm-lock.yaml
 ```
 
 Verification tiers: shared Playwright journeys run one journey body under
@@ -967,9 +968,9 @@ owned by `specs/developing/testing/`.
 
 ## 12. Definition of done
 
-Ownership: `@proliferate/product-client` is the only connected shared DOM
-product; Desktop and Web import and mount the same `ProductClient`;
-`product-surfaces` no longer exists; each app contains only host ownership;
+Ownership: `@proliferate/product-client` is the connected shared DOM product;
+Desktop and Web import and mount the same `ProductClient`; `product-surfaces`
+remains a separate package that `product-client` may consume; each app contains only host ownership;
 Mobile imports remain unchanged and DOM-free.
 
 Behavior: Desktop's visual/behavioral baseline is preserved, including local,
@@ -1015,8 +1016,9 @@ post-cutover verification PR is merged.
   move) reconcile it and the frontend structure guides listed in the migration
   plan §20. Until then, this spec wins on any conflict about connected-product
   ownership.
-- The old Web product under `apps/web/src` and `product-surfaces` remain live
-  until their checkpoints delete/absorb them; no new product behavior may be
+- The old Web product under `apps/web/src` remains live until its checkpoint
+  deletes it, and `product-surfaces` stays a separate consumed package; no new
+  product behavior may be
   built in the old Web controllers, and any feature adding a genuinely
   host-specific operation extends the one host contract narrowly with both
   positive and negative host tests.

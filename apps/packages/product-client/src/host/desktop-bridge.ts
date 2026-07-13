@@ -1,4 +1,4 @@
-import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
+import type { AnyHarnessClientConnection } from "@anyharness/sdk-react";
 
 /**
  * The typed Desktop bridge: product-level native capabilities grouped by
@@ -9,7 +9,8 @@ import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
  * product consumer actually needs them.
  *
  * This package defines the shared contract; the Desktop adapter is implemented
- * in a later PR.
+ * in a later PR. Types here mirror the concrete shapes Desktop already uses so
+ * migrated product code keeps its behavior.
  */
 export interface DesktopBridge {
   runtime: DesktopRuntimeBridge;
@@ -24,22 +25,33 @@ export interface DesktopBridge {
 }
 
 /**
- * The connection to a local AnyHarness runtime. ProductClient feeds this to the
- * same AnyHarness SDK it uses for cloud work, so it reuses the SDK's resolved
- * connection shape rather than defining a parallel one.
+ * A connection to an AnyHarness runtime at the runtime level — base URL plus an
+ * optional auth token, with no workspace identity. Runtime discovery and SSH
+ * tunnels resolve before any workspace is selected, so this reuses the SDK's
+ * client-connection type (what `getAnyHarnessClient` consumes) rather than the
+ * workspace-scoped resolved-connection type.
  */
-export type LocalRuntimeConnection = AnyHarnessResolvedConnection;
+export type LocalRuntimeConnection = AnyHarnessClientConnection;
 
 export interface DesktopRuntimeBridge {
   getConnection(): Promise<LocalRuntimeConnection>;
   restart(): Promise<LocalRuntimeConnection>;
 }
 
-/** A local open destination: an editor, Finder, or a terminal. */
+// --- Local files and repositories -----------------------------------------
+
+export type EditorIconId = "cursor" | "vscode" | "windsurf" | "zed" | "sublime";
+export type OpenTargetKind = "editor" | "finder" | "terminal" | "copy";
+export type OpenTargetIconId = EditorIconId | "finder" | "terminal";
+
+/** A local open destination. Mirrors Desktop's open-target model, including the
+ * copy-path action, icon id, and keyboard shortcut. */
 export interface OpenTarget {
   id: string;
   label: string;
-  kind: "editor" | "finder" | "terminal";
+  kind: OpenTargetKind;
+  shortcut?: string;
+  iconId?: OpenTargetIconId;
 }
 
 /**
@@ -58,6 +70,8 @@ export interface DesktopFilesBridge {
   openTerminal(path: string): Promise<void>;
 }
 
+// --- Local agent credentials ------------------------------------------------
+
 /**
  * Local model/provider credentials (not Proliferate login credentials — those
  * remain owned by `host.auth`).
@@ -68,46 +82,101 @@ export interface DesktopCredentialsBridge {
   remove(name: string): Promise<void>;
 }
 
-export interface NativeMenuItem {
-  id: string;
-  label: string;
-  enabled?: boolean;
-}
+// --- Native UI --------------------------------------------------------------
+
+export type NativeMenuNativeIcon =
+  | "copy"
+  | "document"
+  | "finder"
+  | "open"
+  | "terminal";
+
+export type NativeMenuIcon =
+  | { kind: "asset"; src: string }
+  | { kind: "resource"; path: string }
+  | { kind: "native"; name: NativeMenuNativeIcon };
+
+/**
+ * A native menu item. Mirrors Desktop's context-menu model so the shared
+ * product can express separators, nested submenus, per-item icons and
+ * accelerators, and selection callbacks — the same content a Web DOM-menu
+ * fallback renders (with native-only actions omitted).
+ */
+export type NativeMenuItem =
+  | { kind: "separator" }
+  | {
+      kind: "submenu";
+      submenuId?: string;
+      label: string;
+      enabled?: boolean;
+      items: NativeMenuItem[];
+    }
+  | {
+      kind?: "action";
+      id: string;
+      label: string;
+      accelerator?: string;
+      enabled?: boolean;
+      icon?: NativeMenuIcon;
+      onSelect?: () => void;
+    };
 
 export interface MenuPosition {
   x: number;
   y: number;
 }
 
-/** A product-level command id dispatched from a native menu selection. */
+/** A product-level command id dispatched from a native menu/shortcut. */
 export type ProductCommand = string;
+
+export type WorkspaceActivityState = "idle" | "attention";
+
+/** Dock/attention indicator payload. Carries the attention count so the badge
+ * matches Desktop's current behavior. */
+export interface WorkspaceActivityPayload {
+  state: WorkspaceActivityState;
+  attentionCount: number;
+}
 
 /**
  * The shared product owns menu content and native-state intents; Desktop owns
- * the native menu, Dock, and WebView implementation.
+ * the native menu, Dock, and WebView implementation. `showContextMenu` resolves
+ * to whether a native menu was shown (so callers can fall back to a DOM menu).
  */
 export interface DesktopNativeUiBridge {
-  showContextMenu(items: NativeMenuItem[], position: MenuPosition): Promise<void>;
+  showContextMenu(items: NativeMenuItem[], position?: MenuPosition): Promise<boolean>;
   subscribeMenuCommands(listener: (command: ProductCommand) => void): () => void;
 
-  setRunningAgentCount(count: number): Promise<void>;
-  setWorkspaceActivity(state: "idle" | "attention"): Promise<void>;
+  setWorkspaceActivity(payload: WorkspaceActivityPayload): Promise<void>;
   setZoom(scale: number): Promise<void>;
 }
 
-/** An available desktop update. Native update handles remain private to the
- * Desktop implementation. */
+// --- Updater ----------------------------------------------------------------
+
+/**
+ * An available desktop update. `handle` is the opaque native update handle
+ * returned by the check; ProductClient passes it back to
+ * `downloadAndInstall` without inspecting it. Native handles stay private to
+ * the Desktop implementation.
+ */
 export interface DesktopUpdate {
   version: string;
   title: string | null;
+  handle: unknown;
 }
 
 export interface DesktopUpdaterBridge {
   getVersion(): Promise<string>;
   check(): Promise<DesktopUpdate | null>;
-  downloadAndInstall(update: DesktopUpdate): Promise<void>;
+  /** `onProgress` receives download completion as a 0..1 fraction. */
+  downloadAndInstall(
+    update: DesktopUpdate,
+    onProgress?: (fraction: number) => void,
+  ): Promise<void>;
   relaunch(): Promise<void>;
 }
+
+// --- Desktop worker ---------------------------------------------------------
 
 export interface WorkerConfiguration {
   targetId: string;
@@ -117,6 +186,7 @@ export interface WorkerConfiguration {
 export interface WorkerStatus {
   targetId: string;
   status: "running" | "started";
+  configPath: string;
 }
 
 /**
@@ -129,13 +199,16 @@ export interface DesktopWorkerBridge {
   stop(): Promise<void>;
 }
 
+// --- SSH --------------------------------------------------------------------
+
+/** A persisted SSH direct-target profile. Mirrors Desktop's stored profile. */
 export interface SshProfile {
   targetId: string;
-  host: string;
-  user: string;
-  port: number;
+  sshHost: string;
+  sshUser: string;
+  sshPort: number;
   identityFile?: string | null;
-  remoteRuntimePort: number;
+  remoteAnyHarnessPort: number;
   workspaceRoot?: string | null;
 }
 
@@ -152,21 +225,52 @@ export interface DesktopSshBridge {
   ensureTunnel(profile: SshProfile): Promise<LocalRuntimeConnection>;
 }
 
+// --- Workspace scratch ------------------------------------------------------
+
 /** Local file-backed workspace scratch. May disappear if scratch becomes
- * server-backed. */
+ * server-backed. `updatedAtMs` is the mtime-equivalent. */
 export interface ScratchRecord {
   content: string;
   updatedAtMs: number | null;
 }
 
-export interface DesktopScratchBridge {
-  read(workspaceId: string): Promise<ScratchRecord | null>;
-  write(workspaceId: string, content: string): Promise<void>;
+export interface ScratchWriteResult {
+  updatedAtMs: number | null;
 }
 
+export interface DesktopScratchBridge {
+  read(workspaceId: string): Promise<ScratchRecord | null>;
+  write(workspaceId: string, content: string): Promise<ScratchWriteResult>;
+}
+
+// --- Diagnostics and support ------------------------------------------------
+
+export interface SupportBundleLog {
+  source: string;
+  path: string;
+  bytesRead: number;
+  truncated: boolean;
+  text: string;
+}
+
+/** A support diagnostics bundle. Mirrors Desktop's collected bundle shape. */
 export interface SupportBundle {
   schemaVersion: number;
-  contents: string;
+  manifest: {
+    appVersion: string;
+    runtimeVersion?: string | null;
+    runtimeStatus?: string | null;
+    runtimeHome?: string | null;
+    platform: string;
+    timestamp: string;
+  };
+  health?: {
+    runtimeHome: string;
+    status: string;
+    version: string;
+  } | null;
+  logs: SupportBundleLog[];
+  collectionErrors: string[];
 }
 
 export interface SaveJsonInput {
@@ -180,18 +284,17 @@ export interface AttachmentInput {
   dataBase64: string;
 }
 
-export interface StagedAttachment {
-  path: string;
-}
-
 /**
  * Support UI can use native logs and attachments without importing Tauri.
+ * Collection and staging return `null` outside a working native host, matching
+ * Desktop's current nullability.
  */
 export interface DesktopDiagnosticsBridge {
-  collectSupportBundle(): Promise<SupportBundle>;
+  collectSupportBundle(): Promise<SupportBundle | null>;
   saveJson(input: SaveJsonInput): Promise<string | null>;
 
-  stageAttachment(input: AttachmentInput): Promise<StagedAttachment>;
+  /** Returns the staged attachment path, or null outside the desktop host. */
+  stageAttachment(input: AttachmentInput): Promise<string | null>;
   readAttachment(path: string): Promise<string>;
   deleteAttachment(path: string): Promise<void>;
 }
