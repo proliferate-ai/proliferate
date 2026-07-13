@@ -8,14 +8,10 @@ import {
 } from "@proliferate/cloud-sdk-react";
 import {
   createWorkflowDefinitionDraft,
-  isWorkflowRevisionConflict,
   workflowDefinitionFromResponse,
-  workflowDefinitionToDraft,
   workflowDraftToCreateRequest,
-  workflowDraftToUpdateRequest,
   workflowWriteErrorMessage,
   type WorkflowAgentCatalog,
-  type WorkflowDefinition,
 } from "@proliferate/product-domain/workflows/definition";
 import { validateWorkflowDefinitionDraft } from "@proliferate/product-domain/workflows/validation";
 import {
@@ -23,6 +19,7 @@ import {
   type WorkflowRepositoryOption,
 } from "@proliferate/product-ui/workflows/WorkflowDefinitionEditor";
 import { WorkflowDefinitionList } from "@proliferate/product-ui/workflows/WorkflowDefinitionList";
+import { PersistedWorkflowEditor } from "./PersistedWorkflowEditor";
 import { WorkflowResourceState } from "./WorkflowResourceState";
 
 export interface WorkflowDefinitionsSurfaceProps {
@@ -223,7 +220,10 @@ function ExistingWorkflowDefinitionEditor({
       />
     );
   }
-  if (definitionQuery.isError || !definitionQuery.data) {
+  // A failed passive refetch reports isError while cached data remains; only
+  // a missing definition is fatal, otherwise the mounted editor (and any
+  // unsaved draft) must survive the background failure.
+  if (!definitionQuery.data) {
     return (
       <WorkflowResourceState
         title="Workflow not found"
@@ -251,136 +251,20 @@ function ExistingWorkflowDefinitionEditor({
       definition={definition}
       catalog={catalog}
       catalogError={catalogError}
+      definitionRefreshFailed={definitionQuery.isError}
       repositories={repositories}
       repositoriesLoading={repositoriesLoading}
       reloadDefinition={async () => {
+        // A failed refetch still resolves with the stale cached data; treat
+        // it as a failure instead of adopting the old value into the draft.
         const result = await definitionQuery.refetch();
-        return result.data ? workflowDefinitionFromResponse(result.data) : null;
+        if (result.isError || !result.data) {
+          throw result.error ?? new Error("Workflow could not be reloaded.");
+        }
+        return workflowDefinitionFromResponse(result.data);
       }}
       onSaved={onSaved}
       onBack={onBack}
-    />
-  );
-}
-
-function PersistedWorkflowEditor({
-  authCacheScope,
-  definition,
-  catalog,
-  catalogError,
-  repositories,
-  repositoriesLoading,
-  reloadDefinition,
-  onSaved,
-  onBack,
-}: {
-  authCacheScope: string;
-  definition: WorkflowDefinition;
-  catalog: WorkflowAgentCatalog;
-  catalogError: boolean;
-  repositories: readonly WorkflowRepositoryOption[];
-  repositoriesLoading: boolean;
-  reloadDefinition: () => Promise<WorkflowDefinition | null>;
-  onSaved: (workflowId: string) => void;
-  onBack: () => void;
-}) {
-  // The draft is seeded from `base`, not from the live query value: a passive
-  // background refetch may bump `definition.revision` while the user is
-  // editing, and the spec requires keeping the local draft until a deliberate
-  // reload. Saves use the base revision so a stale editor still 409s.
-  const [base, setBase] = useState(definition);
-  const [draft, setDraft] = useState(() => workflowDefinitionToDraft(definition));
-  const [showValidation, setShowValidation] = useState(false);
-  const [writeFailure, setWriteFailure] = useState<
-    { message: string; conflict: boolean } | null
-  >(null);
-  const actions = useWorkflowDefinitionActions(authCacheScope);
-  const issues = showValidation ? validateWorkflowDefinitionDraft(draft, catalog) : [];
-
-  const recordWriteFailure = (error: unknown) => {
-    setWriteFailure({
-      message: workflowWriteErrorMessage(error),
-      conflict: isWorkflowRevisionConflict(error),
-    });
-  };
-
-  const adopt = (next: WorkflowDefinition) => {
-    setBase(next);
-    setDraft(workflowDefinitionToDraft(next));
-    setShowValidation(false);
-    setWriteFailure(null);
-  };
-
-  const reload = async () => {
-    try {
-      const next = await reloadDefinition();
-      if (next) {
-        adopt(next);
-      }
-    } catch (error) {
-      recordWriteFailure(error);
-    }
-  };
-
-  const save = async () => {
-    setShowValidation(true);
-    const nextIssues = validateWorkflowDefinitionDraft(draft, catalog);
-    if (nextIssues.length > 0) {
-      return;
-    }
-    setWriteFailure(null);
-    try {
-      const updated = await actions.updateWorkflowDefinition({
-        workflowDefinitionId: base.id,
-        body: workflowDraftToUpdateRequest(draft, base.revision, catalog),
-      });
-      adopt(workflowDefinitionFromResponse(updated));
-      onSaved(updated.id);
-    } catch (error) {
-      recordWriteFailure(error);
-    }
-  };
-
-  const remove = async () => {
-    setWriteFailure(null);
-    try {
-      await actions.deleteWorkflowDefinition({
-        workflowDefinitionId: base.id,
-        expectedRevision: base.revision,
-      });
-      onBack();
-    } catch (error) {
-      recordWriteFailure(error);
-    }
-  };
-
-  const newerRevisionAvailable = definition.revision > base.revision;
-  const versionWarning = newerRevisionAvailable
-    ? "A newer revision of this workflow is available. Reload to edit the latest version."
-    : base.validatedCatalogVersion !== catalog.catalogVersion
-      ? `This workflow was validated with catalog ${base.validatedCatalogVersion}. Saving will validate it against ${catalog.catalogVersion}.`
-      : catalogError
-        ? "Catalog refresh failed; editing uses the last loaded catalog."
-        : null;
-  const showReload = newerRevisionAvailable || writeFailure?.conflict === true;
-
-  return (
-    <WorkflowDefinitionEditor
-      mode="edit"
-      draft={draft}
-      catalog={catalog}
-      repositories={repositories}
-      issues={issues}
-      serverError={writeFailure?.message ?? null}
-      catalogWarning={versionWarning}
-      saving={actions.updatingWorkflowDefinition}
-      deleting={actions.deletingWorkflowDefinition}
-      loadingRepositories={repositoriesLoading}
-      onChange={setDraft}
-      onSave={() => void save()}
-      onCancel={onBack}
-      onDelete={() => void remove()}
-      onReload={showReload ? () => void reload() : undefined}
     />
   );
 }

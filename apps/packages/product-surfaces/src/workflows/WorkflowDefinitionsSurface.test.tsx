@@ -322,6 +322,63 @@ describe("WorkflowDefinitionsSurface", () => {
     expect(screen.queryByText(/changed in another window/u)).toBeNull();
   });
 
+  it("keeps the mounted editor and draft when a passive refetch fails with cached data", () => {
+    const props = {
+      authCacheScope: "user-1",
+      selectedWorkflowId: "workflow-1",
+      onSelectWorkflow: vi.fn(),
+      onBackToList: vi.fn(),
+    };
+    const { rerender } = render(<WorkflowDefinitionsSurface {...props} />);
+
+    const title = screen.getByLabelText("Title") as HTMLInputElement;
+    fireEvent.change(title, { target: { value: "My unsaved title" } });
+
+    // TanStack v5: a failed background refetch reports isError while the
+    // cached data remains available.
+    cloud.useWorkflowDefinition.mockReturnValue({
+      data: persisted,
+      isLoading: false,
+      isError: true,
+      refetch: cloud.refetchDetail,
+    });
+    rerender(<WorkflowDefinitionsSurface {...props} />);
+
+    expect((screen.getByLabelText("Title") as HTMLInputElement).value).toBe("My unsaved title");
+    expect(screen.queryByText("Workflow not found")).toBeNull();
+    screen.getByText(/could not be refreshed/u);
+  });
+
+  it("retains the draft when an explicit reload fails instead of adopting stale data", async () => {
+    cloud.update.mockRejectedValue(
+      new ProliferateClientError("stale revision", 409, "workflow_revision_conflict"),
+    );
+    render(
+      <WorkflowDefinitionsSurface
+        authCacheScope="user-1"
+        selectedWorkflowId="workflow-1"
+        onSelectWorkflow={vi.fn()}
+        onBackToList={vi.fn()}
+      />,
+    );
+
+    const title = screen.getByLabelText("Title") as HTMLInputElement;
+    fireEvent.change(title, { target: { value: "My unsaved title" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByText(/changed in another window/u);
+
+    // The failed refetch still resolves with the stale cached data attached.
+    cloud.refetchDetail.mockResolvedValue({
+      isError: true,
+      error: new Error("network down"),
+      data: persisted,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Reload" }));
+
+    await screen.findByText(/network down/u);
+    expect((screen.getByLabelText("Title") as HTMLInputElement).value).toBe("My unsaved title");
+  });
+
   it("adopts its own successful save without a remount", async () => {
     const savedResponse = { ...persisted, revision: 3, title: "Saved twice" };
     cloud.update.mockResolvedValue(savedResponse);
