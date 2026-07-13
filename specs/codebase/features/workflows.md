@@ -315,6 +315,13 @@ The first editor is intentionally basic:
 - inline validation; and
 - save, reload, reopen, and soft-delete behavior.
 
+Desktop local mode may mount the product shell without an account. Anonymous
+users see a sign-in gate; development auth bypass shows instructions to disable
+the bypass and use real account authentication. Neither state mounts the Cloud
+workflow, catalog, or repository query tree. Authenticated Desktop requests use
+the verified current user's ID as their cache scope and fail closed when that
+identity is unavailable. Web remains behind its app-level authentication gate.
+
 The UI preserves array order exactly. Switching an agent or model clears an
 incompatible model or effort rather than submitting a hidden invalid value. A
 revision conflict keeps the local draft and offers a deliberate reload; it
