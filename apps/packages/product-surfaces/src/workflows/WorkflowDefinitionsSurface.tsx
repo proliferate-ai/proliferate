@@ -86,7 +86,6 @@ export function WorkflowDefinitionsSurface({
     }
     return (
       <CreateWorkflowDefinitionEditor
-        key={catalog.catalogVersion}
         catalog={catalog}
         catalogError={catalogQuery.isError}
         authCacheScope={authCacheScope}

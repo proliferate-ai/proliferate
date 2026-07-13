@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useEffect } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter, useNavigate } from "react-router-dom";
+import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { AuthenticatedAppHost } from "@/pages/AuthenticatedAppHost";
 
 vi.mock("@/hooks/organizations/lifecycle/use-organization-selection-lifecycle", () => ({
@@ -47,6 +47,15 @@ function TestSettings({ returnTo = "/" }: { returnTo?: string }) {
         Back
       </button>
     </section>
+  );
+}
+
+function LocationProbe() {
+  const location = useLocation();
+  return (
+    <output data-testid="location">
+      {`${location.pathname}${location.search}${location.hash}`}
+    </output>
   );
 }
 
@@ -94,5 +103,20 @@ describe("AuthenticatedAppHost", () => {
 
     expect(screen.getByTestId("workspace").dataset.visible).toBe("true");
     expect(mainMounts).toBe(1);
+  });
+
+  it("preserves the workflow ID, query, and hash in a legacy automation deep link", async () => {
+    render(
+      <MemoryRouter initialEntries={["/automations/workflow-1?source=legacy#details"]}>
+        <AuthenticatedAppHost MainComponent={TestMain} SettingsComponent={TestSettings} />
+        <LocationProbe />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("location").textContent)
+        .toBe("/workflows/workflow-1?source=legacy#details");
+    });
+    expect(screen.getByTestId("workflows")).toBeTruthy();
   });
 });

@@ -11,7 +11,14 @@ class TestIntersectionObserver {
   disconnect() {}
 }
 
+class TestResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
 vi.stubGlobal("IntersectionObserver", TestIntersectionObserver);
+vi.stubGlobal("ResizeObserver", TestResizeObserver);
 
 const cloud = vi.hoisted(() => ({
   create: vi.fn(),
@@ -158,6 +165,47 @@ describe("WorkflowDefinitionsSurface", () => {
       })],
     }));
     expect(onSelectWorkflow).toHaveBeenCalledWith("workflow-1");
+  });
+
+  it("preserves the create draft when the live catalog refreshes", () => {
+    const props = {
+      authCacheScope: "user-1",
+      onSelectWorkflow: vi.fn(),
+      onBackToList: vi.fn(),
+    };
+    const { rerender } = render(<WorkflowDefinitionsSurface {...props} />);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "New workflow" })[0]!);
+    fireEvent.change(screen.getByLabelText("Title"), {
+      target: { value: "Keep my draft" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add input" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "ticket" } });
+    fireEvent.change(screen.getByLabelText("Prompt"), {
+      target: { value: "Investigate {{inputs.ticket}}" },
+    });
+
+    cloud.useCloudAgentCatalog.mockReturnValue({
+      data: {
+        ...catalog,
+        catalogVersion: "probe-8",
+        agents: catalog.agents.map((agent) => ({
+          ...agent,
+          displayName: "Claude refreshed",
+        })),
+      },
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    rerender(<WorkflowDefinitionsSurface {...props} />);
+
+    expect((screen.getByLabelText("Title") as HTMLInputElement).value).toBe("Keep my draft");
+    expect((screen.getByLabelText("Name") as HTMLInputElement).value).toBe("ticket");
+    expect((screen.getByLabelText("Prompt") as HTMLTextAreaElement).value)
+      .toBe("Investigate {{inputs.ticket}}");
+    const harness = screen.getByLabelText("Harness") as HTMLSelectElement;
+    expect(harness.options[harness.selectedIndex]?.text).toBe("Claude refreshed");
   });
 
   it("preserves the local draft after an optimistic revision conflict", async () => {

@@ -15,3 +15,15 @@ export const routes = {
   workspace: (workspaceId: string) => `/cloud/workspaces/${workspaceId}`,
   chat: (workspaceId: string, chatId: string) => `/cloud/workspaces/${workspaceId}/chats/${chatId}`,
 } as const;
+
+export function legacyWorkflowRedirectHref(
+  workflowsPath: string,
+  workflowId: string | undefined,
+  search: string,
+  hash: string,
+): string {
+  const destination = workflowId
+    ? `${workflowsPath}/${encodeURIComponent(workflowId)}`
+    : workflowsPath;
+  return `${destination}${search}${hash}`;
+}

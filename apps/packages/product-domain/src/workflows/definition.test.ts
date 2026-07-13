@@ -8,7 +8,9 @@ import {
   workflowDefinitionToDraft,
   workflowDraftToWriteInput,
   workflowEffortOptions,
+  workflowModelOptions,
   type WorkflowAgentCatalog,
+  type WorkflowCatalogModel,
   type WorkflowDefinition,
 } from "./definition";
 
@@ -126,6 +128,42 @@ describe("workflow definition draft", () => {
       .toEqual(["low", "high"]);
     expect(workflowEffortOptions(catalog, "claude", "haiku")).toEqual([]);
     expect(workflowEffortOptions(catalog, "cursor", "composer")).toEqual([]);
+  });
+
+  it("excludes models whose catalog visibility is omitted", () => {
+    const catalogWithUncuratedModel: WorkflowAgentCatalog = {
+      ...catalog,
+      agents: catalog.agents.map((agent) => agent.kind === "claude"
+        ? {
+          ...agent,
+          session: {
+            ...agent.session,
+            models: [
+              ...agent.session.models,
+              ({
+                id: "uncurated",
+                displayName: "Uncurated",
+                status: "active",
+                controls: {},
+              } as unknown as WorkflowCatalogModel),
+            ],
+          },
+        }
+        : agent),
+    };
+    const draft = createWorkflowDefinitionDraft(catalogWithUncuratedModel);
+    draft.title = "Triage";
+    draft.stages[0] = {
+      harnessConfig: { agentKind: "claude", modelId: "uncurated", effort: null },
+      steps: [{ kind: "agent.prompt", prompt: "Investigate" }],
+    };
+
+    expect(workflowModelOptions(catalogWithUncuratedModel, "claude"))
+      .not.toContainEqual(expect.objectContaining({ value: "uncurated" }));
+    expect(validateWorkflowDefinitionDraft(draft, catalogWithUncuratedModel)).toContainEqual({
+      path: "stages.0.harnessConfig.modelId",
+      message: "Choose a model supported by this harness.",
+    });
   });
 
   it("rejects harness-wide effort leakage and effort without an explicit model", () => {

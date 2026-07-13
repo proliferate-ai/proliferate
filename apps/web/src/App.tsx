@@ -1,10 +1,10 @@
-import { Navigate, Route, useLocation, type Location } from "react-router-dom";
+import { Navigate, Route, useLocation, useParams, type Location } from "react-router-dom";
 
 import { WebAppShell } from "./components/app/shell/WebAppShell";
 import { AuthGate } from "./components/auth/AuthGate";
 import { AuthScreen } from "./components/auth/screen/AuthScreen";
 import { ConnectGitHubScreen } from "./components/auth/screen/ConnectGitHubScreen";
-import { routes } from "./config/routes";
+import { legacyWorkflowRedirectHref, routes } from "./config/routes";
 import { AuthCallbackPage } from "./pages/AuthCallbackPage";
 import { AuthErrorPage } from "./pages/AuthErrorPage";
 import { BillingReturnHandoffPage } from "./pages/BillingReturnHandoffPage";
@@ -95,5 +95,11 @@ function LegacyRouteRedirect({
   to: string;
 }) {
   const location = useLocation();
-  return <Navigate to={`${to}${location.search}${location.hash}`} replace />;
+  const { workflowId } = useParams<{ workflowId?: string }>();
+  return (
+    <Navigate
+      to={legacyWorkflowRedirectHref(to, workflowId, location.search, location.hash)}
+      replace
+    />
+  );
 }
