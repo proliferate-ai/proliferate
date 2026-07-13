@@ -26,11 +26,9 @@ interface RightPanelHeaderTabsProps {
   newTabMenuDefaultKind: RightPanelNewTabMenuDefault;
   onActivateEntry: (entryKey: RightPanelHeaderEntryKey) => boolean;
   onCloseTerminal: (terminalId: string) => void;
-  onCloseBrowser: (browserId: string) => void;
   onCloseViewerTarget: (targetKey: RightPanelHeaderEntryKey) => void;
   onRenameTerminal: (terminalId: string, title: string) => Promise<void>;
   onCreateTerminal: () => void;
-  onCreateBrowser: () => void;
   onOpenRepoSettings: () => void;
   onTogglePanel: () => void;
   onReorderHeaderEntry: (
@@ -50,11 +48,9 @@ export function RightPanelHeaderTabs({
   newTabMenuDefaultKind,
   onActivateEntry,
   onCloseTerminal,
-  onCloseBrowser,
   onCloseViewerTarget,
   onRenameTerminal,
   onCreateTerminal,
-  onCreateBrowser,
   onOpenRepoSettings,
   onTogglePanel,
   onReorderHeaderEntry,
@@ -106,7 +102,6 @@ export function RightPanelHeaderTabs({
                   shortcutRevealVisible={shortcutRevealVisible}
                   onActivateEntry={onActivateEntry}
                   onCloseTerminal={onCloseTerminal}
-                  onCloseBrowser={onCloseBrowser}
                   onCloseViewerTarget={onCloseViewerTarget}
                   onRenameTerminal={onRenameTerminal}
                 />
@@ -127,7 +122,6 @@ export function RightPanelHeaderTabs({
               isWorkspaceReady={isWorkspaceReady}
               onOpenChange={setNewTabMenuOpen}
               onCreateTerminal={onCreateTerminal}
-              onCreateBrowser={onCreateBrowser}
             />
           </div>
         </div>

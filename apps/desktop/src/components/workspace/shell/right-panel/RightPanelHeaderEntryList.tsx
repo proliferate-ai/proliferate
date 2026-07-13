@@ -1,11 +1,9 @@
-import { BrowserHeaderButton } from "@/components/workspace/shell/right-panel/BrowserHeaderButton";
 import { RightPanelHeaderEntryDropZone } from "@/components/workspace/shell/right-panel/RightPanelHeaderEntryDropZone";
 import { TerminalHeaderButton } from "@/components/workspace/shell/right-panel/TerminalHeaderButton";
 import { ToolHeaderButton } from "@/components/workspace/shell/right-panel/ToolHeaderButton";
 import { ViewerHeaderButton } from "@/components/workspace/shell/right-panel/ViewerHeaderButton";
 import type { RightPanelHeaderDragController } from "@/hooks/workspaces/ui/use-right-panel-header-drag";
 import {
-  browserHeaderDisplayTitle,
   terminalHeaderDisplayTitle,
   type RightPanelHeaderEntry,
 } from "@/lib/domain/workspaces/shell/right-panel-header-entry";
@@ -32,7 +30,6 @@ interface RightPanelHeaderEntryListProps {
   shortcutRevealVisible: boolean;
   onActivateEntry: (entryKey: RightPanelHeaderEntryKey) => boolean;
   onCloseTerminal: (terminalId: string) => void;
-  onCloseBrowser: (browserId: string) => void;
   onCloseViewerTarget: (targetKey: RightPanelHeaderEntryKey) => void;
   onRenameTerminal: (terminalId: string, title: string) => Promise<void>;
 }
@@ -48,7 +45,6 @@ export function RightPanelHeaderEntryList({
   shortcutRevealVisible,
   onActivateEntry,
   onCloseTerminal,
-  onCloseBrowser,
   onCloseViewerTarget,
   onRenameTerminal,
 }: RightPanelHeaderEntryListProps) {
@@ -121,39 +117,9 @@ export function RightPanelHeaderEntryList({
           );
         }
 
-        if (entry.kind === "viewer") {
-          const targetKey = viewerTargetKey(entry.target);
-          const editablePath = viewerTargetEditablePath(entry.target);
-          const buffer = editablePath ? buffersByPath[editablePath] : null;
-          return (
-            <RightPanelHeaderEntryDropZone
-              key={entry.key}
-              entryKey={entry.key}
-              isDragging={dragState.isDragging}
-              dragOffsetX={dragState.dragOffsetX}
-              showDropIndicator={dragState.showDropIndicator}
-              onRegister={drag.registerHeaderEntryNode}
-              onPointerDown={drag.handleHeaderPointerDown}
-              onPointerMove={drag.handleHeaderPointerMove}
-              onPointerUp={drag.finishHeaderPointerDrag}
-              onPointerCancel={drag.cancelHeaderPointerDrag}
-            >
-              <ViewerHeaderButton
-                target={entry.target}
-                isActive={activeEntryKey === entry.key}
-                isDirty={buffer?.isDirty ?? false}
-                isDiff={tabModes[targetKey] === "diff" || entry.target.kind === "fileDiff"}
-                isDragging={drag.draggedHeaderKey === entry.key}
-                shouldSuppressClick={drag.shouldSuppressHeaderClick}
-                onSelect={() => {
-                  onActivateEntry(entry.key);
-                }}
-                onClose={() => onCloseViewerTarget(targetKey)}
-              />
-            </RightPanelHeaderEntryDropZone>
-          );
-        }
-
+        const targetKey = viewerTargetKey(entry.target);
+        const editablePath = viewerTargetEditablePath(entry.target);
+        const buffer = editablePath ? buffersByPath[editablePath] : null;
         return (
           <RightPanelHeaderEntryDropZone
             key={entry.key}
@@ -167,16 +133,17 @@ export function RightPanelHeaderEntryList({
             onPointerUp={drag.finishHeaderPointerDrag}
             onPointerCancel={drag.cancelHeaderPointerDrag}
           >
-            <BrowserHeaderButton
-              browserId={entry.tab.id}
-              displayTitle={browserHeaderDisplayTitle(entries, entry)}
+            <ViewerHeaderButton
+              target={entry.target}
               isActive={activeEntryKey === entry.key}
+              isDirty={buffer?.isDirty ?? false}
+              isDiff={tabModes[targetKey] === "diff" || entry.target.kind === "fileDiff"}
               isDragging={drag.draggedHeaderKey === entry.key}
               shouldSuppressClick={drag.shouldSuppressHeaderClick}
               onSelect={() => {
                 onActivateEntry(entry.key);
               }}
-              onClose={() => onCloseBrowser(entry.tab.id)}
+              onClose={() => onCloseViewerTarget(targetKey)}
             />
           </RightPanelHeaderEntryDropZone>
         );

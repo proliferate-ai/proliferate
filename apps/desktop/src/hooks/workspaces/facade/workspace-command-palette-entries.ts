@@ -7,7 +7,6 @@ import {
 import { focusChatInput } from "@/lib/domain/focus-zone";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 import { runShortcutHandler } from "@/lib/domain/shortcuts/registry";
-import { requestRightPanelBrowserTab } from "@/lib/infra/right-panel-new-tab-menu";
 
 export interface RunCommandState {
   onRun: () => void;
@@ -186,17 +185,6 @@ export function buildWorkspaceCommandPaletteEntries(args: {
       disabledReason: args.restoreTabDisabledReason,
       execute: () => {
         args.restoreLastDismissedTab();
-      },
-    },
-    {
-      id: "workspace.open-browser-tab",
-      value: commandPaletteCommandValue("workspace.open-browser-tab"),
-      group: "tabs",
-      label: "Open Browser Tab",
-      icon: "panel-bottom",
-      disabledReason: args.selectedWorkspaceId ? null : "Workspace is still opening.",
-      execute: () => {
-        requestRightPanelBrowserTab();
       },
     },
     {

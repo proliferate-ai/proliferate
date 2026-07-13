@@ -22,8 +22,6 @@ interface RightPanelProps {
   onStateChange: Dispatch<SetStateAction<RightPanelWorkspaceState>>;
   terminalActivationRequest: RightPanelTerminalActivationRequest | null;
   focusRequestToken?: number;
-  nativeOverlaysHidden?: boolean;
-  onOpenPanel: () => void;
   onTogglePanel: () => void;
   onTerminalActivationRequestHandled: (request: RightPanelTerminalActivationRequest) => void;
 }

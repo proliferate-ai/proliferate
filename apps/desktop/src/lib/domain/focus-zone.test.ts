@@ -26,7 +26,6 @@ describe("focus-zone helpers", () => {
   it("classifies the right panel and its hosted surfaces as right-panel focus", () => {
     expect(isRightPanelFocusZone("right-panel")).toBe(true);
     expect(isRightPanelFocusZone("terminal")).toBe(true);
-    expect(isRightPanelFocusZone("browser")).toBe(true);
     expect(isRightPanelFocusZone("chat")).toBe(false);
   });
 

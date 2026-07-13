@@ -1,23 +1,16 @@
 import {
   DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE,
   availableRightPanelTools,
-  browserIdsFromHeaderOrder,
   parseRightPanelHeaderEntryKey,
-  rightPanelBrowserHeaderKey,
   rightPanelTerminalHeaderKey,
   rightPanelToolHeaderKey,
   terminalIdsFromHeaderOrder,
   type RightPanelActiveEntryKey,
-  type RightPanelBrowserTabsById,
   type RightPanelHeaderEntryKey,
   type RightPanelMaterializedState,
   type RightPanelTerminalRecord,
   type RightPanelWorkspaceState,
 } from "@/lib/domain/workspaces/shell/right-panel-model";
-import {
-  pickBrowserTabsInHeader,
-  sanitizeBrowserTabsById,
-} from "@/lib/domain/workspaces/shell/right-panel-browser-tabs";
 import {
   viewerTargetKey,
   type ViewerTarget,
@@ -31,19 +24,16 @@ export function normalizeRightPanelMaterializedState(
     liveViewerTargets?: readonly ViewerTarget[];
   },
 ): RightPanelMaterializedState {
-  const browserTabsById = sanitizeBrowserTabsById(input?.browserTabsById, input?.headerOrder);
   const headerOrder = normalizeRightPanelHeaderOrder(input?.headerOrder, {
     isCloudWorkspaceSelected: options.isCloudWorkspaceSelected,
     liveTerminals: options.liveTerminals,
     liveViewerTargets: options.liveViewerTargets,
-    browserTabsById,
   });
   const activeEntryKey = resolveRightPanelActiveEntryKey(input?.activeEntryKey, headerOrder);
 
   return {
     activeEntryKey,
     headerOrder,
-    browserTabsById: pickBrowserTabsInHeader(browserTabsById, headerOrder),
   };
 }
 
@@ -81,7 +71,6 @@ function normalizeRightPanelHeaderOrder(
     isCloudWorkspaceSelected: boolean;
     liveTerminals?: readonly RightPanelTerminalRecord[];
     liveViewerTargets?: readonly ViewerTarget[];
-    browserTabsById: RightPanelBrowserTabsById;
   },
 ): RightPanelHeaderEntryKey[] {
   const availableTools = availableRightPanelTools(options.isCloudWorkspaceSelected);
@@ -93,11 +82,6 @@ function normalizeRightPanelHeaderOrder(
   const terminalIds = resolveValidTerminalIds(source, options.liveTerminals, terminalIdsInSource);
   const validTerminalKeys = new Set(
     terminalIds.map((terminalId) => rightPanelTerminalHeaderKey(terminalId)),
-  );
-  const validBrowserKeys = new Set(
-    browserIdsFromHeaderOrder(source)
-      .filter((browserId) => Boolean(options.browserTabsById[browserId]))
-      .map((browserId) => rightPanelBrowserHeaderKey(browserId)),
   );
   const validViewerKeys = resolveValidViewerKeys(source, options.liveViewerTargets);
   const next: RightPanelHeaderEntryKey[] = [];
@@ -111,9 +95,6 @@ function normalizeRightPanelHeaderOrder(
       next.push(key);
     }
     if (entry.kind === "terminal" && validTerminalKeys.has(key)) {
-      next.push(key);
-    }
-    if (entry.kind === "browser" && validBrowserKeys.has(key)) {
       next.push(key);
     }
     if (entry.kind === "viewer" && validViewerKeys.has(entry.targetKey)) {

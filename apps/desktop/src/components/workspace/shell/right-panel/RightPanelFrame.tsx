@@ -7,7 +7,6 @@ import { RightPanelContent } from "@/components/workspace/shell/right-panel/Righ
 import { RightPanelHeaderTabs } from "@/components/workspace/shell/right-panel/RightPanelHeaderTabs";
 import type {
   RightPanelActiveEntryKey,
-  RightPanelBrowserTab,
   RightPanelHeaderEntryKey,
   RightPanelTool,
 } from "@/lib/domain/workspaces/shell/right-panel-model";
@@ -26,19 +25,15 @@ interface RightPanelFrameProps {
   workspaceUiKey: string | null;
   activeEntryKey: RightPanelActiveEntryKey;
   activeTool: RightPanelTool | null;
-  activeBrowserId: string | null;
   activeTerminalId: string | null;
   activeViewerTarget: ViewerTarget | null;
   entries: readonly RightPanelHeaderEntry[];
   unreadByTerminal: Record<string, boolean>;
   buffersByPath: Record<string, WorkspaceFileBuffer>;
   tabModes: Record<string, FileViewerMode>;
-  browserTabs: readonly RightPanelBrowserTab[];
   orderedTerminals: readonly TerminalRecord[];
-  isOpen: boolean;
   isWorkspaceReady: boolean;
   shouldRenderContent: boolean;
-  shouldMountBrowserPanel: boolean;
   shouldMountTerminalPanel: boolean;
   canConnectTerminals: boolean;
   isLoadingTerminals: boolean;
@@ -46,22 +41,18 @@ interface RightPanelFrameProps {
   terminalFocusRequestToken: number;
   newTabMenuRequestToken: number;
   newTabMenuDefaultKind: RightPanelNewTabMenuDefault;
-  nativeOverlaysHidden: boolean;
   onActivateEntry: (entryKey: RightPanelHeaderEntryKey) => boolean;
   onSelectTerminal: (terminalId: string) => void;
   onCloseTerminal: (terminalId: string) => void;
-  onCloseBrowser: (browserId: string) => void;
   onCloseViewerTarget: (targetKey: RightPanelHeaderEntryKey) => void;
   onRenameTerminal: (terminalId: string, title: string) => Promise<void>;
   onCreateTerminal: () => void;
-  onCreateBrowser: () => void;
   onOpenRepoSettings: () => void;
   onTogglePanel: () => void;
   onReorderHeaderEntry: (
     entryKey: RightPanelHeaderEntryKey,
     beforeEntryKey: RightPanelHeaderEntryKey | null,
   ) => void;
-  onUpdateBrowserUrl: (browserId: string, url: string) => void;
 }
 
 export function RightPanelFrame({
@@ -71,19 +62,15 @@ export function RightPanelFrame({
   workspaceUiKey,
   activeEntryKey,
   activeTool,
-  activeBrowserId,
   activeTerminalId,
   activeViewerTarget,
   entries,
   unreadByTerminal,
   buffersByPath,
   tabModes,
-  browserTabs,
   orderedTerminals,
-  isOpen,
   isWorkspaceReady,
   shouldRenderContent,
-  shouldMountBrowserPanel,
   shouldMountTerminalPanel,
   canConnectTerminals,
   isLoadingTerminals,
@@ -91,19 +78,15 @@ export function RightPanelFrame({
   terminalFocusRequestToken,
   newTabMenuRequestToken,
   newTabMenuDefaultKind,
-  nativeOverlaysHidden,
   onActivateEntry,
   onSelectTerminal,
   onCloseTerminal,
-  onCloseBrowser,
   onCloseViewerTarget,
   onRenameTerminal,
   onCreateTerminal,
-  onCreateBrowser,
   onOpenRepoSettings,
   onTogglePanel,
   onReorderHeaderEntry,
-  onUpdateBrowserUrl,
 }: RightPanelFrameProps) {
   return (
     <div
@@ -126,11 +109,9 @@ export function RightPanelFrame({
         newTabMenuDefaultKind={newTabMenuDefaultKind}
         onActivateEntry={onActivateEntry}
         onCloseTerminal={onCloseTerminal}
-        onCloseBrowser={onCloseBrowser}
         onCloseViewerTarget={onCloseViewerTarget}
         onRenameTerminal={onRenameTerminal}
         onCreateTerminal={onCreateTerminal}
-        onCreateBrowser={onCreateBrowser}
         onReorderHeaderEntry={onReorderHeaderEntry}
         onOpenRepoSettings={onOpenRepoSettings}
         onTogglePanel={onTogglePanel}
@@ -141,23 +122,17 @@ export function RightPanelFrame({
         workspaceUiKey={workspaceUiKey}
         activeEntryKey={activeEntryKey}
         activeTool={activeTool}
-        activeBrowserId={activeBrowserId}
         activeTerminalId={activeTerminalId}
         activeViewerTarget={activeViewerTarget}
-        browserTabs={browserTabs}
         orderedTerminals={orderedTerminals}
         shouldRenderContent={shouldRenderContent}
-        shouldMountBrowserPanel={shouldMountBrowserPanel}
         shouldMountTerminalPanel={shouldMountTerminalPanel}
-        isOpen={isOpen}
         isWorkspaceReady={isWorkspaceReady}
         canConnectTerminals={canConnectTerminals}
         isLoadingTerminals={isLoadingTerminals}
         terminalListErrorMessage={terminalListErrorMessage}
         terminalFocusRequestToken={terminalFocusRequestToken}
         unreadByTerminal={unreadByTerminal}
-        nativeOverlaysHidden={nativeOverlaysHidden}
-        onUpdateBrowserUrl={onUpdateBrowserUrl}
         onNewTerminal={onCreateTerminal}
         onSelectTerminal={onSelectTerminal}
         onCloseTerminal={onCloseTerminal}

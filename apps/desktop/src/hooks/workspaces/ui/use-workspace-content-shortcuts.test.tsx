@@ -244,7 +244,7 @@ describe("useWorkspaceContentShortcuts", () => {
     expect(useContentSearchStore.getState().scope).toBe("diffs");
   });
 
-  it("declines content search when terminal or browser owns focus", () => {
+  it("declines content search when the terminal owns focus", () => {
     const actions = createActions();
     const zone = document.createElement("div");
     zone.tabIndex = 0;

@@ -177,11 +177,8 @@ describe("useMainScreenActions right panel actions", () => {
     const { result, spies } = renderActions({
       rightPanelState: {
         ...DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
-        activeEntryKey: "browser:b1",
-        headerOrder: [...DEFAULT_RIGHT_PANEL_WORKSPACE_STATE.headerOrder, "browser:b1"],
-        browserTabsById: {
-          b1: { id: "b1", url: null },
-        },
+        activeEntryKey: "terminal:t1",
+        headerOrder: [...DEFAULT_RIGHT_PANEL_WORKSPACE_STATE.headerOrder, "terminal:t1"],
       },
       rightPanelOpen: false,
     });

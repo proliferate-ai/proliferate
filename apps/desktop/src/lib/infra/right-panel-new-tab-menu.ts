@@ -1,7 +1,6 @@
-export type RightPanelNewTabMenuDefault = "terminal" | "browser";
+export type RightPanelNewTabMenuDefault = "terminal";
 
 export const RIGHT_PANEL_NEW_TAB_MENU_EVENT = "proliferate:right-panel-new-tab-menu";
-export const RIGHT_PANEL_BROWSER_TAB_EVENT = "proliferate:right-panel-browser-tab";
 
 export interface RightPanelNewTabMenuRequest {
   defaultKind: RightPanelNewTabMenuDefault;
@@ -17,17 +16,8 @@ export function requestRightPanelNewTabMenu(
   return true;
 }
 
-export function requestRightPanelBrowserTab(): boolean {
-  return !window.dispatchEvent(new Event(RIGHT_PANEL_BROWSER_TAB_EVENT, {
-    cancelable: true,
-  }));
-}
-
 export function rightPanelNewTabMenuDefaultFromEvent(
-  event: Event,
+  _event: Event,
 ): RightPanelNewTabMenuDefault {
-  if (!(event instanceof CustomEvent)) {
-    return "terminal";
-  }
-  return event.detail?.defaultKind === "browser" ? "browser" : "terminal";
+  return "terminal";
 }
