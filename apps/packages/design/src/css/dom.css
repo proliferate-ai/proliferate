@@ -1,9 +1,10 @@
 @import "tailwindcss";
 @source "../../../ui/src";
 @source "../../../product-ui/src";
+@source "../../../product-surfaces/src";
 @import "../theme.css";
 
-/* -- Semantic UI type-scale tokens (shared by web + desktop; desktop.css
+/* -- Semantic UI type-scale tokens (shared by web + desktop; product.css
       imports this file). Values are the desktop "UI font size" default
       preset: applyAppearancePreference() re-writes every --text-* token on
       :root at boot from UI_FONT_SCALES (appearance.ts), so these build-time
@@ -142,7 +143,7 @@ body {
 
 /* ---- Skeleton shimmer (codex block shimmer) ----
    Loading blocks share one motion family with the thinking-text sweep in
-   desktop.css: a soft gradient band travelling left→right via transform
+   product.css: a soft gradient band travelling left→right via transform
    (compositor-only — never background-position). Stagger sibling rows by
    setting the --shimmer-delay custom property per row. */
 @keyframes skeleton-shimmer-sweep {

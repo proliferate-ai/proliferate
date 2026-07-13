@@ -18,7 +18,7 @@ interface LevelBarsButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonEleme
 
 // HTML bars, not an inline SVG: WebKit does not compositor-accelerate
 // transform/opacity animations on SVG child elements, so the staggered
-// "wave" (see composer-level-bar-wave in desktop.css) used to force a
+// "wave" (see composer-level-bar-wave in product.css) used to force a
 // repaint of the whole icon every frame. Plain <span> bars with
 // currentColor backgrounds pick up the same scaleY/opacity keyframes on
 // the compositor instead. Geometry mirrors the old SVG rendering: 2px-wide

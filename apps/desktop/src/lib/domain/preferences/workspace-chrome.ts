@@ -4,7 +4,7 @@
 //
 // Both chrome modes use 46px (codex --height-toolbar, UX_SPEC §7) so the
 // header always lines up with the right panel's --tab-system-height in
-// apps/packages/design/src/css/desktop.css — the main header aligns down to
+// apps/packages/design/src/css/product.css — the main header aligns down to
 // the right pane, not the other way around (owner ruling 2026-07-10).
 const WORKSPACE_GLASS_HEADER_BASE_CLASS =
   "flex h-[46px] shrink-0 items-center bg-background/70 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60";

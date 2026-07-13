@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-/** Must match the .composer-dock-card-exit duration in desktop.css. */
+/** Must match the .composer-dock-card-exit duration in product.css. */
 const CARD_EXIT_DURATION_MS = 150;
 
 interface HeldSlotEntry {
@@ -20,7 +20,7 @@ interface HeldSlotEntry {
  *
  * Both animations are compositor-only (transform/opacity) and disabled under
  * prefers-reduced-motion — see the composer dock card motion block in
- * desktop.css.
+ * product.css.
  *
  * When `entryKey` changes to another non-null key the old card is swapped
  * out instantly and the new one plays the entrance (no stacking); the fade

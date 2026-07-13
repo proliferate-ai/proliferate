@@ -6,7 +6,7 @@ export const GIT_DIFF_FETCH_CONCURRENCY_LIMIT = 5;
 /**
  * Above this many diff lines, sidebar review cards opt their diff rows into
  * content-visibility row virtualization (the [data-diff-row-virtualization]
- * rule in design/src/css/desktop.css) so off-screen rows of one large file
+ * rule in design/src/css/product.css) so off-screen rows of one large file
  * skip layout/paint. Small diffs stay un-contained: full paint is already
  * cheap and per-row containment has its own overhead.
  */
