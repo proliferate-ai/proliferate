@@ -260,14 +260,16 @@ jobs:
           STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
         run: pnpm -C tests/release run vertical-slice:tier2
 
-      # ── STRICT flip switch. Only runs when explicitly requested via
-      # workflow_dispatch (schedule events carry no `inputs`, so this never
-      # runs on the nightly cron). NO continue-on-error: a strict run must
-      # fail closed, including on a missing STRIPE_TEST_SECRET_KEY — that is
-      # the correct, required behavior
-      # (release-worlds-and-fixtures.md "Secret preflight"), not a bug.
+      # ── STRICT invocation. The tier-2 slice is a PROVEN slice: green
+      # locally and through this identical Actions path (run 29246540107,
+      # 2026-07-13), so per core-release-validation.md's ratchet it now runs
+      # strict on every push and on dispatch-strict. Schedule stays
+      # diagnostic-only (nightly row of the gate cadence). NO
+      # continue-on-error: a strict run must fail closed, including on a
+      # missing STRIPE_TEST_SECRET_KEY — that is the correct, required
+      # behavior (release-worlds-and-fixtures.md "Secret preflight").
       - name: Tier-2 vertical slice — strict
-        if: inputs.behavior == 'strict'
+        if: inputs.behavior == 'strict' || github.event_name == 'push'
         env:
           TIER2_INTENT_PROFILE: ci
           TIER2_INTENT_SKIP_RUNTIME: "1"
