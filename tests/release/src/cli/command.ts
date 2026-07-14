@@ -3,21 +3,23 @@ import type { ScenarioDefinition } from "../scenarios/types.js";
 import type { FailureReport } from "../report/types.js";
 import { toFailureReports } from "../report/failure-reporter.js";
 import { IdentityError, type RunIdentityV1 } from "../runner/identity.js";
-import { executeSelectedTests, SelectionError } from "../runner/execute.js";
+import { executeSelectedCells } from "../runner/execute.js";
+import { buildPlannedCells, SelectionError } from "../runner/plan.js";
+import type { PlannedCellV1 } from "../runner/result.js";
 import {
   BuildMapError,
   toCandidateBuildEvidence,
   type CandidateBuildEvidenceV1,
   type CandidateBuildMapV1,
 } from "../artifacts/build-map.js";
-import type { TestRunReportV2 } from "../evidence/schema.js";
+import type { TestRunReportV3 } from "../evidence/schema.js";
 
 /**
  * Testable command orchestration
  * (specs/developing/testing/candidate-build-handoff.md "Runner integration").
  * The required ordering is encoded here: parse → identity → selection →
  * candidate-build-map validation → only then local-user/gateway setup →
- * execute → write report V2 → auxiliary issue filing → persisted exit.
+ * execute → write report V3 → auxiliary issue filing → persisted exit.
  * `cli/run.ts` stays a thin process adapter supplying the real side-effect
  * dependencies.
  */
@@ -33,8 +35,8 @@ export interface CommandDeps {
   seedLocalDurableUser: (seeded: Set<string>) => Promise<void>;
   pushLocalGatewayAuth: () => Promise<void>;
   printEnvManifestReport: () => void;
-  execute: typeof executeSelectedTests;
-  write: (outputDir: string, report: TestRunReportV2) => Promise<string>;
+  execute: typeof executeSelectedCells;
+  write: (outputDir: string, report: TestRunReportV3) => Promise<string>;
   fileIssues: (reports: readonly FailureReport[]) => Promise<string[]>;
   log: (message: string) => void;
   error: (message: string) => void;
@@ -97,6 +99,21 @@ export async function runReleaseCommand(argv: readonly string[], deps: CommandDe
     }
   }
 
+  // The exact test plan is expanded and validated deterministically after
+  // the candidate map and before any setup side effect: invalid, empty, or
+  // duplicate expansion exits 2, writes no report, and runs zero
+  // user/gateway/provider/fixture/scenario setup.
+  let cells: PlannedCellV1[];
+  try {
+    cells = await buildPlannedCells(scenarios, {
+      desktop: args.desktop,
+      agents: args.agents === "all" ? ["all"] : args.agents,
+    });
+  } catch (error) {
+    deps.error(error instanceof Error ? error.message : String(error));
+    return 2;
+  }
+
   // Local lane self-seeds its durable user per run (Part 2 of #1069): the CI
   // local lane boots a fresh, ephemeral server, so it mints the durable
   // identity through the real /setup claim instead of depending on a repo
@@ -109,7 +126,7 @@ export async function runReleaseCommand(argv: readonly string[], deps: CommandDe
 
   deps.printEnvManifestReport();
 
-  let report: TestRunReportV2;
+  let report: TestRunReportV3;
   try {
     report = await deps.execute({
       behavior: args.behavior,
@@ -117,6 +134,7 @@ export async function runReleaseCommand(argv: readonly string[], deps: CommandDe
       identity,
       inputs: { targetLane: args.lane, desktop: args.desktop, agents: args.agents, scenarios: args.scenarios },
       scenarios,
+      cells,
       locallySeeded,
       candidateBuild,
       log: (message) => deps.log(`  ${message}`),
@@ -163,7 +181,7 @@ export async function runReleaseCommand(argv: readonly string[], deps: CommandDe
   return report.summary.intended_exit_code;
 }
 
-function printSummary(report: TestRunReportV2, deps: Pick<CommandDeps, "log" | "error">): void {
+function printSummary(report: TestRunReportV3, deps: Pick<CommandDeps, "log" | "error">): void {
   const counts = report.summary.by_status;
   deps.log(
     `\n${counts.green} green, ${counts.failed} failed, ${counts.blocked} blocked, ` +
@@ -174,7 +192,7 @@ function printSummary(report: TestRunReportV2, deps: Pick<CommandDeps, "log" | "
   for (const result of report.results) {
     if (result.status !== "green") {
       const reason = result.reason ? ` — ${firstLine(result.reason.message)}` : "";
-      deps.log(`  [${result.status}] ${result.test_id}${reason}`);
+      deps.log(`  [${result.status}] ${result.cell_id}${reason}`);
     }
   }
   for (const error of report.summary.integrity_errors) {

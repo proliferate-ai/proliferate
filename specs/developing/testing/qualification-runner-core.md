@@ -4,6 +4,15 @@ Status: frozen implementation contract for the first qualification-platform
 slice. Revision: `Q1-frozen-2`. Audited base:
 `2ec15eaf8cfc870cbdbb42c225a5f1428e5282b4`.
 
+Successor: [`exact-test-matrix.md`](exact-test-matrix.md) (ETM1) changes the
+selected unit from one broad `scenario/lane` test to an exact test cell
+(matrix children like `T3-CHAT-1/local/harness=codex`), renames the report's
+selected/result arrays and verdict vocabulary accordingly, and advances the
+combined report to `TestRunReportV3`. This document remains the contract of
+record for run identity, normalization, diagnostic/strict behavior,
+missing/duplicate integrity, sanitization, and report-derived exit codes,
+which ETM1 extends rather than replaces.
+
 ## Outcome
 
 The release-test command runs the selected tests and truthfully reports what
@@ -21,6 +30,15 @@ receive selected tests
 This contract owns test selection, run identity, normalized results, the
 combined report, and diagnostic/strict exit behavior. It does not provision
 providers or worlds, build candidates, or add scenarios.
+
+## Successor boundary
+
+[`exact-test-matrix.md`](exact-test-matrix.md) preserves this contract's run
+identity, terminal-state normalization, preflight, diagnostic/strict policy,
+and report-derived exits while replacing the selected unit with exact child
+test cells and advancing the combined report to V3. This document records the
+frozen foundation as implemented; the successor document owns current
+selected-cell and report shape.
 
 ## Vocabulary
 

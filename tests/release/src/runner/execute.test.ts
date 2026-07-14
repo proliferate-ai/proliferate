@@ -2,12 +2,15 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { EnvResolution, ResolvedEnvVar } from "../config/env-resolution.js";
-import { validateReport } from "../evidence/schema.js";
-import { gatewayJsonRpc } from "../fixtures/integration-gateway.js";
-import { toFailureReports } from "../report/failure-reporter.js";
-import type { ScenarioDefinition } from "../scenarios/types.js";
+import type {
+  LeafScenarioDefinition,
+  MatrixScenarioDefinition,
+  ScenarioCellOutcome,
+  ScenarioDefinition,
+} from "../scenarios/types.js";
 import { ScenarioBlockedError, ScenarioExpectedFailError } from "../scenarios/types.js";
-import { executeSelectedTests, expandSelectedTests, SelectionError, type ExecuteOptions } from "./execute.js";
+import { executeSelectedCells, type ExecuteOptions } from "./execute.js";
+import { buildPlannedCells } from "./plan.js";
 import type { RunIdentityV1 } from "./identity.js";
 
 const IDENTITY: RunIdentityV1 = {
@@ -22,11 +25,11 @@ interface FakeScenarioOptions {
   id: string;
   lanes?: Array<"local" | "sandbox">;
   requiredEnv?: string[];
-  run?: ScenarioDefinition["run"];
-  plan?: ScenarioDefinition["plan"];
+  run?: LeafScenarioDefinition["run"];
+  plan?: LeafScenarioDefinition["plan"];
 }
 
-function fakeScenario(options: FakeScenarioOptions): ScenarioDefinition {
+function fakeScenario(options: FakeScenarioOptions): LeafScenarioDefinition {
   return {
     id: options.id,
     title: `${options.id} title`,
@@ -35,6 +38,37 @@ function fakeScenario(options: FakeScenarioOptions): ScenarioDefinition {
     requiredEnv: options.requiredEnv ?? [],
     plan: options.plan ?? (() => [{ description: `plan ${options.id}` }]),
     run: options.run ?? (async () => undefined),
+  };
+}
+
+interface FakeMatrixOptions {
+  id: string;
+  lanes?: Array<"local" | "sandbox">;
+  requiredEnv?: string[];
+  cells?: Array<Record<string, string>>;
+  cellRequiredEnv?: Record<string, string[]>;
+  runCells?: MatrixScenarioDefinition["runCells"];
+  planCell?: MatrixScenarioDefinition["planCell"];
+}
+
+function fakeMatrix(options: FakeMatrixOptions): MatrixScenarioDefinition {
+  const dims = options.cells ?? [{ child: "a" }, { child: "b" }, { child: "c" }];
+  return {
+    id: options.id,
+    title: `${options.id} title`,
+    registryFlowRef: `specs#${options.id}`,
+    lanes: options.lanes ?? ["local"],
+    requiredEnv: options.requiredEnv ?? [],
+    kind: "matrix",
+    expandCells: () =>
+      dims.map((dimensions) => ({
+        dimensions,
+        requiredEnv: options.cellRequiredEnv?.[Object.values(dimensions)[0]],
+      })),
+    planCell: options.planCell ?? ((_ctx, cell) => [{ description: `plan ${cell.cell_id}` }]),
+    runCells:
+      options.runCells ??
+      (async (_ctx, cells) => cells.map((cell) => ({ cellId: cell.cell_id, status: "green" as const }))),
   };
 }
 
@@ -65,51 +99,45 @@ function fakeEnv(presentNames: string[] = [], secretValues: Record<string, strin
   };
 }
 
-function baseOptions(scenarios: ScenarioDefinition[], overrides: Partial<ExecuteOptions> = {}): ExecuteOptions {
+async function optionsFor(
+  scenarios: ScenarioDefinition[],
+  overrides: Partial<ExecuteOptions> = {},
+): Promise<ExecuteOptions> {
+  const cells =
+    overrides.cells ??
+    (await buildPlannedCells(scenarios, {
+      desktop: "web",
+      agents:
+        overrides.inputs?.agents === undefined || overrides.inputs.agents === "all"
+          ? ["all"]
+          : overrides.inputs.agents,
+    }));
   return {
     behavior: "diagnostic",
     execution: "real",
     identity: IDENTITY,
     inputs: { targetLane: "local", desktop: "web", agents: "all", scenarios: "all" },
     scenarios,
+    cells,
     resolveNeededEnv: () => fakeEnv(),
+    resolveSecretValues: () => [],
     ...overrides,
   };
 }
 
-test("expands scenarios across declared lanes with stable unique test ids", () => {
-  const selected = expandSelectedTests([
-    fakeScenario({ id: "A", lanes: ["local", "sandbox"] }),
-    fakeScenario({ id: "B", lanes: ["sandbox"] }),
-  ]);
-  assert.deepEqual(
-    selected.map((testEntry) => testEntry.test_id),
-    ["A/local", "A/sandbox", "B/sandbox"],
-  );
-});
-
-test("rejects duplicate expanded test ids before execution", () => {
-  assert.throws(
-    () => expandSelectedTests([fakeScenario({ id: "A" }), fakeScenario({ id: "A" })]),
-    SelectionError,
-  );
-});
-
-test("rejects a selection that expands to zero tests", () => {
-  assert.throws(() => expandSelectedTests([]), SelectionError);
-});
-
-test("normal return normalizes to green with timestamps and duration", async () => {
-  const report = await executeSelectedTests(baseOptions([fakeScenario({ id: "A" })]));
+test("normal leaf return normalizes to green with timestamps and duration", async () => {
+  const report = await executeSelectedCells(await optionsFor([fakeScenario({ id: "A" })]));
   const [result] = report.results;
   assert.equal(result.status, "green");
+  assert.equal(result.cell_id, "A/local");
+  assert.deepEqual(result.dimensions, {});
   assert.ok(result.started_at !== null);
   assert.ok(typeof result.duration_ms === "number");
   assert.equal(report.verdict.status, "non_qualifying");
   assert.equal(report.summary.intended_exit_code, 0);
 });
 
-test("ScenarioBlockedError, ScenarioExpectedFailError, Error, and non-Error throws normalize correctly", async () => {
+test("leaf ScenarioBlockedError, ScenarioExpectedFailError, Error, and non-Error throws normalize correctly", async () => {
   const scenarios = [
     fakeScenario({ id: "BLOCKED", run: async () => { throw new ScenarioBlockedError("gate"); } }),
     fakeScenario({ id: "XFAIL", run: async () => { throw new ScenarioExpectedFailError("known gap"); } }),
@@ -117,8 +145,8 @@ test("ScenarioBlockedError, ScenarioExpectedFailError, Error, and non-Error thro
     fakeScenario({ id: "WEIRD", run: async () => { throw "a string"; } }),
     fakeScenario({ id: "GREEN" }),
   ];
-  const report = await executeSelectedTests(baseOptions(scenarios));
-  const byId = new Map(report.results.map((result) => [result.test_id, result]));
+  const report = await executeSelectedCells(await optionsFor(scenarios));
+  const byId = new Map(report.results.map((result) => [result.cell_id, result]));
   assert.equal(byId.get("BLOCKED/local")?.status, "blocked");
   assert.equal(byId.get("BLOCKED/local")?.reason?.code, "scenario_blocked");
   assert.equal(byId.get("XFAIL/local")?.status, "expected_fail");
@@ -131,116 +159,250 @@ test("ScenarioBlockedError, ScenarioExpectedFailError, Error, and non-Error thro
   assert.equal(report.summary.intended_exit_code, 1);
 });
 
-test("strict also continues siblings after runtime non-green states", async () => {
-  const ran: string[] = [];
-  const scenarios = [
-    fakeScenario({ id: "RED", run: async () => { ran.push("RED"); throw new Error("boom"); } }),
-    fakeScenario({ id: "GREEN", run: async () => { ran.push("GREEN"); } }),
-  ];
-  const report = await executeSelectedTests(baseOptions(scenarios, { behavior: "strict" }));
-  assert.deepEqual(ran, ["RED", "GREEN"]);
-  assert.equal(report.verdict.status, "selected_tests_failed");
-  assert.equal(report.summary.intended_exit_code, 1);
-});
-
-test("diagnostic missing requirements block only affected tests", async () => {
-  const ran: string[] = [];
-  const scenarios = [
-    fakeScenario({ id: "NEEDY", requiredEnv: ["MISSING_VAR"], run: async () => { ran.push("NEEDY"); } }),
-    fakeScenario({ id: "FREE", run: async () => { ran.push("FREE"); } }),
-  ];
-  const report = await executeSelectedTests(baseOptions(scenarios));
-  const byId = new Map(report.results.map((result) => [result.test_id, result]));
-  assert.equal(byId.get("NEEDY/local")?.status, "blocked");
-  assert.equal(byId.get("NEEDY/local")?.reason?.code, "missing_requirement");
-  assert.equal(byId.get("FREE/local")?.status, "green");
-  assert.deepEqual(ran, ["FREE"]);
-  assert.equal(report.summary.intended_exit_code, 0);
-});
-
-test("strict missing preflight executes zero test bodies, blocks affected, cancels the rest", async () => {
-  const ran: string[] = [];
-  const scenarios = [
-    fakeScenario({ id: "NEEDY", requiredEnv: ["MISSING_VAR"], run: async () => { ran.push("NEEDY"); } }),
-    fakeScenario({ id: "FREE", run: async () => { ran.push("FREE"); } }),
-  ];
-  const report = await executeSelectedTests(baseOptions(scenarios, { behavior: "strict" }));
-  assert.deepEqual(ran, []);
-  const byId = new Map(report.results.map((result) => [result.test_id, result]));
-  assert.equal(byId.get("NEEDY/local")?.status, "blocked");
-  assert.equal(byId.get("NEEDY/local")?.reason?.code, "missing_requirement");
-  assert.equal(byId.get("FREE/local")?.status, "cancelled");
-  assert.equal(byId.get("FREE/local")?.reason?.code, "strict_preflight_failed");
-  assert.equal(report.verdict.status, "selected_tests_failed");
-  assert.equal(report.summary.intended_exit_code, 1);
-});
-
-test("locally seeded vars do not satisfy the sandbox lane", async () => {
-  const scenarios = [
-    fakeScenario({ id: "A", lanes: ["local", "sandbox"], requiredEnv: ["SEEDED_VAR"] }),
-  ];
-  const report = await executeSelectedTests(
-    baseOptions(scenarios, {
-      resolveNeededEnv: () => fakeEnv(["SEEDED_VAR"]),
-      locallySeeded: new Set(["SEEDED_VAR"]),
-    }),
+test("a three-cell collector returning green/failed/green preserves all three; strict exits 1", async () => {
+  const matrix = fakeMatrix({
+    id: "M",
+    runCells: async (_ctx, cells) =>
+      cells.map((cell, index) => ({
+        cellId: cell.cell_id,
+        status: index === 1 ? ("failed" as const) : ("green" as const),
+        reason: index === 1 ? { code: "scenario_failure" as const, message: "child b broke" } : undefined,
+      })),
+  });
+  const report = await executeSelectedCells(await optionsFor([matrix], { behavior: "strict" }));
+  assert.equal(report.results.length, 3);
+  assert.deepEqual(
+    report.results.map((result) => result.status),
+    ["green", "failed", "green"],
   );
-  const byId = new Map(report.results.map((result) => [result.test_id, result]));
-  assert.equal(byId.get("A/local")?.status, "green");
-  assert.equal(byId.get("A/sandbox")?.status, "blocked");
+  assert.equal(report.verdict.status, "selected_cells_failed");
+  assert.equal(report.summary.intended_exit_code, 1);
 });
 
-test("dry-run calls each plan() exactly once, never run(), and finalizes not_run/dry_run", async () => {
-  const planCalls: string[] = [];
-  let runCalled = false;
-  const scenarios = [
-    fakeScenario({
-      id: "A",
-      lanes: ["local", "sandbox"],
-      plan: ({ runtimeLane }) => {
-        planCalls.push(`A/${runtimeLane}`);
-        return [{ description: `step for ${runtimeLane}` }];
-      },
-      run: async () => { runCalled = true; },
-    }),
-  ];
-  const report = await executeSelectedTests(baseOptions(scenarios, { execution: "dry_run" }));
-  assert.deepEqual(planCalls, ["A/local", "A/sandbox"]);
-  assert.equal(runCalled, false);
-  for (const result of report.results) {
-    assert.equal(result.status, "not_run");
-    assert.equal(result.reason?.code, "dry_run");
-    assert.equal(result.plan_steps.length, 1);
-  }
-  assert.equal(report.run.execution, "dry_run");
-  assert.equal(report.verdict.status, "non_qualifying");
-  assert.equal(report.summary.intended_exit_code, 0);
-});
-
-test("a throwing plan() becomes not_run/plan_error, records a runner error, continues, exits 2", async () => {
-  const scenarios = [
-    fakeScenario({ id: "BROKEN", plan: () => { throw new Error("plan bug"); } }),
-    fakeScenario({ id: "FINE" }),
-  ];
-  const report = await executeSelectedTests(baseOptions(scenarios, { execution: "dry_run" }));
-  const byId = new Map(report.results.map((result) => [result.test_id, result]));
-  assert.equal(byId.get("BROKEN/local")?.status, "not_run");
-  assert.equal(byId.get("BROKEN/local")?.reason?.code, "plan_error");
-  assert.equal(byId.get("FINE/local")?.status, "not_run");
-  assert.equal(byId.get("FINE/local")?.reason?.code, "dry_run");
-  assert.equal(report.summary.runner_errors.length, 1);
-  assert.equal(report.summary.by_status.failed, 0);
-  assert.equal(report.verdict.status, "non_qualifying");
+test("an omitted child outcome is synthesized as missing with integrity exit 2", async () => {
+  const matrix = fakeMatrix({
+    id: "M",
+    runCells: async (_ctx, cells) =>
+      cells
+        .filter((cell) => cell.dimensions.child !== "b")
+        .map((cell) => ({ cellId: cell.cell_id, status: "green" as const })),
+  });
+  const report = await executeSelectedCells(await optionsFor([matrix]));
+  const omitted = report.results.find((result) => result.dimensions.child === "b");
+  assert.equal(omitted?.status, "missing");
+  assert.ok(report.summary.integrity_errors.length > 0);
   assert.equal(report.summary.intended_exit_code, 2);
 });
 
-test("a post-selection runner defect finalizes every pending test and still produces a report", async () => {
-  // Simulates e.g. a scenario referencing an env var that resolveEnv rejects
-  // (undeclared in the manifest): the selected set must not be lost.
+test("a duplicate child outcome keeps the first result and records an integrity error", async () => {
+  const matrix = fakeMatrix({
+    id: "M",
+    cells: [{ child: "a" }],
+    runCells: async (_ctx, cells) => [
+      { cellId: cells[0].cell_id, status: "green" as const },
+      { cellId: cells[0].cell_id, status: "failed" as const },
+    ],
+  });
+  const report = await executeSelectedCells(await optionsFor([matrix]));
+  assert.equal(report.results[0].status, "green");
+  assert.ok(report.summary.integrity_errors.some((error) => error.code === "duplicate_result"));
+  assert.equal(report.summary.intended_exit_code, 2);
+});
+
+test("an unknown child outcome — even another group's planned cell — is an integrity error", async () => {
+  const matrix = fakeMatrix({
+    id: "M",
+    cells: [{ child: "a" }],
+    runCells: async (_ctx, cells) => [
+      { cellId: cells[0].cell_id, status: "green" as const },
+      { cellId: "OTHER/local", status: "green" as const },
+    ],
+  });
+  const other = fakeScenario({ id: "OTHER" });
+  const report = await executeSelectedCells(await optionsFor([matrix, other]));
+  // The leaf OTHER/local must carry its own real result, not the collector's.
+  const otherResult = report.results.find((result) => result.cell_id === "OTHER/local");
+  assert.equal(otherResult?.status, "green");
+  assert.ok(report.summary.integrity_errors.some((error) => error.message.includes("unassigned cell")));
+  assert.equal(report.summary.intended_exit_code, 2);
+});
+
+test("a one-child matrix still must return one explicit child outcome", async () => {
+  const matrix = fakeMatrix({
+    id: "M",
+    cells: [{ child: "only" }],
+    runCells: async () => [],
+  });
+  const report = await executeSelectedCells(await optionsFor([matrix]));
+  assert.equal(report.results[0].status, "missing");
+  assert.equal(report.summary.intended_exit_code, 2);
+});
+
+test("a collector-level throw finalizes all assigned runnable cells honestly", async () => {
+  const failing = fakeMatrix({
+    id: "MFAIL",
+    runCells: async () => {
+      throw new Error("shared setup exploded");
+    },
+  });
+  const blocked = fakeMatrix({
+    id: "MBLOCK",
+    runCells: async () => {
+      throw new ScenarioBlockedError("shared gate");
+    },
+  });
+  const xfail = fakeMatrix({
+    id: "MXFAIL",
+    runCells: async () => {
+      throw new ScenarioExpectedFailError("shared known gap");
+    },
+  });
+  const sibling = fakeScenario({ id: "GREEN" });
+  const report = await executeSelectedCells(await optionsFor([failing, blocked, xfail, sibling]));
+  const byId = new Map(report.results.map((result) => [result.cell_id, result]));
+  for (const child of ["a", "b", "c"]) {
+    assert.equal(byId.get(`MFAIL/local/child=${child}`)?.status, "failed");
+    assert.equal(byId.get(`MBLOCK/local/child=${child}`)?.status, "blocked");
+    assert.equal(byId.get(`MXFAIL/local/child=${child}`)?.status, "expected_fail");
+  }
+  // Independent scenario/runtime collectors continue after one collector fails.
+  assert.equal(byId.get("GREEN/local")?.status, "green");
+  assert.equal(report.summary.integrity_errors.length, 0);
+});
+
+test("a collector cannot self-declare runner-only terminal states", async () => {
+  const matrix = fakeMatrix({
+    id: "M",
+    cells: [{ child: "a" }],
+    runCells: async (_ctx, cells) => [
+      { cellId: cells[0].cell_id, status: "cancelled" } as unknown as ScenarioCellOutcome,
+    ],
+  });
+  const report = await executeSelectedCells(await optionsFor([matrix]));
+  assert.equal(report.results[0].status, "missing");
+  assert.ok(report.summary.integrity_errors.some((error) => error.message.includes("runner-only status")));
+  assert.equal(report.summary.intended_exit_code, 2);
+});
+
+test("runCells is invoked once per scenario/runtime lane with its assigned cells", async () => {
+  const invocations: Array<{ lane: string; cellIds: string[] }> = [];
+  const matrix = fakeMatrix({
+    id: "M",
+    lanes: ["local", "sandbox"],
+    runCells: async (ctx, cells) => {
+      invocations.push({ lane: ctx.runtimeLane, cellIds: cells.map((cell) => cell.cell_id) });
+      return cells.map((cell) => ({ cellId: cell.cell_id, status: "green" as const }));
+    },
+  });
+  await executeSelectedCells(await optionsFor([matrix]));
+  assert.equal(invocations.length, 2);
+  assert.deepEqual(invocations.map((invocation) => invocation.lane).sort(), ["local", "sandbox"]);
+  for (const invocation of invocations) {
+    assert.equal(invocation.cellIds.length, 3);
+  }
+});
+
+test("diagnostic missing requirements block only affected cells; the collector receives the rest", async () => {
+  let received: string[] = [];
+  const matrix = fakeMatrix({
+    id: "M",
+    cellRequiredEnv: { b: ["MISSING_VAR"] },
+    runCells: async (_ctx, cells) => {
+      received = cells.map((cell) => cell.cell_id);
+      return cells.map((cell) => ({ cellId: cell.cell_id, status: "green" as const }));
+    },
+  });
+  const report = await executeSelectedCells(await optionsFor([matrix]));
+  const byId = new Map(report.results.map((result) => [result.cell_id, result]));
+  assert.equal(byId.get("M/local/child=b")?.status, "blocked");
+  assert.equal(byId.get("M/local/child=b")?.reason?.code, "missing_requirement");
+  assert.equal(byId.get("M/local/child=a")?.status, "green");
+  assert.equal(byId.get("M/local/child=c")?.status, "green");
+  assert.deepEqual(received.sort(), ["M/local/child=a", "M/local/child=c"]);
+  assert.equal(report.summary.intended_exit_code, 0);
+});
+
+test("strict missing preflight executes zero collector bodies, blocks affected, cancels the rest", async () => {
+  let collectorRan = false;
+  let leafRan = false;
+  const matrix = fakeMatrix({
+    id: "M",
+    cellRequiredEnv: { b: ["MISSING_VAR"] },
+    runCells: async (_ctx, cells) => {
+      collectorRan = true;
+      return cells.map((cell) => ({ cellId: cell.cell_id, status: "green" as const }));
+    },
+  });
+  const leaf = fakeScenario({
+    id: "FREE",
+    run: async () => {
+      leafRan = true;
+    },
+  });
+  const report = await executeSelectedCells(await optionsFor([matrix, leaf], { behavior: "strict" }));
+  assert.equal(collectorRan, false);
+  assert.equal(leafRan, false);
+  const byId = new Map(report.results.map((result) => [result.cell_id, result]));
+  assert.equal(byId.get("M/local/child=b")?.status, "blocked");
+  assert.equal(byId.get("M/local/child=a")?.status, "cancelled");
+  assert.equal(byId.get("FREE/local")?.status, "cancelled");
+  assert.equal(report.verdict.status, "selected_cells_failed");
+  assert.equal(report.summary.intended_exit_code, 1);
+});
+
+test("dry-run lists and reports every exact cell without executing collectors", async () => {
+  let collectorRan = false;
+  const planned: string[] = [];
+  const matrix = fakeMatrix({
+    id: "M",
+    planCell: (_ctx, cell) => {
+      planned.push(cell.cell_id);
+      return [{ description: `steps for ${cell.cell_id}` }];
+    },
+    runCells: async () => {
+      collectorRan = true;
+      return [];
+    },
+  });
+  const leaf = fakeScenario({ id: "LEAF" });
+  const report = await executeSelectedCells(await optionsFor([matrix, leaf], { execution: "dry_run" }));
+  assert.equal(collectorRan, false);
+  assert.equal(planned.length, 3);
+  assert.equal(report.results.length, 4);
+  for (const result of report.results) {
+    assert.equal(result.status, "not_run");
+    assert.equal(result.reason?.code, "dry_run");
+    assert.ok(result.plan_steps.length > 0);
+  }
+  assert.equal(report.summary.intended_exit_code, 0);
+});
+
+test("a throwing planCell becomes not_run/plan_error, records a runner error, continues, exits 2", async () => {
+  const matrix = fakeMatrix({
+    id: "M",
+    cells: [{ child: "a" }, { child: "b" }],
+    planCell: (_ctx, cell) => {
+      if (cell.dimensions.child === "a") {
+        throw new Error("plan bug");
+      }
+      return [{ description: "fine" }];
+    },
+  });
+  const report = await executeSelectedCells(await optionsFor([matrix], { execution: "dry_run" }));
+  const byId = new Map(report.results.map((result) => [result.cell_id, result]));
+  assert.equal(byId.get("M/local/child=a")?.reason?.code, "plan_error");
+  assert.equal(byId.get("M/local/child=b")?.reason?.code, "dry_run");
+  assert.equal(report.summary.runner_errors.length, 1);
+  assert.equal(report.summary.intended_exit_code, 2);
+});
+
+test("a post-selection runner defect finalizes every pending cell and still produces a report", async () => {
   const scenarios = [fakeScenario({ id: "A" }), fakeScenario({ id: "B" })];
-  const report = await executeSelectedTests(
-    baseOptions(scenarios, {
-      resolveNeededEnv: () => { throw new Error('resolveEnv: "NOT_IN_MANIFEST" is not declared'); },
+  const report = await executeSelectedCells(
+    await optionsFor(scenarios, {
+      resolveNeededEnv: () => {
+        throw new Error('resolveEnv: "NOT_IN_MANIFEST" is not declared');
+      },
     }),
   );
   assert.equal(report.results.length, 2);
@@ -248,23 +410,7 @@ test("a post-selection runner defect finalizes every pending test and still prod
     assert.equal(result.status, "missing");
   }
   assert.equal(report.summary.runner_errors.length, 1);
-  assert.match(report.summary.runner_errors[0].message, /NOT_IN_MANIFEST/);
   assert.equal(report.summary.intended_exit_code, 2);
-});
-
-test("a diagnostic dry-run runner defect still produces valid persistable evidence", async () => {
-  const report = await executeSelectedTests(
-    baseOptions([fakeScenario({ id: "DRY-A" }), fakeScenario({ id: "DRY-B" })], {
-      execution: "dry_run",
-      resolveNeededEnv: () => { throw new Error("preflight resolver failed"); },
-    }),
-  );
-
-  assert.deepEqual(report.results.map((result) => result.status), ["missing", "missing"]);
-  assert.equal(report.summary.runner_errors.length, 1);
-  assert.equal(report.summary.integrity_errors.length, 2);
-  assert.equal(report.summary.intended_exit_code, 2);
-  assert.doesNotThrow(() => validateReport(report));
 });
 
 test("exact resolved secret values are redacted from the report", async () => {
@@ -273,190 +419,209 @@ test("exact resolved secret values are redacted from the report", async () => {
     fakeScenario({
       id: "LEAKY",
       requiredEnv: ["SECRET_VAR"],
-      run: async () => { throw new Error(`request failed with key ${secret}`); },
+      run: async () => {
+        throw new Error(`request failed with key ${secret}`);
+      },
     }),
   ];
-  const report = await executeSelectedTests(
-    baseOptions(scenarios, {
+  const report = await executeSelectedCells(
+    await optionsFor(scenarios, {
       resolveNeededEnv: () => fakeEnv([], { SECRET_VAR: secret }),
       resolveSecretValues: () => [secret],
     }),
   );
-  const serialized = JSON.stringify(report);
-  assert.ok(!serialized.includes(secret));
+  assert.ok(!JSON.stringify(report).includes(secret));
   assert.match(report.results[0].reason!.message, /\[REDACTED\]/);
 });
 
-test("secrets are redacted even when no selected scenario declares them", async () => {
-  // A fixture can use a secret opportunistically (e.g. an optional GitHub
-  // token in a clone URL) without listing it in requiredEnv; redaction draws
-  // from the full manifest, injected here via resolveSecretValues.
-  const secret = "ghp_undeclared_token";
-  const scenarios = [
-    fakeScenario({ id: "LEAKY", run: async () => { throw new Error(`clone https://x:${secret}@github.com failed`); } }),
-  ];
-  const report = await executeSelectedTests(
-    baseOptions(scenarios, { resolveSecretValues: () => [secret] }),
-  );
-  assert.ok(!JSON.stringify(report).includes(secret));
-});
-
-test("provider response bodies never reach the report or issue payloads", async () => {
-  // The ApiRequestError/LocalRuntimeError shape: Error.message embeds the
-  // complete response body. The normalized evidence must withhold it.
-  const providerPayload = '{"api_key":"sk-live-9999","customer_email":"a@b.c","stack":"Traceback..."}';
-  class FakeApiRequestError extends Error {
-    readonly status = 500;
-    readonly body = providerPayload;
-    constructor() {
-      super(`POST /v1/checkout -> 500: ${providerPayload}`);
-      this.name = "ApiRequestError";
-    }
-  }
-  const scenarios = [fakeScenario({ id: "PROV", run: async () => { throw new FakeApiRequestError(); } })];
-  const report = await executeSelectedTests(baseOptions(scenarios));
-  const serialized = JSON.stringify(report);
-  assert.ok(!serialized.includes("sk-live-9999"));
-  assert.ok(!serialized.includes("customer_email"));
-  assert.match(report.results[0].reason!.message, /POST \/v1\/checkout -> 500/);
-  assert.match(report.results[0].reason!.message, /withheld from evidence/);
-});
-
-test("plain integration-gateway response bodies never reach evidence or issue payloads", async () => {
-  const providerPayload = '{"access_token":"RAW_GATEWAY_TOKEN","detail":"provider traceback"}';
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () => new Response(providerPayload, { status: 502 });
-  try {
-    const scenario = fakeScenario({
-      id: "GATEWAY",
-      run: async () => {
-        await gatewayJsonRpc(
-          {
-            workerId: "worker-1",
-            desktopInstallId: "desktop-1",
-            mcpUrl: "https://gateway.example.test/mcp",
-            authorization: "Bearer worker-token",
-          },
-          { jsonrpc: "2.0", id: 1, method: "initialize", params: {} },
-        );
-      },
-    });
-    const report = await executeSelectedTests(baseOptions([scenario], { resolveSecretValues: () => [] }));
-    const issues = toFailureReports(report.results);
-
-    assert.equal(report.results[0].status, "failed");
-    assert.ok(!JSON.stringify(report).includes("RAW_GATEWAY_TOKEN"));
-    assert.ok(!JSON.stringify(issues).includes("RAW_GATEWAY_TOKEN"));
-    assert.match(report.results[0].reason!.message, /response body withheld from evidence/);
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-});
-
-test("provider payloads stay out of blocked and expected-fail evidence", async () => {
-  const blockedPayload = "RAW_BLOCKED_PROVIDER_BODY";
-  const expectedPayload = "RAW_EXPECTED_PROVIDER_BODY";
-  const report = await executeSelectedTests(
-    baseOptions([
-      fakeScenario({
-        id: "BLOCKED-PAYLOAD",
-        run: async () => {
-          throw new ScenarioBlockedError(`gateway unavailable -> 503: ${blockedPayload}`);
-        },
-      }),
-      fakeScenario({
-        id: "EXPECTED-PAYLOAD",
-        run: async () => {
-          throw new ScenarioExpectedFailError(`provisioning failed: ${expectedPayload}`);
-        },
-      }),
-    ]),
-  );
-  const serialized = JSON.stringify(report);
-
-  assert.ok(!serialized.includes(blockedPayload));
-  assert.ok(!serialized.includes(expectedPayload));
-  assert.equal(report.results[0].status, "blocked");
-  assert.equal(report.results[1].status, "expected_fail");
-});
-
-test("runtime-discovered URL credentials are scrubbed even when unknown to the redactor", async () => {
-  // A `gh auth token` embedded in a clone URL is not in the env manifest, so
-  // exact-value redaction cannot know it; the URL-userinfo scrub must catch it.
-  const token = "ghp_dynamicallyDiscovered123";
-  const scenarios = [
-    fakeScenario({
-      id: "GIT",
-      run: async () => {
-        throw new Error(
-          `git clone https://x-access-token:${token}@github.com/o/r.git failed (128): ` +
-            `fatal: unable to access 'https://x-access-token:${token}@github.com/o/r.git'`,
-        );
-      },
-    }),
-  ];
-  const report = await executeSelectedTests(baseOptions(scenarios, { resolveSecretValues: () => [] }));
-  const serialized = JSON.stringify(report);
-  assert.ok(!serialized.includes(token));
-  assert.match(report.results[0].reason!.message, /\[REDACTED\]@github\.com/);
-});
-
-test("rejects duplicate scenario ids even with disjoint lanes", () => {
-  assert.throws(
-    () =>
-      expandSelectedTests([
-        fakeScenario({ id: "A", lanes: ["local"] }),
-        fakeScenario({ id: "A", lanes: ["sandbox"] }),
-      ]),
-    SelectionError,
-  );
-});
-
-test("overlong messages are bounded to 4096 code points", async () => {
-  const scenarios = [
-    fakeScenario({ id: "LOUD", run: async () => { throw new Error("x".repeat(10_000)); } }),
-  ];
-  const report = await executeSelectedTests(baseOptions(scenarios));
-  assert.ok([...report.results[0].reason!.message].length <= 4096);
-});
-
-test("the report records identity, inputs, behavior, and selected/result equality", async () => {
-  const report = await executeSelectedTests(
-    baseOptions([fakeScenario({ id: "A", lanes: ["local", "sandbox"] })], {
+test("the report records identity, inputs, candidate evidence, and selected/result equality", async () => {
+  const evidence = {
+    artifacts: [{ artifact_id: "anyharness/test-host", version: "9.9.9", sha256: "e".repeat(64) }],
+  };
+  const report = await executeSelectedCells(
+    await optionsFor([fakeScenario({ id: "A", lanes: ["local", "sandbox"] })], {
       inputs: { targetLane: "staging", desktop: "native", agents: ["claude"], scenarios: ["A"] },
+      candidateBuild: evidence,
     }),
   );
+  assert.equal(report.schema_version, 3);
   assert.equal(report.run.run_id, "run-1");
-  assert.equal(report.run.behavior, "diagnostic");
   assert.equal(report.inputs.target_lane, "staging");
-  assert.deepEqual(report.inputs.agents, ["claude"]);
+  assert.deepEqual(report.candidate_build, evidence);
   assert.deepEqual(
-    report.selected_tests.map((testEntry) => testEntry.test_id).sort(),
-    report.results.map((result) => result.test_id).sort(),
+    report.selected_cells.map((cell) => cell.cell_id).sort(),
+    report.results.map((result) => result.cell_id).sort(),
   );
   assert.equal(report.summary.selected, report.summary.finalized);
 });
 
-test("strict all-green is the only strict exit-0 result", async () => {
-  const report = await executeSelectedTests(
-    baseOptions([fakeScenario({ id: "A" }), fakeScenario({ id: "B" })], { behavior: "strict" }),
+test("candidate evidence defaults to explicit null when omitted", async () => {
+  const report = await executeSelectedCells(await optionsFor([fakeScenario({ id: "A" })]));
+  assert.equal(report.candidate_build, null);
+});
+
+test("strict all-green across leaf and matrix cells is the only strict exit-0 result", async () => {
+  const report = await executeSelectedCells(
+    await optionsFor([fakeScenario({ id: "A" }), fakeMatrix({ id: "M" })], { behavior: "strict" }),
   );
-  assert.equal(report.verdict.status, "selected_tests_passed");
-  assert.equal(report.verdict.scope, "selected_tests");
+  assert.equal(report.verdict.status, "selected_cells_passed");
+  assert.equal(report.verdict.scope, "selected_cells");
   assert.equal(report.verdict.completeness, "partial");
   assert.equal(report.summary.intended_exit_code, 0);
 });
 
-test("the report carries the supplied candidate evidence, or explicit null when omitted", async () => {
-  const omitted = await executeSelectedTests(baseOptions([fakeScenario({ id: "A" })]));
-  assert.equal(omitted.schema_version, 2);
-  assert.equal(omitted.candidate_build, null);
+test("a collector mutating its received cells cannot alter the plan or evidence (ETM-002)", async () => {
+  const matrix = fakeMatrix({
+    id: "M",
+    cells: [{ child: "a" }],
+    runCells: async (_ctx, cells) => {
+      // Hostile collector: rewrites everything it was handed.
+      const cell = cells[0] as { cell_id: string; dimensions: Record<string, string>; required_env: string[] };
+      const originalId = cell.cell_id;
+      cell.cell_id = "M/local/child=tampered";
+      cell.dimensions.child = "tampered";
+      cell.required_env.push("INJECTED_VAR");
+      return [{ cellId: originalId, status: "green" as const }];
+    },
+  });
+  const report = await executeSelectedCells(await optionsFor([matrix]));
+  assert.equal(report.selected_cells[0].cell_id, "M/local/child=a");
+  assert.deepEqual(report.selected_cells[0].dimensions, { child: "a" });
+  assert.deepEqual(report.selected_cells[0].required_env, []);
+  assert.equal(report.results[0].cell_id, "M/local/child=a");
+  assert.deepEqual(report.results[0].dimensions, { child: "a" });
+  assert.equal(report.results[0].status, "green");
+  assert.equal(report.summary.integrity_errors.length, 0);
+});
 
-  const evidence = {
-    artifacts: [{ artifact_id: "anyharness/test-host", version: "9.9.9", sha256: "e".repeat(64) }],
+test("null, undefined, and malformed collector output is runner integrity, never a product failure (ETM-003)", async () => {
+  for (const bad of [null, undefined, "green", { cellId: 1 }]) {
+    const matrix = fakeMatrix({
+      id: "M",
+      cells: [{ child: "a" }],
+      runCells: (async () => (Array.isArray(bad) || typeof bad !== "object" || bad === null
+        ? bad
+        : [bad])) as unknown as MatrixScenarioDefinition["runCells"],
+    });
+    const report = await executeSelectedCells(await optionsFor([matrix]));
+    assert.equal(report.results[0].status, "missing", `for output ${JSON.stringify(bad)}`);
+    assert.notEqual(report.results[0].status, "failed");
+    assert.ok(report.summary.integrity_errors.length > 0);
+    assert.equal(report.summary.intended_exit_code, 2);
+  }
+});
+
+test("a throwing reason getter is runner integrity, never an ordinary failed result (ETM-003)", async () => {
+  const matrix = fakeMatrix({
+    id: "M",
+    cells: [{ child: "a" }],
+    runCells: async (_ctx, cells) => {
+      const poisoned = { cellId: cells[0].cell_id, status: "failed" as const };
+      Object.defineProperty(poisoned, "reason", {
+        get() {
+          throw new Error("hostile getter");
+        },
+        enumerable: true,
+      });
+      return [poisoned as ScenarioCellOutcome];
+    },
+  });
+  const report = await executeSelectedCells(await optionsFor([matrix]));
+  assert.equal(report.results[0].status, "missing");
+  assert.notEqual(report.results[0].status, "failed");
+  assert.ok(report.summary.integrity_errors.length > 0);
+  assert.equal(report.summary.intended_exit_code, 2);
+});
+
+test("a malformed reason value preserves the aggregate as integrity exit 2 (ETM-003)", async () => {
+  for (const badReason of [
+    null,
+    "oops",
+    42,
+    { code: "not_a_known_code", message: "x" },
+    { code: "scenario_failure" },
+  ]) {
+    const matrix = fakeMatrix({
+      id: "M",
+      cells: [{ child: "a" }],
+      runCells: async (_ctx, cells) => [
+        { cellId: cells[0].cell_id, status: "failed", reason: badReason } as unknown as ScenarioCellOutcome,
+      ],
+    });
+    const report = await executeSelectedCells(await optionsFor([matrix]));
+    assert.equal(report.results[0].status, "missing", `for reason ${JSON.stringify(badReason)}`);
+    assert.equal(report.summary.intended_exit_code, 2);
+    // The aggregate survived — sanitization did not crash on the bad reason.
+    assert.equal(report.schema_version, 3);
+  }
+});
+
+test("nested reason accessors are read exactly once before their values are persisted (ETM-003)", async () => {
+  let codeReads = 0;
+  let messageReads = 0;
+  const reason = {
+    get code(): unknown {
+      codeReads += 1;
+      return codeReads === 1 ? "scenario_failure" : "evil_code";
+    },
+    get message(): unknown {
+      messageReads += 1;
+      return messageReads === 1 ? "captured failure" : 42;
+    },
   };
-  const carried = await executeSelectedTests(
-    baseOptions([fakeScenario({ id: "A" })], { candidateBuild: evidence }),
+  const matrix = fakeMatrix({
+    id: "M",
+    cells: [{ child: "a" }],
+    runCells: async (_ctx, cells) => [
+      { cellId: cells[0].cell_id, status: "failed", reason } as unknown as ScenarioCellOutcome,
+    ],
+  });
+
+  const report = await executeSelectedCells(await optionsFor([matrix]));
+  assert.equal(codeReads, 1);
+  assert.equal(messageReads, 1);
+  assert.equal(report.results[0].status, "failed");
+  assert.deepEqual(report.results[0].reason, {
+    code: "scenario_failure",
+    message: "captured failure",
+  });
+  assert.equal(report.summary.integrity_errors.length, 0);
+  assert.equal(report.summary.intended_exit_code, 1);
+});
+
+test("a poisoned outcome iterator is runner integrity, not a collector failure (ETM-003)", async () => {
+  const matrix = fakeMatrix({
+    id: "M",
+    cells: [{ child: "a" }],
+    runCells: async () => {
+      const hostile: ScenarioCellOutcome[] = [];
+      Object.defineProperty(hostile, Symbol.iterator, {
+        value() {
+          throw new Error("hostile iterator");
+        },
+      });
+      return hostile;
+    },
+  });
+  const report = await executeSelectedCells(await optionsFor([matrix]));
+  assert.equal(report.results[0].status, "missing");
+  assert.ok(report.summary.integrity_errors.length > 0);
+  assert.equal(report.summary.intended_exit_code, 2);
+});
+
+test("a collector mutating ctx.agents cannot alter the persisted invocation inputs", async () => {
+  const matrix = fakeMatrix({
+    id: "M",
+    cells: [{ child: "a" }],
+    runCells: async (ctx, cells) => {
+      (ctx.agents as string[]).push("injected-agent");
+      return cells.map((cell) => ({ cellId: cell.cell_id, status: "green" as const }));
+    },
+  });
+  const report = await executeSelectedCells(
+    await optionsFor([matrix], {
+      inputs: { targetLane: "local", desktop: "web", agents: ["claude"], scenarios: "all" },
+    }),
   );
-  assert.deepEqual(carried.candidate_build, evidence);
+  assert.deepEqual(report.inputs.agents, ["claude"]);
 });

@@ -6,26 +6,29 @@ import {
   countByStatus,
   deriveVerdict,
   ResultTracker,
-  type FinalTestResultV1,
+  type FinalCellResultV1,
   type FinalTestStatus,
-  type SelectedTestV1,
+  type PlannedCellV1,
 } from "./result.js";
 
-function selected(id: string): SelectedTestV1 {
+function selected(id: string): PlannedCellV1 {
   return {
-    test_id: `${id}/local`,
+    cell_id: `${id}/local`,
     scenario_id: id,
     registry_flow_ref: `specs#${id}`,
     runtime_lane: "local",
+    dimensions: {},
+    required_env: [],
   };
 }
 
-function result(id: string, status: FinalTestStatus): FinalTestResultV1 {
+function result(id: string, status: FinalTestStatus): FinalCellResultV1 {
   return {
-    test_id: `${id}/local`,
+    cell_id: `${id}/local`,
     scenario_id: id,
     registry_flow_ref: `specs#${id}`,
     runtime_lane: "local",
+    dimensions: {},
     status,
     started_at: null,
     finished_at: "2026-07-13T00:00:00Z",
@@ -95,37 +98,37 @@ const MATRIX: Array<{
     name: "every selected real test green",
     statuses: ["green", "green"],
     diagnostic: { exit: 0, verdict: "non_qualifying" },
-    strict: { exit: 0, verdict: "selected_tests_passed" },
+    strict: { exit: 0, verdict: "selected_cells_passed" },
   },
   {
     name: "blocked only",
     statuses: ["green", "blocked"],
     diagnostic: { exit: 0, verdict: "non_qualifying" },
-    strict: { exit: 1, verdict: "selected_tests_failed" },
+    strict: { exit: 1, verdict: "selected_cells_failed" },
   },
   {
     name: "expected-fail only",
     statuses: ["green", "expected_fail"],
     diagnostic: { exit: 0, verdict: "non_qualifying" },
-    strict: { exit: 1, verdict: "selected_tests_failed" },
+    strict: { exit: 1, verdict: "selected_cells_failed" },
   },
   {
     name: "any failed",
     statuses: ["green", "failed", "blocked"],
     diagnostic: { exit: 1, verdict: "non_qualifying" },
-    strict: { exit: 1, verdict: "selected_tests_failed" },
+    strict: { exit: 1, verdict: "selected_cells_failed" },
   },
   {
     name: "any cancelled",
     statuses: ["green", "cancelled"],
     diagnostic: { exit: 1, verdict: "non_qualifying" },
-    strict: { exit: 1, verdict: "selected_tests_failed" },
+    strict: { exit: 1, verdict: "selected_cells_failed" },
   },
   {
     name: "any missing",
     statuses: ["green", "missing"],
     diagnostic: { exit: 1, verdict: "non_qualifying" },
-    strict: { exit: 1, verdict: "selected_tests_failed" },
+    strict: { exit: 1, verdict: "selected_cells_failed" },
   },
   {
     name: "successful diagnostic dry-run (every test not_run)",
@@ -163,7 +166,7 @@ test("runner or integrity errors force exit 2 in both behaviors", () => {
 
   const s1 = deriveVerdict({ behavior: "strict", results, integrityErrors: [], runnerErrors: runner });
   assert.equal(s1.intendedExitCode, 2);
-  assert.equal(s1.status, "selected_tests_failed");
+  assert.equal(s1.status, "selected_cells_failed");
 });
 
 test("strict all-green with any error cannot pass", () => {
@@ -173,6 +176,6 @@ test("strict all-green with any error cannot pass", () => {
     integrityErrors: [{ code: "summary_mismatch", message: "off by one" }],
     runnerErrors: [],
   });
-  assert.equal(verdict.status, "selected_tests_failed");
+  assert.equal(verdict.status, "selected_cells_failed");
   assert.equal(verdict.intendedExitCode, 2);
 });

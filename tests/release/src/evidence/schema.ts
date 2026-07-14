@@ -1,28 +1,31 @@
 import type { DesktopMode, RuntimeLane, TargetLane } from "../config/types.js";
 import type { CandidateBuildEvidenceV1 } from "../artifacts/build-map.js";
 import type { RunIdentityV1 } from "../runner/identity.js";
+import { canonicalCellId, dimensionShapeProblem } from "../runner/plan.js";
 import {
   ALL_FINAL_STATUSES,
   deriveVerdict,
-  type FinalTestResultV1,
+  type FinalCellResultV1,
   type FinalTestStatus,
   type IntegrityErrorV1,
+  type PlannedCellV1,
   type ResultBehavior,
   type RunnerErrorV1,
-  type SelectedTestV1,
   type VerdictStatus,
 } from "../runner/result.js";
 
 /**
  * The versioned combined-report contract, per
- * specs/developing/testing/qualification-runner-core.md ("Combined report")
- * plus specs/developing/testing/candidate-build-handoff.md ("Report V2"),
- * which adds bounded candidate-artifact identity. One artifact per
- * invocation/shard/attempt; validated before writing. V1 is the prior
- * contract recorded in repository history; current code emits only V2.
+ * specs/developing/testing/qualification-runner-core.md ("Combined report"),
+ * specs/developing/testing/candidate-build-handoff.md (candidate-artifact
+ * evidence), and specs/developing/testing/exact-test-matrix.md ("Combined
+ * report V3"), which changes the semantic result unit to an exact test cell.
+ * One artifact per invocation/shard/attempt; validated before writing. V1 and
+ * V2 are prior contracts recorded in repository history; current code emits
+ * only V3.
  */
-export interface TestRunReportV2 {
-  schema_version: 2;
+export interface TestRunReportV3 {
+  schema_version: 3;
   kind: "proliferate.test-run";
   /**
    * Artifact ID/version/SHA-256 from the validated candidate build map, or
@@ -42,8 +45,8 @@ export interface TestRunReportV2 {
     agents: string[] | "all";
     scenarios: string[] | "all";
   };
-  selected_tests: SelectedTestV1[];
-  results: FinalTestResultV1[];
+  selected_cells: PlannedCellV1[];
+  results: FinalCellResultV1[];
   summary: {
     selected: number;
     finalized: number;
@@ -54,7 +57,7 @@ export interface TestRunReportV2 {
   };
   verdict: {
     status: VerdictStatus;
-    scope: "selected_tests";
+    scope: "selected_cells";
     completeness: "partial";
     reasons: string[];
   };
@@ -139,9 +142,13 @@ export function redactExternalPayloads(message: string): string {
  * Runs before validation/serialization so no exact secret value or overlong
  * message can enter the persisted artifact.
  */
-export function sanitizeReport(report: TestRunReportV2, secretValues: readonly string[]): TestRunReportV2 {
+export function sanitizeReport(report: TestRunReportV3, secretValues: readonly string[]): TestRunReportV3 {
   const clean = (message: string): string =>
     boundMessage(redactExternalPayloads(redactUrlCredentials(redactSecrets(message, secretValues))));
+  // Structured identity fields (cell ids, dimension keys/values) cannot be
+  // redacted without making the evidence ambiguous, so a resolved secret
+  // appearing there fails closed: no report is produced at all.
+  assertNoSecretsInIdentity(report, secretValues);
   return {
     ...report,
     results: report.results.map((result) => ({
@@ -162,13 +169,55 @@ export function sanitizeReport(report: TestRunReportV2, secretValues: readonly s
 }
 
 /**
+ * Rejects a report whose structured identity fields carry a resolved secret
+ * value. Exported for the writer-side tests; execution calls it through
+ * `sanitizeReport`.
+ */
+export function assertNoSecretsInIdentity(report: TestRunReportV3, secretValues: readonly string[]): void {
+  const secrets = secretValues.filter((secret) => secret.length > 0);
+  if (secrets.length === 0) {
+    return;
+  }
+  const identityStrings: string[] = [];
+  for (const cell of report.selected_cells) {
+    identityStrings.push(cell.cell_id, ...Object.keys(cell.dimensions), ...Object.values(cell.dimensions));
+  }
+  for (const result of report.results) {
+    identityStrings.push(result.cell_id, ...Object.keys(result.dimensions), ...Object.values(result.dimensions));
+  }
+  for (const value of identityStrings) {
+    for (const secret of secrets) {
+      if (value.includes(secret)) {
+        throw new ReportValidationError(
+          "A resolved secret value appears in a cell id or dimension; refusing to produce evidence.",
+        );
+      }
+    }
+  }
+}
+
+/**
  * Validates the report invariants before writing: unique + exactly-equal
  * selected/result test ids, finalized counts, all seven status keys with
  * exact counts, and verdict/exit consistency.
  */
-export function validateReport(report: TestRunReportV2): void {
-  if (report.schema_version !== 2 || report.kind !== "proliferate.test-run") {
-    throw new ReportValidationError("Report must be schema_version 2, kind proliferate.test-run.");
+export function validateReport(report: TestRunReportV3): void {
+  if (report.schema_version !== 3 || report.kind !== "proliferate.test-run") {
+    throw new ReportValidationError("Report must be schema_version 3, kind proliferate.test-run.");
+  }
+  if (report.run.behavior !== "diagnostic" && report.run.behavior !== "strict") {
+    throw new ReportValidationError(`Unknown behavior "${report.run.behavior}".`);
+  }
+  if (report.run.execution !== "real" && report.run.execution !== "dry_run") {
+    throw new ReportValidationError(`Unknown execution mode "${report.run.execution}".`);
+  }
+  if (report.verdict.scope !== "selected_cells" || report.verdict.completeness !== "partial") {
+    throw new ReportValidationError(
+      "Verdict scope/completeness must be selected_cells/partial; this report cannot claim more.",
+    );
+  }
+  if (report.selected_cells.length === 0) {
+    throw new ReportValidationError("A report with zero selected cells is not representable evidence.");
   }
   validateCandidateBuildEvidence(report.candidate_build);
   // Strict evidence must name the exact bytes it qualified: only diagnostic
@@ -177,17 +226,68 @@ export function validateReport(report: TestRunReportV2): void {
     throw new ReportValidationError("Strict reports require non-null candidate_build identity.");
   }
 
-  const selectedIds = report.selected_tests.map((test) => test.test_id);
-  const resultIds = report.results.map((result) => result.test_id);
+  const selectedIds = report.selected_cells.map((cell) => cell.cell_id);
+  const resultIds = report.results.map((result) => result.cell_id);
   if (new Set(selectedIds).size !== selectedIds.length) {
-    throw new ReportValidationError("Selected test ids are not unique.");
+    throw new ReportValidationError("Selected cell ids are not unique.");
   }
   if (new Set(resultIds).size !== resultIds.length) {
-    throw new ReportValidationError("Result test ids are not unique.");
+    throw new ReportValidationError("Result cell ids are not unique.");
   }
   const selectedSet = new Set(selectedIds);
   if (resultIds.length !== selectedIds.length || !resultIds.every((id) => selectedSet.has(id))) {
-    throw new ReportValidationError("Selected and result test ids are not exactly equal sets.");
+    throw new ReportValidationError("Selected and result cell ids are not exactly equal sets.");
+  }
+
+  // Every selected cell's id must be re-derivable from its own
+  // scenario/lane/dimensions through the same canonical derivation the
+  // planner uses — a coordinated edit of cell_id and dimensions together
+  // still cannot validate.
+  for (const cell of report.selected_cells) {
+    if (cell.runtime_lane !== "local" && cell.runtime_lane !== "sandbox") {
+      throw new ReportValidationError(`Unknown runtime lane on "${cell.cell_id}".`);
+    }
+    if (
+      !Array.isArray(cell.required_env) ||
+      cell.required_env.some((name) => typeof name !== "string")
+    ) {
+      throw new ReportValidationError(`required_env on "${cell.cell_id}" is malformed.`);
+    }
+    // The planner's complete dimension rules apply to persisted evidence too:
+    // a report carrying dimensions the planner could never have produced
+    // (invalid keys, empty/oversized/non-string values) is not valid even if
+    // its cell id was edited consistently.
+    const dimensionProblem = dimensionShapeProblem(cell.dimensions);
+    if (dimensionProblem) {
+      throw new ReportValidationError(`Selected cell "${cell.cell_id}" has ${dimensionProblem}.`);
+    }
+    const expectedId = canonicalCellId(cell.scenario_id, cell.runtime_lane, cell.dimensions ?? {});
+    if (cell.cell_id !== expectedId) {
+      throw new ReportValidationError(
+        `Selected cell id "${cell.cell_id}" is not the canonical id for its scenario/lane/dimensions.`,
+      );
+    }
+  }
+
+  // Every result must repeat its planned cell's identity and dimensions
+  // exactly — a result that drifts from its plan is tampered evidence.
+  const cellsById = new Map(report.selected_cells.map((cell) => [cell.cell_id, cell]));
+  for (const result of report.results) {
+    const cell = cellsById.get(result.cell_id)!;
+    if (
+      result.scenario_id !== cell.scenario_id ||
+      result.runtime_lane !== cell.runtime_lane ||
+      result.registry_flow_ref !== cell.registry_flow_ref
+    ) {
+      throw new ReportValidationError(
+        `Result "${result.cell_id}" does not match its planned cell's scenario/lane/reference.`,
+      );
+    }
+    const cellDims = JSON.stringify(Object.entries(cell.dimensions).sort());
+    const resultDims = JSON.stringify(Object.entries(result.dimensions ?? {}).sort());
+    if (cellDims !== resultDims) {
+      throw new ReportValidationError(`Result "${result.cell_id}" dimensions do not match its planned cell.`);
+    }
   }
 
   if (report.summary.selected !== selectedIds.length || report.summary.finalized !== report.results.length) {
@@ -216,7 +316,7 @@ export function validateReport(report: TestRunReportV2): void {
   const knownStatuses = new Set<string>(ALL_FINAL_STATUSES);
   for (const result of report.results) {
     if (!knownStatuses.has(result.status)) {
-      throw new ReportValidationError(`Unknown result status "${result.status}" for ${result.test_id}.`);
+      throw new ReportValidationError(`Unknown result status "${result.status}" for ${result.cell_id}.`);
     }
   }
 
@@ -233,7 +333,7 @@ export function validateReport(report: TestRunReportV2): void {
     );
     if (executed) {
       throw new ReportValidationError(
-        `Dry-run cannot produce a real result: ${executed.test_id} is "${executed.status}".`,
+        `Dry-run cannot produce a real result: ${executed.cell_id} is "${executed.status}".`,
       );
     }
   }
@@ -267,12 +367,7 @@ export function validateReport(report: TestRunReportV2): void {
   // Recompute the complete verdict/exit policy from the results and errors
   // and require the persisted fields to match — the validator, not the
   // producer, is the last line against false-success evidence.
-  const expected = deriveVerdict({
-    behavior: report.run.behavior,
-    results: report.results,
-    integrityErrors: report.summary.integrity_errors,
-    runnerErrors: report.summary.runner_errors,
-  });
+  const expected = expectedVerdict(report);
   if (report.verdict.status !== expected.status) {
     throw new ReportValidationError(
       `Verdict "${report.verdict.status}" does not match the recomputed "${expected.status}".`,
@@ -283,13 +378,37 @@ export function validateReport(report: TestRunReportV2): void {
       `intended_exit_code ${report.summary.intended_exit_code} does not match the recomputed ${expected.intendedExitCode}.`,
     );
   }
+  // The reasons array is derived evidence too: arbitrary prose (e.g.
+  // "production fully qualified") must not validate.
+  if (JSON.stringify(report.verdict.reasons) !== JSON.stringify(expected.reasons)) {
+    throw new ReportValidationError("verdict.reasons do not match the recomputed derived reasons.");
+  }
+}
+
+/**
+ * The single derivation both the producer (runner/execute.ts, applied after
+ * sanitization) and this validator use for the persisted verdict, including
+ * the bounded reasons array.
+ */
+export function expectedVerdict(report: TestRunReportV3): {
+  status: VerdictStatus;
+  intendedExitCode: 0 | 1 | 2;
+  reasons: string[];
+} {
+  const derived = deriveVerdict({
+    behavior: report.run.behavior,
+    results: report.results,
+    integrityErrors: report.summary.integrity_errors,
+    runnerErrors: report.summary.runner_errors,
+  });
+  return { ...derived, reasons: derived.reasons.map(boundMessage) };
 }
 
 const EVIDENCE_SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const EVIDENCE_ARTIFACT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
 
 /**
- * `candidate_build` must be present on every V2 report — an explicit null for
+ * `candidate_build` must be present on every report — an explicit null for
  * diagnostic omission, otherwise only bounded artifact ID/version/SHA-256
  * triples. Anything path-like, oversized, or extra is rejected so map paths
  * and raw map JSON can never masquerade as evidence.

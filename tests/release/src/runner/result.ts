@@ -3,7 +3,10 @@ import type { RuntimeLane } from "../config/types.js";
 /**
  * Cell state, finalization invariants, behavior policy, verdict, and intended
  * exit code, per specs/developing/testing/qualification-runner-core.md
- * ("Final test results" / "Diagnostic and strict verdicts").
+ * ("Final test results" / "Diagnostic and strict verdicts") as extended by
+ * specs/developing/testing/exact-test-matrix.md: the selected unit is an
+ * exact test cell (`scenario/lane` for leaves, `scenario/lane/dim=value` for
+ * matrix children), and every planned cell must receive exactly one result.
  */
 
 export type ResultBehavior = "diagnostic" | "strict";
@@ -28,33 +31,48 @@ export const ALL_FINAL_STATUSES: readonly FinalTestStatus[] = [
   "missing",
 ];
 
-export type ResultReasonCode =
-  | "missing_requirement"
-  | "scenario_blocked"
-  | "known_gap"
-  | "scenario_failure"
-  | "strict_preflight_failed"
-  | "dry_run"
-  | "plan_error"
-  | "missing_result";
+/** Terminal states scenario code may declare for its own cells; the runner owns the rest. */
+export const SCENARIO_DECLARABLE_STATUSES = ["green", "failed", "blocked", "expected_fail"] as const;
+export type ScenarioDeclarableStatus = (typeof SCENARIO_DECLARABLE_STATUSES)[number];
+
+export const RESULT_REASON_CODES = [
+  "missing_requirement",
+  "scenario_blocked",
+  "known_gap",
+  "scenario_failure",
+  "strict_preflight_failed",
+  "dry_run",
+  "plan_error",
+  "missing_result",
+] as const;
+export type ResultReasonCode = (typeof RESULT_REASON_CODES)[number];
 
 export interface ResultReason {
   code: ResultReasonCode;
   message: string;
 }
 
-export interface SelectedTestV1 {
-  test_id: string;
+/**
+ * One exactly-planned test cell. The selected-cell array is the complete test
+ * plan for an invocation; the runner (runner/plan.ts), not scenario code,
+ * creates cell ids.
+ */
+export interface PlannedCellV1 {
+  cell_id: string;
   scenario_id: string;
   registry_flow_ref: string;
   runtime_lane: RuntimeLane;
+  /** Sorted-key matrix dimensions; empty for leaf cells. */
+  dimensions: Record<string, string>;
+  required_env: string[];
 }
 
-export interface FinalTestResultV1 {
-  test_id: string;
+export interface FinalCellResultV1 {
+  cell_id: string;
   scenario_id: string;
   registry_flow_ref: string;
   runtime_lane: RuntimeLane;
+  dimensions: Record<string, string>;
   status: FinalTestStatus;
   started_at: string | null;
   finished_at: string;
@@ -73,7 +91,19 @@ export interface IntegrityErrorV1 {
   message: string;
 }
 
-export type VerdictStatus = "selected_tests_passed" | "selected_tests_failed" | "non_qualifying";
+export type VerdictStatus = "selected_cells_passed" | "selected_cells_failed" | "non_qualifying";
+
+/** Independent deep copy of a planned cell (dimensions and required_env included). */
+export function clonePlannedCell(cell: PlannedCellV1): PlannedCellV1 {
+  return {
+    cell_id: cell.cell_id,
+    scenario_id: cell.scenario_id,
+    registry_flow_ref: cell.registry_flow_ref,
+    runtime_lane: cell.runtime_lane,
+    dimensions: { ...cell.dimensions },
+    required_env: [...cell.required_env],
+  };
+}
 
 export interface Finalization {
   status: FinalTestStatus;
@@ -85,53 +115,62 @@ export interface Finalization {
 }
 
 /**
- * Tracks one pending slot per selected test and enforces the finalization
- * invariants: exactly one final result per selected test, first accepted
+ * Tracks one pending slot per planned cell and enforces the finalization
+ * invariants: exactly one final result per planned cell, first accepted
  * result wins, duplicates and missing results are integrity errors.
  */
 export class ResultTracker {
-  private readonly selected: readonly SelectedTestV1[];
-  private readonly results = new Map<string, FinalTestResultV1>();
+  private readonly selected: readonly PlannedCellV1[];
+  private readonly results = new Map<string, FinalCellResultV1>();
   readonly integrityErrors: IntegrityErrorV1[] = [];
   readonly runnerErrors: RunnerErrorV1[] = [];
 
-  constructor(selected: readonly SelectedTestV1[]) {
-    this.selected = selected;
+  constructor(selected: readonly PlannedCellV1[]) {
+    // The tracker owns the canonical plan: deep-copied at construction so no
+    // later mutation of the caller's cell objects (or of copies handed to
+    // scenario collectors) can alter what finalization and the persisted
+    // report validate against.
+    this.selected = selected.map(clonePlannedCell);
   }
 
-  get selectedTests(): readonly SelectedTestV1[] {
+  get selectedCells(): readonly PlannedCellV1[] {
     return this.selected;
   }
 
-  pendingTests(): SelectedTestV1[] {
-    return this.selected.filter((test) => !this.results.has(test.test_id));
+  pendingCells(): PlannedCellV1[] {
+    return this.selected.filter((cell) => !this.results.has(cell.cell_id));
   }
 
   recordRunnerError(code: RunnerErrorV1["code"], message: string): void {
     this.runnerErrors.push({ code, message });
   }
 
-  finalize(testId: string, finalization: Finalization): void {
-    const test = this.selected.find((candidate) => candidate.test_id === testId);
-    if (!test) {
+  recordIntegrityError(code: IntegrityErrorV1["code"], message: string): void {
+    this.integrityErrors.push({ code, message });
+  }
+
+  finalize(cellId: string, finalization: Finalization): void {
+    const cell = this.selected.find((candidate) => candidate.cell_id === cellId);
+    if (!cell) {
       this.integrityErrors.push({
         code: "selection_result_mismatch",
-        message: `Result recorded for "${testId}", which is not a selected test.`,
+        message: `Result recorded for "${cellId}", which is not a planned cell.`,
       });
       return;
     }
-    if (this.results.has(testId)) {
+    if (this.results.has(cellId)) {
       this.integrityErrors.push({
         code: "duplicate_result",
-        message: `Duplicate finalization for "${testId}" (${finalization.status}); the first result is retained.`,
+        message: `Duplicate finalization for "${cellId}" (${finalization.status}); the first result is retained.`,
       });
       return;
     }
-    this.results.set(testId, {
-      test_id: test.test_id,
-      scenario_id: test.scenario_id,
-      registry_flow_ref: test.registry_flow_ref,
-      runtime_lane: test.runtime_lane,
+    this.results.set(cellId, {
+      cell_id: cell.cell_id,
+      scenario_id: cell.scenario_id,
+      registry_flow_ref: cell.registry_flow_ref,
+      runtime_lane: cell.runtime_lane,
+      dimensions: { ...cell.dimensions },
       status: finalization.status,
       started_at: finalization.startedAt ?? null,
       finished_at: finalization.finishedAt ?? new Date().toISOString(),
@@ -142,27 +181,27 @@ export class ResultTracker {
   }
 
   /**
-   * Synthesizes `missing` for any selected test with no recorded outcome and
+   * Synthesizes `missing` for any planned cell with no recorded outcome and
    * records the integrity error; returns every result in selection order.
    */
-  finalizeRun(execution: "real" | "dry_run"): FinalTestResultV1[] {
-    for (const test of this.pendingTests()) {
+  finalizeRun(execution: "real" | "dry_run"): FinalCellResultV1[] {
+    for (const cell of this.pendingCells()) {
       this.integrityErrors.push({
         code: "selection_result_mismatch",
-        message: `Selected test "${test.test_id}" ended with no recorded result; synthesized as missing.`,
+        message: `Planned cell "${cell.cell_id}" ended with no recorded result; synthesized as missing.`,
       });
-      this.finalize(test.test_id, {
+      this.finalize(cell.cell_id, {
         status: "missing",
-        reason: { code: "missing_result", message: "Finalization found no result for this selected test." },
+        reason: { code: "missing_result", message: "Finalization found no result for this planned cell." },
       });
     }
-    const results = this.selected.map((test) => this.results.get(test.test_id)!);
+    const results = this.selected.map((cell) => this.results.get(cell.cell_id)!);
     if (execution === "real") {
       for (const result of results) {
         if (result.status === "not_run") {
           this.integrityErrors.push({
             code: "real_execution_not_run",
-            message: `"${result.test_id}" is not_run during real execution.`,
+            message: `"${result.cell_id}" is not_run during real execution.`,
           });
         }
       }
@@ -173,7 +212,7 @@ export class ResultTracker {
 
 export interface VerdictInput {
   behavior: ResultBehavior;
-  results: readonly FinalTestResultV1[];
+  results: readonly FinalCellResultV1[];
   integrityErrors: readonly IntegrityErrorV1[];
   runnerErrors: readonly RunnerErrorV1[];
 }
@@ -184,7 +223,7 @@ export interface DerivedVerdict {
   intendedExitCode: 0 | 1 | 2;
 }
 
-export function countByStatus(results: readonly FinalTestResultV1[]): Record<FinalTestStatus, number> {
+export function countByStatus(results: readonly FinalCellResultV1[]): Record<FinalTestStatus, number> {
   const counts = Object.fromEntries(ALL_FINAL_STATUSES.map((status) => [status, 0])) as Record<
     FinalTestStatus,
     number
@@ -197,7 +236,7 @@ export function countByStatus(results: readonly FinalTestResultV1[]): Record<Fin
 
 /**
  * The diagnostic/strict verdict matrix. Diagnostic is always non-qualifying;
- * strict passes only when every selected real test is green and there are no
+ * strict passes only when every selected real cell is green and there are no
  * runner or integrity errors. Any runner/integrity error exits 2 in both
  * behaviors.
  */
@@ -215,7 +254,7 @@ export function deriveVerdict(input: VerdictInput): DerivedVerdict {
 
   const nonGreen = ALL_FINAL_STATUSES.filter((status) => status !== "green" && counts[status] > 0);
   for (const status of nonGreen) {
-    reasons.push(`${counts[status]} selected test(s) finished ${status}`);
+    reasons.push(`${counts[status]} selected cell(s) finished ${status}`);
   }
 
   if (input.behavior === "diagnostic") {
@@ -228,13 +267,13 @@ export function deriveVerdict(input: VerdictInput): DerivedVerdict {
   const allGreen = input.results.length > 0 && input.results.every((result) => result.status === "green");
   if (allGreen && !hasErrors) {
     return {
-      status: "selected_tests_passed",
-      reasons: ["every selected test is green; scope is selected tests only, completeness partial"],
+      status: "selected_cells_passed",
+      reasons: ["every selected cell is green; scope is selected cells only, completeness partial"],
       intendedExitCode: 0,
     };
   }
   return {
-    status: "selected_tests_failed",
+    status: "selected_cells_failed",
     reasons,
     intendedExitCode: hasErrors ? 2 : 1,
   };

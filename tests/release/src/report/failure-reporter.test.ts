@@ -2,14 +2,15 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { toFailureReports } from "./failure-reporter.js";
-import type { FinalTestResultV1 } from "../runner/result.js";
+import type { FinalCellResultV1 } from "../runner/result.js";
 
-function failedResult(overrides: Partial<FinalTestResultV1> = {}): FinalTestResultV1 {
+function failedResult(overrides: Partial<FinalCellResultV1> = {}): FinalCellResultV1 {
   return {
-    test_id: "T3-EXAMPLE/local",
+    cell_id: "T3-EXAMPLE/local",
     scenario_id: "T3-EXAMPLE",
     registry_flow_ref: "specs/developing/testing/scenarios.md#T3-EXAMPLE",
     runtime_lane: "local",
+    dimensions: {},
     status: "failed",
     started_at: "2026-07-13T00:00:00Z",
     finished_at: "2026-07-13T00:00:01Z",
@@ -22,7 +23,7 @@ function failedResult(overrides: Partial<FinalTestResultV1> = {}): FinalTestResu
 
 test("toFailureReports maps a normalized failed result to the issue payload", () => {
   const [report] = toFailureReports([failedResult()]);
-  assert.equal(report.scenario_id, "T3-EXAMPLE");
+  assert.equal(report.scenario_id, "T3-EXAMPLE/local");
   assert.equal(report.flow, "specs/developing/testing/scenarios.md#T3-EXAMPLE");
   assert.equal(report.lane, "local");
   assert.match(report.observed, /boom/);
@@ -31,18 +32,18 @@ test("toFailureReports maps a normalized failed result to the issue payload", ()
 });
 
 test("toFailureReports produces payloads only for failed results", () => {
-  const results: FinalTestResultV1[] = [
+  const results: FinalCellResultV1[] = [
     failedResult(),
-    failedResult({ test_id: "T3-B/local", scenario_id: "T3-B", status: "blocked" }),
-    failedResult({ test_id: "T3-C/local", scenario_id: "T3-C", status: "expected_fail" }),
-    failedResult({ test_id: "T3-D/local", scenario_id: "T3-D", status: "cancelled" }),
-    failedResult({ test_id: "T3-E/local", scenario_id: "T3-E", status: "not_run" }),
-    failedResult({ test_id: "T3-F/local", scenario_id: "T3-F", status: "missing" }),
-    failedResult({ test_id: "T3-G/local", scenario_id: "T3-G", status: "green" }),
+    failedResult({ cell_id: "T3-B/local", scenario_id: "T3-B", status: "blocked" }),
+    failedResult({ cell_id: "T3-C/local", scenario_id: "T3-C", status: "expected_fail" }),
+    failedResult({ cell_id: "T3-D/local", scenario_id: "T3-D", status: "cancelled" }),
+    failedResult({ cell_id: "T3-E/local", scenario_id: "T3-E", status: "not_run" }),
+    failedResult({ cell_id: "T3-F/local", scenario_id: "T3-F", status: "missing" }),
+    failedResult({ cell_id: "T3-G/local", scenario_id: "T3-G", status: "green" }),
   ];
   const reports = toFailureReports(results);
   assert.equal(reports.length, 1);
-  assert.equal(reports[0].scenario_id, "T3-EXAMPLE");
+  assert.equal(reports[0].scenario_id, "T3-EXAMPLE/local");
 });
 
 test("toFailureReports handles a failed result with no recorded reason", () => {

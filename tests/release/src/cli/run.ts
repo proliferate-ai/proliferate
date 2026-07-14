@@ -10,7 +10,7 @@ import {
 } from "../fixtures/identity.js";
 import { fileIssuesForFailures } from "../report/issue-filer.js";
 import { resolveRunIdentity } from "../runner/identity.js";
-import { executeSelectedTests } from "../runner/execute.js";
+import { executeSelectedCells } from "../runner/execute.js";
 import { loadCandidateBuildMap } from "../artifacts/build-map.js";
 import { writeReport } from "../evidence/write.js";
 
@@ -122,7 +122,7 @@ process.exitCode = await runReleaseCommand(process.argv.slice(2), {
   seedLocalDurableUser,
   pushLocalGatewayAuth,
   printEnvManifestReport,
-  execute: executeSelectedTests,
+  execute: executeSelectedCells,
   write: writeReport,
   fileIssues: fileIssuesForFailures,
   log: (message) => console.log(message),

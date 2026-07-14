@@ -5,7 +5,12 @@
   `draft-7-candidate-only`; founder-authorized 2026-07-14)
 - Repository: `proliferate-ai/proliferate`
 - Base SHA: `7850bcffd84263aca0d65a7fcd46743b8145adbe`
-- Pipeline stage: **specification frozen; implementation in progress**
+- Pipeline stage: **implemented and merged in PR #1159**
+
+[`exact-test-matrix.md`](exact-test-matrix.md) preserves the candidate evidence
+introduced by report V2 while advancing the runner's current aggregate to
+report V3. This document remains authoritative for candidate build-map,
+materialization, and AnyHarness handoff behavior.
 
 ## Outcome
 
@@ -228,6 +233,11 @@ run-owned temporary directory when launch, readiness, health, or evidence
 comparison fails.
 
 ## Report V2
+
+Successor: [`exact-test-matrix.md`](exact-test-matrix.md) advances the
+combined report to `TestRunReportV3` (exact selected cells and cell results).
+`candidate_build` and its validation/redaction guarantees carry forward
+unchanged into V3; V2 is recorded repository history.
 
 Adding artifact identity changes the aggregate evidence contract, so the
 runner emits `TestRunReportV2` rather than silently changing V1:

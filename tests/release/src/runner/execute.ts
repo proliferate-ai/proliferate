@@ -2,65 +2,31 @@ import type { EnvResolution } from "../config/env-resolution.js";
 import { blockedReasonForMissingEnv, missingRequiredForLane, resolveEnv } from "../config/env-resolution.js";
 import { envVarNames } from "../config/env-manifest.js";
 import type { DesktopMode, TargetLane } from "../config/types.js";
-import type { ScenarioDefinition } from "../scenarios/types.js";
-import { ScenarioBlockedError, ScenarioExpectedFailError } from "../scenarios/types.js";
+import {
+  isMatrixScenario,
+  ScenarioBlockedError,
+  ScenarioExpectedFailError,
+  type MatrixScenarioDefinition,
+  type ScenarioDefinition,
+} from "../scenarios/types.js";
 import type { CandidateBuildEvidenceV1 } from "../artifacts/build-map.js";
-import type { TestRunReportV2 } from "../evidence/schema.js";
-import { sanitizeReport } from "../evidence/schema.js";
+import type { TestRunReportV3 } from "../evidence/schema.js";
+import { expectedVerdict, sanitizeReport } from "../evidence/schema.js";
 import type { RunIdentityV1 } from "./identity.js";
 import {
+  clonePlannedCell,
   countByStatus,
   deriveVerdict,
+  RESULT_REASON_CODES,
   ResultTracker,
-  type FinalTestResultV1,
+  SCENARIO_DECLARABLE_STATUSES,
+  type FinalCellResultV1,
+  type PlannedCellV1,
   type ResultBehavior,
-  type SelectedTestV1,
+  type ResultReason,
+  type ResultReasonCode,
+  type ScenarioDeclarableStatus,
 } from "./result.js";
-
-export class SelectionError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "SelectionError";
-  }
-}
-
-/**
- * Expands scenarios across their declared runtime lanes into selected tests
- * (`test_id = scenario_id/runtime_lane`) and rejects duplicate expanded ids,
- * so a duplicate cell can never execute or record twice.
- */
-export function expandSelectedTests(scenarios: readonly ScenarioDefinition[]): SelectedTestV1[] {
-  const selected: SelectedTestV1[] = [];
-  const seen = new Set<string>();
-  const seenScenarioIds = new Set<string>();
-  for (const scenario of scenarios) {
-    // Duplicate scenario ids are rejected outright (not only duplicate
-    // expanded test ids): later lookup is by scenario id, so two definitions
-    // sharing an id — even with disjoint lanes — could execute one body
-    // while reporting the other's metadata.
-    if (seenScenarioIds.has(scenario.id)) {
-      throw new SelectionError(`Duplicate scenario id "${scenario.id}" in the selection.`);
-    }
-    seenScenarioIds.add(scenario.id);
-    for (const runtimeLane of scenario.lanes) {
-      const testId = `${scenario.id}/${runtimeLane}`;
-      if (seen.has(testId)) {
-        throw new SelectionError(`Duplicate expanded test id "${testId}".`);
-      }
-      seen.add(testId);
-      selected.push({
-        test_id: testId,
-        scenario_id: scenario.id,
-        registry_flow_ref: scenario.registryFlowRef,
-        runtime_lane: runtimeLane,
-      });
-    }
-  }
-  if (selected.length === 0) {
-    throw new SelectionError("Selection expanded to zero tests.");
-  }
-  return selected;
-}
 
 export interface ExecuteInputs {
   targetLane: TargetLane;
@@ -76,6 +42,12 @@ export interface ExecuteOptions {
   inputs: ExecuteInputs;
   scenarios: readonly ScenarioDefinition[];
   /**
+   * The complete exact test plan, prebuilt and validated by runner/plan.ts
+   * before any setup side effect (cli/command.ts owns the ordering).
+   * Execution never re-expands or reorders cells.
+   */
+  cells: readonly PlannedCellV1[];
+  /**
    * Bounded artifact identity from the validated candidate build map;
    * explicit null when a diagnostic run omitted the map. The caller
    * (cli/command.ts) owns loading and validation before any setup.
@@ -83,7 +55,7 @@ export interface ExecuteOptions {
   candidateBuild?: CandidateBuildEvidenceV1 | null;
   /** Names satisfied only by this run's local durable-user seeding. */
   locallySeeded?: ReadonlySet<string>;
-  /** Injectable for tests; defaults to resolveEnv over the union of requiredEnv. */
+  /** Injectable for tests; defaults to resolveEnv over the union of required env. */
   resolveNeededEnv?: (names: readonly string[]) => EnvResolution;
   /**
    * Injectable for tests; defaults to every present secret value in the full
@@ -96,33 +68,38 @@ export interface ExecuteOptions {
 }
 
 /**
- * Runs the required control flow: initialize one pending slot per selected
- * test, preflight declared requirements, plan or execute per behavior,
- * normalize every outcome, synthesize missing results, and derive the
- * verdict/intended exit — returning an unwritten, sanitized combined report.
+ * Runs the required control flow: one pending slot per planned cell,
+ * per-cell requirement preflight, plan or execute per behavior with matrix
+ * collectors invoked once per scenario/runtime lane, one explicit outcome per
+ * assigned cell, missing synthesis, and the diagnostic/strict verdict —
+ * returning an unwritten, sanitized combined report V3.
  */
-export async function executeSelectedTests(options: ExecuteOptions): Promise<TestRunReportV2> {
+export async function executeSelectedCells(options: ExecuteOptions): Promise<TestRunReportV3> {
   const now = options.now ?? (() => new Date());
   const log = options.log ?? (() => undefined);
   const startedAt = now().toISOString();
-  const selected = expandSelectedTests(options.scenarios);
-  const tracker = new ResultTracker(selected);
+  // The tracker deep-copies the plan at construction; everything below —
+  // grouping, collector assignment, finalization, and the persisted
+  // selected_cells — reads the tracker's protected canonical copy, so a
+  // collector mutating the cell objects it received cannot alter evidence.
+  const tracker = new ResultTracker(options.cells);
+  const cells = tracker.selectedCells;
   const scenariosById = new Map(options.scenarios.map((scenario) => [scenario.id, scenario]));
   const locallySeeded = options.locallySeeded ?? new Set<string>();
 
-  // Once a valid selected set exists, a recoverable runner defect (e.g. a
-  // scenario referencing an undeclared env var) must not lose the selected
-  // results: it becomes a runner error, pending tests finalize as missing,
+  // Once a valid planned set exists, a recoverable runner defect (e.g. a
+  // scenario referencing an undeclared env var) must not lose the planned
+  // results: it becomes a runner error, pending cells finalize as missing,
   // and the report is still produced for persistence.
   try {
-    const neededEnvNames = [...new Set(options.scenarios.flatMap((scenario) => scenario.requiredEnv))];
+    const neededEnvNames = [...new Set(cells.flatMap((cell) => cell.required_env))];
     const resolveNeeded = options.resolveNeededEnv ?? ((names: readonly string[]) => resolveEnv(names));
     const neededEnv = resolveNeeded(neededEnvNames);
 
     if (options.execution === "dry_run") {
-      await planAll(selected, scenariosById, tracker, options, now);
+      planAll(cells, scenariosById, tracker, options, now);
     } else {
-      await runAll(selected, scenariosById, tracker, options, neededEnv, locallySeeded, now, log);
+      await runAll(cells, scenariosById, tracker, options, neededEnv, locallySeeded, now, log);
     }
   } catch (error) {
     tracker.recordRunnerError("runner_error", `Runner failed after selection: ${evidenceSafeMessage(error)}`);
@@ -137,8 +114,8 @@ export async function executeSelectedTests(options: ExecuteOptions): Promise<Tes
     runnerErrors: tracker.runnerErrors,
   });
 
-  const report: TestRunReportV2 = {
-    schema_version: 2,
+  const report: TestRunReportV3 = {
+    schema_version: 3,
     kind: "proliferate.test-run",
     candidate_build: options.candidateBuild ?? null,
     run: {
@@ -151,13 +128,15 @@ export async function executeSelectedTests(options: ExecuteOptions): Promise<Tes
     inputs: {
       target_lane: options.inputs.targetLane,
       desktop: options.inputs.desktop,
-      agents: options.inputs.agents,
-      scenarios: options.inputs.scenarios,
+      // Copied so no scenario holding a reference to the selector arrays can
+      // alter the persisted invocation inputs.
+      agents: options.inputs.agents === "all" ? "all" : [...options.inputs.agents],
+      scenarios: options.inputs.scenarios === "all" ? "all" : [...options.inputs.scenarios],
     },
-    selected_tests: [...selected],
+    selected_cells: cells.map(clonePlannedCell),
     results,
     summary: {
-      selected: selected.length,
+      selected: cells.length,
       finalized: results.length,
       by_status: countByStatus(results),
       integrity_errors: [...tracker.integrityErrors],
@@ -166,14 +145,23 @@ export async function executeSelectedTests(options: ExecuteOptions): Promise<Tes
     },
     verdict: {
       status: verdict.status,
-      scope: "selected_tests",
+      scope: "selected_cells",
       completeness: "partial",
       reasons: verdict.reasons,
     },
   };
 
   const resolveSecrets = options.resolveSecretValues ?? defaultResolveSecretValues;
-  return sanitizeReport(report, resolveSecrets());
+  const sanitized = sanitizeReport(report, resolveSecrets());
+  // The persisted verdict (including its reasons) is derived from the
+  // sanitized content through the same single derivation the report
+  // validator recomputes, so validation can require byte-for-byte equality.
+  const finalVerdict = expectedVerdict(sanitized);
+  return {
+    ...sanitized,
+    summary: { ...sanitized.summary, intended_exit_code: finalVerdict.intendedExitCode },
+    verdict: { ...sanitized.verdict, status: finalVerdict.status, reasons: finalVerdict.reasons },
+  };
 }
 
 /**
@@ -197,10 +185,7 @@ function evidenceSafeMessage(error: unknown): string {
     const prefix = /^(.*?->\s*\d+)/.exec(error.message)?.[1] ?? `request failed with status ${status}`;
     return `${error.name}: ${prefix} (response body withheld from evidence)`;
   }
-  if (
-    error instanceof Error &&
-    ("stdout" in error || "stderr" in error)
-  ) {
+  if (error instanceof Error && ("stdout" in error || "stderr" in error)) {
     return `${error.name}: external command failed (output withheld from evidence)`;
   }
   return error instanceof Error ? error.message : String(error);
@@ -217,42 +202,41 @@ function defaultResolveSecretValues(): string[] {
     .map((entry) => entry.value as string);
 }
 
-async function planAll(
-  selected: readonly SelectedTestV1[],
+function planAll(
+  cells: readonly PlannedCellV1[],
   scenariosById: ReadonlyMap<string, ScenarioDefinition>,
   tracker: ResultTracker,
   options: ExecuteOptions,
   now: () => Date,
-): Promise<void> {
+): void {
   const agents = options.inputs.agents === "all" ? ["all"] : options.inputs.agents;
-  for (const test of selected) {
-    const scenario = scenariosById.get(test.scenario_id)!;
+  for (const cell of cells) {
+    const scenario = scenariosById.get(cell.scenario_id)!;
+    const planCtx = { runtimeLane: cell.runtime_lane, desktop: options.inputs.desktop, agents: [...agents] };
     try {
-      const steps = scenario.plan({
-        runtimeLane: test.runtime_lane,
-        desktop: options.inputs.desktop,
-        agents,
-      });
-      tracker.finalize(test.test_id, {
+      const steps = isMatrixScenario(scenario)
+        ? scenario.planCell(planCtx, clonePlannedCell(cell))
+        : scenario.plan(planCtx);
+      tracker.finalize(cell.cell_id, {
         status: "not_run",
-        reason: { code: "dry_run", message: "Diagnostic dry-run planned this test instead of executing it." },
+        reason: { code: "dry_run", message: "Diagnostic dry-run planned this cell instead of executing it." },
         planSteps: steps.map((step) => step.description),
         finishedAt: now().toISOString(),
       });
     } catch (error) {
       const message = evidenceSafeMessage(error);
-      tracker.finalize(test.test_id, {
+      tracker.finalize(cell.cell_id, {
         status: "not_run",
         reason: { code: "plan_error", message: `plan() threw: ${message}` },
         finishedAt: now().toISOString(),
       });
-      tracker.recordRunnerError("runner_error", `plan() for "${test.test_id}" threw: ${message}`);
+      tracker.recordRunnerError("runner_error", `plan() for "${cell.cell_id}" threw: ${message}`);
     }
   }
 }
 
 async function runAll(
-  selected: readonly SelectedTestV1[],
+  cells: readonly PlannedCellV1[],
   scenariosById: ReadonlyMap<string, ScenarioDefinition>,
   tracker: ResultTracker,
   options: ExecuteOptions,
@@ -261,35 +245,34 @@ async function runAll(
   now: () => Date,
   log: (message: string) => void,
 ): Promise<void> {
-  const missingByTest = new Map<string, string[]>();
-  for (const test of selected) {
-    const scenario = scenariosById.get(test.scenario_id)!;
-    const missing = missingRequiredForLane(scenario.requiredEnv, test.runtime_lane, neededEnv, locallySeeded);
+  const missingByCell = new Map<string, string[]>();
+  for (const cell of cells) {
+    const missing = missingRequiredForLane(cell.required_env, cell.runtime_lane, neededEnv, locallySeeded);
     if (missing.length > 0) {
-      missingByTest.set(test.test_id, missing);
+      missingByCell.set(cell.cell_id, missing);
     }
   }
 
-  // Strict preflight is fail-closed: any unsatisfied selected requirement
-  // means zero scenario bodies execute.
-  if (options.behavior === "strict" && missingByTest.size > 0) {
-    for (const test of selected) {
-      const missing = missingByTest.get(test.test_id);
+  // Strict preflight is fail-closed: any unsatisfied planned requirement
+  // means zero collector bodies execute.
+  if (options.behavior === "strict" && missingByCell.size > 0) {
+    for (const cell of cells) {
+      const missing = missingByCell.get(cell.cell_id);
       if (missing) {
-        tracker.finalize(test.test_id, {
+        tracker.finalize(cell.cell_id, {
           status: "blocked",
           reason: {
             code: "missing_requirement",
-            message: blockedReasonForMissingEnv(test.scenario_id, test.runtime_lane, missing, locallySeeded),
+            message: blockedReasonForMissingEnv(cell.cell_id, cell.runtime_lane, missing, locallySeeded),
           },
           finishedAt: now().toISOString(),
         });
       } else {
-        tracker.finalize(test.test_id, {
+        tracker.finalize(cell.cell_id, {
           status: "cancelled",
           reason: {
             code: "strict_preflight_failed",
-            message: "Strict preflight found unsatisfied requirements on sibling tests; no test body ran.",
+            message: "Strict preflight found unsatisfied requirements on sibling cells; no cell body ran.",
           },
           finishedAt: now().toISOString(),
         });
@@ -298,59 +281,234 @@ async function runAll(
     return;
   }
 
-  const agents = options.inputs.agents === "all" ? ["all"] : options.inputs.agents;
-  for (const test of selected) {
-    const scenario = scenariosById.get(test.scenario_id)!;
-    const missing = missingByTest.get(test.test_id);
+  // Diagnostic preflight blocks only affected cells; runnable cells are then
+  // grouped by scenario/runtime lane so a matrix collector is invoked exactly
+  // once per group with its assigned cells (efficient shared setup).
+  const groups = new Map<string, PlannedCellV1[]>();
+  for (const cell of cells) {
+    const missing = missingByCell.get(cell.cell_id);
     if (missing) {
-      tracker.finalize(test.test_id, {
+      tracker.finalize(cell.cell_id, {
         status: "blocked",
         reason: {
           code: "missing_requirement",
-          message: blockedReasonForMissingEnv(test.scenario_id, test.runtime_lane, missing, locallySeeded),
+          message: blockedReasonForMissingEnv(cell.cell_id, cell.runtime_lane, missing, locallySeeded),
         },
         finishedAt: now().toISOString(),
       });
       continue;
     }
+    const groupKey = `${cell.scenario_id}/${cell.runtime_lane}`;
+    const group = groups.get(groupKey);
+    if (group) {
+      group.push(cell);
+    } else {
+      groups.set(groupKey, [cell]);
+    }
+  }
+
+  const agents = options.inputs.agents === "all" ? ["all"] : options.inputs.agents;
+  for (const assigned of groups.values()) {
+    const first = assigned[0];
+    const scenario = scenariosById.get(first.scenario_id)!;
+    const ctx = {
+      targetLane: options.inputs.targetLane,
+      runtimeLane: first.runtime_lane,
+      desktop: options.inputs.desktop,
+      // A fresh copy per invocation: a collector mutating ctx.agents cannot
+      // alter the persisted invocation inputs or a sibling's context.
+      agents: [...agents],
+      dryRun: false,
+      env: neededEnv,
+    };
     const startedAt = now().toISOString();
     const startedMs = now().getTime();
-    const finish = (status: "green" | "failed" | "blocked" | "expected_fail", reason: FinalTestResultV1["reason"]) =>
-      tracker.finalize(test.test_id, {
+    const finish = (cellId: string, status: FinalCellResultV1["status"], reason: ResultReason | null): void =>
+      tracker.finalize(cellId, {
         status,
         reason: reason ?? undefined,
         startedAt,
         finishedAt: now().toISOString(),
         durationMs: now().getTime() - startedMs,
       });
+
     try {
-      log(`running ${test.test_id}`);
-      await scenario.run({
-        targetLane: options.inputs.targetLane,
-        runtimeLane: test.runtime_lane,
-        desktop: options.inputs.desktop,
-        agents,
-        dryRun: false,
-        env: neededEnv,
-      });
-      finish("green", null);
-    } catch (error) {
-      if (error instanceof ScenarioBlockedError) {
-        finish("blocked", { code: "scenario_blocked", message: error.reason });
-      } else if (error instanceof ScenarioExpectedFailError) {
-        finish("expected_fail", { code: "known_gap", message: error.diagnosis });
+      log(`running ${assigned.map((cell) => cell.cell_id).join(", ")}`);
+      if (isMatrixScenario(scenario)) {
+        // Collectors receive independent copies; the canonical plan stays
+        // with the tracker.
+        const outcomes = await scenario.runCells(ctx, assigned.map(clonePlannedCell));
+        try {
+          applyCollectorOutcomes(scenario, assigned, outcomes, tracker, finish);
+        } catch (error) {
+          // A throw while consuming the returned data (e.g. a poisoned
+          // iterator) is malformed collector output — runner integrity, not
+          // a product failure.
+          tracker.recordIntegrityError(
+            "selection_result_mismatch",
+            `Collector "${scenario.id}" output could not be consumed: ${evidenceSafeMessage(error)}`,
+          );
+        }
       } else {
-        // The report stores the normalized message, never the raw stack
-        // (spec: "raw stacks and provider payloads are not serialized");
-        // the stack still reaches the console via the runner's own logging.
-        finish("failed", {
-          code: "scenario_failure",
-          message: evidenceSafeMessage(error),
-        });
+        await scenario.run(ctx);
+        finish(first.cell_id, "green", null);
+      }
+    } catch (error) {
+      // A collector-level throw applies its normalized outcome to every
+      // still-pending cell assigned to this invocation; independent
+      // scenario/runtime collectors continue afterward.
+      const normalized = normalizeThrown(error);
+      const stillPending = new Set(tracker.pendingCells().map((pending) => pending.cell_id));
+      for (const cell of assigned) {
+        if (stillPending.has(cell.cell_id)) {
+          finish(cell.cell_id, normalized.status, normalized.reason);
+        }
+      }
+      if (normalized.status === "failed") {
         log(
-          `failed ${test.test_id}: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`,
+          `failed ${assigned.map((cell) => cell.cell_id).join(", ")}: ${
+            error instanceof Error ? (error.stack ?? error.message) : String(error)
+          }`,
         );
       }
     }
   }
+}
+
+/**
+ * Applies a matrix collector's returned outcomes: exactly one explicit
+ * outcome per assigned cell. Unknown and duplicate cell ids are integrity
+ * errors; omitted cells stay pending and are synthesized as `missing` at
+ * finalization. Scenario code cannot declare runner-only terminal states.
+ */
+function applyCollectorOutcomes(
+  scenario: MatrixScenarioDefinition,
+  assigned: readonly PlannedCellV1[],
+  outcomes: unknown,
+  tracker: ResultTracker,
+  finish: (cellId: string, status: FinalCellResultV1["status"], reason: ResultReason | null) => void,
+): void {
+  // Malformed collector output (null/undefined/non-array, or entries without
+  // a cell id and status) is a runner-integrity failure, not a product
+  // failure: the affected cells stay pending and finalize as missing with
+  // exit 2 — never as failed/exit 1.
+  if (!Array.isArray(outcomes)) {
+    tracker.recordIntegrityError(
+      "selection_result_mismatch",
+      `Collector "${scenario.id}" returned ${outcomes === null ? "null" : typeof outcomes} instead of an outcome array.`,
+    );
+    return;
+  }
+  const assignedIds = new Set(assigned.map((cell) => cell.cell_id));
+  for (const raw of outcomes) {
+    // The complete outcome — including the optional reason — is validated
+    // separately from collector execution, and property reads are guarded:
+    // a throwing getter or a malformed reason is runner integrity (the cell
+    // stays pending and finalizes missing/exit 2), never an ordinary failed
+    // result and never a lost aggregate.
+    const outcome = readCollectorOutcome(raw);
+    if (outcome === null) {
+      tracker.recordIntegrityError(
+        "selection_result_mismatch",
+        `Collector "${scenario.id}" returned a malformed outcome entry.`,
+      );
+      continue;
+    }
+    if (!assignedIds.has(outcome.cellId)) {
+      // Never finalize a cell outside this invocation's assignment — even one
+      // that is planned for another collector — or one collector could write
+      // another's results.
+      tracker.recordIntegrityError(
+        "selection_result_mismatch",
+        `Collector "${scenario.id}" returned an outcome for unassigned cell "${outcome.cellId}".`,
+      );
+      continue;
+    }
+    if (!(SCENARIO_DECLARABLE_STATUSES as readonly string[]).includes(outcome.status)) {
+      tracker.recordIntegrityError(
+        "selection_result_mismatch",
+        `Collector "${scenario.id}" declared runner-only status "${outcome.status}" for "${outcome.cellId}".`,
+      );
+      continue;
+    }
+    const status = outcome.status as ScenarioDeclarableStatus;
+    finish(outcome.cellId, status, outcome.reason ?? defaultReasonFor(status));
+  }
+}
+
+/**
+ * Reads one raw collector outcome defensively: every property access is
+ * guarded (a throwing getter is malformed data, not a scenario failure) and
+ * the optional reason must be a well-formed `{ code, message }` with a known
+ * reason code and string message — `reason: "oops"` would otherwise crash
+ * sanitization and lose the aggregate. Returns null for any malformed entry.
+ */
+function readCollectorOutcome(
+  raw: unknown,
+): { cellId: string; status: string; reason?: ResultReason } | null {
+  try {
+    if (typeof raw !== "object" || raw === null) {
+      return null;
+    }
+    const cellId = (raw as { cellId?: unknown }).cellId;
+    const status = (raw as { status?: unknown }).status;
+    const reason = (raw as { reason?: unknown }).reason;
+    if (typeof cellId !== "string" || typeof status !== "string") {
+      return null;
+    }
+    if (reason === undefined) {
+      return { cellId, status };
+    }
+    if (typeof reason !== "object" || reason === null) {
+      return null;
+    }
+    // Snapshot nested accessors exactly once before validating. Re-reading a
+    // stateful getter after validation could otherwise persist a different
+    // code/message (or throw later during sanitization).
+    const code = (reason as { code?: unknown }).code;
+    const message = (reason as { message?: unknown }).message;
+    if (
+      typeof code !== "string" ||
+      !(RESULT_REASON_CODES as readonly string[]).includes(code) ||
+      typeof message !== "string"
+    ) {
+      return null;
+    }
+    return {
+      cellId,
+      status,
+      reason: {
+        code: code as ResultReasonCode,
+        message,
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
+function defaultReasonFor(status: ScenarioDeclarableStatus): ResultReason | null {
+  switch (status) {
+    case "green":
+      return null;
+    case "failed":
+      return { code: "scenario_failure", message: "collector reported this cell failed" };
+    case "blocked":
+      return { code: "scenario_blocked", message: "collector reported this cell blocked" };
+    case "expected_fail":
+      return { code: "known_gap", message: "collector reported this cell as a diagnosed known gap" };
+  }
+}
+
+function normalizeThrown(error: unknown): { status: "blocked" | "expected_fail" | "failed"; reason: ResultReason } {
+  if (error instanceof ScenarioBlockedError) {
+    return { status: "blocked", reason: { code: "scenario_blocked", message: error.reason } };
+  }
+  if (error instanceof ScenarioExpectedFailError) {
+    return { status: "expected_fail", reason: { code: "known_gap", message: error.diagnosis } };
+  }
+  // The report stores the normalized message, never the raw stack (spec:
+  // "raw stacks and provider payloads are not serialized"); the stack still
+  // reaches the console via the runner's own logging.
+  return { status: "failed", reason: { code: "scenario_failure", message: evidenceSafeMessage(error) } };
 }
