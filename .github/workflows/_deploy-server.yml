@@ -53,6 +53,10 @@ jobs:
       SUPPORT_REPORT_ATTACHMENT_MAX_BYTES: ${{ vars.SUPPORT_REPORT_ATTACHMENT_MAX_BYTES || '26214400' }}
       SUPPORT_REPORT_TOTAL_ATTACHMENT_MAX_BYTES: ${{ vars.SUPPORT_REPORT_TOTAL_ATTACHMENT_MAX_BYTES || '104857600' }}
       SUPPORT_REPORT_INTERNAL_BASE_URL: ${{ vars.SUPPORT_REPORT_INTERNAL_BASE_URL }}
+      # Non-secret ARN of the environment's AWS Secrets Manager support-feed
+      # record. ECS resolves its supportFeedToken field at runtime; the token
+      # value is never read into this workflow.
+      SUPPORT_FEED_SECRET_ARN: ${{ vars.SUPPORT_FEED_SECRET_ARN }}
       SUPPORT_TRACKER_ENABLED: ${{ vars.SUPPORT_TRACKER_ENABLED || 'false' }}
       SUPPORT_TRACKER_RECONCILER_INTERVAL_SECONDS: ${{ vars.SUPPORT_TRACKER_RECONCILER_INTERVAL_SECONDS || '30.0' }}
       SUPPORT_TRACKER_RECONCILER_BATCH_SIZE: ${{ vars.SUPPORT_TRACKER_RECONCILER_BATCH_SIZE || '10' }}
@@ -89,6 +93,7 @@ jobs:
           : "${API_BASE_URL:?Set API_BASE_URL on the GitHub environment.}"
           : "${WEB_URL:?Set WEB_URL on the GitHub environment.}"
           : "${E2B_TEMPLATE_REF:?Set E2B_TEMPLATE_REF on the GitHub environment.}"
+          : "${SUPPORT_FEED_SECRET_ARN:?Set SUPPORT_FEED_SECRET_ARN on the GitHub environment.}"
           if [ "$SUPPORT_TRACKER_ENABLED" = "true" ]; then
             : "${SUPPORT_GITHUB_APP_ID:?Set SUPPORT_GITHUB_APP_ID when support tracker is enabled.}"
             : "${SUPPORT_GITHUB_APP_INSTALLATION_ID:?Set SUPPORT_GITHUB_APP_INSTALLATION_ID when support tracker is enabled.}"
@@ -101,6 +106,26 @@ jobs:
         with:
           role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+
+      # Prove the environment's support-feed secret is reachable and carries the
+      # supportFeedToken field before any ECS mutation, without resolving the
+      # token into a shell variable or printing its value. The secret payload is
+      # piped straight into jq; only a boolean field-presence result is used.
+      - name: Verify support feed secret reference
+        run: |
+          set -euo pipefail
+          if ! aws secretsmanager get-secret-value \
+              --secret-id "$SUPPORT_FEED_SECRET_ARN" \
+              --query SecretString \
+              --output text \
+            | jq -e 'type == "object" and (has("supportFeedToken"))
+                     and (.supportFeedToken | type == "string")
+                     and (.supportFeedToken | length > 0)' \
+              >/dev/null; then
+            echo "Support feed secret ${SUPPORT_FEED_SECRET_ARN} is missing, inaccessible, or has no supportFeedToken field." >&2
+            exit 1
+          fi
+          echo "Support feed secret reference verified (field present; value not read)."
 
       - name: Login to Amazon ECR
         id: ecr
@@ -277,10 +302,20 @@ jobs:
               {"name":"SUPPORT_LINEAR_PRIVATE_DETAILS_LABEL_ID","value":$support_linear_private_details_label_id}
             ]' > env-updates.json
 
+          # The support-feed bearer token is always projected as exactly one ECS
+          # secret referencing the environment's supportFeedToken field. It is
+          # listed first and unconditionally; the render/assert jq below strips
+          # any inherited plaintext duplicate and rejects a missing/duplicated
+          # reference before registration.
           jq -n \
+            --arg support_feed_secret_arn "$SUPPORT_FEED_SECRET_ARN" \
             --arg support_github_private_key_parameter "$support_github_private_key_parameter" \
             --arg support_linear_api_key_parameter "$support_linear_api_key_parameter" \
             '[
+              {
+                "name":"SUPPORT_FEED_BEARER_TOKEN",
+                "valueFrom":($support_feed_secret_arn + ":supportFeedToken::")
+              },
               (
                 if $support_github_private_key_parameter == "" then empty else
                 {
@@ -299,46 +334,82 @@ jobs:
               )
             ]' > secret-updates.json
 
+          # The render (MERGE_JQ) and fail-closed check (ASSERT_JQ) are pure
+          # JSON->JSON programs with no AWS dependency. They are written to files
+          # verbatim so server/tests/integration/test_support_feed.py can extract
+          # and exercise the exact logic that runs here. Keep the heredoc
+          # sentinels (MERGE_JQ / ASSERT_JQ) stable; the test greps for them.
+          cat > merge-task.jq <<'MERGE_JQ'
+          def merge_environment($updates):
+            (.environment // []) as $current
+            | ($updates[0] | map(.name)) as $updated_names
+            | ["SUPPORT_GITHUB_APP_PRIVATE_KEY", "SUPPORT_LINEAR_API_KEY", "SUPPORT_FEED_BEARER_TOKEN"] as $secret_names
+            | ($current | map(select(
+                .name as $name
+                | ($updated_names | index($name) | not)
+                and ($secret_names | index($name) | not)
+              ))) + $updates[0];
+
+          def merge_secrets($updates):
+            (.secrets // []) as $current
+            | ($updates[0] | map(.name)) as $updated_names
+            | ($current | map(select(.name as $name | ($updated_names | index($name) | not)))) + $updates[0];
+
+          del(
+            .taskDefinitionArn,
+            .revision,
+            .status,
+            .requiresAttributes,
+            .compatibilities,
+            .registeredAt,
+            .registeredBy
+          )
+          | .containerDefinitions |= map(
+              if .name == $container then
+                .image = $image
+                | .environment = merge_environment($updates)
+                | .secrets = merge_secrets($secret_updates)
+              else
+                .
+              end
+            )
+          MERGE_JQ
+
+          cat > assert-task.jq <<'ASSERT_JQ'
+          def feed_secrets($c): [ $c.secrets[]? | select(.name == "SUPPORT_FEED_BEARER_TOKEN") ];
+          def feed_plain($c): [ $c.environment[]? | select(.name == "SUPPORT_FEED_BEARER_TOKEN") ];
+          ([ .containerDefinitions[] | select(.name == $container) ]) as $matches
+          | if ($matches | length) != 1 then
+              error("expected exactly one \($container) container, found \($matches | length)")
+            else . end
+          | $matches[0] as $c
+          | (feed_secrets($c)) as $secrets
+          | (feed_plain($c)) as $plain
+          | if ($secrets | length) != 1 then
+              error("expected exactly one SUPPORT_FEED_BEARER_TOKEN ECS secret, found \($secrets | length)")
+            elif ($plain | length) != 0 then
+              error("SUPPORT_FEED_BEARER_TOKEN must not be present as a plaintext environment entry")
+            elif (($secrets[0].valueFrom // "") | startswith("arn:aws:secretsmanager:") | not) then
+              error("SUPPORT_FEED_BEARER_TOKEN must reference a Secrets Manager secret ARN")
+            elif (($secrets[0].valueFrom // "") | endswith(":supportFeedToken::") | not) then
+              error("SUPPORT_FEED_BEARER_TOKEN must project the supportFeedToken field")
+            else empty end
+          ASSERT_JQ
+
           jq \
             --arg container "$ECS_SERVER_CONTAINER_NAME" \
             --arg image "${{ steps.image.outputs.image_uri }}" \
             --slurpfile updates env-updates.json \
             --slurpfile secret_updates secret-updates.json \
-            '
-              def merge_environment($updates):
-                (.environment // []) as $current
-                | ($updates[0] | map(.name)) as $updated_names
-                | ["SUPPORT_GITHUB_APP_PRIVATE_KEY", "SUPPORT_LINEAR_API_KEY"] as $secret_names
-                | ($current | map(select(
-                    .name as $name
-                    | ($updated_names | index($name) | not)
-                    and ($secret_names | index($name) | not)
-                  ))) + $updates[0];
+            -f merge-task.jq \
+            task-definition.raw.json > task-definition.json
 
-              def merge_secrets($updates):
-                (.secrets // []) as $current
-                | ($updates[0] | map(.name)) as $updated_names
-                | ($current | map(select(.name as $name | ($updated_names | index($name) | not)))) + $updates[0];
-
-              del(
-                .taskDefinitionArn,
-                .revision,
-                .status,
-                .requiresAttributes,
-                .compatibilities,
-                .registeredAt,
-                .registeredBy
-              )
-              | .containerDefinitions |= map(
-                  if .name == $container then
-                    .image = $image
-                    | .environment = merge_environment($updates)
-                    | .secrets = merge_secrets($secret_updates)
-                  else
-                    .
-                  end
-                )
-            ' task-definition.raw.json > task-definition.json
+          # Fail closed before register-task-definition: exactly one secret-backed
+          # SUPPORT_FEED_BEARER_TOKEN, no plaintext duplicate, correct field ref.
+          jq \
+            --arg container "$ECS_SERVER_CONTAINER_NAME" \
+            -f assert-task.jq \
+            task-definition.json > /dev/null
 
           new_task_definition_arn="$(
             aws ecs register-task-definition \

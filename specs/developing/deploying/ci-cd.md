@@ -927,6 +927,10 @@ Hosted flow:
    - renders a new ECS task definition from the live service task definition
    - updates non-secret runtime environment such as `API_URL`, `API_BASE_URL`,
      release SHA, and E2B template ref
+   - projects the private support feed token as exactly one ECS secret,
+     `SUPPORT_FEED_BEARER_TOKEN`, from the `SUPPORT_FEED_SECRET_ARN` record's
+     `supportFeedToken` field, and fails closed before task registration if that
+     reference is missing, inaccessible, duplicated, or present as plaintext
    - runs `alembic upgrade head` as a one-off Fargate task
    - rolls the ECS service
    - smokes `${API_URL}${API_HEALTH_PATH:-/api/health}`
@@ -1058,6 +1062,7 @@ SUPPORT_REPORT_S3_PREFIX
 SUPPORT_REPORT_S3_REGION
 SUPPORT_REPORT_INTERNAL_BASE_URL
 SUPPORT_SLACK_WEBHOOK_URL_PARAMETER_NAME
+SUPPORT_FEED_SECRET_ARN
 
 # legacy support-tracker inputs; still rendered by deploys but not consumed by
 # the current server
@@ -1091,6 +1096,22 @@ server consumes only the Slack webhook; tracker inputs remain for migration
 cleanup and do not enable a reconciler. If a secret already exists in SSM, the
 GitHub secret can be omitted and the corresponding `*_PARAMETER_NAME` variable
 will be used as the ECS `valueFrom`.
+
+`SUPPORT_FEED_SECRET_ARN` is a required non-secret GitHub environment variable
+holding the ARN of that environment's AWS Secrets Manager support-feed record.
+It backs the private completed-report feed (`GET /api/internal/support/reports`).
+`_deploy-server.yml` requires it during deploy-config validation, then after AWS
+role assumption verifies the ARN resolves to a Secrets Manager record whose
+`supportFeedToken` field is present — without reading or printing the value. The
+render renders exactly one ECS secret on the server container,
+`{"name":"SUPPORT_FEED_BEARER_TOKEN","valueFrom":"<ARN>:supportFeedToken::"}`,
+strips any inherited plaintext `SUPPORT_FEED_BEARER_TOKEN` environment entry, and
+fails closed before `aws ecs register-task-definition` if the reference is
+absent, inaccessible, duplicated, or present as plaintext. GitHub stores only
+the non-secret ARN; ECS resolves the token for the server process through the
+execution role. The token is never resolved into a workflow shell variable. The
+pure render/assert jq (the `MERGE_JQ`/`ASSERT_JQ` heredocs) is covered by
+`server/tests/integration/test_support_feed.py` without calling AWS.
 
 # E2B
 E2B_PUBLIC_TEMPLATE_FAMILY
