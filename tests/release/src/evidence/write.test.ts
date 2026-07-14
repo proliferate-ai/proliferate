@@ -714,7 +714,9 @@ function failedCleanupSmokeReportV4(): TestRunReportV4 {
   report.summary.by_status = byStatus;
   report.summary.intended_exit_code = 1;
   report.verdict.status = "selected_cells_failed";
-  withDerivedReasons(report);
+  // withDerivedReasons mutates verdict.reasons in place; the V3 parameter type is
+  // structurally satisfied (V4 only adds schema_version 4 + per-result evidence).
+  withDerivedReasons(report as unknown as TestRunReportV3);
   return report;
 }
 

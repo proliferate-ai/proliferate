@@ -64,6 +64,7 @@ const EVIDENCE_CATEGORIES = {
     "runtime_home",
     "repository_clone",
     "extracted_artifacts",
+    "secret_env_file",
     "run_directory",
     "port_registration",
   ],

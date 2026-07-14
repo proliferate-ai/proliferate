@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 
 import type { MaterializedArtifact } from "../../artifacts/local-candidate-set.js";
@@ -76,12 +79,15 @@ test("startDockerStack registers each resource before creating it and verifies r
   });
   const registered: Array<{ kind: DockerResourceKind; providerId: string }> = [];
   const fetch: ReadinessFetch = async () => ({ ok: true, status: 200, json: async () => ({ version: "1.2.3" }) });
+  const runDir = await mkdtemp(path.join(os.tmpdir(), "q1-docker-"));
 
+  try {
   const running = await startDockerStack({
     naming: { project: "plq-run-shard", network: "plq-run-shard-net" },
     ports: { server: 8100, postgres: 8101, redis: 8102 },
     serverArtifact: SERVER_ARTIFACT,
     serverEnv: SERVER_ENV,
+    runDir,
     ...SETUP_TOKEN,
     registerCleanup: async (kind, providerId) => {
       registered.push({ kind, providerId });
@@ -92,6 +98,21 @@ test("startDockerStack registers each resource before creating it and verifies r
   assert.equal(running.version, "1.2.3");
   assert.equal(running.imageRef, "srv:candidate");
 
+  // The master key never appears in `docker run` argv; it is passed via a
+  // mode-0600 `--env-file` in the run dir, registered for cleanup.
+  const secretEnvFilePath = path.join(runDir, "server-secret.env");
+  for (const cmd of argv) {
+    assert.ok(!cmd.some((arg) => arg.includes("sk-master")), `master key leaked into argv: ${cmd.join(" ")}`);
+  }
+  const serverRun = argv.find((cmd) => cmd.includes("--name") && cmd.includes("plq-run-shard-server"));
+  assert.ok(serverRun);
+  assert.ok(serverRun!.includes("--env-file"));
+  assert.equal(serverRun![serverRun!.indexOf("--env-file") + 1], secretEnvFilePath);
+  const envFileBody = await readFile(secretEnvFilePath, "utf8");
+  assert.match(envFileBody, /^AGENT_GATEWAY_LITELLM_MASTER_KEY=sk-master$/m);
+  assert.equal(((await stat(secretEnvFilePath)).mode & 0o777).toString(8), "600");
+  assert.deepEqual(registered[0], { kind: "secret_env_file", providerId: secretEnvFilePath });
+
   // The real first-run setup token is copied out of the running Server via
   // `docker cp` — the world/fixture consumes the real product path, not a bypass.
   const cp = argv.find((cmd) => cmd[0] === "docker" && cmd[1] === "cp");
@@ -99,24 +120,30 @@ test("startDockerStack registers each resource before creating it and verifies r
   assert.equal(cp![2], "plq-run-shard-server:/tmp/proliferate-setup/setup-token");
   assert.equal(cp![3], "/run/setup-token");
 
-  // Network registered first (torn down last); server registered after migration.
+  // Secret env-file registered first (torn down last); network next; server
+  // registered after migration.
   assert.deepEqual(
     registered.map((entry) => entry.kind),
-    ["docker_network", "postgres_container", "redis_container", "server_container"],
+    ["secret_env_file", "docker_network", "postgres_container", "redis_container", "server_container"],
   );
 
   // A `docker network create` happened AFTER the network was registered.
   const networkRegisteredAt = registered.findIndex((entry) => entry.kind === "docker_network");
-  assert.equal(networkRegisteredAt, 0);
+  assert.equal(networkRegisteredAt, 1);
   const ranNetworkCreate = argv.some((cmd) => cmd.includes("network") && cmd.includes("create"));
   assert.ok(ranNetworkCreate);
 
-  // The migration one-off ran `alembic upgrade head` on the loaded image.
+  // The migration one-off ran `alembic upgrade head` on the loaded image, also
+  // via `--env-file` (no secret in argv).
   const migration = argv.find((cmd) => cmd.includes("alembic"));
   assert.ok(migration);
   assert.ok(migration!.includes("--rm"));
+  assert.ok(migration!.includes("--env-file"));
   assert.ok(migration!.includes("srv:candidate"));
   assert.deepEqual(migration!.slice(-3), ["alembic", "upgrade", "head"]);
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
 });
 
 test("startDockerStack fails when the server never reports version-bearing health", async () => {
@@ -127,17 +154,23 @@ test("startDockerStack fails when the server never reports version-bearing healt
   const fetch: ReadinessFetch = async () => {
     throw new Error("refused");
   };
-  await assert.rejects(
-    startDockerStack({
-      naming: { project: "plq-r", network: "plq-r-net" },
-      ports: { server: 8100, postgres: 8101, redis: 8102 },
-      serverArtifact: SERVER_ARTIFACT,
-      serverEnv: SERVER_ENV,
-      ...SETUP_TOKEN,
-      registerCleanup: async () => undefined,
-      timeoutMs: 300,
-      deps: { exec, fetch },
-    }),
-    /did not become ready/,
-  );
+  const runDir = await mkdtemp(path.join(os.tmpdir(), "q1-docker-"));
+  try {
+    await assert.rejects(
+      startDockerStack({
+        naming: { project: "plq-r", network: "plq-r-net" },
+        ports: { server: 8100, postgres: 8101, redis: 8102 },
+        serverArtifact: SERVER_ARTIFACT,
+        serverEnv: SERVER_ENV,
+        runDir,
+        ...SETUP_TOKEN,
+        registerCleanup: async () => undefined,
+        timeoutMs: 300,
+        deps: { exec, fetch },
+      }),
+      /did not become ready/,
+    );
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
 });

@@ -238,6 +238,7 @@ export async function constructLocalWorld(options: ConstructLocalWorldOptions): 
       ports: { server: options.ports.server, postgres: options.ports.postgres, redis: options.ports.redis },
       serverArtifact,
       serverEnv,
+      runDir,
       // The real Server mints the first-run token at boot and writes the
       // plaintext to SETUP_TOKEN_FILE inside the container; the world copies it
       // out to <runDir>/setup-token so the actor fixture claims through the real

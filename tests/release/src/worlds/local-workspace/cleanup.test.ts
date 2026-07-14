@@ -20,6 +20,7 @@ async function registerFullGreenRun(stack: LocalWorldCleanupStack, order: string
     "port_registration",
     "runtime_home",
     "extracted_artifacts",
+    "secret_env_file",
     "docker_network",
     "postgres_container",
     "redis_container",
@@ -51,8 +52,8 @@ test("runAll releases in reverse registration order and reports a fully-clean su
     assert.equal(order[order.length - 1], "run_directory");
 
     assert.equal(evidence.failed, 0);
-    assert.equal(evidence.registered, 14);
-    assert.equal(evidence.reconciled, 14);
+    assert.equal(evidence.registered, 15);
+    assert.equal(evidence.reconciled, 15);
     assert.equal(evidence.virtualKeyDeleted, true);
     assert.equal(evidence.litellmSubjectsDeleted, true);
     assert.equal(evidence.browserClosed, true);

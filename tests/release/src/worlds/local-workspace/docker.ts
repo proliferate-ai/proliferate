@@ -1,4 +1,6 @@
 import { execFile } from "node:child_process";
+import { chmod, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { promisify } from "node:util";
 
 import type { MaterializedArtifact } from "../../artifacts/local-candidate-set.js";
@@ -16,7 +18,9 @@ import { waitForHttpReady, type ReadinessFetch } from "./processes.js";
  *   - agent gateway enabled;
  *   - a short AGENT_GATEWAY_BACKFILL_INTERVAL_SECONDS (fast enrollment);
  *   - AGENT_GATEWAY_LITELLM_* passthrough (base/public/master — the master key
- *     stays inside the container env, never in evidence).
+ *     stays inside the container env, never in evidence). Secret-bearing env
+ *     (the master key) is passed via a mode-0600 `--env-file` in the run dir,
+ *     never as `-e KEY=value` argv (which is ps-visible and error-log leakable).
  * Migrations run via a separate `alembic upgrade head` one-off run of the same
  * image (its CMD is uvicorn only).
  */
@@ -79,6 +83,11 @@ export interface DockerStackOptions {
   serverArtifact: MaterializedArtifact;
   serverEnv: ServerContainerEnv;
   /**
+   * Run/shard-scoped directory the mode-0600 secret env-file is written into.
+   * The file is registered for cleanup and removed on teardown.
+   */
+  runDir: string;
+  /**
    * Container path the Server wrote its first-run setup token to (matches
    * `serverEnv.SETUP_TOKEN_FILE`); the plaintext is copied out via `docker cp`
    * after the Server is healthy so the actor fixture can claim /setup for real.
@@ -97,7 +106,11 @@ export type DockerResourceKind =
   | "postgres_container"
   | "redis_container"
   | "server_container"
-  | "docker_network";
+  | "docker_network"
+  | "secret_env_file";
+
+/** Server env keys routed through the `--env-file` (never `-e` argv). */
+const SECRET_ENV_KEYS: readonly string[] = ["AGENT_GATEWAY_LITELLM_MASTER_KEY"];
 
 export interface RunningServer {
   baseUrl: string;
@@ -155,6 +168,16 @@ export async function startDockerStack(options: DockerStackOptions): Promise<Run
   const imageRef = await loadServerImage(options.serverArtifact.path, options.deps);
   log(`loaded server image ${imageRef}`);
 
+  // Secret-bearing Server env (the LiteLLM master key) is written to a
+  // mode-0600 env-file in the run dir and passed via `--env-file`, so it never
+  // appears in `docker run` argv. Registered first (torn down last) and removed
+  // on teardown; the run_directory sweep is the durable backstop.
+  const secretEnvFilePath = path.join(options.runDir, "server-secret.env");
+  await options.registerCleanup("secret_env_file", secretEnvFilePath, () =>
+    rm(secretEnvFilePath, { force: true }),
+  );
+  await writeSecretEnvFile(secretEnvFilePath, options.serverEnv);
+
   // Network first so it is registered first and therefore torn down LAST
   // (reverse order), after every container that attaches to it.
   await options.registerCleanup("docker_network", naming.network, () =>
@@ -187,7 +210,7 @@ export async function startDockerStack(options: DockerStackOptions): Promise<Run
 
   await waitForPostgres(exec, pgName, timeoutMs, log);
 
-  await runMigrations({ imageRef, naming, serverEnv: options.serverEnv, timeoutMs, log, deps: { exec } });
+  await runMigrations({ imageRef, naming, serverEnv: options.serverEnv, secretEnvFilePath, timeoutMs, log, deps: { exec } });
   log(`migrations applied via ${imageRef}`);
 
   const serverName = `${naming.project}-server`;
@@ -197,7 +220,7 @@ export async function startDockerStack(options: DockerStackOptions): Promise<Run
   await exec("docker", [
     "run", "-d", "--name", serverName, "--network", naming.network,
     "-p", `127.0.0.1:${ports.server}:${SERVER_INTERNAL_PORT}`,
-    ...envFlags(options.serverEnv),
+    ...envArgs(options.serverEnv, secretEnvFilePath),
     imageRef,
   ]);
 
@@ -264,6 +287,8 @@ export async function runMigrations(params: {
   imageRef: string;
   naming: DockerNaming;
   serverEnv: ServerContainerEnv;
+  /** Mode-0600 env-file carrying the secret env keys (passed via `--env-file`). */
+  secretEnvFilePath: string;
   timeoutMs?: number;
   log?: (message: string) => void;
   deps?: DockerDeps;
@@ -273,7 +298,7 @@ export async function runMigrations(params: {
     "docker",
     [
       "run", "--rm", "--network", params.naming.network,
-      ...envFlags(params.serverEnv),
+      ...envArgs(params.serverEnv, params.secretEnvFilePath),
       params.imageRef,
       "alembic", "upgrade", "head",
     ],
@@ -317,12 +342,34 @@ async function readServerVersion(baseUrl: string, fetchImpl?: ReadinessFetch): P
   return version;
 }
 
-function envFlags(env: Record<string, string>): string[] {
-  const flags: string[] = [];
+/**
+ * Builds `docker run` env arguments: secret-bearing keys come from a
+ * `--env-file` (so they never appear in argv), every other key stays as
+ * `-e KEY=value`.
+ */
+function envArgs(env: Record<string, string>, secretEnvFilePath: string): string[] {
+  const args: string[] = ["--env-file", secretEnvFilePath];
   for (const [key, value] of Object.entries(env)) {
-    flags.push("-e", `${key}=${value}`);
+    if (SECRET_ENV_KEYS.includes(key)) {
+      continue;
+    }
+    args.push("-e", `${key}=${value}`);
   }
-  return flags;
+  return args;
+}
+
+/**
+ * Writes the secret-bearing Server env keys to a mode-0600 env-file in the run
+ * dir. Docker `--env-file` reads `KEY=value` lines; the master key is a simple
+ * token, so no escaping is required. `chmod` is issued explicitly so the mode is
+ * 0600 even if the path already existed with a looser mode.
+ */
+async function writeSecretEnvFile(filePath: string, env: Record<string, string>): Promise<void> {
+  const lines = SECRET_ENV_KEYS.filter((key) => typeof env[key] === "string").map(
+    (key) => `${key}=${env[key]}`,
+  );
+  await writeFile(filePath, `${lines.join("\n")}\n`, { mode: 0o600 });
+  await chmod(filePath, 0o600);
 }
 
 async function ignoreMissing(promise: Promise<unknown>): Promise<void> {
