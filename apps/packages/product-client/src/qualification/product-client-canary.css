@@ -1,0 +1,19 @@
+.product-client-build-canary {
+  display: grid;
+  gap: 0.5rem;
+  min-height: 100vh;
+  place-content: center;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+}
+
+.product-client-build-canary__card {
+  display: grid;
+  gap: 0.375rem;
+  width: min(28rem, calc(100vw - 2rem));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-card);
+  padding: 1rem;
+}

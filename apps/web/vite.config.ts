@@ -54,6 +54,7 @@ export default defineConfig({
   ],
   clearScreen: false,
   build: {
+    manifest: true,
     sourcemap: sentryUploadEnabled ? "hidden" : false,
   },
   server: {

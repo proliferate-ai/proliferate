@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "collectedAt": "2026-07-14T21:20:22.504Z",
+  "dist": "/Users/pablohansen/.codex/worktrees/wdu-codex-owned/product-client-extraction-mechanics/apps/web/dist",
+  "metric": "gzip_bytes",
+  "note": "Provisional legacy Web baseline. The Web replacement PR reruns this on its exact base for the binding budget.",
+  "totals": {
+    "css": 17319,
+    "js": 471379
+  },
+  "entries": [
+    {
+      "file": "assets/index-ARz6PF3D.css",
+      "name": "index-ARz6PF3D.css",
+      "kind": "css",
+      "bytes": 106276,
+      "gzipBytes": 17319
+    },
+    {
+      "file": "assets/index-ychkcnvs.js",
+      "name": "index-ychkcnvs.js",
+      "kind": "js",
+      "bytes": 1564701,
+      "gzipBytes": 471379
+    }
+  ]
+}

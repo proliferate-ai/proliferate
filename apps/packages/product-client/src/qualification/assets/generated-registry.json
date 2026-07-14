@@ -1,0 +1,5 @@
+{
+  "schemaVersion": 1,
+  "name": "product-client-build-canary",
+  "entries": ["public-shell", "lazy-authenticated-root"]
+}

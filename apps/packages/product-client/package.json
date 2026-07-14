@@ -4,7 +4,17 @@
   "private": true,
   "type": "module",
   "files": ["dist"],
+  "imports": {
+    "#product/*": {
+      "types": "./src/*",
+      "default": "./dist/*.js"
+    }
+  },
   "exports": {
+    "./qualification/ProductClientBuildCanary": {
+      "types": "./dist/qualification/ProductClientBuildCanary.d.ts",
+      "import": "./dist/qualification/ProductClientBuildCanary.js"
+    },
     "./host/product-host": {
       "types": "./dist/host/product-host.d.ts",
       "import": "./dist/host/product-host.js"
@@ -19,14 +29,25 @@
     }
   },
   "scripts": {
-    "build": "pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/product-domain build && tsc -p tsconfig.json",
-    "typecheck": "pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/product-domain build && tsc -p tsconfig.json --noEmit",
+    "build": "pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-domain build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build && pnpm --filter @proliferate/product-surfaces build && tsc -p tsconfig.json && node scripts/copy-product-client-qualification-assets.mjs",
+    "typecheck": "pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-domain build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build && pnpm --filter @proliferate/product-surfaces build && tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
+    "@anyharness/sdk": "workspace:*",
     "@anyharness/sdk-react": "workspace:*",
     "@proliferate/cloud-sdk": "workspace:*",
-    "@proliferate/product-domain": "workspace:*"
+    "@proliferate/cloud-sdk-react": "workspace:*",
+    "@proliferate/design": "workspace:*",
+    "@proliferate/product-domain": "workspace:*",
+    "@proliferate/product-surfaces": "workspace:*",
+    "@proliferate/product-ui": "workspace:*",
+    "@proliferate/ui": "workspace:*",
+    "@tanstack/react-query": "^5.101.0",
+    "lucide-react": "0.577.0",
+    "react-router-dom": "^7",
+    "tailwind-merge": "^3.6.0",
+    "zustand": "^5"
   },
   "peerDependencies": {
     "react": "^19",
@@ -34,12 +55,16 @@
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.2",
+    "@tailwindcss/vite": "^4",
     "@types/react": "~19.2.17",
     "@types/react-dom": "~19.2.3",
+    "@vitejs/plugin-react": "^4",
     "jsdom": "^29.1.1",
     "react": "19.2.7",
     "react-dom": "19.2.7",
+    "tailwindcss": "^4",
     "typescript": "^5.7",
+    "vite": "^6",
     "vitest": "^3.2.6"
   }
 }

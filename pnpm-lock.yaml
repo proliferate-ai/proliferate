@@ -389,16 +389,52 @@ importers:
 
   apps/packages/product-client:
     dependencies:
+      '@anyharness/sdk':
+        specifier: workspace:*
+        version: link:../../../anyharness/sdk
       '@anyharness/sdk-react':
         specifier: workspace:*
         version: link:../../../anyharness/sdk-react
       '@proliferate/cloud-sdk':
         specifier: workspace:*
         version: link:../../../cloud/sdk
+      '@proliferate/cloud-sdk-react':
+        specifier: workspace:*
+        version: link:../../../cloud/sdk-react
+      '@proliferate/design':
+        specifier: workspace:*
+        version: link:../design
       '@proliferate/product-domain':
         specifier: workspace:*
         version: link:../product-domain
+      '@proliferate/product-surfaces':
+        specifier: workspace:*
+        version: link:../product-surfaces
+      '@proliferate/product-ui':
+        specifier: workspace:*
+        version: link:../product-ui
+      '@proliferate/ui':
+        specifier: workspace:*
+        version: link:../ui
+      '@tanstack/react-query':
+        specifier: ^5.101.0
+        version: 5.101.0(react@19.2.7)
+      lucide-react:
+        specifier: 0.577.0
+        version: 0.577.0(react@19.2.7)
+      react-router-dom:
+        specifier: ^7
+        version: 7.17.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      tailwind-merge:
+        specifier: ^3.6.0
+        version: 3.6.0
+      zustand:
+        specifier: ^5
+        version: 5.0.14(@types/react@19.2.17)(react@19.2.7)(use-sync-external-store@1.6.0(react@19.2.7))
     devDependencies:
+      '@tailwindcss/vite':
+        specifier: ^4
+        version: 4.3.1(vite@6.4.3(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.22.4)(yaml@2.9.0))
       '@testing-library/react':
         specifier: ^16.3.2
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -408,6 +444,9 @@ importers:
       '@types/react-dom':
         specifier: ~19.2.3
         version: 19.2.3(@types/react@19.2.17)
+      '@vitejs/plugin-react':
+        specifier: ^4
+        version: 4.7.0(vite@6.4.3(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.22.4)(yaml@2.9.0))
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1
@@ -417,9 +456,15 @@ importers:
       react-dom:
         specifier: 19.2.7
         version: 19.2.7(react@19.2.7)
+      tailwindcss:
+        specifier: ^4
+        version: 4.3.1
       typescript:
         specifier: ^5.7
         version: 5.9.3
+      vite:
+        specifier: ^6
+        version: 6.4.3(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.22.4)(yaml@2.9.0)
       vitest:
         specifier: ^3.2.6
         version: 3.2.6(@types/debug@4.1.13)(@types/node@24.13.2)(jiti@2.7.0)(jsdom@29.1.1)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.22.4)(yaml@2.9.0)

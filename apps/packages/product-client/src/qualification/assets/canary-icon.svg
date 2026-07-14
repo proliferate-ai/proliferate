@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="ProductClient canary">
+  <rect width="32" height="32" rx="8" fill="#181818"/>
+  <circle cx="16" cy="16" r="9" fill="#339cff"/>
+  <path d="M11 17.5 15 21l7-10" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

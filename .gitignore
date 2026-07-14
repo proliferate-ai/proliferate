@@ -8,6 +8,8 @@ reference/
 dist/
 out/
 target/
+apps/desktop/dist-product-client-qualification/
+apps/packages/product-client/qualification/browser-host/dist/
 apps/desktop/index.js
 *.db
 *.db-wal
