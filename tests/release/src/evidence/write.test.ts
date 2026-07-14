@@ -677,6 +677,47 @@ function validSmokeReportV4(evidenceOverrides: Partial<LocalWorkspaceTurnEvidenc
   return report;
 }
 
+/**
+ * V4 report with one FAILED LOCAL-WORLD-SMOKE-1 cell whose cleanup did not fully
+ * reconcile: the cell records `cleanup.failed > 0` and an incomplete deletion.
+ * Per the spec failure table a cleanup failure makes the aggregate non-qualifying
+ * and nonzero; the report must still persist (exit 1) rather than throw (exit 2).
+ */
+function failedCleanupSmokeReportV4(): TestRunReportV4 {
+  const report = validSmokeReportV4();
+  report.run.behavior = "strict";
+  report.candidate_build = STRICT_CB;
+  report.results[0] = {
+    ...report.results[0],
+    status: "failed",
+    reason: { code: "scenario_failure", message: "cleanup did not fully reconcile (failed=1)" },
+    evidence: validCellEvidence({
+      cleanup: {
+        ledger_id_hash: "d".repeat(64),
+        registered: 8,
+        reconciled: 7,
+        failed: 1,
+        virtual_key_deleted: false,
+        litellm_subjects_deleted: true,
+        browser_closed: true,
+        processes_stopped: true,
+        containers_removed: true,
+        local_paths_removed: true,
+      },
+    }),
+  };
+  const byStatus = Object.fromEntries(ALL_FINAL_STATUSES.map((status) => [status, 0])) as Record<
+    FinalTestStatus,
+    number
+  >;
+  byStatus.failed = 1;
+  report.summary.by_status = byStatus;
+  report.summary.intended_exit_code = 1;
+  report.verdict.status = "selected_cells_failed";
+  withDerivedReasons(report);
+  return report;
+}
+
 test("validateReportV4 accepts schema_version 4 with null evidence on an ordinary cell", () => {
   validateReportV4(validReportV4());
 });
@@ -813,6 +854,31 @@ test("writeReportV4 sanitizes, validates, and writes a V4 artifact", async () =>
     const parsed = JSON.parse(raw);
     assert.equal(parsed.schema_version, 4);
     assert.equal(parsed.results[0].evidence.kind, "local_workspace_turn");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("validateReportV4 accepts a failed cell whose cleanup evidence records failed>0", () => {
+  // The sibling green case (failed>0 on a green cell) is still rejected — see
+  // "validateReportV4 rejects a green cell whose cleanup has a false deletion
+  // flag or a failure" above. Here the same evidence is valid because the cell
+  // is non-green and merely records its own cleanup failure.
+  validateReportV4(failedCleanupSmokeReportV4());
+});
+
+test("writeReportV4 persists a failed cleanup-failure cell (exit 1, report written, not throw→exit 2)", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "q1-evidence-v4-"));
+  try {
+    const written = await writeReportV4(dir, failedCleanupSmokeReportV4());
+    const parsed = JSON.parse(await readFile(written, "utf8"));
+    assert.equal(parsed.schema_version, 4);
+    assert.equal(parsed.results[0].status, "failed");
+    assert.equal(parsed.results[0].evidence.cleanup.failed, 1);
+    assert.equal(parsed.results[0].evidence.cleanup.virtual_key_deleted, false);
+    // The report IS persisted with a real nonzero intended exit, so the CLI
+    // returns exit 1 rather than throwing on write and returning exit 2.
+    assert.equal(parsed.summary.intended_exit_code, 1);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

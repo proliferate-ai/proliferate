@@ -83,8 +83,9 @@ export interface TestRunReportV3 {
  *   - reject unknown evidence `kind`, extra fields, unsafe strings (must pass
  *     the same safe-string checks as identity fields), invalid/negative counts,
  *     internally inconsistent token math (prompt+completion === total, all > 0),
- *     non-positive spend, or a `cleanup` block with `failed > 0` /
- *     any deletion boolean false on a green cell.
+ *     non-positive spend, or — on a GREEN cell only — a `cleanup` block with
+ *     `failed > 0` or any deletion boolean false (a non-green cell may retain
+ *     evidence recording its own cleanup failure).
  */
 
 /** One result's optional bounded evidence; today only the local-workspace turn. */
@@ -785,14 +786,18 @@ function validateCleanupEvidence(
   for (const field of deletionFields) {
     requireBoolean(`${where}.cleanup.${field}`, cleanup[field]);
   }
-  // Unconditional: a failed cleanup entry is never representable, green or not.
-  if (cleanup.failed > 0) {
-    throw new ReportValidationError(`${where}.cleanup.failed must be 0 for persisted evidence.`);
-  }
-  // Green-cell rule (spec "Cleanup and failure behavior"): a green cell whose
-  // cleanup left any deletion incomplete cannot remain green evidence.
-  if (status === "green" && deletionFields.some((field) => cleanup[field] !== true)) {
-    throw new ReportValidationError(`${where}.cleanup is incomplete on a green result.`);
+  // Green-cell rule (spec "Cleanup and failure behavior"): a green cell requires
+  // complete clean cleanup evidence — zero failed entries and every deletion
+  // boolean true. A non-green cell may carry evidence that records the cleanup
+  // failure itself (failed > 0 and/or an incomplete deletion) so the report is
+  // still persisted with a real nonzero exit rather than throwing and exiting 2.
+  if (status === "green") {
+    if (cleanup.failed > 0) {
+      throw new ReportValidationError(`${where}.cleanup.failed must be 0 for a green result.`);
+    }
+    if (deletionFields.some((field) => cleanup[field] !== true)) {
+      throw new ReportValidationError(`${where}.cleanup is incomplete on a green result.`);
+    }
   }
 }
 
