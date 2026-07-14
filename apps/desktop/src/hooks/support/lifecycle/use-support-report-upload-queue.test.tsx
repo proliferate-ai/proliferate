@@ -121,7 +121,14 @@ const productHostMock = {
       window.localStorage.removeItem(key);
     },
   },
-  telemetry: { captureException: vi.fn() },
+  telemetry: {
+    track: vi.fn(),
+    captureException: vi.fn(),
+    getSupportContext: () => ({
+      clientReleaseId: "proliferate-desktop@0.0.0+test",
+      telemetryRefs: {},
+    }),
+  },
 };
 
 vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({

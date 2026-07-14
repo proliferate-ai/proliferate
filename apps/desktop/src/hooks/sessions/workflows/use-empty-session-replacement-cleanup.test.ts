@@ -39,6 +39,7 @@ function createDeps() {
     closeSessionSlotStream: vi.fn(),
     removeWorkspaceSessionRecord: vi.fn(),
     dismissSessionMutation: { mutateAsync } as never,
+    captureException: vi.fn(),
   };
   return { deps, mutateAsync };
 }

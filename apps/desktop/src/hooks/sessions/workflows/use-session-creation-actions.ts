@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
 import { hasPromptContent } from "@/lib/domain/chat/composer/prompt-input";
 import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
 import {
@@ -70,6 +71,7 @@ export function useSessionCreationActions() {
   const { upsertWorkspaceSessionRecord, removeWorkspaceSessionRecord } = useWorkspaceSessionCache();
   const dismissSessionMutation = useDismissSessionMutation();
   const showToast = useToastStore((state) => state.show);
+  const telemetry = useProductTelemetry();
 
   const createSessionWithResolvedConfig = useCallback(async function createWithResolvedConfig(
     options: CreateSessionWithResolvedConfigOptions,
@@ -250,7 +252,12 @@ export function useSessionCreationActions() {
       replacementTransaction = beginEmptySessionReplacement(
         options.replacesSessionId,
         workspaceId,
-        { closeSessionSlotStream, removeWorkspaceSessionRecord, dismissSessionMutation },
+        {
+          closeSessionSlotStream,
+          removeWorkspaceSessionRecord,
+          dismissSessionMutation,
+          captureException: telemetry.captureException,
+        },
       );
       if (replacementTransaction && currentOwnedShellWorkspaceId) {
         replacementShellPreferences = beginReplacementShellPreferences({
@@ -283,6 +290,8 @@ export function useSessionCreationActions() {
 
     const unregisterSessionCreation = registerSessionCreation(pendingSessionId);
     const createPromise = materializeSessionCreation({
+      trackProductEvent: telemetry.track,
+      captureException: telemetry.captureException,
       ensureCloudAgentCatalog,
       existingProjectedRecord,
       frozenDefaultLiveSessionControlValuesByAgentKind,
@@ -324,7 +333,7 @@ export function useSessionCreationActions() {
         replacementTransaction,
         rollbackOwnedShellIntent,
         workspaceId,
-      }, { activateSession });
+      }, { activateSession, captureException: telemetry.captureException });
     };
 
     const cleanupInFlight = (): void => {
@@ -371,6 +380,7 @@ export function useSessionCreationActions() {
     promptSession,
     removeWorkspaceSessionRecord,
     showToast,
+    telemetry,
     upsertWorkspaceSessionRecord,
   ]);
 

@@ -1,6 +1,6 @@
 import { AnyHarnessError } from "@anyharness/sdk";
+import type { ErrorContext } from "@proliferate/product-client/host/product-host";
 import { dismissSession as dismissRuntimeSession } from "@/lib/access/anyharness/sessions";
-import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
 import {
   commitReplacedSessionTombstone,
   releaseReplacedSessionSuppression,
@@ -14,6 +14,13 @@ import {
 const DISMISS_RETRY_DELAYS_MS = [0, 100, 500] as const;
 
 /**
+ * Narrow exception-capture dependency injected from the calling hook (which
+ * reads the product telemetry facade). Keeps this plain workflow free of any
+ * vendor import.
+ */
+type CaptureException = (error: unknown, context?: ErrorContext) => void;
+
+/**
  * Retires a runtime created by a materializer that lost ownership of its
  * projected shell. The runtime may stay hidden only when cleanup state is
  * durable or dismissal confirms that it no longer exists.
@@ -23,6 +30,7 @@ export async function scheduleCreatedRuntimeSessionCleanup(input: {
   workspaceId: string;
   runtimeSessionId: string;
   clientSessionId: string;
+  captureException: CaptureException;
 }): Promise<boolean> {
   stageReplacedSessionTombstone(
     input.workspaceId,
@@ -40,6 +48,7 @@ export async function scheduleCreatedRuntimeSessionCleanup(input: {
     run: () => dismissCreatedRuntimeSessionWithRetry(
       input.connection,
       input.runtimeSessionId,
+      input.captureException,
     ),
   });
   if (durablySuppressed) {
@@ -63,6 +72,7 @@ export async function scheduleCreatedRuntimeSessionCleanup(input: {
 async function dismissCreatedRuntimeSessionWithRetry(
   connection: Parameters<typeof dismissRuntimeSession>[0],
   sessionId: string,
+  captureException: CaptureException,
 ): Promise<void> {
   let lastError: unknown = null;
   for (const delayMs of DISMISS_RETRY_DELAYS_MS) {
@@ -82,7 +92,7 @@ async function dismissCreatedRuntimeSessionWithRetry(
     }
   }
   if (lastError) {
-    captureTelemetryException(lastError, {
+    captureException(lastError, {
       tags: {
         action: "dismiss_superseded_session_creation",
         domain: "sessions",

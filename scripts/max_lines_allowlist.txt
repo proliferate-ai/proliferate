@@ -36,6 +36,8 @@ apps/desktop/src/components/content/ui/diff/ChatDiffViewer.tsx 622 existing desk
 apps/desktop/src/components/content/ui/diff/SplitDiffViewer.tsx 540 existing desktop split diff viewer component
 apps/desktop/src/components/settings/panes/agents/harness/HarnessPane.test.tsx 908 P3 runtime catalog extends All-Models coverage + add-key modal flow + credential refresh + switch disambiguation + surface store mock + ProductHost test-host wiring
 apps/desktop/src/hooks/sessions/workflows/session-replacement-tombstones.ts 408 async ProductStorage hydration added to the already-large in-memory tombstone model
+apps/desktop/src/hooks/sessions/workflows/session-creation-materialization.ts 415 injected typed telemetry deps (chat_session_created track + captureException) threaded from the calling hook for telemetry ownership; split deferred
+apps/desktop/src/hooks/sessions/workflows/use-session-creation-actions.ts 406 product telemetry facade wired to thread track/captureException into the session-creation workflows for telemetry ownership; split deferred
 apps/desktop/src/lib/domain/workspaces/cloud/logical-workspaces.test.ts 690 managed sandbox cloud workspace indicators extend existing oversized test file
 apps/desktop/src/lib/domain/workspaces/sidebar/sidebar.test.ts 691 workspace git-status threading extends existing oversized test file
 apps/desktop/src/lib/domain/workspaces/sidebar/sidebar-indicators.test.ts 630 existing desktop oversized test file

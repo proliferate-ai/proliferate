@@ -9,7 +9,19 @@ import { makeTestProductHost } from "@/test/product-host-fixtures";
 // Every shared lifecycle hook is a no-op stub; this test exercises the root's
 // composition (children pass-through, Desktop lifecycle mount, auth restore,
 // command-actions context), not the individual lifecycles.
-vi.mock("@/hooks/app/lifecycle/use-connectivity-listeners", () => ({ useConnectivityListeners: vi.fn() }));
+// One shared lifecycle hook can be told to throw during render, to prove the
+// root's error boundary contains it rather than letting it escape to the host.
+const lifecycleThrow = vi.hoisted(() => ({ value: false }));
+vi.mock("@/hooks/app/lifecycle/use-connectivity-listeners", () => ({
+  useConnectivityListeners: () => {
+    if (lifecycleThrow.value) {
+      throw new Error("lifecycle boom");
+    }
+  },
+}));
+vi.mock("@/lib/integrations/telemetry/native-diagnostics", () => ({
+  reportReactRenderError: vi.fn(),
+}));
 vi.mock("@/hooks/app/lifecycle/use-debug-session-activity", () => ({ useDebugSessionActivity: vi.fn() }));
 vi.mock("@/hooks/app/lifecycle/use-dev-desktop-handoff", () => ({ useDevDesktopHandoff: vi.fn() }));
 vi.mock("@/hooks/app/lifecycle/use-product-entry-routing", () => ({ useProductEntryRouting: vi.fn() }));
@@ -65,6 +77,7 @@ function CommandContextProbe() {
 afterEach(() => {
   cleanup();
   desktopLifecycleMountCount.value = 0;
+  lifecycleThrow.value = false;
   vi.clearAllMocks();
 });
 
@@ -90,6 +103,31 @@ describe("ProductLifecycleRoot", () => {
     expect(screen.getByTestId("command-context").textContent).toBe("true");
     // The auth restore effect fires through the host boundary.
     await waitFor(() => expect(restoreSession).toHaveBeenCalled());
+  });
+
+  it("contains a render-phase throw from a shared lifecycle hook in the error boundary", () => {
+    lifecycleThrow.value = true;
+    // React logs the caught render error to console.error; silence it so the
+    // test output stays clean while still asserting the boundary caught it.
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const host = makeTestProductHost({
+      auth: { restoreSession: vi.fn().mockResolvedValue(undefined) },
+    });
+
+    render(
+      <ProductHostProvider host={host}>
+        <ProductLifecycleRoot>
+          <div data-testid="app-tree">app</div>
+        </ProductLifecycleRoot>
+      </ProductHostProvider>,
+    );
+
+    // The boundary shows its fallback instead of letting the lifecycle throw
+    // escape the product lifecycle root; the product tree does not render.
+    expect(screen.getByText("Something went wrong")).toBeTruthy();
+    expect(screen.queryByTestId("app-tree")).toBeNull();
+
+    consoleError.mockRestore();
   });
 
   it("keeps a single Desktop lifecycle mount under StrictMode", () => {

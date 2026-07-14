@@ -134,54 +134,94 @@ persisted key's identity or shape.
 
 ## Recorded deviations and follow-ups
 
-- **`WorkspaceProviders` keeps the `appQueryClient` module-singleton import
-  instead of `useQueryClient()`.** Switching to `useQueryClient()` trips the
-  frontend boundary rule `QUERY_CLIENT_OUTSIDE_CACHE_OWNER` for a non-cache-owner
-  path. The module import is behavior-identical and the single-instance
-  guarantee is unchanged (the provider still receives the one `appQueryClient`).
-  Honoring the `useQueryClient()` mandate needs either a boundary allowlist entry
-  or relocating the resolve-connection cache reads into a `hooks/**/cache/`
-  owner — both beyond this slice's file plan. Deferred to a later slice.
-- **Auth product-event relocation deferred.** The locked design decision moves
-  `auth_signed_in`/`auth_sign_in_failed`/`auth_signed_out` emission from
-  `hooks/auth/workflows/use-auth-actions.ts` into the product-facing login/logout
-  workflows that call `host.auth`. That relocation is deferred: `use-auth-actions.ts`
-  still emits the same events with the same payloads and conditions through the
-  retained `client.ts` transport. Behavior is fully preserved; only the call
-  site is not yet the typed product facade.
-- **Module-level and error-boundary telemetry call sites stay direct.** Plain
-  (non-hook) product functions and one React error boundary still call
-  `trackProductEvent`/`captureTelemetryException` directly because they cannot
-  read `useProductHost()`:
-  `hooks/sessions/workflows/session-creation-materialization.ts` (`chat_session_created`),
+- **Query-client import — RESOLVED.** `ProductProviderRoot` no longer imports the
+  `appQueryClient` module singleton. The workspace-connection resolver and its
+  React Query cache reads moved into a cache-owner hook,
+  `hooks/workspaces/cache/use-resolve-workspace-connection.ts` (a
+  `hooks/**/cache/` path — sanctioned by `is_query_cache_owner_path` in
+  `scripts/check_frontend_boundaries.py`), which reads the one client through
+  `useQueryClient()`. Behavior and the single-instance guarantee are unchanged
+  (the same `appQueryClient` mounted by `DesktopHostProviders` flows through
+  context); no second QueryClient is constructed. The only remaining
+  `appQueryClient` importers are its constructor (`providers/app-query-client.ts`)
+  and the host composition (`providers/DesktopHostProviders.tsx`).
+- **Module-level and error-boundary telemetry — RESOLVED (except one retained,
+  below).** The plain (non-hook) product workflows and the settings error
+  boundary now receive a narrow typed telemetry dependency injected from their
+  calling hook (which reads `useProductTelemetry`), instead of importing
+  `lib/integrations/telemetry/client`:
+  `session-creation-materialization.ts` (injected `trackProductEvent` for
+  `chat_session_created` + `captureException`),
   `session-creation-failure-cleanup.ts`, `session-created-runtime-cleanup.ts`,
-  `use-empty-session-replacement-cleanup.ts` (exception capture),
-  `hooks/support/lifecycle/support-report-upload-payload.ts` (`support_report_submitted`),
-  `hooks/access/tauri/use-updater.ts` (app-update events; host/OS-adjacent), and
-  `components/settings/screen/SettingsContentBoundary.tsx` (boundary capture).
-  These need dependency-threading of the typed adapter from their calling hooks
-  (or move wholesale in the ProductClient extraction slice). Same events, same
-  transport, deferred.
+  `use-empty-session-replacement-cleanup.ts` (injected `captureException`),
+  `support-report-upload-payload.ts` (injected `support_report_submitted`
+  `track` + injected `ProductSupportTelemetryContext`), all threaded from
+  `use-session-creation-actions.ts` / `use-support-report-upload-queue.ts`. The
+  class boundary `components/settings/screen/SettingsContentBoundary.tsx` gets
+  the capture callback through a small functional wrapper that reads the facade
+  and passes it as a prop. Same events, same payloads, same transport. The
+  narrow injected-dep types follow the existing `TrackChatPromptSubmitted`
+  pattern.
+- **Error-boundary scope — RESOLVED.** `ProductLifecycleRoot` now renders the
+  single `AppErrorBoundary` around an inner `ProductLifecycles` component that
+  runs the shared lifecycle hooks, so a render-phase throw in any lifecycle is
+  contained exactly as it was inside the old `AppRuntime` boundary. The same
+  boundary also covers the product route/UI tree passed as `children`; the
+  duplicate `AppErrorBoundary` was removed from `App.tsx` (single boundary).
+  `main.tsx`'s composition tree is unchanged. A containment test was added to
+  `providers/ProductLifecycleRoot.test.tsx`.
+- **Auth product-event relocation — STOPPED (blocked; needs a founder
+  decision).** The locked design decision moves
+  `auth_signed_in`/`auth_sign_in_failed`/`auth_signed_out` emission from
+  `hooks/auth/workflows/use-auth-actions.ts` into the product-facing
+  login/logout workflows. This was **not** performed, because relocating it as
+  specified would degrade telemetry two ways, both violating "identical event
+  names/payloads/conditions":
+  1. **Success-payload fidelity.** `auth_signed_in.{provider,source}` and
+     `auth_signed_out.provider` are resolved inside the orchestration flow
+     (`orchestration-provider-flow.ts` / `orchestration-password-flow.ts`) —
+     `provider` can be `dev_bypass` vs `github`/`sso`; `source` can be
+     `dev_bypass`/`desktop_callback`/`interactive_poll`. But `host.auth.startLogin`
+     and `host.auth.logout` both return `Promise<void>` per the frozen §7.2
+     contract, so those fields are discarded at the host boundary and are
+     **unavailable** at the product-workflow layer. Moving success emission there
+     would require widening the frozen `ProductAuthHost` return contract (out of
+     scope; affects the Web extraction target) or degrading the payload.
+  2. **Coverage.** Emission currently lives one layer below `host.auth` in
+     `use-auth-actions` (wired via `createDesktopAuthOperations`), so **every**
+     `host.auth.startLogin`/`logout` caller is covered. The move-list omits two
+     additional callers — `hooks/organizations/workflows/use-organization-join-invitation-flow.ts`
+     and `hooks/organizations/lifecycle/use-organization-join-auth-launch.ts` —
+     so relocating up to the listed workflows would drop their auth telemetry.
+  `use-auth-actions.ts` therefore stays the central, below-host emission point,
+  emitting the same events with the same payloads/conditions through the
+  retained `client.ts` transport. Resolving this needs a founder decision:
+  either widen the frozen host contract so `startLogin`/`logout` return the
+  orchestration result, or accept the central emission point as the sanctioned
+  owner.
 - **Contract-sanctioned direct transport (retained, not deferrals).** The sink
   (`client.ts`), startup wiring (`main.tsx`), the host adapter itself
   (`desktop-product-host.ts`), the Sentry route-instrumentation HOC
   (`InstrumentedRoutes` in `App.tsx`), the Query-client capture DI
-  (`app-query-client.ts`), and pre-provider auth/boot reporting
+  (`app-query-client.ts`), the retained auth-event transport
+  (`hooks/auth/workflows/use-auth-actions.ts`, per the STOP above),
+  `hooks/access/tauri/use-updater.ts` (app-update events + capture; a host/OS
+  updater-bridge consumer that moves in the extraction slice, not a product
+  workflow), and pre-provider auth/boot reporting
   (`lib/access/tauri/auth.ts` keychain event, `lib/integrations/auth/*`,
   `hooks/auth/lifecycle/use-auth-bootstrap.ts`,
   `lib/workflows/cloud/ensure-desktop-worker.ts`) stay direct-transport by
-  contract, because they are the transport or run before the host exists.
-- **Error-boundary scope change.** Because the prescribed tree mounts
-  `ProductLifecycleRoot` (shared lifecycle hooks) above `App` (which owns
-  `AppErrorBoundary`), a render-phase throw in a lifecycle hook now propagates
-  past that boundary instead of being caught as it was inside the old
-  `AppRuntime`. Effects are unaffected (boundaries never caught those). To
-  contain lifecycle throws, a future stage must move the boundary up to wrap
-  `ProductLifecycleRoot`.
+  contract, because they are the transport, run before the host exists, or are
+  host/OS-adjacent bridge consumers.
 - **`useProductStorageContext` folder placement.** The context facade hook lives
   under `hooks/persistence/facade/` (a documented hook responsibility folder,
   mirroring `hooks/telemetry/facade/use-product-telemetry.ts`) so the strict
   frontend structure check passes.
+- **Two session-creation files allowlisted for size.** Threading the typed
+  telemetry deps pushed `session-creation-materialization.ts` (398→415) and
+  `use-session-creation-actions.ts` (396→406) just past the 400-line soft
+  threshold; both have `scripts/max_lines_allowlist.txt` entries (split
+  deferred), matching the precedent set by `session-replacement-tombstones.ts`.
 
 ## Persistence inventory at the reviewed head
 

@@ -5,16 +5,23 @@ import type {
   SupportReportUploadFile,
   SupportReportUploadResponse,
 } from "@proliferate/cloud-sdk/types";
+import type { ProductSupportTelemetryContext } from "@proliferate/product-client/host/product-host";
 import type {
   SupportReportJob,
   SupportReportServerCorrelation,
   SupportReportWorkspaceOption,
 } from "@/lib/domain/support/report-types";
-import {
-  getSupportReportReleaseId,
-  getSupportReportTelemetryRefs,
-  trackProductEvent,
-} from "@/lib/integrations/telemetry/client";
+import type { DesktopProductEventMap } from "@/lib/domain/telemetry/events";
+
+/**
+ * Narrow typed telemetry dependency injected from the calling hook (which reads
+ * the product telemetry facade). Keeps this plain module free of any vendor
+ * import while preserving the exact event name/payload it emits.
+ */
+type TrackSupportReportSubmitted = (
+  name: "support_report_submitted",
+  payload: DesktopProductEventMap["support_report_submitted"],
+) => void;
 
 export const DIAGNOSTICS_MAX_BYTES = 25 * 1024 * 1024;
 const ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
@@ -23,6 +30,7 @@ const TOTAL_ATTACHMENT_MAX_BYTES = 100 * 1024 * 1024;
 export function buildCreateReportRequest(
   job: SupportReportJob,
   attachmentCount: number,
+  supportContext: ProductSupportTelemetryContext,
 ): SupportReportCreateRequest {
   return {
     clientJobId: job.jobId,
@@ -31,7 +39,7 @@ export function buildCreateReportRequest(
     context: job.snapshot.context,
     scope: job.scope,
     workspaceRefs: workspaceRefsForJob(job),
-    telemetryRefs: getSupportReportTelemetryRefs(),
+    telemetryRefs: supportContext.telemetryRefs,
     expectedClientUploads: {
       diagnostics: job.includeLogs !== false,
       attachmentCount,
@@ -40,7 +48,7 @@ export function buildCreateReportRequest(
     kind: job.kind ?? "bug",
     creditConsent: job.creditConsent ?? false,
     creditName: job.creditName ?? null,
-    clientReleaseId: getSupportReportReleaseId(),
+    clientReleaseId: supportContext.clientReleaseId,
     urgent: job.urgent ?? false,
     notifyMe: job.notifyMe ?? false,
   };
@@ -83,9 +91,10 @@ export function trackSupportReportSubmitted(
   job: SupportReportJob,
   correlation: SupportReportServerCorrelation,
   attachmentCount: number,
+  track: TrackSupportReportSubmitted,
 ): void {
   const workspaceIds = workspaceIdsForJob(job);
-  trackProductEvent("support_report_submitted", {
+  track("support_report_submitted", {
     source_surface: "desktop",
     scope_kind: job.scope.kind,
     public_content_consent: job.publicContentConsent !== false,

@@ -91,7 +91,7 @@ describe("replacement session creation failure", () => {
       },
       rollbackOwnedShellIntent: () => true,
       workspaceId: "workspace-1",
-    }, { activateSession });
+    }, { activateSession, captureException: vi.fn() });
 
     expect(getSessionRecord("old-session")).not.toBeNull();
     expect(getSessionRecord("pending-claude")).toBeNull();
@@ -155,7 +155,7 @@ describe("replacement session creation failure", () => {
       },
       rollbackOwnedShellIntent: () => true,
       workspaceId: "workspace-1",
-    }, { activateSession });
+    }, { activateSession, captureException: vi.fn() });
 
     expect(getSessionRecord("pending-claude")).toBeNull();
     expect(getSessionRecord("old-session")).not.toBeNull();

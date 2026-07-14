@@ -60,6 +60,7 @@ describe("useCoworkManagedWorkspaces replacement lifecycle", () => {
         closeSessionSlotStream: vi.fn(),
         removeWorkspaceSessionRecord: vi.fn(),
         dismissSessionMutation: { mutateAsync: vi.fn() } as never,
+        captureException: vi.fn(),
       });
     });
 

@@ -10,7 +10,6 @@ import { Toaster } from "@proliferate/ui/kit/Sonner"
 import { MacWindowControlsSafeArea } from "@/components/app/chrome/MacWindowControlsSafeArea"
 import { useLocalWorktreeSettingsTarget } from "@/hooks/workspaces/facade/use-local-worktree-settings-target"
 import { useWorktreeCleanupPolicySync } from "@/hooks/workspaces/lifecycle/use-worktree-cleanup-policy-sync"
-import { AppErrorBoundary } from "@/components/app/AppErrorBoundary"
 import { RepoSetupModalHost } from "@/components/workspace/repo-setup/RepoSetupModalHost"
 import { SupportModalHost } from "@/components/support/SupportModalHost"
 import { AddRepoFlowHost } from "@/components/workspace/repo-setup/AddRepoFlowHost"
@@ -72,11 +71,11 @@ const SubagentsUxPlaygroundPage = import.meta.env.DEV
   : null
 
 // Thin product route/UI tree. Shared and Desktop lifecycle wiring lives above
-// this component in `ProductLifecycleRoot`; `App` owns only the error boundary,
-// route tree, modal hosts, and toasts.
+// this component in `ProductLifecycleRoot`, which also owns the single
+// `AppErrorBoundary` enclosing both the lifecycle hooks and this tree; `App`
+// owns only the route tree, modal hosts, and toasts.
 function App() {
   return (
-    <AppErrorBoundary>
       <ShortcutRevealProvider>
         <MacWindowControlsSafeArea />
         <UpdateRestartDialog />
@@ -170,7 +169,6 @@ function App() {
         <UpdateToastPresenter />
         <KeyboardShortcutsDialog />
       </ShortcutRevealProvider>
-    </AppErrorBoundary>
   )
 }
 

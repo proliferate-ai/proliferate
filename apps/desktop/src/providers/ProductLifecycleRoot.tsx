@@ -37,6 +37,7 @@ import {
 } from "@/lib/infra/measurement/boot-stall-diagnostics"
 import { AppCommandActionsProvider } from "@/providers/AppCommandActionsProvider"
 import { DesktopProductLifecycleRoot } from "@/providers/DesktopProductLifecycleRoot"
+import { AppErrorBoundary } from "@/components/app/AppErrorBoundary"
 import { useProductAuthStatus } from "@/hooks/auth/facade/use-product-auth"
 
 const APP_RUNTIME_RENDER_MILESTONES = new Set([1, 2, 3, 5, 10, 25, 50, 100, 250])
@@ -62,14 +63,30 @@ function recordAppRendererEvent(
 }
 
 /**
- * Product-owned lifecycle root. Mounts the shared product lifecycle hooks (in
- * the exact order and boot-diagnostic bracketing the app has always used),
- * drives the auth restore effect, and mounts the capability-gated
- * `DesktopProductLifecycleRoot` (which itself renders nothing on a non-Desktop
- * host). It renders the product route/UI tree (`children`) beneath the
- * `AppCommandActionsProvider` it owns.
+ * Product-owned lifecycle root. Encloses the shared lifecycle hooks in the
+ * single `AppErrorBoundary` so a render-phase throw in any lifecycle is
+ * contained — exactly as it was when these hooks lived inside `App`'s boundary,
+ * before the root split hoisted them above `App`. The boundary must sit above
+ * the component that runs the hooks (a React boundary only catches its
+ * descendants), so the hooks live in the inner `ProductLifecycles` and the same
+ * boundary also covers the product route/UI tree passed as `children`.
  */
 export function ProductLifecycleRoot({ children }: { children: ReactNode }) {
+  return (
+    <AppErrorBoundary>
+      <ProductLifecycles>{children}</ProductLifecycles>
+    </AppErrorBoundary>
+  )
+}
+
+/**
+ * Mounts the shared product lifecycle hooks (in the exact order and
+ * boot-diagnostic bracketing the app has always used), drives the auth restore
+ * effect, and mounts the capability-gated `DesktopProductLifecycleRoot` (which
+ * itself renders nothing on a non-Desktop host). It renders the product
+ * route/UI tree (`children`) beneath the `AppCommandActionsProvider` it owns.
+ */
+function ProductLifecycles({ children }: { children: ReactNode }) {
   appRuntimeRenderCount += 1
   if (APP_RUNTIME_RENDER_MILESTONES.has(appRuntimeRenderCount)) {
     recordBootDiagnostic("app_runtime.render.pass", { count: appRuntimeRenderCount })

@@ -13,7 +13,7 @@ import {
   rollbackSupersededSessionCreation,
   supersedeInFlightSessionCreation,
 } from "@/hooks/sessions/workflows/session-creation-supersession";
-import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
+import type { ErrorContext } from "@proliferate/product-client/host/product-host";
 import {
   clearStagedReplacedClientSessionAlias,
   clearStagedReplacedSessionTombstone,
@@ -34,6 +34,11 @@ export interface EmptySessionReplacementDeps {
   closeSessionSlotStream: (sessionId: string) => void;
   removeWorkspaceSessionRecord: (workspaceId: string, sessionId: string) => void;
   dismissSessionMutation: ReturnType<typeof useDismissSessionMutation>;
+  /**
+   * Narrow exception-capture dependency injected from the calling hook (which
+   * reads the product telemetry facade). Keeps this plain workflow vendor-free.
+   */
+  captureException: (error: unknown, context?: ErrorContext) => void;
 }
 
 export interface EmptySessionReplacementTransaction {
@@ -150,6 +155,7 @@ export function beginEmptySessionReplacement(
             materializedSessionId,
             resolvedWorkspaceId,
             deps.dismissSessionMutation,
+            deps.captureException,
           ),
         });
         if (!durablySuppressed) {
@@ -193,6 +199,7 @@ async function dismissMaterializedSession(
   materializedSessionId: string,
   workspaceId: string,
   dismissMutation: ReturnType<typeof useDismissSessionMutation>,
+  captureException: EmptySessionReplacementDeps["captureException"],
 ): Promise<void> {
   let lastError: unknown = null;
   for (const delayMs of DISMISS_RETRY_DELAYS_MS) {
@@ -220,7 +227,7 @@ async function dismissMaterializedSession(
     }
   }
   if (lastError) {
-    captureTelemetryException(lastError, {
+    captureException(lastError, {
       tags: {
         action: "dismiss_replaced_empty_session",
         domain: "sessions",
