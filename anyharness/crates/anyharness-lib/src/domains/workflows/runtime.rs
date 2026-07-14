@@ -15,9 +15,9 @@ use tokio::sync::Mutex as AsyncMutex;
 
 use anyharness_contract::v1::ConfigApplyState;
 
-use crate::domains::sessions::runtime::{
-    CreateAndStartSessionError, InternalSessionCreateError, InternalSessionCreateInput,
-    SendPromptError, SendPromptOutcome, SessionRuntime,
+use crate::domains::sessions::runtime::{InternalSessionCreateInput, SessionRuntime};
+use crate::domains::workflows::dispatch::{
+    apply_prompt_dispatch_outcome, blocking_bool, guarded_fail, map_create_error, ExecutionAbort,
 };
 use crate::domains::workflows::model::{
     VersionedPutWorkflowRunInput, WorkflowResolvedPlanV2, WorkflowRunFailureCode,
@@ -59,16 +59,6 @@ pub enum WorkflowGetError {
     InvalidRunId(WorkflowRunValidationError),
     Store(WorkflowServiceError),
     Internal(anyhow::Error),
-}
-
-/// How execution stopped when it did not reach the extension-driven completion.
-enum ExecutionAbort {
-    /// A classified effect failure: attempt one guarded durable failure write.
-    Fail(WorkflowRunFailureCode),
-    /// A store/join infrastructure failure, already logged. Leave rows
-    /// nonterminal and let the next startup fence handle them, mirroring the
-    /// terminal-write-failure rule.
-    Infra,
 }
 
 pub struct WorkflowRunRuntime {
@@ -462,6 +452,11 @@ async fn run_execution(
     }
 
     // 8. Dispatch the one rendered prompt with the deterministic prompt id.
+    // Ambiguity rule (spec §6.1, symmetric): a LOST acknowledgement is never a
+    // failure claim — the actor may be running the turn. The step stays
+    // running with a null turn id; the extension terminalizes it if the turn
+    // ran, and the startup fence resolves it if not. Only a verifiably failed
+    // dispatch persists `prompt_dispatch_failed`.
     let acceptance = session_runtime
         .send_text_prompt_with_id(
             &session_id,
@@ -469,130 +464,10 @@ async fn run_execution(
             plan.prompt_id.clone(),
         )
         .await;
-    match acceptance {
-        Ok(SendPromptOutcome::Running { turn_id, .. }) => {
-            record_turn(service, &run_id, &session_id, turn_id).await;
-        }
-        Ok(SendPromptOutcome::Queued { .. }) => {
-            // Stay running with a null turn id; no queue model, no retry.
-        }
-        Err(error) => {
-            tracing::warn!(
-                run_id = %run_id,
-                session_id = %session_id,
-                "workflow prompt dispatch failed"
-            );
-            let _: SendPromptError = error;
-            return Err(ExecutionAbort::Fail(
-                WorkflowRunFailureCode::PromptDispatchFailed,
-            ));
-        }
-    }
+    apply_prompt_dispatch_outcome(service, &run_id, &session_id, acceptance).await?;
 
     // 9. Drop the lease (on scope exit) — completion arrives via the extension.
     Ok(())
-}
-
-/// Record the post-send turn id on the running step. A store failure here does
-/// not fail the run: the prompt is already dispatched and the extension owns
-/// completion.
-async fn record_turn(
-    service: &Arc<WorkflowRunService>,
-    run_id: &str,
-    session_id: &str,
-    turn_id: String,
-) {
-    let service = service.clone();
-    let run_id_owned = run_id.to_string();
-    let joined =
-        tokio::task::spawn_blocking(move || service.record_turn(&run_id_owned, &turn_id)).await;
-    match joined {
-        Ok(Ok(_)) => {}
-        Ok(Err(_error)) => {
-            tracing::warn!(
-                run_id = %run_id,
-                session_id = %session_id,
-                "workflow record_turn failed; completion still owned by the extension"
-            );
-        }
-        Err(join_error) => {
-            tracing::warn!(
-                run_id = %run_id,
-                session_id = %session_id,
-                error = %join_error,
-                "workflow record_turn task join failed"
-            );
-        }
-    }
-}
-
-/// Run one guarded synchronous CAS transition on the blocking pool. `Ok(bool)`
-/// reports whether the row moved; a store/join infra failure becomes
-/// [`ExecutionAbort::Infra`] (logged, nonterminal).
-async fn blocking_bool<F>(run_id: &str, step: &'static str, call: F) -> Result<bool, ExecutionAbort>
-where
-    F: FnOnce() -> Result<bool, WorkflowServiceError> + Send + 'static,
-{
-    match tokio::task::spawn_blocking(call).await {
-        Ok(Ok(moved)) => Ok(moved),
-        Ok(Err(_error)) => {
-            tracing::error!(run_id = %run_id, step, "workflow transition store failure");
-            Err(ExecutionAbort::Infra)
-        }
-        Err(join_error) => {
-            tracing::error!(
-                run_id = %run_id,
-                step,
-                error = %join_error,
-                "workflow transition task join failed"
-            );
-            Err(ExecutionAbort::Infra)
-        }
-    }
-}
-
-/// The one guarded durable failure write for a classified effect failure.
-async fn guarded_fail(
-    service: &Arc<WorkflowRunService>,
-    run_id: &str,
-    code: WorkflowRunFailureCode,
-) {
-    let service = service.clone();
-    let run_id_owned = run_id.to_string();
-    let joined =
-        tokio::task::spawn_blocking(move || service.fail_nonterminal(&run_id_owned, code)).await;
-    match joined {
-        Ok(Ok(())) => {}
-        Ok(Err(_error)) => {
-            tracing::error!(
-                run_id = %run_id,
-                failure_code = code.as_str(),
-                "workflow durable failure write failed; rows left nonterminal for fencing"
-            );
-        }
-        Err(join_error) => {
-            tracing::error!(
-                run_id = %run_id,
-                failure_code = code.as_str(),
-                error = %join_error,
-                "workflow durable failure write task join failed"
-            );
-        }
-    }
-}
-
-/// Classify a creation-seam failure (ruling C2A-DEC-01): "missing or
-/// unavailable supplied workspace" covers every access-gate refusal (missing,
-/// retired, mutation-blocked) plus the service-level workspace-not-found;
-/// everything else at this step is a session creation failure.
-fn map_create_error(error: &InternalSessionCreateError) -> WorkflowRunFailureCode {
-    match error {
-        InternalSessionCreateError::WorkspaceUnavailable(_)
-        | InternalSessionCreateError::Create(CreateAndStartSessionError::WorkspaceNotFound) => {
-            WorkflowRunFailureCode::WorkspaceUnavailable
-        }
-        InternalSessionCreateError::Create(_) => WorkflowRunFailureCode::SessionCreateFailed,
-    }
 }
 
 #[cfg(test)]

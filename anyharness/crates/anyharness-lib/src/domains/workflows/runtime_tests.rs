@@ -4,13 +4,17 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use serde_json::json;
 
 use super::*;
+use crate::domains::sessions::runtime::{SendPromptError, TextPromptDispatchError};
 use crate::domains::workflows::model::{
     workflow_prompt_id, PutWorkflowRunInput, PutWorkflowRunInputV2, WorkflowDefinition,
     WorkflowDefinitionV2, WorkflowHarnessConfig, WorkflowHarnessConfigV2, WorkflowInput,
     WorkflowInputType, WorkflowModelSelection, WorkflowPermissionPolicy, WorkflowPromptStep,
     WorkflowStage, WorkflowStageV2,
 };
-use crate::domains::workflows::store::WorkflowRunStore;
+use crate::domains::workflows::model::{
+    WorkflowRunStatus, WorkflowStepStatus, WorkflowTurnOutcome,
+};
+use crate::domains::workflows::store::{FinishTurnStoreOutcome, WorkflowRunStore};
 use crate::persistence::Db;
 
 fn portable_input(workspace_id: &str) -> PutWorkflowRunInputV2 {
@@ -209,4 +213,144 @@ async fn shared_run_gate_makes_v1_winner_conflict_v2_without_lookup() {
     assert!(v2_task.await.expect("join v2"));
     assert_eq!(schedule_count.load(Ordering::SeqCst), 1);
     assert_eq!(lookup_count.load(Ordering::SeqCst), 0);
+}
+
+/// Drive a run through the exact service transitions `run_execution` performs
+/// before step-8 dispatch (accept -> begin_run -> bind_session -> begin_step),
+/// so the dispatch-decision tests below exercise the production path rather
+/// than a fabricated row. Returns (run_id, session_id, prompt_id).
+fn run_at_dispatch_boundary(service: &Arc<WorkflowRunService>) -> (String, String, String) {
+    const WORKSPACE_ID: &str = "20000000-0000-4000-8000-000000000002";
+    let run_id = uuid::Uuid::new_v4().to_string();
+    let session_id = format!("session-{run_id}");
+    let plan = match service
+        .accept(&run_id, v1_input(WORKSPACE_ID))
+        .expect("accept")
+    {
+        AcceptOutcome::Created { plan, .. } => plan,
+        other => panic!("fresh run was not created: {other:?}"),
+    };
+    assert!(service.begin_run(&run_id).expect("begin_run"));
+    assert!(service
+        .bind_session(&run_id, &session_id)
+        .expect("bind_session"));
+    assert!(service.begin_step(&run_id).expect("begin_step"));
+    (run_id, session_id, plan.prompt_id)
+}
+
+fn view(
+    service: &Arc<WorkflowRunService>,
+    run_id: &str,
+) -> crate::domains::workflows::service::WorkflowRunView {
+    service.get(run_id).expect("get").expect("run exists")
+}
+
+#[tokio::test]
+async fn lost_acknowledgement_keeps_step_running_and_exact_completion_terminalizes() {
+    let service = Arc::new(WorkflowRunService::new(WorkflowRunStore::new(
+        Db::open_in_memory().expect("in-memory db"),
+    )));
+    let (run_id, session_id, prompt_id) = run_at_dispatch_boundary(&service);
+
+    let decision = apply_prompt_dispatch_outcome(
+        &service,
+        &run_id,
+        &session_id,
+        Err(TextPromptDispatchError::AcknowledgementLost),
+    )
+    .await;
+    assert!(decision.is_ok(), "lost acknowledgement must not abort");
+
+    let ambiguous = view(&service, &run_id);
+    assert_eq!(ambiguous.run.status, WorkflowRunStatus::Running);
+    assert_eq!(ambiguous.run.failure_code, None);
+    assert_eq!(ambiguous.steps[0].status, WorkflowStepStatus::Running);
+    assert_eq!(ambiguous.steps[0].turn_id, None);
+    assert_eq!(ambiguous.steps[0].failure_code, None);
+
+    // The turn was in fact running: its exact completion (matched by session
+    // and prompt id) terminalizes the run through the production extension
+    // seam.
+    let finished = service
+        .finish_turn(
+            &session_id,
+            &prompt_id,
+            Some("turn-after-lost-ack"),
+            WorkflowTurnOutcome::Completed,
+        )
+        .expect("finish_turn");
+    assert!(matches!(finished, FinishTurnStoreOutcome::Terminalized));
+    let completed = view(&service, &run_id);
+    assert_eq!(completed.run.status, WorkflowRunStatus::Completed);
+    assert_eq!(completed.run.failure_code, None);
+    assert_eq!(completed.steps[0].status, WorkflowStepStatus::Completed);
+}
+
+#[tokio::test]
+async fn lost_acknowledgement_without_completion_is_fenced_as_runtime_restarted() {
+    let service = Arc::new(WorkflowRunService::new(WorkflowRunStore::new(
+        Db::open_in_memory().expect("in-memory db"),
+    )));
+    let (run_id, session_id, _prompt_id) = run_at_dispatch_boundary(&service);
+
+    apply_prompt_dispatch_outcome(
+        &service,
+        &run_id,
+        &session_id,
+        Err(TextPromptDispatchError::AcknowledgementLost),
+    )
+    .await
+    .expect("lost acknowledgement must not abort");
+
+    // No completion ever arrived: the startup fence owns the ambiguous row.
+    service
+        .fence_nonterminal_after_restart()
+        .expect("fence after restart");
+    let fenced = view(&service, &run_id);
+    assert_eq!(fenced.run.status, WorkflowRunStatus::Failed);
+    assert_eq!(
+        fenced.run.failure_code,
+        Some(WorkflowRunFailureCode::RuntimeRestarted)
+    );
+    assert_eq!(fenced.steps[0].status, WorkflowStepStatus::Failed);
+}
+
+#[tokio::test]
+async fn verifiable_dispatch_failure_still_terminalizes_prompt_dispatch_failed() {
+    let service = Arc::new(WorkflowRunService::new(WorkflowRunStore::new(
+        Db::open_in_memory().expect("in-memory db"),
+    )));
+    let (run_id, session_id, _prompt_id) = run_at_dispatch_boundary(&service);
+
+    let decision = apply_prompt_dispatch_outcome(
+        &service,
+        &run_id,
+        &session_id,
+        Err(TextPromptDispatchError::Dispatch(
+            SendPromptError::Internal(anyhow::anyhow!(
+                "actor rejected the prompt before acceptance"
+            )),
+        )),
+    )
+    .await;
+    let code = match decision {
+        Err(ExecutionAbort::Fail(code)) => code,
+        other => panic!("definite dispatch failure must abort with a failure code: {other:?}"),
+    };
+    assert_eq!(code, WorkflowRunFailureCode::PromptDispatchFailed);
+
+    // The production boundary (`execute`) converts that abort into the one
+    // guarded durable failure write.
+    guarded_fail(&service, &run_id, code).await;
+    let failed = view(&service, &run_id);
+    assert_eq!(failed.run.status, WorkflowRunStatus::Failed);
+    assert_eq!(
+        failed.run.failure_code,
+        Some(WorkflowRunFailureCode::PromptDispatchFailed)
+    );
+    assert_eq!(failed.steps[0].status, WorkflowStepStatus::Failed);
+    assert_eq!(
+        failed.steps[0].failure_code,
+        Some(WorkflowRunFailureCode::PromptDispatchFailed)
+    );
 }
