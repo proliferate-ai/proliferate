@@ -19,9 +19,12 @@ The host then runs the same production deployment from `server/deploy/**`:
 - `migrate`
 - `api`
 
-The default stack uses Amazon Linux 2023 on Graviton (`arm64`), but it still
-downloads the `x86_64` Linux `anyharness` tarball because that binary is copied
-into provider-hosted cloud sandboxes rather than executed on the EC2 host.
+The default stack uses Amazon Linux 2023 on Graviton (`arm64`) and currently
+downloads the `aarch64` runtime archive. Cloud runtime-bundle discovery,
+however, currently expects x86 Linux binaries for provider sandboxes. This is
+an unresolved architecture contradiction: the default AWS cloud-workspace path
+is not proven. Do not switch archive architectures without resolving and
+testing that product boundary.
 
 ## What The Stack Does
 
@@ -33,6 +36,10 @@ against `self-hosted-assets.SHA256SUMS`, and extracts it into
 profile-aware `bootstrap.sh`/`update.sh`) as a manual install — one deployment
 layer, not an embedded copy that can drift.
 
+The CloudFormation template, launch script, deploy bundle, checksums, and both
+runtime archives are assets of that same `server-v*` release. See
+[Releases](releases.md) for the exact seven-file inventory.
+
 CloudFormation itself only writes host-specific config:
 
 - `/opt/proliferate/server/deploy/.env.static` (from the stack parameters)
@@ -41,18 +48,26 @@ CloudFormation itself only writes host-specific config:
 Operator overrides go in `/opt/proliferate/server/deploy/.env.local`, which
 `ensure-secrets.sh` merges into `.env.runtime` and which survives the
 CloudFormation `.env.static` rewrite on updates.
-The generated `.env.static` sets
-`PROLIFERATE_PUBLIC_HEALTHCHECK_URL=https://<site-address>/health` so the stack
-only reports success after both the local API and the advertised public HTTPS
-endpoint respond.
+CloudFormation leaves `PROLIFERATE_PUBLIC_HEALTHCHECK_URL` blank in
+`.env.static`. `ensure-secrets.sh` resolves the site address, derives the
+public `/health` URL, and writes it to `.env.runtime`; the stack reports
+success only after both the local API and that advertised public HTTPS endpoint
+respond.
 
 ## Required Inputs
 
-You need:
+The base stack needs:
 
 - an unprefixed release version like `0.1.0`
-- GitHub OAuth credentials if you want desktop sign-in
-- E2B credentials if you want managed cloud sandboxes
+- a real `SiteAddress`, or `UseSslipFallback=true` for an evaluation stack
+
+GitHub OAuth is optional and enables GitHub-based sign-in in Proliferate
+Desktop; email/password can be used without it. E2B credentials are optional
+and enable managed cloud sandboxes when `E2BApiKey` and `E2BTemplateName` are
+both set. Cloud repository
+access additionally requires a GitHub App configured through host-local
+overrides. The LiteLLM gateway, SSO, and invitation email are also independent
+optional capabilities rather than base-stack requirements.
 
 The GitHub release tag still uses the `server-v*` line, but `ReleaseVersion`
 should be the matching unprefixed image tag. Example:
@@ -67,14 +82,8 @@ bootstrap if you leave them blank:
 - `CLOUD_SECRET_KEY`
 - `POSTGRES_PASSWORD`
 
-For a real domain:
-
-- `SiteAddress`
-- optionally `HostedZoneId` if Route53 should create the DNS record
-
-For evaluation stacks:
-
-- set `UseSslipFallback=true`
+For a real domain, set `SiteAddress` and optionally `HostedZoneId` when Route53
+should create the DNS record.
 
 Environment-boundary note:
 
@@ -124,28 +133,38 @@ bash launch-stack.sh --site-address api.company.com
 ```
 
 It prints the `BaseUrl`, `SetupClaimUrl`, and `ReadSetupTokenCommand` outputs on
-success. Or launch the CloudFormation stack manually:
+success. Claim the instance before ordinary Desktop sign-in or use: open
+`SetupClaimUrl`, run `ReadSetupTokenCommand`, and enter that one-time token to
+create the first admin. Later registration follows the configured sign-in and
+invitation paths.
+
+Or launch the CloudFormation stack manually:
 
 1. Launch the CloudFormation stack with the template from
    [template.yaml](../../../server/infra/self-hosted-aws/template.yaml).
 2. Wait for the stack to complete.
-3. Read the `BaseUrl` output.
-4. Set `~/.proliferate/config.json` to that `BaseUrl`.
-5. Open the desktop app and sign in with GitHub.
-6. Sync Codex credentials.
-7. Create a cloud workspace.
+3. Read the `SetupClaimUrl` and `ReadSetupTokenCommand` outputs.
+4. Open the claim URL, read the token through SSM, and create the first admin.
+5. Read the `BaseUrl` output and set `~/.proliferate/config.json` to it.
+6. Open Desktop and sign in through an enabled auth method.
+7. Sync agent credentials.
+8. If the E2B/runtime and repository-access capabilities are configured, create
+   a cloud workspace. The default Graviton runtime-archive contradiction above
+   means that path is not currently proven by this procedure.
 
-Agent gateway defaults are written into `.env.static` but disabled by default.
-CloudFormation rewrites `.env.static` on release updates, so host-specific
-overrides should go in `/opt/proliferate/server/deploy/.env.local`:
+The server's default leaves the agent gateway disabled; CloudFormation does
+not write gateway settings into `.env.static`. Host-specific gateway settings
+belong in `/opt/proliferate/server/deploy/.env.local`, which survives the
+CloudFormation `.env.static` rewrite on release updates:
 
 ```text
 AGENT_GATEWAY_ENABLED=true
 AGENT_GATEWAY_LITELLM_BASE_URL=http://litellm:4000
-AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL=https://<public-litellm-endpoint>
+AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL=https://<site-address>/llm
 AGENT_GATEWAY_LITELLM_MASTER_KEY=<same value as LITELLM_MASTER_KEY>
 LITELLM_MASTER_KEY=<openssl rand -hex 32>
 LITELLM_POSTGRES_PASSWORD=<openssl rand -hex 32>
+ANTHROPIC_API_KEY=<provider-key>
 ```
 
 Then run `/opt/proliferate/server/deploy/update.sh`. Because
@@ -153,7 +172,8 @@ Then run `/opt/proliferate/server/deploy/update.sh`. Because
 pulls, starts, and updates the profiled `litellm`/`litellm-db` services (compose
 profile `agent-gateway`) — no separate `--profile` command is needed. The
 update script merges `.env.static` with `.env.local` and preserves the override
-across later stack updates. The gateway is the bundled LiteLLM service.
+across later stack updates. The gateway is the bundled LiteLLM service, served
+publicly under `/llm`, and it requires at least one provider credential.
 
 ## Update Flow
 
@@ -163,13 +183,13 @@ The normal update path is:
 2. update the stack `ReleaseVersion` to the matching unprefixed version
 3. let `cfn-hup` rerun the in-place update
 
-That update runs the same canonical commands:
-
-```bash
-docker compose -f docker-compose.production.yml pull
-docker compose -f docker-compose.production.yml run --rm migrate
-docker compose -f docker-compose.production.yml up -d
-```
+The update config set first downloads, verifies, and extracts the deploy bundle
+for the selected `ReleaseVersion`, rewrites stack-owned `.env.static`, and then
+invokes the canonical `./update.sh`. That script resolves config and generated
+secrets, runs preflight and registry login, refreshes the selected runtime
+archive, pulls enabled images, migrates, reconciles base and optional-profile
+services, and waits for health. Bare Compose commands are not an equivalent
+update path.
 
 ## Advanced Overrides
 

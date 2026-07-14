@@ -4,7 +4,7 @@ This is the canonical self-hosted deployment story for Proliferate:
 
 - the official desktop app reads `~/.proliferate/config.json` at startup
 - the control plane runs from `server/deploy/docker-compose.production.yml`
-- updates are image pull + migrate + restart
+- installs and updates run through the checked-in deployment scripts
 - the AWS one-click stack bootstraps this exact Docker deployment
 - self-hosted control planes use anonymous telemetry by default; vendor telemetry
   stays off unless the deployment is explicitly marked as `hosted_product`
@@ -67,7 +67,9 @@ Every `server-v*` GitHub release also publishes this directory as a
 standalone bundle, `proliferate-deploy.tar.gz` (checksummed in
 `self-hosted-assets.SHA256SUMS`), so operators do not need to clone the
 monorepo. The bundle extracts to a `proliferate-deploy/` directory with the
-files above plus a `VERSION` file stamped with the release version.
+files above plus a `VERSION` file stamped with the release version. See
+[Releases](releases.md) for the complete published asset inventory and tag
+identities.
 
 Services:
 
@@ -76,16 +78,14 @@ Services:
 - `migrate`: one-shot Alembic job
 - `api`: Proliferate control plane
 
-If you want self-hosted cloud workspace provisioning, the control plane host
-also needs the Linux runtime bundle on disk: `anyharness`,
-`proliferate-worker`, and `proliferate-supervisor`. The production Compose stack
-mounts `${PROLIFERATE_HOST_BIN_DIR:-/opt/proliferate/bin}` into the API
-container read-only so `CLOUD_RUNTIME_SOURCE_BINARY_PATH`,
-`CLOUD_WORKER_SOURCE_BINARY_PATH`, and `CLOUD_SUPERVISOR_SOURCE_BINARY_PATH` can
-point at host paths such as `/opt/proliferate/bin/anyharness-linux`. You can
-either place those binaries there manually or set `RUNTIME_BINARY_URL` to a
-tarball that contains all three binaries and let `install-runtime.sh` fetch it
-during bootstrap and updates.
+Server releases include Linux runtime archives containing `anyharness`,
+`proliferate-worker`, and `proliferate-supervisor`, but a host-installed archive
+is not a current prerequisite for E2B cloud workspaces. The E2B template build
+installs the runtime binaries into the template. Current cloud materialization
+launches that preinstalled AnyHarness directly and launches Worker as a
+separate sidecar. Host runtime-staging and Supervisor launch helpers have no
+active call site, so Supervisor process ownership remains an implementation
+gap rather than an active install requirement.
 
 Public traffic goes only to the control plane:
 
@@ -93,21 +93,26 @@ Public traffic goes only to the control plane:
 Desktop -> https://api.company.com -> Caddy -> API
 ```
 
-Cloud workspace runtimes are still provider-hosted. The control plane returns a
-`runtimeUrl`, and the desktop talks to that runtime directly.
+Cloud workspace runtimes are still provider-hosted. For those workspaces,
+Desktop resolves an authenticated AnyHarness gateway URL on the self-hosted
+control plane and sends runtime requests through that gateway. Desktop is
+configured only with the control-plane `apiBaseUrl`; it does not connect
+directly to a provider runtime URL.
 
 The agent LLM gateway is the bundled LiteLLM proxy (compose services
 `litellm` + `litellm-db`, behind `--profile agent-gateway`) for sandbox model
 traffic:
 
 ```text
-Sandbox harness -> https://llm.company.com/anthropic/... -> LiteLLM -> provider API
+Sandbox harness -> https://api.company.com/llm -> LiteLLM -> provider API
 ```
 
 The Proliferate API talks to LiteLLM's management API through
 `AGENT_GATEWAY_LITELLM_BASE_URL` (authenticated with
 `AGENT_GATEWAY_LITELLM_MASTER_KEY`). Sandboxes receive only short-lived
-virtual keys and `AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL`.
+virtual keys and `AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL`. Enabling the gateway
+requires its paired secrets and at least one configured provider credential;
+the public base URL is `https://<SITE_ADDRESS>/llm`.
 
 ## First-Time Setup
 
@@ -138,9 +143,11 @@ sudo bash install.sh --eval
 
 Pin a specific release with `--version X.Y.Z`; see `install.sh --help` for all
 flags (`--eval`, `--telemetry-mode`, `--no-start`, `--dry-run`, `--yes`).
+When bootstrap finishes, use the printed `/setup` URL and one-time token to
+claim the instance before opening it in Desktop.
 
 After install, manage the instance from `/opt/proliferate/server/deploy`:
-`update.sh` (pull + migrate + restart), `doctor.sh` (redacting diagnostics),
+`update.sh` (validated in-place update), `doctor.sh` (redacting diagnostics),
 and `preflight.sh` (config validation).
 
 ### Manual setup
@@ -163,32 +170,25 @@ template, so without `--ignore-missing` the check always fails on this
 bundle-only download. Working from a monorepo checkout instead?
 `server/deploy/` is the same directory; run the steps below from there.
 
-4. Fill in the required values in `.env.static`:
+4. Fill in the base-install values in `.env.static`:
    - `SITE_ADDRESS`
    - `PROLIFERATE_TELEMETRY_MODE`
-   - `PROLIFERATE_HOST_BIN_DIR`
    - `PROLIFERATE_SERVER_IMAGE`
    - `PROLIFERATE_SERVER_IMAGE_TAG`
-   - `GITHUB_OAUTH_CLIENT_ID`
-   - `GITHUB_OAUTH_CLIENT_SECRET`
-   - `E2B_API_KEY`
-   - `E2B_TEMPLATE_NAME`
-   - optional agent gateway (when `AGENT_GATEWAY_ENABLED=true`, `bootstrap.sh`
-     and `update.sh` start and update the profiled `litellm`/`litellm-db`
-     services automatically; no separate `--profile` command is needed):
-     - `AGENT_GATEWAY_ENABLED=true`
-     - `AGENT_GATEWAY_LITELLM_BASE_URL=http://litellm:4000`
-     - `AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL=https://llm.company.com`
-     - `AGENT_GATEWAY_LITELLM_MASTER_KEY` = `LITELLM_MASTER_KEY`, plus
-       `LITELLM_POSTGRES_PASSWORD`
-     - `AGENT_GATEWAY_DEFAULT_USER_BUDGET_USD` /
-       `AGENT_GATEWAY_DEFAULT_ORG_BUDGET_USD` for limits
-   - `CLOUD_RUNTIME_SOURCE_BINARY_PATH`,
-     `CLOUD_WORKER_SOURCE_BINARY_PATH`, and
-     `CLOUD_SUPERVISOR_SOURCE_BINARY_PATH` if you want cloud workspaces
-   - for advanced auth-flow, sandbox template, timeout, or runtime-path
-     overrides, add the extra env vars manually from
-     [env-vars.yaml](../reference/env-vars.yaml)
+   The control plane, database, migration, Caddy, claim flow, and generated
+   internal secrets make up the base install. Configure only the capabilities
+   you intend to enable:
+   - GitHub OAuth for GitHub-based sign-in in Proliferate Desktop (email and
+     password remain available without it);
+   - a GitHub App for cloud-workspace repository access;
+   - `E2B_API_KEY` and `E2B_TEMPLATE_NAME` together for E2B cloud workspaces;
+   - the LiteLLM gateway, SSO, or invitation email independently.
+   The complete keys and pairing rules are in
+   [.env.production.example](../../../server/deploy/.env.production.example)
+   and [env-vars.yaml](../reference/env-vars.yaml).
+   To enable the gateway, set `AGENT_GATEWAY_ENABLED=true`, use
+   `AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL=https://api.company.com/llm`, set the
+   paired LiteLLM secrets, and configure at least one provider key.
 5. Leave `POSTGRES_PASSWORD`, `JWT_SECRET`, and `CLOUD_SECRET_KEY` blank if you
    want `bootstrap.sh` to generate and persist them in `.env.generated`
    (next to `.env.static`) on first startup.
@@ -197,26 +197,6 @@ bundle-only download. Working from a monorepo checkout instead?
    `.env.runtime`, and `.env.local` wins for non-secret operator settings. This
    is mainly useful for generated/self-hosted stacks where `.env.static` may be
    rewritten by infrastructure tooling.
-7. Either place Linux `anyharness`, `proliferate-worker`, and
-   `proliferate-supervisor` binaries on the host under
-   `${PROLIFERATE_HOST_BIN_DIR:-/opt/proliferate/bin}` and set:
-
-```text
-CLOUD_RUNTIME_SOURCE_BINARY_PATH=/opt/proliferate/bin/anyharness-linux
-CLOUD_WORKER_SOURCE_BINARY_PATH=/opt/proliferate/bin/proliferate-worker-linux
-CLOUD_SUPERVISOR_SOURCE_BINARY_PATH=/opt/proliferate/bin/proliferate-supervisor-linux
-```
-
-Or set:
-
-```text
-CLOUD_RUNTIME_SOURCE_BINARY_PATH=/opt/proliferate/bin/anyharness-linux
-CLOUD_WORKER_SOURCE_BINARY_PATH=/opt/proliferate/bin/proliferate-worker-linux
-CLOUD_SUPERVISOR_SOURCE_BINARY_PATH=/opt/proliferate/bin/proliferate-supervisor-linux
-RUNTIME_BINARY_URL=https://github.com/proliferate-ai/proliferate/releases/download/server-vX.Y.Z/anyharness-x86_64-unknown-linux-musl.tar.gz
-RUNTIME_BINARY_SHA256_URL=https://github.com/proliferate-ai/proliferate/releases/download/server-vX.Y.Z/self-hosted-assets.SHA256SUMS
-```
-
 If you want `bootstrap.sh` and `update.sh` to verify the public HTTPS endpoint
 after the local API passes health, also set:
 
@@ -224,13 +204,17 @@ after the local API passes health, also set:
 PROLIFERATE_PUBLIC_HEALTHCHECK_URL=https://api.company.com/health
 ```
 
-8. Run, from the deploy directory:
+7. Run, from the deploy directory:
 
 ```bash
 ./bootstrap.sh
 ```
 
-9. Give desktop users this config:
+8. Open the generated `https://api.company.com/setup` claim URL and use the
+   one-time setup token printed by `bootstrap.sh` to create the first admin.
+   This instance claim happens before ordinary registration or Desktop use;
+   later users register through the configured sign-in and invitation paths.
+9. Give desktop users this config, restart Desktop, and sign in:
 
 ```json
 {
@@ -240,28 +224,32 @@ PROLIFERATE_PUBLIC_HEALTHCHECK_URL=https://api.company.com/health
 
 ## Update Flow
 
-The canonical self-hosted update flow is, from the deploy directory:
+The canonical in-place update flow is, from the deploy directory:
 
 ```bash
 ./update.sh
 ```
 
-That script runs:
+`update.sh` merges the resolved environment, runs preflight and registry login,
+refreshes the configured runtime archive, pulls enabled images, migrates,
+reconciles the base and enabled optional-profile services, and waits for
+health. Do not replace it with a few bare Compose commands; those omit the
+configuration, runtime, registry, optional-service, and health behavior.
 
-```bash
-docker compose -f docker-compose.production.yml pull
-docker compose -f docker-compose.production.yml run --rm migrate
-docker compose -f docker-compose.production.yml up -d
-```
+The script does not resolve a newer release, fetch newer deployment scripts,
+or change a pinned image tag. For a pinned manual upgrade, rerun
+`install.sh --version <new-version>` so the selected release bundle and image
+tag advance together. The CloudFormation path instead downloads and extracts
+the selected release bundle before it invokes `update.sh`.
 
 Optional services are managed through one mechanism: a capability flag in the
 resolved env selects a compose profile, and `bootstrap.sh`/`update.sh` compute
 the same `--profile` args for every `pull`/`up` call. When
 `AGENT_GATEWAY_ENABLED=true`, both scripts automatically pull, start, and
 update the profiled `litellm`/`litellm-db` services (compose profile
-`agent-gateway`); operators no longer run a separate
-`docker compose --profile agent-gateway up -d`. Exposing the gateway publicly
-still needs a Caddy route to `litellm:4000`; see the model-gateway add-on docs.
+`agent-gateway`); operators do not run a separate
+`docker compose --profile agent-gateway up -d`. The bundled Caddyfile exposes
+the enabled gateway at `/llm`.
 
 Recommended image strategy:
 
@@ -279,7 +267,6 @@ ghcr.io/proliferate-ai/proliferate-server
 
 The CI pipeline publishes:
 
-- commit SHA tags
 - released version tags
 - a rolling `stable` tag
 
