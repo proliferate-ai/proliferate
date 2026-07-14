@@ -15,9 +15,19 @@ import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-
 const runtimeMocks = vi.hoisted(() => ({
   bootstrapHarnessRuntime: vi.fn().mockResolvedValue(undefined),
 }));
+const lifecycleMocks = vi.hoisted(() => ({
+  useUpdateRestartWatcher: vi.fn(),
+  useDesktopWorkerEnrollment: vi.fn(),
+}));
 
 vi.mock("@/lib/access/anyharness/runtime-bootstrap", () => ({
   bootstrapHarnessRuntime: runtimeMocks.bootstrapHarnessRuntime,
+}));
+vi.mock("@/hooks/access/tauri/use-update-restart-watcher", () => ({
+  useUpdateRestartWatcher: lifecycleMocks.useUpdateRestartWatcher,
+}));
+vi.mock("@/hooks/cloud/lifecycle/use-desktop-worker-enrollment", () => ({
+  useDesktopWorkerEnrollment: lifecycleMocks.useDesktopWorkerEnrollment,
 }));
 
 vi.mock("@proliferate/product-domain/sessions/activity", () => ({
@@ -55,6 +65,13 @@ function makeBridge(
       getConnection: vi.fn(),
       restart: vi.fn(),
     },
+    diagnostics: {
+      logEvent: vi.fn().mockResolvedValue(undefined),
+    },
+    updater: {
+      isSupported: vi.fn(() => true),
+    },
+    worker: {},
     nativeUi: {
       setRunningAgentCount,
       subscribeMenuCommands: () => () => {},
@@ -202,7 +219,7 @@ describe("DesktopProductLifecycleRoot", () => {
     expect(setRunningAgentCount).toHaveBeenCalledWith(1);
   });
 
-  it("wires Desktop activity and zoom lifecycles only through the mounted bridge", () => {
+  it("wires Desktop product lifecycles only through the mounted bridge", () => {
     const setWorkspaceActivity = vi.fn().mockResolvedValue(undefined);
     const setZoom = vi.fn().mockResolvedValue(undefined);
     const bridge = makeBridge(vi.fn().mockResolvedValue(undefined), {
@@ -214,14 +231,20 @@ describe("DesktopProductLifecycleRoot", () => {
 
     expect(useWorkspaceActivityIndicator).toHaveBeenCalledWith(setWorkspaceActivity);
     expect(useDesktopZoomPreferenceLifecycle).toHaveBeenCalledWith(setZoom);
+    expect(lifecycleMocks.useUpdateRestartWatcher).toHaveBeenCalledWith(bridge.updater);
+    expect(lifecycleMocks.useDesktopWorkerEnrollment).toHaveBeenCalledWith(bridge.worker);
 
     cleanup();
     vi.mocked(useWorkspaceActivityIndicator).mockClear();
     vi.mocked(useDesktopZoomPreferenceLifecycle).mockClear();
+    lifecycleMocks.useUpdateRestartWatcher.mockClear();
+    lifecycleMocks.useDesktopWorkerEnrollment.mockClear();
     renderRoot(makeHost(null));
 
     expect(useWorkspaceActivityIndicator).not.toHaveBeenCalled();
     expect(useDesktopZoomPreferenceLifecycle).not.toHaveBeenCalled();
+    expect(lifecycleMocks.useUpdateRestartWatcher).not.toHaveBeenCalled();
+    expect(lifecycleMocks.useDesktopWorkerEnrollment).not.toHaveBeenCalled();
   });
 
   it("exports only changed counts as sessions go busy and idle", () => {

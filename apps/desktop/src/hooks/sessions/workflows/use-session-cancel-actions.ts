@@ -1,5 +1,6 @@
 import { useCancelSessionMutation } from "@anyharness/sdk-react";
 import { useCallback } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
 import {
   getSessionClientAndWorkspace,
@@ -12,6 +13,7 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import { useToastStore } from "@/stores/toast/toast-store";
 
 export function useSessionCancelActions() {
+  const ssh = useProductHost().desktop?.ssh ?? null;
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const showToast = useToastStore((state) => state.show);
   const cancelSessionMutation = useCancelSessionMutation();
@@ -31,13 +33,16 @@ export function useSessionCancelActions() {
     }
 
     try {
-      const { materializedSessionId, workspaceId } = await getSessionClientAndWorkspace(sessionId);
+      const { materializedSessionId, workspaceId } = await getSessionClientAndWorkspace(
+        sessionId,
+        ssh,
+      );
       await cancelSessionMutation.mutateAsync({ workspaceId, sessionId: materializedSessionId });
       patchSessionRecord(sessionId, { status: "idle" });
     } catch {
       // Cancel failed.
     }
-  }, [cancelSessionMutation, getWorkspaceRuntimeBlockReason, showToast]);
+  }, [cancelSessionMutation, getWorkspaceRuntimeBlockReason, showToast, ssh]);
 
   return { cancelActiveSession };
 }

@@ -5,9 +5,6 @@ import type {
   SupportReportUploadFile,
   SupportReportUploadResponse,
 } from "@proliferate/cloud-sdk/types";
-import {
-  readStagedSupportReportAttachment,
-} from "@/lib/access/tauri/support";
 import type {
   SupportReportJob,
   SupportReportServerCorrelation,
@@ -138,11 +135,12 @@ export function jsonBlob(value: unknown): Blob {
 
 export async function loadAttachmentBlob(
   attachment: SupportReportJob["attachments"][number],
+  readAttachment?: (path: string) => Promise<string>,
 ): Promise<Blob> {
   const dataBase64 = attachment.dataBase64
     ?? (
       attachment.stagedPath
-        ? await readStagedSupportReportAttachment(attachment.stagedPath)
+        ? await readAttachment?.(attachment.stagedPath)
         : null
     );
   if (!dataBase64) {

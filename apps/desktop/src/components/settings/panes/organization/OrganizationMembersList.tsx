@@ -8,8 +8,8 @@ import {
 } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { SettingsEyebrow } from "@proliferate/product-ui/settings/SettingsEyebrow";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { Avatar } from "@/components/settings/panes/organization/OrganizationLogo";
-import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { buildProliferateApiUrl } from "@/lib/infra/proliferate-api";
 import {
   membershipStatusBadge,
@@ -181,7 +181,7 @@ function InvitationRow({
   updating: boolean;
   onRevokeInvitation?: (invitationId: string) => void;
 }) {
-  const { copyText } = useTauriShellActions();
+  const { writeText } = useProductHost().clipboard;
   const showToast = useToastStore((state) => state.show);
   const deliveryHint = invitationDeliveryHint(invitation.deliveryStatus);
 
@@ -190,7 +190,7 @@ function InvitationRow({
       `/register?token=${invitation.id}&email=${encodeURIComponent(invitation.email)}`,
     );
     try {
-      await copyText(url);
+      await writeText(url);
       showToast("Invite link copied.", "info");
     } catch {
       showToast("Invite link could not be copied.");

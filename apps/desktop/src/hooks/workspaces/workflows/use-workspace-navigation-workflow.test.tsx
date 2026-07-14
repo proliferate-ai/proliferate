@@ -69,9 +69,9 @@ vi.mock("@/hooks/workspaces/derived/use-logical-workspaces", () => ({
   }),
 }));
 
-vi.mock("@/hooks/access/tauri/use-shell-actions", () => ({
-  useTauriShellActions: () => ({
-    openExternal: shellMocks.openExternal,
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => ({
+    links: { openExternal: shellMocks.openExternal },
   }),
 }));
 

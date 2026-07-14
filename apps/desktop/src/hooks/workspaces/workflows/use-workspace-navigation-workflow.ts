@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { webWorkspaceDeepLink } from "@proliferate/cloud-sdk";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useWebAppTarget } from "@/hooks/capabilities/derived/use-web-app-target";
 import { useWorkspaceSelection } from "@/hooks/workspaces/workflows/selection/use-workspace-selection";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
@@ -28,7 +28,7 @@ export function useWorkspaceNavigationWorkflow() {
   );
   const { selectWorkspace } = useWorkspaceSelection();
   const { logicalWorkspaces } = useLogicalWorkspaces();
-  const { openExternal } = useTauriShellActions();
+  const { openExternal } = useProductHost().links;
   const webApp = useWebAppTarget();
   const showToast = useToastStore((state) => state.show);
 

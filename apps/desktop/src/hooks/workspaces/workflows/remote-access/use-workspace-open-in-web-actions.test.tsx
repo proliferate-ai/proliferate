@@ -14,10 +14,10 @@ const hookMocks = vi.hoisted(() => ({
   } as { cloudWorkspace: { id: string } | null; mobilityWorkspace: { cloudWorkspaceId: string } | null } | null,
 }));
 
-vi.mock("@/hooks/access/tauri/use-shell-actions", () => ({
-  useTauriShellActions: () => ({
-    copyText: hookMocks.copyText,
-    openExternal: hookMocks.openExternal,
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => ({
+    clipboard: { writeText: hookMocks.copyText },
+    links: { openExternal: hookMocks.openExternal },
   }),
 }));
 

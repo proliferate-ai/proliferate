@@ -4,6 +4,8 @@ import {
   anyHarnessCoworkStatusKey,
 } from "@anyharness/sdk-react";
 import type { CoworkStatus, TerminalWebSocketAuthTransport } from "@anyharness/sdk";
+import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import type { CloudMobilityWorkspaceSummary } from "@/lib/access/cloud/client";
 import { getProliferateClient } from "@/lib/access/cloud/client";
 import { CloudClientProvider } from "@proliferate/cloud-sdk-react";
@@ -42,10 +44,11 @@ import { TelemetryProvider } from "./TelemetryProvider";
 async function resolveWorkspaceConnectionWithCache(
   runtimeUrl: string,
   workspaceId: string,
+  ssh: DesktopSshBridge | null,
 ) {
   const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(workspaceId);
   if (!cloudWorkspaceId) {
-    return resolveWorkspaceConnection(runtimeUrl, workspaceId);
+    return resolveWorkspaceConnection(runtimeUrl, workspaceId, ssh);
   }
 
   const cachedConnection = await appQueryClient.fetchQuery(
@@ -80,6 +83,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
 }
 
 function WorkspaceProviders({ children }: { children: ReactNode }) {
+  const ssh = useProductHost().desktop?.ssh ?? null;
   const location = useLocation();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const authStatus = useAuthStore((state) => state.status);
@@ -154,27 +158,31 @@ function WorkspaceProviders({ children }: { children: ReactNode }) {
           explicitCloudRuntimeMaterializationId
           && materializationId === explicitCloudRuntimeMaterializationId
         ) {
-          return resolveWorkspaceConnectionWithCache(runtimeUrl, explicitCloudRuntimeMaterializationId);
+          return resolveWorkspaceConnectionWithCache(
+            runtimeUrl,
+            explicitCloudRuntimeMaterializationId,
+            ssh,
+          );
         }
 
         if (
           explicitTargetMaterializationId
           && materializationId === explicitTargetMaterializationId
         ) {
-          return resolveWorkspaceConnectionWithCache(runtimeUrl, explicitTargetMaterializationId);
+          return resolveWorkspaceConnectionWithCache(runtimeUrl, explicitTargetMaterializationId, ssh);
         }
 
         if (
           logicalWorkspace.localWorkspace
           && materializationId === logicalWorkspace.localWorkspace.id
         ) {
-          return resolveWorkspaceConnectionWithCache(runtimeUrl, logicalWorkspace.localWorkspace.id);
+          return resolveWorkspaceConnectionWithCache(runtimeUrl, logicalWorkspace.localWorkspace.id, ssh);
         }
       }
 
-      return resolveWorkspaceConnectionWithCache(runtimeUrl, workspaceId);
+      return resolveWorkspaceConnectionWithCache(runtimeUrl, workspaceId, ssh);
     },
-    [authStatus, authUserId, cacheScopeKey, runtimeUrl, selectedWorkspaceId],
+    [authStatus, authUserId, cacheScopeKey, runtimeUrl, selectedWorkspaceId, ssh],
   );
 
   return (

@@ -1,9 +1,8 @@
 import type { CloudAgentKind, CloudWorkspaceDetail } from "@/lib/access/cloud/client";
+import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
 import type { TerminalWebSocketAuthTransport } from "@anyharness/sdk";
 import { resolveCloudSandboxGatewayConnectionForWorkspace } from "@/lib/access/cloud/cloud-sandbox-gateway";
 import { getCloudWorkspaceWithRetry } from "@/lib/access/cloud/workspace-connection-retry";
-import { ensureSshAnyHarnessTunnel } from "@/lib/access/tauri/ssh-tunnel";
-import { getSshDirectTargetProfile } from "@/lib/access/tauri/ssh-target-profile";
 import { parseTargetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { resolveCloudWorkspaceStatus } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
@@ -29,26 +28,23 @@ export interface RuntimeTarget {
 export async function resolveRuntimeTargetForWorkspace(
   runtimeUrl: string,
   workspaceId: string,
+  ssh: DesktopSshBridge | null = null,
 ): Promise<RuntimeTarget> {
   const targetWorkspace = parseTargetWorkspaceSyntheticId(workspaceId);
   if (targetWorkspace) {
-    const profile = await getSshDirectTargetProfile(targetWorkspace.targetId);
+    if (!ssh) {
+      throw new Error("SSH direct access is only available in Desktop.");
+    }
+    const profile = await ssh.getProfile(targetWorkspace.targetId);
     if (!profile) {
       throw new Error(
         "SSH direct access is not configured for this target. Add the SSH host, user, and key in Compute settings.",
       );
     }
-    const tunnel = await ensureSshAnyHarnessTunnel({
-      targetId: profile.targetId,
-      sshHost: profile.sshHost,
-      sshUser: profile.sshUser,
-      sshPort: profile.sshPort,
-      identityFile: profile.identityFile ?? null,
-      remoteAnyHarnessPort: profile.remoteAnyHarnessPort,
-    });
+    const tunnel = await ssh.ensureTunnel(profile);
     return {
       location: "target",
-      baseUrl: tunnel.localUrl,
+      baseUrl: tunnel.runtimeUrl,
       anyharnessWorkspaceId: targetWorkspace.anyharnessWorkspaceId,
       runtimeGeneration: 0,
       targetId: targetWorkspace.targetId,

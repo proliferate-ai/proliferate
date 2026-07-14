@@ -358,10 +358,10 @@ describe("updater", () => {
     expect(fractions).toEqual([0.4, 1, 1]);
   });
 
-  it("does not call onProgress while total length is unknown", async () => {
+  it("does not call onProgress while total length is unknown or zero", async () => {
     mocks.downloadAndInstall.mockImplementation(async (_handle, cb) => {
       cb?.(50, undefined);
-      cb?.(50, undefined);
+      cb?.(50, 0);
     });
 
     const onProgress = vi.fn();

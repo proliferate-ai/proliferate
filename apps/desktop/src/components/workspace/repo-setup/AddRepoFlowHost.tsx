@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   AddRepoFlow,
   type AddRepoFlowOption,
@@ -8,7 +9,6 @@ import {
 } from "@proliferate/product-surfaces/settings/cloud-environments/use-add-cloud-environment";
 import { useAddRepo } from "@/hooks/workspaces/workflows/use-add-repo";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
-import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { isSettingsAdminRole } from "@/lib/domain/settings/admin-roles";
 import { useAddRepoFlowStore } from "@/stores/ui/add-repo-flow-store";
 import { useToastStore } from "@/stores/toast/toast-store";
@@ -28,7 +28,8 @@ export function AddRepoFlowHost() {
 
   const { addRepoFromPath, isAddingRepo } = useAddRepo();
   const { activeOrganization, activeOrganizationId } = useActiveOrganization();
-  const { openExternal, pickFolder } = useTauriShellActions();
+  const host = useProductHost();
+  const files = host.desktop?.files ?? null;
   const showToast = useToastStore((state) => state.show);
   const [flowError, setFlowError] = useState<string | null>(null);
 
@@ -38,9 +39,13 @@ export function AddRepoFlowHost() {
     canManageGitHubAppInstallation: isSettingsAdminRole(
       activeOrganization?.membership?.role,
     ),
-    userAuthorizationReturnTo: "proliferate://settings/environments?source=github_app_callback",
+    userAuthorizationReturnTo: host.links.buildReturnUrl({
+      kind: "settings",
+      section: "environments",
+      source: "github_app_callback",
+    }),
     installationReturnTo: "proliferate://settings/environments?source=github_app_installation_callback",
-    onOpenExternalUrl: openExternal,
+    onOpenExternalUrl: host.links.openExternal,
     onEnvironmentAdded: (repoId) => {
       // Read before closeFlow — close() clears the completion callback.
       const onCompleted = useAddRepoFlowStore.getState().onCompleted;
@@ -62,7 +67,11 @@ export function AddRepoFlowHost() {
     // they differ in intent copy only — the same registration flow backs both.
     // The folder picker IS the intent signal; no confirmation step needed.
     void (async () => {
-      const path = await pickFolder();
+      if (!files) {
+        setFlowError("Local repositories are only available in Desktop.");
+        return;
+      }
+      const path = await files.pickDirectory();
       if (!path) {
         return;
       }
@@ -80,7 +89,7 @@ export function AddRepoFlowHost() {
       // keep the dialog open so the user can retry or back out.
       setFlowError(result.error);
     })();
-  }, [addRepoFromPath, closeFlow, pickFolder, setStep]);
+  }, [addRepoFromPath, closeFlow, files, setStep]);
 
   const handleBack = useCallback(() => {
     setFlowError(null);

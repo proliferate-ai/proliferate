@@ -28,7 +28,7 @@ import {
   discoverDesktopSso,
 } from "@/lib/integrations/auth/proliferate-sso-auth";
 import { checkControlPlaneReachable } from "@/lib/access/cloud/health";
-import { revokeDesktopWorkerServerSide } from "@/lib/workflows/cloud/ensure-desktop-worker";
+import { revokeDesktopWorkerServerSide } from "@/lib/integrations/auth/desktop-worker-revocation";
 import {
   applyAnonymousState,
   applyAuthenticatedState,

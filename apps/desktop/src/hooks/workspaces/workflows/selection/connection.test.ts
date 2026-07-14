@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { DesktopRuntimeBridge } from "@proliferate/product-client/host/desktop-bridge";
+import type {
+  DesktopRuntimeBridge,
+  DesktopSshBridge,
+} from "@proliferate/product-client/host/desktop-bridge";
 
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import type {
@@ -32,9 +35,11 @@ const context = (workspaceId: string): WorkspaceSelectionContext => ({
 function deps(
   localRuntime: DesktopRuntimeBridge | null,
   refreshCloudWorkspaceConnection = vi.fn(),
+  ssh: DesktopSshBridge | null = null,
 ): WorkspaceSelectionDeps {
   return {
     localRuntime,
+    ssh,
     logicalWorkspaces: [],
     rawWorkspaces: [],
     cache: {
@@ -82,18 +87,25 @@ describe("resolveSelectionConnection", () => {
     expect(mocks.resolveWorkspaceConnection).toHaveBeenCalledWith(
       "http://runtime.test",
       "workspace-runtime",
+      null,
     );
     expect(result.runtimeUrl).toBe("http://runtime.test");
   });
 
   it("does not discover a local runtime for an SSH target workspace", async () => {
+    const ssh = {
+      getProfile: vi.fn(),
+      saveProfile: vi.fn(),
+      removeProfile: vi.fn(),
+      ensureTunnel: vi.fn(),
+    } satisfies DesktopSshBridge;
     mocks.resolveWorkspaceConnection.mockResolvedValue({
       runtimeUrl: "https://target.test",
       anyharnessWorkspaceId: "workspace-runtime",
     });
 
     await resolveSelectionConnection(
-      deps(null),
+      deps(null, vi.fn(), ssh),
       context("target:target-1:workspace-runtime"),
       { kind: "local" },
     );
@@ -102,6 +114,7 @@ describe("resolveSelectionConnection", () => {
     expect(mocks.resolveWorkspaceConnection).toHaveBeenCalledWith(
       "",
       "target:target-1:workspace-runtime",
+      ssh,
     );
   });
 

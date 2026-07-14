@@ -7,6 +7,7 @@ import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { Button } from "@proliferate/ui/primitives/Button";
 import type { GitHubRepoAuthorityAction } from "@proliferate/cloud-sdk";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { useGitHubAppInstallation } from "@/hooks/settings/workflows/use-github-app-installation";
 import { useGitHubAppUserAuthorization } from "@/hooks/settings/workflows/use-github-app-user-authorization";
@@ -14,8 +15,6 @@ import { type CloudRepoEnvironmentEditor } from "@/hooks/settings/workflows/use-
 
 // Land the GitHub authorization callback on the cloud environments settings
 // surface (the same return target the add-repo flow uses).
-const USER_AUTHORIZATION_RETURN_TO =
-  "proliferate://settings/environments?source=github_app_callback";
 const INSTALLATION_RETURN_TO =
   "proliferate://settings/environments?source=github_app_installation_callback";
 
@@ -171,8 +170,13 @@ function RepoCloudAuthorizationRequired({
   onAuthorizationReturn: () => void;
 }) {
   const { activeOrganizationId } = useActiveOrganization();
+  const { links } = useProductHost();
   const userAuthorization = useGitHubAppUserAuthorization({
-    returnTo: USER_AUTHORIZATION_RETURN_TO,
+    returnTo: links.buildReturnUrl({
+      kind: "settings",
+      section: "environments",
+      source: "github_app_callback",
+    }),
     onAuthorizationReturn,
   });
   const installation = useGitHubAppInstallation({

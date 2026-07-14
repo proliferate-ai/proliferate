@@ -20,6 +20,7 @@ import type { PasswordSignInCredentials } from "@/lib/integrations/auth/orchestr
 
 import { getProliferateApiBaseUrl } from "@/lib/infra/proliferate-api";
 import { setDesktopAppConfig } from "@/lib/access/tauri/config";
+import { isTauriRuntimeAvailable } from "@/lib/access/tauri/connect-server";
 import { relaunch } from "@/lib/access/tauri/updater";
 import { copyText, openExternal } from "@/lib/access/tauri/shell";
 import {
@@ -57,8 +58,12 @@ const SSO_UNAVAILABLE =
  * write rejects before relaunch so no in-process switch is claimed.
  */
 export function createDesktopDeployment(): ProductDeploymentHost {
+  const apiBaseUrl = getProliferateApiBaseUrl();
+  if (!isTauriRuntimeAvailable()) {
+    return { apiBaseUrl };
+  }
   return {
-    apiBaseUrl: getProliferateApiBaseUrl(),
+    apiBaseUrl,
     async switchDeployment(apiBaseUrl: string): Promise<void> {
       await setDesktopAppConfig({ apiBaseUrl });
       await relaunch();

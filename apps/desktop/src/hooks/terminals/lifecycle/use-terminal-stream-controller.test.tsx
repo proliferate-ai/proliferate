@@ -5,6 +5,8 @@ import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { connectTerminal } from "@anyharness/sdk";
+import type { ProductHost } from "@proliferate/product-client/host/product-host";
+import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import { resetTerminalStreamRegistryForTests } from "@/lib/infra/terminals/terminal-stream-registry";
 import { useTerminalStreamController } from "./use-terminal-stream-controller";
 
@@ -33,6 +35,8 @@ const mockState = vi.hoisted(() => ({
     };
   }>,
 }));
+
+const testProductHost = { desktop: null } as ProductHost;
 
 vi.mock("@anyharness/sdk", () => ({
   AnyHarnessError: class AnyHarnessError extends Error {
@@ -273,7 +277,9 @@ function renderActions() {
     },
   });
   const wrapper = ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <ProductHostProvider host={testProductHost}>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    </ProductHostProvider>
   );
   return renderHook(() => useTerminalStreamController(), { wrapper });
 }

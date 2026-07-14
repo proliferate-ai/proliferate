@@ -9,6 +9,19 @@ import { AuthScreenLayout } from "@/components/auth/AuthScreenLayout";
 import { LoginScreen } from "@/components/auth/LoginScreen";
 import { SessionCheckScreen } from "@/components/auth/SessionCheckScreen";
 
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => ({
+    deployment: {
+      apiBaseUrl: "https://api.example.test",
+      switchDeployment: vi.fn(async () => {}),
+      resetDeployment: vi.fn(async () => {}),
+    },
+    desktop: {
+      updater: { getVersion: vi.fn(async () => "0.0.0-test") },
+    },
+  }),
+}));
+
 // Force the auth-required gate so anonymous resolves to the sign-in shell
 // (exercising the loading -> login -> app reveal path).
 vi.mock("@/lib/domain/auth/auth-mode", () => ({

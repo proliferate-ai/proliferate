@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useStartGitHubAppUserAuthorization } from "@proliferate/cloud-sdk-react";
-import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 
 // Same staggered refetch cadence the Account pane uses after opening the
 // GitHub authorization page: the callback deep-link may land on another
@@ -28,7 +28,7 @@ export function useGitHubAppUserAuthorization({
   onAuthorizationReturn?: () => void;
 }): GitHubAppUserAuthorizationFlow {
   const start = useStartGitHubAppUserAuthorization();
-  const { openExternal } = useTauriShellActions();
+  const { openExternal } = useProductHost().links;
   const [error, setError] = useState<string | null>(null);
   const timersRef = useRef<number[]>([]);
   const onReturnRef = useRef(onAuthorizationReturn);

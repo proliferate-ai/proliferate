@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   mergeFetchedHistoryWithExistingEvents,
   mergeFetchedHistoryWithNewerEvents,
@@ -48,6 +49,7 @@ interface SessionHistoryHydrationOptions {
  * Stream handle lifecycle stays in useSessionRuntimeActions.
  */
 export function useSessionHistoryHydration() {
+  const ssh = useProductHost().desktop?.ssh ?? null;
   const { mountSubagentChildrenFromEvents } = useLinkedSessionMounting();
 
   const rehydrateSessionSlotFromHistory = useCallback(async (
@@ -108,8 +110,9 @@ export function useSessionHistoryHydration() {
               ? { measurementOperationId: requestMeasurementOperationId }
               : {}),
             ...(options?.timeoutMs != null ? { timeoutMs: options.timeoutMs } : {}),
+            ssh,
           }
-          : undefined,
+          : { ssh },
       );
       for (const operationId of historyApplyOperationIds) {
         recordMeasurementWorkflowStep({
@@ -379,7 +382,7 @@ export function useSessionHistoryHydration() {
       finishStandaloneApplyOperation(standaloneMeasurementOperationId, "error_sanitized");
       return false;
     }
-  }, [mountSubagentChildrenFromEvents]);
+  }, [mountSubagentChildrenFromEvents, ssh]);
 
   return {
     rehydrateSessionSlotFromHistory,

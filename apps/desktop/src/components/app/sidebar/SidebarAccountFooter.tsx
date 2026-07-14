@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { CreditCard, LogOut, Settings } from "lucide-react";
 import { Check, ChevronUpDown, Mail } from "@proliferate/ui/icons";
 import { useUsageSummary } from "@proliferate/cloud-sdk-react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import {
@@ -22,7 +23,6 @@ import { useJoinedOrganizationActivation } from "@/hooks/organizations/workflows
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { useOpenSupportReportWindow } from "@/hooks/support/workflows/use-open-support-report-window";
 import { useSupportMenuAction } from "@/hooks/support/derived/use-support-menu-action";
-import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 import type {
   OrganizationInvitationRecord,
@@ -46,7 +46,7 @@ export function SidebarAccountFooter() {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const authStatus = useAuthStore((state) => state.status);
-  const { openExternal } = useTauriShellActions();
+  const { openExternal } = useProductHost().links;
   const handleSignOut = useAppSidebarSignOutAction();
   const openShortcutsDialog = useKeyboardShortcutsDialogStore((state) => state.setOpen);
   const {

@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { DesktopRuntimeBridge } from "@proliferate/product-client/host/desktop-bridge";
+import type {
+  DesktopDiagnosticsBridge,
+  DesktopRuntimeBridge,
+} from "@proliferate/product-client/host/desktop-bridge";
 import type { AuthState } from "@proliferate/product-client/host/product-host";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 
@@ -14,9 +17,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/access/anyharness/runtime-bootstrap", () => ({
   bootstrapHarnessRuntime: mocks.bootstrapHarnessRuntime,
-}));
-vi.mock("@/lib/access/tauri/diagnostics", () => ({
-  logRendererEvent: mocks.logRendererEvent,
 }));
 vi.mock("@/lib/infra/measurement/boot-stall-diagnostics", () => ({
   recordBootDiagnostic: mocks.recordBootDiagnostic,
@@ -36,6 +36,10 @@ function makeRuntime(): DesktopRuntimeBridge {
   };
 }
 
+const diagnostics = {
+  logEvent: mocks.logRendererEvent,
+} as unknown as DesktopDiagnosticsBridge;
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.bootstrapHarnessRuntime.mockResolvedValue(undefined);
@@ -50,7 +54,7 @@ describe("useDesktopRuntimeBootstrapLifecycle", () => {
     const runtime = makeRuntime();
     const { rerender, unmount } = renderHook(
       ({ status }: { status: AuthState["status"] }) =>
-        useDesktopRuntimeBootstrapLifecycle(runtime, status),
+        useDesktopRuntimeBootstrapLifecycle(runtime, diagnostics, status),
       { initialProps: { status: "loading" as AuthState["status"] } },
     );
 
@@ -74,7 +78,7 @@ describe("useDesktopRuntimeBootstrapLifecycle", () => {
         status: AuthState["status"];
         unrelatedValue: number;
       }) =>
-        useDesktopRuntimeBootstrapLifecycle(runtimeValue, status),
+        useDesktopRuntimeBootstrapLifecycle(runtimeValue, diagnostics, status),
       {
         initialProps: {
           runtimeValue: runtime,
@@ -98,7 +102,7 @@ describe("useDesktopRuntimeBootstrapLifecycle", () => {
     const runtime = makeRuntime();
     const { rerender } = renderHook(
       ({ status }: { status: AuthState["status"] }) =>
-        useDesktopRuntimeBootstrapLifecycle(runtime, status),
+        useDesktopRuntimeBootstrapLifecycle(runtime, diagnostics, status),
       { initialProps: { status: "anonymous" as AuthState["status"] } },
     );
 
@@ -117,7 +121,7 @@ describe("useDesktopRuntimeBootstrapLifecycle", () => {
   it("revokes the published runtime state when its bridge lifecycle ends", async () => {
     const runtime = makeRuntime();
     const { unmount } = renderHook(() =>
-      useDesktopRuntimeBootstrapLifecycle(runtime, "authenticated"),
+      useDesktopRuntimeBootstrapLifecycle(runtime, diagnostics, "authenticated"),
     );
     await waitFor(() => expect(mocks.bootstrapHarnessRuntime).toHaveBeenCalledTimes(1));
     useHarnessConnectionStore.setState({

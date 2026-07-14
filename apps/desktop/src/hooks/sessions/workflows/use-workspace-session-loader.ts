@@ -18,7 +18,9 @@ import {
 } from "@/hooks/sessions/workflows/session-replacement-tombstones";
 
 export function useWorkspaceSessionLoader() {
-  const localRuntime = useProductHost().desktop?.runtime ?? null;
+  const desktop = useProductHost().desktop;
+  const localRuntime = desktop?.runtime ?? null;
+  const ssh = desktop?.ssh ?? null;
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const {
     getWorkspaceSessionCacheSnapshot,
@@ -68,12 +70,11 @@ export function useWorkspaceSessionLoader() {
     const loadedSessions = await fetchWorkspaceSessions(
       runtimeUrl,
       workspaceId,
-      requestHeaders || options?.measurementOperationId
-        ? {
-          requestHeaders,
-          measurementOperationId: options?.measurementOperationId,
-        }
-        : undefined,
+      {
+        requestHeaders,
+        measurementOperationId: options?.measurementOperationId,
+        ssh,
+      },
     );
     const sessions = filterReplacedSessionTombstones(
       workspaceId,
@@ -86,6 +87,7 @@ export function useWorkspaceSessionLoader() {
     getWorkspaceSessionCacheSnapshot,
     localRuntime,
     setWorkspaceSessions,
+    ssh,
   ]);
 
   return { ensureWorkspaceSessions };

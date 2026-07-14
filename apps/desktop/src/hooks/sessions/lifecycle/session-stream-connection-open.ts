@@ -1,4 +1,5 @@
 import type { SessionStreamHandle } from "@anyharness/sdk";
+import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
 import { openSessionStream } from "@/lib/access/anyharness/session-runtime";
 import {
   clearSessionStreamHandle,
@@ -35,6 +36,7 @@ import type {
 
 interface OpenSessionStreamConnectionInput {
   sessionId: string;
+  ssh: DesktopSshBridge | null;
   options: SessionStreamConnectOptions | undefined;
   createSessionStreamFlushController:
     UseSessionStreamConnectionActionsOptions["createSessionStreamFlushController"];
@@ -47,6 +49,7 @@ interface OpenSessionStreamConnectionInput {
 
 export async function openSessionStreamConnection({
   sessionId,
+  ssh,
   options,
   createSessionStreamFlushController,
   refreshSessionSlotMeta,
@@ -144,6 +147,7 @@ export async function openSessionStreamConnection({
     afterSeq,
     requestHeaders: options?.requestHeaders,
     measurementOperationId: streamMeasurementOperationId ?? undefined,
+    ssh,
     onHandle: (nextHandle) => {
       if (!isStillCurrent()) {
         logDevSessionRuntimeEvent(sessionId, "stream_handle_ignored_not_current", {});

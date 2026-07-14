@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
+import type { DesktopUpdaterBridge } from "@proliferate/product-client/host/desktop-bridge";
 import { useUpdaterStore } from "@/stores/updater/updater-store";
 import { useRunningAgentCount } from "@/hooks/app/lifecycle/use-running-agent-count";
-import { isTauriPackaged, relaunch } from "@/lib/access/tauri/updater";
 
 // Once the user picks "Restart when they finish", wait until the app is genuinely idle
 // before relaunching. The short debounce avoids relaunching on a transient gap between
@@ -13,7 +13,7 @@ const IDLE_DEBOUNCE_MS = 5_000;
  * "restart when they finish", this relaunches the moment no local sessions are running
  * (held stable for IDLE_DEBOUNCE_MS). Mount once, at the app root.
  */
-export function useUpdateRestartWatcher(): void {
+export function useUpdateRestartWatcher(updater: DesktopUpdaterBridge): void {
   const phase = useUpdaterStore((s) => s.phase);
   const restartWhenIdle = useUpdaterStore((s) => s.restartWhenIdle);
   const runningCount = useRunningAgentCount();
@@ -27,16 +27,16 @@ export function useUpdateRestartWatcher(): void {
       }
     };
 
-    const armed = isTauriPackaged() && restartWhenIdle && phase === "ready";
+    const armed = updater.isSupported() && restartWhenIdle && phase === "ready";
     if (!armed || runningCount > 0) {
       clear();
       return;
     }
 
     timerRef.current = window.setTimeout(() => {
-      void relaunch();
+      void updater.relaunch();
     }, IDLE_DEBOUNCE_MS);
 
     return clear;
-  }, [phase, restartWhenIdle, runningCount]);
+  }, [phase, restartWhenIdle, runningCount, updater]);
 }

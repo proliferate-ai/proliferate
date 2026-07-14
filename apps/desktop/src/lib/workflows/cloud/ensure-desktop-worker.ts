@@ -1,9 +1,5 @@
-import { enrollDesktopWorker, revokeDesktopWorker } from "@proliferate/cloud-sdk";
-import { getDesktopInstallId } from "@/lib/access/tauri/desktop-install-id";
-import {
-  ensureDesktopDispatchWorker,
-  stopDesktopDispatchWorker,
-} from "@/lib/access/tauri/cloud-worker";
+import { enrollDesktopWorker } from "@proliferate/cloud-sdk";
+import type { DesktopWorkerBridge } from "@proliferate/product-client/host/desktop-bridge";
 import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
 
 // ensureDesktopWorker and teardownDesktopWorker both mutate the single
@@ -33,16 +29,17 @@ function enqueueWorkerLifecycleTask<T>(task: () => Promise<T>): Promise<T> {
 // Resolves false when enrollment failed so the guard can retry.
 export function ensureDesktopWorker(
   organizationId: string | null,
+  worker: DesktopWorkerBridge,
   deps: EnsureDesktopWorkerDeps,
 ): Promise<boolean> {
   return enqueueWorkerLifecycleTask(async () => {
     try {
-      const desktopInstallId = await getDesktopInstallId();
+      const desktopInstallId = await worker.getInstallId();
       const { enrollmentToken } = await enrollDesktopWorker(
         desktopInstallId,
         organizationId,
       );
-      await ensureDesktopDispatchWorker({
+      await worker.ensure({
         targetId: desktopInstallId,
         enrollmentToken,
       });
@@ -69,35 +66,16 @@ export function ensureDesktopWorker(
   });
 }
 
-// Revokes this install's worker + gateway token server-side for the current
-// user. Must run while the auth session is still valid — sign-out
-// orchestration calls it BEFORE the session is cleared, because once the
-// store flips to anonymous the request can only fail with a local 401.
-// Best-effort; never blocks or throws.
-export async function revokeDesktopWorkerServerSide(): Promise<void> {
-  try {
-    const desktopInstallId = await getDesktopInstallId();
-    await revokeDesktopWorker(desktopInstallId);
-  } catch (error) {
-    captureTelemetryException(error, {
-      tags: {
-        action: "revoke-desktop-worker",
-        domain: "cloud",
-      },
-    });
-  }
-}
-
 // Local teardown of the desktop worker: stops the worker process and deletes
 // the integration-gateway dotfile so local sessions cannot keep using the
 // departed identity's integrations. Server-side revocation happens
-// separately via revokeDesktopWorkerServerSide (while the auth token is still
-// valid) and via the predecessor-retiring enrollment of the next identity.
+// separately in Desktop auth transport (while the auth token is still valid)
+// and via the predecessor-retiring enrollment of the next identity.
 // Never blocks or throws.
-export function teardownDesktopWorker(): Promise<void> {
+export function teardownDesktopWorker(worker: DesktopWorkerBridge): Promise<void> {
   return enqueueWorkerLifecycleTask(async () => {
     try {
-      await stopDesktopDispatchWorker();
+      await worker.stop();
     } catch (error) {
       captureTelemetryException(error, {
         tags: {

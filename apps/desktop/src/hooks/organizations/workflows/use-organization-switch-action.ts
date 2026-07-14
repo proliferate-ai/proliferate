@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useOrganizationSelectionActions } from "@/hooks/organizations/workflows/use-organization-selection-actions";
 import { useSessionDismissActions } from "@/hooks/sessions/workflows/use-session-dismiss-actions";
 import { collectRunningLocalSessionIds } from "@/lib/domain/sessions/running-local-sessions";
@@ -12,6 +13,7 @@ import { getSessionRecords } from "@/stores/sessions/session-records";
 // (user, org)-keyed enrollment guard observes the store change and re-enrolls
 // the worker under the new organization.
 export function useOrganizationSwitchAction() {
+  const worker = useProductHost().desktop?.worker ?? null;
   const { dismissSession } = useSessionDismissActions();
   const { setActiveOrganizationId } = useOrganizationSelectionActions();
   const [switchingOrganization, setSwitchingOrganization] = useState(false);
@@ -25,12 +27,14 @@ export function useOrganizationSwitchAction() {
         // be dismissed must not block rotating the worker identity.
         await dismissSession(sessionId);
       }
-      await teardownDesktopWorker();
+      if (worker !== null) {
+        await teardownDesktopWorker(worker);
+      }
       setActiveOrganizationId(organizationId);
     } finally {
       setSwitchingOrganization(false);
     }
-  }, [dismissSession, setActiveOrganizationId]);
+  }, [dismissSession, setActiveOrganizationId, worker]);
 
   return { switchOrganization, switchingOrganization };
 }

@@ -35,8 +35,8 @@ vi.mock("@/hooks/access/downloads/desktop-releases/use-desktop-release-manifest"
     return accessMocks.installedManifest;
   },
 }));
-vi.mock("@/hooks/access/tauri/use-shell-actions", () => ({
-  useTauriShellActions: () => ({ openExternal: accessMocks.openExternal }),
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => ({ links: { openExternal: accessMocks.openExternal } }),
 }));
 
 import { useReleaseNotice } from "./use-release-notice";

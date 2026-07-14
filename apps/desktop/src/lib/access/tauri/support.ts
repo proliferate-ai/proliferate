@@ -1,10 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
 import { isTauriDesktop } from "@/lib/access/tauri/diagnostics";
-import type {
-  SupportReportJob,
-} from "@/lib/domain/support/report-types";
-
-export const SUPPORT_REPORT_JOB_EVENT = "support://report-job";
 
 export async function stageSupportReportAttachment(input: {
   clientFileId: string;
@@ -39,18 +34,4 @@ export async function deleteStagedSupportReportAttachment(path: string): Promise
   }
 
   await invoke("delete_staged_support_report_attachment", { input: { path } });
-}
-
-/**
- * Listen for support report jobs enqueued in-process via DOM CustomEvent.
- * The modal dispatches these directly — no Tauri event relay needed.
- */
-export function listenSupportReportJobs(
-  handler: (job: SupportReportJob) => void,
-): Promise<() => void> {
-  const listener = (event: Event) => {
-    handler((event as CustomEvent<SupportReportJob>).detail);
-  };
-  window.addEventListener(SUPPORT_REPORT_JOB_EVENT, listener);
-  return Promise.resolve(() => window.removeEventListener(SUPPORT_REPORT_JOB_EVENT, listener));
 }

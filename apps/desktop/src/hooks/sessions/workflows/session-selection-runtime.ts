@@ -1,7 +1,10 @@
 import {
   getLatencyFlowRequestHeaders,
 } from "@/lib/infra/measurement/latency-flow";
-import type { DesktopRuntimeBridge } from "@proliferate/product-client/host/desktop-bridge";
+import type {
+  DesktopRuntimeBridge,
+  DesktopSshBridge,
+} from "@proliferate/product-client/host/desktop-bridge";
 import { parseTargetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
@@ -55,6 +58,7 @@ export async function fetchWorkspaceSessions(
   options?: {
     requestHeaders?: HeadersInit;
     measurementOperationId?: MeasurementOperationId | null;
+    ssh?: DesktopSshBridge | null;
   },
 ): Promise<WorkspaceSession[]> {
   const sessions = await fetchWorkspaceSessionSummaries(
@@ -65,6 +69,7 @@ export async function fetchWorkspaceSessions(
       category: "session.list",
       headers: options?.requestHeaders,
     }),
+    options?.ssh ?? null,
   );
   const visibleSessions = filterReplacedSessionTombstones(workspaceId, sessions) ?? [];
   return visibleSessions.map((session) => ({

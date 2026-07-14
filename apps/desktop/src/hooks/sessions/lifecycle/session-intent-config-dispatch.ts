@@ -1,4 +1,5 @@
 import type { Session } from "@anyharness/sdk";
+import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
 import type { useSetSessionConfigOptionMutation } from "@anyharness/sdk-react";
 import {
   getAuthoritativeConfigValue,
@@ -26,6 +27,7 @@ import { logLatency } from "@/lib/infra/measurement/debug-latency";
 type SetSessionConfigOptionMutation = ReturnType<typeof useSetSessionConfigOptionMutation>;
 
 export interface ConfigIntentDispatchDeps {
+  ssh?: DesktopSshBridge | null;
   getWorkspaceSurface: (
     workspaceId: string | null | undefined,
   ) => Parameters<typeof persistDefaultSessionModePreference>[0]["workspaceSurface"];
@@ -52,6 +54,7 @@ export async function dispatchConfigIntent(
   try {
     const { workspaceId, materializedSessionId } = await getSessionClientAndWorkspace(
       intent.clientSessionId,
+      deps.ssh ?? null,
     );
     useSessionIntentStore.getState().bindMaterializedSession(
       intent.clientSessionId,

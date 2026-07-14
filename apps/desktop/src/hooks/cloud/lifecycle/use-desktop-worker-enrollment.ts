@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { DesktopWorkerBridge } from "@proliferate/product-client/host/desktop-bridge";
 import { desktopWorkerStartupFailureCopy } from "@/copy/cloud/desktop-worker-copy";
 import {
   ensureDesktopWorker,
@@ -44,7 +45,7 @@ function identityKey(userId: string, organizationId: string | null): string {
 // and then re-enroll once the organizations query resolves on every cold
 // start. A stale selection 404s server-side and the guard re-enrolls once the
 // selection lifecycle falls back to a real membership.
-export function useDesktopWorkerEnrollment(): void {
+export function useDesktopWorkerEnrollment(worker: DesktopWorkerBridge): void {
   const authStatus = useAuthStore((state) => state.status);
   const authUserId = useAuthStore((state) => state.user?.id ?? null);
   const activeOrganizationId = useOrganizationStore(
@@ -61,7 +62,7 @@ export function useDesktopWorkerEnrollment(): void {
       // (any user) re-enrolls with a fresh identity.
       if (enrolledIdentityKey !== null) {
         enrolledIdentityKey = null;
-        void teardownDesktopWorker();
+        void teardownDesktopWorker(worker);
       }
       return;
     }
@@ -77,7 +78,7 @@ export function useDesktopWorkerEnrollment(): void {
     enrolledIdentityKey = nextIdentityKey;
     let cancelled = false;
     let retryTimer: number | null = null;
-    void ensureDesktopWorker(activeOrganizationId, {
+    void ensureDesktopWorker(activeOrganizationId, worker, {
       onFailure: (error) => {
         if (cancelled || enrolledIdentityKey !== nextIdentityKey) {
           return;
@@ -105,5 +106,5 @@ export function useDesktopWorkerEnrollment(): void {
         window.clearTimeout(retryTimer);
       }
     };
-  }, [authStatus, authUserId, activeOrganizationId, retryNonce, showToast]);
+  }, [authStatus, authUserId, activeOrganizationId, retryNonce, showToast, worker]);
 }

@@ -3,7 +3,7 @@ import {
   OPEN_TARGET_FALLBACK_ICON,
   OPEN_TARGET_ICON_DEFINITIONS,
 } from "@/config/open-targets";
-import type { OpenTargetIconId } from "@/lib/domain/open-targets/model";
+import type { OpenTargetIconId } from "@proliferate/product-client/host/desktop-bridge";
 
 type OpenTargetIconVariant = "inline" | "menu";
 

@@ -618,12 +618,19 @@ native menu commands, Dock attention, and Desktop zoom through the merged
 `apps/desktop`. The complete contract is
 [`web-desktop-client-unification-d1b.md`](web-desktop-client-unification-d1b.md).
 
-Desktop Local Runtime Adoption is the current implementation slice. It routes
-product-owned local AnyHarness discovery, restart, readiness, and connection
-through `host.desktop.runtime`, moves initial bootstrap under the existing
-Desktop-only product-lifecycle root, and leaves raw sidecar process ownership
-in Desktop. The complete living contract is
+Desktop Local Runtime Adoption is complete at PR #1167 merge
+`36e96e7bea1c409dfde1797b3a691003f82d8f5a`. It routes product-owned local
+AnyHarness discovery, restart, readiness, and connection through
+`host.desktop.runtime`, moves initial bootstrap under the existing Desktop-only
+product-lifecycle root, and leaves raw sidecar process ownership in Desktop.
+The complete contract is
 [`web-desktop-client-unification-d1c.md`](web-desktop-client-unification-d1c.md).
+
+Finish the Desktop Capability Boundary is the current implementation slice. It
+routes active product-owned files, credentials, SSH, scratch, updater, worker,
+diagnostics, support, links, and clipboard behavior through the mounted host
+while product source remains in Desktop. The complete living contract is
+[`web-desktop-client-unification-d1d.md`](web-desktop-client-unification-d1d.md).
 
 Related authoritative docs:
 

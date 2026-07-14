@@ -7,12 +7,8 @@ import {
   type ClipboardEvent,
   type DragEvent,
 } from "react";
-import {
-  SUPPORT_REPORT_JOB_EVENT,
-  deleteStagedSupportReportAttachment,
-  stageSupportReportAttachment,
-} from "@/lib/access/tauri/support";
-import { logRendererEvent } from "@/lib/access/tauri/diagnostics";
+import type { DesktopDiagnosticsBridge } from "@proliferate/product-client/host/desktop-bridge";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import type {
   SupportReportAttachmentPayload,
   SupportReportJob,
@@ -20,6 +16,7 @@ import type {
 import { useSupportReportSnapshot } from "@/hooks/support/derived/use-support-report-snapshot";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import type { SupportModalKind } from "@/stores/support/support-modal-store";
+import { enqueueSupportReportJob } from "@/lib/access/browser/support-report-job-events";
 
 export interface StagedAttachment extends SupportReportAttachmentPayload {
   id: string;
@@ -33,6 +30,7 @@ interface UseSupportModalStateOptions {
 }
 
 export function useSupportModalState({ kind, onClose }: UseSupportModalStateOptions) {
+  const diagnostics = useProductHost().desktop?.diagnostics ?? null;
   const snapshot = useSupportReportSnapshot({ source: "sidebar" });
   const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);
   const [message, setMessage] = useState("");
@@ -58,11 +56,11 @@ export function useSupportModalState({ kind, onClose }: UseSupportModalStateOpti
   // Write marker line into native log on mount so the log tail can be
   // bisected around the report. Owns the marker (the store stays pure state).
   useEffect(() => {
-    void logRendererEvent({
+    void diagnostics?.logEvent({
       source: "support_report",
       message: `support-report-opened kind=${kind} jobId=${jobIdRef.current}`,
     }).catch(() => {});
-  }, [kind]);
+  }, [diagnostics, kind]);
 
   const stageFiles = useCallback(async (files: FileList | File[]) => {
     const nextFiles = Array.from(files);
@@ -71,12 +69,14 @@ export function useSupportModalState({ kind, onClose }: UseSupportModalStateOpti
     }
     setStagingError(null);
     try {
-      const staged = await Promise.all(nextFiles.map(stageAttachment));
+      const staged = await Promise.all(
+        nextFiles.map((file) => stageAttachment(file, diagnostics)),
+      );
       setAttachments((current) => [...current, ...staged]);
     } catch (error) {
       setStagingError(error instanceof Error ? error.message : "Failed to add attachment.");
     }
-  }, []);
+  }, [diagnostics]);
 
   const handleAttachmentPaste = useCallback((event: ClipboardEvent<HTMLElement>) => {
     const files = extractAttachmentTransferFiles(event.clipboardData);
@@ -120,7 +120,7 @@ export function useSupportModalState({ kind, onClose }: UseSupportModalStateOpti
       URL.revokeObjectURL(attachment.previewUrl);
     }
     if (attachment.stagedPath) {
-      void deleteStagedSupportReportAttachment(attachment.stagedPath);
+      void diagnostics?.deleteAttachment(attachment.stagedPath);
     }
   }
 
@@ -174,9 +174,7 @@ export function useSupportModalState({ kind, onClose }: UseSupportModalStateOpti
       // listener is the single owner of persistence + draining. Persisting
       // here too would make the listener's persist dedupe and silently skip
       // draining, so the report would never upload until the next app launch.
-      window.dispatchEvent(
-        new CustomEvent(SUPPORT_REPORT_JOB_EVENT, { detail: job }),
-      );
+      enqueueSupportReportJob(job);
       onClose();
     } catch (error) {
       submittingRef.current = false;
@@ -192,7 +190,7 @@ export function useSupportModalState({ kind, onClose }: UseSupportModalStateOpti
         URL.revokeObjectURL(attachment.previewUrl);
       }
       if (attachment.stagedPath) {
-        void deleteStagedSupportReportAttachment(attachment.stagedPath).catch(() => {});
+        void diagnostics?.deleteAttachment(attachment.stagedPath).catch(() => {});
       }
     }
     onClose();
@@ -229,14 +227,19 @@ function scopeFallbackFileName(file: File): string {
   return file.name || fallbackAttachmentFileName(file.type);
 }
 
-async function stageAttachment(file: File): Promise<StagedAttachment> {
+async function stageAttachment(
+  file: File,
+  diagnostics: DesktopDiagnosticsBridge | null,
+): Promise<StagedAttachment> {
   const dataBase64 = await fileToBase64(file);
   const id = crypto.randomUUID();
-  const stagedPath = await stageSupportReportAttachment({
-    clientFileId: id,
-    fileName: scopeFallbackFileName(file),
-    dataBase64,
-  });
+  const stagedPath = diagnostics
+    ? await diagnostics.stageAttachment({
+        clientFileId: id,
+        fileName: scopeFallbackFileName(file),
+        dataBase64,
+      })
+    : null;
 
   // Create preview URL for image types.
   let previewUrl: string | null = null;

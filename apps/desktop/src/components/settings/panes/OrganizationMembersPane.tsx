@@ -5,12 +5,12 @@ import { OrganizationMembersSection } from "@/components/settings/panes/organiza
 import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
 import { useOrganizationActions } from "@/hooks/access/cloud/organizations/use-organization-actions";
 import { useOrganizationInvitations } from "@/hooks/access/cloud/organizations/use-organization-invitations";
 import { useOrganizationJoinLink } from "@/hooks/access/cloud/organizations/use-organization-join-link";
 import { useOrganizationMembers } from "@/hooks/access/cloud/organizations/use-organization-members";
-import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION } from "@/config/settings";
 import {
@@ -40,7 +40,7 @@ export function OrganizationMembersPane() {
   const canManage = admin.isAdmin || TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION;
   const canManageOwners = admin.isOwner || TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION;
   const joinLinkQuery = useOrganizationJoinLink(activeOrganizationId, canManage);
-  const { copyText } = useTauriShellActions();
+  const { writeText } = useProductHost().clipboard;
   const showToast = useToastStore((state) => state.show);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
@@ -63,7 +63,7 @@ export function OrganizationMembersPane() {
       if (!link?.url) {
         throw new Error("Invite link could not be loaded.");
       }
-      await copyText(link.url);
+      await writeText(link.url);
       showToast("Invite link copied.", "info");
     } catch {
       showToast("Could not copy invite link.");

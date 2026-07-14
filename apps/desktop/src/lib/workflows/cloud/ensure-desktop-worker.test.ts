@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { DesktopWorkerBridge } from "@proliferate/product-client/host/desktop-bridge";
 
 const sdkMocks = vi.hoisted(() => ({
   enrollDesktopWorker: vi.fn(),
-  revokeDesktopWorker: vi.fn(),
 }));
 const tauriMocks = vi.hoisted(() => ({
   getDesktopInstallId: vi.fn(),
@@ -12,20 +12,21 @@ const tauriMocks = vi.hoisted(() => ({
 
 vi.mock("@proliferate/cloud-sdk", () => ({
   enrollDesktopWorker: sdkMocks.enrollDesktopWorker,
-  revokeDesktopWorker: sdkMocks.revokeDesktopWorker,
-}));
-vi.mock("@/lib/access/tauri/desktop-install-id", () => ({
-  getDesktopInstallId: tauriMocks.getDesktopInstallId,
-}));
-vi.mock("@/lib/access/tauri/cloud-worker", () => ({
-  ensureDesktopDispatchWorker: tauriMocks.ensureDesktopDispatchWorker,
-  stopDesktopDispatchWorker: tauriMocks.stopDesktopDispatchWorker,
 }));
 vi.mock("@/lib/integrations/telemetry/client", () => ({
   captureTelemetryException: vi.fn(),
 }));
 
-import { ensureDesktopWorker } from "./ensure-desktop-worker";
+import {
+  ensureDesktopWorker,
+  teardownDesktopWorker,
+} from "./ensure-desktop-worker";
+
+const worker = {
+  getInstallId: tauriMocks.getDesktopInstallId,
+  ensure: tauriMocks.ensureDesktopDispatchWorker,
+  stop: tauriMocks.stopDesktopDispatchWorker,
+} as DesktopWorkerBridge;
 
 describe("ensureDesktopWorker", () => {
   beforeEach(() => {
@@ -40,7 +41,7 @@ describe("ensureDesktopWorker", () => {
 
   it("enrolls with the caller-supplied organization id", async () => {
     await expect(
-      ensureDesktopWorker("org-1", { onFailure: vi.fn() }),
+      ensureDesktopWorker("org-1", worker, { onFailure: vi.fn() }),
     ).resolves.toBe(true);
 
     expect(sdkMocks.enrollDesktopWorker).toHaveBeenCalledWith("install-1", "org-1");
@@ -52,7 +53,7 @@ describe("ensureDesktopWorker", () => {
 
   it("enrolls org-less users with a null organization id", async () => {
     await expect(
-      ensureDesktopWorker(null, { onFailure: vi.fn() }),
+      ensureDesktopWorker(null, worker, { onFailure: vi.fn() }),
     ).resolves.toBe(true);
 
     expect(sdkMocks.enrollDesktopWorker).toHaveBeenCalledWith("install-1", null);
@@ -63,7 +64,7 @@ describe("ensureDesktopWorker", () => {
     const onFailure = vi.fn();
     sdkMocks.enrollDesktopWorker.mockRejectedValue(error);
 
-    await expect(ensureDesktopWorker(null, { onFailure })).resolves.toBe(false);
+    await expect(ensureDesktopWorker(null, worker, { onFailure })).resolves.toBe(false);
 
     expect(tauriMocks.ensureDesktopDispatchWorker).not.toHaveBeenCalled();
     expect(onFailure).toHaveBeenCalledWith(error);
@@ -73,11 +74,19 @@ describe("ensureDesktopWorker", () => {
     sdkMocks.enrollDesktopWorker.mockRejectedValue(new Error("offline"));
 
     await expect(
-      ensureDesktopWorker(null, {
+      ensureDesktopWorker(null, worker, {
         onFailure: () => {
           throw new Error("toast unavailable");
         },
       }),
     ).resolves.toBe(false);
+  });
+
+  it("stops the local worker through the bridge", async () => {
+    tauriMocks.stopDesktopDispatchWorker.mockResolvedValue(undefined);
+
+    await teardownDesktopWorker(worker);
+
+    expect(tauriMocks.stopDesktopDispatchWorker).toHaveBeenCalledTimes(1);
   });
 });

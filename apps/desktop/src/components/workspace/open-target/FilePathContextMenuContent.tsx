@@ -5,7 +5,7 @@ import { ChevronRight, ExternalLink } from "@proliferate/ui/icons";
 import { OpenTargetIcon } from "@/components/workspace/open-target/OpenTargetIcon";
 import { POPOVER_SURFACE_CLASS } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import type { OpenTarget } from "@/lib/domain/open-targets/model";
+import type { OpenTarget } from "@proliferate/product-client/host/desktop-bridge";
 
 export type FilePathContextMenuTarget = Pick<OpenTarget, "id" | "label" | "iconId" | "kind">;
 

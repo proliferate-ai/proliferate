@@ -1,8 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { configuredAgentEnvVarsKey } from "./query-keys";
-import {
-  useTauriCredentialsActions,
-} from "@/hooks/access/tauri/use-credentials-actions";
 import { useAgentCredentialsStore } from "@/stores/agents/agent-credentials-store";
 
 const EMPTY_CONFIGURED_ENV_VARS: string[] = [];
@@ -19,16 +17,15 @@ async function readConfiguredEnvVarNames(
 
 export function useLocalAgentCredentials() {
   const queryClient = useQueryClient();
-  const {
-    deleteEnvVarSecret,
-    listConfiguredEnvVarNames,
-    setEnvVarSecret,
-  } = useTauriCredentialsActions();
+  const credentials = useProductHost().desktop?.localCredentials ?? null;
   const markRestartRequired = useAgentCredentialsStore((state) => state.markRestartRequired);
 
   const configuredEnvVarsQuery = useQuery({
     queryKey: configuredAgentEnvVarsKey(),
-    queryFn: () => readConfiguredEnvVarNames(listConfiguredEnvVarNames),
+    queryFn: () => credentials
+      ? readConfiguredEnvVarNames(credentials.listConfigured)
+      : Promise.resolve(EMPTY_CONFIGURED_ENV_VARS),
+    enabled: credentials !== null,
     staleTime: Infinity,
   });
 
@@ -40,7 +37,10 @@ export function useLocalAgentCredentials() {
 
   const saveCredentialMutation = useMutation({
     mutationFn: async ({ name, value }: { name: string; value: string }) => {
-      await setEnvVarSecret(name, value);
+      if (!credentials) {
+        throw new Error("Local agent credentials are only available in Desktop.");
+      }
+      await credentials.set(name, value);
     },
     onSuccess: async () => {
       await invalidateConfiguredEnvVars();
@@ -50,7 +50,10 @@ export function useLocalAgentCredentials() {
 
   const deleteCredentialMutation = useMutation({
     mutationFn: async (name: string) => {
-      await deleteEnvVarSecret(name);
+      if (!credentials) {
+        throw new Error("Local agent credentials are only available in Desktop.");
+      }
+      await credentials.remove(name);
     },
     onSuccess: async () => {
       await invalidateConfiguredEnvVars();

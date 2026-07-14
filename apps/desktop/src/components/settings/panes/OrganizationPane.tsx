@@ -6,6 +6,7 @@ import {
 } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   useGitHubAppInstallationStatus,
   useStartGitHubAppInstallation,
@@ -26,7 +27,6 @@ import {
   useTeamCheckoutActions,
 } from "@/hooks/access/cloud/billing/use-team-checkout";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
-import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { TEAM_UPGRADE_GATE_COPY } from "@/copy/billing/upgrade-gate-copy";
 import { organizationLogoImageValidationError } from "@/lib/domain/organizations/logo-image";
 import { useAuthStore } from "@/stores/auth/auth-store";
@@ -48,7 +48,7 @@ export function OrganizationPane() {
     organizations,
     organizationsQuery,
   } = useActiveOrganization();
-  const { openExternal } = useTauriShellActions();
+  const { openExternal } = useProductHost().links;
   const actions = useOrganizationActions(activeOrganizationId);
   const [settingsName, setSettingsName] = useState("");
   const [settingsLogoImage, setSettingsLogoImage] = useState<string | null>(null);

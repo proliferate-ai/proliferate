@@ -10,7 +10,6 @@ import { useWorkspaceCollectionsInvalidationActions } from "@/hooks/workspaces/c
 import { useWorkspaceCollectionsMutationCacheActions } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { getHomeDir } from "@/lib/access/tauri/shell";
 import {
   createWorkspace,
   createWorktreeWorkspace,
@@ -53,7 +52,9 @@ interface RuntimeBoundResult<T> {
 }
 
 export function useWorkspaceActions() {
-  const localRuntime = useProductHost().desktop?.runtime ?? null;
+  const desktop = useProductHost().desktop;
+  const localRuntime = desktop?.runtime ?? null;
+  const files = desktop?.files ?? null;
   const {
     upsertLocalWorkspaceInWorkspaceCollections,
   } = useWorkspaceCollectionsMutationCacheActions();
@@ -228,7 +229,10 @@ export function useWorkspaceActions() {
           workspace.repoRootId === input.repoRootId && workspace.kind === "worktree"
         ) ?? null;
 
-      const homeDir = await getHomeDir();
+      if (!files) {
+        throw new Error("Local file access is not available.");
+      }
+      const homeDir = await files.getHomeDirectory();
       const userPreferences = useUserPreferencesStore.getState();
       const authUser = useAuthStore.getState().user;
       const repoPreferences = useRepoPreferencesStore.getState();

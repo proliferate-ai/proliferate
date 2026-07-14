@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useSetSessionConfigOptionMutation } from "@anyharness/sdk-react";
 import { resolveStatusFromExecutionSummary } from "@proliferate/product-domain/sessions/activity";
 import { resolveFallbackSessionModelId } from "@/lib/domain/sessions/model-fallback";
@@ -10,12 +11,13 @@ import {
 import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 
 export function useSessionModelFallbackAction() {
+  const ssh = useProductHost().desktop?.ssh ?? null;
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
   const setSessionConfigOptionMutation = useSetSessionConfigOptionMutation();
 
   return useCallback(async (sessionId: string, fallbackModelId: string) => {
     const { workspaceId, materializedSessionId } =
-      await getSessionClientAndWorkspace(sessionId);
+      await getSessionClientAndWorkspace(sessionId, ssh);
     const response = await setSessionConfigOptionMutation.mutateAsync({
       workspaceId,
       sessionId: materializedSessionId,
@@ -61,5 +63,5 @@ export function useSessionModelFallbackAction() {
     });
 
     return response;
-  }, [setSessionConfigOptionMutation, upsertWorkspaceSessionRecord]);
+  }, [setSessionConfigOptionMutation, ssh, upsertWorkspaceSessionRecord]);
 }

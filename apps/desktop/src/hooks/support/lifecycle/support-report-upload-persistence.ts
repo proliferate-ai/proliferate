@@ -1,7 +1,4 @@
 import type { MutableRefObject } from "react";
-import {
-  deleteStagedSupportReportAttachment,
-} from "@/lib/access/tauri/support";
 import type {
   SupportReportJob,
 } from "@/lib/domain/support/report-types";
@@ -103,10 +100,13 @@ export function readPersistedJobs(): PersistedSupportReportJob[] {
   }
 }
 
-export async function deleteSupportReportJobAttachments(job: SupportReportJob): Promise<void> {
+export async function deleteSupportReportJobAttachments(
+  job: SupportReportJob,
+  deleteAttachment?: (path: string) => Promise<void>,
+): Promise<void> {
   await Promise.all(job.attachments.map(async (attachment) => {
-    if (attachment.stagedPath) {
-      await deleteStagedSupportReportAttachment(attachment.stagedPath).catch(() => {});
+    if (attachment.stagedPath && deleteAttachment) {
+      await deleteAttachment(attachment.stagedPath).catch(() => {});
     }
   }));
 }

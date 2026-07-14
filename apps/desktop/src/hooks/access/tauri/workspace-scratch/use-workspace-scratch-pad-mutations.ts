@@ -1,10 +1,10 @@
 import { useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  writeWorkspaceScratchPad,
-  type WorkspaceScratchPadRecord,
-  type WorkspaceScratchPadWriteResult,
-} from "@/lib/access/tauri/workspace-scratch";
+import type {
+  ScratchRecord,
+  ScratchWriteResult,
+} from "@proliferate/product-client/host/desktop-bridge";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { workspaceScratchPadKey } from "@/hooks/access/tauri/workspace-scratch/query-keys";
 
 interface WorkspaceScratchPadWriteInput {
@@ -14,13 +14,19 @@ interface WorkspaceScratchPadWriteInput {
 
 export function useWorkspaceScratchPadMutations(workspaceKey: string | null | undefined) {
   const queryClient = useQueryClient();
+  const scratch = useProductHost().desktop?.scratch ?? null;
 
   const writeMutation = useMutation<
-    WorkspaceScratchPadWriteResult,
+    ScratchWriteResult,
     Error,
     WorkspaceScratchPadWriteInput
   >({
-    mutationFn: ({ workspaceKey: key, content }) => writeWorkspaceScratchPad(key, content),
+    mutationFn: ({ workspaceKey: key, content }) => {
+      if (!scratch) {
+        throw new Error("Workspace scratch is only available in Desktop.");
+      }
+      return scratch.write(key, content);
+    },
   });
   const { mutateAsync } = writeMutation;
 
@@ -41,7 +47,7 @@ export function useWorkspaceScratchPadMutations(workspaceKey: string | null | un
     if (!key) {
       return;
     }
-    queryClient.setQueryData<WorkspaceScratchPadRecord>(
+    queryClient.setQueryData<ScratchRecord>(
       workspaceScratchPadKey(key),
       {
         content,

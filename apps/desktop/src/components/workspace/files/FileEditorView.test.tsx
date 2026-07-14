@@ -18,6 +18,7 @@ const gitDiffQuery = vi.fn();
 const workspaceFilesQuery = vi.fn();
 const searchWorkspaceFilesQuery = vi.fn();
 const openFileMock = vi.fn();
+const writeTextMock = vi.fn(async () => undefined);
 let workspaceFileContext = {
   workspaceUiKey: "workspace-1",
   materializedWorkspaceId: "workspace-1",
@@ -26,6 +27,10 @@ let workspaceFileContext = {
 
 vi.mock("@/components/content/ui/DiffViewer", () => ({
   DiffViewer: () => createElement("div", null, "diff rendered"),
+}));
+
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => ({ clipboard: { writeText: writeTextMock } }),
 }));
 
 vi.mock("@/hooks/ui/highlighting/use-highlighted-lines", () => ({
@@ -104,6 +109,7 @@ describe("FileEditorView", () => {
     searchWorkspaceFilesQuery.mockReset();
     gitStatusQuery.mockReset();
     openFileMock.mockReset();
+    writeTextMock.mockClear();
     workspaceFileContext = {
       workspaceUiKey: "workspace-1",
       materializedWorkspaceId: "workspace-1",
@@ -236,6 +242,8 @@ describe("FileEditorView", () => {
     expect(container.querySelector(".file-source-scroll")).toBeTruthy();
     fireEvent.click(screen.getByLabelText("File viewer options"));
     expect(screen.getByText("Word wrap")).toBeTruthy();
+    fireEvent.click(screen.getByText("Copy content"));
+    expect(writeTextMock).toHaveBeenCalledWith("{\"ok\":true}");
   });
 
   it("virtualizes large source files instead of mounting every line", () => {

@@ -1,4 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
+import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import type {
   ContentPart,
   NormalizedSessionControl,
@@ -43,6 +45,7 @@ export function usePlanHandoffWorkflow({
   plan: PromptPlanAttachmentDescriptor;
   onCompleted: () => void;
 }) {
+  const ssh = useProductHost().desktop?.ssh ?? null;
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const connectionState = useHarnessConnectionStore((state) => state.connectionState);
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
@@ -153,6 +156,7 @@ export function usePlanHandoffWorkflow({
             sessionId,
             currentCollaborationModeForSession(sessionId),
             setSessionConfigOptionMutation.mutateAsync,
+            ssh,
           ),
         promptSession,
         dismissSession,
@@ -272,13 +276,17 @@ async function applyPlanHandoffPrePromptConfigChanges(
   sessionId: string,
   collaborationMode: NormalizedSessionControl | null,
   setSessionConfigOption: ReturnType<typeof useSetSessionConfigOptionMutation>["mutateAsync"],
+  ssh: DesktopSshBridge | null,
 ): Promise<void> {
   const changes = resolvePlanHandoffPrePromptConfigChanges(collaborationMode);
   if (changes.length === 0) {
     return;
   }
 
-  const { materializedSessionId, workspaceId } = await getSessionClientAndWorkspace(sessionId);
+  const { materializedSessionId, workspaceId } = await getSessionClientAndWorkspace(
+    sessionId,
+    ssh,
+  );
   for (const change of changes) {
     const response = await setSessionConfigOption({
       workspaceId,

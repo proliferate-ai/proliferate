@@ -3,11 +3,11 @@ import type {
   AuthState,
 } from "@proliferate/product-client/host/product-host";
 import type {
+  DesktopDiagnosticsBridge,
   DesktopRuntimeBridge,
 } from "@proliferate/product-client/host/desktop-bridge";
 
 import { bootstrapHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap";
-import { logRendererEvent } from "@/lib/access/tauri/diagnostics";
 import {
   recordBootDiagnostic,
 } from "@/lib/infra/measurement/boot-stall-diagnostics";
@@ -20,6 +20,7 @@ import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-
 
 export function useDesktopRuntimeBootstrapLifecycle(
   runtime: DesktopRuntimeBridge,
+  diagnostics: DesktopDiagnosticsBridge,
   authStatus: AuthState["status"],
 ): void {
   const authReady = authStatus !== "loading";
@@ -31,13 +32,14 @@ export function useDesktopRuntimeBootstrapLifecycle(
 
     const runtimeBootstrapStartedAt = startStartupTimer();
     const controller = new AbortController();
-    recordAppRendererEvent("app.runtime_bootstrap.start");
+    recordAppRendererEvent(diagnostics, "app.runtime_bootstrap.start");
     logStartupDebug("app.runtime_bootstrap.start", { authStatus: "ready" });
     void bootstrapHarnessRuntime(runtime, controller.signal).finally(() => {
       if (controller.signal.aborted) {
         return;
       }
       recordAppRendererEvent(
+        diagnostics,
         "app.runtime_bootstrap.completed",
         elapsedStartupMs(runtimeBootstrapStartedAt),
       );
@@ -50,15 +52,19 @@ export function useDesktopRuntimeBootstrapLifecycle(
       controller.abort();
       useHarnessConnectionStore.getState().resetConnectionState();
     };
-  }, [authReady, runtime]);
+  }, [authReady, diagnostics, runtime]);
 }
 
-function recordAppRendererEvent(message: string, elapsedMs?: number): void {
+function recordAppRendererEvent(
+  diagnostics: DesktopDiagnosticsBridge,
+  message: string,
+  elapsedMs?: number,
+): void {
   recordBootDiagnostic(
     `app_bootstrap.${message}`,
     elapsedMs === undefined ? undefined : { elapsedMs },
   );
-  void logRendererEvent({
+  void diagnostics.logEvent({
     source: "app_bootstrap",
     message,
     elapsedMs,

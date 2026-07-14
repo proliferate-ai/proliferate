@@ -63,19 +63,19 @@ const cloudSupportMocks = vi.hoisted(() => ({
 }));
 
 const diagnosticsMocks = vi.hoisted(() => ({
-  collectSupportDiagnostics: vi.fn(async () => null),
-  logRendererEvent: vi.fn(async () => {}),
+  collectSupportBundle: vi.fn(async () => null),
+  logEvent: vi.fn(async () => {}),
+  deleteAttachment: vi.fn(async () => {}),
+  readAttachment: vi.fn(async () => ""),
 }));
 
 const supportAccessMocks = vi.hoisted(() => ({
-  deleteStagedSupportReportAttachment: vi.fn(async () => {}),
   listenSupportReportJobs: vi.fn(),
   listeners: [] as Array<{
     active: boolean;
     handler: (job: SupportReportJob) => void;
     unlisten: ReturnType<typeof vi.fn>;
   }>,
-  readStagedSupportReportAttachment: vi.fn(async () => ""),
 }));
 
 const uploadWorkflowMocks = vi.hoisted(() => ({
@@ -85,6 +85,7 @@ const uploadWorkflowMocks = vi.hoisted(() => ({
 }));
 
 const telemetryMocks = vi.hoisted(() => ({
+  getSupportReportReleaseId: vi.fn(() => "proliferate-desktop@0.0.0+test"),
   getSupportReportTelemetryRefs: vi.fn(() => ({})),
   trackProductEvent: vi.fn(),
 }));
@@ -105,9 +106,11 @@ vi.mock("@anyharness/sdk-react", () => ({
 
 vi.mock("@proliferate/cloud-sdk/client/support", () => cloudSupportMocks);
 
-vi.mock("@/lib/access/tauri/diagnostics", () => diagnosticsMocks);
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => ({ desktop: { diagnostics: diagnosticsMocks } }),
+}));
 
-vi.mock("@/lib/access/tauri/support", () => supportAccessMocks);
+vi.mock("@/lib/access/browser/support-report-job-events", () => supportAccessMocks);
 
 vi.mock("@/lib/access/anyharness/debug-client", () => ({
   createSessionDebugClient: vi.fn(() => ({})),
@@ -244,7 +247,7 @@ describe("useSupportReportUploadQueue", () => {
     renderHook(() => useSupportReportUploadQueue());
 
     await waitFor(() => {
-      expect(diagnosticsMocks.logRendererEvent).toHaveBeenCalledWith({
+      expect(diagnosticsMocks.logEvent).toHaveBeenCalledWith({
         source: "support_report_upload",
         message: "failed.auth_required",
       });

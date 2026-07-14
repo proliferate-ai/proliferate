@@ -3,7 +3,7 @@ import { ChevronDown } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { OpenTargetIcon } from "@/components/workspace/open-target/OpenTargetIcon";
 import { OpenTargetMenu, TargetIcon } from "./OpenTargetMenu";
-import type { OpenTarget } from "@/hooks/access/tauri/use-shell-actions";
+import type { OpenTarget } from "@proliferate/product-client/host/desktop-bridge";
 
 interface SplitButtonProps {
   icon?: ReactNode;
@@ -11,7 +11,7 @@ interface SplitButtonProps {
   showLabel?: boolean;
   onClick?: () => void;
   targets?: OpenTarget[];
-  onTargetClick?: (targetId: string) => void;
+  onTargetClick?: (target: OpenTarget) => void;
   preferredTarget?: OpenTarget | null;
 }
 
@@ -56,7 +56,7 @@ export function SplitButton({
   return (
     <OpenTargetMenu
       targets={targets}
-      onTargetClick={(target) => onTargetClick(target.id)}
+      onTargetClick={onTargetClick}
       align="right"
       trigger={({ toggle, isOpen }) => (
         <div className="flex">
