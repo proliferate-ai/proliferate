@@ -729,6 +729,9 @@ mod tests {
     use rusqlite::Connection;
 
     use super::table_columns;
+    use crate::persistence::custom_migration_registry_tests::{
+        mark_foreign_key_migrations_applied, table_column_names,
+    };
     use crate::persistence::migrations::{run_migrations, MIGRATIONS};
 
     #[test]
@@ -932,6 +935,7 @@ mod tests {
             [],
         )
         .expect("mark 0016 custom migration applied");
+        mark_foreign_key_migrations_applied(&conn);
 
         run_migrations(&mut conn).expect("run migrations");
 
@@ -976,6 +980,7 @@ mod tests {
             [],
         )
         .expect("mark 0016 custom migration applied");
+        mark_foreign_key_migrations_applied(&conn);
 
         run_migrations(&mut conn).expect("run migrations");
 
@@ -1059,6 +1064,7 @@ mod tests {
             conn.execute("INSERT INTO _migrations (name) VALUES (?1)", [name])
                 .expect("mark sql migration applied");
         }
+        mark_foreign_key_migrations_applied(&conn);
 
         run_migrations(&mut conn).expect("run migrations");
 
@@ -1093,14 +1099,5 @@ mod tests {
         assert_eq!(backfilled.1, "claude");
         assert_eq!(backfilled.2, "/tmp/backfill.output");
         assert_eq!(backfilled.3, "2026-04-11T00:01:00Z");
-    }
-
-    fn table_column_names(conn: &Connection, table_name: &str) -> Vec<String> {
-        let pragma = format!("PRAGMA table_info({table_name})");
-        let mut stmt = conn.prepare(&pragma).expect("prepare pragma");
-        stmt.query_map([], |row| row.get::<_, String>(1))
-            .expect("query columns")
-            .collect::<Result<_, _>>()
-            .expect("collect columns")
     }
 }

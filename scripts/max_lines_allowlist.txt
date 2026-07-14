@@ -26,7 +26,7 @@ anyharness/crates/anyharness-lib/src/domains/sessions/runtime/tests.rs 680 exist
 anyharness/crates/anyharness-lib/src/domains/workspaces/inventory.rs 653 runtime pressure worktree inventory joins and tests
 anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight.rs 613 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/live/sessions/probe.rs 613 catalog probe with per-harness model-source fallbacks
-anyharness/crates/anyharness-lib/src/persistence/custom_migrations.rs 1106 custom migration with legacy schema coverage
+anyharness/crates/anyharness-lib/src/persistence/custom_migrations.rs 1103 custom migration with legacy schema coverage
 anyharness/sdk-react/src/hooks/sessions.ts 723 existing SDK React oversized file
 cloud/sdk/src/types/generated.ts 773 existing generated cloud SDK type surface (+billing budget-limit/usage types)
 anyharness/sdk/src/reducer/__tests__/transcript.test.ts 1817 existing SDK oversized test file
