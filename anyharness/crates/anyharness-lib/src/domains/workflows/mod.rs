@@ -1,5 +1,5 @@
 //! The `workflows` product domain: durable one-prompt workflow execution in an
-//! existing workspace (spec `features/workflow-runs.md`). A workflow run may
+//! existing workspace (spec `systems/product/workflows/runs.md`). A workflow run may
 //! own several sessions in later slices, so it is a top-level domain rather
 //! than a sessions subdomain.
 

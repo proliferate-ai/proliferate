@@ -123,25 +123,15 @@ catalog path. Cloud product catalogs may be newer than these bundled runtime
 inputs; AnyHarness still validates creation against what the target runtime can
 actually launch.
 
-The two bundled inputs converge on different tracks (see
-`specs/tbd/anyharness-self-update-v1.md`). The **catalog document** syncs live
-via heartbeat: a sandbox worker sees the server's `catalogVersion` diff, fetches
-the new document, and pushes it to the running runtime — no binary swap needed,
-so new models/metadata reach an existing sandbox on the fly. `registry.json`
-(install/launch/auth recipes) rides the **binary only**: it is `include_str!`'d
-into the runtime, so a new registry ships iff a new binary ships. In a cloud
-sandbox that binary swap now happens in place (worker-owned self-update), so new
-recipes no longer require a new template — but they still arrive only with a
-binary, not live like the catalog document.
-
-The two inputs converge on **different tracks**. The `catalog.json` *document*
-syncs **live**: the cloud worker watches the heartbeat `catalogVersion`, fetches
-the newer document, and `PUT`s it to the runtime, which validates and reconciles
-without a binary change. `registry.json` (install/launch/auth recipes) rides the
-**binary only** — it is `include_str!`'d, so a new registry ships iff a new
-runtime binary ships. In cloud sandboxes the binary itself can now be swapped in
-place (worker-owned; see `specs/tbd/anyharness-self-update-v1.md`); desktop gets
-a new binary only via the app bundle.
+The two inputs converge on different tracks. The `catalog.json` document syncs live:
+the cloud worker watches the heartbeat `catalogVersion`, fetches the newer
+document, and `PUT`s it to the runtime, which validates and reconciles without
+a binary change. `registry.json` (install/launch/auth recipes) rides
+the binary only: it is `include_str!`'d, so a new registry ships iff a new
+runtime binary ships. In cloud sandboxes the binary itself can be swapped in
+place by the Worker (see
+`specs/codebase/structures/proliferate-worker/guides/lifecycle.md`); Desktop
+gets a new binary only via the app bundle.
 
 ### Resolution Flow
 

@@ -2,7 +2,7 @@
 // Ledger-driven import codemod for the Desktop -> @proliferate/product-client move.
 //
 // Reads the checked move ledger
-// (specs/codebase/features/web-desktop-product-client-move-ledger.md) and, for
+// (specs/codebase/systems/product/clients/web-desktop-unification/move-ledger.md) and, for
 // every module classified `move`, rewrites the Desktop-local import/export
 // specifiers (`@/...` alias and relative `./`,`../`) that resolve to another
 // `move`-classified JS/TS module into package-private `#product/*` specifiers.
@@ -294,7 +294,7 @@ function main() {
   const srcRoot = opts.src ? path.resolve(opts.src) : path.join(REPO_ROOT, "apps", "desktop", "src");
   const ledgerPath = opts.ledger
     ? path.resolve(opts.ledger)
-    : path.join(REPO_ROOT, "specs", "codebase", "features", "web-desktop-product-client-move-ledger.md");
+    : path.join(REPO_ROOT, "specs", "codebase", "systems", "product", "clients", "web-desktop-unification", "move-ledger.md");
 
   if (!fs.existsSync(srcRoot)) throw new MigrationError(`source root not found: ${srcRoot}`);
   const ledger = parseLedger(ledgerPath); // throws LedgerError on parse failure

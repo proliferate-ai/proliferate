@@ -4,9 +4,9 @@
 //!
 //! Execution contract: the plan ESCALATES, never suppresses. An artifact the
 //! plan leaves alone still goes through its mechanism's own idempotent skip
-//! checks; a planned reinstall forces the mechanism to act. Pins come from the
-//! registry install specs today; catalog v2 pins take over in the consumption
-//! wave (PR-7b).
+//! checks; a planned reinstall forces the mechanism to act. The registry owns
+//! each install mechanism, while active catalog pin overrides provide the
+//! version and resolved source when present.
 
 use crate::domains::agents::model::{AgentDescriptor, AgentProcessInstallSpec, ArtifactRole};
 

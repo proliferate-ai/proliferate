@@ -37,9 +37,9 @@ export function localAuthStateFingerprint(state: AgentAuthState): string {
  * produced it before pushing it to the local runtime (spec §5 twin of the
  * cloud materializer). The runtime's route-auth render plane compares this
  * against the server it currently points at and skips a mismatched document
- * (self-hosting-v1 §3.5) rather than injecting a previous server's gateway
- * credentials — the class of bug a desktop server switch would otherwise hit
- * while the worker is still re-enrolling against the new server.
+ * rather than injecting a previous server's gateway credentials — the class of
+ * bug a desktop server switch would otherwise hit while the worker is still
+ * re-enrolling against the new server.
  */
 export function stampIssuingServerOrigin(
   state: AgentAuthState,

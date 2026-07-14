@@ -1,13 +1,11 @@
 /**
- * Pure resolution of a saved model id against a known id set — groundwork for
- * the v2 catalog ids (specs/tbd/agents-catalog-registry-migration.md): when
- * the catalog re-keys, a stored preference must land on the equivalent known
- * id instead of silently falling back to the default model.
+ * Pure resolution of a saved model id against the current known ids. Live
+ * callers use this compatibility path so a stored preference can land on an
+ * equivalent known id instead of silently falling back to the default model.
  *
- * Resolution order: exact match > alias match > prefix-normalized match
- * (trailing variant suffixes such as "/low" stripped while the base resolves)
- * > null. Existing call sites are NOT rewired yet; this is consumed when the
- * v2 ids land.
+ * Resolution order after trimming: exact known id, alias to a known id, then
+ * repeatedly remove the final `/segment` and retry exact followed by alias;
+ * return null when no candidate resolves.
  */
 export function resolveSavedModelId(
   saved: string,

@@ -9,7 +9,7 @@ import type { ComponentType, ReactElement } from "react";
 // `src/ProductClient.tsx` entry.
 //
 // The prop shape mirrors the approved `ProductClientProps` recorded in
-// specs/codebase/features/web-desktop-product-client-entry-contract.md. It is
+// specs/codebase/systems/product/clients/web-desktop-unification/entry-contract.md. It is
 // typed locally here on purpose: this PR must not import a placeholder product
 // nor pre-create the reserved real types.
 

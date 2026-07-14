@@ -253,7 +253,7 @@ trap 'rm -f "$known_keys_file"' EXIT
     grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' "$EXAMPLE_ENV_FILE" | sed 's/=$//'
   fi
   # Keys the deploy scripts / AWS stack manage, or advanced overrides
-  # documented in env-secrets-matrix.md, that are not in the shipped example.
+  # documented in env-vars.yaml, that are not in the shipped example.
   cat <<'MANAGED'
 DATABASE_URL
 API_BASE_URL
@@ -278,7 +278,7 @@ MANAGED
 while IFS= read -r key; do
   [[ -n "$key" ]] || continue
   if ! grep -qxF "$key" "$known_keys_file"; then
-    warn "Unknown config key '$key' in $(basename "$ENV_FILE"). If this is not an advanced override from env-secrets-matrix.md, it may be a typo (the server ignores unknown keys)."
+    warn "Unknown config key '$key' in $(basename "$ENV_FILE"). If this is not an advanced override from env-vars.yaml, it may be a typo (the server ignores unknown keys)."
   fi
 done < <(grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' "$ENV_FILE" | sed 's/=$//' | sort -u)
 

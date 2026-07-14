@@ -1,8 +1,7 @@
 """llm credit grants
 
-Adds the LLM credit grant ledger (PR 8 of the agent-auth migration, see
-specs/codebase/primitives/agent-auth-litellm.md section 7): grants are the
-credit side, imported ``agent_llm_usage_event`` rows are the debit side, and
+Adds the LLM credit grant ledger in PR 8 of the agent-auth migration: grants are
+the credit side, imported ``agent_llm_usage_event`` rows are the debit side, and
 remaining credit = sum(grants) - sum(usage). Also adds ``budget_status`` to
 ``agent_gateway_enrollment`` so exhaustion can suspend a virtual key without
 overloading ``sync_status``.

@@ -167,8 +167,8 @@ fn oauth_wins_when_api_key_absent() {
 
 #[test]
 fn gateway_context_activates_iff_route_fact_present() {
-    // The gateway context is route-engaged (decisions ledger 13): its `route`
-    // signal matches a `Route` fact collected from workspace-scoped state.
+    // The gateway context is route-engaged: its `route` signal matches a
+    // `Route` fact collected from workspace-scoped state.
     let descriptor = claude_gateway_descriptor();
     let contexts = vec![context("gateway", "gateway", Some(route("gateway")))];
 
@@ -191,8 +191,8 @@ fn gateway_context_activates_iff_route_fact_present() {
 
 #[test]
 fn native_key_and_gateway_route_coexist_as_union() {
-    // Decision (amendment): gateway is a distinct auth slot; UNION across slots
-    // means a workspace with a native key AND gateway enrollment sees both.
+    // Gateway is a distinct auth slot, so union across slots exposes both a
+    // native key context and an engaged gateway route.
     let descriptor = claude_gateway_descriptor();
     let contexts = vec![
         context("anthropic-api", "anthropic", Some(env(TEST_API_KEY_VAR))),
@@ -595,8 +595,8 @@ fn bundled_docs_bedrock_flag_beats_api_key_for_claude() {
 
     // The flag alone classifies as bedrock — a production Bedrock deployment
     // on an ECS task role sets the flag but has no passively detectable creds
-    // (IMDS / task-role are the exotic tail we deliberately don't detect,
-    // decisions ledger 12). Keying bedrock on the flag is the honest signal:
+    // (IMDS / task-role are the exotic tail we deliberately don't detect).
+    // Keying bedrock on the flag is the honest routing signal:
     // the CLI still routes to Bedrock, so bare ids must be gated.
     let flag_only = [flag_fact("CLAUDE_CODE_USE_BEDROCK", "1")];
     assert_eq!(classify_bundled("claude", &flag_only), vec!["bedrock"]);

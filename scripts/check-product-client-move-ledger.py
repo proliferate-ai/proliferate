@@ -2,7 +2,7 @@
 """Verify the ProductClient move ledger against `apps/desktop/src` on disk.
 
 Checks the ledger at
-`specs/codebase/features/web-desktop-product-client-move-ledger.md`:
+`specs/codebase/systems/product/clients/web-desktop-unification/move-ledger.md`:
 
   (a) every current file under apps/desktop/src is classified exactly once;
   (b) move/split targets are unique (no two sources map to one target);
@@ -35,8 +35,11 @@ LEDGER = os.path.join(
     REPO_ROOT,
     "specs",
     "codebase",
-    "features",
-    "web-desktop-product-client-move-ledger.md",
+    "systems",
+    "product",
+    "clients",
+    "web-desktop-unification",
+    "move-ledger.md",
 )
 SRC_ROOT = os.path.join(REPO_ROOT, "apps", "desktop", "src")
 TARGET_PREFIX = "apps/packages/product-client/src/"

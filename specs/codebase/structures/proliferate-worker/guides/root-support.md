@@ -1,62 +1,57 @@
 # Worker Root Support Files
 
-Status: authoritative for support files at
+Status: authoritative for cross-cutting files at
 `anyharness/crates/proliferate-worker/src/*.rs`.
 
-Root support files are small, boring cross-cutting modules that do not yet need
-their own folder. They are not a place for generic utilities or hidden service
-layers.
+Root support modules are small process-wide dependencies. The focused root
+workflow modules—`catalog_sync.rs`, `integration_gateway.rs`,
+`self_update.rs`, and `anyharness_update.rs`—are covered by the identity,
+lifecycle, and client guides rather than treated as generic utilities.
 
-## Target Shape
+## Ownership
 
-```text
-src/
-  config.rs
-  error.rs
-  logging.rs
-  observability.rs
-  process_lock.rs
-  versions.rs
-```
-
-## What Goes Where
-
-| File | Owns | Must Not Own |
+| File | Owns | Does not own |
 | --- | --- | --- |
-| `config.rs` | Worker config load, parse, sanitize, and private config writes. | Command, reconcile, tail, or identity workflows. |
-| `error.rs` | Worker error enum and conversions. | Domain-specific control flow. |
-| `logging.rs` | Tracing/Sentry/log initialization. | Per-flow observability policy. |
-| `observability.rs` | Shared diagnostic helpers and correlation conventions. | Workflow implementation or hidden global state. |
-| `process_lock.rs` | Single-instance guarantee for the worker process. | Subsystem lifecycle. |
-| `versions.rs` | Worker, AnyHarness, and supervisor version helpers. | Self-update decisions or the supervisor mailbox. |
+| `config.rs` | TOML config loading, defaults, enrollment-token sanitation, atomic private writes | Enrollment or convergence decisions |
+| `error.rs` | Worker error variants and source conversion | Recovery policy |
+| `logging.rs` | Tracing and Sentry initialization, release identity, privacy scrubbing | Per-flow decisions |
+| `observability.rs` | Heartbeat acknowledgement event | A generic telemetry service |
+| `process_lock.rs` | One Worker process per canonical database path | Process supervision |
+| `versions.rs` | Stamped Worker version and boot-time AnyHarness version hint | Desired-version policy |
 
-## Observability
+## Configuration Boundary
 
-Shared observability helpers may define correlation-field conventions and small
-formatting utilities. Flow code still owns when and why it logs.
+Current configuration includes:
 
-Important correlation fields:
+- Cloud base URL, optional enrollment token, and Worker database path;
+- heartbeat interval;
+- integration-gateway output home;
+- independent Worker and AnyHarness update gates;
+- fixed AnyHarness binary, launcher, and working-directory paths used when its
+  update gate is enabled;
+- runtime base URL and optional runtime bearer token for narrow local calls.
 
-- `command_id`
-- `target_id`
-- `worker_id`
-- `domain` (for reconcile: the config/agent-auth/exposures/revoked-jti domain)
-- `applied_revision`, `desired_revision` (for reconcile)
-- `cloud_workspace_id`
-- `anyharness_workspace_id`
-- `session_id`
-- `session_projection_id`
-- `exposure_id`
-- `last_uploaded_seq` (for the tail)
+Update gates default to false. Runtime URL defaults to
+`http://127.0.0.1:8457`. Runtime bearer auth can be loaded from config or the
+`ANYHARNESS_BEARER_TOKEN` environment variable by the focused caller.
 
-There are no `lease_id`, `sandbox_profile_id`, or `slot_generation` fields — the
-collapsed model has no slot or fence to correlate on.
+## Telemetry And Privacy
+
+`logging.rs` stamps component-specific Worker release identity, initializes
+Sentry when configured, and scrubs bearer values, URL query strings, and
+absolute local paths from captured text. Flow modules still decide what an
+event means and when to emit it.
+
+Use current identifiers such as `worker_id` and the authenticated user context
+when available. Do not add removed command, Target, projection, slot, or
+generation identifiers as standard Worker fields.
 
 ## Hard Rules
 
-- Keep root support files small and boring.
-- Do not add `utils.rs`, `helpers.rs`, or `misc.rs`.
-- Do not create an `infra/` folder unless root support files become a real
-  source of clutter; `infra/` must not become a softer name for `utils`.
-- Move code into an owning subsystem when it starts making product, command,
-  reconcile, tail, materialization, store, client, or identity decisions.
+- Do not add catch-all `utils`, `helpers`, `misc`, or service modules.
+- Keep secrets out of errors and telemetry.
+- Keep private writes atomic and permission-restricted.
+- Move a decision into its focused owner when a support file starts owning a
+  workflow.
+- The process lock prevents two Workers from sharing one local database; it is
+  not a distributed lock or Supervisor contract.

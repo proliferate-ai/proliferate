@@ -1,169 +1,181 @@
-# Running a feature worktree cleanly (profiles + auth)
+# Feature Worktree Auth
 
-You are working in a feature worktree. Run the app under **your own dev profile**
-(never `main`, never another feature's name). Profile name = your feature name
-(e.g. `changes`, `support`, `files`, `offline`). Each profile gets its own ports,
-its own Postgres DB (`proliferate_dev_<profile>`), and its own on-disk state
-(`~/.proliferate-local/dev/profiles/<profile>/`), all collision-checked — so
-several features run simultaneously without stepping on each other.
+Status: current procedure
 
-## Boot
+Run every feature worktree under its own dev profile. Choose the lowest auth
+layer that proves the behavior under test; do not clone another profile's
+database, tokens, or Desktop session.
 
-```bash
-pdevui <profile>    # first boot: builds frontend, creates DB, runs migrations
-prunui <profile>    # every boot after that (fast, no rebuild)
-```
+## Boot The Profile
 
-`pdev`/`prun`/`pdevui`/`prunui`/`pseedauth` are shell helpers from the
-maintainer's `~/.zshrc`. If they don't exist in your shell, use the raw
-equivalents:
+For every layer, begin with the repository-owned flow:
 
 ```bash
-# pdev <profile>  ≈
-USE_EXISTING_POSTGRES=1 make dev-init PROFILE=<profile>
-USE_EXISTING_POSTGRES=1 node scripts/dev.mjs ensure-db --db-name proliferate_dev_<profile>
-USE_EXISTING_POSTGRES=1 make rebuild dev PROFILE=<profile>
-
-# prun <profile>  ≈
-USE_EXISTING_POSTGRES=1 make dev PROFILE=<profile>
-
-# pdevui/prunui = the same with SKIP_RUST=1 and a prebuilt runtime binary:
-SKIP_RUST=1 ANYHARNESS_DEV_RUNTIME_BIN=<path-to-anyharness-bin> make dev PROFILE=<profile>
-
-# pui <pkg>  ≈  pnpm --filter "@proliferate/<pkg>" build   (all: make shared-build)
+make setup PROFILE=<profile>
+make build # first clean worktree or after generated/Rust/frontend artifacts change
+make run PROFILE=<profile>
 ```
 
-These skip the Rust build and use the shared prebuilt runtime binary — which is
-built from **main**. So this rule is load-bearing, not a footnote:
+See [`dev-profiles.md`](dev-profiles.md) for profile state, ports, and app
+identity.
 
-> **If your branch changes any Rust/anyharness code, you MUST use
-> `pdev <profile>` / `prun <profile>` instead.** With `pdevui` you'd silently
-> run main's runtime and your feature simply won't exist at runtime.
-> Check with: `git diff main...HEAD --name-only | grep -c '\.rs$'` — nonzero
-> means `pdev`. Never run two full `pdev` cargo builds at the same time
-> (file-lock contention); stagger first boots.
+## Choose One Auth Layer
 
-If you edit shared packages (`packages/product-ui` etc.), run `pui <pkg>` after
-edits — apps consume built dist, HMR won't pick it up.
+Layers B and C require real auth. Remove `VITE_DEV_DISABLE_AUTH` from ignored
+`apps/desktop/.env.local`, or set it to `false`, and restart the profile before
+using either layer. Otherwise the Desktop installs the fake Layer A session and
+returns before real auth bootstrap.
 
-## Auth — pick exactly one layer
+### Layer A — feature does not need a backend identity
 
-Pick the *lowest* layer that covers what your feature actually exercises.
-
-### Layer A — feature doesn't care who's logged in (default)
-
-In this worktree's `apps/desktop/.env.local`:
+For frontend-only work, enable the development auth bypass in the worktree's
+ignored `apps/desktop/.env.local`:
 
 ```bash
 VITE_DEV_DISABLE_AUTH=true
-# remove/comment VITE_REQUIRE_AUTH=true
 ```
 
-Boots straight into a fake local session. No OAuth, no backend user.
-**Limit:** frontend-only session — cloud-workspace calls are hard-blocked, and
-there is no real user row behind authed API routes.
+Restart the profile after changing the value. This creates a development-only
+frontend session; there is no backing user or organization. Authenticated API
+routes, personal workflow definitions, and cloud workspaces intentionally
+remain unavailable. Use Layer B or C when the feature crosses that boundary.
 
 ### Layer B — feature needs a real backend session (admin/org/authed APIs)
 
-Blank the GitHub vars in this worktree's `server/.env` (they're what force the
-GitHub login screen):
+Use a fresh profile in single-org mode and provide a local setup-token path.
+To expose password sign-in even when another env file contains normal product
+GitHub credentials, override them to empty in ignored `server/.env.local` and
+restart:
 
 ```bash
 GITHUB_OAUTH_CLIENT_ID=
 GITHUB_OAUTH_CLIENT_SECRET=
 ```
 
-**Boot with single-org mode on** — local dev pins `SINGLE_ORG_MODE=false`
-(`scripts/dev.mjs`), which unmounts `/setup` and `/register`; without this the
-desktop shows sign-in with no way to ever create an account:
+Then run:
 
 ```bash
-SINGLE_ORG_MODE=true SETUP_TOKEN_FILE=/tmp/proliferate-<profile>-setup-token \
-  pdevui <profile>
+make setup PROFILE=<profile>
+make build
+SINGLE_ORG_MODE=true \
+SETUP_TOKEN_FILE=/tmp/proliferate-<profile>-setup-token \
+make run PROFILE=<profile>
 ```
 
-(`SETUP_TOKEN_FILE` is needed because the default `/var/lib/proliferate/...`
-path isn't writable on macOS. Keep both vars on every boot of this profile.)
+Read `PROLIFERATE_API_PORT` from:
 
-Then, because the profile DB is fresh, the first-run claim page is open:
+```text
+~/.proliferate-local/dev/profiles/<profile>/profile.env
+```
 
-1. `cat /tmp/proliferate-<profile>-setup-token`
-2. Open `http://127.0.0.1:<PROLIFERATE_API_PORT>/setup` (port is in
-   `~/.proliferate-local/dev/profiles/<profile>/profile.env`), paste the token,
-   choose email + password + org name.
-3. Sign in on the desktop password form (it's the default whenever GitHub isn't
-   configured). Real JWT, real user row — everything works except
-   GitHub-specific integration.
+Then open:
 
-Note: after a successful claim, `/setup` permanently shows "Not found — There
-is nothing to set up here". That page means the claim **worked** (setup closes
-once any user exists) — don't retry; go sign in on the desktop. If you lost the
-password, reset the profile DB (`dropdb proliferate_dev_<profile>` + reboot)
-and claim again.
+```text
+http://127.0.0.1:<PROLIFERATE_API_PORT>/setup
+```
 
-Extra teammates/users: invite from the app, or use the `/register` page with an
-invitation id.
+Use the token from `/tmp/proliferate-<profile>-setup-token` to claim the local
+instance, create the owner account and organization, and sign in with that
+account. Setup closes after the first successful claim.
+
+Treat the setup token and local server logs as secrets. The server writes the
+token file with mode `0600`, logs the plaintext token locally at info level as
+a fallback, and deletes the file after a successful claim. Never copy the
+token into chat, issues, shared logs, committed docs, or a PR.
 
 ### Layer C — feature needs GitHub specifically (repo connect, GitHub integration UI)
 
-**Do not attempt GitHub OAuth from a feature profile** — the dev GitHub app's
-callback URL is registered against main's port; it will not work. Instead,
-borrow main's already-authenticated state:
+Product GitHub identity and GitHub App repository authority are separate
+subflows. Configure the one the feature actually crosses; repository
+connection requires both.
 
-```bash
-pseedauth <profile>       # run while the feature profile is NOT running
-pdevui <profile>
+#### Product GitHub identity
+
+Create a dedicated test GitHub OAuth app for the selected profile. Read
+`PROLIFERATE_API_PORT` from that profile's `profile.env` and register this
+callback:
+
+```text
+http://127.0.0.1:<PROLIFERATE_API_PORT>/auth/desktop/github/callback
 ```
 
-`pseedauth` clones main's dev DB into your profile's DB (user, oauth_account,
-auth_identity, provider_grant, org membership, GitHub App authorizations,
-integration accounts — everything) and copies main's desktop session file
-(`auth-session.json`), so the app boots already logged in as the main user with
-working GitHub credentials.
+Keep the test app's client id and client secret in ignored
+`server/.env.local` as `GITHUB_OAUTH_CLIENT_ID` and
+`GITHUB_OAUTH_CLIENT_SECRET`. Never put the secret in chat, docs, logs,
+`profile.env`, `launch.env`, or a committed file. Start the profile with the
+normal `setup`, first-time `build`, and `run` commands, then exercise GitHub
+sign-in or connection through the product.
 
-Preconditions (normally true automatically):
-- Your worktree's `server/.env` is a copy of main's — `JWT_SECRET` and
-  `CLOUD_SECRET_KEY` must match or the copied tokens/ciphertext are useless.
-  Keep `GITHUB_OAUTH_CLIENT_ID/SECRET` **set** in this layer.
-- Someone has signed into the `main` profile recently (the copied access token
-  expires; refresh works as long as the user's `token_generation` hasn't been
-  bumped by a logout/password change on main).
+Do not reconfigure a production or shared OAuth app for a feature profile.
+Run OAuth and Desktop deep-link profiles serially: the generated development
+apps share `proliferate-local://auth/callback`, so the operating system may
+deliver a callback to the wrong concurrently running profile.
 
-**It drops and replaces your profile's DB** — any local test data in that
-profile is gone. Re-run it any time you want to resync from main.
+For a Hosted-Web-only OAuth test, use:
 
-## Quick reference
+```bash
+make dev-web-auth
+```
 
-| You need | Do |
-|---|---|
-| Just run the UI | `VITE_DEV_DISABLE_AUTH=true` in `apps/desktop/.env.local`, then `pdevui <profile>` |
-| Real login / admin flows | blank GitHub vars in `server/.env`, boot with `SINGLE_ORG_MODE=true` + `SETUP_TOKEN_FILE`, claim `/setup`, password sign-in |
-| GitHub integration | `pseedauth <profile>`, then boot |
-| Branch changes Rust | same auth layers, but boot with `pdev`/`prun` (not `pdevui`) |
-| Branch changes DB schema | dedicate the profile to this branch (see below) |
+That helper starts its own local server and Web app and publicly exposes the
+callback API through ngrok. Register only the callback it prints, use dedicated
+test-provider credentials, and stop the helper immediately after the test.
 
-One profile per worktree. Don't share a profile name across worktrees, don't
-reuse `main`.
+#### Repository connection and GitHub App authority
 
-## Schema-changing branches: dedicate the profile
+Repository connection additionally requires a dedicated test GitHub App. Keep
+its current configuration only in ignored `server/.env.local`:
 
-Migrations only run **forward**, in two places:
+```text
+GITHUB_APP_ID
+GITHUB_APP_SLUG
+GITHUB_APP_CLIENT_ID
+GITHUB_APP_CLIENT_SECRET
+GITHUB_APP_WEBHOOK_SECRET
+GITHUB_APP_CALLBACK_BASE_URL
+GITHUB_APP_PRIVATE_KEY or GITHUB_APP_PRIVATE_KEY_PATH
+```
 
-- **Runtime SQLite** (`~/.proliferate-local/runtimes/<profile>/db.sqlite`):
-  anyharness migrations run at boot. If your branch adds runtime migrations
-  (e.g. goals/workflows), booting it upgrades the profile's SQLite — and then
-  booting *older* code (main, another branch) under the **same profile** hits a
-  schema it doesn't understand.
-- **Server Postgres** (`proliferate_dev_<profile>`): alembic migrations run at
-  boot; same one-way property.
+Never print or copy those secret values. Follow the
+[GitHub App manual profile procedure](../../codebase/platforms/product/sandbox-github-auth.md#manual-profile-qa)
+to expose this profile's API with `CLOUD_WORKER_TUNNEL=ngrok`, set the callback
+base to the public API URL for the run, and register the test App's callback
+and setup URLs. Stop the tunnel after the test.
 
-Rules:
-- A branch that changes either schema gets its **own profile name, kept for the
-  branch's lifetime** — never reused for other branches or main.
-- Fresh profiles are always fine: migrations bring a new DB fully up
-  automatically. `pseedauth` is also fine — the clone of main's DB is upgraded
-  forward on first boot.
-- If a profile does get crossed over a schema boundary, reset it: delete
-  `~/.proliferate-local/runtimes/<profile>/` for SQLite, and/or re-run
-  `pseedauth <profile>` (or `dropdb proliferate_dev_<profile>` + reboot) for
-  Postgres.
+Through the product UI, complete all three distinct proofs:
+
+```text
+authorize the signed-in user for the test GitHub App
+install/grant the test GitHub App to the test organization or repository
+verify the selected repository reports ready authority/coverage
+```
+
+Product OAuth alone does not prove installation or repository coverage.
+
+## Decision Table
+
+| Behavior under test | Layer |
+| --- | --- |
+| Rendering or interaction with no authenticated API call | A |
+| Admin, organization, password-auth, or authenticated API behavior | B |
+| GitHub sign-in only | C — Product GitHub identity |
+| Repository connection or GitHub integration UI | C — Product identity plus GitHub App authority |
+| Hosted-Web OAuth without the Desktop profile | `make dev-web-auth` |
+
+## Profile And Schema Safety
+
+Use one profile for one worktree. A branch with Postgres or AnyHarness SQLite
+migrations keeps its profile for the branch's lifetime because migrations only
+move forward. If a test needs a different identity or a clean database, create
+a new profile; copying another profile's database, auth rows, refresh tokens,
+provider grants, or Desktop session is unsupported.
+
+## Verification
+
+- Confirm the selected profile and its reachable ports with `make dev-list`.
+- Prove that Layer A cannot call authenticated Cloud APIs.
+- For Layer B, verify `/setup` closes after claim and the created account can
+  use the required authenticated route.
+- For Layer C, verify the browser callback returns to the intended profile and
+  the required GitHub-backed operation succeeds.
+- Stop any public auth helper or tunnel after the callback test.

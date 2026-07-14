@@ -117,4 +117,4 @@ pnpm --dir apps/mobile web:profile
 When auth, native storage, deep links, simulator/device rendering, or
 TestFlight-only behavior is part of the change, also verify the native path with
 `make dev-mobile-auth` or the relevant release lane in
-[`../deploying/ci-cd.md`](../deploying/ci-cd.md).
+[`../deploying/releases.md`](../deploying/releases.md).

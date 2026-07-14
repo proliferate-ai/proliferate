@@ -35,8 +35,6 @@ make run PROFILE=main
 
 ## Pull Requests
 
-Keep PRs focused and leave unrelated files alone.
-
-PR titles and labels must follow [CI/CD specs](./specs/developing/deploying/ci-cd.md): use
-exactly one `release:*` label and at least one `area:*` label before marking a
-PR ready for review.
+Follow the [pull-request procedure](./specs/developing/process/pull-requests.md)
+to prepare a focused PR, record proof, choose its metadata, and mark it ready
+for review.

@@ -97,8 +97,8 @@ fn validate_agent(
 /// Reserved auth-context id for the enrolled gateway route.
 const GATEWAY_AUTH_CONTEXT_ID: &str = "gateway";
 
-/// Build invariant (decisions ledger 14): every `gatewayPolicy.seedModels` id
-/// must be a first-class `session.models` row tagged with `gateway`
+/// Every `gatewayPolicy.seedModels` id must be a first-class `session.models`
+/// row tagged with `gateway`
 /// availability. Gateway models are catalog rows, not launch-time side
 /// effects — a seed the renderer would inject but the menu cannot advertise is
 /// a curation bug, so it fails the build (validator + this Rust check).
@@ -587,8 +587,8 @@ mod tests {
 
     #[test]
     fn rejects_seed_model_without_gateway_tagged_row() {
-        // Decision 14 invariant: a seedModel with no gateway-tagged
-        // session.models row fails the build.
+        // A seedModel with no gateway-tagged session.models row fails the
+        // build.
         let mut catalog = draft_catalog();
         catalog.agents[0]
             .session

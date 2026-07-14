@@ -477,7 +477,7 @@ before launch (the supported runtime override — resolution order in
 `apps/desktop/src/lib/infra/proliferate-api.ts`; read once at boot, relaunch
 to apply). The web-port lane uses `VITE_PROLIFERATE_API_BASE_URL` instead.
 Tests never drive a server-picker UI to configure themselves, even after the
-sign-in-screen server entry (self-hosting-v1 §3.5, B4-desktop) ships.
+sign-in-screen server entry ships.
 
 ### T3-FIXTURE: shared identity + lanes (infrastructure, not a test)
 Two identities the runner mints/uses, so no scenario reimplements auth:
@@ -726,18 +726,19 @@ E2B-webhook findings. Test: `tests/release/src/scenarios/t3-bill-4.ts`.
 ## Tier 4 — upgrade path
 
 ### T4-CLOUD-1: AnyHarness runtime binary self-update in a cloud sandbox
-Spec of record: `specs/tbd/anyharness-self-update-v1.md` §7. Sandbox lane,
-`--lane staging`. The one place the AnyHarness binary itself converges in a
-running sandbox (not via a new E2B template).
+Shipped mechanism owner:
+`specs/codebase/structures/proliferate-worker/guides/lifecycle.md`. Target
+qualification owner: `specs/developing/testing/tier-4-scenario-contract.md`.
+Sandbox lane, `--lane staging`. The one place the AnyHarness binary itself
+converges in a running sandbox (not via a new E2B template).
 
 Shape: with a sandbox already running version N, record the advertised
 `desiredVersions.anyharness` pin (`/meta` `runtimeVersion`) and the running
 version (proxied runtime `/health` via `GET /v1/cloud/cloud-sandbox/anyharness/
 health`); bump the advertised pin to a different published version; let the
 sandbox worker converge the binary in place (no test-side artifact push — the
-feed is the only thing moved); assert the runtime reports the new version (spec
-§5 "converged" for the binary track) and, secondarily, that the catalog/agent
-pins reconcile.
+feed is the only thing moved); assert the runtime reports the new version and,
+secondarily, that the catalog/agent pins reconcile.
 
 Feed knob: the server advertises the pin from `RUNTIME_VERSION`, a baked-in
 image ENV with no runtime override, so the test-scoped bump overrides

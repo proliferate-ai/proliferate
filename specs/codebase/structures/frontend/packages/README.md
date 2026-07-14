@@ -143,7 +143,7 @@ May import Cloud SDK React hooks, `product-domain`, `product-ui`, `ui`, `design`
 
 ### `product-client`
 The shared connected Desktop/Web application, per
-[`../../../features/web-desktop-client-unification.md`](../../../features/web-desktop-client-unification.md).
+[`../../../systems/product/clients/web-desktop-unification/README.md`](../../../systems/product/clients/web-desktop-unification/README.md).
 Desktop is the baseline; Desktop and Web become thin hosts that each construct
 one typed `ProductHost` and mount the same product through `ProductHostProvider`.
 Like the other shared packages, it builds to `dist` and is consumed through
