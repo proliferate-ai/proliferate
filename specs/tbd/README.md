@@ -19,7 +19,6 @@ They are not operating law until they are promoted into `specs/codebase/**` or
 | [structure-alignment-coordinator-model.md](structure-alignment-coordinator-model.md) | Coordinator model for structure-alignment planning. |
 | [web-desktop-unification-migration.md](web-desktop-unification-migration.md) | Non-authoritative rollout history and execution detail for the Web/Desktop product-client unification. The promoted contract is [web-desktop-client-unification.md](../codebase/systems/product/clients/web-desktop-unification/README.md); the binding execution/freeze ledger is [web-desktop-unification-rollout.md](../developing/deploying/web-desktop-unification-rollout.md). |
 | [web-desktop-unification-intake-ledger.md](web-desktop-unification-intake-ledger.md) | Historical 2026-07-13 intake snapshot of open PRs, worktrees, and migration conflicts. Current phase and slice state lives in the [rollout ledger](../developing/deploying/web-desktop-unification-rollout.md); this file is historical sweep input only. |
-| [workspace-migration-git-durability-plan.md](workspace-migration-git-durability-plan.md) | Workspace migration git durability planning. |
 
 ## Promotion Rules
 
