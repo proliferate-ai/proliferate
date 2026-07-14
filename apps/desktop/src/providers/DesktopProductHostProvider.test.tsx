@@ -124,6 +124,7 @@ beforeEach(() => {
     user: null,
     session: null,
     error: null,
+    issue: null,
   });
 });
 
@@ -167,6 +168,7 @@ describe("DesktopProductHostProvider", () => {
         avatarUrl: null,
         githubLogin: "ada",
       },
+      readiness: { status: "ready" },
     });
   });
 
@@ -337,5 +339,92 @@ describe("DesktopProductHostProvider", () => {
 
     expect(result.current).not.toBe(before);
     expect(result.current.cloud.client).toBe(nextClient);
+  });
+
+  it("exposes a non-null Cloud client while anonymous", () => {
+    const { result } = renderHook(() => useProductHost(), { wrapper });
+    expect(result.current.auth.state).toMatchObject({ status: "anonymous" });
+    // Anonymity does not disable authority-capable transport.
+    expect(result.current.cloud.client).toBe(cloudClient);
+  });
+
+  it("publishes an anonymous deployment_unreachable issue and replaces on issue change", () => {
+    const { result } = renderHook(() => useProductHost(), { wrapper });
+    const before = result.current;
+    expect(before.auth.state).toEqual({
+      status: "anonymous",
+      methods: ["password", "github", "sso"],
+    });
+
+    act(() => {
+      useAuthStore.setState({
+        status: "anonymous",
+        issue: { kind: "deployment_unreachable" },
+      });
+    });
+
+    expect(result.current).not.toBe(before);
+    expect(result.current.auth.state).toEqual({
+      status: "anonymous",
+      methods: ["password", "github", "sso"],
+      issue: { kind: "deployment_unreachable" },
+    });
+  });
+
+  it("publishes an anonymous callback_failed issue with its provider code", () => {
+    act(() => {
+      useAuthStore.setState({
+        status: "anonymous",
+        issue: {
+          kind: "callback_failed",
+          reason: "provider_error",
+          providerCode: "access_denied",
+        },
+      });
+    });
+    const { result } = renderHook(() => useProductHost(), { wrapper });
+
+    expect(result.current.auth.state).toEqual({
+      status: "anonymous",
+      methods: ["password", "github", "sso"],
+      issue: {
+        kind: "callback_failed",
+        reason: "provider_error",
+        providerCode: "access_denied",
+      },
+    });
+  });
+
+  it("maps the authenticated cached-session degraded path to user null and ready", () => {
+    act(() => {
+      useAuthStore.setState({ status: "authenticated", user: null });
+    });
+    const { result } = renderHook(() => useProductHost(), { wrapper });
+
+    expect(result.current.auth.state).toEqual({
+      status: "authenticated",
+      user: null,
+      readiness: { status: "ready" },
+    });
+  });
+
+  it("does not replace the host when an issue changes while authenticated", () => {
+    act(() => {
+      useAuthStore.setState({ status: "authenticated", user: AUTH_USER });
+    });
+    const { result } = renderHook(() => useProductHost(), { wrapper });
+    const before = result.current;
+
+    // A stale issue arriving behind a signed-in session must not regress it.
+    act(() => {
+      useAuthStore.setState({
+        issue: { kind: "callback_failed", reason: "expired" },
+      });
+    });
+
+    expect(result.current).toBe(before);
+    expect(result.current.auth.state).toMatchObject({
+      status: "authenticated",
+    });
   });
 });

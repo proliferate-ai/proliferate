@@ -348,28 +348,47 @@ describe("createDesktopAuthOperations - finishLogin", () => {
   it("rejects when state is missing and never calls the callback handler", async () => {
     const actions = makeActions();
     const ops = createDesktopAuthOperations(actions, () => deps);
-    await expect(ops.finishLogin({ code: "abc" })).rejects.toThrow();
+    await expect(
+      ops.finishLogin({ status: "success", code: "abc" }),
+    ).rejects.toThrow();
     expect(mocks.handleDesktopCallbackUrl).not.toHaveBeenCalled();
   });
 
-  it("reconstructs the callback URL and delegates to the existing handler", async () => {
+  it("reconstructs the success callback URL and delegates to the existing handler", async () => {
     mocks.handleDesktopCallbackUrl.mockResolvedValue(true);
     const actions = makeActions();
     const ops = createDesktopAuthOperations(actions, () => deps);
-    await ops.finishLogin({ code: "abc", state: "xyz" });
+    await ops.finishLogin({ status: "success", code: "abc", state: "xyz" });
     expect(mocks.handleDesktopCallbackUrl).toHaveBeenCalledWith(
       "proliferate://auth/callback?code=abc&state=xyz",
       deps,
     );
   });
 
-  it("rejects when the callback handler declines", async () => {
+  it("rejects when the success callback handler declines", async () => {
     mocks.handleDesktopCallbackUrl.mockResolvedValue(false);
     const actions = makeActions();
     const ops = createDesktopAuthOperations(actions, () => deps);
     await expect(
-      ops.finishLogin({ code: "abc", state: "xyz" }),
+      ops.finishLogin({ status: "success", code: "abc", state: "xyz" }),
     ).rejects.toThrow();
+  });
+
+  it("routes a failure callback as a provider error without exchanging and never throws", async () => {
+    mocks.handleDesktopCallbackUrl.mockResolvedValue(false);
+    const actions = makeActions();
+    const ops = createDesktopAuthOperations(actions, () => deps);
+    // Failure is already terminal; finishLogin must not throw on a declined
+    // (no matching pending) failure and must reconstruct an error= URL.
+    await ops.finishLogin({
+      status: "failure",
+      code: "access_denied",
+      state: "xyz",
+    });
+    expect(mocks.handleDesktopCallbackUrl).toHaveBeenCalledWith(
+      "proliferate://auth/callback?error=access_denied&state=xyz",
+      deps,
+    );
   });
 });
 
@@ -427,9 +446,7 @@ describe("clipboard and links adapters", () => {
     rawListener!("proliferate://workspaces/ws1");
     rawListener!("https://unknown.example.test/nope");
 
-    expect(received).toEqual([
-      { kind: "workspace", workspaceId: "ws1", query: {} },
-    ]);
+    expect(received).toEqual([{ kind: "workspace", workspaceId: "ws1" }]);
   });
 });
 

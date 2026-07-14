@@ -433,10 +433,10 @@ describe("decodeDesktopProductEntry / encodeDesktopReturnUrl", () => {
       encodeDesktopReturnUrl({ kind: "invitation", token: "tok-1" }),
     ).toThrow();
     expect(() =>
-      encodeDesktopReturnUrl({ kind: "settings", section: "general", query: {} }),
+      encodeDesktopReturnUrl({ kind: "settings", section: "general" }),
     ).toThrow();
     expect(() =>
-      encodeDesktopReturnUrl({ kind: "billing-return", status: "done", query: {} }),
+      encodeDesktopReturnUrl({ kind: "billing-return", status: "done" }),
     ).toThrow();
   });
 });

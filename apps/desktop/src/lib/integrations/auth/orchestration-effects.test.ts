@@ -30,8 +30,10 @@ describe("handleDesktopNavigationUrl", () => {
     );
 
     expect(handled).toBe(true);
+    // Legacy desktopNavigationTarget maps integrations/plugins/powers deep links
+    // onto the Settings integrations pane, preserving the raw query verbatim.
     expect(deps.navigateDesktopRoute).toHaveBeenCalledWith(
-      "/integrations?source=mcp_oauth_callback&status=completed",
+      "/settings?source=mcp_oauth_callback&status=completed&section=integrations",
     );
   });
 

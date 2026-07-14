@@ -56,6 +56,7 @@ export function DesktopProductHostProvider({
   const email = useAuthStore((state) => state.user?.email ?? null);
   const avatarUrl = useAuthStore((state) => state.user?.avatar_url ?? null);
   const githubLogin = useAuthStore((state) => state.user?.github_login ?? null);
+  const issue = useAuthStore((state) => state.issue ?? null);
 
   const restoreSession = useAuthBootstrap();
   const actions = useAuthActions();
@@ -94,27 +95,42 @@ export function DesktopProductHostProvider({
   const authenticatedAvatarUrl = isAuthenticated ? avatarUrl : null;
   const authenticatedGithubLogin = isAuthenticated ? githubLogin : null;
 
+  // The normalized anonymous issue replaces the host only while anonymous; a
+  // stale issue lingering behind an authenticated/bootstrapping status must not
+  // participate in host replacement, mirroring the identity/method gating.
+  const anonymousIssue = status === "anonymous" ? issue : null;
+  const anonymousIssueKey = anonymousIssue ? JSON.stringify(anonymousIssue) : "";
+
   const authState = useMemo<AuthState>(() => {
     if (status === "bootstrapping") {
       return { status: "loading" };
     }
     if (status === "authenticated") {
+      // Desktop is always product-ready once authenticated; the connect_github
+      // action_required readiness is a Web-only mapping the type must support
+      // but Desktop never emits. The user is null only in the existing
+      // cached-session degraded path where no user record is present.
       return {
         status: "authenticated",
-        user: mapProductAuthUser({
-          id: userId ?? "",
-          email: email ?? "",
-          display_name: displayName,
-          github_login: githubLogin,
-          avatar_url: avatarUrl,
-        }),
+        user: authenticatedUserId
+          ? mapProductAuthUser({
+              id: authenticatedUserId,
+              email: authenticatedEmail ?? "",
+              display_name: authenticatedDisplayName,
+              github_login: authenticatedGithubLogin,
+              avatar_url: authenticatedAvatarUrl,
+            })
+          : null,
+        readiness: { status: "ready" },
       };
     }
-    return { status: "anonymous", methods };
-    // methods is folded into anonymousMethodsKey so authenticated method
-    // changes do not recompute the snapshot; identity fields are gated to
-    // authenticated status so anonymous/bootstrapping identity mutations do
-    // not recompute it either.
+    return anonymousIssue
+      ? { status: "anonymous", methods, issue: anonymousIssue }
+      : { status: "anonymous", methods };
+    // methods is folded into anonymousMethodsKey and the issue into
+    // anonymousIssueKey so authenticated method/issue changes do not recompute
+    // the snapshot; identity fields are gated to authenticated status so
+    // anonymous/bootstrapping identity mutations do not recompute it either.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     status,
@@ -124,6 +140,7 @@ export function DesktopProductHostProvider({
     authenticatedAvatarUrl,
     authenticatedGithubLogin,
     anonymousMethodsKey,
+    anonymousIssueKey,
   ]);
 
   // Auth operations stay stable as long as the underlying action callbacks do
