@@ -131,6 +131,9 @@ importers:
       '@proliferate/design':
         specifier: workspace:*
         version: link:../packages/design
+      '@proliferate/product-client':
+        specifier: workspace:*
+        version: link:../packages/product-client
       '@proliferate/product-domain':
         specifier: workspace:*
         version: link:../packages/product-domain

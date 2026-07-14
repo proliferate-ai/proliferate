@@ -13,12 +13,10 @@ import { useDebugSessionActivity } from "@/hooks/app/lifecycle/use-debug-session
 import { useDesktopWorkerEnrollment } from "@/hooks/cloud/lifecycle/use-desktop-worker-enrollment"
 import { useDevDesktopHandoff } from "@/hooks/app/lifecycle/use-dev-desktop-handoff"
 import { useOrganizationJoinAuthLaunch } from "@/hooks/organizations/lifecycle/use-organization-join-auth-launch"
-import { useExportRunningAgentCount } from "@/hooks/app/lifecycle/use-export-running-agent-count"
 import { useUpdateRestartWatcher } from "@/hooks/access/tauri/use-update-restart-watcher"
 import { useWorkspaceActivityIndicator } from "@/hooks/app/lifecycle/use-workspace-activity-indicator"
 import { useAppShortcuts } from "@/hooks/app/lifecycle/use-app-shortcuts"
 import { useAppCommandActions } from "@/hooks/app/workflows/use-app-command-actions"
-import { useAuthBootstrap } from "@/hooks/auth/lifecycle/use-auth-bootstrap"
 import { useAgentAutoReconcile } from "@/hooks/agents/lifecycle/use-agent-auto-reconcile"
 import { useFirstRunAuthAdoption } from "@/hooks/agents/lifecycle/use-first-run-auth-adoption"
 import { useGatewayCatalogMirrorSync } from "@/hooks/agents/lifecycle/use-gateway-catalog-mirror-sync"
@@ -59,7 +57,9 @@ import { SettingsCloudRedirect } from "@/pages/SettingsCloudRedirect"
 import { useAuthStore } from "@/stores/auth/auth-store"
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store"
 import { AppCommandActionsProvider } from "@/providers/AppCommandActionsProvider"
+import { DesktopProductLifecycleRoot } from "@/providers/DesktopProductLifecycleRoot"
 import { ShortcutRevealProvider } from "@/providers/ShortcutRevealProvider"
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider"
 
 const APP_RUNTIME_RENDER_MILESTONES = new Set([1, 2, 3, 5, 10, 25, 50, 100, 250])
 
@@ -143,7 +143,7 @@ function AppRuntime() {
     recordBootDiagnostic("app_runtime.render.pass", { count: appRuntimeRenderCount })
   }
   recordBootDiagnosticOnce("app_runtime.render.before.use_auth_bootstrap")
-  const bootstrapAuth = useAuthBootstrap()
+  const bootstrapAuth = useProductHost().auth.restoreSession
   recordBootDiagnosticOnce("app_runtime.render.after.use_auth_bootstrap")
   recordBootDiagnosticOnce("app_runtime.render.before.auth_status")
   const authStatus = useAuthStore((s) => s.status)
@@ -151,9 +151,6 @@ function AppRuntime() {
   recordBootDiagnosticOnce("app_runtime.render.before.use_app_command_actions")
   const appCommandActions = useAppCommandActions()
   recordBootDiagnosticOnce("app_runtime.render.after.use_app_command_actions")
-  recordBootDiagnosticOnce("app_runtime.render.before.use_export_running_agent_count")
-  useExportRunningAgentCount()
-  recordBootDiagnosticOnce("app_runtime.render.after.use_export_running_agent_count")
   useConnectivityListeners()
   useUpdateRestartWatcher()
   useDebugSessionActivity()
@@ -260,6 +257,7 @@ function AppRuntime() {
           <MacWindowControlsSafeArea />
           <UpdateRestartDialog />
           <WorkspaceActivityIndicatorMount />
+          <DesktopProductLifecycleRoot />
           <WorktreeCleanupPolicySyncGate />
           <InstrumentedRoutes>
             <Route path="/index.html" element={<Navigate to="/" replace />} />

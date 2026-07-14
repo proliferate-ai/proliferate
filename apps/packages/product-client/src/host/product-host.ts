@@ -215,9 +215,12 @@ export interface ProductLinks {
    */
   buildReturnUrl(entry: ProductEntry): string;
   /**
-   * Deliver host-decoded inbound entries (initial + live) to shared routing.
-   * The listener receives any entry that arrived before subscription as well
-   * as every subsequent one; returns an unsubscribe function. This is how
+   * Deliver host-decoded inbound entries (initial + live) to shared routing;
+   * returns an unsubscribe function. "Initial + live" is bounded: the listener
+   * receives the host's current snapshot at subscription time (e.g. the deep
+   * link the process launched with) plus every entry that arrives after it
+   * subscribes. It does not replay live events that arrived before this
+   * listener mounted, and the host keeps no persistence or queue. This is how
    * Desktop OS deep links and Web callback entries reach ProductClient.
    */
   observeInboundEntries(listener: (entry: ProductEntry) => void): () => void;
