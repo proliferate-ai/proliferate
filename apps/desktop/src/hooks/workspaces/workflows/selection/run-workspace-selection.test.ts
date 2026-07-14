@@ -142,6 +142,7 @@ describe("runWorkspaceSelection", () => {
 
     await runWorkspaceSelection({
       localRuntime: null,
+      cloudClient: null,
       cache: selectionCache(),
       logicalWorkspaces: [],
       rawWorkspaces: [],
@@ -171,6 +172,7 @@ describe("runWorkspaceSelection", () => {
   it("still throws when a workspace is missing everywhere and no knownWorkspace is provided", async () => {
     await expect(runWorkspaceSelection({
       localRuntime: null,
+      cloudClient: null,
       cache: selectionCache(),
       logicalWorkspaces: [],
       rawWorkspaces: [],
