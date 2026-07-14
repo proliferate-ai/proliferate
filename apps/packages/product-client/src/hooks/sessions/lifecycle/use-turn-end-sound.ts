@@ -4,7 +4,7 @@ import {
   offUserFacingTurnEnd,
   onUserFacingTurnEnd,
 } from "#product/lib/infra/events/turn-end-events";
-import dingSrc from "@/assets/sounds/ding.mp3";
+import dingSrc from "../../../assets/sounds/ding.mp3";
 
 export function useTurnEndSound(): void {
   const audioRef = useRef<HTMLAudioElement | null>(null);

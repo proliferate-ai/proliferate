@@ -1,19 +1,19 @@
 import type { ComponentType, SVGProps } from "react";
 import { Plug } from "lucide-react";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
-import axiomIcon from "@/assets/connector-icons/axiom.svg";
-import axiomDarkIcon from "@/assets/connector-icons/axiom-dark.svg";
-import context7Icon from "@/assets/connector-icons/context7.jpeg";
-import exaIcon from "@/assets/connector-icons/exa.svg";
-import gitlabIcon from "@/assets/connector-icons/gitlab.svg";
-import neonIcon from "@/assets/connector-icons/neon.svg";
-import notionIcon from "@/assets/connector-icons/notion.png";
-import posthogIcon from "@/assets/connector-icons/posthog.svg";
-import renderIcon from "@/assets/connector-icons/render.svg";
-import renderDarkIcon from "@/assets/connector-icons/render-dark.svg";
-import sentryIcon from "@/assets/connector-icons/sentry.svg";
-import sentryDarkIcon from "@/assets/connector-icons/sentry-dark.svg";
-import supabaseIcon from "@/assets/connector-icons/supabase.png";
+import axiomIcon from "../../../../assets/connector-icons/axiom.svg";
+import axiomDarkIcon from "../../../../assets/connector-icons/axiom-dark.svg";
+import context7Icon from "../../../../assets/connector-icons/context7.jpeg";
+import exaIcon from "../../../../assets/connector-icons/exa.svg";
+import gitlabIcon from "../../../../assets/connector-icons/gitlab.svg";
+import neonIcon from "../../../../assets/connector-icons/neon.svg";
+import notionIcon from "../../../../assets/connector-icons/notion.png";
+import posthogIcon from "../../../../assets/connector-icons/posthog.svg";
+import renderIcon from "../../../../assets/connector-icons/render.svg";
+import renderDarkIcon from "../../../../assets/connector-icons/render-dark.svg";
+import sentryIcon from "../../../../assets/connector-icons/sentry.svg";
+import sentryDarkIcon from "../../../../assets/connector-icons/sentry-dark.svg";
+import supabaseIcon from "../../../../assets/connector-icons/supabase.png";
 import { useResolvedMode } from "#product/hooks/theme/derived/use-resolved-mode";
 
 function LinearGlyph({ className, ...props }: SVGProps<SVGSVGElement>) {
