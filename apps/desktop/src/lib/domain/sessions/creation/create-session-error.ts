@@ -3,9 +3,8 @@ import { AnyHarnessError } from "@anyharness/sdk";
 const UNSUPPORTED_SESSION_MODEL_CODE = "SESSION_MODEL_UNSUPPORTED";
 const UNSUPPORTED_SESSION_MODE_CODE = "SESSION_MODE_UNSUPPORTED";
 // Distinct from UNSUPPORTED: the model exists but is gated behind auth
-// contexts that are not active (decisions ledger 16). The fix is to satisfy
-// one of the required contexts (sign in / add a key / enroll the gateway),
-// not to update the target.
+// contexts that are not active. UNSUPPORTED means the requested model ID did
+// not resolve. GATED carries the contexts that can unlock the known model.
 const GATED_SESSION_MODEL_CODE = "SESSION_MODEL_GATED";
 
 export function formatSessionCreateFailureMessage(error: unknown): string {

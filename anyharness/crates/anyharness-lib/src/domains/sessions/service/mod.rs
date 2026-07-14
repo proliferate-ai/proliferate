@@ -33,8 +33,8 @@ pub enum CreateSessionError {
         model_id: String,
     },
     /// The model exists in the catalog but is gated behind auth contexts that
-    /// are not active (decisions ledger 16). Distinct from `ModelUnsupported`
-    /// (unknown model): the client can unlock it by satisfying one of
+    /// are not active. Distinct from `ModelUnsupported` (unresolvable model):
+    /// the client can unlock it by satisfying one of
     /// `required_contexts` (the model's `availability.anyOf`).
     ModelGated {
         agent_kind: String,

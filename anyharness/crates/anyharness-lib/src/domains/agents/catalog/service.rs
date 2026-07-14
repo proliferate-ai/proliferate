@@ -1,9 +1,9 @@
-//! The ONE read surface over the ACTIVE agent catalog (migration §5.3).
+//! The single read surface over the active agent catalog.
 //!
 //! Every runtime consumer of catalog data goes through here: installer
 //! pins, model menus, control matrices, and launch validation.
 //!
-//! Semantic rules (decisions ledger 9, §5.3):
+//! Semantic rules:
 //! - `defaultVisible` is the menu, `availability` is the truth:
 //!   [`ActiveCatalog::validate_launch`] accepts launchable-but-unadvertised
 //!   models (available under the active contexts but not default-visible).

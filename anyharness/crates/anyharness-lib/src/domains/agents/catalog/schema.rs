@@ -189,8 +189,8 @@ pub enum AgentCatalogAuthSignal {
     Discovery(String),
     /// An enrolled runtime route kind (e.g. `"gateway"`): matches a
     /// `Route` fact resolved from workspace-scoped `agent-auth/state.json`
-    /// (decisions ledger 13). Route facts are collected in layer 1 beside the
-    /// env facts, never inside `classify()`, so purity holds.
+    /// through the launch route resolver. Route facts are collected beside
+    /// env facts, never inside `classify()`, so classification stays pure.
     Route(String),
     AnyOf(Vec<AgentCatalogAuthSignal>),
     AllOf(Vec<AgentCatalogAuthSignal>),

@@ -64,6 +64,72 @@ Consequences:
 - Runtime catalog sync/version endpoints are control-plane convergence
   transport, not the primary product UI catalog.
 
+## Availability And Launch Validation
+
+Desktop catalog projection and AnyHarness launch validation answer related but
+different questions:
+
+```text
+Desktop projection
+  active auth contexts unknown          -> optimistic
+  contexts known + availability present -> annotate from the anyOf intersection
+  catalog-only row, no availability     -> enabled
+
+AnyHarness validation
+  model ID cannot resolve               -> SESSION_MODEL_UNSUPPORTED
+  model resolves, no active context     -> SESSION_MODEL_GATED (HTTP 400)
+```
+
+When active auth contexts are known, the Desktop's pure gate helper annotates
+each row it receives by intersecting `availability.anyOf` with the active
+context IDs. A catalog-only row with no availability data remains enabled in
+that Desktop projection. This fallback is not a runtime rule: AnyHarness
+catalog rows require availability, and a runtime row is available only when
+its `availability.anyOf` intersects the active contexts.
+
+Runtime launch menus contain visible, available rows. When contexts are known,
+the current Desktop catalog-only fallback drops gated rows; locked rows are not
+currently rendered. The former migration claim that the menu never shrinks
+therefore does not describe shipped behavior.
+
+Launch validation distinguishes identity from access. An ID, alias, or variant
+that cannot be resolved returns `SESSION_MODEL_UNSUPPORTED`. A known model that
+is outside the active contexts returns `SESSION_MODEL_GATED` as HTTP 400, with
+`required_contexts` equal to the model's `availability.anyOf`. Unrelated errors
+do not carry `required_contexts`.
+
+### Claude And Bedrock
+
+`CLAUDE_CODE_USE_BEDROCK=1` is the routing signal for the ordered Bedrock auth
+context. It wins even when OAuth, an Anthropic API key, or AWS credential facts
+also exist. Without that flag, OAuth remains OAuth even when AWS credentials
+are present for another purpose.
+
+The catalog marks only region- or vendor-prefixed inference-profile rows that
+match `us.anthropic.*` or `global.anthropic.*` as Bedrock-available. Runtime
+validation follows that catalog availability; it does not infer support with a
+prefix matcher. Bare Claude IDs remain OAuth/API selections. They are gated
+under Bedrock rather than transparently remapped.
+
+## Classification And Gateway Invariants
+
+Credential fact collection reads the composed launch environment plus only
+registry-declared ambient variables; composed values win. Arbitrary ambient
+values do not become classification law. Secret facts expose presence, while
+declared flag facts may expose the value required for matching. Workspace route
+facts are collected separately from workspace route state.
+
+Classification is pure. Within each auth slot, the first matching catalog
+context wins; results are unioned across slots, and baseline applies when no
+context matches. A context without signals never matches.
+
+A workspace gateway route is a classification fact when
+`agent-auth/state.json` resolves to an engaged gateway profile through the same
+route resolver used at launch. Every `gatewayPolicy.seedModels` ID must have a
+gateway-available `session.models` row. Gateway model resolution uses the
+latest successful gateway probe when one exists and otherwise falls back to
+the configured seed models.
+
 ## Bundled Agent Inputs
 
 The supported AnyHarness agent input schemas are:

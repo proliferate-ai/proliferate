@@ -17,9 +17,9 @@ use crate::domains::agents::registry::schema::{
 /// the slot declares (env vars with their secret|flag tags, discovery
 /// kinds). Slots that declare no vocabulary are validated structurally only.
 ///
-/// TODO(PR-7a): once registry.json carries the source vocabulary (flag tags
-/// on CLAUDE_CODE_USE_BEDROCK-style vars, named discovery kinds), pair this
-/// check with the pinned registry in the build pipeline and sync path.
+/// Pairing can enforce only structural slot ownership when a registry slot
+/// declares no env or discovery vocabulary. Declared vocabulary is enforced
+/// as a strict subset at every pairing call.
 pub fn validate_agent_catalog_registry_pairing(
     catalog: &AgentCatalogDocument,
     registry: &AgentRegistryDocument,
@@ -104,7 +104,7 @@ fn validate_signal_vocabulary(
             // Route signals carry no registry env/discovery vocabulary: the
             // route is paired by the context's auth slot (resolved above) and
             // the `Route` fact is fed from workspace-scoped state, never from
-            // slot-declared credential detection (decisions ledger 13).
+            // slot-declared credential detection.
         }
         AgentCatalogAuthSignal::AnyOf(children) | AgentCatalogAuthSignal::AllOf(children) => {
             for child in children {
@@ -163,7 +163,7 @@ mod tests {
             model.availability.any_of.retain(|id| id == "anthropic-api");
         }
         // Trimming to anthropic-api drops the gateway-tagged rows; drop the
-        // gateway curation too so the seedModels invariant (decision 14) does
+        // gateway curation too so the seedModels invariant does
         // not trip on this signal-vocabulary fixture.
         claude.session.gateway_policy = None;
         claude.session.defaults.remove("gateway");
@@ -281,8 +281,8 @@ mod tests {
 
     #[test]
     fn pairing_waives_discovery_check_when_slot_declares_no_kinds() {
-        // registry.json has no discovery kinds yet (PR-7a vocabulary):
-        // structural validation only.
+        // A slot with no declared discovery kinds can be checked structurally
+        // but has no discovery vocabulary to constrain.
         let catalog = pairing_catalog(Some(
             serde_json::json!({ "discovery": "claude-oauth-creds" }),
         ));

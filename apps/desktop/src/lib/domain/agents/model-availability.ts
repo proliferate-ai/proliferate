@@ -1,10 +1,8 @@
 /**
- * Pure gating decisions for the T0 optimistic model menu
- * (specs/tbd/agents-catalog-registry-migration.md §5.5, decision 9):
- * menu = catalog × known auth contexts. Models whose availability does not
- * intersect the known contexts render GATED with a human unlock condition
- * composed straight from `availability.anyOf`. The menu never shrinks —
- * gating annotates entries, it never filters them.
+ * Pure gate annotation for the catalog rows supplied by the caller. A row
+ * whose `availability.anyOf` does not intersect the known contexts is gated
+ * with an unlock condition derived from `anyOf`; a row without availability
+ * remains enabled. Catalog projection owns which rows reach this helper.
  */
 
 export interface ModelAvailability {
@@ -87,8 +85,8 @@ export type GatedModel<T extends GateableModel> = T & {
 };
 
 /**
- * Annotate every model with its gate decision. Returns the full input list in
- * order — never filters (the menu never shrinks; items resolve or stay gated).
+ * Annotate every supplied model with its gate decision, preserving input order.
+ * This helper does not select or filter catalog rows.
  */
 export function gateModelList<T extends GateableModel>(
   models: readonly T[],
