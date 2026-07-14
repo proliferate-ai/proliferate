@@ -11,20 +11,21 @@ import {
   redactUrlCredentials,
   ReportValidationError,
   validateReport,
-  type TestRunReportV1,
+  type TestRunReportV2,
 } from "./schema.js";
 import { reportPath, ReportWriteError, writeReport } from "./write.js";
 import { ALL_FINAL_STATUSES, type FinalTestStatus } from "../runner/result.js";
 
-function validReport(overrides: Partial<TestRunReportV1> = {}): TestRunReportV1 {
+function validReport(overrides: Partial<TestRunReportV2> = {}): TestRunReportV2 {
   const byStatus = Object.fromEntries(ALL_FINAL_STATUSES.map((status) => [status, 0])) as Record<
     FinalTestStatus,
     number
   >;
   byStatus.green = 1;
   return {
-    schema_version: 1,
+    schema_version: 2,
     kind: "proliferate.test-run",
+    candidate_build: null,
     run: {
       run_id: "run-1",
       shard_id: "shard-1",
@@ -160,7 +161,7 @@ test("validateReport rejects an unknown result status", () => {
 // Every verdict-matrix row must survive validation when produced honestly.
 // A `missing` result is only honest alongside its integrity error, which
 // forces exit 2.
-const MATRIX_ROWS: Array<{ statuses: FinalTestStatus[]; behavior: "diagnostic" | "strict"; exit: 0 | 1 | 2; verdict: TestRunReportV1["verdict"]["status"]; execution?: "real" | "dry_run"; integrity?: boolean }> = [
+const MATRIX_ROWS: Array<{ statuses: FinalTestStatus[]; behavior: "diagnostic" | "strict"; exit: 0 | 1 | 2; verdict: TestRunReportV2["verdict"]["status"]; execution?: "real" | "dry_run"; integrity?: boolean }> = [
   { statuses: ["green"], behavior: "diagnostic", exit: 0, verdict: "non_qualifying" },
   { statuses: ["green"], behavior: "strict", exit: 0, verdict: "selected_tests_passed" },
   { statuses: ["blocked"], behavior: "diagnostic", exit: 0, verdict: "non_qualifying" },
@@ -361,4 +362,69 @@ test("writeReport validates before writing: an invalid report writes nothing", a
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test("validateReport requires candidate_build to be present (null or evidence)", () => {
+  const absent = validReport();
+  delete (absent as Partial<TestRunReportV2>).candidate_build;
+  assert.throws(() => validateReport(absent), /candidate_build must be present/);
+
+  const withNull = validReport();
+  withNull.candidate_build = null;
+  validateReport(withNull);
+
+  const withEvidence = validReport();
+  withEvidence.candidate_build = {
+    artifacts: [{ artifact_id: "anyharness/aarch64-apple-darwin", version: "0.3.27", sha256: "e".repeat(64) }],
+  };
+  validateReport(withEvidence);
+});
+
+test("validateReport rejects unsafe or path-carrying candidate evidence", () => {
+  const reject = (candidate: unknown, pattern: RegExp): void => {
+    const report = validReport();
+    report.candidate_build = candidate as TestRunReportV2["candidate_build"];
+    assert.throws(() => validateReport(report), pattern);
+  };
+  reject({ artifacts: [] }, /non-empty/);
+  reject(
+    {
+      artifacts: [
+        {
+          artifact_id: "anyharness/x",
+          version: "1",
+          sha256: "e".repeat(64),
+          path: "/tmp/leaked-local-path",
+        },
+      ],
+    },
+    /exactly artifact_id\/version\/sha256/,
+  );
+  reject(
+    { artifacts: [{ artifact_id: "../escape", version: "1", sha256: "e".repeat(64) }] },
+    /unsafe/,
+  );
+  reject(
+    { artifacts: [{ artifact_id: "anyharness/x", version: "", sha256: "e".repeat(64) }] },
+    /version/,
+  );
+  reject(
+    { artifacts: [{ artifact_id: "anyharness/x", version: "1", sha256: "not-a-digest" }] },
+    /64-hex/,
+  );
+  reject(
+    {
+      artifacts: [
+        { artifact_id: "anyharness/x", version: "1", sha256: "e".repeat(64) },
+        { artifact_id: "anyharness/x", version: "2", sha256: "f".repeat(64) },
+      ],
+    },
+    /duplicate/,
+  );
+});
+
+test("validateReport rejects a schema_version 1 report", () => {
+  const report = validReport();
+  (report as { schema_version: number }).schema_version = 1;
+  assert.throws(() => validateReport(report), /schema_version 2/);
 });

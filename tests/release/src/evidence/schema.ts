@@ -1,4 +1,5 @@
 import type { DesktopMode, RuntimeLane, TargetLane } from "../config/types.js";
+import type { CandidateBuildEvidenceV1 } from "../artifacts/build-map.js";
 import type { RunIdentityV1 } from "../runner/identity.js";
 import {
   ALL_FINAL_STATUSES,
@@ -14,12 +15,21 @@ import {
 
 /**
  * The versioned combined-report contract, per
- * specs/developing/testing/qualification-runner-core.md ("Combined report").
- * One artifact per invocation/shard/attempt; validated before writing.
+ * specs/developing/testing/qualification-runner-core.md ("Combined report")
+ * plus specs/developing/testing/candidate-build-handoff.md ("Report V2"),
+ * which adds bounded candidate-artifact identity. One artifact per
+ * invocation/shard/attempt; validated before writing. V1 is the prior
+ * contract recorded in repository history; current code emits only V2.
  */
-export interface TestRunReportV1 {
-  schema_version: 1;
+export interface TestRunReportV2 {
+  schema_version: 2;
   kind: "proliferate.test-run";
+  /**
+   * Artifact ID/version/SHA-256 from the validated candidate build map, or
+   * an explicit null when a diagnostic run omitted the map. Never map paths,
+   * local paths, raw map JSON, credentials, or command/provider output.
+   */
+  candidate_build: CandidateBuildEvidenceV1 | null;
   run: RunIdentityV1 & {
     behavior: ResultBehavior;
     execution: "real" | "dry_run";
@@ -129,7 +139,7 @@ export function redactExternalPayloads(message: string): string {
  * Runs before validation/serialization so no exact secret value or overlong
  * message can enter the persisted artifact.
  */
-export function sanitizeReport(report: TestRunReportV1, secretValues: readonly string[]): TestRunReportV1 {
+export function sanitizeReport(report: TestRunReportV2, secretValues: readonly string[]): TestRunReportV2 {
   const clean = (message: string): string =>
     boundMessage(redactExternalPayloads(redactUrlCredentials(redactSecrets(message, secretValues))));
   return {
@@ -156,10 +166,11 @@ export function sanitizeReport(report: TestRunReportV1, secretValues: readonly s
  * selected/result test ids, finalized counts, all seven status keys with
  * exact counts, and verdict/exit consistency.
  */
-export function validateReport(report: TestRunReportV1): void {
-  if (report.schema_version !== 1 || report.kind !== "proliferate.test-run") {
-    throw new ReportValidationError("Report must be schema_version 1, kind proliferate.test-run.");
+export function validateReport(report: TestRunReportV2): void {
+  if (report.schema_version !== 2 || report.kind !== "proliferate.test-run") {
+    throw new ReportValidationError("Report must be schema_version 2, kind proliferate.test-run.");
   }
+  validateCandidateBuildEvidence(report.candidate_build);
 
   const selectedIds = report.selected_tests.map((test) => test.test_id);
   const resultIds = report.results.map((result) => result.test_id);
@@ -266,5 +277,53 @@ export function validateReport(report: TestRunReportV1): void {
     throw new ReportValidationError(
       `intended_exit_code ${report.summary.intended_exit_code} does not match the recomputed ${expected.intendedExitCode}.`,
     );
+  }
+}
+
+const EVIDENCE_SHA256_PATTERN = /^[0-9a-f]{64}$/;
+const EVIDENCE_ARTIFACT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
+
+/**
+ * `candidate_build` must be present on every V2 report — an explicit null for
+ * diagnostic omission, otherwise only bounded artifact ID/version/SHA-256
+ * triples. Anything path-like, oversized, or extra is rejected so map paths
+ * and raw map JSON can never masquerade as evidence.
+ */
+function validateCandidateBuildEvidence(evidence: CandidateBuildEvidenceV1 | null): void {
+  if (evidence === undefined) {
+    throw new ReportValidationError("candidate_build must be present (null for diagnostic omission).");
+  }
+  if (evidence === null) {
+    return;
+  }
+  if (!Array.isArray(evidence.artifacts) || evidence.artifacts.length === 0) {
+    throw new ReportValidationError("candidate_build.artifacts must be a non-empty array.");
+  }
+  const seen = new Set<string>();
+  for (const artifact of evidence.artifacts) {
+    const keys = Object.keys(artifact).sort();
+    if (keys.join(",") !== "artifact_id,sha256,version") {
+      throw new ReportValidationError(
+        "candidate_build artifacts carry exactly artifact_id/version/sha256.",
+      );
+    }
+    if (
+      typeof artifact.artifact_id !== "string" ||
+      artifact.artifact_id.length === 0 ||
+      artifact.artifact_id.length > 128 ||
+      !EVIDENCE_ARTIFACT_ID_PATTERN.test(artifact.artifact_id)
+    ) {
+      throw new ReportValidationError("candidate_build artifact_id is missing or unsafe.");
+    }
+    if (seen.has(artifact.artifact_id)) {
+      throw new ReportValidationError(`candidate_build duplicate artifact_id "${artifact.artifact_id}".`);
+    }
+    seen.add(artifact.artifact_id);
+    if (typeof artifact.version !== "string" || artifact.version.length === 0 || artifact.version.length > 128) {
+      throw new ReportValidationError("candidate_build version is missing or unbounded.");
+    }
+    if (typeof artifact.sha256 !== "string" || !EVIDENCE_SHA256_PATTERN.test(artifact.sha256)) {
+      throw new ReportValidationError("candidate_build sha256 must be a lowercase 64-hex digest.");
+    }
   }
 }

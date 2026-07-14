@@ -795,7 +795,35 @@ release-e2e:
 		--agents $(AGENTS) \
 		--scenarios $(SCENARIOS) \
 		$(if $(DRY_RUN),--dry-run,) \
-		$(if $(FILE_ISSUES),--file-issues,)
+		$(if $(FILE_ISSUES),--file-issues,) \
+		$(if $(CANDIDATE_BUILD_MAP),--candidate-build-map $(CANDIDATE_BUILD_MAP),)
+
+# Assembles a CandidateBuildMapV1 for an already-built binary
+# (specs/developing/testing/candidate-build-handoff.md). BINARY defaults to the
+# release AnyHarness build; OUTPUT to tests/release/.output/candidate-build.json.
+CANDIDATE_MAP_BINARY ?= target/release/anyharness
+CANDIDATE_MAP_OUTPUT ?= tests/release/.output/candidate-build.json
+qualification-candidate-build-map:
+	node scripts/ci-cd/assemble-candidate-build-map.mjs \
+		--binary $(CANDIDATE_MAP_BINARY) \
+		--output $(CANDIDATE_MAP_OUTPUT)
+
+# The real build→map→validate→materialize→launch→health→evidence proof
+# (specs/developing/testing/candidate-build-handoff.md "Real handoff smoke").
+# Builds a release-mode AnyHarness stamped with the repository VERSION and the
+# current HEAD SHA, assembles the map, launches the exact bytes against an
+# isolated runtime home/port, and requires the diagnostic runner's report
+# candidate evidence to equal the launched identity.
+qualification-candidate-handoff-smoke:
+	pnpm install --silent
+	PROLIFERATE_BUILD_VERSION=$$(cat VERSION) \
+	PROLIFERATE_BUILD_SHA=$$(git rev-parse HEAD) \
+		cargo build --release -p anyharness
+	node scripts/ci-cd/assemble-candidate-build-map.mjs \
+		--binary target/release/anyharness \
+		--output tests/release/.output/candidate-build.json
+	cd tests/release && pnpm exec tsx src/artifacts/anyharness-smoke.ts \
+		--map .output/candidate-build.json
 
 test-cloud-ssh-worker:
 	@test -n "$(SSH_TARGET)" || { \

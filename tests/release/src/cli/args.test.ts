@@ -5,7 +5,10 @@ import { CliUsageError, parseArgs } from "./args.js";
 
 test("parses explicit diagnostic and strict behaviors", () => {
   assert.equal(parseArgs(["--behavior", "diagnostic"]).behavior, "diagnostic");
-  assert.equal(parseArgs(["--behavior", "strict"]).behavior, "strict");
+  assert.equal(
+    parseArgs(["--behavior", "strict", "--candidate-build-map", "map.json"]).behavior,
+    "strict",
+  );
 });
 
 test("rejects an omitted --behavior", () => {
@@ -103,4 +106,23 @@ test("rejects unknown flags and invalid lane/desktop values as usage errors", ()
   assert.throws(() => parseArgs(["--nope"]), CliUsageError);
   assert.throws(() => parseArgs(["--behavior", "diagnostic", "--lane", "prod"]), CliUsageError);
   assert.throws(() => parseArgs(["--behavior", "diagnostic", "--desktop", "mobile"]), CliUsageError);
+});
+
+test("parses --candidate-build-map", () => {
+  const args = parseArgs(["--behavior", "diagnostic", "--candidate-build-map", "out/map.json"]);
+  assert.equal(args.candidateBuildMap, "out/map.json");
+});
+
+test("strict without --candidate-build-map is rejected; with it, accepted", () => {
+  assert.throws(() => parseArgs(["--behavior", "strict"]), CliUsageError);
+  const args = parseArgs(["--behavior", "strict", "--candidate-build-map", "map.json"]);
+  assert.equal(args.behavior, "strict");
+  assert.equal(args.candidateBuildMap, "map.json");
+});
+
+test("diagnostic runs may omit the candidate build map", () => {
+  const real = parseArgs(["--behavior", "diagnostic"]);
+  assert.equal(real.candidateBuildMap, undefined);
+  const dry = parseArgs(["--behavior", "diagnostic", "--dry-run"]);
+  assert.equal(dry.candidateBuildMap, undefined);
 });
