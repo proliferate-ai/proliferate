@@ -1,6 +1,6 @@
 # Web/Desktop Unification D1a: Desktop Host Adoption
 
-Status: **frozen r2; implementation accepted pending merge**.
+Status: **complete**.
 
 - Revision: `D1a-r2`
 - Frozen: 2026-07-13
@@ -8,6 +8,10 @@ Status: **frozen r2; implementation accepted pending merge**.
   `2ec15eaf8cfc870cbdbb42c225a5f1428e5282b4`
 - Accepted implementation: PR #1157, head
   `90926523c3662067e02f8511db6c8e0058e119f1`
+- Authority promotion: PR #1160, merge
+  `00f92b86c90bdcff288908b158e654c3bdbb543b`
+- Implementation merge: PR #1157, merge
+  `a76ab5911e2af39593b4b31530535f0811a3558b`
 - Parent architecture:
   [`web-desktop-client-unification.md`](web-desktop-client-unification.md)
 - Pipeline ledger:
@@ -647,12 +651,12 @@ run.
 
 ## 13. Completion and stop conditions
 
-D1a's implementation has been accepted at PR #1157 head
+D1a merged through PR #1157 as
+`a76ab5911e2af39593b4b31530535f0811a3558b` from accepted head
 `90926523c3662067e02f8511db6c8e0058e119f1`. The observable outcome,
 reconciled file plan, focused tests, builds, structure checks, Tier-2 CI, and
 named-profile smoke are satisfied, with only the explicit base-equivalent
-pretest waiver in §12.2. Record the actual merge SHA here before marking the
-slice complete.
+pretest waiver in §12.2. The slice is complete.
 
 Stop and return to specification if implementation requires:
 
