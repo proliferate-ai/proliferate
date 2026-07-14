@@ -23,13 +23,13 @@
       "types": "./dist/host/ProductHostProvider.d.ts",
       "import": "./dist/host/ProductHostProvider.js"
     },
-    "./qualification/ProductClientBuildCanary": {
-      "types": "./dist/qualification/ProductClientBuildCanary.d.ts",
-      "import": "./dist/qualification/ProductClientBuildCanary.js"
+    "./ProductClient": {
+      "types": "./dist/ProductClient.d.ts",
+      "import": "./dist/ProductClient.js"
     }
   },
   "scripts": {
-    "build": "pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/product-domain build && tsc -p tsconfig.json && node scripts/copy-qualification-assets.mjs",
+    "build": "pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/product-domain build && tsc -p tsconfig.json",
     "typecheck": "pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/product-domain build && tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
