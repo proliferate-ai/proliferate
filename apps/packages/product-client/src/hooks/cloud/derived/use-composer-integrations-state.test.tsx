@@ -10,15 +10,15 @@ const mocks = vi.hoisted(() => ({
   cloudActive: true,
 }));
 
-vi.mock("@/hooks/access/cloud/integrations/use-integration-health", () => ({
+vi.mock("#product/hooks/access/cloud/integrations/use-integration-health", () => ({
   useIntegrationHealth: mocks.useIntegrationHealth,
 }));
 
-vi.mock("@/hooks/cloud/derived/use-cloud-availability-state", () => ({
+vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
   useCloudAvailabilityState: () => ({ cloudActive: mocks.cloudActive }),
 }));
 
-vi.mock("@/hooks/organizations/facade/use-active-organization", () => ({
+vi.mock("#product/hooks/organizations/facade/use-active-organization", () => ({
   useActiveOrganization: () => ({ activeOrganizationId: "org-1" }),
 }));
 

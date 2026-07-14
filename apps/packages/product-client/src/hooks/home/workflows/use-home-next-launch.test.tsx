@@ -39,45 +39,45 @@ vi.mock("react-router-dom", () => ({
   useNavigate: () => mocks.navigate,
 }));
 
-vi.mock("@/hooks/cloud/workflows/use-create-cloud-workspace", () => ({
+vi.mock("#product/hooks/cloud/workflows/use-create-cloud-workspace", () => ({
   useCreateCloudWorkspace: () => ({
     createCloudWorkspaceAndEnterWithResult: mocks.createCloudWorkspaceAndEnterWithResult,
   }),
 }));
 
-vi.mock("@/hooks/cowork/workflows/use-cowork-thread-workflow", () => ({
+vi.mock("#product/hooks/cowork/workflows/use-cowork-thread-workflow", () => ({
   useCoworkThreadWorkflow: () => ({
     createThreadFromSelection: mocks.createThreadFromSelection,
   }),
 }));
 
-vi.mock("@/hooks/workspaces/workflows/use-workspace-entry-actions", () => ({
+vi.mock("#product/hooks/workspaces/workflows/use-workspace-entry-actions", () => ({
   useWorkspaceEntryActions: () => ({
     createLocalWorkspaceAndEnterWithResult: mocks.createLocalWorkspaceAndEnterWithResult,
     createWorktreeAndEnterWithResult: mocks.createWorktreeAndEnterWithResult,
   }),
 }));
 
-vi.mock("@/hooks/workspaces/workflows/selection/use-workspace-selection", () => ({
+vi.mock("#product/hooks/workspaces/workflows/selection/use-workspace-selection", () => ({
   useWorkspaceSelection: () => ({
     selectWorkspace: mocks.selectWorkspace,
   }),
 }));
 
-vi.mock("@/hooks/sessions/workflows/use-session-creation-actions", () => ({
+vi.mock("#product/hooks/sessions/workflows/use-session-creation-actions", () => ({
   useSessionCreationActions: () => ({
     createEmptySessionWithResolvedConfig: mocks.createEmptySessionWithResolvedConfig,
     createSessionWithResolvedConfig: mocks.createSessionWithResolvedConfig,
   }),
 }));
 
-vi.mock("@/hooks/workspaces/derived/use-workspace-runtime-block", () => ({
+vi.mock("#product/hooks/workspaces/derived/use-workspace-runtime-block", () => ({
   useWorkspaceRuntimeBlock: () => ({
     getWorkspaceRuntimeBlockReason: () => null,
   }),
 }));
 
-vi.mock("@/hooks/sessions/workflows/use-session-interaction-resolution-actions", () => ({
+vi.mock("#product/hooks/sessions/workflows/use-session-interaction-resolution-actions", () => ({
   useSessionInteractionResolutionActions: () => ({
     resolvePermission: vi.fn(),
     resolveMcpElicitation: vi.fn(),

@@ -23,7 +23,7 @@ const mocks = vi.hoisted(() => ({
   materializePendingWorkspaceSessions: vi.fn(),
 }));
 
-vi.mock("@/hooks/workspaces/cache/use-workspaces", () => ({
+vi.mock("#product/hooks/workspaces/cache/use-workspaces", () => ({
   useWorkspaces: () => ({
     data: {
       repoRoots: [{
@@ -69,7 +69,7 @@ vi.mock("./use-workspace-entry-flow", async (importOriginal) => {
   };
 });
 
-vi.mock("@/hooks/chat/derived/use-active-session-config-state", () => ({
+vi.mock("#product/hooks/chat/derived/use-active-session-config-state", () => ({
   useActiveSessionLaunchState: () => ({
     currentLaunchIdentity: null,
   }),
@@ -84,11 +84,11 @@ vi.mock("./selection/use-workspace-selection", () => ({
   }),
 }));
 
-vi.mock("@/stores/editor/workspace-editor-state", () => ({
+vi.mock("#product/stores/editor/workspace-editor-state", () => ({
   resetWorkspaceEditorState: mocks.resetWorkspaceEditorState,
 }));
 
-vi.mock("@/stores/chat/chat-input-store", () => ({
+vi.mock("#product/stores/chat/chat-input-store", () => ({
   useChatInputStore: {
     getState: () => ({
       requestFocus: mocks.requestFocus,
@@ -96,11 +96,11 @@ vi.mock("@/stores/chat/chat-input-store", () => ({
   },
 }));
 
-vi.mock("@/hooks/workspaces/workflows/use-pending-workspace-session-materialization", () => ({
+vi.mock("#product/hooks/workspaces/workflows/use-pending-workspace-session-materialization", () => ({
   usePendingWorkspaceSessionMaterialization: () => mocks.materializePendingWorkspaceSessions,
 }));
 
-vi.mock("@/hooks/chat/derived/use-configured-launch-readiness", () => ({
+vi.mock("#product/hooks/chat/derived/use-configured-launch-readiness", () => ({
   useConfiguredLaunchReadiness: () => ({
     selection: null,
     displayName: null,

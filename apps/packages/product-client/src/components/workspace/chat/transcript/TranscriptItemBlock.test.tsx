@@ -10,11 +10,11 @@ import {
 import { ProposedPlanToolCallIdsProvider } from "#product/components/workspace/chat/transcript/ProposedPlanToolCallIdsContext";
 import { TranscriptItemBlock } from "#product/components/workspace/chat/transcript/TranscriptItemBlock";
 
-vi.mock("@/hooks/cowork/workflows/use-open-cowork-coding-session", () => ({
+vi.mock("#product/hooks/cowork/workflows/use-open-cowork-coding-session", () => ({
   useOpenCoworkCodingSession: () => vi.fn(),
 }));
 
-vi.mock("@/hooks/workspaces/workflows/selection/use-workspace-selection", () => ({
+vi.mock("#product/hooks/workspaces/workflows/selection/use-workspace-selection", () => ({
   useWorkspaceSelection: () => ({
     selectWorkspace: vi.fn(),
   }),

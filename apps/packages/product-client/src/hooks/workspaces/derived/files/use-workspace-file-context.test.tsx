@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   useWorkspaces: vi.fn(),
 }));
 
-vi.mock("@/hooks/workspaces/cache/use-workspaces", () => ({
+vi.mock("#product/hooks/workspaces/cache/use-workspaces", () => ({
   useWorkspaces: mocks.useWorkspaces,
 }));
 

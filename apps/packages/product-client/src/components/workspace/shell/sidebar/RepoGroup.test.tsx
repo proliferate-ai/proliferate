@@ -65,11 +65,11 @@ vi.mock("@proliferate/ui/layout/ShortcutBadge", () => ({
   ShortcutBadge: ({ label }: { label: string }) => <span>{label}</span>,
 }));
 
-vi.mock("@/components/workspace/shell/sidebar/SidebarWorkspaceVariantIcon", () => ({
+vi.mock("#product/components/workspace/shell/sidebar/SidebarWorkspaceVariantIcon", () => ({
   SidebarWorkspaceVariantIcon: () => <span data-icon="variant" />,
 }));
 
-vi.mock("@/hooks/workspaces/ui/use-repo-group-native-context-menu", () => ({
+vi.mock("#product/hooks/workspaces/ui/use-repo-group-native-context-menu", () => ({
   useRepoGroupNativeContextMenu: () => ({ onContextMenuCapture: vi.fn() }),
 }));
 

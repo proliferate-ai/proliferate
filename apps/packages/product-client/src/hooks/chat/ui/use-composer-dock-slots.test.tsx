@@ -33,83 +33,83 @@ const selectedWorkspaceState = vi.hoisted(() => ({
   value: null as string | null,
 }));
 
-vi.mock("@/hooks/chat/derived/use-active-pending-session-interactions", () => ({
+vi.mock("#product/hooks/chat/derived/use-active-pending-session-interactions", () => ({
   useActivePendingInteractionState: () => ({
     primaryPendingInteraction: primaryPendingInteractionState.value,
   }),
   useActivePendingPrompts: () => pendingPromptsState.value,
 }));
 
-vi.mock("@/hooks/chat/derived/use-active-todo-tracker", () => ({
+vi.mock("#product/hooks/chat/derived/use-active-todo-tracker", () => ({
   useActiveTodoTracker: () => activeTodoTrackerState.value,
 }));
 
-vi.mock("@/hooks/chat/derived/use-chat-prompt-recoveries", () => ({
+vi.mock("#product/hooks/chat/derived/use-chat-prompt-recoveries", () => ({
   useChatPromptRecoveries: () => ({
     recoveries: promptRecoveryState.value,
     workspaceUiKey: "workspace-1",
   }),
 }));
 
-vi.mock("@/hooks/chat/facade/use-delegated-work-composer", () => ({
+vi.mock("#product/hooks/chat/facade/use-delegated-work-composer", () => ({
   useDelegatedWorkComposer: () => delegatedWorkState.value,
 }));
 
-vi.mock("@/stores/sessions/session-selection-store", () => ({
+vi.mock("#product/stores/sessions/session-selection-store", () => ({
   useSessionSelectionStore: (
     selector: (state: { selectedWorkspaceId: string | null }) => unknown,
   ) => selector({ selectedWorkspaceId: selectedWorkspaceState.value }),
 }));
 
-vi.mock("@/hooks/workspaces/facade/use-selected-cloud-runtime-state", () => ({
+vi.mock("#product/hooks/workspaces/facade/use-selected-cloud-runtime-state", () => ({
   useSelectedCloudRuntimeState: () => ({ state: null }),
 }));
 
-vi.mock("@/hooks/workspaces/derived/use-workspace-status-panel-state", () => ({
+vi.mock("#product/hooks/workspaces/derived/use-workspace-status-panel-state", () => ({
   useWorkspaceStatusPanelState: () => workspaceStatusPanelState.value,
 }));
 
-vi.mock("@/components/workspace/chat/surface/WorkspaceArrivalAttachedPanel", () => ({
+vi.mock("#product/components/workspace/chat/surface/WorkspaceArrivalAttachedPanel", () => ({
   WorkspaceArrivalAttachedPanel: () => <div data-testid="workspace-status-panel" />,
 }));
 
-vi.mock("@/components/workspace/chat/surface/CloudRuntimeAttachedPanel", () => ({
+vi.mock("#product/components/workspace/chat/surface/CloudRuntimeAttachedPanel", () => ({
   CloudRuntimeAttachedPanel: () => <div data-testid="cloud-runtime-panel" />,
 }));
 
-vi.mock("@/components/workspace/chat/input/TodoTrackerPanel", () => ({
+vi.mock("#product/components/workspace/chat/input/TodoTrackerPanel", () => ({
   TodoTrackerPanel: () => <div data-testid="todo-tracker-panel" />,
   TodoTrackerStrip: () => <div data-testid="todo-tracker-strip" />,
 }));
 
-vi.mock("@/components/workspace/chat/input/ApprovalCard", () => ({
+vi.mock("#product/components/workspace/chat/input/ApprovalCard", () => ({
   ConnectedApprovalCard: () => <div data-testid="approval-card" />,
 }));
 
-vi.mock("@/components/workspace/chat/input/McpElicitationCard", () => ({
+vi.mock("#product/components/workspace/chat/input/McpElicitationCard", () => ({
   ConnectedMcpElicitationCard: () => <div data-testid="mcp-elicitation-card" />,
 }));
 
-vi.mock("@/components/workspace/chat/input/PromptRecoveryPanel", () => ({
+vi.mock("#product/components/workspace/chat/input/PromptRecoveryPanel", () => ({
   ConnectedPromptRecoveryPanel: () => <div data-testid="prompt-recovery-panel" />,
 }));
-vi.mock("@/components/workspace/chat/input/DelegatedWorkComposerPanel", () => ({
+vi.mock("#product/components/workspace/chat/input/DelegatedWorkComposerPanel", () => ({
   DelegatedWorkComposerPanel: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
-vi.mock("@/components/workspace/chat/input/delegated-work/DelegatedWorkComposerControl", () => ({
+vi.mock("#product/components/workspace/chat/input/delegated-work/DelegatedWorkComposerControl", () => ({
   DelegatedWorkComposerControl: () => <div data-testid="delegated-work-control" />,
 }));
 
-vi.mock("@/components/workspace/chat/input/workspace-activity/WorkspaceActivityComposerCard", () => ({
+vi.mock("#product/components/workspace/chat/input/workspace-activity/WorkspaceActivityComposerCard", () => ({
   ConnectedWorkspaceActivityComposerCard: () => <div data-testid="workspace-activity-card" />,
 }));
 
-vi.mock("@/components/workspace/chat/input/PendingPromptList", () => ({
+vi.mock("#product/components/workspace/chat/input/PendingPromptList", () => ({
   ConnectedPendingPromptList: () => <div data-testid="pending-prompt-list" />,
 }));
 
-vi.mock("@/components/workspace/chat/input/UserInputCard", () => ({
+vi.mock("#product/components/workspace/chat/input/UserInputCard", () => ({
   ConnectedUserInputCard: () => <div data-testid="user-input-card" />,
 }));
 

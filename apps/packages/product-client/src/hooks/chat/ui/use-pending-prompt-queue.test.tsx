@@ -17,37 +17,37 @@ const mocks = vi.hoisted(() => ({
   steerPendingPrompt: vi.fn(),
 }));
 
-vi.mock("@/hooks/chat/derived/use-active-session-identity", () => ({
+vi.mock("#product/hooks/chat/derived/use-active-session-identity", () => ({
   useActiveSessionId: () => mocks.activeSessionId,
 }));
 
-vi.mock("@/hooks/chat/ui/use-queued-prompt-edit", () => ({
+vi.mock("#product/hooks/chat/ui/use-queued-prompt-edit", () => ({
   useQueuedPromptEditReader: () => ({
     visiblePendingPrompts: mocks.pendingPrompts,
     beginEdit: mocks.beginEdit,
   }),
 }));
 
-vi.mock("@/hooks/chat/workflows/use-prompt-outbox-actions", () => ({
+vi.mock("#product/hooks/chat/workflows/use-prompt-outbox-actions", () => ({
   usePromptOutboxActions: () => ({
     cancelBeforeDispatch: mocks.cancelBeforeDispatch,
     dismissPrompt: mocks.dismissPrompt,
   }),
 }));
 
-vi.mock("@/hooks/sessions/workflows/use-delete-pending-prompt", () => ({
+vi.mock("#product/hooks/sessions/workflows/use-delete-pending-prompt", () => ({
   useDeletePendingPrompt: () => mocks.deletePendingPrompt,
 }));
 
-vi.mock("@/hooks/sessions/workflows/use-reorder-pending-prompts", () => ({
+vi.mock("#product/hooks/sessions/workflows/use-reorder-pending-prompts", () => ({
   useReorderPendingPrompts: () => mocks.reorderPendingPrompts,
 }));
 
-vi.mock("@/hooks/sessions/workflows/use-steer-pending-prompt", () => ({
+vi.mock("#product/hooks/sessions/workflows/use-steer-pending-prompt", () => ({
   useSteerPendingPrompt: () => mocks.steerPendingPrompt,
 }));
 
-vi.mock("@/stores/sessions/session-directory-store", () => ({
+vi.mock("#product/stores/sessions/session-directory-store", () => ({
   useSessionDirectoryStore: (
     selector: (state: { entriesById: Record<string, { materializedSessionId: string }> }) => unknown,
   ) => selector({
@@ -58,7 +58,7 @@ vi.mock("@/stores/sessions/session-directory-store", () => ({
   }),
 }));
 
-vi.mock("@/stores/toast/toast-store", () => ({
+vi.mock("#product/stores/toast/toast-store", () => ({
   useToastStore: (selector: (state: { show: (message: string) => void }) => unknown) =>
     selector({ show: mocks.showToast }),
 }));

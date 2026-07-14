@@ -21,7 +21,7 @@ const storageMocks = vi.hoisted(() => ({
   writeTombstones: vi.fn(() => true),
 }));
 
-vi.mock("@/lib/access/persistence/session-replacement-tombstones-storage", () => ({
+vi.mock("#product/lib/access/persistence/session-replacement-tombstones-storage", () => ({
   setSessionReplacementTombstonesStorageContext: () => {},
   hydrateSessionReplacementTombstones: async () => ({}),
   writeSessionReplacementTombstones: storageMocks.writeTombstones,

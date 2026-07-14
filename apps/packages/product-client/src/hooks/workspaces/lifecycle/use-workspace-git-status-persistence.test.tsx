@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
   } as unknown,
 }));
 
-vi.mock("@/hooks/workspaces/derived/use-workspace-git-statuses", () => ({
+vi.mock("#product/hooks/workspaces/derived/use-workspace-git-statuses", () => ({
   useWorkspaceGitStatuses: () => mocks.gitStatuses,
 }));
 

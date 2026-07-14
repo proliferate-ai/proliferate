@@ -52,18 +52,18 @@ vi.mock("react-router-dom", () => ({
   useNavigate: () => routerMocks.navigate,
 }));
 
-vi.mock("@/stores/sessions/session-selection-store", () => ({
+vi.mock("#product/stores/sessions/session-selection-store", () => ({
   useSessionSelectionStore: (selector: (state: typeof harnessMocks.state) => unknown) =>
     selector(harnessMocks.state),
 }));
 
-vi.mock("@/hooks/workspaces/workflows/selection/use-workspace-selection", () => ({
+vi.mock("#product/hooks/workspaces/workflows/selection/use-workspace-selection", () => ({
   useWorkspaceSelection: () => ({
     selectWorkspace: selectionMocks.selectWorkspace,
   }),
 }));
 
-vi.mock("@/hooks/workspaces/derived/use-logical-workspaces", () => ({
+vi.mock("#product/hooks/workspaces/derived/use-logical-workspaces", () => ({
   useLogicalWorkspaces: () => ({
     logicalWorkspaces: logicalWorkspaceMocks.logicalWorkspaces,
   }),
@@ -82,20 +82,20 @@ const webAppMocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@/hooks/capabilities/derived/use-web-app-target", () => ({
+vi.mock("#product/hooks/capabilities/derived/use-web-app-target", () => ({
   useWebAppTarget: () => webAppMocks.webApp,
 }));
 
-vi.mock("@/stores/toast/toast-store", () => ({
+vi.mock("#product/stores/toast/toast-store", () => ({
   useToastStore: (selector: (state: { show: typeof toastMocks.show }) => unknown) =>
     selector({ show: toastMocks.show }),
 }));
 
-vi.mock("@/stores/editor/workspace-editor-state", () => ({
+vi.mock("#product/stores/editor/workspace-editor-state", () => ({
   resetWorkspaceEditorState: editorMocks.resetWorkspaceEditorState,
 }));
 
-vi.mock("@/stores/preferences/workspace-ui-store", () => ({
+vi.mock("#product/stores/preferences/workspace-ui-store", () => ({
   markWorkspaceViewed: workspaceUiMocks.markWorkspaceViewed,
 }));
 

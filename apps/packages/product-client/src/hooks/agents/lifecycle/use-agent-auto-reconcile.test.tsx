@@ -15,17 +15,17 @@ vi.mock("@anyharness/sdk-react", () => ({
   useRuntimeHealthQuery: mocks.useRuntimeHealthQuery,
 }));
 
-vi.mock("@/stores/sessions/harness-connection-store", () => ({
+vi.mock("#product/stores/sessions/harness-connection-store", () => ({
   useHarnessConnectionStore: mocks.useHarnessConnectionStore,
 }));
 
-vi.mock("@/hooks/access/anyharness/agents/use-agent-resources-cache", () => ({
+vi.mock("#product/hooks/access/anyharness/agents/use-agent-resources-cache", () => ({
   useAgentResourcesCache: () => ({
     invalidateAgentListResources: mocks.invalidateAgentListResources,
   }),
 }));
 
-vi.mock("@/hooks/agents/derived/use-agent-catalog", () => ({
+vi.mock("#product/hooks/agents/derived/use-agent-catalog", () => ({
   useAgentCatalog: mocks.useAgentCatalog,
 }));
 

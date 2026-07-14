@@ -100,7 +100,7 @@ vi.mock("@anyharness/sdk-react", () => ({
   resolveWorkspaceConnectionFromContext,
 }));
 
-vi.mock("@/lib/access/anyharness/debug-client", () => ({
+vi.mock("#product/lib/access/anyharness/debug-client", () => ({
   createSessionDebugClient,
 }));
 
@@ -111,22 +111,22 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   }),
 }));
 
-vi.mock("@/stores/sessions/harness-connection-store", () => ({
+vi.mock("#product/stores/sessions/harness-connection-store", () => ({
   useHarnessConnectionStore: (selector: (state: typeof mockState.runtime) => unknown) =>
     selector(mockState.runtime),
 }));
 
-vi.mock("@/stores/sessions/session-selection-store", () => ({
+vi.mock("#product/stores/sessions/session-selection-store", () => ({
   useSessionSelectionStore: (selector: (state: typeof mockState.selection) => unknown) =>
     selector(mockState.selection),
 }));
 
-vi.mock("@/stores/sessions/session-directory-store", () => ({
+vi.mock("#product/stores/sessions/session-directory-store", () => ({
   useSessionDirectoryStore: (selector: (state: typeof mockState.directory) => unknown) =>
     selector(mockState.directory),
 }));
 
-vi.mock("@/stores/toast/toast-store", () => ({
+vi.mock("#product/stores/toast/toast-store", () => ({
   useToastStore: (selector: (state: { show: typeof showToast }) => unknown) =>
     selector({ show: showToast }),
 }));

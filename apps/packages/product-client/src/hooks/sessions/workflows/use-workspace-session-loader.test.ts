@@ -25,20 +25,20 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   }),
 }));
 
-vi.mock("@/hooks/access/anyharness/sessions/use-workspace-session-cache", () => ({
+vi.mock("#product/hooks/access/anyharness/sessions/use-workspace-session-cache", () => ({
   useWorkspaceSessionCache: () => ({
     getWorkspaceSessionCacheSnapshot: mocks.getWorkspaceSessionCacheSnapshot,
     setWorkspaceSessions: mocks.setWorkspaceSessions,
   }),
 }));
 
-vi.mock("@/hooks/workspaces/derived/use-workspace-runtime-block", () => ({
+vi.mock("#product/hooks/workspaces/derived/use-workspace-runtime-block", () => ({
   useWorkspaceRuntimeBlock: () => ({
     getWorkspaceRuntimeBlockReason: mocks.getWorkspaceRuntimeBlockReason,
   }),
 }));
 
-vi.mock("@/hooks/sessions/workflows/session-selection-runtime", () => ({
+vi.mock("#product/hooks/sessions/workflows/session-selection-runtime", () => ({
   ensureRuntimeReadyForSessions: mocks.ensureRuntimeReadyForSessions,
   fetchWorkspaceSessions: mocks.fetchWorkspaceSessions,
 }));

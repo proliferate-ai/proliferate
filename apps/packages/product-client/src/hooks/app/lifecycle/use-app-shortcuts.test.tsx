@@ -22,17 +22,17 @@ const harnessState = vi.hoisted(() => ({
   sidebarShortcutTargets: [] as string[],
 }));
 
-vi.mock("@/hooks/workspaces/derived/use-sidebar-shortcut-targets", () => ({
+vi.mock("#product/hooks/workspaces/derived/use-sidebar-shortcut-targets", () => ({
   useSidebarShortcutTargets: () => harnessState.sidebarShortcutTargets,
 }));
 
-vi.mock("@/hooks/workspaces/workflows/use-workspace-navigation-workflow", () => ({
+vi.mock("#product/hooks/workspaces/workflows/use-workspace-navigation-workflow", () => ({
   useWorkspaceNavigationWorkflow: () => ({
     selectWorkspaceFromSurface: navigationMocks.selectWorkspaceFromSurface,
   }),
 }));
 
-vi.mock("@/stores/sessions/session-selection-store", () => ({
+vi.mock("#product/stores/sessions/session-selection-store", () => ({
   useSessionSelectionStore: (
     selector: (state: {
       selectedWorkspaceId: string | null;
@@ -45,7 +45,7 @@ vi.mock("@/stores/sessions/session-selection-store", () => ({
     }),
 }));
 
-vi.mock("@/lib/workflows/workspaces/right-panel-shortcut-requests", () => ({
+vi.mock("#product/lib/workflows/workspaces/right-panel-shortcut-requests", () => ({
   requestRightPanelTabByIndex: vi.fn(() => true),
 }));
 

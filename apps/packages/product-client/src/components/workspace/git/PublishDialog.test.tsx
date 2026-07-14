@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   useWorkflow: vi.fn(),
 }));
 
-vi.mock("@/hooks/workspaces/workflows/use-workspace-publish-workflow", () => ({
+vi.mock("#product/hooks/workspaces/workflows/use-workspace-publish-workflow", () => ({
   useWorkspacePublishWorkflow: (options: unknown) => {
     mocks.useWorkflow(options);
     return mocks.workflow!;

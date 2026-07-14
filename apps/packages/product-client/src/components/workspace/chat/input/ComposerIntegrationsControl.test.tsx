@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
 }));
 
-vi.mock("@/hooks/cloud/derived/use-composer-integrations-state", () => ({
+vi.mock("#product/hooks/cloud/derived/use-composer-integrations-state", () => ({
   useComposerIntegrationsState: () => mocks.state,
 }));
 
@@ -26,7 +26,7 @@ vi.mock("react-router-dom", async (importOriginal) => ({
 
 // IntegrationIcon reads the resolved theme mode; stub it to a plain marker so
 // the popover rows render without the theme provider.
-vi.mock("@/components/settings/panes/integrations/IntegrationIcon", () => ({
+vi.mock("#product/components/settings/panes/integrations/IntegrationIcon", () => ({
   IntegrationIcon: ({ namespace }: { namespace: string }) => (
     <span data-testid={`icon-${namespace}`} />
   ),

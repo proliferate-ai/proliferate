@@ -30,12 +30,12 @@ vi.mock("react-router-dom", () => ({
   useNavigate: () => mocks.navigate,
 }));
 
-vi.mock("@/stores/toast/toast-store", () => ({
+vi.mock("#product/stores/toast/toast-store", () => ({
   useToastStore: (selector: (state: { show: typeof mocks.showToast }) => unknown) =>
     selector({ show: mocks.showToast }),
 }));
 
-vi.mock("@/stores/sessions/session-selection-store", () => ({
+vi.mock("#product/stores/sessions/session-selection-store", () => ({
   useSessionSelectionStore: (
     selector: (state: { setWorkspaceArrivalEvent: typeof mocks.setWorkspaceArrivalEvent }) => unknown,
   ) => selector({ setWorkspaceArrivalEvent: mocks.setWorkspaceArrivalEvent }),

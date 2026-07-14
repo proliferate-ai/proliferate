@@ -12,12 +12,12 @@ const harnessState = vi.hoisted(() => ({
   selectedWorkspaceId: null as string | null,
 }));
 
-vi.mock("@/stores/sessions/session-selection-store", () => ({
+vi.mock("#product/stores/sessions/session-selection-store", () => ({
   useSessionSelectionStore: (selector: (state: { selectedWorkspaceId: string | null }) => unknown) =>
     selector(harnessState),
 }));
 
-vi.mock("@/lib/domain/focus-zone", () => ({
+vi.mock("#product/lib/domain/focus-zone", () => ({
   focusChatInput: vi.fn(() => true),
 }));
 

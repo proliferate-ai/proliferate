@@ -4,13 +4,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { CloudGuard, type CloudGateFlags } from "#product/components/cloud/CloudGuard";
 
-vi.mock("@/components/settings/panes/CloudUnavailablePane", () => ({
+vi.mock("#product/components/settings/panes/CloudUnavailablePane", () => ({
   CloudUnavailablePane: () => <div>unavailable</div>,
 }));
-vi.mock("@/components/settings/panes/CloudSignInRequiredPane", () => ({
+vi.mock("#product/components/settings/panes/CloudSignInRequiredPane", () => ({
   CloudSignInRequiredPane: () => <div>sign-in-required</div>,
 }));
-vi.mock("@/components/settings/panes/CloudAuthUnavailablePane", () => ({
+vi.mock("#product/components/settings/panes/CloudAuthUnavailablePane", () => ({
   CloudAuthUnavailablePane: () => <div>auth-unavailable</div>,
 }));
 
@@ -23,7 +23,7 @@ const availability = vi.hoisted(() => ({
   } as CloudGateFlags,
 }));
 
-vi.mock("@/hooks/cloud/derived/use-cloud-availability-state", () => ({
+vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
   useCloudAvailabilityState: () => availability.value,
 }));
 

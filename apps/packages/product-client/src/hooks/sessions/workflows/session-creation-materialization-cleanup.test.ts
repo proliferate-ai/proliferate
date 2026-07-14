@@ -30,17 +30,17 @@ const mocks = vi.hoisted(() => ({
   writeTombstones: vi.fn(() => true),
 }));
 
-vi.mock("@/lib/access/anyharness/sessions", async (importOriginal) => ({
+vi.mock("#product/lib/access/anyharness/sessions", async (importOriginal) => ({
   ...await importOriginal<typeof import("#product/lib/access/anyharness/sessions")>(),
   createSession: mocks.createSession,
   dismissSession: mocks.dismissSession,
 }));
 
-vi.mock("@/lib/workflows/sessions/session-launch-defaults", () => ({
+vi.mock("#product/lib/workflows/sessions/session-launch-defaults", () => ({
   applySessionLaunchDefaults: mocks.applySessionLaunchDefaults,
 }));
 
-vi.mock("@/lib/access/anyharness/runtime-target", () => ({
+vi.mock("#product/lib/access/anyharness/runtime-target", () => ({
   resolveRuntimeTargetForWorkspace: vi.fn(async () => ({
     baseUrl: "http://runtime.test",
     authToken: null,
@@ -52,16 +52,16 @@ vi.mock("@/lib/access/anyharness/runtime-target", () => ({
   })),
 }));
 
-vi.mock("@/hooks/sessions/workflows/session-creation-runtime", async (importOriginal) => ({
+vi.mock("#product/hooks/sessions/workflows/session-creation-runtime", async (importOriginal) => ({
   ...await importOriginal<typeof import("#product/hooks/sessions/workflows/session-creation-runtime")>(),
   resolveDesktopRuntimeUrlForWorkspace: mocks.resolveDesktopRuntimeUrlForWorkspace,
 }));
 
-vi.mock("@/lib/access/anyharness/direct-session-create-guard", () => ({
+vi.mock("#product/lib/access/anyharness/direct-session-create-guard", () => ({
   assertDirectSessionCreateSupported: vi.fn(),
 }));
 
-vi.mock("@/lib/access/persistence/session-replacement-tombstones-storage", () => ({
+vi.mock("#product/lib/access/persistence/session-replacement-tombstones-storage", () => ({
   readSessionReplacementTombstones: () => ({}),
   writeSessionReplacementTombstones: mocks.writeTombstones,
 }));

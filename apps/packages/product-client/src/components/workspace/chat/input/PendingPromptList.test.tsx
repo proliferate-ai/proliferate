@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { derivePendingPromptQueueRow } from "@proliferate/product-domain/chats/pending-prompts/pending-prompt-queue";
 import { PendingPromptList, type PendingPromptListProps } from "#product/components/workspace/chat/input/PendingPromptList";
 
-vi.mock("@/hooks/chat/ui/use-pending-prompt-queue", () => ({
+vi.mock("#product/hooks/chat/ui/use-pending-prompt-queue", () => ({
   usePendingPromptQueue: vi.fn(),
 }));
 

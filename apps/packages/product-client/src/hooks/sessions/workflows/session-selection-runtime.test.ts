@@ -16,11 +16,11 @@ const mocks = vi.hoisted(() => ({
   fetchWorkspaceSessionSummaries: vi.fn(),
 }));
 
-vi.mock("@/lib/access/anyharness/session-runtime", () => ({
+vi.mock("#product/lib/access/anyharness/session-runtime", () => ({
   fetchWorkspaceSessionSummaries: mocks.fetchWorkspaceSessionSummaries,
 }));
 
-vi.mock("@/lib/access/anyharness/runtime-bootstrap", () => ({
+vi.mock("#product/lib/access/anyharness/runtime-bootstrap", () => ({
   bootstrapHarnessRuntime: mocks.bootstrapHarnessRuntime,
 }));
 

@@ -17,19 +17,19 @@ const mocks = vi.hoisted(() => ({
   useSelectedCloudRuntimeState: vi.fn(),
 }));
 
-vi.mock("@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog", () => ({
+vi.mock("#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog", () => ({
   useCloudAgentCatalog: mocks.useCloudAgentCatalog,
 }));
 
-vi.mock("@/hooks/agents/derived/use-agent-catalog", () => ({
+vi.mock("#product/hooks/agents/derived/use-agent-catalog", () => ({
   useAgentCatalog: mocks.useAgentCatalog,
 }));
 
-vi.mock("@/hooks/access/anyharness/agents/use-workspace-agent-launch-options", () => ({
+vi.mock("#product/hooks/access/anyharness/agents/use-workspace-agent-launch-options", () => ({
   useWorkspaceAgentLaunchOptionsQuery: mocks.useWorkspaceAgentLaunchOptionsQuery,
 }));
 
-vi.mock("@/hooks/workspaces/facade/use-selected-cloud-runtime-state", () => ({
+vi.mock("#product/hooks/workspaces/facade/use-selected-cloud-runtime-state", () => ({
   useSelectedCloudRuntimeState: mocks.useSelectedCloudRuntimeState,
 }));
 

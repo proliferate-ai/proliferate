@@ -35,7 +35,7 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   useProductHost: () => ({ desktop: { runtime: mocks.localRuntime }, cloud: { client: null } }),
 }));
 
-vi.mock("@/lib/access/persistence/session-replacement-tombstones-storage", () => ({
+vi.mock("#product/lib/access/persistence/session-replacement-tombstones-storage", () => ({
   readSessionReplacementTombstones: () => ({}),
   writeSessionReplacementTombstones: mocks.writeSessionReplacementTombstones,
 }));
@@ -45,28 +45,28 @@ vi.mock("@anyharness/sdk-react", () => ({
   useRestoreDismissedSessionMutation: () => ({ mutateAsync: mocks.restoreMutateAsync }),
 }));
 
-vi.mock("@/hooks/access/anyharness/sessions/use-workspace-session-cache", () => ({
+vi.mock("#product/hooks/access/anyharness/sessions/use-workspace-session-cache", () => ({
   useWorkspaceSessionCache: () => ({
     upsertWorkspaceSessionRecord: mocks.upsertWorkspaceSessionRecord,
   }),
 }));
 
-vi.mock("@/hooks/workspaces/derived/use-workspace-runtime-block", () => ({
+vi.mock("#product/hooks/workspaces/derived/use-workspace-runtime-block", () => ({
   useWorkspaceRuntimeBlock: () => ({
     getWorkspaceRuntimeBlockReason: () => null,
   }),
 }));
 
-vi.mock("@/hooks/sessions/workflows/session-selection-runtime", () => ({
+vi.mock("#product/hooks/sessions/workflows/session-selection-runtime", () => ({
   buildLatencyRequestOptions: () => undefined,
   resolveRuntimeUrlForWorkspaceSessions: mocks.resolveRuntimeUrlForWorkspaceSessions,
 }));
 
-vi.mock("@/lib/access/anyharness/session-runtime", () => ({
+vi.mock("#product/lib/access/anyharness/session-runtime", () => ({
   getWorkspaceClientAndId: mocks.getWorkspaceClientAndId,
 }));
 
-vi.mock("@/stores/toast/toast-store", () => ({
+vi.mock("#product/stores/toast/toast-store", () => ({
   useToastStore: (selector: (state: { show: typeof mocks.showToast }) => unknown) =>
     selector({ show: mocks.showToast }),
 }));

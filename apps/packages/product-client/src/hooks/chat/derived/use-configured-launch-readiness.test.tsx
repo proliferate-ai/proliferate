@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   useChatLaunchCatalog: vi.fn(),
 }));
 
-vi.mock("@/hooks/chat/derived/use-chat-launch-catalog", () => ({
+vi.mock("#product/hooks/chat/derived/use-chat-launch-catalog", () => ({
   useChatLaunchCatalog: mocks.useChatLaunchCatalog,
 }));
 

@@ -27,7 +27,7 @@ const repoSetupModalStore = vi.hoisted(() => {
   return { state, store };
 });
 
-vi.mock("@/stores/ui/repo-setup-modal-store", () => ({
+vi.mock("#product/stores/ui/repo-setup-modal-store", () => ({
   useRepoSetupModalStore: repoSetupModalStore.store,
 }));
 

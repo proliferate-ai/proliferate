@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   getWorkspaceSessionRecords: vi.fn(),
 }));
 
-vi.mock("@/stores/sessions/session-records", () => ({
+vi.mock("#product/stores/sessions/session-records", () => ({
   getMaterializedSessionId: mocks.getMaterializedSessionId,
   getWorkspaceSessionRecords: mocks.getWorkspaceSessionRecords,
 }));

@@ -20,7 +20,7 @@ const coworkState = vi.hoisted(() => ({
   isCreatingThread: false,
 }));
 
-vi.mock("@/components/feedback/Skeleton", () => ({
+vi.mock("#product/components/feedback/Skeleton", () => ({
   SkeletonBlock: () => <div data-testid="threads-skeleton" />,
 }));
 
@@ -48,7 +48,7 @@ vi.mock("@proliferate/ui/layout/SidebarActionButton", () => ({
   ),
 }));
 
-vi.mock("@/components/workspace/shell/sidebar/SidebarIndicators", () => ({
+vi.mock("#product/components/workspace/shell/sidebar/SidebarIndicators", () => ({
   SidebarStatusIndicatorView: ({ indicator }: { indicator: { kind: string } | null }) => (
     <span data-testid={indicator ? `status-${indicator.kind}` : "status-none"} />
   ),
@@ -89,31 +89,31 @@ vi.mock("@proliferate/product-ui/sidebar/ProductSidebarThreads", () => ({
   ),
 }));
 
-vi.mock("@/components/workspace/cowork/sidebar/CoworkThreadItem", () => ({
+vi.mock("#product/components/workspace/cowork/sidebar/CoworkThreadItem", () => ({
   CoworkThreadItem: ({ thread }: { thread: CoworkThread }) => (
     <div data-testid="real-thread-row">{thread.title ?? thread.id}</div>
   ),
 }));
 
-vi.mock("@/components/workspace/shell/sidebar/SidebarShowToggleRow", () => ({
+vi.mock("#product/components/workspace/shell/sidebar/SidebarShowToggleRow", () => ({
   SidebarShowToggleRow: ({ label }: { label: string }) => <button type="button">{label}</button>,
 }));
 
-vi.mock("@/hooks/access/anyharness/cowork/use-cowork-status", () => ({
+vi.mock("#product/hooks/access/anyharness/cowork/use-cowork-status", () => ({
   useCoworkStatus: () => ({
     status: { enabled: true },
     isLoading: coworkState.statusLoading,
   }),
 }));
 
-vi.mock("@/hooks/access/anyharness/cowork/use-cowork-threads", () => ({
+vi.mock("#product/hooks/access/anyharness/cowork/use-cowork-threads", () => ({
   useCoworkThreads: () => ({
     threads: coworkState.threads,
     isLoading: coworkState.threadsLoading,
   }),
 }));
 
-vi.mock("@/hooks/cowork/workflows/use-cowork-thread-workflow", () => ({
+vi.mock("#product/hooks/cowork/workflows/use-cowork-thread-workflow", () => ({
   useCoworkThreadWorkflow: () => ({
     createThread: coworkState.createThread,
     openThread: coworkState.openThread,
@@ -121,7 +121,7 @@ vi.mock("@/hooks/cowork/workflows/use-cowork-thread-workflow", () => ({
   }),
 }));
 
-vi.mock("@/hooks/workspaces/derived/use-workspace-sidebar-activities", () => ({
+vi.mock("#product/hooks/workspaces/derived/use-workspace-sidebar-activities", () => ({
   useWorkspaceSidebarActivityStates: () => ({}),
 }));
 
@@ -130,7 +130,7 @@ const workspaceUiState = vi.hoisted(() => ({
   setThreadsCollapsed: vi.fn(),
 }));
 
-vi.mock("@/stores/preferences/workspace-ui-store", () => ({
+vi.mock("#product/stores/preferences/workspace-ui-store", () => ({
   useWorkspaceUiStore: (selector: (state: typeof workspaceUiState) => unknown) =>
     selector(workspaceUiState),
 }));

@@ -7,7 +7,7 @@ import { CoworkWorkspaceShell } from "#product/components/workspace/cowork/Cowor
 
 const chatViewRender = vi.hoisted(() => vi.fn());
 
-vi.mock("@/components/workspace/chat/ChatView", () => ({
+vi.mock("#product/components/workspace/chat/ChatView", () => ({
   ChatView: (props: {
     showWorkspaceStatusPanels?: boolean;
   }) => {
@@ -16,11 +16,11 @@ vi.mock("@/components/workspace/chat/ChatView", () => ({
   },
 }));
 
-vi.mock("@/components/workspace/shell/sidebar/MainSidebar", () => ({
+vi.mock("#product/components/workspace/shell/sidebar/MainSidebar", () => ({
   MainSidebar: () => <div data-testid="main-sidebar" />,
 }));
 
-vi.mock("@/components/workspace/shell/sidebar/SidebarUpdatePill", () => ({
+vi.mock("#product/components/workspace/shell/sidebar/SidebarUpdatePill", () => ({
   SidebarUpdatePill: () => <div data-testid="sidebar-update-pill" />,
 }));
 
@@ -44,25 +44,25 @@ vi.mock("@proliferate/ui/icons", () => ({
   SplitPanelLeft: () => <span data-testid="split-panel-icon" />,
 }));
 
-vi.mock("@/components/workspace/cowork/CoworkArtifactsPanel", () => ({
+vi.mock("#product/components/workspace/cowork/CoworkArtifactsPanel", () => ({
   CoworkArtifactsPanel: () => <div data-testid="cowork-artifacts-panel" />,
 }));
 
-vi.mock("@/components/workspace/cowork/CoworkWorkspaceHeader", () => ({
+vi.mock("#product/components/workspace/cowork/CoworkWorkspaceHeader", () => ({
   CoworkWorkspaceHeader: ({ title }: { title: string }) => (
     <div data-testid="cowork-workspace-header">{title}</div>
   ),
 }));
 
-vi.mock("@/hooks/ui/layout/use-resize", () => ({
+vi.mock("#product/hooks/ui/layout/use-resize", () => ({
   useResize: () => vi.fn(),
 }));
 
-vi.mock("@/hooks/shortcuts/lifecycle/use-shortcut-handler", () => ({
+vi.mock("#product/hooks/shortcuts/lifecycle/use-shortcut-handler", () => ({
   useShortcutHandler: () => {},
 }));
 
-vi.mock("@/hooks/theme/derived/use-transparent-chrome", () => ({
+vi.mock("#product/hooks/theme/derived/use-transparent-chrome", () => ({
   useTransparentChromeEnabled: () => false,
 }));
 
@@ -82,7 +82,7 @@ const workspaceUiState = vi.hoisted(() => ({
   setSidebarWidth: vi.fn(),
 }));
 
-vi.mock("@/stores/preferences/workspace-ui-store", () => ({
+vi.mock("#product/stores/preferences/workspace-ui-store", () => ({
   useWorkspaceUiStore: (selector: (state: typeof workspaceUiState) => unknown) =>
     selector(workspaceUiState),
 }));
@@ -92,7 +92,7 @@ const coworkUiState = vi.hoisted(() => ({
   setArtifactPanelOpen: vi.fn(),
 }));
 
-vi.mock("@/stores/cowork/cowork-ui-store", () => ({
+vi.mock("#product/stores/cowork/cowork-ui-store", () => ({
   useCoworkUiStore: (selector: (state: typeof coworkUiState) => unknown) =>
     selector(coworkUiState),
 }));
@@ -101,7 +101,7 @@ const sessionDirectoryState = vi.hoisted(() => ({
   entriesById: {},
 }));
 
-vi.mock("@/stores/sessions/session-directory-store", () => ({
+vi.mock("#product/stores/sessions/session-directory-store", () => ({
   useSessionDirectoryStore: (selector: (state: typeof sessionDirectoryState) => unknown) =>
     selector(sessionDirectoryState),
 }));
@@ -110,12 +110,12 @@ const sessionSelectionState = vi.hoisted(() => ({
   activeSessionId: null as string | null,
 }));
 
-vi.mock("@/stores/sessions/session-selection-store", () => ({
+vi.mock("#product/stores/sessions/session-selection-store", () => ({
   useSessionSelectionStore: (selector: (state: typeof sessionSelectionState) => unknown) =>
     selector(sessionSelectionState),
 }));
 
-vi.mock("@/providers/WorkspacePathProvider", () => ({
+vi.mock("#product/providers/WorkspacePathProvider", () => ({
   WorkspacePathProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 

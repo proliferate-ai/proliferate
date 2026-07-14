@@ -63,7 +63,7 @@ vi.mock("./runtime-ready", () => ({
   ensureRuntimeReady: mocks.ensureRuntimeReady,
 }));
 
-vi.mock("@/hooks/workspaces/cache/use-workspaces", () => ({
+vi.mock("#product/hooks/workspaces/cache/use-workspaces", () => ({
   useWorkspaces: () => ({
     data: {
       localWorkspaces: [],
@@ -77,7 +77,7 @@ vi.mock("@/hooks/workspaces/cache/use-workspaces", () => ({
   }),
 }));
 
-vi.mock("@/stores/sessions/harness-connection-store", () => {
+vi.mock("#product/stores/sessions/harness-connection-store", () => {
   const useHarnessConnectionStore = Object.assign(
     vi.fn((selector: (state: { runtimeUrl: string }) => unknown) =>
       selector({ runtimeUrl: "http://localhost:7007" })),

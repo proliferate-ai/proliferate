@@ -12,7 +12,7 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
   useCreateAgentApiKey: () => ({ mutate: createKeyMutate, isPending: false }),
 }));
 
-vi.mock("@/stores/toast/toast-store", () => ({
+vi.mock("#product/stores/toast/toast-store", () => ({
   useToastStore: (selector: (s: { show: typeof showToast }) => unknown) =>
     selector({ show: showToast }),
 }));

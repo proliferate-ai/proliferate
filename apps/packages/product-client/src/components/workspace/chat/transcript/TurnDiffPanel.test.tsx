@@ -31,7 +31,7 @@ const gitDiffQuery = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@/hooks/chat/cache/use-turn-current-file-diffs", () => ({
+vi.mock("#product/hooks/chat/cache/use-turn-current-file-diffs", () => ({
   useTurnCurrentFileDiffs: () => turnCurrentDiffs.state,
   useTurnCurrentFilePatch: (input: {
     file: {

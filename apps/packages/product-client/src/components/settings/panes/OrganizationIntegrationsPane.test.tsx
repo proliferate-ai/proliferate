@@ -15,14 +15,14 @@ const definitionsState = vi.hoisted(() => ({
   refetch: vi.fn(),
 }));
 
-vi.mock("@/hooks/organizations/facade/use-active-organization", () => ({
+vi.mock("#product/hooks/organizations/facade/use-active-organization", () => ({
   useActiveOrganization: () => ({
     activeOrganization: { id: "org-1", name: "Acme" },
     activeOrganizationId: "org-1",
     organizationsQuery: { isLoading: false },
   }),
 }));
-vi.mock("@/hooks/access/cloud/integrations/use-admin-integration-definitions", () => ({
+vi.mock("#product/hooks/access/cloud/integrations/use-admin-integration-definitions", () => ({
   useAdminIntegrationDefinitions: () => definitionsState,
   useAdminIntegrationDefinitionActions: () => ({
     createDefinition,
@@ -30,7 +30,7 @@ vi.mock("@/hooks/access/cloud/integrations/use-admin-integration-definitions", (
     setEnabled,
   }),
 }));
-vi.mock("@/stores/toast/toast-store", () => ({
+vi.mock("#product/stores/toast/toast-store", () => ({
   useToastStore: (selector: (state: { show: typeof showToast }) => unknown) =>
     selector({ show: showToast }),
 }));

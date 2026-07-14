@@ -15,10 +15,10 @@ const mocks = vi.hoisted(() => ({
   resolveWorkspaceConnection: vi.fn(),
 }));
 
-vi.mock("@/hooks/workspaces/workflows/runtime-ready", () => ({
+vi.mock("#product/hooks/workspaces/workflows/runtime-ready", () => ({
   ensureRuntimeReady: mocks.ensureRuntimeReady,
 }));
-vi.mock("@/lib/access/anyharness/resolve-workspace-connection", () => ({
+vi.mock("#product/lib/access/anyharness/resolve-workspace-connection", () => ({
   resolveWorkspaceConnection: mocks.resolveWorkspaceConnection,
 }));
 

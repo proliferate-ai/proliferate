@@ -23,11 +23,11 @@ const hookMocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@/hooks/support/derived/use-support-menu-action", () => ({
+vi.mock("#product/hooks/support/derived/use-support-menu-action", () => ({
   useSupportMenuAction: () => hookMocks.supportMenuAction,
 }));
 
-vi.mock("@/hooks/support/workflows/use-open-support-report-window", () => ({
+vi.mock("#product/hooks/support/workflows/use-open-support-report-window", () => ({
   useOpenSupportReportWindow: () => ({
     openBug: hookMocks.openBug,
     openFeature: vi.fn(),
@@ -42,11 +42,11 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   }),
 }));
 
-vi.mock("@/hooks/capabilities/derived/use-web-app-target", () => ({
+vi.mock("#product/hooks/capabilities/derived/use-web-app-target", () => ({
   useWebAppTarget: () => hookMocks.webApp,
 }));
 
-vi.mock("@/hooks/workspaces/workflows/use-workspace-navigation-workflow", () => ({
+vi.mock("#product/hooks/workspaces/workflows/use-workspace-navigation-workflow", () => ({
   useWorkspaceNavigationWorkflow: () => ({
     goToTopLevelRoute: hookMocks.goToTopLevelRoute,
   }),

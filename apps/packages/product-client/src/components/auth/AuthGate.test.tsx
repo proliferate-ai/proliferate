@@ -45,7 +45,7 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", async () => {
 
 // Force the auth-required gate so anonymous resolves to the sign-in shell
 // (exercising the loading -> login -> app reveal path).
-vi.mock("@/lib/domain/auth/auth-mode", () => ({
+vi.mock("#product/lib/domain/auth/auth-mode", () => ({
   isProductAuthRequired: () => true,
 }));
 
@@ -55,7 +55,7 @@ vi.mock("@/lib/domain/auth/auth-mode", () => ({
 // its mode and fires onMarkResolved once told the mark has settled
 // (markComplete) — mirroring the real living mark so the reveal fade is actually
 // exercised (and the post-sign-in deadlock would be caught).
-vi.mock("@/components/auth/AuthShell", async () => {
+vi.mock("#product/components/auth/AuthShell", async () => {
   const { useEffect, useRef } = await import("react");
   return {
     AuthShell: ({

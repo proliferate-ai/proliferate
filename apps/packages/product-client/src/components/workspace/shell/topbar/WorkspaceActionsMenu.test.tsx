@@ -8,7 +8,7 @@ const nativeMenuState = vi.hoisted(() => ({
   show: vi.fn<() => Promise<boolean>>(),
 }));
 
-vi.mock("@/hooks/workspaces/ui/use-workspace-actions-native-menu", () => ({
+vi.mock("#product/hooks/workspaces/ui/use-workspace-actions-native-menu", () => ({
   useWorkspaceActionsNativeMenu: () => ({ showNativeMenu: nativeMenuState.show }),
 }));
 

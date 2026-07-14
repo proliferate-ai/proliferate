@@ -26,11 +26,11 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
   usePutAuthSelections: () => ({ mutate: putMutate, isPending: false }),
 }));
 
-vi.mock("@/hooks/cloud/derived/use-cloud-availability-state", () => ({
+vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
   useCloudAvailabilityState: () => ({ cloudActive: state.cloudActive }),
 }));
 
-vi.mock("@/hooks/agents/derived/use-agent-catalog", () => ({
+vi.mock("#product/hooks/agents/derived/use-agent-catalog", () => ({
   useAgentCatalog: () => ({
     agents: state.agents,
     isLoading: state.agentsLoading,

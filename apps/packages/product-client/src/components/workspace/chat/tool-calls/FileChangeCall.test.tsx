@@ -13,7 +13,7 @@ function renderToStaticMarkup(ui: ReactElement) {
   );
 }
 
-vi.mock("@/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
+vi.mock("#product/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
   useFileReferenceActions: ({ rawPath }: { rawPath: string }) => ({
     reference: {
       rawPath,

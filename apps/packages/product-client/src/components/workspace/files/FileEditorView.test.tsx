@@ -25,7 +25,7 @@ let workspaceFileContext = {
   treeStateKey: "workspace-1",
 };
 
-vi.mock("@/components/content/ui/DiffViewer", () => ({
+vi.mock("#product/components/content/ui/DiffViewer", () => ({
   DiffViewer: () => createElement("div", null, "diff rendered"),
 }));
 
@@ -33,12 +33,12 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   useProductHost: () => ({ clipboard: { writeText: writeTextMock } }),
 }));
 
-vi.mock("@/hooks/ui/highlighting/use-highlighted-lines", () => ({
+vi.mock("#product/hooks/ui/highlighting/use-highlighted-lines", () => ({
   useHighlightedLines: (code: string) =>
     code.split("\n").map((line) => [{ content: line }]),
 }));
 
-vi.mock("@/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
+vi.mock("#product/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
   useFileReferenceActions: () => ({
     reference: {
       rawPath: "package.json",
@@ -60,11 +60,11 @@ vi.mock("@/hooks/workspaces/workflows/files/use-file-reference-actions", () => (
   }),
 }));
 
-vi.mock("@/hooks/workspaces/derived/files/use-workspace-file-context", () => ({
+vi.mock("#product/hooks/workspaces/derived/files/use-workspace-file-context", () => ({
   useWorkspaceFileContext: () => workspaceFileContext,
 }));
 
-vi.mock("@/hooks/workspaces/workflows/files/use-workspace-file-target-actions", () => ({
+vi.mock("#product/hooks/workspaces/workflows/files/use-workspace-file-target-actions", () => ({
   useWorkspaceFileTargetActions: () => ({
     openFile: openFileMock,
     openFileDiff: vi.fn(),

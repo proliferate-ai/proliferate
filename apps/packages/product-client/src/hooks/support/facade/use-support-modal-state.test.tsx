@@ -16,7 +16,7 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   useProductHost: () => ({ desktop: { diagnostics: diagnosticsMocks } }),
 }));
 
-vi.mock("@/hooks/support/derived/use-support-report-snapshot", () => ({
+vi.mock("#product/hooks/support/derived/use-support-report-snapshot", () => ({
   useSupportReportSnapshot: () => ({
     openedAt: "2026-07-05T00:00:00.000Z",
     source: "sidebar",
@@ -27,7 +27,7 @@ vi.mock("@/hooks/support/derived/use-support-report-snapshot", () => ({
   }),
 }));
 
-vi.mock("@/stores/sessions/session-selection-store", () => ({
+vi.mock("#product/stores/sessions/session-selection-store", () => ({
   useSessionSelectionStore: (selector: (state: { activeSessionId: string | null }) => unknown) =>
     selector({ activeSessionId: null }),
 }));

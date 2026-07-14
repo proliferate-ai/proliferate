@@ -6,11 +6,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { AuthenticatedAppHost } from "#product/pages/AuthenticatedAppHost";
 
-vi.mock("@/hooks/organizations/lifecycle/use-organization-selection-lifecycle", () => ({
+vi.mock("#product/hooks/organizations/lifecycle/use-organization-selection-lifecycle", () => ({
   useOrganizationSelectionLifecycle: vi.fn(),
 }));
 
-vi.mock("@/pages/WorkflowsPage", () => ({
+vi.mock("#product/pages/WorkflowsPage", () => ({
   WorkflowsPage: () => <section data-testid="workflows" />,
 }));
 

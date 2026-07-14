@@ -26,17 +26,17 @@ const mocks = vi.hoisted(() => ({
   clearPendingConfigRollbackCheck: vi.fn(),
 }));
 
-vi.mock("@/stores/preferences/workspace-ui-store", () => ({
+vi.mock("#product/stores/preferences/workspace-ui-store", () => ({
   trackSessionInteraction: mocks.trackSessionInteraction,
   trackWorkspaceInteraction: mocks.trackWorkspaceInteraction,
 }));
 
-vi.mock("@/lib/infra/events/turn-end-events", () => ({
+vi.mock("#product/lib/infra/events/turn-end-events", () => ({
   notifyTurnEnd: mocks.notifyTurnEnd,
   notifyUserFacingTurnEnd: mocks.notifyUserFacingTurnEnd,
 }));
 
-vi.mock("@/hooks/sessions/lifecycle/session-runtime-pending-config", () => ({
+vi.mock("#product/hooks/sessions/lifecycle/session-runtime-pending-config", () => ({
   clearPendingConfigRollbackCheck: mocks.clearPendingConfigRollbackCheck,
 }));
 

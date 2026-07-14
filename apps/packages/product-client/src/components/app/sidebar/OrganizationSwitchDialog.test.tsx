@@ -8,7 +8,7 @@ import { useToastStore } from "#product/stores/toast/toast-store";
 
 const switchMock = vi.fn<(organizationId: string) => Promise<void>>();
 
-vi.mock("@/hooks/organizations/workflows/use-organization-switch-action", () => ({
+vi.mock("#product/hooks/organizations/workflows/use-organization-switch-action", () => ({
   useOrganizationSwitchAction: () => ({
     switchOrganization: switchMock,
     switchingOrganization: false,

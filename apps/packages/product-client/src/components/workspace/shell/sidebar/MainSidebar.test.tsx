@@ -16,15 +16,15 @@ const releaseNoticeState = vi.hoisted(() => ({
   openChangelog: vi.fn(),
 }));
 
-vi.mock("@/hooks/updates/facade/use-release-notice", () => ({
+vi.mock("#product/hooks/updates/facade/use-release-notice", () => ({
   useReleaseNotice: () => releaseNoticeState,
 }));
 
-vi.mock("@/components/diagnostics/DebugProfiler", () => ({
+vi.mock("#product/components/diagnostics/DebugProfiler", () => ({
   DebugProfiler: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
-vi.mock("@/components/app/sidebar/SidebarAccountFooter", () => ({
+vi.mock("#product/components/app/sidebar/SidebarAccountFooter", () => ({
   SidebarAccountFooter: () => <div data-testid="sidebar-account-footer" />,
 }));
 
@@ -72,7 +72,7 @@ vi.mock("./WorkspaceCleanupAttentionSection", () => ({
   WorkspaceCleanupAttentionSection: () => <div data-testid="cleanup-attention" />,
 }));
 
-vi.mock("@/components/workspace/cowork/sidebar/CoworkThreadsSection", () => ({
+vi.mock("#product/components/workspace/cowork/sidebar/CoworkThreadsSection", () => ({
   CoworkThreadsSection: () => <div data-testid="cowork-threads" />,
 }));
 
@@ -109,15 +109,15 @@ vi.mock("@proliferate/ui/primitives/PopoverButton", () => ({
   ),
 }));
 
-vi.mock("@/components/workspace/repo-setup/RepoSetupModal", () => ({
+vi.mock("#product/components/workspace/repo-setup/RepoSetupModal", () => ({
   RepoSetupModal: () => <div data-testid="repo-setup-modal" />,
 }));
 
-vi.mock("@/hooks/cloud/derived/use-cloud-availability-state", () => ({
+vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
   useCloudAvailabilityState: () => ({ cloudActive: false, cloudUnavailable: false }),
 }));
 
-vi.mock("@/hooks/cloud/facade/use-cloud-billing", () => ({
+vi.mock("#product/hooks/cloud/facade/use-cloud-billing", () => ({
   useCloudBilling: () => ({ data: null }),
 }));
 
@@ -125,15 +125,15 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
   useRepositories: () => ({ data: { repositories: [] }, isPending: false }),
 }));
 
-vi.mock("@/hooks/ui/debug/use-debug-render-count", () => ({
+vi.mock("#product/hooks/ui/debug/use-debug-render-count", () => ({
   useDebugRenderCount: () => {},
 }));
 
-vi.mock("@/hooks/workspaces/derived/use-sidebar-shortcut-targets", () => ({
+vi.mock("#product/hooks/workspaces/derived/use-sidebar-shortcut-targets", () => ({
   useSidebarShortcutTargets: () => [],
 }));
 
-vi.mock("@/hooks/support/derived/use-support-report-snapshot", () => ({
+vi.mock("#product/hooks/support/derived/use-support-report-snapshot", () => ({
   useSupportReportSnapshot: () => ({
     openedAt: "2026-05-30T00:00:00.000Z",
     source: "sidebar",
@@ -149,7 +149,7 @@ vi.mock("@/hooks/support/derived/use-support-report-snapshot", () => ({
   }),
 }));
 
-vi.mock("@/hooks/support/workflows/use-open-support-report-window", () => ({
+vi.mock("#product/hooks/support/workflows/use-open-support-report-window", () => ({
   useOpenSupportReportWindow: () => ({
     openBug: vi.fn(() => {
       useSupportModalStore.getState().openFeedback();
@@ -160,14 +160,14 @@ vi.mock("@/hooks/support/workflows/use-open-support-report-window", () => ({
   }),
 }));
 
-vi.mock("@/hooks/support/facade/use-support-availability", () => ({
+vi.mock("#product/hooks/support/facade/use-support-availability", () => ({
   useSupportAvailability: () => ({
     canSubmit: true,
     disabledReason: null,
   }),
 }));
 
-vi.mock("@/stores/sessions/session-selection-store", () => ({
+vi.mock("#product/stores/sessions/session-selection-store", () => ({
   useSessionSelectionStore: (selector: (state: { pendingWorkspaceEntry: null }) => unknown) =>
     selector({ pendingWorkspaceEntry: null }),
 }));
@@ -182,16 +182,16 @@ const workspaceUiState = vi.hoisted(() => ({
   toggleSidebarWorkspaceType: vi.fn(),
 }));
 
-vi.mock("@/stores/preferences/workspace-ui-store", () => ({
+vi.mock("#product/stores/preferences/workspace-ui-store", () => ({
   useWorkspaceUiStore: (selector: (state: typeof workspaceUiState) => unknown) =>
     selector(workspaceUiState),
 }));
 
-vi.mock("@/hooks/workspaces/workflows/use-workspace-display-name-actions", () => ({
+vi.mock("#product/hooks/workspaces/workflows/use-workspace-display-name-actions", () => ({
   useWorkspaceDisplayNameActions: () => ({ updateWorkspaceDisplayName: vi.fn() }),
 }));
 
-vi.mock("@/hooks/workspaces/workflows/use-workspace-sidebar-actions", () => ({
+vi.mock("#product/hooks/workspaces/workflows/use-workspace-sidebar-actions", () => ({
   useWorkspaceSidebarActions: () => ({
     handleAddRepo: vi.fn(),
     handleCreateCloudWorkspace: vi.fn(),
@@ -207,18 +207,18 @@ vi.mock("@/hooks/workspaces/workflows/use-workspace-sidebar-actions", () => ({
   }),
 }));
 
-vi.mock("@/hooks/cloud/workflows/use-cloud-workspace-actions", () => ({
+vi.mock("#product/hooks/cloud/workflows/use-cloud-workspace-actions", () => ({
   useCloudWorkspaceActions: () => ({
     archiveCloudWorkspace: vi.fn(),
     restoreCloudWorkspace: vi.fn(),
   }),
 }));
 
-vi.mock("@/hooks/workspaces/cache/use-workspace-collections-invalidation", () => ({
+vi.mock("#product/hooks/workspaces/cache/use-workspace-collections-invalidation", () => ({
   useWorkspaceCollectionsInvalidation: () => vi.fn(),
 }));
 
-vi.mock("@/stores/sessions/harness-connection-store", () => ({
+vi.mock("#product/stores/sessions/harness-connection-store", () => ({
   useHarnessConnectionStore: (selector: (state: { runtimeUrl: string }) => unknown) =>
     selector({ runtimeUrl: "http://127.0.0.1:8482" }),
 }));
@@ -228,7 +228,7 @@ vi.mock("@proliferate/cloud-sdk/client/workspaces", () => ({
   restoreCloudWorkspace: vi.fn(),
 }));
 
-vi.mock("@/hooks/workspaces/facade/use-sidebar-repo-group-state", () => ({
+vi.mock("#product/hooks/workspaces/facade/use-sidebar-repo-group-state", () => ({
   useSidebarRepoGroupState: () => ({
     allRepoKeys: [],
     allRepoGroupsCollapsed: false,
@@ -241,7 +241,7 @@ vi.mock("@/hooks/workspaces/facade/use-sidebar-repo-group-state", () => ({
   }),
 }));
 
-vi.mock("@/hooks/workspaces/derived/use-workspace-sidebar-state", () => ({
+vi.mock("#product/hooks/workspaces/derived/use-workspace-sidebar-state", () => ({
   useWorkspaceSidebarState: () => ({
     groups: [],
     selectedWorkspaceId: null,
@@ -252,7 +252,7 @@ vi.mock("@/hooks/workspaces/derived/use-workspace-sidebar-state", () => ({
   }),
 }));
 
-vi.mock("@/hooks/sessions/lifecycle/use-session-activity-reconciler", () => ({
+vi.mock("#product/hooks/sessions/lifecycle/use-session-activity-reconciler", () => ({
   useSessionActivityReconciler: () => {},
 }));
 
@@ -261,7 +261,7 @@ const repoSetupModalState = vi.hoisted(() => ({
   close: vi.fn(),
 }));
 
-vi.mock("@/stores/ui/repo-setup-modal-store", () => ({
+vi.mock("#product/stores/ui/repo-setup-modal-store", () => ({
   useRepoSetupModalStore: (selector: (state: typeof repoSetupModalState) => unknown) =>
     selector(repoSetupModalState),
 }));

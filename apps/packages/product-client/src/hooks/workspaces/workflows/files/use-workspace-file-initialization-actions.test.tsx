@@ -22,13 +22,13 @@ vi.mock("@anyharness/sdk-react", () => ({
   useAnyHarnessWorkspaceContext: mocks.useAnyHarnessWorkspaceContext,
 }));
 
-vi.mock("@/hooks/access/anyharness/files/use-workspace-files-cache", () => ({
+vi.mock("#product/hooks/access/anyharness/files/use-workspace-files-cache", () => ({
   useWorkspaceFilesCache: () => ({
     prefetchWorkspaceDirectory: mocks.prefetchWorkspaceDirectory,
   }),
 }));
 
-vi.mock("@/hooks/workspaces/derived/use-workspace-runtime-block", () => ({
+vi.mock("#product/hooks/workspaces/derived/use-workspace-runtime-block", () => ({
   useWorkspaceRuntimeBlock: () => ({
     getWorkspaceRuntimeBlockReason: mocks.getWorkspaceRuntimeBlockReason,
   }),

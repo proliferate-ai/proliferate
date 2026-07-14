@@ -15,29 +15,29 @@ const mocks = vi.hoisted(() => ({
   startLatencyFlow: vi.fn(() => "flow-1"),
 }));
 
-vi.mock("@/hooks/sessions/workflows/use-session-creation-actions", () => ({
+vi.mock("#product/hooks/sessions/workflows/use-session-creation-actions", () => ({
   useSessionCreationActions: () => ({
     createEmptySessionWithResolvedConfig: mocks.createEmptySessionWithResolvedConfig,
   }),
 }));
 
-vi.mock("@/hooks/sessions/workflows/use-session-config-actions", () => ({
+vi.mock("#product/hooks/sessions/workflows/use-session-config-actions", () => ({
   useSessionConfigActions: () => ({
     setActiveSessionConfigOption: mocks.setActiveSessionConfigOption,
   }),
 }));
 
-vi.mock("@/hooks/cowork/workflows/use-cowork-thread-workflow", () => ({
+vi.mock("#product/hooks/cowork/workflows/use-cowork-thread-workflow", () => ({
   useCoworkThreadWorkflow: () => ({
     createThreadFromSelection: mocks.createThreadFromSelection,
   }),
 }));
 
-vi.mock("@/hooks/workspaces/cache/use-workspaces", () => ({
+vi.mock("#product/hooks/workspaces/cache/use-workspaces", () => ({
   useWorkspaces: () => ({ data: { workspaces: [] } }),
 }));
 
-vi.mock("@/hooks/chat/derived/use-active-session-config-state", () => ({
+vi.mock("#product/hooks/chat/derived/use-active-session-config-state", () => ({
   useActiveSessionLaunchState: () => ({
     activeSessionId: "store-active",
     currentLaunchIdentity: { kind: "codex", modelId: "gpt-5" },
@@ -46,18 +46,18 @@ vi.mock("@/hooks/chat/derived/use-active-session-config-state", () => ({
   }),
 }));
 
-vi.mock("@/hooks/chat/derived/use-configured-launch-readiness", () => ({
+vi.mock("#product/hooks/chat/derived/use-configured-launch-readiness", () => ({
   useConfiguredLaunchReadiness: () => ({
     disabledReason: null,
     launchCatalog: { launchAgents: [] },
   }),
 }));
 
-vi.mock("@/lib/domain/chat/models/launch-selection-defaults", () => ({
+vi.mock("#product/lib/domain/chat/models/launch-selection-defaults", () => ({
   resolveAvailableLaunchSelection: (_agents: unknown, selection: unknown) => selection,
 }));
 
-vi.mock("@/stores/sessions/session-selection-store", () => ({
+vi.mock("#product/stores/sessions/session-selection-store", () => ({
   useSessionSelectionStore: (selector: (state: unknown) => unknown) => selector({
     selectedWorkspaceId: "workspace-1",
     selectedLogicalWorkspaceId: "logical-workspace-1",
@@ -65,13 +65,13 @@ vi.mock("@/stores/sessions/session-selection-store", () => ({
   }),
 }));
 
-vi.mock("@/stores/chat/chat-input-store", () => ({
+vi.mock("#product/stores/chat/chat-input-store", () => ({
   useChatInputStore: {
     getState: () => ({ draftByWorkspaceId: {} }),
   },
 }));
 
-vi.mock("@/stores/preferences/user-preferences-store", () => ({
+vi.mock("#product/stores/preferences/user-preferences-store", () => ({
   useUserPreferencesStore: {
     getState: () => ({
       defaultChatModelIdByAgentKind: {},
@@ -80,7 +80,7 @@ vi.mock("@/stores/preferences/user-preferences-store", () => ({
   },
 }));
 
-vi.mock("@/stores/toast/toast-store", () => ({
+vi.mock("#product/stores/toast/toast-store", () => ({
   useToastStore: (selector: (state: unknown) => unknown) => selector({
     show: mocks.showToast,
   }),

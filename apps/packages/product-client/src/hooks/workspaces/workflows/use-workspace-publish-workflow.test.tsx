@@ -36,15 +36,15 @@ vi.mock("@anyharness/sdk-react", () => ({
   useCreatePullRequestMutation: () => mocks.createPullRequestMutation!,
 }));
 
-vi.mock("@/hooks/workspaces/cache/use-pr-status-refresh", () => ({
+vi.mock("#product/hooks/workspaces/cache/use-pr-status-refresh", () => ({
   useRefreshPrStatuses: () => mocks.refreshPrStatuses,
 }));
 
-vi.mock("@/hooks/workspaces/derived/use-logical-workspaces", () => ({
+vi.mock("#product/hooks/workspaces/derived/use-logical-workspaces", () => ({
   useLogicalWorkspaces: () => ({ logicalWorkspaces: [] }),
 }));
 
-vi.mock("@/stores/preferences/workspace-ui-store", () => ({
+vi.mock("#product/stores/preferences/workspace-ui-store", () => ({
   recordWorkspaceGitStatusSnapshot: vi.fn(),
   useWorkspaceUiStore: {
     getState: () => ({ gitStatusSnapshotByWorkspace: {} }),

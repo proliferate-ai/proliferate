@@ -83,11 +83,11 @@ vi.mock("@anyharness/sdk-react", () => ({
   },
 }));
 
-vi.mock("@/hooks/cloud/derived/use-cloud-availability-state", () => ({
+vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
   useCloudAvailabilityState: () => ({ cloudActive: state.cloudActive }),
 }));
 
-vi.mock("@/stores/toast/toast-store", () => ({
+vi.mock("#product/stores/toast/toast-store", () => ({
   useToastStore: (selector: (value: { show: typeof showToast }) => unknown) =>
     selector({ show: showToast }),
 }));

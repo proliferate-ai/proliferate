@@ -61,19 +61,19 @@ const stateMocks = vi.hoisted(() => {
   return { model, repository, mode, computeTargets };
 });
 
-vi.mock("@/hooks/home/derived/use-home-next-model-selection", () => ({
+vi.mock("#product/hooks/home/derived/use-home-next-model-selection", () => ({
   useHomeNextModelSelection: () => stateMocks.model,
 }));
 
-vi.mock("@/hooks/home/derived/use-home-next-repository-selection", () => ({
+vi.mock("#product/hooks/home/derived/use-home-next-repository-selection", () => ({
   useHomeNextRepositorySelection: () => stateMocks.repository,
 }));
 
-vi.mock("@/hooks/home/derived/use-home-next-mode-selection", () => ({
+vi.mock("#product/hooks/home/derived/use-home-next-mode-selection", () => ({
   useHomeNextModeSelection: () => stateMocks.mode,
 }));
 
-vi.mock("@/hooks/compute/derived/use-compute-target-options", () => ({
+vi.mock("#product/hooks/compute/derived/use-compute-target-options", () => ({
   useComputeTargetOptions: () => stateMocks.computeTargets,
 }));
 

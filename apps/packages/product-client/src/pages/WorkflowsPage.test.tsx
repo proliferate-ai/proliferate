@@ -23,7 +23,7 @@ class TestIntersectionObserver {
 
 vi.stubGlobal("IntersectionObserver", TestIntersectionObserver);
 
-vi.mock("@/lib/domain/auth/auth-mode", () => ({
+vi.mock("#product/lib/domain/auth/auth-mode", () => ({
   isDevAuthBypassed: () => authMode.devBypassed,
 }));
 
@@ -51,7 +51,7 @@ vi.mock("@proliferate/product-surfaces/workflows/WorkflowDefinitionsSurface", ()
   },
 }));
 
-vi.mock("@/components/workspace/shell/screen/MainSidebarPageShell", () => ({
+vi.mock("#product/components/workspace/shell/screen/MainSidebarPageShell", () => ({
   MainSidebarPageShell: ({ children }: { children: ReactNode }) => (
     <main>{children}</main>
   ),

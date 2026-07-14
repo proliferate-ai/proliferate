@@ -29,11 +29,11 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   useProductHost: () => ({ desktop: { updater: updaterMocks } }),
 }));
 
-vi.mock("@/components/app/sidebar/SidebarAccountFooter", () => ({
+vi.mock("#product/components/app/sidebar/SidebarAccountFooter", () => ({
   SidebarAccountFooter: () => <div data-testid="sidebar-account-footer" />,
 }));
 
-vi.mock("@/hooks/support/derived/use-support-report-snapshot", () => ({
+vi.mock("#product/hooks/support/derived/use-support-report-snapshot", () => ({
   useSupportReportSnapshot: () => ({
     openedAt: "2026-05-30T00:00:00.000Z",
     source: "settings",
@@ -48,14 +48,14 @@ vi.mock("@/hooks/support/derived/use-support-report-snapshot", () => ({
   }),
 }));
 
-vi.mock("@/hooks/support/facade/use-support-availability", () => ({
+vi.mock("#product/hooks/support/facade/use-support-availability", () => ({
   useSupportAvailability: () => ({
     canSubmit: true,
     disabledReason: null,
   }),
 }));
 
-vi.mock("@/hooks/agents/derived/use-agent-catalog", () => ({
+vi.mock("#product/hooks/agents/derived/use-agent-catalog", () => ({
   useAgentCatalog: () => ({
     agents: [],
     agentsByKind: new Map(),

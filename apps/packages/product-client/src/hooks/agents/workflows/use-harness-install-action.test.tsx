@@ -9,7 +9,7 @@ const installAgent = vi.hoisted(() => vi.fn());
 const refreshAgentResources = vi.hoisted(() => vi.fn());
 const showToast = vi.hoisted(() => vi.fn());
 
-vi.mock("@/hooks/agents/workflows/use-agent-installation-actions", () => ({
+vi.mock("#product/hooks/agents/workflows/use-agent-installation-actions", () => ({
   useAgentInstallationActions: () => ({
     installAgent,
     isAgentSeedHydrating: false,
@@ -18,7 +18,7 @@ vi.mock("@/hooks/agents/workflows/use-agent-installation-actions", () => ({
   }),
 }));
 
-vi.mock("@/stores/toast/toast-store", () => ({
+vi.mock("#product/stores/toast/toast-store", () => ({
   useToastStore: (selector: (state: { show: typeof showToast }) => unknown) =>
     selector({ show: showToast }),
 }));

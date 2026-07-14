@@ -20,18 +20,18 @@ const mocks = vi.hoisted(() => ({
   requestedRepoRootIds: [] as string[],
 }));
 
-vi.mock("@/hooks/workspaces/derived/use-logical-workspaces", () => ({
+vi.mock("#product/hooks/workspaces/derived/use-logical-workspaces", () => ({
   useLogicalWorkspaces: () => ({
     logicalWorkspaces: mocks.logicalWorkspaces,
     isLoading: false,
   }),
 }));
 
-vi.mock("@/hooks/workspaces/cache/use-workspaces", () => ({
+vi.mock("#product/hooks/workspaces/cache/use-workspaces", () => ({
   useWorkspaces: () => mocks.collectionsResult,
 }));
 
-vi.mock("@/hooks/workspaces/cache/use-repo-pr-statuses", () => ({
+vi.mock("#product/hooks/workspaces/cache/use-repo-pr-statuses", () => ({
   useRepoPrStatuses: (repoRootIds: string[]) => {
     mocks.requestedRepoRootIds = repoRootIds;
     return mocks.prState;

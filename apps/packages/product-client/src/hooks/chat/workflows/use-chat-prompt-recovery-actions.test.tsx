@@ -14,13 +14,13 @@ const mocks = vi.hoisted(() => ({
   showToast: vi.fn(),
 }));
 
-vi.mock("@/hooks/sessions/workflows/use-session-creation-actions", () => ({
+vi.mock("#product/hooks/sessions/workflows/use-session-creation-actions", () => ({
   useSessionCreationActions: () => ({
     createSessionWithResolvedConfig: mocks.createSession,
   }),
 }));
 
-vi.mock("@/stores/toast/toast-store", () => ({
+vi.mock("#product/stores/toast/toast-store", () => ({
   useToastStore: (selector: (state: { show: typeof mocks.showToast }) => unknown) =>
     selector({ show: mocks.showToast }),
 }));

@@ -33,17 +33,17 @@ vi.mock("react", async (importOriginal) => {
   };
 });
 
-vi.mock("@/hooks/workspaces/workflows/selection/use-workspace-selection", () => ({
+vi.mock("#product/hooks/workspaces/workflows/selection/use-workspace-selection", () => ({
   useWorkspaceSelection: () => ({
     selectWorkspace: mocks.selectWorkspace,
   }),
 }));
 
-vi.mock("@/stores/editor/workspace-editor-state", () => ({
+vi.mock("#product/stores/editor/workspace-editor-state", () => ({
   resetWorkspaceEditorState: mocks.resetWorkspaceFiles,
 }));
 
-vi.mock("@/stores/chat/chat-input-store", () => ({
+vi.mock("#product/stores/chat/chat-input-store", () => ({
   useChatInputStore: {
     getState: () => ({
       requestFocus: mocks.requestChatInputFocus,
@@ -51,7 +51,7 @@ vi.mock("@/stores/chat/chat-input-store", () => ({
   },
 }));
 
-vi.mock("@/stores/sessions/session-selection-store", () => {
+vi.mock("#product/stores/sessions/session-selection-store", () => {
   const useSessionSelectionStore = Object.assign(
     (selector: (state: typeof mocks.harnessState) => unknown) =>
       selector(mocks.harnessState),
@@ -62,18 +62,18 @@ vi.mock("@/stores/sessions/session-selection-store", () => {
   return { useSessionSelectionStore };
 });
 
-vi.mock("@/hooks/workspaces/workflows/use-pending-workspace-session-materialization", () => ({
+vi.mock("#product/hooks/workspaces/workflows/use-pending-workspace-session-materialization", () => ({
   usePendingWorkspaceSessionMaterialization: () => mocks.materializePendingWorkspaceSessions,
 }));
 
-vi.mock("@/hooks/chat/derived/use-configured-launch-readiness", () => ({
+vi.mock("#product/hooks/chat/derived/use-configured-launch-readiness", () => ({
   useConfiguredLaunchReadiness: () => ({
     selection: null,
     displayName: null,
   }),
 }));
 
-vi.mock("@/hooks/chat/derived/use-active-session-config-state", () => ({
+vi.mock("#product/hooks/chat/derived/use-active-session-config-state", () => ({
   useActiveSessionLaunchState: () => ({
     currentLaunchIdentity: null,
   }),

@@ -8,13 +8,13 @@ import type { ModelSelectorProps } from "#product/lib/domain/chat/models/model-s
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 
 // Mock hooks that depend on app providers / external packages
-vi.mock("@/hooks/activity/derived/use-session-goal", () => ({
+vi.mock("#product/hooks/activity/derived/use-session-goal", () => ({
   useSessionGoal: () => null,
 }));
-vi.mock("@/stores/activity/goal-bar-store", () => ({
+vi.mock("#product/stores/activity/goal-bar-store", () => ({
   useGoalBarStore: () => vi.fn(),
 }));
-vi.mock("@/hooks/cloud/derived/use-composer-integrations-state", () => ({
+vi.mock("#product/hooks/cloud/derived/use-composer-integrations-state", () => ({
   useComposerIntegrationsState: () => ({ mode: "hidden", connectedCount: 0, providers: [], reauthLabel: null }),
 }));
 vi.mock("@/hooks/sessions/lifecycle/use-runtime-pressure-state", () => ({

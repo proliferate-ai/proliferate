@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   listRepoRootPullRequestStatuses: vi.fn(),
 }));
 
-vi.mock("@/lib/access/anyharness/pull-requests", () => ({
+vi.mock("#product/lib/access/anyharness/pull-requests", () => ({
   listRepoRootPullRequestStatuses: mocks.listRepoRootPullRequestStatuses,
 }));
 

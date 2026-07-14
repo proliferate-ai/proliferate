@@ -21,7 +21,7 @@ const workflowMocks = vi.hoisted(() => ({
   teardownDesktopWorker: vi.fn<(worker: DesktopWorkerBridge) => Promise<void>>(),
 }));
 
-vi.mock("@/lib/workflows/cloud/ensure-desktop-worker", () => ({
+vi.mock("#product/lib/workflows/cloud/ensure-desktop-worker", () => ({
   ensureDesktopWorker: workflowMocks.ensureDesktopWorker,
   teardownDesktopWorker: workflowMocks.teardownDesktopWorker,
 }));

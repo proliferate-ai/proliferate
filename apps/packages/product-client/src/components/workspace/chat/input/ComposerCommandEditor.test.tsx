@@ -16,7 +16,7 @@ const slashCommandMock = vi.hoisted(() => ({
   selectedCount: 0,
 }));
 
-vi.mock("@/hooks/chat/ui/use-chat-slash-command-menu", () => ({
+vi.mock("#product/hooks/chat/ui/use-chat-slash-command-menu", () => ({
   useChatSlashCommandMenu: ({
     open,
     onSelect,

@@ -136,7 +136,7 @@ vi.mock("@anyharness/sdk-react", () => ({
   useAgentLaunchOptionsQuery: () => state.launchOptions,
 }));
 
-vi.mock("@/stores/toast/toast-store", () => ({
+vi.mock("#product/stores/toast/toast-store", () => ({
   useToastStore: (selector: (s: { show: typeof showToast }) => unknown) =>
     selector({ show: showToast }),
 }));
@@ -173,7 +173,7 @@ vi.mock("./ProviderPickerModal", () => ({
 // Stub ApiKeyCreatorModal: when open, renders a deterministic button that
 // fires onSubmit with a fixture key. This exercises the create+bind flow
 // without needing Radix Dialog jsdom polyfills.
-vi.mock("@/components/settings/panes/agent-auth/ApiKeyCreatorModal", () => ({
+vi.mock("#product/components/settings/panes/agent-auth/ApiKeyCreatorModal", () => ({
   ApiKeyCreatorModal: ({
     open,
     onClose,
@@ -205,7 +205,7 @@ vi.mock("@/components/settings/panes/agent-auth/ApiKeyCreatorModal", () => ({
     ) : null,
 }));
 
-vi.mock("@/hooks/cloud/derived/use-cloud-availability-state", () => ({
+vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
   useCloudAvailabilityState: () => ({
     cloudEnabled: true,
     cloudActive: state.cloudActive,
@@ -216,18 +216,18 @@ vi.mock("@/hooks/cloud/derived/use-cloud-availability-state", () => ({
   }),
 }));
 
-vi.mock("@/hooks/agents/derived/use-agent-catalog", () => ({
+vi.mock("#product/hooks/agents/derived/use-agent-catalog", () => ({
   useAgentCatalog: () => ({ agentsByKind: state.agentsByKind, agentsNeedingSetup: [] }),
 }));
-vi.mock("@/hooks/agents/workflows/use-harness-install-action", () => ({
+vi.mock("#product/hooks/agents/workflows/use-harness-install-action", () => ({
   useHarnessInstallAction: () => null,
 }));
-vi.mock("@/stores/sessions/harness-connection-store", () => ({
+vi.mock("#product/stores/sessions/harness-connection-store", () => ({
   useHarnessConnectionStore: (selector: (s: { runtimeUrl: string }) => unknown) =>
     selector({ runtimeUrl: "http://127.0.0.1:8457" }),
 }));
 
-vi.mock("@/hooks/access/anyharness/agents/use-agent-resources-cache", () => ({
+vi.mock("#product/hooks/access/anyharness/agents/use-agent-resources-cache", () => ({
   useAgentResourcesCache: () => ({
     invalidateAgentListResources: vi.fn().mockResolvedValue(undefined),
     invalidateAgentSetupResources: vi.fn().mockResolvedValue(undefined),
@@ -235,7 +235,7 @@ vi.mock("@/hooks/access/anyharness/agents/use-agent-resources-cache", () => ({
   }),
 }));
 
-vi.mock("@/hooks/agents/workflows/use-agent-login-terminal-workflow", () => ({
+vi.mock("#product/hooks/agents/workflows/use-agent-login-terminal-workflow", () => ({
   useAgentLoginTerminalWorkflow: () => ({
     sessionsByKind: state.loginSessions,
     runtimeConnection: { baseUrl: "http://127.0.0.1:8457", authToken: undefined },
@@ -245,11 +245,11 @@ vi.mock("@/hooks/agents/workflows/use-agent-login-terminal-workflow", () => ({
   }),
 }));
 
-vi.mock("@/components/agents/AgentLoginTerminalPanel", () => ({
+vi.mock("#product/components/agents/AgentLoginTerminalPanel", () => ({
   AgentLoginTerminalPanel: () => <div data-testid="login-terminal" />,
 }));
 
-vi.mock("@/stores/ui/agent-surface-store", () => ({
+vi.mock("#product/stores/ui/agent-surface-store", () => ({
   useAgentSurfaceStore: (selector: (s: { surface: "cloud" | "local"; setSurface: (v: "cloud" | "local") => void }) => unknown) =>
     selector({
       surface: state.agentSurface,

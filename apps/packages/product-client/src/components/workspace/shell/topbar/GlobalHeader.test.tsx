@@ -22,24 +22,24 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   }),
 }));
 
-vi.mock("@/stores/preferences/user-preferences-store", () => ({
+vi.mock("#product/stores/preferences/user-preferences-store", () => ({
   useUserPreferencesStore: (selector: (state: { defaultOpenInTargetId: string }) => unknown) =>
     selector({ defaultOpenInTargetId: mocks.preferredTargetId }),
 }));
 
-vi.mock("@/components/workspace/shell/topbar/HeaderTabs", () => ({
+vi.mock("#product/components/workspace/shell/topbar/HeaderTabs", () => ({
   HeaderTabs: () => null,
 }));
 
-vi.mock("@/components/workspace/shell/topbar/WorkspaceActionsMenuContainer", () => ({
+vi.mock("#product/components/workspace/shell/topbar/WorkspaceActionsMenuContainer", () => ({
   WorkspaceActionsMenuContainer: () => null,
 }));
 
-vi.mock("@/components/diagnostics/DebugProfiler", () => ({
+vi.mock("#product/components/diagnostics/DebugProfiler", () => ({
   DebugProfiler: ({ children }: { children: ReactNode }) => children,
 }));
 
-vi.mock("@/components/workspace/open-target/SplitButton", () => ({
+vi.mock("#product/components/workspace/open-target/SplitButton", () => ({
   SplitButton: ({
     onClick,
     onTargetClick,
@@ -64,7 +64,7 @@ vi.mock("@/components/workspace/open-target/SplitButton", () => ({
   ),
 }));
 
-vi.mock("@/hooks/ui/debug/use-debug-render-count", () => ({
+vi.mock("#product/hooks/ui/debug/use-debug-render-count", () => ({
   useDebugRenderCount: () => undefined,
 }));
 

@@ -8,7 +8,7 @@ const hookMocks = vi.hoisted(() => ({
   showToast: vi.fn(),
 }));
 
-vi.mock("@/stores/toast/toast-store", () => ({
+vi.mock("#product/stores/toast/toast-store", () => ({
   useToastStore: (selector: (state: { show: (message: string, type?: "error" | "info") => void }) => unknown) =>
     selector({ show: hookMocks.showToast }),
 }));

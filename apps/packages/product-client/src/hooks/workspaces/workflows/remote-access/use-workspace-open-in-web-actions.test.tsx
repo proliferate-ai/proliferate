@@ -21,7 +21,7 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   }),
 }));
 
-vi.mock("@/hooks/workspaces/derived/use-selected-logical-workspace", () => ({
+vi.mock("#product/hooks/workspaces/derived/use-selected-logical-workspace", () => ({
   useSelectedLogicalWorkspace: () => ({
     selectedLogicalWorkspace: hookMocks.selectedLogicalWorkspace,
     selectedLogicalWorkspaceId: null,
@@ -36,11 +36,11 @@ const webAppMocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@/hooks/capabilities/derived/use-web-app-target", () => ({
+vi.mock("#product/hooks/capabilities/derived/use-web-app-target", () => ({
   useWebAppTarget: () => webAppMocks.webApp,
 }));
 
-vi.mock("@/stores/toast/toast-store", () => ({
+vi.mock("#product/stores/toast/toast-store", () => ({
   useToastStore: (selector: (state: { show: (message: string, type?: "error" | "info") => void }) => unknown) =>
     selector({ show: hookMocks.showToast }),
 }));

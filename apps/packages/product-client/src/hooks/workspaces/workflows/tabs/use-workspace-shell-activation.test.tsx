@@ -33,13 +33,13 @@ const measurementMocks = vi.hoisted(() => {
   return state;
 });
 
-vi.mock("@/hooks/sessions/facade/use-session-selection-actions", () => ({
+vi.mock("#product/hooks/sessions/facade/use-session-selection-actions", () => ({
   useSessionSelectionActions: () => ({
     selectSession: hookMocks.selectSession,
   }),
 }));
 
-vi.mock("@/lib/infra/scheduling/schedule-after-next-paint", () => ({
+vi.mock("#product/lib/infra/scheduling/schedule-after-next-paint", () => ({
   scheduleAfterNextPaint: vi.fn((callback: () => void) => {
     hookMocks.scheduledCallbacks.push(callback);
     return () => {

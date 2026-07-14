@@ -12,7 +12,7 @@ vi.mock("@proliferate/ui/primitives/ModalShell", () => ({
     open ? <div>{children}</div> : null,
 }));
 
-vi.mock("@/config/harness-env-vars", () => ({
+vi.mock("#product/config/harness-env-vars", () => ({
   PROVIDER_REGISTRY: [
     { id: "anthropic", displayName: "Anthropic", envVarNames: ["ANTHROPIC_API_KEY"] },
     { id: "openrouter", displayName: "OpenRouter", envVarNames: ["OPENROUTER_API_KEY"] },

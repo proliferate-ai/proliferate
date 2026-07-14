@@ -19,7 +19,7 @@ vi.mock("@/hooks/access/tauri/use-updater", () => ({
   useUpdater: () => updaterMocks,
 }));
 
-vi.mock("@/hooks/app/lifecycle/use-running-agent-count", () => ({
+vi.mock("#product/hooks/app/lifecycle/use-running-agent-count", () => ({
   useRunningAgentCount: () => sessionMocks.runningCount,
 }));
 

@@ -48,7 +48,7 @@ vi.mock("@anyharness/sdk-react", () => ({
   }),
 }));
 
-vi.mock("@/hooks/workspaces/facade/files/use-workspace-file-actions", () => ({
+vi.mock("#product/hooks/workspaces/facade/files/use-workspace-file-actions", () => ({
   useWorkspaceFileActions: () => ({
     openFile: vi.fn(),
     openFileDiff: vi.fn(),
@@ -56,7 +56,7 @@ vi.mock("@/hooks/workspaces/facade/files/use-workspace-file-actions", () => ({
   }),
 }));
 
-vi.mock("@/hooks/workspaces/derived/files/use-workspace-file-context", () => ({
+vi.mock("#product/hooks/workspaces/derived/files/use-workspace-file-context", () => ({
   useWorkspaceFileContext: () => ({
     workspaceUiKey: "workspace-1",
     materializedWorkspaceId: "workspace-1",
@@ -64,7 +64,7 @@ vi.mock("@/hooks/workspaces/derived/files/use-workspace-file-context", () => ({
   }),
 }));
 
-vi.mock("@/hooks/workspaces/derived/use-git-panel-state", () => ({
+vi.mock("#product/hooks/workspaces/derived/use-git-panel-state", () => ({
   useGitPanelState: () => mockGitPanelState(),
 }));
 

@@ -135,22 +135,22 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   useProductHost: () => productHostMock,
 }));
 
-vi.mock("@/lib/access/browser/support-report-job-events", () => supportAccessMocks);
+vi.mock("#product/lib/access/browser/support-report-job-events", () => supportAccessMocks);
 
-vi.mock("@/lib/access/anyharness/debug-client", () => ({
+vi.mock("#product/lib/access/anyharness/debug-client", () => ({
   createSessionDebugClient: vi.fn(() => ({})),
 }));
 
 vi.mock("@/lib/integrations/telemetry/client", () => telemetryMocks);
 
-vi.mock("@/lib/workflows/support/support-report-upload-workflows", () => uploadWorkflowMocks);
+vi.mock("#product/lib/workflows/support/support-report-upload-workflows", () => uploadWorkflowMocks);
 
-vi.mock("@/stores/sessions/harness-connection-store", () => ({
+vi.mock("#product/stores/sessions/harness-connection-store", () => ({
   useHarnessConnectionStore: (selector: (state: { runtimeUrl: string }) => unknown) =>
     selector({ runtimeUrl: "http://127.0.0.1:7777" }),
 }));
 
-vi.mock("@/stores/toast/toast-store", () => ({
+vi.mock("#product/stores/toast/toast-store", () => ({
   useToastStore: (selector: (state: { show: typeof toastStoreMocks.show }) => unknown) =>
     selector({ show: toastStoreMocks.show }),
 }));

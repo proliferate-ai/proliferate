@@ -63,7 +63,7 @@ vi.mock("@anyharness/sdk-react", () => ({
   useAnyHarnessCacheScopeKey: () => "test-cache-scope",
 }));
 
-vi.mock("@/hooks/access/cloud/query-keys", () => ({
+vi.mock("#product/hooks/access/cloud/query-keys", () => ({
   cloudWorkspaceConnectionKey: (workspaceId: string) => [
     "cloud",
     "workspaces",
@@ -72,7 +72,7 @@ vi.mock("@/hooks/access/cloud/query-keys", () => ({
   ],
 }));
 
-vi.mock("@/hooks/workspaces/derived/use-workspace-runtime-block", () => ({
+vi.mock("#product/hooks/workspaces/derived/use-workspace-runtime-block", () => ({
   useWorkspaceRuntimeBlock: () => ({
     selectedCloudRuntime: {
       workspaceId: null,
@@ -83,7 +83,7 @@ vi.mock("@/hooks/workspaces/derived/use-workspace-runtime-block", () => ({
   }),
 }));
 
-vi.mock("@/lib/access/anyharness/resolve-workspace-connection", () => ({
+vi.mock("#product/lib/access/anyharness/resolve-workspace-connection", () => ({
   resolveWorkspaceConnection: vi.fn(async () => ({
     runtimeUrl: "http://runtime.test",
     authToken: mockState.token,
@@ -92,7 +92,7 @@ vi.mock("@/lib/access/anyharness/resolve-workspace-connection", () => ({
   })),
 }));
 
-vi.mock("@/stores/sessions/harness-connection-store", () => {
+vi.mock("#product/stores/sessions/harness-connection-store", () => {
   const state = {
     runtimeUrl: "http://desktop-runtime.test",
   };
@@ -103,7 +103,7 @@ vi.mock("@/stores/sessions/harness-connection-store", () => {
   return { useHarnessConnectionStore };
 });
 
-vi.mock("@/stores/sessions/session-selection-store", () => {
+vi.mock("#product/stores/sessions/session-selection-store", () => {
   const state = {
     selectedWorkspaceId: "workspace-1",
   };
@@ -114,12 +114,12 @@ vi.mock("@/stores/sessions/session-selection-store", () => {
   return { useSessionSelectionStore };
 });
 
-vi.mock("@/stores/toast/toast-store", () => ({
+vi.mock("#product/stores/toast/toast-store", () => ({
   useToastStore: (selector: (value: { show: (message: string) => void }) => unknown) =>
     selector({ show: vi.fn() }),
 }));
 
-vi.mock("@/stores/terminal/terminal-store", () => {
+vi.mock("#product/stores/terminal/terminal-store", () => {
   const state = {
     activeTerminalByWorkspace: { "workspace-1": "terminal-1" },
     markUnread: vi.fn(),

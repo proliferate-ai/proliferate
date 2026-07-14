@@ -29,7 +29,7 @@ vi.mock("@/hooks/access/tauri/use-updater", () => ({
 vi.mock("@/hooks/access/tauri/app/use-app-version", () => ({
   useAppVersion: () => accessMocks.appVersion,
 }));
-vi.mock("@/hooks/access/downloads/desktop-releases/use-desktop-release-manifest", () => ({
+vi.mock("#product/hooks/access/downloads/desktop-releases/use-desktop-release-manifest", () => ({
   useDesktopReleaseManifest: (version: string | null) => {
     accessMocks.requestedManifestVersion = version;
     return accessMocks.installedManifest;

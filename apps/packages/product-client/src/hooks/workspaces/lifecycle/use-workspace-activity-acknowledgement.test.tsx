@@ -16,12 +16,12 @@ const mocks = vi.hoisted(() => ({
   logicalWorkspaces: [] as LogicalWorkspace[],
 }));
 
-vi.mock("@/hooks/ui/document/use-document-focus-visibility", () => ({
+vi.mock("#product/hooks/ui/document/use-document-focus-visibility", () => ({
   isDocumentVisibleAndFocused: () => mocks.focused,
   useDocumentFocusVisibilityNonce: () => mocks.focusVisibilityNonce,
 }));
 
-vi.mock("@/hooks/workspaces/derived/use-logical-workspaces", () => ({
+vi.mock("#product/hooks/workspaces/derived/use-logical-workspaces", () => ({
   useLogicalWorkspaces: () => ({
     logicalWorkspaces: mocks.logicalWorkspaces,
     isLoading: false,

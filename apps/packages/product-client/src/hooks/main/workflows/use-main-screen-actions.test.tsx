@@ -22,23 +22,23 @@ vi.mock("@anyharness/sdk-react", () => ({
   }),
 }));
 
-vi.mock("@/hooks/workspaces/derived/use-workspace-runtime-block", () => ({
+vi.mock("#product/hooks/workspaces/derived/use-workspace-runtime-block", () => ({
   useWorkspaceRuntimeBlock: () => ({
     getWorkspaceRuntimeBlockReason: vi.fn(() => null),
   }),
 }));
 
-vi.mock("@/stores/sessions/harness-connection-store", () => ({
+vi.mock("#product/stores/sessions/harness-connection-store", () => ({
   useHarnessConnectionStore: (selector: (state: { runtimeUrl: string }) => unknown) =>
     selector({ runtimeUrl: "http://localhost:3000" }),
 }));
 
-vi.mock("@/stores/sessions/session-selection-store", () => ({
+vi.mock("#product/stores/sessions/session-selection-store", () => ({
   useSessionSelectionStore: (selector: (state: { selectedWorkspaceId: string }) => unknown) =>
     selector({ selectedWorkspaceId: "workspace-1" }),
 }));
 
-vi.mock("@/stores/toast/toast-store", () => ({
+vi.mock("#product/stores/toast/toast-store", () => ({
   useToastStore: (selector: (state: { show: (message: string) => void }) => unknown) =>
     selector({ show: vi.fn() }),
 }));

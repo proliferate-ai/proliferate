@@ -28,11 +28,11 @@ const selectionMocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@/hooks/agents/derived/use-agent-catalog", () => ({
+vi.mock("#product/hooks/agents/derived/use-agent-catalog", () => ({
   useAgentCatalog: () => selectionMocks.agentCatalog,
 }));
 
-vi.mock("@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog", () => ({
+vi.mock("#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog", () => ({
   useCloudLaunchModelRegistries: () => selectionMocks.modelRegistriesQuery,
 }));
 

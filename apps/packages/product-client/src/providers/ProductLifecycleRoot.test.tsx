@@ -12,7 +12,7 @@ import { makeTestProductHost } from "#product/test/product-host-fixtures";
 // One shared lifecycle hook can be told to throw during render, to prove the
 // root's error boundary contains it rather than letting it escape to the host.
 const lifecycleThrow = vi.hoisted(() => ({ value: false }));
-vi.mock("@/hooks/app/lifecycle/use-connectivity-listeners", () => ({
+vi.mock("#product/hooks/app/lifecycle/use-connectivity-listeners", () => ({
   useConnectivityListeners: () => {
     if (lifecycleThrow.value) {
       throw new Error("lifecycle boom");
@@ -22,32 +22,32 @@ vi.mock("@/hooks/app/lifecycle/use-connectivity-listeners", () => ({
 vi.mock("@/lib/integrations/telemetry/native-diagnostics", () => ({
   reportReactRenderError: vi.fn(),
 }));
-vi.mock("@/hooks/app/lifecycle/use-debug-session-activity", () => ({ useDebugSessionActivity: vi.fn() }));
+vi.mock("#product/hooks/app/lifecycle/use-debug-session-activity", () => ({ useDebugSessionActivity: vi.fn() }));
 vi.mock("@/hooks/app/lifecycle/use-dev-desktop-handoff", () => ({ useDevDesktopHandoff: vi.fn() }));
-vi.mock("@/hooks/app/lifecycle/use-product-entry-routing", () => ({ useProductEntryRouting: vi.fn() }));
-vi.mock("@/hooks/organizations/lifecycle/use-organization-join-auth-launch", () => ({ useOrganizationJoinAuthLaunch: vi.fn() }));
-vi.mock("@/hooks/app/lifecycle/use-app-shortcuts", () => ({ useAppShortcuts: vi.fn() }));
-vi.mock("@/hooks/app/workflows/use-app-command-actions", () => ({
+vi.mock("#product/hooks/app/lifecycle/use-product-entry-routing", () => ({ useProductEntryRouting: vi.fn() }));
+vi.mock("#product/hooks/organizations/lifecycle/use-organization-join-auth-launch", () => ({ useOrganizationJoinAuthLaunch: vi.fn() }));
+vi.mock("#product/hooks/app/lifecycle/use-app-shortcuts", () => ({ useAppShortcuts: vi.fn() }));
+vi.mock("#product/hooks/app/workflows/use-app-command-actions", () => ({
   useAppCommandActions: () => ({ __brand: "app-command-actions" }),
 }));
-vi.mock("@/hooks/agents/lifecycle/use-agent-auto-reconcile", () => ({ useAgentAutoReconcile: vi.fn() }));
-vi.mock("@/hooks/agents/lifecycle/use-first-run-auth-adoption", () => ({ useFirstRunAuthAdoption: vi.fn() }));
-vi.mock("@/hooks/agents/lifecycle/use-gateway-catalog-mirror-sync", () => ({ useGatewayCatalogMirrorSync: vi.fn() }));
-vi.mock("@/hooks/agents/lifecycle/use-local-auth-state-sync", () => ({ useLocalAuthStateSync: vi.fn() }));
-vi.mock("@/hooks/automations/lifecycle/use-local-automation-executor", () => ({ useLocalAutomationExecutor: vi.fn() }));
-vi.mock("@/hooks/home/lifecycle/use-home-deferred-launch-runner", () => ({ useHomeDeferredLaunchRunner: vi.fn() }));
-vi.mock("@/hooks/preferences/lifecycle/use-appearance-preference-lifecycle", () => ({ useAppearancePreferenceLifecycle: vi.fn() }));
-vi.mock("@/hooks/preferences/lifecycle/use-repo-preferences-lifecycle", () => ({ useRepoPreferencesLifecycle: vi.fn() }));
-vi.mock("@/hooks/preferences/lifecycle/use-user-preferences-lifecycle", () => ({ useUserPreferencesLifecycle: vi.fn() }));
-vi.mock("@/hooks/preferences/lifecycle/use-workspace-ui-lifecycle", () => ({ useWorkspaceUiLifecycle: vi.fn() }));
-vi.mock("@/hooks/persistence/lifecycle/use-product-storage-persistence-lifecycle", () => ({ useProductStoragePersistenceLifecycle: vi.fn() }));
-vi.mock("@/hooks/sessions/lifecycle/use-session-intent-dispatcher", () => ({ useSessionIntentDispatcher: vi.fn() }));
-vi.mock("@/hooks/sessions/lifecycle/use-session-selection-lifecycle", () => ({ useSessionSelectionLifecycle: vi.fn() }));
-vi.mock("@/hooks/shortcuts/lifecycle/use-shortcut-dispatcher", () => ({ useShortcutDispatcher: vi.fn() }));
-vi.mock("@/hooks/support/lifecycle/use-support-report-upload-queue", () => ({ useSupportReportUploadQueue: vi.fn() }));
-vi.mock("@/hooks/sessions/lifecycle/use-turn-end-sound", () => ({ useTurnEndSound: vi.fn() }));
-vi.mock("@/hooks/workspaces/lifecycle/use-workspace-git-status-persistence", () => ({ useWorkspaceGitStatusPersistence: vi.fn() }));
-vi.mock("@/hooks/auth/facade/use-product-auth", () => ({ useProductAuthStatus: () => "loading" }));
+vi.mock("#product/hooks/agents/lifecycle/use-agent-auto-reconcile", () => ({ useAgentAutoReconcile: vi.fn() }));
+vi.mock("#product/hooks/agents/lifecycle/use-first-run-auth-adoption", () => ({ useFirstRunAuthAdoption: vi.fn() }));
+vi.mock("#product/hooks/agents/lifecycle/use-gateway-catalog-mirror-sync", () => ({ useGatewayCatalogMirrorSync: vi.fn() }));
+vi.mock("#product/hooks/agents/lifecycle/use-local-auth-state-sync", () => ({ useLocalAuthStateSync: vi.fn() }));
+vi.mock("#product/hooks/automations/lifecycle/use-local-automation-executor", () => ({ useLocalAutomationExecutor: vi.fn() }));
+vi.mock("#product/hooks/home/lifecycle/use-home-deferred-launch-runner", () => ({ useHomeDeferredLaunchRunner: vi.fn() }));
+vi.mock("#product/hooks/preferences/lifecycle/use-appearance-preference-lifecycle", () => ({ useAppearancePreferenceLifecycle: vi.fn() }));
+vi.mock("#product/hooks/preferences/lifecycle/use-repo-preferences-lifecycle", () => ({ useRepoPreferencesLifecycle: vi.fn() }));
+vi.mock("#product/hooks/preferences/lifecycle/use-user-preferences-lifecycle", () => ({ useUserPreferencesLifecycle: vi.fn() }));
+vi.mock("#product/hooks/preferences/lifecycle/use-workspace-ui-lifecycle", () => ({ useWorkspaceUiLifecycle: vi.fn() }));
+vi.mock("#product/hooks/persistence/lifecycle/use-product-storage-persistence-lifecycle", () => ({ useProductStoragePersistenceLifecycle: vi.fn() }));
+vi.mock("#product/hooks/sessions/lifecycle/use-session-intent-dispatcher", () => ({ useSessionIntentDispatcher: vi.fn() }));
+vi.mock("#product/hooks/sessions/lifecycle/use-session-selection-lifecycle", () => ({ useSessionSelectionLifecycle: vi.fn() }));
+vi.mock("#product/hooks/shortcuts/lifecycle/use-shortcut-dispatcher", () => ({ useShortcutDispatcher: vi.fn() }));
+vi.mock("#product/hooks/support/lifecycle/use-support-report-upload-queue", () => ({ useSupportReportUploadQueue: vi.fn() }));
+vi.mock("#product/hooks/sessions/lifecycle/use-turn-end-sound", () => ({ useTurnEndSound: vi.fn() }));
+vi.mock("#product/hooks/workspaces/lifecycle/use-workspace-git-status-persistence", () => ({ useWorkspaceGitStatusPersistence: vi.fn() }));
+vi.mock("#product/hooks/auth/facade/use-product-auth", () => ({ useProductAuthStatus: () => "loading" }));
 vi.mock("@/lib/infra/measurement/debug-startup", () => ({
   elapsedStartupMs: () => 0,
   logStartupDebug: vi.fn(),

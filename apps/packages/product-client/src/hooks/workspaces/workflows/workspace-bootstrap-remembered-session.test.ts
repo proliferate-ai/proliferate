@@ -3,7 +3,7 @@ import type { WorkspaceSession } from "#product/hooks/access/anyharness/sessions
 import { selectSessionWithShellIntentRollback } from "#product/hooks/sessions/workflows/session-shell-selection";
 import { handleRememberedWorkspaceSessionBootstrap } from "#product/hooks/workspaces/workflows/workspace-bootstrap-remembered-session";
 
-vi.mock("@/hooks/sessions/workflows/session-shell-selection", () => ({
+vi.mock("#product/hooks/sessions/workflows/session-shell-selection", () => ({
   selectSessionWithShellIntentRollback: vi.fn(),
 }));
 

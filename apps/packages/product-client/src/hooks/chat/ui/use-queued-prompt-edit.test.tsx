@@ -16,25 +16,25 @@ const mocks = vi.hoisted(() => ({
   showToast: vi.fn(),
 }));
 
-vi.mock("@/hooks/chat/derived/use-active-session-identity", () => ({
+vi.mock("#product/hooks/chat/derived/use-active-session-identity", () => ({
   useActiveSessionId: () => mocks.activeSessionId,
 }));
 
-vi.mock("@/hooks/chat/derived/use-active-pending-session-interactions", () => ({
+vi.mock("#product/hooks/chat/derived/use-active-pending-session-interactions", () => ({
   useActivePendingPrompts: () => mocks.pendingPrompts,
 }));
 
-vi.mock("@/hooks/sessions/workflows/use-edit-pending-prompt", () => ({
+vi.mock("#product/hooks/sessions/workflows/use-edit-pending-prompt", () => ({
   useEditPendingPrompt: () => mocks.editPendingPrompt,
 }));
 
-vi.mock("@/stores/sessions/session-intent-store", () => ({
+vi.mock("#product/stores/sessions/session-intent-store", () => ({
   useSessionIntentStore: {
     getState: vi.fn(),
   },
 }));
 
-vi.mock("@/stores/toast/toast-store", () => ({
+vi.mock("#product/stores/toast/toast-store", () => ({
   useToastStore: (selector: (state: { show: (message: string) => void }) => unknown) =>
     selector({ show: mocks.showToast }),
 }));

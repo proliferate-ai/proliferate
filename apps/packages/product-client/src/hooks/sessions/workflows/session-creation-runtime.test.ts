@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   bootstrapHarnessRuntime: vi.fn(),
 }));
 
-vi.mock("@/lib/access/anyharness/runtime-bootstrap", () => ({
+vi.mock("#product/lib/access/anyharness/runtime-bootstrap", () => ({
   bootstrapHarnessRuntime: mocks.bootstrapHarnessRuntime,
 }));
 

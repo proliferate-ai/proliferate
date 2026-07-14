@@ -42,36 +42,36 @@ const harnessState = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@/hooks/workspaces/derived/use-logical-workspaces", () => ({
+vi.mock("#product/hooks/workspaces/derived/use-logical-workspaces", () => ({
   useLogicalWorkspaces: () => ({
     logicalWorkspaces: harnessState.logicalWorkspaces,
     isLoading: harnessState.logicalWorkspacesLoading,
   }),
 }));
 
-vi.mock("@/hooks/workspaces/derived/use-workspace-sidebar-activities", () => ({
+vi.mock("#product/hooks/workspaces/derived/use-workspace-sidebar-activities", () => ({
   useWorkspaceSidebarActivityStatesWithErrorAttention: () =>
     harnessState.workspaceActivities,
 }));
 
-vi.mock("@/stores/preferences/workspace-ui-store", () => ({
+vi.mock("#product/stores/preferences/workspace-ui-store", () => ({
   useWorkspaceUiStore: (selector: (state: typeof harnessState.workspaceUi) => unknown) =>
     selector(harnessState.workspaceUi),
 }));
 
-vi.mock("@/stores/sessions/session-selection-store", () => ({
+vi.mock("#product/stores/sessions/session-selection-store", () => ({
   useSessionSelectionStore: (
     selector: (state: typeof harnessState.sessionSelection) => unknown,
   ) => selector(harnessState.sessionSelection),
 }));
 
-vi.mock("@/stores/sessions/session-directory-store", () => ({
+vi.mock("#product/stores/sessions/session-directory-store", () => ({
   useSessionDirectoryStore: (
     selector: (state: typeof harnessState.sessionDirectory) => unknown,
   ) => selector(harnessState.sessionDirectory),
 }));
 
-vi.mock("@/stores/home/deferred-home-launch-store", () => ({
+vi.mock("#product/stores/home/deferred-home-launch-store", () => ({
   useDeferredHomeLaunchStore: (
     selector: (state: typeof harnessState.deferredHome) => unknown,
   ) => selector(harnessState.deferredHome),

@@ -43,11 +43,11 @@ const hookMocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@/hooks/cloud/derived/use-cloud-availability-state", () => ({
+vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
   useCloudAvailabilityState: () => ({ cloudActive: true }),
 }));
 
-vi.mock("@/hooks/cloud/facade/use-cloud-billing", () => ({
+vi.mock("#product/hooks/cloud/facade/use-cloud-billing", () => ({
   useCloudBilling: () => ({ data: null }),
 }));
 
@@ -82,20 +82,20 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   }),
 }));
 
-vi.mock("@/hooks/cloud/workflows/use-create-cloud-workspace", () => ({
+vi.mock("#product/hooks/cloud/workflows/use-create-cloud-workspace", () => ({
   useCreateCloudWorkspace: () => ({
     createCloudWorkspaceAndEnter: hookMocks.createCloudWorkspaceAndEnter,
     isCreatingCloudWorkspace: false,
   }),
 }));
 
-vi.mock("@/hooks/workspaces/derived/use-selected-logical-workspace", () => ({
+vi.mock("#product/hooks/workspaces/derived/use-selected-logical-workspace", () => ({
   useSelectedLogicalWorkspace: () => ({
     selectedLogicalWorkspace: hookMocks.selectedLogicalWorkspace,
   }),
 }));
 
-vi.mock("@/hooks/workspaces/derived/use-standard-repo-projection", () => ({
+vi.mock("#product/hooks/workspaces/derived/use-standard-repo-projection", () => ({
   useStandardRepoProjection: () => ({
     repoRoots: [],
     localWorkspaces: [],
@@ -103,7 +103,7 @@ vi.mock("@/hooks/workspaces/derived/use-standard-repo-projection", () => ({
   }),
 }));
 
-vi.mock("@/hooks/workspaces/workflows/use-workspace-entry-actions", () => ({
+vi.mock("#product/hooks/workspaces/workflows/use-workspace-entry-actions", () => ({
   useWorkspaceEntryActions: () => ({
     createLocalWorkspaceAndEnter: hookMocks.createLocalWorkspaceAndEnter,
     isCreatingLocalWorkspace: false,
@@ -112,7 +112,7 @@ vi.mock("@/hooks/workspaces/workflows/use-workspace-entry-actions", () => ({
   }),
 }));
 
-vi.mock("@/hooks/workspaces/workflows/use-add-repo", () => ({
+vi.mock("#product/hooks/workspaces/workflows/use-add-repo", () => ({
   useAddRepo: () => ({
     canAddRepo: true,
     addRepoDisabledReason: null,
@@ -120,39 +120,39 @@ vi.mock("@/hooks/workspaces/workflows/use-add-repo", () => ({
   }),
 }));
 
-vi.mock("@/hooks/workspaces/workflows/use-workspace-copy-actions", () => ({
+vi.mock("#product/hooks/workspaces/workflows/use-workspace-copy-actions", () => ({
   useWorkspaceCopyActions: () => ({
     copyWorkspaceLocation: hookMocks.copyWorkspaceLocation,
     copyBranchName: hookMocks.copyBranchName,
   }),
 }));
 
-vi.mock("@/hooks/workspaces/workflows/use-workspace-navigation-workflow", () => ({
+vi.mock("#product/hooks/workspaces/workflows/use-workspace-navigation-workflow", () => ({
   useWorkspaceNavigationWorkflow: () => ({
     goToTopLevelRoute: hookMocks.goToTopLevelRoute,
     navigateToWorkspaceShell: hookMocks.navigateToWorkspaceShell,
   }),
 }));
 
-vi.mock("@/hooks/home/ui/use-home-next-target-selection-state", () => ({
+vi.mock("#product/hooks/home/ui/use-home-next-target-selection-state", () => ({
   useHomeNextTargetSelectionSnapshot: () => hookMocks.homeTargetSelection,
 }));
 
-vi.mock("@/hooks/home/derived/use-home-next-repository-selection", () => ({
+vi.mock("#product/hooks/home/derived/use-home-next-repository-selection", () => ({
   useHomeNextRepositorySelection: () => hookMocks.homeRepositorySelection,
 }));
 
-vi.mock("@/stores/sessions/session-selection-store", () => ({
+vi.mock("#product/stores/sessions/session-selection-store", () => ({
   useSessionSelectionStore: (selector: (state: { selectedWorkspaceId: string | null }) => unknown) =>
     selector({ selectedWorkspaceId: hookMocks.selectedWorkspaceId }),
 }));
 
-vi.mock("@/stores/toast/toast-store", () => ({
+vi.mock("#product/stores/toast/toast-store", () => ({
   useToastStore: (selector: (state: { show: (message: string) => void }) => unknown) =>
     selector({ show: hookMocks.showToast }),
 }));
 
-vi.mock("@/stores/workspaces/new-workspace-command-scope-store", () => ({
+vi.mock("#product/stores/workspaces/new-workspace-command-scope-store", () => ({
   useNewWorkspaceCommandScopeStore: (
     selector: (state: { activeScope: unknown }) => unknown,
   ) => selector({ activeScope: hookMocks.activeNewWorkspaceScope }),
@@ -170,7 +170,7 @@ const webAppMocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@/hooks/capabilities/derived/use-web-app-target", () => ({
+vi.mock("#product/hooks/capabilities/derived/use-web-app-target", () => ({
   useWebAppTarget: () => webAppMocks.webApp,
 }));
 
@@ -178,7 +178,7 @@ vi.mock("@/hooks/capabilities/derived/use-web-app-target", () => ({
 // use-app-navigation-command-actions.test.tsx; here we only need it not to
 // pull in `useAppCapabilities`'s react-query calls (no QueryClientProvider
 // in this suite's wrapper).
-vi.mock("@/hooks/support/derived/use-support-menu-action", () => ({
+vi.mock("#product/hooks/support/derived/use-support-menu-action", () => ({
   useSupportMenuAction: () => ({ kind: "vendor" as const }),
 }));
 

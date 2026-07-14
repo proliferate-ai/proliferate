@@ -27,12 +27,12 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("@/lib/access/anyharness/workspaces", () => ({
+vi.mock("#product/lib/access/anyharness/workspaces", () => ({
   listRepoRoots: mocks.repoRootsList,
   listRuntimeWorkspaces: mocks.workspacesList,
 }));
 
-vi.mock("@/hooks/cloud/derived/use-cloud-availability-state", () => ({
+vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
   useCloudAvailabilityState: () => ({
     cloudActive: mocks.cloudActive,
   }),

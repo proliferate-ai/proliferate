@@ -35,12 +35,12 @@ const harnessState = vi.hoisted(() => ({
   selectedWorkspaceId: "workspace-1" as string | null,
 }));
 
-vi.mock("@/stores/sessions/session-selection-store", () => ({
+vi.mock("#product/stores/sessions/session-selection-store", () => ({
   useSessionSelectionStore: (selector: (state: { selectedWorkspaceId: string | null }) => unknown) =>
     selector(harnessState),
 }));
 
-vi.mock("@/lib/workflows/workspaces/right-panel-shortcut-requests", () => ({
+vi.mock("#product/lib/workflows/workspaces/right-panel-shortcut-requests", () => ({
   requestRightPanelCloseActiveTab: vi.fn(() => true),
   requestRightPanelRelativeTab: vi.fn(() => true),
   requestRightPanelTabByIndex: vi.fn(() => true),

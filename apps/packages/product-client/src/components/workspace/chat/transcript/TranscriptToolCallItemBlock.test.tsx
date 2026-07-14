@@ -31,17 +31,17 @@ function renderToStaticMarkup(ui: ReactElement) {
   );
 }
 
-vi.mock("@/hooks/cowork/workflows/use-open-cowork-coding-session", () => ({
+vi.mock("#product/hooks/cowork/workflows/use-open-cowork-coding-session", () => ({
   useOpenCoworkCodingSession: () => vi.fn(),
 }));
 
-vi.mock("@/hooks/workspaces/workflows/selection/use-workspace-selection", () => ({
+vi.mock("#product/hooks/workspaces/workflows/selection/use-workspace-selection", () => ({
   useWorkspaceSelection: () => ({
     selectWorkspace: vi.fn(),
   }),
 }));
 
-vi.mock("@/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
+vi.mock("#product/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
   useFileReferenceActions: ({ rawPath }: { rawPath: string }) => ({
     reference: {
       rawPath,

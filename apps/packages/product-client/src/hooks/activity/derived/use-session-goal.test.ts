@@ -9,7 +9,7 @@ import {
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useSessionGoalBarModel } from "#product/hooks/activity/derived/use-session-goal";
 
-vi.mock("@/hooks/chat/derived/use-active-session-identity", () => ({
+vi.mock("#product/hooks/chat/derived/use-active-session-identity", () => ({
   useActiveSessionId: () => "test-session-id",
 }));
 

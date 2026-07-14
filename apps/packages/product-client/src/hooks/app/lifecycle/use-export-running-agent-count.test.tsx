@@ -10,7 +10,7 @@ vi.mock("@proliferate/product-domain/sessions/activity", () => ({
   isSessionSlotBusy: (snapshot: { busy?: boolean } | null) =>
     snapshot?.busy === true,
 }));
-vi.mock("@/lib/domain/sessions/directory/directory-activity", () => ({
+vi.mock("#product/lib/domain/sessions/directory/directory-activity", () => ({
   activitySnapshotFromDirectoryEntry: (entry: unknown) => entry,
   // Also mocked because the session-directory store imports it at module load.
   activityFromTranscript: () => ({}),

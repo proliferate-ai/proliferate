@@ -26,7 +26,7 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@/stores/preferences/workspace-ui-store", async (importOriginal) => {
+vi.mock("#product/stores/preferences/workspace-ui-store", async (importOriginal) => {
   const actual = await importOriginal<typeof import("#product/stores/preferences/workspace-ui-store")>();
   return {
     ...actual,
@@ -34,25 +34,25 @@ vi.mock("@/stores/preferences/workspace-ui-store", async (importOriginal) => {
   };
 });
 
-vi.mock("@/hooks/workspaces/cache/use-workspaces", () => ({
+vi.mock("#product/hooks/workspaces/cache/use-workspaces", () => ({
   useWorkspaces: () => ({
     data: mocks.workspaceCollections,
   }),
 }));
 
-vi.mock("@/hooks/cloud/workflows/use-cloud-workspace-actions", () => ({
+vi.mock("#product/hooks/cloud/workflows/use-cloud-workspace-actions", () => ({
   useCloudWorkspaceActions: () => ({
     refreshCloudWorkspace: mocks.refreshCloudWorkspace,
   }),
 }));
 
-vi.mock("@/hooks/workspaces/workflows/selection/use-workspace-selection", () => ({
+vi.mock("#product/hooks/workspaces/workflows/selection/use-workspace-selection", () => ({
   useWorkspaceSelection: () => ({
     selectWorkspace: mocks.selectWorkspace,
   }),
 }));
 
-vi.mock("@/hooks/workspaces/workflows/use-pending-workspace-session-materialization", () => ({
+vi.mock("#product/hooks/workspaces/workflows/use-pending-workspace-session-materialization", () => ({
   usePendingWorkspaceSessionMaterialization: () => mocks.materializePendingWorkspaceSessions,
 }));
 

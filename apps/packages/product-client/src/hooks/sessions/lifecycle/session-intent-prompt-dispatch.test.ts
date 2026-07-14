@@ -19,11 +19,11 @@ const mocks = vi.hoisted(() => ({
   waitForSessionMaterialization: vi.fn(),
 }));
 
-vi.mock("@/lib/access/browser/prompt-attachment-blocks", () => ({
+vi.mock("#product/lib/access/browser/prompt-attachment-blocks", () => ({
   promptAttachmentSnapshotsToBlocks: mocks.promptAttachmentSnapshotsToBlocks,
 }));
 
-vi.mock("@/lib/access/anyharness/session-runtime", () => ({
+vi.mock("#product/lib/access/anyharness/session-runtime", () => ({
   getSessionClientAndWorkspace: mocks.getSessionClientAndWorkspace,
 }));
 
@@ -37,15 +37,15 @@ vi.mock("@/lib/infra/measurement/latency-flow", () => ({
   getLatencyFlowRequestHeaders: mocks.getLatencyFlowRequestHeaders,
 }));
 
-vi.mock("@/lib/workflows/sessions/session-materialization", () => ({
+vi.mock("#product/lib/workflows/sessions/session-materialization", () => ({
   waitForSessionMaterialization: mocks.waitForSessionMaterialization,
 }));
 
-vi.mock("@/hooks/sessions/workflows/session-materialization-deps", () => ({
+vi.mock("#product/hooks/sessions/workflows/session-materialization-deps", () => ({
   sessionMaterializationDeps: {},
 }));
 
-vi.mock("@/stores/sessions/session-records", () => ({
+vi.mock("#product/stores/sessions/session-records", () => ({
   getSessionRecord: mocks.getSessionRecord,
   patchSessionRecord: mocks.patchSessionRecord,
 }));

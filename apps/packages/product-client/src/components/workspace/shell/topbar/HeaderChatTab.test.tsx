@@ -7,7 +7,7 @@ import { ProductHostProvider } from "@proliferate/product-client/host/ProductHos
 import { HeaderChatTab } from "#product/components/workspace/shell/topbar/HeaderChatTab";
 import type { HeaderChatTabEntry } from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 
-vi.mock("@/hooks/cowork/workflows/use-open-cowork-coding-session", () => ({
+vi.mock("#product/hooks/cowork/workflows/use-open-cowork-coding-session", () => ({
   useOpenCoworkCodingSession: () => vi.fn(),
 }));
 

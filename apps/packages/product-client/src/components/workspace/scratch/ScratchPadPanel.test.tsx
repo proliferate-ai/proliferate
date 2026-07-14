@@ -42,7 +42,7 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   }),
 }));
 
-vi.mock("@/components/workspace/scratch/ScratchCodeMirrorEditor", async () => {
+vi.mock("#product/components/workspace/scratch/ScratchCodeMirrorEditor", async () => {
   const React = await import("react");
   const ScratchCodeMirrorEditor = React.forwardRef(({
     value,

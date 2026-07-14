@@ -18,7 +18,7 @@ const hostMocks = vi.hoisted(() => ({
   reveal: vi.fn(async () => undefined),
 }));
 
-vi.mock("@/hooks/editor/workflows/use-open-in-default-editor", () => ({
+vi.mock("#product/hooks/editor/workflows/use-open-in-default-editor", () => ({
   useOpenInDefaultEditor: () => ({
     defaultTarget: null,
     openInDefaultEditor: editorMocks.openInDefaultEditor,
@@ -26,7 +26,7 @@ vi.mock("@/hooks/editor/workflows/use-open-in-default-editor", () => ({
   }),
 }));
 
-vi.mock("@/hooks/workspaces/workflows/tabs/use-workspace-shell-activation", () => ({
+vi.mock("#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation", () => ({
   useWorkspaceShellActivation: () => ({
     activateViewerTarget: vi.fn(),
   }),
@@ -45,7 +45,7 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   }),
 }));
 
-vi.mock("@/hooks/workspaces/workflows/files/use-fuzzy-file-resolver", () => ({
+vi.mock("#product/hooks/workspaces/workflows/files/use-fuzzy-file-resolver", () => ({
   useFuzzyFileResolver: () => async () => null,
 }));
 

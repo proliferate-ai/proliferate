@@ -67,28 +67,28 @@ vi.mock("react-router-dom", () => ({
   useNavigate: () => screenMocks.navigate,
 }));
 
-vi.mock("@/hooks/home/derived/use-home-next-state", () => ({
+vi.mock("#product/hooks/home/derived/use-home-next-state", () => ({
   useHomeNextState: (args: any) => {
     screenMocks.homeNextStateArgs = args;
     return screenMocks.homeNext;
   },
 }));
 
-vi.mock("@/hooks/home/derived/use-home-next-launch-controls", () => ({
+vi.mock("#product/hooks/home/derived/use-home-next-launch-controls", () => ({
   useHomeNextLaunchControls: () => ({
     controls: [],
     launchControlValues: {},
   }),
 }));
 
-vi.mock("@/hooks/home/workflows/use-home-next-launch", () => ({
+vi.mock("#product/hooks/home/workflows/use-home-next-launch", () => ({
   useHomeNextLaunch: () => ({
     isLaunching: false,
     launch: screenMocks.launch,
   }),
 }));
 
-vi.mock("@/hooks/home/facade/use-home-screen", () => ({
+vi.mock("#product/hooks/home/facade/use-home-screen", () => ({
   useHomeScreen: () => ({
     onboardingCards: screenMocks.onboardingCards,
     isAddingRepo: false,
@@ -96,7 +96,7 @@ vi.mock("@/hooks/home/facade/use-home-screen", () => ({
   }),
 }));
 
-vi.mock("@/stores/home/home-draft-handoff-store", () => ({
+vi.mock("#product/stores/home/home-draft-handoff-store", () => ({
   useHomeDraftHandoffStore: (selector: (state: {
     draftText: string | null;
     clearDraftText: () => void;
@@ -106,7 +106,7 @@ vi.mock("@/stores/home/home-draft-handoff-store", () => ({
   }),
 }));
 
-vi.mock("@/components/home/screen/HomeTargetPicker", () => ({
+vi.mock("#product/components/home/screen/HomeTargetPicker", () => ({
   HomeTargetPicker: (props: any) => {
     screenMocks.targetPickerProps = props;
     return (
@@ -131,7 +131,7 @@ vi.mock("@/components/home/screen/HomeTargetPicker", () => ({
   },
 }));
 
-vi.mock("@/components/workspace/chat/input/ChatInputControlRow", () => ({
+vi.mock("#product/components/workspace/chat/input/ChatInputControlRow", () => ({
   ComposerLeadingControls: (props: any) => {
     screenMocks.leadingControlsProps = props;
     return <div data-testid="composer-leading-controls" />;
@@ -154,7 +154,7 @@ vi.mock("@proliferate/ui/primitives/ComposerTextarea", () => ({
   ),
 }));
 
-vi.mock("@/components/workspace/chat/input/ChatComposerActions", () => ({
+vi.mock("#product/components/workspace/chat/input/ChatComposerActions", () => ({
   ChatComposerActions: ({
     isDisabled,
     onSubmit,

@@ -31,12 +31,12 @@ const mocks = vi.hoisted(() => ({
 
 const CACHE_SCOPE_KEY = "desktop:test-user";
 
-vi.mock("@/lib/access/persistence/session-replacement-tombstones-storage", () => ({
+vi.mock("#product/lib/access/persistence/session-replacement-tombstones-storage", () => ({
   readSessionReplacementTombstones: () => ({}),
   writeSessionReplacementTombstones: mocks.writeSessionReplacementTombstones,
 }));
 
-vi.mock("@/lib/access/anyharness/sessions", () => ({
+vi.mock("#product/lib/access/anyharness/sessions", () => ({
   dismissSession: mocks.dismissSession,
   listWorkspaceSessions: mocks.listWorkspaceSessions,
 }));

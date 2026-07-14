@@ -22,10 +22,10 @@ const integrationsState = vi.hoisted(() => ({
 vi.mock("react-router-dom", () => ({
   useNavigate: () => vi.fn(),
 }));
-vi.mock("@/hooks/organizations/facade/use-active-organization", () => ({
+vi.mock("#product/hooks/organizations/facade/use-active-organization", () => ({
   useActiveOrganization: () => ({ activeOrganizationId: "org-1" }),
 }));
-vi.mock("@/hooks/cloud/facade/use-cloud-integrations", () => ({
+vi.mock("#product/hooks/cloud/facade/use-cloud-integrations", () => ({
   useCloudIntegrations: () => integrationsState,
   useCloudIntegrationActions: () => ({
     authenticate,
@@ -41,7 +41,7 @@ vi.mock("@/hooks/cloud/facade/use-cloud-integrations", () => ({
 vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   useProductHost: () => ({ links: { openExternal } }),
 }));
-vi.mock("@/stores/toast/toast-store", () => ({
+vi.mock("#product/stores/toast/toast-store", () => ({
   useToastStore: (selector: (state: { show: typeof showToast }) => unknown) =>
     selector({ show: showToast }),
 }));

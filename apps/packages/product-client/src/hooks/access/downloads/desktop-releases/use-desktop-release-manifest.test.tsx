@@ -9,7 +9,7 @@ const downloadsMocks = vi.hoisted(() => ({
   fetchDesktopReleaseManifest: vi.fn(),
 }));
 
-vi.mock("@/lib/access/downloads/desktop-release-manifest", () => downloadsMocks);
+vi.mock("#product/lib/access/downloads/desktop-release-manifest", () => downloadsMocks);
 
 import { useDesktopReleaseManifest } from "#product/hooks/access/downloads/desktop-releases/use-desktop-release-manifest";
 

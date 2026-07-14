@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => ({
   logicalWorkspaces: [] as LogicalWorkspace[],
 }));
 
-vi.mock("@/hooks/workspaces/derived/use-logical-workspaces", () => ({
+vi.mock("#product/hooks/workspaces/derived/use-logical-workspaces", () => ({
   useLogicalWorkspaces: () => ({
     logicalWorkspaces: mocks.logicalWorkspaces,
     isLoading: false,
