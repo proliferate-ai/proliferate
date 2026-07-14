@@ -8,6 +8,8 @@ import type {
   ProductDeploymentHost,
   ProductEntry,
   ProductLinks,
+  ProductLoginOutcome,
+  ProductLogoutOutcome,
   ProductRouteChange,
   ProductTelemetry,
 } from "@proliferate/product-client/host/product-host";
@@ -37,6 +39,7 @@ import {
   setTelemetryUser,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
+import { markLoginNotAttempted } from "@/lib/domain/telemetry/errors";
 import { handleDesktopCallbackUrl } from "@/lib/integrations/auth/orchestration-callback";
 import { discoverDesktopSso } from "@/lib/integrations/auth/proliferate-sso-auth";
 import { DESKTOP_AUTH_REDIRECT_URI } from "@/lib/integrations/auth/proliferate-auth";
@@ -121,12 +124,18 @@ export function buildAnonymousMethods({
  * so the concrete hook result (with richer return types) is assignable.
  */
 export interface DesktopAuthActions {
-  signInWithGitHub: (options?: GitHubDesktopSignInOptions) => Promise<unknown>;
-  signInWithPassword: (credentials: PasswordSignInCredentials) => Promise<unknown>;
-  signInWithSso: (options?: DesktopSsoSignInOptions) => Promise<unknown>;
-  signOut: () => Promise<unknown>;
+  signInWithGitHub: (
+    options?: GitHubDesktopSignInOptions,
+  ) => Promise<ProductLoginOutcome>;
+  signInWithPassword: (
+    credentials: PasswordSignInCredentials,
+  ) => Promise<ProductLoginOutcome>;
+  signInWithSso: (
+    options?: DesktopSsoSignInOptions,
+  ) => Promise<ProductLoginOutcome>;
+  signOut: () => Promise<ProductLogoutOutcome>;
   cancelAuthFlow: (message?: string) => Promise<void>;
-  linkGoogle: () => Promise<unknown>;
+  linkGoogle: () => Promise<ProductLoginOutcome>;
 }
 
 export type DesktopAuthOperations = Pick<
@@ -146,48 +155,54 @@ export function createDesktopAuthOperations(
   actions: DesktopAuthActions,
   getCallbackDeps: () => AuthOrchestrationDeps,
 ): DesktopAuthOperations {
-  async function startLogin(request: LoginRequest): Promise<void> {
+  // Pre-transport rejections (an unsupported method or an unresolved
+  // precondition) are tagged so the product audit wrapper re-throws them
+  // without emitting a sign-in-failed event, matching the prior below-host
+  // emitter which only fired once an orchestration flow actually ran.
+  async function startLogin(request: LoginRequest): Promise<ProductLoginOutcome> {
     switch (request.kind) {
       case "password":
-        await actions.signInWithPassword({
+        return actions.signInWithPassword({
           email: request.email,
           password: request.password,
         });
-        return;
 
       case "github": {
         if (
           request.purpose === "link" ||
           request.purpose === "required_github_link"
         ) {
-          throw new Error(
-            "GitHub account linking is not available from Desktop sign-in.",
+          throw markLoginNotAttempted(
+            new Error(
+              "GitHub account linking is not available from Desktop sign-in.",
+            ),
           );
         }
         // Omitted purpose or "login": the existing action hard-codes login.
-        await actions.signInWithGitHub({ prompt: request.prompt });
-        return;
+        return actions.signInWithGitHub({ prompt: request.prompt });
       }
 
       case "google": {
         if (request.purpose === "link") {
-          await actions.linkGoogle();
-          return;
+          return actions.linkGoogle();
         }
-        throw new Error("Google sign-in is not available on Desktop.");
+        throw markLoginNotAttempted(
+          new Error("Google sign-in is not available on Desktop."),
+        );
       }
 
       case "apple":
-        throw new Error("Apple sign-in is not available on Desktop.");
+        throw markLoginNotAttempted(
+          new Error("Apple sign-in is not available on Desktop."),
+        );
 
       case "sso": {
         if (!request.slug) {
-          await actions.signInWithSso({
+          return actions.signInWithSso({
             email: request.email,
             organizationId: request.organizationId,
             connectionId: request.connectionId,
           });
-          return;
         }
         const discovery = await discoverDesktopSso({
           slug: request.slug,
@@ -196,14 +211,13 @@ export function createDesktopAuthOperations(
           connectionId: request.connectionId,
         });
         if (!discovery.enabled || !discovery.organizationId) {
-          throw new Error(SSO_UNAVAILABLE);
+          throw markLoginNotAttempted(new Error(SSO_UNAVAILABLE));
         }
-        await actions.signInWithSso({
+        return actions.signInWithSso({
           organizationId: discovery.organizationId,
           connectionId: discovery.connectionId,
           prompt: "select_account",
         });
-        return;
       }
     }
   }
@@ -240,8 +254,8 @@ export function createDesktopAuthOperations(
     await actions.cancelAuthFlow();
   }
 
-  async function logout(): Promise<void> {
-    await actions.signOut();
+  async function logout(): Promise<ProductLogoutOutcome> {
+    return actions.signOut();
   }
 
   return { startLogin, finishLogin, cancelLogin, logout };

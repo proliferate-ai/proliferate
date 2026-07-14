@@ -1,10 +1,4 @@
 import { useCallback } from "react";
-import { classifyTelemetryFailure } from "@/lib/domain/telemetry/failures";
-import { isTelemetryHandled } from "@/lib/domain/telemetry/errors";
-import {
-  captureTelemetryException,
-  trackProductEvent,
-} from "@/lib/integrations/telemetry/client";
 import {
   cancelActiveAuthFlow,
   linkDesktopProvider,
@@ -16,146 +10,42 @@ import {
   signInWithPassword,
   type PasswordSignInCredentials,
 } from "@/lib/integrations/auth/orchestration-password-flow";
-import {
-  isAbortError,
-  type GitHubDesktopSignInOptions,
-} from "@/lib/integrations/auth/proliferate-auth";
+import type { GitHubDesktopSignInOptions } from "@/lib/integrations/auth/proliferate-auth";
 import type { DesktopSsoSignInOptions } from "@/lib/integrations/auth/proliferate-sso-auth";
 import { useAuthOrchestrationEffects } from "@/hooks/auth/workflows/use-auth-orchestration-effects";
 
-// Owns user-triggered auth actions and their telemetry. Does not own auth bootstrap.
+// Transport-only auth actions beneath the Desktop ProductHost. Each callback
+// runs the orchestration flow and surfaces its normalized {provider, source}
+// (or {provider} for sign-out) result to the host, which returns it upward.
+// Product telemetry for these operations is emitted ABOVE the host boundary by
+// `useAuditedAuth`; this hook must not classify or emit telemetry, so it stays
+// assignable as the host provider without depending on ProductHost.
 export function useAuthActions() {
   const authEffects = useAuthOrchestrationEffects();
 
   return {
-    signInWithGitHub: useCallback(async (options?: GitHubDesktopSignInOptions) => {
-      try {
-        const result = await signInWithGitHub(options, authEffects);
-        trackProductEvent("auth_signed_in", {
-          provider: result.provider,
-          source: result.source,
-        });
-        return result;
-      } catch (error) {
-        if (isAbortError(error)) {
-          throw error;
-        }
-        if (!isTelemetryHandled(error)) {
-          captureTelemetryException(error, {
-            tags: {
-              action: "sign_in",
-              domain: "auth",
-              provider: "github",
-            },
-          });
-        }
-        trackProductEvent("auth_sign_in_failed", {
-          failure_kind: classifyTelemetryFailure(error),
-          provider: "github",
-        });
-        throw error;
-      }
-    }, [authEffects]),
-    signInWithPassword: useCallback(async (credentials: PasswordSignInCredentials) => {
-      try {
-        const result = await signInWithPassword(credentials, authEffects);
-        trackProductEvent("auth_signed_in", {
-          provider: result.provider,
-          source: result.source,
-        });
-        return result;
-      } catch (error) {
-        if (isAbortError(error)) {
-          throw error;
-        }
-        if (!isTelemetryHandled(error)) {
-          captureTelemetryException(error, {
-            tags: {
-              action: "sign_in",
-              domain: "auth",
-              provider: "password",
-            },
-          });
-        }
-        trackProductEvent("auth_sign_in_failed", {
-          failure_kind: classifyTelemetryFailure(error),
-          provider: "password",
-        });
-        throw error;
-      }
-    }, [authEffects]),
-    signInWithSso: useCallback(async (options?: DesktopSsoSignInOptions) => {
-      try {
-        const result = await signInWithSso(options, authEffects);
-        trackProductEvent("auth_signed_in", {
-          provider: result.provider,
-          source: result.source,
-        });
-        return result;
-      } catch (error) {
-        if (isAbortError(error)) {
-          throw error;
-        }
-        if (!isTelemetryHandled(error)) {
-          captureTelemetryException(error, {
-            tags: {
-              action: "sign_in",
-              domain: "auth",
-              provider: "sso",
-            },
-          });
-        }
-        trackProductEvent("auth_sign_in_failed", {
-          failure_kind: classifyTelemetryFailure(error),
-          provider: "sso",
-        });
-        throw error;
-      }
-    }, [authEffects]),
-    signOut: useCallback(async () => {
-      try {
-        const result = await signOut(authEffects);
-        trackProductEvent("auth_signed_out", {
-          provider: result.provider,
-        });
-        return result;
-      } catch (error) {
-        captureTelemetryException(error, {
-          tags: {
-            action: "sign_out",
-            domain: "auth",
-          },
-        });
-        throw error;
-      }
-    }, [authEffects]),
-    cancelAuthFlow: useCallback(async (message?: string) => {
-      await cancelActiveAuthFlow(message);
-    }, []),
-    linkGoogle: useCallback(async () => {
-      try {
-        const result = await linkDesktopProvider("google", authEffects);
-        trackProductEvent("auth_signed_in", {
-          provider: result.provider,
-          source: result.source,
-        });
-        return result;
-      } catch (error) {
-        if (!isTelemetryHandled(error)) {
-          captureTelemetryException(error, {
-            tags: {
-              action: "link_provider",
-              domain: "auth",
-              provider: "google",
-            },
-          });
-        }
-        trackProductEvent("auth_sign_in_failed", {
-          failure_kind: classifyTelemetryFailure(error),
-          provider: "google",
-        });
-        throw error;
-      }
-    }, [authEffects]),
+    signInWithGitHub: useCallback(
+      (options?: GitHubDesktopSignInOptions) =>
+        signInWithGitHub(options, authEffects),
+      [authEffects],
+    ),
+    signInWithPassword: useCallback(
+      (credentials: PasswordSignInCredentials) =>
+        signInWithPassword(credentials, authEffects),
+      [authEffects],
+    ),
+    signInWithSso: useCallback(
+      (options?: DesktopSsoSignInOptions) => signInWithSso(options, authEffects),
+      [authEffects],
+    ),
+    signOut: useCallback(() => signOut(authEffects), [authEffects]),
+    cancelAuthFlow: useCallback(
+      (message?: string) => cancelActiveAuthFlow(message),
+      [],
+    ),
+    linkGoogle: useCallback(
+      () => linkDesktopProvider("google", authEffects),
+      [authEffects],
+    ),
   };
 }

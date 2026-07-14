@@ -34,6 +34,7 @@ import {
   useProductAuthStatus,
   useProductAuthUser,
 } from "@/hooks/auth/facade/use-product-auth";
+import { useAuditedAuth } from "@/hooks/auth/facade/use-audited-auth";
 import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
 import { useOrganizationJoinInvitationFlow } from "@/hooks/organizations/workflows/use-organization-join-invitation-flow";
 import { useJoinedOrganizationActivation } from "@/hooks/organizations/workflows/use-joined-organization-activation";
@@ -48,7 +49,8 @@ export function AccountPane() {
   const navigate = useNavigate();
   const status = useProductAuthStatus();
   const user = useProductAuthUser();
-  const { links, auth } = useProductHost();
+  const { links } = useProductHost();
+  const auth = useAuditedAuth();
   const {
     signIn: signInWithGitHub,
     submitting: signingIn,

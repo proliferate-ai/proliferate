@@ -158,6 +158,31 @@ export type ProductProviderAuthPurpose =
   | "required_github_link";
 
 /**
+ * Non-secret, already-normalized metadata a completed login resolves to. It
+ * carries only the classification the product's auth telemetry needs — which
+ * identity provider authenticated and by which transport path — never a token,
+ * code, PKCE verifier, session, or user record. Values are open strings at this
+ * boundary; the concrete provider/source vocabularies stay product-owned (the
+ * emitting product code narrows them). This lets the product-facing login
+ * workflow emit `auth_signed_in {provider, source}` above the host boundary
+ * without the host classifying or emitting telemetry itself.
+ */
+export interface ProductLoginOutcome {
+  provider: string;
+  source: string;
+}
+
+/**
+ * Non-secret metadata a completed logout resolves to: which provider the
+ * signed-out session belonged to. Same open-string, product-owned-vocabulary
+ * rules as {@link ProductLoginOutcome}; the product workflow emits
+ * `auth_signed_out {provider}` above the host boundary.
+ */
+export interface ProductLogoutOutcome {
+  provider: string;
+}
+
+/**
  * Host-decoded provider callback, already normalized to success or failure by
  * the host before `finishLogin`. The raw callback URL, PKCE verifier, and
  * OAuth state proof never cross this boundary. This value is ephemeral:
@@ -179,11 +204,18 @@ export interface ProductAuthHost {
   state: AuthState;
 
   restoreSession(): Promise<void>;
-  startLogin(request: LoginRequest): Promise<void>;
+  /**
+   * Begin (and, for synchronous methods like password, complete) a login.
+   * Resolves with normalized, non-secret {@link ProductLoginOutcome} metadata
+   * so the product-facing login workflow can emit its auth telemetry above the
+   * host boundary. Rejects on failure or abort; the host classifies neither.
+   */
+  startLogin(request: LoginRequest): Promise<ProductLoginOutcome>;
   finishLogin(callback: AuthCallback): Promise<void>;
   /** Abandon an in-flight provider/OAuth login before it completes. */
   cancelLogin(): Promise<void>;
-  logout(): Promise<void>;
+  /** Sign out, resolving with the non-secret {@link ProductLogoutOutcome}. */
+  logout(): Promise<ProductLogoutOutcome>;
 }
 
 /**

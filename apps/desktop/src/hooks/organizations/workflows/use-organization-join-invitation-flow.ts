@@ -7,6 +7,7 @@ import {
 } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { useAuditedAuth } from "@/hooks/auth/facade/use-audited-auth";
 import {
   useConnectServer,
   type UseConnectServerResult,
@@ -77,7 +78,7 @@ export function useOrganizationJoinInvitationFlow(): UseOrganizationJoinInvitati
   const { auth } = useProductHost();
   const storage = useProductStorageContext();
   const authStatus = auth.state.status;
-  const { startLogin } = auth;
+  const { startLogin } = useAuditedAuth();
   const connectServer = useConnectServer();
   const signInStartedRef = useRef(false);
   const serverSwitchStartedRef = useRef(false);

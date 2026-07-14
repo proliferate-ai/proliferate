@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { useAuditedAuth } from "@/hooks/auth/facade/use-audited-auth";
 import { isAbortError } from "@/lib/integrations/auth/proliferate-auth";
 
 export interface UseOrgSlugSsoSignInResult {
@@ -13,7 +13,7 @@ export interface UseOrgSlugSsoSignInResult {
 // the org's SSO connection, then hand off to the existing native SSO machinery
 // (system browser + proliferate://auth/callback deep link).
 export function useOrgSlugSsoSignIn(): UseOrgSlugSsoSignInResult {
-  const { startLogin } = useProductHost().auth;
+  const { startLogin } = useAuditedAuth();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

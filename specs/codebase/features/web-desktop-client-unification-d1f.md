@@ -170,41 +170,58 @@ persisted key's identity or shape.
   duplicate `AppErrorBoundary` was removed from `App.tsx` (single boundary).
   `main.tsx`'s composition tree is unchanged. A containment test was added to
   `providers/ProductLifecycleRoot.test.tsx`.
-- **Auth product-event relocation — STOPPED (blocked; needs a founder
-  decision).** The locked design decision moves
-  `auth_signed_in`/`auth_sign_in_failed`/`auth_signed_out` emission from
-  `hooks/auth/workflows/use-auth-actions.ts` into the product-facing
-  login/logout workflows. This was **not** performed, because relocating it as
-  specified would degrade telemetry two ways, both violating "identical event
-  names/payloads/conditions":
-  1. **Success-payload fidelity.** `auth_signed_in.{provider,source}` and
-     `auth_signed_out.provider` are resolved inside the orchestration flow
-     (`orchestration-provider-flow.ts` / `orchestration-password-flow.ts`) —
-     `provider` can be `dev_bypass` vs `github`/`sso`; `source` can be
-     `dev_bypass`/`desktop_callback`/`interactive_poll`. But `host.auth.startLogin`
-     and `host.auth.logout` both return `Promise<void>` per the frozen §7.2
-     contract, so those fields are discarded at the host boundary and are
-     **unavailable** at the product-workflow layer. Moving success emission there
-     would require widening the frozen `ProductAuthHost` return contract (out of
-     scope; affects the Web extraction target) or degrading the payload.
-  2. **Coverage.** Emission currently lives one layer below `host.auth` in
-     `use-auth-actions` (wired via `createDesktopAuthOperations`), so **every**
-     `host.auth.startLogin`/`logout` caller is covered. The move-list omits two
-     additional callers — `hooks/organizations/workflows/use-organization-join-invitation-flow.ts`
-     and `hooks/organizations/lifecycle/use-organization-join-auth-launch.ts` —
-     so relocating up to the listed workflows would drop their auth telemetry.
-  `use-auth-actions.ts` therefore stays the central, below-host emission point,
-  emitting the same events with the same payloads/conditions through the
-  retained `client.ts` transport. Resolving this needs a founder decision:
-  either widen the frozen host contract so `startLogin`/`logout` return the
-  orchestration result, or accept the central emission point as the sanctioned
-  owner.
+- **Auth product-event relocation — RESOLVED (host contract widened; single
+  product emission wrapper).** The founder decision was taken (widen the frozen
+  host contract rather than accept a below-host emitter). `ProductAuthHost` now
+  returns normalized, non-secret result metadata:
+  `startLogin(request): Promise<ProductLoginOutcome>` where
+  `ProductLoginOutcome { provider: string; source: string }`, and
+  `logout(): Promise<ProductLogoutOutcome>` where
+  `ProductLogoutOutcome { provider: string }`. Values stay open strings at the
+  package boundary (no desktop `AuthTelemetryProvider`/`AuthSignInSource` import
+  crosses into the package); the emitting product code narrows them. This is the
+  d1e §7.2 `void` return amended — d1e is left historical; this doc records the
+  amendment.
+  - The Desktop host adapter (`createDesktopAuthOperations` in
+    `providers/desktop-product-host.ts`) surfaces the orchestration
+    `{provider, source}` / `{provider}` results — already returned by
+    `orchestration-provider-flow.ts` / `orchestration-password-flow.ts` —
+    upward through `startLogin`/`logout`. `hooks/auth/workflows/use-auth-actions.ts`
+    is now **transport-only**: it runs the orchestration flows and returns their
+    results, with no `trackProductEvent`, no `captureTelemetryException`, and no
+    failure classification. It stays beneath the host because it supplies
+    `ProductAuthHost`; it does not call `useProductHost()`.
+  - The single emission point is one product-owned wrapper,
+    `hooks/auth/facade/use-audited-auth.ts` (`useAuditedAuth`), which wraps
+    `host.auth.startLogin`/`logout` and emits through the typed
+    `use-product-telemetry` facade with the exact prior semantics: success →
+    `auth_signed_in {provider, source}` / `auth_signed_out {provider}` from the
+    host outcome; non-abort, transport-attempted failure → `captureException`
+    (skipped when the error is already telemetry-handled) then
+    `auth_sign_in_failed {failure_kind: classifyTelemetryFailure(error),
+    provider}`; abort → re-thrown, no emission. `cancelLogin` passes through with
+    no emission (as before).
+  - **Exact-condition fidelity.** The prior emitter only fired once an
+    orchestration flow ran; the host has pre-transport rejection paths
+    (unsupported Apple/Google/GitHub-link login, an unresolved SSO slug) that
+    emitted nothing. A `markLoginNotAttempted`/`isLoginNotAttempted` disposition
+    tag (`lib/domain/telemetry/errors.ts`, a WeakSet marker with no vendor
+    coupling) marks those host throws so `useAuditedAuth` re-throws them without
+    emitting — preserving "same events, same payloads, same conditions".
+  - **Full coverage.** Every product login/logout caller routes through
+    `useAuditedAuth`, including the two the move-list originally omitted:
+    `use-github-sign-in`, `use-password-sign-in`, `use-sso-sign-in`,
+    `use-org-slug-sso-sign-in`, `use-app-sidebar-sign-out-action`,
+    `AccountPane` (sign-out + Google account link), and both org-join flows
+    (`use-organization-join-invitation-flow`, `use-organization-join-auth-launch`).
+    A grep for `track("auth_…")` outside tests returns exactly the three lines in
+    `use-audited-auth.ts`; no direct `host.auth.startLogin`/`logout` product
+    caller remains.
 - **Contract-sanctioned direct transport (retained, not deferrals).** The sink
   (`client.ts`), startup wiring (`main.tsx`), the host adapter itself
   (`desktop-product-host.ts`), the Sentry route-instrumentation HOC
   (`InstrumentedRoutes` in `App.tsx`), the Query-client capture DI
-  (`app-query-client.ts`), the retained auth-event transport
-  (`hooks/auth/workflows/use-auth-actions.ts`, per the STOP above),
+  (`app-query-client.ts`),
   `hooks/access/tauri/use-updater.ts` (app-update events + capture; a host/OS
   updater-bridge consumer that moves in the extraction slice, not a product
   workflow), and pre-provider auth/boot reporting

@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { useAuditedAuth } from "@/hooks/auth/facade/use-audited-auth";
 import { useSsoDiscovery } from "@/hooks/access/cloud/auth/use-sso-discovery";
 import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
 import { isAbortError } from "@/lib/integrations/auth/proliferate-auth";
@@ -20,7 +20,7 @@ export interface UseSsoSignInResult {
 // Owns SSO sign-in form state and submit callback. Discovery stays in the Cloud
 // access hook so the login surface can render only when deployment SSO is enabled.
 export function useSsoSignIn(): UseSsoSignInResult {
-  const { startLogin, cancelLogin } = useProductHost().auth;
+  const { startLogin, cancelLogin } = useAuditedAuth();
   const { cloudEnabled } = useAppCapabilities();
   const {
     data: ssoDiscovery,

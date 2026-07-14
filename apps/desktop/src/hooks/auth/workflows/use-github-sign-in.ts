@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { useAuditedAuth } from "@/hooks/auth/facade/use-audited-auth";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 import { useGitHubDesktopAuthAvailability } from "@/hooks/access/cloud/auth/use-github-auth-availability";
 import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
@@ -25,7 +25,7 @@ export interface UseGitHubSignInResult {
 // otherwise the first-load pending window flashes a "checking…" state during the loading -> auth
 // transition. The query self-guards on control-plane reachability.
 export function useGitHubSignIn(): UseGitHubSignInResult {
-  const { startLogin, cancelLogin } = useProductHost().auth;
+  const { startLogin, cancelLogin } = useAuditedAuth();
   const { cloudEnabled } = useAppCapabilities();
   const {
     data: githubDesktopAuthAvailable,

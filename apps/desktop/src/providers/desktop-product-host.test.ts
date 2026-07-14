@@ -74,13 +74,23 @@ const SSO_UNAVAILABLE =
   "We could not find single sign-on for that workspace. Check the sign-in link your admin shared.";
 
 function makeActions() {
+  const loginOutcome = { provider: "github", source: "desktop_callback" };
   return {
-    signInWithGitHub: vi.fn().mockResolvedValue(undefined),
-    signInWithPassword: vi.fn().mockResolvedValue(undefined),
-    signInWithSso: vi.fn().mockResolvedValue(undefined),
-    signOut: vi.fn().mockResolvedValue(undefined),
+    signInWithGitHub: vi.fn().mockResolvedValue(loginOutcome),
+    signInWithPassword: vi.fn().mockResolvedValue({
+      provider: "password",
+      source: "password_form",
+    }),
+    signInWithSso: vi.fn().mockResolvedValue({
+      provider: "sso",
+      source: "desktop_callback",
+    }),
+    signOut: vi.fn().mockResolvedValue({ provider: "github" }),
     cancelAuthFlow: vi.fn().mockResolvedValue(undefined),
-    linkGoogle: vi.fn().mockResolvedValue(undefined),
+    linkGoogle: vi.fn().mockResolvedValue({
+      provider: "google",
+      source: "desktop_callback",
+    }),
   };
 }
 

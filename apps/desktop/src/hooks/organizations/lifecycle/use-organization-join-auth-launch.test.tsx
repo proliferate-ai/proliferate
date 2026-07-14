@@ -8,7 +8,7 @@ import { useAuthStore } from "@/stores/auth/auth-store";
 import { useOrganizationJoinAuthLaunch } from "./use-organization-join-auth-launch";
 
 const hostMocks = vi.hoisted(() => ({
-  startLogin: vi.fn<(_request?: unknown) => Promise<void>>(),
+  startLogin: vi.fn<(_request?: unknown) => Promise<{ provider: string; source: string }>>(),
 }));
 
 // The hook now launches auth through host.auth.startLogin; bridge the store so
@@ -48,7 +48,7 @@ describe("useOrganizationJoinAuthLaunch", () => {
   beforeEach(() => {
     clearTestStorage();
     hostMocks.startLogin.mockReset();
-    hostMocks.startLogin.mockResolvedValue(undefined);
+    hostMocks.startLogin.mockResolvedValue({ provider: "sso", source: "desktop_callback" });
     useAuthStore.setState({
       status: "anonymous",
       session: null,

@@ -93,10 +93,10 @@ function makeHost(
       authRequired: true,
       state: makeAuthState(authStatus),
       restoreSession: async () => {},
-      startLogin: async () => {},
+      startLogin: async () => ({ provider: "github", source: "desktop_callback" }),
       finishLogin: async () => {},
       cancelLogin: async () => {},
-      logout: async () => {},
+      logout: async () => ({ provider: "github" }),
     },
     cloud: { client: null },
     storage: {

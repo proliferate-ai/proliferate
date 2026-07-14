@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { useAuditedAuth } from "@/hooks/auth/facade/use-audited-auth";
 import { writePendingOrganizationJoinTarget } from "@/lib/access/persistence/organization-join-target";
 import { useProductStorageContext } from "@/hooks/persistence/facade/use-product-storage-context";
 import { canFallbackToStandardInviteSignIn } from "@/lib/domain/organizations/join-auth";
@@ -16,7 +17,7 @@ export function useOrganizationJoinAuthLaunch() {
   const { auth } = useProductHost();
   const storage = useProductStorageContext();
   const authStatus = auth.state.status;
-  const { startLogin } = auth;
+  const { startLogin } = useAuditedAuth();
   const startedForOrganizationRef = useRef<string | null>(null);
   const joinOrganizationId = useMemo(
     () => organizationJoinTargetFromSearch(location.search),
