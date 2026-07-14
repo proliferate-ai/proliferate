@@ -90,6 +90,44 @@ jobs:
       - name: Smoke deploy surface detector
         run: node scripts/ci-cd/detect-deploy-surfaces.mjs --base HEAD --head HEAD
 
+  # Fail-closed proof of the exact candidate-build handoff. This lane uses no
+  # provider credentials: it builds one host AnyHarness, records its identity,
+  # materializes and launches those bytes, and matches the aggregate evidence.
+  candidate-build-handoff:
+    name: Candidate build handoff
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.11.0
+
+      - name: Setup Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test qualification runner
+        run: pnpm -C tests/release test
+
+      - name: Typecheck qualification runner
+        run: pnpm -C tests/release typecheck
+
+      - name: Test candidate build-map assembler
+        run: node --test scripts/ci-cd/assemble-candidate-build-map.test.mjs
+
+      - name: Prove candidate build handoff
+        run: make qualification-candidate-handoff-smoke
+
   cargo-check:
     name: Cargo check & test
     runs-on: ubuntu-latest

@@ -6,7 +6,10 @@ import path from "node:path";
 import { test } from "node:test";
 
 import type { CandidateBuildMapV1 } from "./build-map.js";
-import { runAnyharnessHandoffSmoke } from "./anyharness-smoke.js";
+import {
+  candidateChildEnvironment,
+  runAnyharnessHandoffSmoke,
+} from "./anyharness-smoke.js";
 
 const SHA = "a".repeat(40);
 
@@ -55,6 +58,28 @@ function mapFor(binaryPath: string, sha256: string, version: string): CandidateB
     ],
   };
 }
+
+test("candidate child environment keeps operational settings and rejects ambient credentials", () => {
+  const environment = candidateChildEnvironment({
+    PATH: "/qualification/bin",
+    TMPDIR: "/qualification/tmp",
+    LANG: "C.UTF-8",
+    RUST_LOG: "info",
+    HOME: "/Users/developer",
+    ANTHROPIC_API_KEY: "anthropic-secret",
+    AWS_SECRET_ACCESS_KEY: "aws-secret",
+    LITELLM_MASTER_KEY: "litellm-secret",
+    STRIPE_SECRET_KEY: "stripe-secret",
+    PROLIFERATE_RUNTIME_HOME: "/developer/runtime-home",
+  });
+
+  assert.deepEqual(environment, {
+    PATH: "/qualification/bin",
+    TMPDIR: "/qualification/tmp",
+    LANG: "C.UTF-8",
+    RUST_LOG: "info",
+  });
+});
 
 test("launches the mapped bytes, verifies health identity, and terminates", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "smoke-test-"));

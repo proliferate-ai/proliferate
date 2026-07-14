@@ -43,6 +43,42 @@ export interface HandoffSmokeOptions {
   log?: (message: string) => void;
 }
 
+const CANDIDATE_CHILD_ENV_KEYS = [
+  "PATH",
+  "Path",
+  "TMPDIR",
+  "TMP",
+  "TEMP",
+  "LANG",
+  "LC_ALL",
+  "LC_CTYPE",
+  "TZ",
+  "RUST_LOG",
+  "RUST_BACKTRACE",
+  "NO_COLOR",
+  "SYSTEMROOT",
+  "WINDIR",
+] as const;
+
+/**
+ * Candidate processes receive only operational environment settings. Provider,
+ * billing, cloud, developer-home, and native-agent credentials stay in the
+ * qualification controller that owns them rather than leaking into the exact
+ * bytes under test.
+ */
+export function candidateChildEnvironment(
+  source: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  const environment: NodeJS.ProcessEnv = {};
+  for (const key of CANDIDATE_CHILD_ENV_KEYS) {
+    const value = source[key];
+    if (value !== undefined) {
+      environment[key] = value;
+    }
+  }
+  return environment;
+}
+
 export async function runAnyharnessHandoffSmoke(options: HandoffSmokeOptions): Promise<HandoffSmokeProof> {
   const log = options.log ?? (() => undefined);
   const artifact = pickAnyharnessArtifact(options.map, options.artifactId);
@@ -61,9 +97,9 @@ export async function runAnyharnessHandoffSmoke(options: HandoffSmokeOptions): P
     log(`launching ${artifact.artifact_id} on 127.0.0.1:${port} (runtime home ${runtimeHome})`);
     child = spawn(binary, ["serve", "--host", "127.0.0.1", "--port", String(port), "--runtime-home", runtimeHome], {
       stdio: ["ignore", "ignore", "pipe"],
-      // A hermetic launch: no developer runtime home, port, or credential is
-      // consulted; stderr stays in memory for console diagnostics only.
-      env: { ...process.env },
+      // A hermetic launch: no developer runtime home, port, provider setting,
+      // or credential is consulted; stderr stays in memory for diagnostics.
+      env: candidateChildEnvironment(),
     });
     let stderr = "";
     child.stderr?.on("data", (chunk) => {
