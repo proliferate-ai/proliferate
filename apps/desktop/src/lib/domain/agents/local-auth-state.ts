@@ -61,3 +61,27 @@ export function planLocalAuthStatePush(input: {
   }
   return { shouldPush: true, fingerprint };
 }
+
+/**
+ * Whether the local agent-auth state sync (server fetch + push to the local
+ * runtime) should run.
+ *
+ * The local-surface `state.json` carries the gateway AND BYOK route material
+ * for LOCAL sessions, which is independent of cloud COMPUTE (E2B sandboxes).
+ * Gating this sync on cloud compute (the previous `cloudActive =
+ * cloudComputeEnabled && authenticated` coupling) left a gateway-enabled server
+ * with cloud compute disabled — e.g. a local-only managed-gateway user, and the
+ * qualification local world — unable to launch gateway-routed sessions, because
+ * the runtime never received its routes and every gateway harness fell back to
+ * "no launchable model". The sync needs only an authenticated session against a
+ * reachable server and a healthy local runtime; when there is nothing to
+ * deliver the rendered document is revision-0 and `planLocalAuthStatePush`
+ * already declines to push it.
+ */
+export function shouldSyncLocalAuthState(input: {
+  authenticated: boolean;
+  serverReachable: boolean;
+  runtimeHealthy: boolean;
+}): boolean {
+  return input.authenticated && input.serverReachable && input.runtimeHealthy;
+}
