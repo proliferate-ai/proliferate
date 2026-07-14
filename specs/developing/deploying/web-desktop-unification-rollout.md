@@ -48,9 +48,12 @@ Current handoff:
 - Final implementation: PR #1157, merge
   `a76ab5911e2af39593b4b31530535f0811a3558b`, from accepted head
   `90926523c3662067e02f8511db6c8e0058e119f1`.
-- Current role: reconcile Desktop Native UI Adoption against that merge with
-  the founder. The next slice remains provisional and is not authorized for
-  implementation.
+- Desktop Native UI Adoption contract:
+  `specs/codebase/features/web-desktop-client-unification-d1b.md`, revision
+  `D1b-r1`, exact implementation base
+  `2ec6907391f57a3e449b5b77c43c18600f64fdaa`.
+- Current role: implementation handoff. The implementation must stop if it
+  would change a frozen material decision or broaden the slice.
 
 | Slice | Outcome | Final evidence | State |
 | --- | --- | --- | --- |
@@ -59,7 +62,7 @@ Current handoff:
 | Preparation: embedded browser | Delete the embedded workspace browser and its native child-WebView capability. | PR #1154, merge `4f7fe6ee5` | Complete |
 | Preparation: ProductClient foundation | Add the compiled package, `ProductHost`, `DesktopBridge`, `ProductHostProvider`, tests, and enforcement. | PR #1153, merge `0b33e116d` | Complete |
 | Desktop Host Adoption | Construct the concrete Desktop host, mount the provider, replace reactive snapshots, and gate running-agent export through one Desktop-only lifecycle root while product files remain in Desktop. | [`web-desktop-client-unification-d1a.md`](../../codebase/features/web-desktop-client-unification-d1a.md), `D1a-r2`; PR #1157 merge `a76ab5911e2af39593b4b31530535f0811a3558b` | Complete |
-| Desktop Native UI Adoption | Route native menus, native commands, Dock attention, and Desktop zoom through the mounted bridge while product files remain in Desktop. | Founder draft reconciled against `a76ab5911e2af39593b4b31530535f0811a3558b`; repository spec not promoted | Provisional; founder review |
+| Desktop Native UI Adoption | Route native menus, native commands, Dock attention, and Desktop zoom through the mounted bridge while product files remain in Desktop. | [`web-desktop-client-unification-d1b.md`](../../codebase/features/web-desktop-client-unification-d1b.md), `D1b-r1`, base `2ec6907391f57a3e449b5b77c43c18600f64fdaa` | Frozen; implementation not started |
 | Later slices | Remaining in-place bridge adoption, ProductClient source movement, legacy Web deletion, thin Web host, deployability, and self-hosted Web follow-up. | Specify and reconcile one slice at a time. | Deferred |
 
 The superseded auth-generation, runtime-lifecycle, PR-1 intake, and
@@ -90,20 +93,31 @@ The accepted r2 deviations are narrow and recorded in the complete contract:
 - the exact Desktop test command has one founder-approved waiver for
   base-identical pretest violations in unchanged files.
 
-## 3. Desktop Native UI Adoption handoff
+## 3. Desktop Native UI Adoption freeze record
 
-The next provisional slice adopts only `DesktopBridge.nativeUi` in existing
-Desktop product consumers. It extends the already-mounted
-`DesktopProductLifecycleRoot`; it does not create a second root or move source
-into ProductClient.
+Desktop Native UI Adoption has one observable outcome: every product-owned
+native menu, native menu-command subscription, Dock attention export, and
+Desktop zoom export reaches the existing concrete
+`DesktopBridge.nativeUi`. It extends the already-mounted
+`DesktopProductLifecycleRoot`; it creates no second host, bridge, or lifecycle
+root and moves no product source into ProductClient.
 
-Before freezing it:
+Reconciliation against PR #1157 was Yellow/targeted. The merged host/provider,
+stable concrete bridge, lifecycle root, native-UI signatures, and tests all
+support the slice without a ProductClient contract change. The exact
+implementation base is
+`2ec6907391f57a3e449b5b77c43c18600f64fdaa`.
 
-1. record the exact Desktop Host Adoption merge SHA as the implementation base;
-2. reconcile the exact landed symbols and file inventory;
-3. settle browser-only Desktop context-menu fall-through behavior;
-4. disposition the two Tauri access hooks whose final consumers move; and
-5. have the founder confirm the representative control flow and failure path.
+The founder approved the goal, non-goals, material decisions, exact ownership
+plan, acceptance proof, control flow, and representative failure path on
+2026-07-13. In browser-only Desktop development, one unavailable native-menu
+attempt returns `false`, redispatches the existing DOM fallback in the next
+microtask, and disables later native attempts for that hook instance. This
+adds no availability capability, retry, persistence, queue, or nullable
+Desktop host.
+
+The complete frozen contract is
+[`web-desktop-client-unification-d1b.md`](../../codebase/features/web-desktop-client-unification-d1b.md).
 
 ## 4. Later source-move and cutover gates
 
