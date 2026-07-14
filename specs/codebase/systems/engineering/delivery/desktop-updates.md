@@ -5,9 +5,9 @@ notice, and the version-specific metadata published on the Desktop downloads
 CDN.
 
 Read this spec with
-[`ci-cd.md`](../../../../developing/deploying/ci-cd.md) and
+[`releases.md`](../../../../developing/deploying/releases.md) and
 [`desktop-update-testing.md`](../../../../developing/testing/desktop-update-testing.md).
-The CI/CD spec owns packaging, signing, publishing, and operator procedure; the
+The Releases procedure owns packaging, signing, publishing, and operator procedure; the
 testing spec owns the real N−1 to N updater mechanism; this feature spec owns
 user-visible update and release-notice behavior.
 
@@ -119,7 +119,7 @@ title. The packaged WebView must be able to fetch the immutable record from the
 public downloads CDN. Direct tag-push releases without an authored input remain
 valid and publish without `notes`. Atomic publication order, collision handling,
 same-version reruns, CORS configuration, and partial-publish recovery are owned
-by [`ci-cd.md`](../../../../developing/deploying/ci-cd.md).
+by [`releases.md`](../../../../developing/deploying/releases.md).
 
 ## Acceptance Matrix
 

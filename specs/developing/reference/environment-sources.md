@@ -80,7 +80,7 @@ SSM. Do not infer universal secret-manager storage from a variable's secret
 classification.
 
 Hosted workflow inputs and deployment procedures are owned by
-[`../deploying/ci-cd.md`](../deploying/ci-cd.md).
+[`../deploying/hosted.md`](../deploying/hosted.md).
 
 ## Frontend, Mobile, and Desktop Native Builds
 

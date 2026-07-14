@@ -97,7 +97,7 @@ still be present. They do not activate a tracker in the current server.
 
 The complete inventory lives in
 [`../reference/env-vars.yaml`](../reference/env-vars.yaml); deployment ownership
-is in [`../deploying/ci-cd.md`](../deploying/ci-cd.md).
+is in [`../deploying/hosted.md`](../deploying/hosted.md).
 
 ## Find the report
 

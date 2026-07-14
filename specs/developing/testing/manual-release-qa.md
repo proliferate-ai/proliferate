@@ -16,7 +16,8 @@ records, and reports a QA pass.
 - [../local/README.md](../local/README.md)
   - profile-backed full-stack local testing, local Stripe, hosted web, desktop,
     mobile web, native mobile, and verification commands
-- [../deploying/ci-cd.md](../deploying/ci-cd.md)
+- [../deploying/hosted.md](../deploying/hosted.md) and
+  [../deploying/releases.md](../deploying/releases.md)
   - CI gates, deploy verification, release lanes, updater publishing,
     TestFlight, E2B templates, and production/staging promotion
 - [../debugging/README.md](../debugging/README.md)
@@ -134,7 +135,8 @@ cd server && uv run pytest -q
 ```
 
 Release and deployment changes must follow the workflow/helper checks in
-[../deploying/ci-cd.md](../deploying/ci-cd.md). Server changes must include
+[../deploying/hosted.md](../deploying/hosted.md) and
+[../deploying/releases.md](../deploying/releases.md). Server changes must include
 the relevant `uv run pytest` slice. SDK contract changes must regenerate and
 build the SDK through the owning SDK workflow.
 
@@ -176,7 +178,7 @@ the change crosses a shared contract.
 | Cloud sandbox and Worker | Through mounted APIs, ensure the personal sandbox row, save/materialize a cloud repo environment, create a Cloud workspace, verify authenticated AnyHarness gateway access, and then verify optional Worker enrollment, heartbeat-derived liveness, and reported versions independently. | [../runbooks/cloud-provisioning-failure.md](../runbooks/cloud-provisioning-failure.md), [../runbooks/worker-enrollment-failure.md](../runbooks/worker-enrollment-failure.md), [../../codebase/structures/proliferate-worker/README.md](../../codebase/structures/proliferate-worker/README.md) |
 | Billing | Use Stripe test mode, verify checkout/portal/refill/webhook behavior, budget/credit reconciliation, and UI state after webhook delivery. | [../local/stripe-local-testing.md](../local/stripe-local-testing.md), [../../codebase/platforms/product/billing.md](../../codebase/platforms/product/billing.md) |
 | Analytics/observability | Verify events, dashboards, replay gates, alerts, release health, and support-correlation ids without leaking sensitive content. | [../operating/analytics/README.md](../operating/analytics/README.md) |
-| Deploy/release | Verify the exact lanes that ran, environment gates, URLs, updater manifests, TestFlight submission, E2B smoke, and release/docs ownership. | [../deploying/ci-cd.md](../deploying/ci-cd.md) |
+| Deploy/release | Verify the exact lanes that ran, environment gates, URLs, updater manifests, TestFlight submission, E2B smoke, and release/docs ownership. | [../deploying/hosted.md](../deploying/hosted.md), [../deploying/releases.md](../deploying/releases.md) |
 
 ## Regression Rules
 

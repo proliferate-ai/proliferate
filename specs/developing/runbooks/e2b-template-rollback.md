@@ -6,7 +6,7 @@ known-good immutable build.
 Use this runbook when a newly promoted E2B template causes managed cloud
 sandbox creation, runtime boot, or template smoke failures.
 The release lane is documented in
-[`../deploying/ci-cd.md`](../deploying/ci-cd.md), and the managed sandbox model
+[`../deploying/releases.md`](../deploying/releases.md), and the managed sandbox model
 is documented in
 [`../../codebase/platforms/product/sandbox-provisioning.md`](../../codebase/platforms/product/sandbox-provisioning.md).
 
