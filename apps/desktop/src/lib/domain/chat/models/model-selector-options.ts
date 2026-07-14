@@ -231,10 +231,9 @@ function resolveModelSelectionActionKindForModel(
   if (activeSelection.kind !== agentKind) {
     return "open_new_chat";
   }
-  // Same harness, different model -> the session is kept, always
-  // (decision 10). The runtime live-switches when the harness has a
-  // mechanism and relaunches the agent process under the same session when
-  // it does not.
+  // The harness boundary decides new versus current chat. A different model
+  // in the same harness preserves the durable session; the runtime either
+  // applies it live or relaunches the agent process under that session.
   return modelSelectionMatchesModel(activeSelection, agent, agentKind, model.id)
     ? "select"
     : "update_current_chat";

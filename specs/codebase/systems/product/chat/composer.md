@@ -94,10 +94,11 @@ Rules:
   catalog identity after alias/normalization resolution.
 - Runtime live config values are preserved for update calls, but they are not
   the rendered product name when a catalog match exists.
-- "New chat" means the active session lacks a settable model path for that row.
-  It does not mean the row failed catalog matching.
-- Action kind derives from switchability: current row is selected, switchable
-  rows update the running session, and non-switchable rows start a new chat.
+- [Model Catalog](../../../platforms/product/model-catalog.md) owns whether a
+  selection is current, `update_current_chat`, or `open_new_chat`; Composer
+  presents that action and does not derive it from live setter availability.
+- [Chat Lifecycle](lifecycle.md) owns the visible create, preserve, and replace
+  transition after the classified action is selected.
 
 Any provider-specific compatibility mapping in Desktop must be backed by a
 domain-level selector test and, when possible, a recorded AnyHarness fixture
