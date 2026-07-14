@@ -238,10 +238,15 @@ At minimum:
 ```bash
 cd server
 DEBUG=true uv run pytest -q tests/integration/test_support_feed.py
-
-cd ..
-python3 scripts/check_docs.py
 ```
+
+> [!note] Bounded amendment (2026-07-14, implementation evidence)
+> The originally prescribed `python3 scripts/check_docs.py` does not exist in
+> this repository (verified during B1 implementation and confirmed by the
+> independent review). Documentation changes are instead validated by parsing
+> the edited `specs/developing/reference/env-vars.yaml` entries and workflow
+> YAML directly. This amendment removes only the unrunnable command; the
+> approved outcome is unchanged.
 
 Focused tests prove:
 
