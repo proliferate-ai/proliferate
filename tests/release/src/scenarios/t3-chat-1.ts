@@ -105,7 +105,7 @@ export async function shippedHarnessKinds(): Promise<string[]> {
   return (catalog.agents ?? []).map((agent) => agent.kind).filter((kind): kind is string => Boolean(kind));
 }
 
-interface HarnessModelChoice {
+export interface HarnessModelChoice {
   harnessKind: string;
   /**
    * Ranked candidates, cheapest-preferred first. More than one candidate is
@@ -120,20 +120,56 @@ interface HarnessModelChoice {
   catalogPinVersion: string | undefined;
 }
 
+/**
+ * The seam between the per-cell outcome mapping and the live runtime, so the
+ * green/failed/blocked classification and the single shared workspace
+ * lifecycle are provable without a running AnyHarness.
+ */
+export interface ChatLaneIO {
+  resolveChoices(harnesses: readonly string[]): Promise<Map<string, HarnessModelChoice>>;
+  /** One shared workspace for every assigned cell; closed exactly once. */
+  openWorkspace(): Promise<{ workspaceId: string; close(): Promise<void> }>;
+  candidatesFor(harnessKind: string, catalogCandidates: readonly string[]): Promise<string[]>;
+  attemptModel(workspaceId: string, choice: HarnessModelChoice & { modelId: string }): Promise<void>;
+}
+
 async function runLocalLane(cells: readonly PlannedCellV1[]): Promise<ScenarioCellOutcome[]> {
   const runtimeUrl = process.env.RELEASE_E2E_LOCAL_RUNTIME_URL ?? DEFAULT_LOCAL_RUNTIME_URL;
   const client = new LocalRuntimeClient({ baseUrl: runtimeUrl });
+  return collectChatOutcomes(cells, {
+    resolveChoices: (harnesses) => catalogHarnesses(harnesses),
+    openWorkspace: async () => {
+      const githubTestRepo = process.env.RELEASE_E2E_GITHUB_TEST_REPO ?? DEFAULT_GITHUB_TEST_REPO;
+      const repoPath = await ensureLocalClone(githubTestRepo);
+      const { workspace } = await client.createLocalWorkspace(repoPath);
+      return {
+        workspaceId: workspace.id,
+        close: async () => {
+          await client.deleteWorkspace(workspace.id).catch(() => undefined);
+        },
+      };
+    },
+    candidatesFor: (harnessKind, catalogCandidates) =>
+      withGatewayProbedCandidates(client, harnessKind, catalogCandidates),
+    attemptModel: (workspaceId, choice) => runOneHarness(client, workspaceId, choice),
+  });
+}
 
+/**
+ * The real per-cell result mapping: one shared workspace for the whole batch
+ * (opened once, closed once in finally); per assigned cell, no compatible
+ * model → explicit `blocked`, a real failure across every candidate model →
+ * explicit `failed`, a passing model → `green`. Mixed outcomes stay mixed.
+ */
+export async function collectChatOutcomes(
+  cells: readonly PlannedCellV1[],
+  io: ChatLaneIO,
+): Promise<ScenarioCellOutcome[]> {
   const requestedHarnesses = cells.map((cell) => cell.dimensions.harness);
-  const choices = await catalogHarnesses(requestedHarnesses);
+  const choices = await io.resolveChoices(requestedHarnesses);
   const outcomes: ScenarioCellOutcome[] = [];
 
-  // Shared setup stays batched: one clone + one workspace for every assigned
-  // harness cell, torn down once in finally.
-  const githubTestRepo = process.env.RELEASE_E2E_GITHUB_TEST_REPO ?? DEFAULT_GITHUB_TEST_REPO;
-  const repoPath = await ensureLocalClone(githubTestRepo);
-  const { workspace } = await client.createLocalWorkspace(repoPath);
-
+  const workspace = await io.openWorkspace();
   try {
     for (const cell of cells) {
       const harnessKind = cell.dimensions.harness;
@@ -153,10 +189,10 @@ async function runLocalLane(cells: readonly PlannedCellV1[]): Promise<ScenarioCe
       }
       let lastError: unknown;
       let succeededModel: string | undefined;
-      const candidates = await withGatewayProbedCandidates(client, harnessKind, choice.modelCandidates);
+      const candidates = await io.candidatesFor(harnessKind, choice.modelCandidates);
       for (const modelId of candidates) {
         try {
-          await runOneHarness(client, workspace.id, { ...choice, modelId });
+          await io.attemptModel(workspace.workspaceId, { ...choice, modelId });
           succeededModel = modelId;
           break;
         } catch (error) {
@@ -180,7 +216,7 @@ async function runLocalLane(cells: readonly PlannedCellV1[]): Promise<ScenarioCe
       }
     }
   } finally {
-    await client.deleteWorkspace(workspace.id).catch(() => undefined);
+    await workspace.close();
   }
 
   return outcomes;

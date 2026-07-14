@@ -5,6 +5,7 @@ import path from "node:path";
 import { test } from "node:test";
 
 import {
+  assertNoSecretsInIdentity,
   boundMessage,
   redactExternalPayloads,
   redactSecrets,
@@ -496,4 +497,59 @@ test("candidate_build rejects undeclared fields beside artifacts (CBH-002)", () 
     map_path: "/tmp/leaked-map.json",
   } as unknown as TestRunReportV3["candidate_build"];
   assert.throws(() => validateReport(report), /exactly one field: artifacts/);
+});
+
+test("validateReport rejects invalid modes, false scope/completeness, and empty selections (ETM-001)", () => {
+  const badBehavior = validReport();
+  (badBehavior.run as { behavior: string }).behavior = "lenient";
+  assert.throws(() => validateReport(badBehavior), /Unknown behavior/);
+
+  const badExecution = validReport();
+  (badExecution.run as { execution: string }).execution = "simulated";
+  assert.throws(() => validateReport(badExecution), /Unknown execution mode/);
+
+  const badScope = validReport();
+  (badScope.verdict as { scope: string }).scope = "full_release";
+  assert.throws(() => validateReport(badScope), /scope\/completeness/);
+
+  const badCompleteness = validReport();
+  (badCompleteness.verdict as { completeness: string }).completeness = "complete";
+  assert.throws(() => validateReport(badCompleteness), /scope\/completeness/);
+
+  const empty = validReport();
+  empty.selected_cells = [];
+  empty.results = [];
+  empty.summary.selected = 0;
+  empty.summary.finalized = 0;
+  empty.summary.by_status.green = 0;
+  assert.throws(() => validateReport(empty), /zero selected cells/);
+});
+
+test("validateReport rejects coordinated cell-id/dimension tampering (ETM-001)", () => {
+  // Both the selected cell and its result are edited consistently — the id
+  // no longer derives from the scenario/lane/dimensions, so it must reject.
+  const report = validReport();
+  report.selected_cells[0].cell_id = "A/local/harness=claude";
+  report.results[0].cell_id = "A/local/harness=claude";
+  assert.throws(() => validateReport(report), /not the canonical id/);
+
+  const renamed = validReport();
+  renamed.selected_cells[0].dimensions = { harness: "codex" };
+  renamed.results[0].dimensions = { harness: "codex" };
+  // cell_id still says A/local while dimensions claim a matrix child.
+  assert.throws(() => validateReport(renamed), /not the canonical id/);
+});
+
+test("a resolved secret in a cell id or dimension fails closed (ETM-004)", () => {
+  const secret = "sk-live-in-identity";
+  const inDimension = validReport();
+  inDimension.selected_cells[0].dimensions = { harness: secret };
+  assert.throws(() => assertNoSecretsInIdentity(inDimension, [secret]), /refusing to produce evidence/);
+
+  const inResult = validReport();
+  inResult.results[0].dimensions = { harness: secret };
+  assert.throws(() => assertNoSecretsInIdentity(inResult, [secret]), /refusing to produce evidence/);
+
+  // Clean identities pass, and message redaction still applies elsewhere.
+  assertNoSecretsInIdentity(validReport(), [secret]);
 });

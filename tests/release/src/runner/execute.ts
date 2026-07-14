@@ -14,6 +14,7 @@ import type { TestRunReportV3 } from "../evidence/schema.js";
 import { sanitizeReport } from "../evidence/schema.js";
 import type { RunIdentityV1 } from "./identity.js";
 import {
+  clonePlannedCell,
   countByStatus,
   deriveVerdict,
   ResultTracker,
@@ -75,8 +76,12 @@ export async function executeSelectedCells(options: ExecuteOptions): Promise<Tes
   const now = options.now ?? (() => new Date());
   const log = options.log ?? (() => undefined);
   const startedAt = now().toISOString();
-  const cells = options.cells;
-  const tracker = new ResultTracker(cells);
+  // The tracker deep-copies the plan at construction; everything below —
+  // grouping, collector assignment, finalization, and the persisted
+  // selected_cells — reads the tracker's protected canonical copy, so a
+  // collector mutating the cell objects it received cannot alter evidence.
+  const tracker = new ResultTracker(options.cells);
+  const cells = tracker.selectedCells;
   const scenariosById = new Map(options.scenarios.map((scenario) => [scenario.id, scenario]));
   const locallySeeded = options.locallySeeded ?? new Set<string>();
 
@@ -124,7 +129,7 @@ export async function executeSelectedCells(options: ExecuteOptions): Promise<Tes
       agents: options.inputs.agents,
       scenarios: options.inputs.scenarios,
     },
-    selected_cells: [...cells],
+    selected_cells: cells.map(clonePlannedCell),
     results,
     summary: {
       selected: cells.length,
@@ -196,7 +201,9 @@ function planAll(
     const scenario = scenariosById.get(cell.scenario_id)!;
     const planCtx = { runtimeLane: cell.runtime_lane, desktop: options.inputs.desktop, agents };
     try {
-      const steps = isMatrixScenario(scenario) ? scenario.planCell(planCtx, cell) : scenario.plan(planCtx);
+      const steps = isMatrixScenario(scenario)
+        ? scenario.planCell(planCtx, clonePlannedCell(cell))
+        : scenario.plan(planCtx);
       tracker.finalize(cell.cell_id, {
         status: "not_run",
         reason: { code: "dry_run", message: "Diagnostic dry-run planned this cell instead of executing it." },
@@ -313,7 +320,9 @@ async function runAll(
     try {
       log(`running ${assigned.map((cell) => cell.cell_id).join(", ")}`);
       if (isMatrixScenario(scenario)) {
-        const outcomes = await scenario.runCells(ctx, assigned);
+        // Collectors receive independent copies; the canonical plan stays
+        // with the tracker.
+        const outcomes = await scenario.runCells(ctx, assigned.map(clonePlannedCell));
         applyCollectorOutcomes(scenario, assigned, outcomes, tracker, finish);
       } else {
         await scenario.run(ctx);
@@ -350,12 +359,36 @@ async function runAll(
 function applyCollectorOutcomes(
   scenario: MatrixScenarioDefinition,
   assigned: readonly PlannedCellV1[],
-  outcomes: readonly { cellId: string; status: ScenarioDeclarableStatus; reason?: ResultReason }[],
+  outcomes: unknown,
   tracker: ResultTracker,
   finish: (cellId: string, status: FinalCellResultV1["status"], reason: ResultReason | null) => void,
 ): void {
+  // Malformed collector output (null/undefined/non-array, or entries without
+  // a cell id and status) is a runner-integrity failure, not a product
+  // failure: the affected cells stay pending and finalize as missing with
+  // exit 2 — never as failed/exit 1.
+  if (!Array.isArray(outcomes)) {
+    tracker.recordIntegrityError(
+      "selection_result_mismatch",
+      `Collector "${scenario.id}" returned ${outcomes === null ? "null" : typeof outcomes} instead of an outcome array.`,
+    );
+    return;
+  }
   const assignedIds = new Set(assigned.map((cell) => cell.cell_id));
-  for (const outcome of outcomes) {
+  for (const raw of outcomes) {
+    if (
+      typeof raw !== "object" ||
+      raw === null ||
+      typeof (raw as { cellId?: unknown }).cellId !== "string" ||
+      typeof (raw as { status?: unknown }).status !== "string"
+    ) {
+      tracker.recordIntegrityError(
+        "selection_result_mismatch",
+        `Collector "${scenario.id}" returned a malformed outcome entry.`,
+      );
+      continue;
+    }
+    const outcome = raw as { cellId: string; status: string; reason?: ResultReason };
     if (!assignedIds.has(outcome.cellId)) {
       // Never finalize a cell outside this invocation's assignment — even one
       // that is planned for another collector — or one collector could write
@@ -373,7 +406,8 @@ function applyCollectorOutcomes(
       );
       continue;
     }
-    finish(outcome.cellId, outcome.status, outcome.reason ?? defaultReasonFor(outcome.status));
+    const status = outcome.status as ScenarioDeclarableStatus;
+    finish(outcome.cellId, status, outcome.reason ?? defaultReasonFor(status));
   }
 }
 

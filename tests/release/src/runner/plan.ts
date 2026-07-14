@@ -131,11 +131,26 @@ function sortedDimensions(dimensions: Record<string, string>): Record<string, st
   );
 }
 
-/** `<scenario>/<lane>/<k>=<encoded v>` with dimension keys sorted lexicographically. */
-function cellIdFor(scenarioId: string, runtimeLane: string, dimensions: Record<string, string>): string {
-  const suffix = Object.keys(dimensions)
-    .sort()
-    .map((key) => `${key}=${encodeURIComponent(dimensions[key])}`)
-    .join(",");
+/**
+ * The canonical runner-created cell id: `<scenario>/<lane>` for leaf cells
+ * (no dimensions) and `<scenario>/<lane>/<k>=<encoded v>` with dimension keys
+ * sorted lexicographically for matrix cells. The report validator recomputes
+ * ids through this same function, so a coordinated cell-id/dimension edit in
+ * persisted evidence cannot validate.
+ */
+export function canonicalCellId(
+  scenarioId: string,
+  runtimeLane: string,
+  dimensions: Record<string, string>,
+): string {
+  const keys = Object.keys(dimensions).sort();
+  if (keys.length === 0) {
+    return `${scenarioId}/${runtimeLane}`;
+  }
+  const suffix = keys.map((key) => `${key}=${encodeURIComponent(dimensions[key])}`).join(",");
   return `${scenarioId}/${runtimeLane}/${suffix}`;
+}
+
+function cellIdFor(scenarioId: string, runtimeLane: string, dimensions: Record<string, string>): string {
+  return canonicalCellId(scenarioId, runtimeLane, dimensions);
 }

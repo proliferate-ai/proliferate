@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { test } from "node:test";
 
-import { chatCellSpecs, shippedHarnessKinds, t3Chat1 } from "./t3-chat-1.js";
+import { chatCellSpecs, collectChatOutcomes, shippedHarnessKinds, t3Chat1 } from "./t3-chat-1.js";
 import { buildPlannedCells } from "../runner/plan.js";
 import { executeSelectedCells } from "../runner/execute.js";
 import type { EnvResolution } from "../config/env-resolution.js";
@@ -101,4 +101,70 @@ test("the sandbox implementation gap becomes explicit non-green children, not on
     assert.equal(result.reason?.code, "known_gap");
   }
   assert.equal(report.summary.integrity_errors.length, 0);
+});
+
+test("one shared workspace yields green/failed/blocked cells with exactly one create/delete (ETM-005)", async () => {
+  const cells = (await buildPlannedCells([t3Chat1], { desktop: "web", agents: ["claude", "codex", "grok"] }))
+    .filter((cell) => cell.runtime_lane === "local");
+  assert.equal(cells.length, 3);
+
+  let opened = 0;
+  let closed = 0;
+  const outcomes = await collectChatOutcomes(cells, {
+    // grok has no compatible model; claude and codex do.
+    resolveChoices: async () =>
+      new Map([
+        ["claude", { harnessKind: "claude", modelCandidates: ["haiku"], catalogPinVersion: undefined }],
+        ["codex", { harnessKind: "codex", modelCandidates: ["gpt-cheap"], catalogPinVersion: undefined }],
+      ]),
+    openWorkspace: async () => {
+      opened += 1;
+      return {
+        workspaceId: "ws-1",
+        close: async () => {
+          closed += 1;
+        },
+      };
+    },
+    candidatesFor: async (_harness, catalogCandidates) => [...catalogCandidates],
+    attemptModel: async (workspaceId, choice) => {
+      assert.equal(workspaceId, "ws-1");
+      if (choice.harnessKind === "codex") {
+        throw new Error("turn failed: SESSION_MODEL_GATED");
+      }
+    },
+  });
+
+  assert.equal(opened, 1);
+  assert.equal(closed, 1);
+  const byId = new Map(outcomes.map((outcome) => [outcome.cellId, outcome]));
+  assert.equal(byId.get("T3-CHAT-1/local/harness=claude")?.status, "green");
+  assert.equal(byId.get("T3-CHAT-1/local/harness=codex")?.status, "failed");
+  assert.match(byId.get("T3-CHAT-1/local/harness=codex")?.reason?.message ?? "", /SESSION_MODEL_GATED/);
+  assert.equal(byId.get("T3-CHAT-1/local/harness=grok")?.status, "blocked");
+  assert.equal(outcomes.length, 3);
+});
+
+test("the workspace closes exactly once even when the mapping throws mid-batch (ETM-005)", async () => {
+  const cells = (await buildPlannedCells([t3Chat1], { desktop: "web", agents: ["claude"] }))
+    .filter((cell) => cell.runtime_lane === "local");
+  let closed = 0;
+  await assert.rejects(
+    collectChatOutcomes(cells, {
+      resolveChoices: async () =>
+        new Map([["claude", { harnessKind: "claude", modelCandidates: ["haiku"], catalogPinVersion: undefined }]]),
+      openWorkspace: async () => ({
+        workspaceId: "ws-1",
+        close: async () => {
+          closed += 1;
+        },
+      }),
+      candidatesFor: async () => {
+        throw new Error("probe endpoint exploded");
+      },
+      attemptModel: async () => undefined,
+    }),
+    /probe endpoint exploded/,
+  );
+  assert.equal(closed, 1);
 });

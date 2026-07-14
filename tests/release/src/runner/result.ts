@@ -91,6 +91,18 @@ export interface IntegrityErrorV1 {
 
 export type VerdictStatus = "selected_cells_passed" | "selected_cells_failed" | "non_qualifying";
 
+/** Independent deep copy of a planned cell (dimensions and required_env included). */
+export function clonePlannedCell(cell: PlannedCellV1): PlannedCellV1 {
+  return {
+    cell_id: cell.cell_id,
+    scenario_id: cell.scenario_id,
+    registry_flow_ref: cell.registry_flow_ref,
+    runtime_lane: cell.runtime_lane,
+    dimensions: { ...cell.dimensions },
+    required_env: [...cell.required_env],
+  };
+}
+
 export interface Finalization {
   status: FinalTestStatus;
   reason?: ResultReason;
@@ -112,7 +124,11 @@ export class ResultTracker {
   readonly runnerErrors: RunnerErrorV1[] = [];
 
   constructor(selected: readonly PlannedCellV1[]) {
-    this.selected = selected;
+    // The tracker owns the canonical plan: deep-copied at construction so no
+    // later mutation of the caller's cell objects (or of copies handed to
+    // scenario collectors) can alter what finalization and the persisted
+    // report validate against.
+    this.selected = selected.map(clonePlannedCell);
   }
 
   get selectedCells(): readonly PlannedCellV1[] {

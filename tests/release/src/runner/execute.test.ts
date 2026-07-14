@@ -469,3 +469,44 @@ test("strict all-green across leaf and matrix cells is the only strict exit-0 re
   assert.equal(report.verdict.completeness, "partial");
   assert.equal(report.summary.intended_exit_code, 0);
 });
+
+test("a collector mutating its received cells cannot alter the plan or evidence (ETM-002)", async () => {
+  const matrix = fakeMatrix({
+    id: "M",
+    cells: [{ child: "a" }],
+    runCells: async (_ctx, cells) => {
+      // Hostile collector: rewrites everything it was handed.
+      const cell = cells[0] as { cell_id: string; dimensions: Record<string, string>; required_env: string[] };
+      const originalId = cell.cell_id;
+      cell.cell_id = "M/local/child=tampered";
+      cell.dimensions.child = "tampered";
+      cell.required_env.push("INJECTED_VAR");
+      return [{ cellId: originalId, status: "green" as const }];
+    },
+  });
+  const report = await executeSelectedCells(await optionsFor([matrix]));
+  assert.equal(report.selected_cells[0].cell_id, "M/local/child=a");
+  assert.deepEqual(report.selected_cells[0].dimensions, { child: "a" });
+  assert.deepEqual(report.selected_cells[0].required_env, []);
+  assert.equal(report.results[0].cell_id, "M/local/child=a");
+  assert.deepEqual(report.results[0].dimensions, { child: "a" });
+  assert.equal(report.results[0].status, "green");
+  assert.equal(report.summary.integrity_errors.length, 0);
+});
+
+test("null, undefined, and malformed collector output is runner integrity, never a product failure (ETM-003)", async () => {
+  for (const bad of [null, undefined, "green", { cellId: 1 }]) {
+    const matrix = fakeMatrix({
+      id: "M",
+      cells: [{ child: "a" }],
+      runCells: (async () => (Array.isArray(bad) || typeof bad !== "object" || bad === null
+        ? bad
+        : [bad])) as unknown as MatrixScenarioDefinition["runCells"],
+    });
+    const report = await executeSelectedCells(await optionsFor([matrix]));
+    assert.equal(report.results[0].status, "missing", `for output ${JSON.stringify(bad)}`);
+    assert.notEqual(report.results[0].status, "failed");
+    assert.ok(report.summary.integrity_errors.length > 0);
+    assert.equal(report.summary.intended_exit_code, 2);
+  }
+});
