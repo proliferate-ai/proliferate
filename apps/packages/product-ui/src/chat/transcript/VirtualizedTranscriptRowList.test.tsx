@@ -97,7 +97,7 @@ describe("VirtualizedTranscriptRowList", () => {
       container.querySelector<HTMLElement>("[data-transcript-bottom-overlay-inset]")?.style.height,
     ).toBe("160px");
     const transcript = container.querySelector<HTMLElement>("[data-transcript-virtualization-mode='virtual']");
-    expect(transcript?.className).toContain("mt-auto");
+    expect(transcript?.className ?? "").not.toContain("mt-auto");
     expect(transcript?.parentElement?.className).toContain("relative flex min-h-full flex-col");
     expect(
       container.querySelector<HTMLElement>("[data-transcript-bottom-overlay-inset]")?.className,

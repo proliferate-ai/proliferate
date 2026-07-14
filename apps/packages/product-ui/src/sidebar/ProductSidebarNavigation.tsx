@@ -51,6 +51,8 @@ export function ProductSidebarNavRow({
       shortcutLabel={item.shortcutLabel}
       shortcutRevealVisible={shortcutRevealVisible}
       onPress={() => onSelect(item.id)}
+      // Codex primary-nav tier; the row's em-based icon well scales with it.
+      className="text-sidebar-nav leading-(--text-sidebar-nav--line-height)"
       {...props}
     />
   );

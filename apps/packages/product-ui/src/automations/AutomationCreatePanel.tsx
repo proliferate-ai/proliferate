@@ -1,5 +1,6 @@
 import { type FormEvent, type ReactNode } from "react";
-import { Bot, CalendarClock, GitBranch, X } from "lucide-react";
+import { Bot, CalendarClock, X } from "lucide-react";
+import { GitBranchIcon } from "@proliferate/ui/icons";
 
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
@@ -142,7 +143,7 @@ export function AutomationCreatePanel({
           </Field>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field title="Repo" icon={<GitBranch size={14} />}>
+            <Field title="Repo" icon={<GitBranchIcon className="size-3.5" />}>
               <Select
                 aria-label="Workflow repo"
                 value={values.repoKey}
