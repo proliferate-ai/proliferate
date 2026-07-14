@@ -51,6 +51,7 @@
     "@proliferate/cloud-sdk-react": "workspace:*",
     "@proliferate/design": "workspace:*",
     "@proliferate/product-domain": "workspace:*",
+    "@proliferate/product-surfaces": "workspace:*",
     "@proliferate/product-ui": "workspace:*",
     "@proliferate/ui": "workspace:*",
     "@tanstack/react-query": "^5.101.0",
@@ -61,6 +62,7 @@
     "@xterm/xterm": "^6.0.0",
     "cmdk": "^1.1.1",
     "geist": "^1.7.2",
+    "lucide-react": "0.577.0",
     "react-markdown": "^9",
     "react-router-dom": "^7",
     "remark-gfm": "^4",
@@ -73,6 +75,7 @@
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/react": "~19.2.17",
     "@types/react-dom": "~19.2.3",
     "@vitejs/plugin-react": "^4",

@@ -3,7 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { TEXT_SIZE_TOKEN_IDS, twMerge } from "@proliferate/ui/utils/tw-merge";
-import { typography } from "../../../../../packages/design/src/tokens";
+import { typography } from "../../../../../design/src/tokens";
 import { DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES } from "#product/lib/domain/preferences/appearance";
 
 /**
