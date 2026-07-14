@@ -259,10 +259,11 @@ async function mainFromCli(): Promise<void> {
       candidate_build: { artifacts: Array<{ artifact_id: string; version: string; sha256: string }> } | null;
       selected_cells?: unknown[];
     };
-    // The smoke consumes report V3 only — a runner emitting an older schema
-    // (or an empty exact-cell plan) is a regression, not acceptable evidence.
-    if (report.schema_version !== 3 || !Array.isArray(report.selected_cells) || report.selected_cells.length === 0) {
-      throw new Error("Runner did not produce a valid schema_version 3 report with a non-empty exact-cell plan.");
+    // The runner now emits report V4 (schema_version 4; V3 semantics unchanged
+    // plus per-result bounded evidence). An older schema — or an empty
+    // exact-cell plan — is a regression, not acceptable evidence.
+    if (report.schema_version !== 4 || !Array.isArray(report.selected_cells) || report.selected_cells.length === 0) {
+      throw new Error("Runner did not produce a valid schema_version 4 report with a non-empty exact-cell plan.");
     }
     const expected = toCandidateBuildEvidence(map);
     if (JSON.stringify(report.candidate_build) !== JSON.stringify(expected)) {

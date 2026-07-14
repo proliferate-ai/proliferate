@@ -39,6 +39,91 @@ function control(
   };
 }
 
+function modeControl(): DesktopAgentLaunchControl {
+  return {
+    key: "mode",
+    label: "Mode",
+    type: "select",
+    phase: "create_session",
+    createField: "modeId",
+    defaultValue: null,
+    values: [
+      { value: "auto", label: "Auto", isDefault: false },
+      { value: "default", label: "Default", isDefault: false },
+      { value: "acceptEdits", label: "Accept Edits", isDefault: false },
+      { value: "plan", label: "Plan", isDefault: false },
+    ],
+    surfaces: { start: true, session: true, automation: true, settings: true },
+    apply: {
+      createField: "modeId",
+      liveConfigId: "mode",
+      liveSetter: "runtime_control",
+      queueBeforeMaterialized: true,
+    },
+    missingLiveConfigPolicy: "ignore_default",
+    valueSource: "inline",
+    queueWhileMaterializing: true,
+    mutableAfterMaterialized: true,
+  };
+}
+
+describe("buildLaunchControlDescriptors mode scoping", () => {
+  it("scopes the mode control to the selected model's supported modes and never defaults to an unsupported mode", () => {
+    // Regression: gateway/bedrock Claude models exclude `auto` from their
+    // per-model mode vocabulary. The composer must not offer or default to
+    // `auto` for such a model — AnyHarness rejects it at session creation with
+    // SESSION_MODE_UNSUPPORTED.
+    const [mode] = buildLaunchControlDescriptors({
+      selection: { kind: "claude", modelId: "claude-haiku-4-5" },
+      launchAgents: [
+        {
+          kind: "claude",
+          launchControls: [modeControl()],
+          models: [
+            {
+              id: "claude-haiku-4-5",
+              modeValues: ["default", "acceptEdits", "plan", "dontAsk", "bypassPermissions"],
+            },
+          ],
+        },
+      ],
+      preferences: {
+        // Even a persisted `auto` preference must not survive onto this model.
+        defaultSessionModeByAgentKind: { claude: "auto" },
+        defaultLiveSessionControlValuesByAgentKind: {},
+      },
+      pendingConfigChanges: null,
+      onSelect: () => {},
+    });
+
+    expect(mode?.key).toBe("mode");
+    expect(mode?.options.map((option) => option.value)).not.toContain("auto");
+    const selected = mode?.options.find((option) => option.selected);
+    expect(selected?.value).toBe("default");
+  });
+
+  it("keeps the full agent-level mode vocabulary when the model has no per-model modes", () => {
+    const [mode] = buildLaunchControlDescriptors({
+      selection: { kind: "claude", modelId: "sonnet" },
+      launchAgents: [
+        {
+          kind: "claude",
+          launchControls: [modeControl()],
+          models: [{ id: "sonnet", modeValues: null }],
+        },
+      ],
+      preferences: {
+        defaultSessionModeByAgentKind: {},
+        defaultLiveSessionControlValuesByAgentKind: {},
+      },
+      pendingConfigChanges: null,
+      onSelect: () => {},
+    });
+
+    expect(mode?.options.map((option) => option.value)).toContain("auto");
+  });
+});
+
 describe("buildLaunchControlDescriptors", () => {
   it("builds descriptors from agent launch controls", () => {
     const controls = buildLaunchControlDescriptors({

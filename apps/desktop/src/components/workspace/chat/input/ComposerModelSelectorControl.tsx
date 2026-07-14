@@ -37,6 +37,13 @@ export function ComposerModelSelectorControl({
   } = modelSelectorProps;
   const selectorEnabled = connectionState === "healthy" && !isLoading && hasAgents;
   const triggerLabel = resolveTriggerLabel(modelSelectorProps);
+  // Stable qualification hook (attributes only): the id of the currently
+  // selected model, derived from the group items already rendered. Lets the
+  // local-world smoke driver assert the composer picker reflects its choice
+  // without adding a modelId to the display-only `currentModel`. No behavior
+  // change.
+  const selectedModelId =
+    groups.flatMap((group) => group.models).find((model) => model.isSelected)?.modelId ?? "";
 
   // UX_SPEC S5: adding a harness routes to Settings -> per-harness agent pages.
   const handleAddProvider = useCallback(() => {
@@ -54,6 +61,8 @@ export function ComposerModelSelectorControl({
     return (
       <ComposerControlButton
         disabled
+        data-composer-model-trigger
+        data-composer-selected-model={selectedModelId}
         icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="size-4 shrink-0" /> : undefined}
         label={triggerLabel}
         className="max-w-[15rem]"
@@ -66,6 +75,8 @@ export function ComposerModelSelectorControl({
       trigger={(
         <ComposerControlButton
           emphasizeLabel
+          data-composer-model-trigger
+          data-composer-selected-model={selectedModelId}
           icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="size-4 shrink-0" /> : undefined}
           label={triggerLabel}
           trailing={currentModel?.pendingState
@@ -234,6 +245,8 @@ function ModelPickerGroup({
         return (
           <PopoverMenuItem
             key={model.modelId}
+            data-model-option={model.modelId}
+            data-model-selected={model.isSelected ? "true" : "false"}
             icon={<ProviderIcon kind={group.kind} className="size-3 shrink-0 text-muted-foreground" />}
             label={(
               <span className="flex items-center gap-1.5">

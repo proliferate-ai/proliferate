@@ -3,6 +3,7 @@ import type { AgentAuthState } from "@proliferate/cloud-sdk";
 import {
   localAuthStateFingerprint,
   planLocalAuthStatePush,
+  shouldSyncLocalAuthState,
   stampIssuingServerOrigin,
 } from "./local-auth-state";
 
@@ -109,5 +110,33 @@ describe("stampIssuingServerOrigin", () => {
     const first = stampIssuingServerOrigin(state(), "https://old-server.example");
     const second = stampIssuingServerOrigin(first, "https://new-server.example");
     expect(second.issuing_server_origin).toBe("https://new-server.example");
+  });
+});
+
+describe("shouldSyncLocalAuthState", () => {
+  it("syncs a gateway-enabled server even when cloud COMPUTE is unavailable", () => {
+    // Regression: the local gateway/BYOK routes must reach the runtime on a
+    // reachable, authenticated server regardless of cloud-compute (E2B). This
+    // is the exact posture of the qualification local world and a local-only
+    // managed-gateway user.
+    expect(
+      shouldSyncLocalAuthState({
+        authenticated: true,
+        serverReachable: true,
+        runtimeHealthy: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("does not sync until authenticated, reachable, and the runtime is healthy", () => {
+    expect(
+      shouldSyncLocalAuthState({ authenticated: false, serverReachable: true, runtimeHealthy: true }),
+    ).toBe(false);
+    expect(
+      shouldSyncLocalAuthState({ authenticated: true, serverReachable: false, runtimeHealthy: true }),
+    ).toBe(false);
+    expect(
+      shouldSyncLocalAuthState({ authenticated: true, serverReachable: true, runtimeHealthy: false }),
+    ).toBe(false);
   });
 });
