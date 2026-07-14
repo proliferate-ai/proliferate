@@ -2345,3 +2345,48 @@ test/product-host-fixtures.ts	move	apps/packages/product-client/src/test/product
 test/product-host-test-utils.tsx	move	apps/packages/product-client/src/test/product-host-test-utils.tsx	product module; default move per ledger rules; no host-retained runtime import
 test/product-storage-test-utils.ts	move	apps/packages/product-client/src/test/product-storage-test-utils.ts	product module; default move per ledger rules; no host-retained runtime import
 ```
+
+## Codemod evidence (S5)
+
+`scripts/migrate-desktop-product-client.mjs` is the ledger-driven import codemod.
+It reads this ledger with the same parse semantics as
+`scripts/check-product-client-move-ledger.py` (fenced ` ```ledger ` block,
+tab-split rows, >=4 fields, valid classification) and, for every `move`-classified
+JS/TS module, rewrites Desktop-local specifiers (`@/...` alias and relative
+`./`,`../`) that resolve to another `move`-classified JS/TS module into
+package-private `#product/*` specifiers. Specifier string-literal nodes are located
+with the TypeScript parser and spliced by position; no fallback text replacement.
+
+Scope (justified): the package `imports` map resolves `#product/*` only to
+`./dist/*.js`, so only compiled JS/TS modules are eligible. Local specifiers that
+resolve to a `retain`/`split`/`delete` target, to an **asset/CSS/JSON** file
+(e.g. `@/assets/...svg?raw`), or **outside** `apps/desktop/src` (the six-level
+`catalogs/agents/catalog.json?raw` reach) are left untouched — a co-moved relative
+asset import stays valid after the move, and an aliased asset/external import
+cannot be expressed as `#product/*`. Those are the move-PR asset-resolution items
+already recorded under "Known wrinkles". Seam imports (e.g. product files reading
+`lib/infra/measurement/**`) resolve to `retain` rows and are therefore correctly
+left as `@/...` here, to be rerouted through host facades by the move PR.
+
+Proof on a disposable copy of `apps/desktop/src` (real working tree never written):
+
+- `--check`  -> 5653 planned rewrites across 1601 files (1985 move modules scanned).
+- `--apply`  -> 5653 applied; plan byte-identical to `--check`.
+- `--check` after apply -> 0 (empty).
+- `--apply` second run -> 0 (idempotent).
+- Two independent full `--apply` runs produce byte-identical trees (deterministic;
+  stable sort by source path then in-file position, no timestamps).
+- Applied diffs touch only import/export specifier tokens (file line counts
+  preserved; every rewritten specifier is `#product/*`).
+- Refuses (exit nonzero) on: a 3-field row, an unterminated ` ```ledger ` block, an
+  unknown classification, a `move` source importing a path with no ledger row, and a
+  missing `--check`/`--apply` mode.
+
+Run against a copy, not the working source:
+
+```bash
+cp -R apps/desktop/src /tmp/proof-src
+node scripts/migrate-desktop-product-client.mjs --check --src /tmp/proof-src
+node scripts/migrate-desktop-product-client.mjs --apply --src /tmp/proof-src
+node scripts/migrate-desktop-product-client.mjs --check --src /tmp/proof-src   # empty
+```
