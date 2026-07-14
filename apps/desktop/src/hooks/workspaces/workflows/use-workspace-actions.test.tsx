@@ -46,6 +46,16 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
     // Branch naming reads only the signed-in github login; no user here matches
     // the prior default (empty auth store) so the branch prefix stays empty.
     auth: { state: { status: "anonymous", methods: [] } },
+    // The hook now emits through host.telemetry (typed adapter). Point it at the
+    // same spies the assertions read so behavior is exercised end to end.
+    telemetry: {
+      track: mocks.trackProductEvent,
+      captureException: mocks.captureTelemetryException,
+      setUser: () => {},
+      setTag: () => {},
+      routeChanged: () => {},
+      getSupportContext: () => ({ clientReleaseId: "desktop@test" }),
+    },
   }),
 }));
 
@@ -116,9 +126,12 @@ describe("useWorkspaceActions local workspace creation", () => {
     });
     expect(mocks.resolveFromPath).not.toHaveBeenCalled();
     expect(mocks.ensureRuntimeReady).toHaveBeenCalledWith(mocks.localRuntime);
-    expect(mocks.trackProductEvent).toHaveBeenCalledWith("workspace_created", {
-      workspace_kind: "local",
-      creation_kind: "local",
+    expect(mocks.trackProductEvent).toHaveBeenCalledWith({
+      name: "workspace_created",
+      properties: {
+        workspace_kind: "local",
+        creation_kind: "local",
+      },
     });
   });
 

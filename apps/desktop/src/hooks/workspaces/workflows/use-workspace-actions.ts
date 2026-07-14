@@ -21,10 +21,7 @@ import {
 } from "@/lib/domain/workspaces/creation/workspace-slug";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { isCloudWorkspaceId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import {
-  captureTelemetryException,
-  trackProductEvent,
-} from "@/lib/integrations/telemetry/client";
+import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
 import type { SetupScriptTelemetryStatus } from "@/lib/domain/telemetry/events";
 import type { AuthUser } from "@/lib/domain/auth/auth-user";
 import { useProductAuthUser } from "@/hooks/auth/facade/use-product-auth";
@@ -55,6 +52,7 @@ interface RuntimeBoundResult<T> {
 
 export function useWorkspaceActions() {
   const desktop = useProductHost().desktop;
+  const telemetry = useProductTelemetry();
   const localRuntime = desktop?.runtime ?? null;
   const files = desktop?.files ?? null;
   // Worktree resolution runs outside render; read the latest signed-in identity
@@ -145,13 +143,13 @@ export function useWorkspaceActions() {
         result.repoRoot,
       );
       refreshWorkspaceCollections(runtimeUrl, "local_create", result.workspace.id);
-      trackProductEvent("workspace_created", {
+      telemetry.track("workspace_created", {
         workspace_kind: "local",
         creation_kind: "local",
       });
     },
     onError: (error) => {
-      captureTelemetryException(error, {
+      telemetry.captureException(error, {
         tags: {
           action: "create_local_workspace",
           domain: "workspace",
@@ -190,7 +188,7 @@ export function useWorkspaceActions() {
     onSuccess: ({ result, runtimeUrl }) => {
       primeWorkspaceCollections(runtimeUrl, result.workspace, "worktree_create");
       refreshWorkspaceCollections(runtimeUrl, "worktree_create", result.workspace.id);
-      trackProductEvent("workspace_created", {
+      telemetry.track("workspace_created", {
         workspace_kind: "local",
         creation_kind: "worktree",
         setup_script_status: (
@@ -201,7 +199,7 @@ export function useWorkspaceActions() {
       });
     },
     onError: (error) => {
-      captureTelemetryException(error, {
+      telemetry.captureException(error, {
         tags: {
           action: "create_worktree_workspace",
           domain: "workspace",
