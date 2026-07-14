@@ -14,8 +14,9 @@ use super::http::{
     agent_auth, agent_gateway_catalog, agents, auth as http_auth, catalogs, cowork, files, git,
     goals, health, hosting, loops, mobility, plans, processes, product_mcp, replay, repo_roots,
     reviews, sessions, sessions_config, sessions_events, sessions_fork, sessions_interactions,
-    sessions_lifecycle, sessions_prompt, sessions_resume, subagents, terminals, workspaces,
-    workspaces_lifecycle, workspaces_purge, workspaces_setup, workspaces_worktrees, worktrees,
+    sessions_lifecycle, sessions_prompt, sessions_resume, subagents, terminals, workflow_runs,
+    workspaces, workspaces_lifecycle, workspaces_purge, workspaces_setup, workspaces_worktrees,
+    worktrees,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::activity as ws_activity;
@@ -440,6 +441,11 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/sessions/{session_id}/goal",
             put(goals::set_session_goal).delete(goals::clear_session_goal),
+        )
+        // Workflow runs (AnyHarness-owned one-prompt execution vertical)
+        .route(
+            "/workflow-runs/{run_id}",
+            put(workflow_runs::put_workflow_run).get(workflow_runs::get_workflow_run),
         )
         // Loops (native crons + emulated scheduler)
         .route(

@@ -416,6 +416,7 @@ impl SessionRuntime {
                             workspace: workspace.clone(),
                             session_id: result.session_id.clone(),
                             turn_id: result.turn_id.clone(),
+                            prompt_id: result.prompt_id.clone(),
                             outcome: result.outcome,
                             stop_reason: result.stop_reason.clone(),
                             last_event_seq: result.last_event_seq,

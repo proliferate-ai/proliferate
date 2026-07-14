@@ -1028,6 +1028,22 @@ export interface paths {
         patch: operations["update_terminal_title"];
         trace?: never;
     };
+    "/v1/workflow-runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_workflow_run"];
+        put: operations["put_workflow_run"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces": {
         parameters: {
             query?: never;
@@ -3598,6 +3614,20 @@ export interface components {
             accepted: number;
         };
         /**
+         * @description `PUT /v1/workflow-runs/{runId}` request body. The `runId` lives in the path
+         *     only and never appears in the body.
+         */
+        PutWorkflowRunRequest: {
+            /** @description Concrete scalar argument values keyed by declared input name. */
+            arguments?: {
+                [key: string]: components["schemas"]["WorkflowRunArgumentValue"];
+            };
+            definition: components["schemas"]["WorkflowRunDefinition"];
+            /** Format: int64 */
+            schemaVersion: number;
+            workspaceId: string;
+        };
+        /**
          * @description A raw ACP session configuration option as exposed by the active session.
          *
          *     This is the transport-fidelity layer. It should match the live ACP state as
@@ -4568,6 +4598,100 @@ export interface components {
             selectedOptionLabel?: string | null;
             text?: string | null;
         };
+        /** @description The durable run view. */
+        WorkflowRun: {
+            arguments: {
+                [key: string]: components["schemas"]["WorkflowRunArgumentValue"];
+            };
+            createdAt: string;
+            definition: components["schemas"]["WorkflowRunDefinition"];
+            failureCode?: null | components["schemas"]["WorkflowRunFailureCode"];
+            finishedAt?: string | null;
+            id: string;
+            /** Format: int64 */
+            schemaVersion: number;
+            sessionId?: string | null;
+            startedAt?: string | null;
+            status: components["schemas"]["WorkflowRunStatus"];
+            updatedAt: string;
+            workspaceId: string;
+        };
+        WorkflowRunArgumentValue: boolean | number | string;
+        /** @description The frozen executable definition: inputs plus exactly one stage. */
+        WorkflowRunDefinition: {
+            inputs?: components["schemas"]["WorkflowRunInput"][];
+            stages: components["schemas"]["WorkflowRunStage"][];
+        };
+        /**
+         * @description The stable machine failure result on failed runs and steps (spec §6.1).
+         * @enum {string}
+         */
+        WorkflowRunFailureCode: "workspace_unavailable" | "session_create_failed" | "session_start_failed" | "prompt_dispatch_failed" | "session_turn_failed" | "session_turn_cancelled" | "runtime_restarted";
+        /** @description Harness selection for the stage's session. */
+        WorkflowRunHarnessConfig: {
+            agentKind: string;
+            /** @description Required key; `null` requests existing `SessionRuntime` mode behavior. */
+            modeId: string | null;
+            /**
+             * @description Required key; `null` requests the target-default model. The
+             *     `schema(required)` override keeps the generated OpenAPI/SDK in sync
+             *     with the wire rule (present key, nullable value) that `nullable_string`
+             *     enforces at deserialization.
+             */
+            modelId: string | null;
+        };
+        /** @description A declared scalar input. */
+        WorkflowRunInput: {
+            name: string;
+            required: boolean;
+            type: components["schemas"]["WorkflowRunInputType"];
+        };
+        /**
+         * @description The only permitted input types (scalars). Defaults, arrays, objects,
+         *     choices, and secret types are rejected by omission from this enum.
+         * @enum {string}
+         */
+        WorkflowRunInputType: "string" | "number" | "boolean";
+        /** @description The single `agent.prompt` step. */
+        WorkflowRunPromptStep: {
+            kind: string;
+            prompt: string;
+        };
+        /** @description PUT/GET response envelope. */
+        WorkflowRunResponse: {
+            run: components["schemas"]["WorkflowRun"];
+            steps: components["schemas"]["WorkflowRunStep"][];
+        };
+        /** @description Exactly one stage: a harness configuration plus exactly one prompt step. */
+        WorkflowRunStage: {
+            harnessConfig: components["schemas"]["WorkflowRunHarnessConfig"];
+            steps: components["schemas"]["WorkflowRunPromptStep"][];
+        };
+        /**
+         * @description Durable run status.
+         * @enum {string}
+         */
+        WorkflowRunStatus: "accepted" | "running" | "completed" | "failed";
+        /** @description The durable materialized step view. */
+        WorkflowRunStep: {
+            createdAt: string;
+            failureCode?: null | components["schemas"]["WorkflowRunFailureCode"];
+            finishedAt?: string | null;
+            promptId: string;
+            /** Format: int64 */
+            stageIndex: number;
+            startedAt?: string | null;
+            status: components["schemas"]["WorkflowRunStepStatus"];
+            /** Format: int64 */
+            stepIndex: number;
+            turnId?: string | null;
+            updatedAt: string;
+        };
+        /**
+         * @description Durable step status.
+         * @enum {string}
+         */
+        WorkflowRunStepStatus: "pending" | "running" | "completed" | "failed";
         Workspace: {
             cleanupAttemptedAt?: string | null;
             cleanupErrorMessage?: string | null;
@@ -7593,6 +7717,110 @@ export interface operations {
             };
             /** @description Terminal not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_workflow_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Canonical UUID for the workflow run */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Durable run and step status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunResponse"];
+                };
+            };
+            /** @description Non-canonical run ID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unknown workflow run */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    put_workflow_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Canonical UUID for the workflow run */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutWorkflowRunRequest"];
+            };
+        };
+        responses: {
+            /** @description Exact replay of an identical invocation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunResponse"];
+                };
+            };
+            /** @description New durable acceptance */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunResponse"];
+                };
+            };
+            /** @description Invalid ID, definition, arguments, or rendered prompt */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Same ID, different invocation */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Acceptance storage failure; no committed run or step */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

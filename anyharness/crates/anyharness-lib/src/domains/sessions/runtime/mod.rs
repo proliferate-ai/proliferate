@@ -38,6 +38,8 @@ mod startup;
 mod tests;
 pub(crate) mod view;
 
+pub(crate) use creation::{InternalSessionCreateError, InternalSessionCreateInput};
+
 pub struct SessionRuntime {
     session_service: Arc<SessionService>,
     session_link_service: SessionLinkService,

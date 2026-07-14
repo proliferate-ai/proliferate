@@ -3,8 +3,8 @@ use anyharness_contract::v1::{SessionExecutionPhase, StopReason};
 use tokio::sync::mpsc;
 
 use crate::acp::provider_errors::{
-    classify_network_connection_error, classify_provider_rate_limit_error,
-    NETWORK_CONNECTION_CODE, PROVIDER_RATE_LIMIT_CODE,
+    classify_network_connection_error, classify_provider_rate_limit_error, NETWORK_CONNECTION_CODE,
+    PROVIDER_RATE_LIMIT_CODE,
 };
 use crate::domains::sessions::extensions::SessionTurnOutcome;
 use crate::live::sessions::actor::config::queue::apply_pending_config_changes_if_idle;
@@ -159,6 +159,7 @@ impl SessionActor {
                             .current_turn_id
                             .clone()
                             .unwrap_or_default(),
+                        prompt_id: prompt_diagnostics.prompt_id.clone(),
                         outcome,
                         stop_reason: Some(stop_reason),
                         last_event_seq,
@@ -208,7 +209,9 @@ impl SessionActor {
                 let error_message = e.to_string();
                 let (error_details, error_code) =
                     match classify_provider_rate_limit_error(&error_message) {
-                        Some(details) => (Some(details), Some(PROVIDER_RATE_LIMIT_CODE.to_string())),
+                        Some(details) => {
+                            (Some(details), Some(PROVIDER_RATE_LIMIT_CODE.to_string()))
+                        }
                         None => match classify_network_connection_error(&error_message) {
                             Some(details) => {
                                 (Some(details), Some(NETWORK_CONNECTION_CODE.to_string()))
@@ -235,6 +238,7 @@ impl SessionActor {
                             .current_turn_id
                             .clone()
                             .unwrap_or_default(),
+                        prompt_id: prompt_diagnostics.prompt_id.clone(),
                         outcome: SessionTurnOutcome::Failed,
                         stop_reason: None,
                         last_event_seq,

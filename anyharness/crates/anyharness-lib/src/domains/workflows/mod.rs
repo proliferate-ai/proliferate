@@ -1,0 +1,13 @@
+//! The `workflows` product domain: durable one-prompt workflow execution in an
+//! existing workspace (spec `features/workflow-runs.md`). A workflow run may
+//! own several sessions in later slices, so it is a top-level domain rather
+//! than a sessions subdomain.
+
+pub mod model;
+pub mod runtime;
+pub mod service;
+pub mod session_extension;
+pub mod store;
+
+#[cfg(test)]
+mod service_tests;

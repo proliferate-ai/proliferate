@@ -41,6 +41,9 @@ pub struct SessionTurnFinishedContext {
     pub workspace: WorkspaceRecord,
     pub session_id: String,
     pub turn_id: String,
+    /// The workflow-owned prompt id when present; used for exact prompt-identity
+    /// matching by workflow completion. `None` for prompts with no id.
+    pub prompt_id: Option<String>,
     pub outcome: SessionTurnOutcome,
     pub stop_reason: Option<String>,
     pub last_event_seq: i64,

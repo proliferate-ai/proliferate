@@ -9,3 +9,5 @@ pub mod ws;
 mod openapi_tests;
 #[cfg(test)]
 mod router_tests;
+#[cfg(test)]
+mod workflow_runs_tests;
