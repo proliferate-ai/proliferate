@@ -31,7 +31,7 @@ http.createServer((req, res) => {
   res.setHeader("content-type", "application/json");
   res.end(JSON.stringify({ status: ${JSON.stringify(options.status ?? "ok")}, version: ${JSON.stringify(
     options.version,
-  )}, runtime_home: home }));
+  )}, runtimeHome: home }));
 }).listen(Number(val("--port")), val("--host"));
 `;
   const binaryPath = path.join(dir, `fake-anyharness-${options.version}-${options.status ?? "ok"}`);

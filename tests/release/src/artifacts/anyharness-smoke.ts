@@ -133,11 +133,13 @@ async function pollHealth(port: number, timeoutMs: number): Promise<AnyharnessHe
     try {
       const response = await fetch(`http://127.0.0.1:${port}/health`);
       if (response.ok) {
-        const body = (await response.json()) as Partial<AnyharnessHealth>;
+        // Wire shape is the camelCase HealthResponse contract
+        // (anyharness-contract/src/v1/health.rs, rename_all = "camelCase").
+        const body = (await response.json()) as { status?: unknown; version?: unknown; runtimeHome?: unknown };
         return {
           status: String(body.status ?? ""),
           version: String(body.version ?? ""),
-          runtime_home: String(body.runtime_home ?? ""),
+          runtime_home: String(body.runtimeHome ?? ""),
         };
       }
       lastError = `HTTP ${response.status}`;
