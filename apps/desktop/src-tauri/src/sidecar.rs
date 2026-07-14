@@ -17,8 +17,8 @@ const HEALTH_POLL_TIMEOUT: Duration = Duration::from_secs(60);
 const ANYHARNESS_DEFER_STARTUP_RETENTION_ENV: &str = "ANYHARNESS_DEFER_STARTUP_RETENTION";
 /// Read by anyharness's route-auth render plane to guard against injecting a
 /// previous server's gateway credentials right after a connect-to-server
-/// switch (self-hosting-v1 §3.5). Must match
-/// `route_auth::CURRENT_SERVER_ORIGIN_ENV` in anyharness-lib exactly.
+/// switch. Must match `route_auth::CURRENT_SERVER_ORIGIN_ENV` in
+/// anyharness-lib exactly.
 const PROLIFERATE_API_BASE_URL_ORIGIN_ENV: &str = "PROLIFERATE_API_BASE_URL_ORIGIN";
 
 #[derive(Debug, Clone, serde::Serialize)]

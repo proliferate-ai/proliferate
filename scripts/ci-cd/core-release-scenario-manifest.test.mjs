@@ -11,7 +11,10 @@ const manifestPath = path.join(testingDir, "core-release-scenario-manifest.json"
 const tier3ContractPath = path.join(testingDir, "tier-3-scenario-contract.md");
 const tier4ContractPath = path.join(testingDir, "tier-4-scenario-contract.md");
 const worldsContractPath = path.join(testingDir, "release-worlds-and-fixtures.md");
-const migrationContractPath = path.join(repoRoot, "specs/tbd/web-desktop-unification-migration.md");
+const migrationContractPath = path.join(
+  repoRoot,
+  "specs/developing/deploying/web-desktop-unification-rollout.md",
+);
 const contract = readFileSync(contractPath, "utf8");
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 const tier3Contract = readFileSync(tier3ContractPath, "utf8");

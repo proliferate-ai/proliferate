@@ -11,8 +11,8 @@ current as evidence changes, review it, and then select the next slice.
 Superseded phase names and rollout mechanics are not implicitly reusable.
 
 Non-authoritative history: the original migration plan and the 2026-07-13
-intake sweep remain under `specs/tbd/` as execution detail and sweep input
-only.
+intake sweep remain in Git history only. They are execution detail and sweep
+input, not reusable rollout mechanics.
 
 Ledger rules:
 

@@ -835,8 +835,8 @@ The following are known implementation differences, not alternate contracts:
 - current machine tokens can enter human mutation routes;
 - no release manifest or support-credit projection comment exists; the landing
   generator is not yet invoked by a production release finalizer;
-- the existing `specs/tbd/support-system-alignment.md` is a historical audit
-  and includes superseded ownership recommendations.
+- older support-system audit notes are historical and include superseded
+  ownership recommendations.
 
 Implementation must migrate forward; it must not preserve old and new paths as
 parallel production behavior.

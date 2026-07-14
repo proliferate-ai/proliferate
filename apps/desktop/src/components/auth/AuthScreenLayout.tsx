@@ -90,9 +90,9 @@ export function AuthScreenLayout({
     && !githubSignInChecking
     && !githubSignInAvailable;
 
-  // Connect-to-a-self-hosted-server (self-hosting-v1 §3.5): a quiet secondary
-  // affordance, never rendered in the web build (no Tauri, no
-  // `set_app_config` command — `available` is false there).
+  // Connect-to-a-self-hosted-server: a quiet secondary affordance, never
+  // rendered in the web build (no Tauri, no `set_app_config` command —
+  // `available` is false there).
   const connectServer = useConnectServer();
   const showConnectServer = showAuth && connectServer.available;
 

@@ -5,9 +5,8 @@ name: Catalog Probe
 # fail-closed: every configured context must probe the newly resolved exact pin.
 # Cursor is retained because its ACP process requires a machine-local login;
 # run `make catalog-update CATALOG_PROBE_ARGS=--include-cursor` on such a host.
-# Follow-ups tracked in specs/tbd/agents-catalog-registry-
-# migration.md §8: bedrock/vertex contexts and deliberate precedence
-# experiments land once the probe binary grows those auth contexts.
+# Follow-ups: bedrock/vertex contexts and deliberate precedence experiments
+# land once the probe binary grows those auth contexts.
 
 on:
   workflow_dispatch:

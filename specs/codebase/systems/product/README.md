@@ -67,5 +67,5 @@ need one place to learn:
 - migration exceptions and current implementation anchors
 
 Do not create a placeholder spec that only says a system should exist. If the
-system is not authoritative yet, keep design notes under `specs/tbd/` until
-the owner and contract are clear.
+system is not authoritative yet, keep design notes outside the permanent
+repository documentation path until the owner and contract are clear.
