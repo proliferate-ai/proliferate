@@ -7,13 +7,13 @@ Status: **current implementation scope**.
 - Prior completed implementation: PR #1182 (D1f), merge
   `f93afce8190bba943277d588c9bfb0d051c615c9`
 - Parent architecture:
-  [`web-desktop-client-unification.md`](web-desktop-client-unification.md)
+  [`web-desktop-client-unification.md`](../README.md)
 - Application-entry contract:
-  [`web-desktop-product-client-entry-contract.md`](web-desktop-product-client-entry-contract.md)
+  [`web-desktop-product-client-entry-contract.md`](../entry-contract.md)
 - Move ledger:
-  [`web-desktop-product-client-move-ledger.md`](web-desktop-product-client-move-ledger.md)
+  [`web-desktop-product-client-move-ledger.md`](../move-ledger.md)
 - Pipeline ledger:
-  [`../../developing/deploying/web-desktop-unification-rollout.md`](../../developing/deploying/web-desktop-unification-rollout.md)
+  [`../../developing/deploying/web-desktop-unification-rollout.md`](../../../../../../developing/deploying/web-desktop-unification-rollout.md)
 - Approved contract:
   `03 - Prove ProductClient Extraction Mechanics.md` (founder-approved r3;
   decisions 8–9 approved 2026-07-14)
@@ -50,7 +50,7 @@ At this slice's head, on base `f93afce81`:
 ## Entry contract (recorded, not implemented)
 
 The full contract is in
-[`web-desktop-product-client-entry-contract.md`](web-desktop-product-client-entry-contract.md).
+[`web-desktop-product-client-entry-contract.md`](../entry-contract.md).
 Summary of what this slice locks:
 
 - **Public entry:** `ProductClient({ RoutesComponent }): ReactElement`, exported
@@ -160,7 +160,7 @@ cutover baseline.
 ## Move ledger summary counts
 
 Full ledger:
-[`web-desktop-product-client-move-ledger.md`](web-desktop-product-client-move-ledger.md).
+[`web-desktop-product-client-move-ledger.md`](../move-ledger.md).
 Source root `apps/desktop/src` = **2220 files at base**. Checked by
 `scripts/check-product-client-move-ledger.py` (every disk path has exactly one
 classification, no target collisions, no unclassified product file):
