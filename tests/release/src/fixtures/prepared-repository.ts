@@ -24,11 +24,10 @@ import type { AuthenticatedActor } from "./authenticated-actor.js";
  * `ensureLocalClone()` helper in `src/fixtures/git.ts` — that helper
  * deliberately reuses one mutable clone across runs, which the spec's
  * "no shared mutable clone is reused between runs" requirement rules out here.
- * `DEFAULT_BASELINE_COMMIT` should be a real, verifiable commit on that repo's
- * default branch; override via `PreparedRepositoryOptions.commit` (or the
- * scenario's typed input) if that repository's history changes — flagged for
- * the integrator to confirm the exact pinned SHA against the live fixture
- * repo before the first real run.
+ * `DEFAULT_BASELINE_COMMIT` is a real, durable commit on that repo's default
+ * branch (`main`), pinned to a full SHA; override via
+ * `PreparedRepositoryOptions.commit` (or the scenario's typed input) if that
+ * repository's history changes.
  *
  * `POST /v1/repo-roots/resolve` on the local AnyHarness runtime
  * (`anyharness/crates/anyharness-lib/src/api/http/repo_roots.rs`) is not yet
@@ -59,14 +58,13 @@ export interface PreparedRepositoryOptions {
 }
 
 /**
- * Placeholder pinned baseline commit on the durable qualification repo's
- * default branch. This MUST be confirmed against the live
- * `RELEASE_E2E_GITHUB_TEST_REPO` fixture (`proliferate-e2e/e2e-fixture`)
- * before the first real run — a wrong/absent SHA fails the clone loudly
- * rather than silently, so this is safe to ship unverified but is flagged in
- * the final report as a must-confirm item.
+ * Pinned baseline commit on the durable qualification repo's default branch
+ * (`proliferate-e2e/e2e-fixture` @ `main`). Pinned to a full, durable SHA
+ * (confirmed live via `gh api repos/proliferate-e2e/e2e-fixture/commits/main`
+ * on 2026-07-14) so every run checks out the exact same bytes; a
+ * wrong/absent SHA fails the clone loudly rather than silently.
  */
-export const DEFAULT_BASELINE_COMMIT = "HEAD";
+export const DEFAULT_BASELINE_COMMIT = "b70a83eda743a4ad615e33483bc8943055d3aa7d";
 
 function defaultRepoUrl(): string {
   return `https://github.com/${DEFAULT_GITHUB_TEST_REPO}.git`;
