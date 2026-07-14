@@ -19,7 +19,7 @@ import type { TestRunReportV3 } from "../evidence/schema.js";
  * (specs/developing/testing/candidate-build-handoff.md "Runner integration").
  * The required ordering is encoded here: parse → identity → selection →
  * candidate-build-map validation → only then local-user/gateway setup →
- * execute → write report V2 → auxiliary issue filing → persisted exit.
+ * execute → write report V3 → auxiliary issue filing → persisted exit.
  * `cli/run.ts` stays a thin process adapter supplying the real side-effect
  * dependencies.
  */

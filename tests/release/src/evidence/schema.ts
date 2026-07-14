@@ -312,7 +312,7 @@ const EVIDENCE_SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const EVIDENCE_ARTIFACT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
 
 /**
- * `candidate_build` must be present on every V2 report — an explicit null for
+ * `candidate_build` must be present on every report — an explicit null for
  * diagnostic omission, otherwise only bounded artifact ID/version/SHA-256
  * triples. Anything path-like, oversized, or extra is rejected so map paths
  * and raw map JSON can never masquerade as evidence.
