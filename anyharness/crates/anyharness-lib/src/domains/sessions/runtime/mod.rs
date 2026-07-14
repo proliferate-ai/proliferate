@@ -39,6 +39,7 @@ mod tests;
 pub(crate) mod view;
 
 pub(crate) use creation::{InternalSessionCreateError, InternalSessionCreateInput};
+pub(crate) use prompt::TextPromptDispatchError;
 
 pub struct SessionRuntime {
     session_service: Arc<SessionService>,

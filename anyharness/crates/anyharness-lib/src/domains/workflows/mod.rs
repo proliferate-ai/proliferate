@@ -3,6 +3,7 @@
 //! own several sessions in later slices, so it is a top-level domain rather
 //! than a sessions subdomain.
 
+mod dispatch;
 pub mod model;
 mod portable_service;
 mod portable_validation;
