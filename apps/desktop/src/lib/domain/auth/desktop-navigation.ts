@@ -4,6 +4,16 @@ import type {
   ProductSettingsEntrySection,
 } from "@proliferate/product-client/host/product-host";
 
+// Legacy in-app route mapping for `proliferate://settings/<path>` deep links.
+// Excludes `/environments` (no nav route) to stay byte-identical to the branches.
+const NAV_SETTINGS_SECTION_BY_PATH: Record<string, ProductSettingsEntrySection> = {
+  "/cloud": "billing",
+  "/billing": "billing",
+  "/account": "account",
+  "/organization": "organization",
+  "/slack-bot": "general",
+};
+
 /**
  * Decode a raw Desktop deep-link URL into the shared {@link ProductEntry}
  * normalization. This is the inverse of {@link encodeDesktopReturnUrl} for the
@@ -147,75 +157,90 @@ export function encodeDesktopReturnUrl(entry: ProductEntry): string {
 
 /**
  * Existing-consumer adapter: the legacy in-app route string for a raw deep
- * link, derived from {@link decodeDesktopProductEntry}. Returns byte-identical
- * strings to the historical route table for every URL that table supported.
- * URLs the table never routed (including the newly decodable `environments`
- * return URL) stay `null`.
+ * link, byte-identical to the historical route table (including exotic query
+ * semantics: percent-encoded spaces, duplicate keys, unrecognized params).
+ *
+ * Intentionally does NOT route through {@link decodeDesktopProductEntry}: the
+ * normalized {@link ProductEntry} codec collapses queries into a lossy
+ * `Record<string, string>` (`x=a%20b`→`x=a+b`, `x=1&x=2`→`x=2`, unknown params
+ * drop), so query-carrying routes are rebuilt from the raw `URL.search`.
  */
 export function desktopNavigationTarget(url: string): string | null {
-  const entry = decodeDesktopProductEntry(url);
-  if (entry === null) {
+  let parsed: URL;
+
+  try {
+    parsed = new URL(url);
+  } catch {
     return null;
   }
-  return entryToRoute(entry);
-}
 
-function entryToRoute(entry: ProductEntry): string | null {
-  switch (entry.kind) {
-    case "organization-join": {
-      // Lands on Account (every signed-in user can reach it), not the
-      // admin-gated Members pane — a non-admin invitee must be able to follow
-      // this link and see/accept their invitation.
-      const params = new URLSearchParams({ section: "account" });
-      params.set("joinOrganizationId", entry.organizationId);
-      if (entry.serverOrigin) {
-        params.set("joinServerOrigin", entry.serverOrigin);
-      }
-      return `/settings?${params.toString()}`;
-    }
-    case "workspace":
-      return `/workspaces/${encodeURIComponent(entry.workspaceId)}${queryToSearch(entry.query)}`;
-    case "billing-return": {
-      const params = queryToParams(entry.query);
-      params.set("checkout", entry.status);
-      params.set("section", "billing");
-      return `/settings?${params.toString()}`;
-    }
-    case "integration-callback": {
-      // Integration OAuth browser returns (and legacy plugins/powers links)
-      // land on the user Integrations pane, carrying flowId/status/failureCode
-      // so the pane can toast the flow outcome on arrival.
-      const params = new URLSearchParams();
-      params.set("source", entry.source);
-      if (entry.status) {
-        params.set("status", entry.status);
-      }
-      if (entry.flowId) {
-        params.set("flowId", entry.flowId);
-      }
-      if (entry.failureCode) {
-        params.set("failureCode", entry.failureCode);
-      }
-      params.set("section", "integrations");
-      return `/settings?${params.toString()}`;
-    }
-    case "settings": {
-      // The legacy navigation table never routed "environments"; keep it null
-      // so desktopNavigationTarget stays byte-identical while decode still
-      // recognizes environments return URLs for the ProductLinks path.
-      if (entry.section === "environments") {
-        return null;
-      }
-      const params = queryToParams(entry.query);
-      if (entry.source) {
-        params.set("source", entry.source);
-      }
-      params.set("section", entry.section);
-      return `/settings?${params.toString()}`;
-    }
-    default:
-      return null;
+  if (parsed.protocol !== "proliferate:" && parsed.protocol !== "proliferate-local:") {
+    return null;
   }
+
+  if (parsed.hostname === "join") {
+    const segments = parsed.pathname.split("/").filter(Boolean);
+    if (segments.length === 1) {
+      const organizationId = decodeRoutePart(segments[0]);
+      // Lands on Account (every signed-in user can reach it), not the
+      // admin-gated Members pane — a non-admin invitee must be able to
+      // follow this link and see/accept their invitation.
+      const params = new URLSearchParams({ section: "account" });
+      params.set("joinOrganizationId", organizationId);
+      // The issuing server stamps its own origin so a self-hosted invite points
+      // the desktop at the right server. Any web page can fire this deep link
+      // with an attacker-supplied origin, so validate hard and DROP anything
+      // untrusted — a dropped origin degrades to today's behavior, never a
+      // silent server switch.
+      const joinServerOrigin = parseJoinServerOrigin(parsed.searchParams.get("origin"));
+      if (joinServerOrigin) {
+        params.set("joinServerOrigin", joinServerOrigin);
+      }
+      return `/settings?${params.toString()}`;
+    }
+  }
+
+  if (parsed.hostname === "settings") {
+    // Legacy settings deep links map their path to a settings section.
+    // SLACK BOT PARKED: /slack-bot lands on General while disabled.
+    const settingsSection = NAV_SETTINGS_SECTION_BY_PATH[parsed.pathname];
+    if (settingsSection) {
+      const params = new URLSearchParams(parsed.search);
+      params.set("section", settingsSection);
+      return `/settings?${params.toString()}`;
+    }
+  }
+
+  if (
+    parsed.hostname === "billing"
+    && (parsed.pathname === "/success" || parsed.pathname === "/cancel")
+  ) {
+    const params = new URLSearchParams(parsed.search);
+    params.set("checkout", parsed.pathname === "/success" ? "success" : "cancel");
+    params.set("section", "billing");
+    return `/settings?${params.toString()}`;
+  }
+
+  if (
+    (parsed.hostname === "integrations" || parsed.hostname === "plugins" || parsed.hostname === "powers")
+    && (parsed.pathname === "" || parsed.pathname === "/")
+  ) {
+    // Integration OAuth browser returns (and legacy plugins/powers links) land on
+    // the user Integrations pane, carrying flowId/status/failureCode so the pane
+    // can toast the flow outcome on arrival.
+    const params = new URLSearchParams(parsed.search);
+    params.set("section", "integrations");
+    return `/settings?${params.toString()}`;
+  }
+
+  if (parsed.hostname === "workspaces") {
+    const segments = parsed.pathname.split("/").filter(Boolean);
+    if (segments.length === 1) {
+      return `/workspaces/${encodeURIComponent(decodeRoutePart(segments[0]))}${parsed.search}`;
+    }
+  }
+
+  return null;
 }
 
 function buildSettingsEntry(

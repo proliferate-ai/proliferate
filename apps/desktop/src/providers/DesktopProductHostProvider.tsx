@@ -84,6 +84,16 @@ export function DesktopProductHostProvider({
   // authenticated it must not participate in host replacement.
   const anonymousMethodsKey = status === "anonymous" ? methodsKey : "";
 
+  // Identity fields replace the host only while authenticated; mutations that
+  // arrive during anonymous/bootstrapping (where the AuthState carries no user)
+  // must not participate in host replacement — mirroring anonymousMethodsKey.
+  const isAuthenticated = status === "authenticated";
+  const authenticatedUserId = isAuthenticated ? userId : null;
+  const authenticatedDisplayName = isAuthenticated ? displayName : null;
+  const authenticatedEmail = isAuthenticated ? email : null;
+  const authenticatedAvatarUrl = isAuthenticated ? avatarUrl : null;
+  const authenticatedGithubLogin = isAuthenticated ? githubLogin : null;
+
   const authState = useMemo<AuthState>(() => {
     if (status === "bootstrapping") {
       return { status: "loading" };
@@ -102,9 +112,19 @@ export function DesktopProductHostProvider({
     }
     return { status: "anonymous", methods };
     // methods is folded into anonymousMethodsKey so authenticated method
-    // changes do not recompute the snapshot.
+    // changes do not recompute the snapshot; identity fields are gated to
+    // authenticated status so anonymous/bootstrapping identity mutations do
+    // not recompute it either.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, userId, displayName, email, avatarUrl, githubLogin, anonymousMethodsKey]);
+  }, [
+    status,
+    authenticatedUserId,
+    authenticatedDisplayName,
+    authenticatedEmail,
+    authenticatedAvatarUrl,
+    authenticatedGithubLogin,
+    anonymousMethodsKey,
+  ]);
 
   // Auth operations stay stable as long as the underlying action callbacks do
   // (each is a useCallback keyed on the stable orchestration effects). The deps

@@ -332,10 +332,13 @@ describe("updater", () => {
   });
 
   it("accumulates chunk lengths into a bounded 0..1 fraction", async () => {
+    // updater.ts adapts the real Started/Progress DownloadEvent union into
+    // these (chunkLength, contentLength) tuples: Started(100) captures the
+    // total, then each Progress forwards its own chunk length.
     mocks.downloadAndInstall.mockImplementation(async (_handle, cb) => {
-      cb?.(50, 100);
-      cb?.(50, 100);
-      cb?.(50, 100); // overshoot -> clamped to 1
+      cb?.(40, 100);
+      cb?.(60, 100);
+      cb?.(10, 100); // overshoot -> clamped to 1
     });
 
     const fractions: number[] = [];
@@ -346,7 +349,7 @@ describe("updater", () => {
 
     expect(mocks.downloadAndInstall).toHaveBeenCalledTimes(1);
     expect(mocks.downloadAndInstall.mock.calls[0][0]).toEqual({ id: 1 });
-    expect(fractions).toEqual([0.5, 1, 1]);
+    expect(fractions).toEqual([0.4, 1, 1]);
   });
 
   it("does not call onProgress while total length is unknown", async () => {

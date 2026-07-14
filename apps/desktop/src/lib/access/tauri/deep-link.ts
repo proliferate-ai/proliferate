@@ -85,6 +85,11 @@ export function subscribeDeepLinkUrls(listener: DeepLinkListener): () => void {
   }
 }
 
+// Memoizes the first `ensureDeepLinkBridge` call: only the first handler is
+// ever registered, matching the pre-multiplex bridge's once-only semantics.
+// Later calls return this same promise and register nothing.
+let deepLinkBridgePromise: Promise<void> | null = null
+
 /**
  * Legacy adapter over the multiplexed raw source above. Drains any URLs
  * that arrived before subscription, then forwards every subsequent
@@ -92,38 +97,47 @@ export function subscribeDeepLinkUrls(listener: DeepLinkListener): () => void {
  * is never unsubscribed — it lives for the process, matching the existing
  * bootstrap-time callback consumer.
  *
+ * Only the first call registers a handler; subsequent calls (e.g. a
+ * duplicate bootstrap invocation under React.StrictMode) are no-ops that
+ * resolve once the original registration settles.
+ *
  * Safe to call outside Tauri — errors are silently swallowed. The returned
  * promise resolves once the initial drain and the live-listener
  * registration attempt have both settled.
  */
-export async function ensureDeepLinkBridge(handler: DeepLinkUrlHandler): Promise<void> {
-  // Drain the initial snapshot exactly like the pre-multiplex bridge: each
-  // URL is awaited in order and a handler rejection is contained here rather
-  // than escaping as an unhandled rejection.
-  try {
-    const currentUrls = await getCurrent()
-    if (currentUrls?.length) {
-      for (const url of currentUrls) {
-        await handler(url)
+export function ensureDeepLinkBridge(handler: DeepLinkUrlHandler): Promise<void> {
+  if (!deepLinkBridgePromise) {
+    deepLinkBridgePromise = (async () => {
+      // Drain the initial snapshot exactly like the pre-multiplex bridge: each
+      // URL is awaited in order and a handler rejection is contained here rather
+      // than escaping as an unhandled rejection.
+      try {
+        const currentUrls = await getCurrent()
+        if (currentUrls?.length) {
+          for (const url of currentUrls) {
+            await handler(url)
+          }
+        }
+      } catch {
+        // Ignore when running outside Tauri or before the plugin is available.
       }
-    }
-  } catch {
-    // Ignore when running outside Tauri or before the plugin is available.
-  }
 
-  // Live URLs begin flowing only after the drain, matching the original
-  // registration order. Handler results are discarded; rejections are
-  // contained so a failing callback cannot surface as an unhandled rejection.
-  subscriptions.add({
-    listener: (url) => {
-      void handler(url).catch(() => {
-        // Callback failures are contained by this legacy adapter.
+      // Live URLs begin flowing only after the drain, matching the original
+      // registration order. Handler results are discarded; rejections are
+      // contained so a failing callback cannot surface as an unhandled rejection.
+      subscriptions.add({
+        listener: (url) => {
+          void handler(url).catch(() => {
+            // Callback failures are contained by this legacy adapter.
+          })
+        },
+        active: true,
       })
-    },
-    active: true,
-  })
 
-  await ensureLiveListener().catch(() => {
-    // Ignore when running outside Tauri or before the plugin is available.
-  })
+      await ensureLiveListener().catch(() => {
+        // Ignore when running outside Tauri or before the plugin is available.
+      })
+    })()
+  }
+  return deepLinkBridgePromise
 }

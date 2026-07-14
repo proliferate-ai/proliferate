@@ -224,5 +224,39 @@ describe("deep-link raw source", () => {
         process.off("unhandledRejection", onUnhandled)
       }
     })
+
+    it("memoizes the first call — a second call registers nothing and shares one live listener", async () => {
+      deepLinkMocks.getCurrent.mockResolvedValue(["proliferate://initial"])
+      let openUrlCallback: ((urls: string[]) => void) | undefined
+      deepLinkMocks.onOpenUrl.mockImplementation(async (cb: (urls: string[]) => void) => {
+        openUrlCallback = cb
+        return () => {}
+      })
+
+      const { ensureDeepLinkBridge } = await loadDeepLink()
+      const handlerA = vi.fn().mockResolvedValue(true)
+      const handlerB = vi.fn().mockResolvedValue(true)
+
+      const first = ensureDeepLinkBridge(handlerA)
+      const second = ensureDeepLinkBridge(handlerB)
+
+      expect(second).toBe(first)
+      await first
+      await second
+
+      // getCurrent (the drain) only ran once, for the first registration.
+      expect(deepLinkMocks.getCurrent).toHaveBeenCalledTimes(1)
+      expect(handlerA).toHaveBeenCalledTimes(1)
+      expect(handlerA).toHaveBeenCalledWith("proliferate://initial")
+      expect(handlerB).not.toHaveBeenCalled()
+
+      openUrlCallback?.(["proliferate://live"])
+
+      // Only the first handler ever registered — one invocation total for
+      // the live url, not two.
+      expect(handlerA).toHaveBeenCalledTimes(2)
+      expect(handlerA).toHaveBeenLastCalledWith("proliferate://live")
+      expect(handlerB).not.toHaveBeenCalled()
+    })
   })
 })

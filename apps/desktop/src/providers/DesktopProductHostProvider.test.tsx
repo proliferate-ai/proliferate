@@ -210,6 +210,56 @@ describe("DesktopProductHostProvider", () => {
     });
   });
 
+  it("does not replace the host when identity fields change while anonymous", () => {
+    const { result } = renderHook(() => useProductHost(), { wrapper });
+    const before = result.current;
+    expect(before.auth.state).toMatchObject({ status: "anonymous" });
+
+    // Retained user data mutates while anonymous — the AuthState carries no
+    // user here, so this must not replace the host.
+    act(() => {
+      useAuthStore.setState({ status: "anonymous", user: AUTH_USER });
+    });
+
+    expect(result.current).toBe(before);
+  });
+
+  it("does not replace the host when identity fields change while bootstrapping", () => {
+    act(() => {
+      useAuthStore.setState({ status: "bootstrapping", user: null });
+    });
+    const { result } = renderHook(() => useProductHost(), { wrapper });
+    const before = result.current;
+    expect(before.auth.state).toMatchObject({ status: "loading" });
+
+    act(() => {
+      useAuthStore.setState({ status: "bootstrapping", user: AUTH_USER });
+    });
+
+    expect(result.current).toBe(before);
+  });
+
+  it("replaces the host when identity fields change while authenticated", () => {
+    act(() => {
+      useAuthStore.setState({ status: "authenticated", user: AUTH_USER });
+    });
+    const { result } = renderHook(() => useProductHost(), { wrapper });
+    const before = result.current;
+
+    act(() => {
+      useAuthStore.setState({
+        status: "authenticated",
+        user: { ...AUTH_USER, email: "ada.lovelace@example.test" },
+      });
+    });
+
+    expect(result.current).not.toBe(before);
+    expect(result.current.auth.state).toMatchObject({
+      status: "authenticated",
+      user: { email: "ada.lovelace@example.test" },
+    });
+  });
+
   it("does not replace the host on token rotation or unrelated rerenders", () => {
     act(() => {
       useAuthStore.setState({ status: "authenticated", user: AUTH_USER });

@@ -131,6 +131,37 @@ describe("desktopNavigationTarget", () => {
     );
   });
 
+  it("preserves raw percent-encoded query bytes (workspaces keep %20, settings match legacy serialization)", () => {
+    // Workspace routes append the raw URL.search verbatim, so %20 survives.
+    expect(desktopNavigationTarget("proliferate://workspaces/ws-1?note=a%20b")).toBe(
+      "/workspaces/ws-1?note=a%20b",
+    );
+    // Settings routes rebuild via URLSearchParams (byte-identical to the legacy
+    // table), which serializes the space as "+".
+    expect(desktopNavigationTarget("proliferate://settings/account?note=a%20b")).toBe(
+      "/settings?note=a+b&section=account",
+    );
+  });
+
+  it("preserves duplicate query keys instead of collapsing them", () => {
+    expect(desktopNavigationTarget("proliferate://settings/account?x=1&x=2")).toBe(
+      "/settings?x=1&x=2&section=account",
+    );
+    expect(desktopNavigationTarget("proliferate://workspaces/ws-1?x=1&x=2")).toBe(
+      "/workspaces/ws-1?x=1&x=2",
+    );
+  });
+
+  it("passes an integration callback's unrecognized status and extra params straight through", () => {
+    expect(
+      desktopNavigationTarget(
+        "proliferate://integrations?source=integration_oauth_callback&status=weird&flowId=f1&extra=keep&extra2=v2",
+      ),
+    ).toBe(
+      "/settings?source=integration_oauth_callback&status=weird&flowId=f1&extra=keep&extra2=v2&section=integrations",
+    );
+  });
+
   it("rejects unsupported desktop navigation links", () => {
     expect(desktopNavigationTarget("https://plugins?source=mcp_oauth_callback")).toBeNull();
     expect(desktopNavigationTarget("proliferate://plugins/extra")).toBeNull();
