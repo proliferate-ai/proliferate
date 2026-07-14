@@ -732,7 +732,6 @@ describe("HarnessPane all models", () => {
     renderPane("claude");
 
 
-
     expect(screen.queryByText("Sonnet 4.6")).not.toBeNull();
     // 2 model toggles + 1 settings switch (Pass model).
     expect(screen.getAllByRole("switch").length).toBeGreaterThanOrEqual(2);
@@ -760,7 +759,6 @@ describe("HarnessPane all models", () => {
       ],
     };
     renderPane("claude");
-
 
     fireEvent.click(screen.getByRole("button", { name: /^Refresh$/ }));
 
@@ -793,7 +791,6 @@ describe("HarnessPane all models", () => {
     // unreachable, or one with no ready models for this harness yet.
     renderPane("claude");
 
-
     fireEvent.click(screen.getByRole("button", { name: /^Refresh$/ }));
 
     expect(refreshMutate).not.toHaveBeenCalled();
@@ -817,7 +814,6 @@ describe("HarnessPane all models", () => {
       overrideApplied: true,
     };
     renderPane("claude");
-
 
     // First switch(es) are settings switches; model switches come later in DOM.
     const allSwitches = screen.getAllByRole("switch");
@@ -866,7 +862,6 @@ describe("HarnessPane all models (local + gateway runtime)", () => {
     renderPane("claude");
 
 
-
     expect(screen.queryByText("Sonnet 4.6")).not.toBeNull();
     expect(screen.queryByText("seed")).not.toBeNull();
     // No override capability for runtime-resolved models: the model switch is
@@ -887,7 +882,6 @@ describe("HarnessPane all models (local + gateway runtime)", () => {
     renderPane("claude");
 
 
-
     expect(
       screen.queryByText(`probed ${new Date("2026-07-02T20:00:00Z").toLocaleString()}`),
     ).not.toBeNull();
@@ -897,7 +891,6 @@ describe("HarnessPane all models (local + gateway runtime)", () => {
     enableLocalGatewaySelection();
     state.gatewayModels.data = { models: [], source: "seed" };
     renderPane("claude");
-
 
     fireEvent.click(screen.getByRole("button", { name: /^Refresh$/ }));
 

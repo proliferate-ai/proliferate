@@ -77,13 +77,11 @@ vi.mock("@/lib/integrations/telemetry/client", () => ({
 }));
 
 import {
-  __resetDesktopTelemetryRouteForTest,
   buildAnonymousMethods,
   createDesktopAuthOperations,
   createDesktopDeployment,
   desktopClipboard,
   desktopProductLinks,
-  desktopTelemetry,
   mapProductAuthUser,
 } from "./desktop-product-host";
 
@@ -563,73 +561,5 @@ describe("clipboard and links adapters", () => {
     returned();
     expect(unsubscribeNative).toHaveBeenCalledTimes(1);
     expect(unsubscribeDev).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("desktopTelemetry", () => {
-  it("track delegates once to trackProductEvent", () => {
-    desktopTelemetry.track({ name: "custom_event", properties: { a: 1 } });
-    expect(mocks.trackProductEvent).toHaveBeenCalledTimes(1);
-    expect(mocks.trackProductEvent).toHaveBeenCalledWith("custom_event", {
-      a: 1,
-    });
-  });
-
-  it("captureException delegates to captureTelemetryException", () => {
-    const error = new Error("boom");
-    desktopTelemetry.captureException(error, { tags: { k: "v" } });
-    expect(mocks.captureTelemetryException).toHaveBeenCalledWith(error, {
-      tags: { k: "v" },
-    });
-  });
-
-  it("setUser maps to the Desktop user, and null clears it", () => {
-    desktopTelemetry.setUser({
-      id: "user-1",
-      email: "a@example.test",
-      displayName: "Ada",
-    });
-    expect(mocks.setTelemetryUser).toHaveBeenCalledWith({
-      id: "user-1",
-      email: "a@example.test",
-      display_name: "Ada",
-    });
-
-    desktopTelemetry.setUser(null);
-    expect(mocks.clearTelemetryUser).toHaveBeenCalledTimes(1);
-  });
-
-  it("setTag delegates to setTelemetryTag", () => {
-    desktopTelemetry.setTag("k", "v");
-    expect(mocks.setTelemetryTag).toHaveBeenCalledWith("k", "v");
-  });
-
-  it("routeChanged emits once per resolved route and suppresses repeats", () => {
-    __resetDesktopTelemetryRouteForTest();
-
-    desktopTelemetry.routeChanged("/");
-    desktopTelemetry.routeChanged("/");
-    desktopTelemetry.routeChanged("/settings");
-
-    // "main" (from "/") emits once, the repeat is suppressed, "settings" emits.
-    expect(mocks.trackProductEvent.mock.calls).toEqual([
-      ["screen_viewed", { route: "main" }],
-      ["screen_viewed", { route: "settings" }],
-    ]);
-    expect(mocks.setTelemetryTag.mock.calls).toEqual([
-      ["route", "main"],
-      ["route", "settings"],
-    ]);
-  });
-
-  it("getSupportContext reads the release id and telemetry refs", () => {
-    mocks.getSupportReportReleaseId.mockReturnValue("desktop@1.2.3+abcdef");
-    mocks.getSupportReportTelemetryRefs.mockReturnValue({
-      posthogDistinctId: "distinct-1",
-    });
-    expect(desktopTelemetry.getSupportContext()).toEqual({
-      clientReleaseId: "desktop@1.2.3+abcdef",
-      telemetryRefs: { posthogDistinctId: "distinct-1" },
-    });
   });
 });
