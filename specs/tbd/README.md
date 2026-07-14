@@ -10,7 +10,6 @@ They are not operating law until they are promoted into `specs/codebase/**` or
 
 | Draft | Use |
 | --- | --- |
-| [anyharness-self-update-v1.md](anyharness-self-update-v1.md) | Mechanism design for worker-owned in-place AnyHarness binary self-update in cloud sandboxes, the `PROLIFERATE_ANYHARNESS_VERSION` export, and the catalog-vs-binary-vs-registry convergence-track restatement + T4 contract. |
 | [anyharness-grammar-adoption-backlog.md](anyharness-grammar-adoption-backlog.md) | Audit backlog for adopting the AnyHarness domain grammar (guides/mental-model.md): 144 findings in recommended wave order. |
 | [anyharness-structure-alignment-swarms.md](anyharness-structure-alignment-swarms.md) | Planning notes for AnyHarness structure-alignment agent work. |
 | [cloud-worker-control-loop.md](cloud-worker-control-loop.md) | Cloud worker control-loop load-reduction planning. |
