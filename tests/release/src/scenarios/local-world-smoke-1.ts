@@ -375,7 +375,14 @@ export const defaultLocalWorldSmokeDriver: LocalWorldSmokeDriver = {
       .locator('[data-workspace-shell][data-pending-workspace="false"]')
       .first()
       .waitFor({ state: "attached", timeout: WORKSPACE_SETTLE_TIMEOUT_MS });
-    const { workspaceId, sessionId } = await readWorkspaceIds(p);
+    const workspaceId = await readWorkspaceUiKey(p);
+    // The DOM's `data-workspace-session-id` is the Desktop client's own
+    // (ephemeral) session id, not AnyHarness's native session id — and it is
+    // regenerated on reload. Turn completion and reopen persistence must key off
+    // the AnyHarness session id, which we resolve from the runtime's own session
+    // list for the just-materialized workspace (which holds exactly this turn's
+    // session).
+    const sessionId = await resolveAnyharnessSessionId(world, workspaceId, WORKSPACE_SETTLE_TIMEOUT_MS);
     // Turn completion is asserted from AnyHarness's own event stream (robust,
     // not DOM-timing-flaky). A session-level error is surfaced as a real
     // failure rather than a hang.
@@ -391,7 +398,6 @@ export const defaultLocalWorldSmokeDriver: LocalWorldSmokeDriver = {
     return { workspaceId, sessionId, reply };
   },
   async reopenAndVerify(world, page, expectations) {
-    void world;
     const p = page.page;
     await p.reload({ waitUntil: "domcontentloaded" });
     // The Desktop client restores the last workspace/session on boot (the
@@ -400,15 +406,11 @@ export const defaultLocalWorldSmokeDriver: LocalWorldSmokeDriver = {
     // the session id to settle back to the same value.
     const shell = p.locator(`[data-workspace-shell][data-workspace-ui-key="${cssAttr(expectations.workspaceId)}"]`).first();
     await shell.waitFor({ state: "attached", timeout: 60_000 });
-    const sessionDeadline = Date.now() + 30_000;
-    let sessionId: string | null = null;
-    while (Date.now() < sessionDeadline) {
-      sessionId = await shell.getAttribute("data-workspace-session-id").catch(() => null);
-      if (sessionId === expectations.sessionId) {
-        break;
-      }
-      await sleep(1_000);
-    }
+    // Session persistence is asserted on AnyHarness's stable native session id
+    // (resolved from the runtime), not the Desktop client's ephemeral,
+    // reload-regenerated `data-workspace-session-id`.
+    const sessionId = await resolveAnyharnessSessionId(world, expectations.workspaceId, 30_000)
+      .catch(() => null);
     if (sessionId !== expectations.sessionId) {
       throw new Error(
         `reopenAndVerify: session "${expectations.sessionId}" did not remain active after reopen ` +
@@ -860,22 +862,45 @@ async function clickMenuItemByText(page: Page, text: string, what: string): Prom
  * (data-workspace-session-id) off the workspace shell. The session id can lag
  * the shell mount by a beat, so it is briefly retried.
  */
-async function readWorkspaceIds(page: Page): Promise<{ workspaceId: string; sessionId: string }> {
+async function readWorkspaceUiKey(page: Page): Promise<string> {
   const shell = page.locator("[data-workspace-shell]").first();
   const deadline = Date.now() + 30_000;
   let workspaceId = "";
-  let sessionId = "";
   while (Date.now() < deadline) {
     workspaceId = (await shell.getAttribute("data-workspace-ui-key").catch(() => "")) ?? "";
-    sessionId = (await shell.getAttribute("data-workspace-session-id").catch(() => "")) ?? "";
-    if (workspaceId && sessionId) {
-      return { workspaceId, sessionId };
+    if (workspaceId) {
+      return workspaceId;
     }
     await sleep(500);
   }
+  throw new Error(`readWorkspaceUiKey: workspace ui-key never settled (workspace="${workspaceId}").`);
+}
+
+/**
+ * Resolves the AnyHarness native session id for a just-materialized local
+ * workspace by polling the runtime's session list. The workspace holds exactly
+ * one session (this turn's), so its id is unambiguous. This is the stable,
+ * correlatable identity — unlike the Desktop client's ephemeral
+ * `data-workspace-session-id`, which is regenerated on reload.
+ */
+async function resolveAnyharnessSessionId(
+  world: ReadyLocalWorld,
+  workspaceId: string,
+  timeoutMs: number,
+): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+  let seen = "";
+  while (Date.now() < deadline) {
+    const sessions = await world.runtime.client.listSessions().catch(() => []);
+    const forWorkspace = sessions.filter((session) => session.workspaceId === workspaceId);
+    if (forWorkspace.length > 0) {
+      seen = forWorkspace[forWorkspace.length - 1]!.id;
+      return seen;
+    }
+    await sleep(1_000);
+  }
   throw new Error(
-    `readWorkspaceIds: workspace/session ids never settled ` +
-      `(workspace="${workspaceId}", session="${sessionId}").`,
+    `resolveAnyharnessSessionId: no AnyHarness session for workspace "${workspaceId}" within ${timeoutMs}ms.`,
   );
 }
 

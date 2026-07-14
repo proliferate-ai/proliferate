@@ -144,7 +144,10 @@ function spendRow(overrides: Record<string, unknown> = {}): Record<string, unkno
 
 async function correlate(rows: Array<Record<string, unknown>>, before: string[] = []): Promise<unknown> {
   const { fetch } = fakeFetch({ "GET /spend/logs": () => response(200, rows) });
-  const controller = new QualificationLiteLlmController(CONFIG, { fetch });
+  const controller = new QualificationLiteLlmController(CONFIG, {
+    fetch,
+    spendCorrelationTimeoutMs: 0,
+  });
   return controller.correlateTurn({
     actor: actor(),
     before: { tokenIdHash: actor().tokenIdHash, requestIds: before, takenAt: WINDOW_START },
@@ -181,6 +184,22 @@ test("correlateTurn rejects an out-of-window row", async () => {
 
 test("correlateTurn rejects a wrong-model row", async () => {
   await assert.rejects(correlate([spendRow({ model: "claude-opus-4-5" })]), /expected "claude-haiku-4-5"/);
+});
+
+test("correlateTurn accepts the provider-prefixed dated snapshot of the accepted model", async () => {
+  // LiteLLM logs the resolved provider model; the alias "claude-haiku-4-5"
+  // resolves to "anthropic/claude-haiku-4-5-20251001".
+  const result = (await correlate([
+    spendRow({ model: "anthropic/claude-haiku-4-5-20251001" }),
+  ])) as { totalTokens: number };
+  assert.equal(result.totalTokens, 13);
+});
+
+test("correlateTurn still rejects a same-family but different dated model", async () => {
+  await assert.rejects(
+    correlate([spendRow({ model: "anthropic/claude-opus-4-5-20251001" })]),
+    /expected "claude-haiku-4-5"/,
+  );
 });
 
 test("correlateTurn rejects zero/inconsistent tokens", async () => {

@@ -44,6 +44,49 @@ const CLAUDE_TIER_RANK: ReadonlyArray<readonly [string, number]> = [
  * ambiguous/unbounded result and rejected. */
 const MAX_CORRELATED_ROWS = 16;
 
+/** Bounded wait for LiteLLM's asynchronous spend-log persistence after a turn. */
+const SPEND_CORRELATION_TIMEOUT_MS = 60_000;
+const SPEND_CORRELATION_POLL_MS = 3_000;
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** The UTC calendar date `days` after `isoTimestamp`, as `YYYY-MM-DD`. */
+function utcDatePlusDays(isoTimestamp: string, days: number): string {
+  const base = new Date(isoTimestamp);
+  base.setUTCDate(base.getUTCDate() + days);
+  return base.toISOString().slice(0, 10);
+}
+
+/**
+ * Whether a LiteLLM-recorded model name identifies the accepted model. LiteLLM
+ * logs the resolved provider model — provider-prefixed (`anthropic/…`) and
+ * pinned to a dated snapshot (`…-20251001`) — while the accepted id is the
+ * catalog/UI alias (`claude-haiku-4-5`). Strip the provider prefix and accept an
+ * exact match or the alias-to-dated-snapshot relationship in either direction.
+ */
+function litellmModelMatches(rowModel: string, acceptedModelId: string): boolean {
+  const stripProvider = (id: string): string => {
+    const slash = id.lastIndexOf("/");
+    return slash >= 0 ? id.slice(slash + 1) : id;
+  };
+  const row = stripProvider(rowModel).trim();
+  const accepted = stripProvider(acceptedModelId).trim();
+  if (!row || !accepted) {
+    return false;
+  }
+  if (row === accepted) {
+    return true;
+  }
+  // A dated snapshot of the alias, e.g. "claude-haiku-4-5" ↔
+  // "claude-haiku-4-5-20251001". Require the extra segment to be a date so an
+  // unrelated longer id (e.g. a different family) is not accepted.
+  const isDatedSuffixOf = (base: string, dated: string): boolean =>
+    dated.startsWith(`${base}-`) && /^\d{6,8}$/.test(dated.slice(base.length + 1));
+  return isDatedSuffixOf(accepted, row) || isDatedSuffixOf(row, accepted);
+}
+
 /** Minimal HTTP response surface this controller consumes. */
 export interface HttpResponseLike {
   ok: boolean;
@@ -61,6 +104,11 @@ export type FetchLike = (
 
 export interface QualificationLiteLlmDeps {
   fetch?: FetchLike;
+  /** Overrides the spend-correlation polling budget (ms). Tests set 0 to
+   * disable polling; production uses the default. */
+  spendCorrelationTimeoutMs?: number;
+  /** Overrides the spend-correlation poll interval (ms). */
+  spendCorrelationPollMs?: number;
 }
 
 /** Raised for any LiteLLM controller failure; never embeds the master key or
@@ -214,12 +262,16 @@ interface SpendLogRow {
 
 export class QualificationLiteLlmController {
   private readonly fetch: FetchLike;
+  private readonly spendCorrelationTimeoutMs: number;
+  private readonly spendCorrelationPollMs: number;
 
   constructor(
     private readonly config: QualificationLiteLlmConfig,
     deps: QualificationLiteLlmDeps = {},
   ) {
     this.fetch = deps.fetch ?? defaultFetch;
+    this.spendCorrelationTimeoutMs = deps.spendCorrelationTimeoutMs ?? SPEND_CORRELATION_TIMEOUT_MS;
+    this.spendCorrelationPollMs = deps.spendCorrelationPollMs ?? SPEND_CORRELATION_POLL_MS;
   }
 
   /** The public inference URL handed to AnyHarness (never the admin URL/key). */
@@ -322,26 +374,43 @@ export class QualificationLiteLlmController {
     if (!Number.isFinite(windowStart) || !Number.isFinite(windowEnd) || windowEnd < windowStart) {
       throw new QualificationLiteLlmError("Correlation window is invalid.");
     }
-    const rows = await this.pageSpendLogs(
-      params.windowStartedAt.slice(0, 10),
-      params.windowFinishedAt.slice(0, 10),
-    );
     const seen = new Set(params.before.requestIds);
-    const uniqueByRequestId = new Map<string, SpendLogRow>();
-    for (const row of rows) {
-      if (row.api_key !== params.actor.tokenId) {
-        continue; // wrong key — not this actor's spend.
+    // LiteLLM writes spend logs asynchronously (batched), so a matching row is
+    // not guaranteed to be queryable the instant the turn ends. Poll until the
+    // actor's in-window row(s) appear or the bounded deadline elapses. The
+    // acceptance invariant is unchanged — each accepted row's own start time must
+    // still fall inside the scenario window; polling only waits for the row to
+    // be persisted, it does not widen the window.
+    // LiteLLM's `/spend/logs` treats `end_date` as the start of that day, so a
+    // same-day `start_date == end_date` query excludes rows recorded later that
+    // day. Query through the day AFTER the window so the turn's row is included;
+    // the exact per-row window bound is still enforced below.
+    const startDate = params.windowStartedAt.slice(0, 10);
+    const endDate = utcDatePlusDays(params.windowFinishedAt, 1);
+    const deadline = Date.now() + this.spendCorrelationTimeoutMs;
+    let accepted: SpendLogRow[] = [];
+    for (;;) {
+      const rows = await this.pageSpendLogs(startDate, endDate);
+      const uniqueByRequestId = new Map<string, SpendLogRow>();
+      for (const row of rows) {
+        if (row.api_key !== params.actor.tokenId) {
+          continue; // wrong key — not this actor's spend.
+        }
+        if (seen.has(row.request_id)) {
+          continue; // pre-existing request id — present before the turn.
+        }
+        const at = row.startTime ? Date.parse(row.startTime) : NaN;
+        if (!Number.isFinite(at) || at < windowStart || at > windowEnd) {
+          continue; // outside the bounded scenario window.
+        }
+        uniqueByRequestId.set(row.request_id, row);
       }
-      if (seen.has(row.request_id)) {
-        continue; // pre-existing request id — present before the turn.
+      accepted = [...uniqueByRequestId.values()];
+      if (accepted.length > 0 || Date.now() >= deadline) {
+        break;
       }
-      const at = row.startTime ? Date.parse(row.startTime) : NaN;
-      if (!Number.isFinite(at) || at < windowStart || at > windowEnd) {
-        continue; // outside the bounded scenario window.
-      }
-      uniqueByRequestId.set(row.request_id, row);
+      await sleepMs(this.spendCorrelationPollMs);
     }
-    const accepted = [...uniqueByRequestId.values()];
     if (accepted.length === 0) {
       throw new QualificationLiteLlmError(
         "No new in-window LiteLLM spend row correlated to the actor key.",
@@ -357,7 +426,7 @@ export class QualificationLiteLlmController {
     let totalTokens = 0;
     let spendUsd = 0;
     for (const row of accepted) {
-      if (row.model !== params.acceptedModelId) {
+      if (!litellmModelMatches(row.model, params.acceptedModelId)) {
         throw new QualificationLiteLlmError(
           `Correlated a spend row for model "${row.model}", expected "${params.acceptedModelId}".`,
         );
