@@ -66,6 +66,13 @@ the cells whose isolation contract permits it.
 
 ## Candidate Artifacts
 
+The first implemented slice of this contract is the candidate-only,
+local-file-only `CandidateBuildMapV1` in
+[`candidate-build-handoff.md`](candidate-build-handoff.md) (one AnyHarness
+artifact, validated and recorded by the runner). The complete remote/full
+manifest below — multi-platform slots, remote locators, retained N-1, and
+digest-verified downloads — is later work layered on that contract.
+
 Every live or upgrade run begins with a content-addressed candidate manifest:
 
 ```text
