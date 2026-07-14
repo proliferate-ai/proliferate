@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "canonicalNumberCases": [
+    { "source": "1", "canonical": "1", "portable": true },
+    { "source": "1.0", "canonical": "1", "portable": true },
+    { "source": "1e0", "canonical": "1", "portable": true },
+    { "source": "-0", "canonical": "0", "portable": true },
+    { "source": "0.0", "canonical": "0", "portable": true },
+    { "source": "1.5", "canonical": "1.5", "portable": true },
+    { "source": "9007199254740991", "canonical": "9007199254740991", "portable": true },
+    { "source": "-9007199254740991", "canonical": "-9007199254740991", "portable": true },
+    { "source": "9007199254740992", "canonical": "9007199254740992", "portable": false },
+    { "source": "9007199254740992.0", "canonical": "9007199254740992", "portable": false },
+    { "source": "9.007199254740992e15", "canonical": "9007199254740992", "portable": false }
+  ],
+  "anyHarnessRequest": {
+    "schemaVersion": 2,
+    "workspaceId": "30000000-0000-4000-8000-000000000001",
+    "definition": {
+      "inputs": [
+        { "name": "ticket", "type": "string", "required": true },
+        { "name": "attempt", "type": "number", "required": true }
+      ],
+      "stages": [
+        {
+          "harnessConfig": {
+            "agentKind": "claude",
+            "modelSelection": { "kind": "exact", "modelId": "claude-sonnet-4-5" },
+            "effort": "high",
+            "permissionPolicy": "workflowDefault"
+          },
+          "steps": [
+            {
+              "kind": "agent.prompt",
+              "prompt": "Investigate {{inputs.ticket}} attempt {{inputs.attempt}}"
+            }
+          ]
+        }
+      ]
+    },
+    "arguments": { "ticket": "PROL-123", "attempt": 1 }
+  }
+}

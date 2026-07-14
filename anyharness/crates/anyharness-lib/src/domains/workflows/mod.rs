@@ -4,10 +4,15 @@
 //! than a sessions subdomain.
 
 pub mod model;
+mod portable_service;
+mod portable_validation;
+pub mod resolution;
 pub mod runtime;
 pub mod service;
 pub mod session_extension;
 pub mod store;
 
+#[cfg(test)]
+mod portable_service_tests;
 #[cfg(test)]
 mod service_tests;

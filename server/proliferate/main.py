@@ -80,6 +80,7 @@ from proliferate.server.setup.lifecycle import ensure_first_run_setup_token
 from proliferate.server.support.api import router as support_router
 from proliferate.server.support.feed.api import router as support_feed_router
 from proliferate.server.version import server_version
+from proliferate.server.workflows.api import invocations_router as workflow_invocations_router
 from proliferate.server.workflows.api import router as workflows_router
 from proliferate.utils.logging import configure_server_logging
 
@@ -153,6 +154,14 @@ def _redacts_entire_body(request: Request) -> bool:
     return request.method == "POST" and request.url.path.endswith("/agent-gateway/keys")
 
 
+def _is_workflow_invocation_argument_error(request: Request, loc: object) -> bool:
+    if request.method != "PUT" or "/workflow-invocations/" not in request.url.path:
+        return False
+    if not isinstance(loc, tuple | list):
+        return False
+    return len(loc) >= 2 and loc[0] == "body" and "arguments" in loc[1:]
+
+
 async def _validation_error_handler(
     request: Request,
     error: RequestValidationError,
@@ -163,7 +172,11 @@ async def _validation_error_handler(
         item = dict(raw)
         if "input" in item:
             loc = item.get("loc") or ()
-            if redact_all or (loc and _is_sensitive_field(loc[-1])):
+            if (
+                redact_all
+                or (loc and _is_sensitive_field(loc[-1]))
+                or _is_workflow_invocation_argument_error(request, loc)
+            ):
                 item["input"] = _REDACTED_INPUT
             else:
                 item["input"] = _redact_validation_input(item["input"])
@@ -290,6 +303,11 @@ def create_app() -> FastAPI:
     app.include_router(gateway_router, prefix=f"{api_prefix}/v1/gateway", tags=["gateway"])
     app.include_router(catalogs_router, prefix=f"{api_prefix}/v1", tags=["catalogs"])
     app.include_router(workflows_router, prefix=f"{api_prefix}/v1", tags=["workflows"])
+    app.include_router(
+        workflow_invocations_router,
+        prefix=f"{api_prefix}/v1",
+        tags=["workflow-invocations"],
+    )
     app.include_router(ai_magic_router, prefix=f"{api_prefix}/v1", tags=["ai_magic"])
     app.include_router(support_router, prefix=f"{api_prefix}/v1", tags=["support"])
     # Private completed-report feed. Logical route /internal/support/reports

@@ -12,7 +12,7 @@ anyharness/crates/anyharness-contract/src/v1/sessions.rs 767 existing AnyHarness
 anyharness/crates/anyharness-lib/src/api/openapi.rs 652 existing AnyHarness oversized file (+hosting schema registration, +agent-auth state response, +gateway catalog endpoints) + enriched gateway-models schema fields (model-table §1) + workflow-runs paths/schemas
 anyharness/crates/anyharness-lib/src/api/router_tests.rs 1364 existing AnyHarness oversized test file (+hosting PR-status route tests, +catalog version + enrichment tests)
 anyharness/crates/anyharness-lib/src/domains/workflows/service_tests.rs 923 workflow-runs merge-gated domain suite (validation matrix, rendering, replay/conflict, transitions, completion races, restart fencing)
-anyharness/crates/anyharness-lib/src/api/workflow_runs_tests.rs 839 workflow-runs HTTP + runtime/extension crossing suite (routes, execution failures, cancellation handoff, fencing abort, bearer/direct-attach admission)
+anyharness/crates/anyharness-lib/src/api/workflow_runs_tests.rs 816 workflow-runs HTTP + runtime/extension crossing suite (routes, execution failures, cancellation handoff, fencing abort, bearer/direct-attach admission)
 anyharness/crates/anyharness-lib/src/api/http/agent_gateway_catalog.rs 632 gateway model enrichment (own vs foreign match) + catalog version endpoint
 anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_resolver.rs 704 provider filtering + family normalizer (bedrock/date/version forms) with tests
 anyharness/crates/anyharness-lib/src/domains/agents/catalog/validation.rs 605 defaultAgentKind must name a declared agent (was already at 598)
@@ -26,7 +26,7 @@ anyharness/crates/anyharness-lib/src/domains/sessions/runtime/tests.rs 680 exist
 anyharness/crates/anyharness-lib/src/domains/workspaces/inventory.rs 653 runtime pressure worktree inventory joins and tests
 anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight.rs 613 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/live/sessions/probe.rs 613 catalog probe with per-harness model-source fallbacks
-anyharness/crates/anyharness-lib/src/persistence/custom_migrations.rs 1112 custom migration with legacy schema coverage
+anyharness/crates/anyharness-lib/src/persistence/custom_migrations.rs 1106 custom migration with legacy schema coverage
 anyharness/sdk-react/src/hooks/sessions.ts 723 existing SDK React oversized file
 cloud/sdk/src/types/generated.ts 773 existing generated cloud SDK type surface (+billing budget-limit/usage types)
 anyharness/sdk/src/reducer/__tests__/transcript.test.ts 1817 existing SDK oversized test file

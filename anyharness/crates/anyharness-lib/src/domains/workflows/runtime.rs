@@ -6,19 +6,29 @@
 //! blocking pool; no lease, transaction, or connection ever survives an
 //! unrelated await.
 
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex as StdMutex, Weak};
+use std::time::Duration;
 
 use tokio::runtime::Handle;
+use tokio::sync::Mutex as AsyncMutex;
+
+use anyharness_contract::v1::ConfigApplyState;
 
 use crate::domains::sessions::runtime::{
     CreateAndStartSessionError, InternalSessionCreateError, InternalSessionCreateInput,
     SendPromptError, SendPromptOutcome, SessionRuntime,
 };
-use crate::domains::workflows::model::WorkflowRunFailureCode;
-use crate::domains::workflows::service::{
-    AcceptOutcome, WorkflowAcceptError, WorkflowExecutionPlan, WorkflowRunService,
-    WorkflowRunValidationError, WorkflowRunView, WorkflowServiceError,
+use crate::domains::workflows::model::{
+    VersionedPutWorkflowRunInput, WorkflowResolvedPlanV2, WorkflowRunFailureCode,
 };
+use crate::domains::workflows::resolution::{resolve_workflow_target, WorkflowResolutionError};
+use crate::domains::workflows::service::{
+    AcceptOutcome, AcceptV2Outcome, InspectV2Outcome, VersionedWorkflowRunView,
+    WorkflowAcceptError, WorkflowExecutionPlan, WorkflowRunService, WorkflowRunValidationError,
+    WorkflowServiceError,
+};
+use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
 use crate::domains::workspaces::operation_gate::{WorkspaceOperationGate, WorkspaceOperationKind};
 use crate::origin::OriginContext;
 
@@ -26,8 +36,8 @@ use crate::origin::OriginContext;
 /// exactly replayed (200), with the durable view either way.
 #[derive(Debug)]
 pub enum WorkflowPutSuccess {
-    Created(WorkflowRunView),
-    Replay(WorkflowRunView),
+    Created(VersionedWorkflowRunView),
+    Replay(VersionedWorkflowRunView),
 }
 
 /// The PUT failure arm.
@@ -35,6 +45,8 @@ pub enum WorkflowPutSuccess {
 pub enum WorkflowPutError {
     Invalid(WorkflowRunValidationError),
     Conflict,
+    WorkspaceAccess(WorkspaceAccessError),
+    TargetUnresolvable(WorkflowResolutionError),
     Store(WorkflowServiceError),
     /// Blocking-pool join failure (task panic/cancel).
     Internal(anyhow::Error),
@@ -63,20 +75,48 @@ pub struct WorkflowRunRuntime {
     service: Arc<WorkflowRunService>,
     session_runtime: Arc<SessionRuntime>,
     operation_gate: Arc<WorkspaceOperationGate>,
+    access_gate: Arc<WorkspaceAccessGate>,
+    accept_gates: Arc<StdMutex<HashMap<String, Weak<AsyncMutex<()>>>>>,
     main_handle: Handle,
 }
+
+fn workflow_accept_gate_slot(
+    gates: &StdMutex<HashMap<String, Weak<AsyncMutex<()>>>>,
+    run_id: &str,
+) -> Result<Arc<AsyncMutex<()>>, WorkflowPutError> {
+    let mut gates = gates.lock().map_err(|_| {
+        WorkflowPutError::Internal(anyhow::anyhow!("workflow run gate lock poisoned"))
+    })?;
+    gates.retain(|_, gate| gate.strong_count() > 0);
+    if let Some(gate) = gates.get(run_id).and_then(Weak::upgrade) {
+        return Ok(gate);
+    }
+
+    let gate = Arc::new(AsyncMutex::new(()));
+    gates.insert(run_id.to_string(), Arc::downgrade(&gate));
+    Ok(gate)
+}
+
+fn effort_apply_allows_step(state: Option<&ConfigApplyState>) -> bool {
+    matches!(state, Some(ConfigApplyState::Applied))
+}
+
+const WORKFLOW_EFFORT_APPLY_TIMEOUT: Duration = Duration::from_secs(45);
 
 impl WorkflowRunRuntime {
     pub fn new(
         service: Arc<WorkflowRunService>,
         session_runtime: Arc<SessionRuntime>,
         operation_gate: Arc<WorkspaceOperationGate>,
+        access_gate: Arc<WorkspaceAccessGate>,
         main_handle: Handle,
     ) -> Self {
         Self {
             service,
             session_runtime,
             operation_gate,
+            access_gate,
+            accept_gates: Arc::new(StdMutex::new(HashMap::new())),
             main_handle,
         }
     }
@@ -94,32 +134,162 @@ impl WorkflowRunRuntime {
     pub async fn put(
         &self,
         run_id: String,
-        input: crate::domains::workflows::model::PutWorkflowRunInput,
+        input: VersionedPutWorkflowRunInput,
     ) -> Result<WorkflowPutSuccess, WorkflowPutError> {
         let service = self.service.clone();
         let session_runtime = self.session_runtime.clone();
         let operation_gate = self.operation_gate.clone();
+        let access_gate = self.access_gate.clone();
+        let accept_gates = self.accept_gates.clone();
         let execution_handle = self.main_handle.clone();
 
         let handoff = self.main_handle.spawn(async move {
-            let accept_service = service.clone();
-            let accept_run_id = run_id.clone();
-            let outcome =
-                tokio::task::spawn_blocking(move || accept_service.accept(&accept_run_id, input))
+            match input {
+                VersionedPutWorkflowRunInput::V1(input) => {
+                    let run_gate = workflow_accept_gate_slot(&accept_gates, &run_id)?;
+                    let _run_guard = run_gate.lock_owned().await;
+                    let accept_service = service.clone();
+                    let accept_run_id = run_id.clone();
+                    let outcome = tokio::task::spawn_blocking(move || {
+                        accept_service.accept(&accept_run_id, input)
+                    })
                     .await
                     .map_err(|error| WorkflowPutError::Internal(error.into()))?;
 
-            match outcome {
-                Ok(AcceptOutcome::Created { plan, view }) => {
-                    execution_handle.spawn(async move {
-                        execute(service, session_runtime, operation_gate, plan).await;
-                    });
-                    Ok(WorkflowPutSuccess::Created(view))
+                    match outcome {
+                        Ok(AcceptOutcome::Created { plan, view }) => {
+                            execution_handle.spawn(async move {
+                                execute(service, session_runtime, operation_gate, plan).await;
+                            });
+                            Ok(WorkflowPutSuccess::Created(VersionedWorkflowRunView::V1(
+                                view,
+                            )))
+                        }
+                        Ok(AcceptOutcome::ExactReplay(view)) => Ok(WorkflowPutSuccess::Replay(
+                            VersionedWorkflowRunView::V1(view),
+                        )),
+                        Ok(AcceptOutcome::Conflict) => Err(WorkflowPutError::Conflict),
+                        Err(WorkflowAcceptError::Invalid(error)) => {
+                            Err(WorkflowPutError::Invalid(error))
+                        }
+                        Err(WorkflowAcceptError::Store(error)) => {
+                            Err(WorkflowPutError::Store(error))
+                        }
+                    }
                 }
-                Ok(AcceptOutcome::ExactReplay(view)) => Ok(WorkflowPutSuccess::Replay(view)),
-                Ok(AcceptOutcome::Conflict) => Err(WorkflowPutError::Conflict),
-                Err(WorkflowAcceptError::Invalid(error)) => Err(WorkflowPutError::Invalid(error)),
-                Err(WorkflowAcceptError::Store(error)) => Err(WorkflowPutError::Store(error)),
+                VersionedPutWorkflowRunInput::V2(input) => {
+                    let prepare_service = service.clone();
+                    let prepare_run_id = run_id.clone();
+                    let prepared = tokio::task::spawn_blocking(move || {
+                        prepare_service.prepare_v2(&prepare_run_id, input)
+                    })
+                    .await
+                    .map_err(|error| WorkflowPutError::Internal(error.into()))?
+                    .map_err(WorkflowPutError::Invalid)?;
+
+                    // SQLite remains the replay authority. This narrow keyed
+                    // gate only prevents same-process racers from both
+                    // performing target lookup before one durable winner is
+                    // visible to the other.
+                    let run_gate = workflow_accept_gate_slot(&accept_gates, &run_id)?;
+                    let _run_guard = run_gate.lock_owned().await;
+
+                    let inspect_service = service.clone();
+                    let prepared_for_inspect = prepared.clone();
+                    let inspected = tokio::task::spawn_blocking(move || {
+                        inspect_service.inspect_v2(prepared_for_inspect)
+                    })
+                    .await
+                    .map_err(|error| WorkflowPutError::Internal(error.into()))?
+                    .map_err(WorkflowPutError::Store)?;
+                    let prepared = match inspected {
+                        InspectV2Outcome::Missing(_) => prepared,
+                        InspectV2Outcome::ExactReplay(view) => {
+                            return Ok(WorkflowPutSuccess::Replay(VersionedWorkflowRunView::V2(
+                                view,
+                            )));
+                        }
+                        InspectV2Outcome::Conflict => {
+                            return Err(WorkflowPutError::Conflict);
+                        }
+                    };
+
+                    let workspace_id = prepared.source.workspace_id.clone();
+                    let harness = prepared.source.definition.stages[0].harness_config.clone();
+                    let access_workspace_id = workspace_id.clone();
+                    tokio::task::spawn_blocking(move || {
+                        access_gate.assert_can_mutate_for_workspace(&access_workspace_id)
+                    })
+                    .await
+                    .map_err(|error| WorkflowPutError::Internal(error.into()))?
+                    .map_err(WorkflowPutError::WorkspaceAccess)?;
+
+                    let launch_runtime = session_runtime.clone();
+                    let launch_workspace_id = workspace_id.clone();
+                    let options = tokio::task::spawn_blocking(move || {
+                        launch_runtime.resolved_workspace_launch_options(&launch_workspace_id)
+                    })
+                    .await
+                    .map_err(|error| WorkflowPutError::Internal(error.into()))?
+                    .map_err(|_error| {
+                        WorkflowPutError::Internal(anyhow::anyhow!(
+                            "workflow launch-options lookup failed"
+                        ))
+                    })?;
+                    let target = resolve_workflow_target(&options, &harness)
+                        .map_err(WorkflowPutError::TargetUnresolvable)?;
+
+                    let render_service = service.clone();
+                    let prepared_for_render = prepared.clone();
+                    let rendered_prompt = tokio::task::spawn_blocking(move || {
+                        render_service.render_v2(&prepared_for_render)
+                    })
+                    .await
+                    .map_err(|error| WorkflowPutError::Internal(error.into()))?
+                    .map_err(WorkflowPutError::Invalid)?;
+                    let resolved = WorkflowResolvedPlanV2 {
+                        workspace_id,
+                        agent_kind: target.agent_kind,
+                        model_id: target.model_id,
+                        mode_id: target.mode_id,
+                        effort_config: target.effort_config,
+                        rendered_prompt,
+                        prompt_id: prepared.prompt_id.clone(),
+                    };
+
+                    let accept_service = service.clone();
+                    let accepted = tokio::task::spawn_blocking(move || {
+                        accept_service.accept_v2(prepared, resolved)
+                    })
+                    .await
+                    .map_err(|error| WorkflowPutError::Internal(error.into()))?
+                    .map_err(WorkflowPutError::Store)?;
+                    match accepted {
+                        AcceptV2Outcome::Created { plan, view } => {
+                            let execution_plan = WorkflowExecutionPlan {
+                                run_id: view.run.id.clone(),
+                                workspace_id: plan.workspace_id.clone(),
+                                agent_kind: plan.agent_kind.clone(),
+                                model_id: Some(plan.model_id.clone()),
+                                mode_id: Some(plan.mode_id.clone()),
+                                effort_config: plan.effort_config.clone(),
+                                rendered_prompt: plan.rendered_prompt.clone(),
+                                prompt_id: plan.prompt_id.clone(),
+                            };
+                            execution_handle.spawn(async move {
+                                execute(service, session_runtime, operation_gate, execution_plan)
+                                    .await;
+                            });
+                            Ok(WorkflowPutSuccess::Created(VersionedWorkflowRunView::V2(
+                                view,
+                            )))
+                        }
+                        AcceptV2Outcome::ExactReplay(view) => Ok(WorkflowPutSuccess::Replay(
+                            VersionedWorkflowRunView::V2(view),
+                        )),
+                        AcceptV2Outcome::Conflict => Err(WorkflowPutError::Conflict),
+                    }
+                }
             }
         });
 
@@ -130,12 +300,15 @@ impl WorkflowRunRuntime {
 
     /// GET the durable view. A non-canonical `runId` is a typed 400, not a 404.
     #[tracing::instrument(skip_all, fields(run_id = %run_id))]
-    pub async fn get(&self, run_id: String) -> Result<Option<WorkflowRunView>, WorkflowGetError> {
+    pub async fn get(
+        &self,
+        run_id: String,
+    ) -> Result<Option<VersionedWorkflowRunView>, WorkflowGetError> {
         if let Err(error) = crate::domains::workflows::service::validate_run_id(&run_id) {
             return Err(WorkflowGetError::InvalidRunId(error));
         }
         let service = self.service.clone();
-        tokio::task::spawn_blocking(move || service.get(&run_id))
+        tokio::task::spawn_blocking(move || service.get_versioned(&run_id))
             .await
             .map_err(|error| WorkflowGetError::Internal(error.into()))?
             .map_err(WorkflowGetError::Store)
@@ -248,7 +421,36 @@ async fn run_execution(
         ));
     }
 
-    // 6. Step pending -> running immediately before dispatch.
+    // 6. Apply schema-v2 effort after startup and before the step can begin.
+    if let Some(effort) = &plan.effort_config {
+        let applied = tokio::time::timeout(
+            WORKFLOW_EFFORT_APPLY_TIMEOUT,
+            session_runtime.set_live_session_config_option(
+                &session_id,
+                &effort.config_id,
+                &effort.value,
+            ),
+        )
+        .await;
+        let apply_state = applied
+            .as_ref()
+            .ok()
+            .and_then(|result| result.as_ref().ok())
+            .map(|(_, _, state)| state);
+        if !effort_apply_allows_step(apply_state) {
+            tracing::warn!(
+                run_id = %run_id,
+                session_id = %session_id,
+                timed_out = applied.is_err(),
+                "workflow session effort configuration was not applied"
+            );
+            return Err(ExecutionAbort::Fail(
+                WorkflowRunFailureCode::SessionConfigApplyFailed,
+            ));
+        }
+    }
+
+    // 7. Step pending -> running immediately before dispatch.
     if !blocking_bool(&run_id, "begin_step", {
         let service = service.clone();
         let run_id = run_id.clone();
@@ -259,7 +461,7 @@ async fn run_execution(
         return Ok(());
     }
 
-    // 7. Dispatch the one rendered prompt with the deterministic prompt id.
+    // 8. Dispatch the one rendered prompt with the deterministic prompt id.
     let acceptance = session_runtime
         .send_text_prompt_with_id(
             &session_id,
@@ -287,7 +489,7 @@ async fn run_execution(
         }
     }
 
-    // 8. Drop the lease (on scope exit) — completion arrives via the extension.
+    // 9. Drop the lease (on scope exit) — completion arrives via the extension.
     Ok(())
 }
 
@@ -392,3 +594,7 @@ fn map_create_error(error: &InternalSessionCreateError) -> WorkflowRunFailureCod
         InternalSessionCreateError::Create(_) => WorkflowRunFailureCode::SessionCreateFailed,
     }
 }
+
+#[cfg(test)]
+#[path = "runtime_tests.rs"]
+mod tests;

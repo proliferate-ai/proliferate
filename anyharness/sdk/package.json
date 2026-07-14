@@ -21,7 +21,8 @@
     "generate": "npm run generate:openapi && npm run generate:types",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "typecheck:contracts": "tsc -p tsconfig.type-tests.json",
+    "test": "npm run typecheck:contracts && vitest run",
     "test:watch": "vitest"
   },
   "license": "AGPL-3.0",

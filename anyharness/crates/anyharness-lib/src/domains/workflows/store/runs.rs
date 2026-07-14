@@ -11,13 +11,15 @@ use crate::domains::workflows::model::{
 pub(super) fn insert_run(conn: &Connection, run: &WorkflowRunRecord) -> rusqlite::Result<()> {
     conn.execute(
         "INSERT INTO workflow_runs (
-            id, schema_version, invocation_json, status, workspace_id, session_id,
-            failure_code, created_at, updated_at, started_at, finished_at
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            id, schema_version, invocation_json, resolved_plan_json, status,
+            workspace_id, session_id, failure_code, created_at, updated_at,
+            started_at, finished_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         params![
             run.id,
             run.schema_version,
             run.invocation_json,
+            run.resolved_plan_json,
             run.status.as_str(),
             run.workspace_id,
             run.session_id,
@@ -127,6 +129,7 @@ pub(super) fn map_run(row: &Row<'_>) -> rusqlite::Result<WorkflowRunRecord> {
         id: row.get("id")?,
         schema_version: row.get("schema_version")?,
         invocation_json: row.get("invocation_json")?,
+        resolved_plan_json: row.get("resolved_plan_json")?,
         status: parse_status(row.get::<_, String>("status")?.as_str())?,
         workspace_id: row.get("workspace_id")?,
         session_id: row.get("session_id")?,

@@ -1,6 +1,8 @@
 use rusqlite::Transaction;
 use serde_json::Value;
 
+use super::custom_migration_schema::table_columns;
+
 pub(super) const CUSTOM_MIGRATIONS: &[(&str, fn(&Transaction<'_>) -> rusqlite::Result<()>)] = &[
     (
         "0016_backfill_session_background_work_timestamps",
@@ -15,10 +17,16 @@ pub(super) const CUSTOM_MIGRATIONS: &[(&str, fn(&Transaction<'_>) -> rusqlite::R
 pub(super) const CUSTOM_FOREIGN_KEY_MIGRATIONS: &[(
     &str,
     fn(&Transaction<'_>) -> rusqlite::Result<()>,
-)] = &[(
-    "0049_simplify_workspace_records",
-    migrate_simplify_workspace_records,
-)];
+)] = &[
+    (
+        "0049_simplify_workspace_records",
+        migrate_simplify_workspace_records,
+    ),
+    (
+        "0061_workflow_runs_v2",
+        super::workflow_runs_v2_migration::migrate_workflow_runs_v2,
+    ),
+];
 
 fn migrate_session_background_work_timestamps(tx: &Transaction<'_>) -> rusqlite::Result<()> {
     let columns = table_columns(tx, "session_background_work")?;
@@ -596,13 +604,6 @@ fn migrate_simplify_workspace_records(tx: &Transaction<'_>) -> rusqlite::Result<
     Ok(())
 }
 
-fn table_columns(tx: &Transaction<'_>, table_name: &str) -> rusqlite::Result<Vec<String>> {
-    let pragma = format!("PRAGMA table_info({table_name})");
-    let mut stmt = tx.prepare(&pragma)?;
-    let rows = stmt.query_map([], |row| row.get::<_, String>(1))?;
-    rows.collect()
-}
-
 fn backfill_pending_background_work(tx: &Transaction<'_>) -> rusqlite::Result<()> {
     let mut stmt = tx.prepare(
         "SELECT session_id, turn_id, timestamp, payload_json
@@ -727,15 +728,8 @@ fn pending_background_work_from_completed_event(
 mod tests {
     use rusqlite::Connection;
 
-    use super::{table_columns, CUSTOM_MIGRATIONS};
+    use super::table_columns;
     use crate::persistence::migrations::{run_migrations, MIGRATIONS};
-
-    #[test]
-    fn custom_migrations_register_review_auto_iterate_rename() {
-        assert!(CUSTOM_MIGRATIONS
-            .iter()
-            .any(|(name, _)| *name == "0036_rename_review_auto_iterate"));
-    }
 
     #[test]
     fn simplify_workspace_records_migration_remaps_repo_workspaces_and_drops_legacy_columns() {

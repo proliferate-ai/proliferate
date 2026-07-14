@@ -568,34 +568,41 @@ CREATE TABLE terminal_command_runs (
 
 -- table: workflow_run_steps
 CREATE TABLE workflow_run_steps (
-    run_id TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,
-    stage_index INTEGER NOT NULL,
-    step_index INTEGER NOT NULL,
-    status TEXT NOT NULL CHECK (status IN ('pending','running','completed','failed')),
-    prompt_id TEXT NOT NULL UNIQUE,
-    turn_id TEXT,
-    failure_code TEXT,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    started_at TEXT,
-    finished_at TEXT,
-    PRIMARY KEY (run_id, stage_index, step_index)
-);
+            run_id TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,
+            stage_index INTEGER NOT NULL,
+            step_index INTEGER NOT NULL,
+            status TEXT NOT NULL CHECK (status IN ('pending','running','completed','failed')),
+            prompt_id TEXT NOT NULL UNIQUE,
+            turn_id TEXT,
+            failure_code TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            started_at TEXT,
+            finished_at TEXT,
+            PRIMARY KEY (run_id, stage_index, step_index)
+        );
 
 -- table: workflow_runs
 CREATE TABLE workflow_runs (
-    id TEXT PRIMARY KEY,
-    schema_version INTEGER NOT NULL CHECK (schema_version = 1),
-    invocation_json TEXT NOT NULL,
-    status TEXT NOT NULL CHECK (status IN ('accepted','running','completed','failed')),
-    workspace_id TEXT NOT NULL,
-    session_id TEXT,
-    failure_code TEXT,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    started_at TEXT,
-    finished_at TEXT
-);
+            id TEXT PRIMARY KEY,
+            schema_version INTEGER NOT NULL CHECK (schema_version IN (1, 2)),
+            invocation_json TEXT NOT NULL CHECK (json_valid(invocation_json)),
+            resolved_plan_json TEXT CHECK (
+                resolved_plan_json IS NULL OR json_valid(resolved_plan_json)
+            ),
+            status TEXT NOT NULL CHECK (status IN ('accepted','running','completed','failed')),
+            workspace_id TEXT NOT NULL,
+            session_id TEXT,
+            failure_code TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            started_at TEXT,
+            finished_at TEXT,
+            CHECK (
+                (schema_version = 1 AND resolved_plan_json IS NULL)
+                OR (schema_version = 2 AND resolved_plan_json IS NOT NULL)
+            )
+        );
 
 -- table: workspace_access_modes
 CREATE TABLE workspace_access_modes (

@@ -12,6 +12,15 @@ pub struct ResolvedModelEffort {
     pub default: Option<String>,
 }
 
+/// Internal live-application metadata. This remains separate from `effort` so
+/// public launch-option projection keeps its existing first-control behavior.
+#[derive(Debug, Clone)]
+pub(crate) struct ResolvedLiveModelEffortCandidate {
+    pub(crate) control_key: String,
+    pub(crate) values: Vec<String>,
+    pub(crate) live_config_id: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct ResolvedLaunchModelOption {
     pub id: String,
@@ -25,6 +34,7 @@ pub struct ResolvedLaunchModelOption {
     pub provider: Option<String>,
     pub status: Option<crate::domains::agents::model::ModelCatalogStatus>,
     pub effort: Option<ResolvedModelEffort>,
+    pub(crate) live_effort_candidates: Vec<ResolvedLiveModelEffortCandidate>,
     pub fast_mode: bool,
     /// The permission/agent modes the model supports (`controls.mode.values`);
     /// `None` when the model declares no mode control (contract §5).

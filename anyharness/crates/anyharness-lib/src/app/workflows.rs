@@ -13,6 +13,7 @@ use crate::domains::workflows::runtime::WorkflowRunRuntime;
 use crate::domains::workflows::service::WorkflowRunService;
 use crate::domains::workflows::session_extension::WorkflowRunSessionExtension;
 use crate::domains::workflows::store::WorkflowRunStore;
+use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationGate;
 use crate::persistence::Db;
 
@@ -54,11 +55,13 @@ pub(super) fn wire_workflow_runtime(
     phase_one: WorkflowWiringPhaseOne,
     session_runtime: Arc<SessionRuntime>,
     operation_gate: Arc<WorkspaceOperationGate>,
+    access_gate: Arc<WorkspaceAccessGate>,
 ) -> Arc<WorkflowRunRuntime> {
     Arc::new(WorkflowRunRuntime::new(
         phase_one.service,
         session_runtime,
         operation_gate,
+        access_gate,
         phase_one.main_handle,
     ))
 }

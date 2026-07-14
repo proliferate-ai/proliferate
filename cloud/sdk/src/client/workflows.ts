@@ -3,6 +3,9 @@ import type {
   WorkflowDefinitionListResponse,
   WorkflowDefinitionResponse,
   WorkflowDefinitionUpdateRequest,
+  WorkflowInvocationCreateRequest,
+  WorkflowInvocationResponse,
+  WorkflowRunEligibilityResponse,
 } from "../types/index.js";
 import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
 
@@ -23,6 +26,41 @@ export async function getWorkflowDefinition(
     method: "GET",
     path: "/v1/workflows/{workflow_definition_id}",
     pathParams: { workflow_definition_id: workflowDefinitionId },
+  });
+}
+
+export async function getWorkflowRunEligibility(
+  workflowDefinitionId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<WorkflowRunEligibilityResponse> {
+  return client.requestJson<WorkflowRunEligibilityResponse>({
+    method: "GET",
+    path: "/v1/workflows/{workflow_definition_id}/run-eligibility",
+    pathParams: { workflow_definition_id: workflowDefinitionId },
+  });
+}
+
+export async function putWorkflowInvocation(
+  invocationId: string,
+  body: WorkflowInvocationCreateRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<WorkflowInvocationResponse> {
+  return client.requestJson<WorkflowInvocationResponse>({
+    method: "PUT",
+    path: "/v1/workflow-invocations/{invocation_id}",
+    pathParams: { invocation_id: invocationId },
+    body,
+  });
+}
+
+export async function getWorkflowInvocation(
+  invocationId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<WorkflowInvocationResponse> {
+  return client.requestJson<WorkflowInvocationResponse>({
+    method: "GET",
+    path: "/v1/workflow-invocations/{invocation_id}",
+    pathParams: { invocation_id: invocationId },
   });
 }
 

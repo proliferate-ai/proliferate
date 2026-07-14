@@ -17,8 +17,14 @@ from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.db.store import workflow_definitions as workflow_store
+from proliferate.db.store import workflow_invocations as invocation_store
 from proliferate.db.store.workflow_definitions import WorkflowDefinitionSnapshot
-from proliferate.server.workflows.errors import WorkflowDefinitionNotFound
+from proliferate.db.store.workflow_invocations import WorkflowInvocationSnapshot
+from proliferate.server.workflows.errors import (
+    InvalidWorkflowInvocation,
+    WorkflowDefinitionNotFound,
+    WorkflowInvocationNotFound,
+)
 
 
 async def workflow_definition_for_user(
@@ -45,4 +51,33 @@ async def workflow_definition_for_user(
 WorkflowDefinitionDependency = Annotated[
     WorkflowDefinitionSnapshot,
     Depends(workflow_definition_for_user),
+]
+
+
+async def workflow_invocation_for_user(
+    invocation_id: str,
+    user: User = Depends(current_product_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> WorkflowInvocationSnapshot:
+    try:
+        parsed_id = UUID(invocation_id)
+    except ValueError as error:
+        raise InvalidWorkflowInvocation(
+            "invocationId must be a canonical lowercase UUID."
+        ) from error
+    if str(parsed_id) != invocation_id:
+        raise InvalidWorkflowInvocation("invocationId must be a canonical lowercase UUID.")
+    value = await invocation_store.get_workflow_invocation_for_user(
+        db,
+        invocation_id=parsed_id,
+        user_id=user.id,
+    )
+    if value is None:
+        raise WorkflowInvocationNotFound()
+    return value
+
+
+WorkflowInvocationDependency = Annotated[
+    WorkflowInvocationSnapshot,
+    Depends(workflow_invocation_for_user),
 ]
