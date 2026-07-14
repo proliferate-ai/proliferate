@@ -36,6 +36,7 @@ class DocumentationIntegrityTest(unittest.TestCase):
             "specs/codebase/systems/engineering/observability/README.md",
             "specs/developing/operating/README.md",
             "specs/developing/operating/analytics/README.md",
+            "specs/developing/testing/manual-release-qa.md",
         }
 
         self.assertLessEqual(required_indexes, set(check_docs.REQUIRED_READMES))
@@ -46,6 +47,8 @@ class DocumentationIntegrityTest(unittest.TestCase):
         self.assertNotIn(
             "specs/developing/analytics/README.md", check_docs.REQUIRED_READMES
         )
+        legacy_qa_root = "specs/developing/" + "qa/" + "README.md"
+        self.assertNotIn(legacy_qa_root, check_docs.REQUIRED_READMES)
 
     def markdown_errors(self, files: dict[str, str]) -> list[str]:
         with tempfile.TemporaryDirectory() as directory:
