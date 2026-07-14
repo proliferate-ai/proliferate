@@ -397,8 +397,11 @@ jobs:
           AGENT_GATEWAY_LITELLM_MASTER_KEY: ${{ secrets.AGENT_GATEWAY_LITELLM_MASTER_KEY }}
           # Bounded, secret-free failure diagnostics written inside the uploaded
           # logs/ tree (all captures pass through redact-diagnostics.ts before
-          # they are written). Lands under the `*/*/logs/` upload glob below.
-          LOCAL_WORLD_SMOKE_DEBUG_DIR: ${{ github.workspace }}/tests/release/.output/local-world/ql-ci-${{ github.run_id }}-${{ github.run_attempt }}/1/logs/debug
+          # they are written). Deliberately OUTSIDE the run dir
+          # (<base>/<run-id>/<shard>) — the cleanup stack deletes the run dir on
+          # teardown, which would delete the captures before upload. This
+          # sibling path still matches the `*/*/logs/` upload glob below.
+          LOCAL_WORLD_SMOKE_DEBUG_DIR: ${{ github.workspace }}/tests/release/.output/local-world/ql-ci-${{ github.run_id }}-${{ github.run_attempt }}/debug/logs
         run: |
           set -euo pipefail
           make qualification-local-workspace \
