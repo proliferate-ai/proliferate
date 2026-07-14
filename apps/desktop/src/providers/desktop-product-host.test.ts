@@ -491,9 +491,9 @@ describe("desktopTelemetry", () => {
   it("routeChanged emits once per resolved route and suppresses repeats", () => {
     __resetDesktopTelemetryRouteForTest();
 
-    desktopTelemetry.routeChanged("/");
-    desktopTelemetry.routeChanged("/");
-    desktopTelemetry.routeChanged("/settings");
+    desktopTelemetry.routeChanged({ pathname: "/", routeId: "main" });
+    desktopTelemetry.routeChanged({ pathname: "/", routeId: "main" });
+    desktopTelemetry.routeChanged({ pathname: "/settings", routeId: "settings" });
 
     // "main" (from "/") emits once, the repeat is suppressed, "settings" emits.
     expect(mocks.trackProductEvent.mock.calls).toEqual([

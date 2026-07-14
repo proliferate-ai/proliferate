@@ -333,6 +333,19 @@ export interface ProductSupportTelemetryContext {
 }
 
 /**
+ * A route change already classified by product code. ProductClient owns the
+ * route taxonomy: it resolves the concrete product `routeId` and passes it
+ * alongside the raw `pathname` so the host attaches vendor navigation metadata
+ * without re-classifying (or re-emitting a product screen-view) itself. The
+ * concrete route-id union stays product-owned; this open boundary carries its
+ * value as a string.
+ */
+export interface ProductRouteChange {
+  pathname: string;
+  routeId: string;
+}
+
+/**
  * Shared product telemetry. ProductClient emits the same events on both hosts;
  * each host constructs the implementation (Sentry/PostHog/native diagnostics)
  * and owns vendor lifecycle. ProductClient imports no vendor SDK directly.
@@ -344,9 +357,11 @@ export interface ProductTelemetry {
   setTag(key: string, value: string): void;
   /**
    * Host-owned route instrumentation. ProductClient calls this after shared
-   * routing settles; the host may attach vendor tracing and route metadata.
+   * routing settles, passing the already-classified {@link ProductRouteChange};
+   * the host may attach vendor tracing and route metadata but must not
+   * re-classify the pathname or emit a second product screen-view event.
    */
-  routeChanged(pathname: string): void;
+  routeChanged(change: ProductRouteChange): void;
   /** Release/correlation metadata attached to support-report submissions. */
   getSupportContext(): ProductSupportTelemetryContext;
 }

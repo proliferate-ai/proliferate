@@ -1,91 +1,117 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const getPreferencesStore = vi.fn();
+
+vi.mock("@/lib/access/tauri/store", () => ({
+  getPreferencesStore: () => getPreferencesStore(),
+}));
+
 import { desktopProductStorage } from "./product-storage";
 
-describe("desktopProductStorage", () => {
+interface FakeStore {
+  get: ReturnType<typeof vi.fn>;
+  set: ReturnType<typeof vi.fn>;
+  delete: ReturnType<typeof vi.fn>;
+  save: ReturnType<typeof vi.fn>;
+}
+
+function makeStore(overrides: Partial<FakeStore> = {}): FakeStore {
+  return {
+    get: vi.fn(async () => undefined),
+    set: vi.fn(async () => {}),
+    delete: vi.fn(async () => true),
+    save: vi.fn(async () => {}),
+    ...overrides,
+  };
+}
+
+describe("desktopProductStorage (Tauri-store backed)", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
   afterEach(() => {
+    getPreferencesStore.mockReset();
     vi.unstubAllGlobals();
   });
 
-  it("getItem returns the stored string value", async () => {
-    vi.stubGlobal("localStorage", {
-      getItem: vi.fn(() => "test-value"),
-    });
+  it("getItem passes a string value through unchanged", async () => {
+    const store = makeStore({ get: vi.fn(async () => "already-a-string") });
+    getPreferencesStore.mockResolvedValue(store);
 
-    const result = await desktopProductStorage.getItem("test-key");
+    const result = await desktopProductStorage.getItem("k");
 
-    expect(result).toBe("test-value");
-    expect(window.localStorage.getItem).toHaveBeenCalledWith("test-key");
+    expect(result).toBe("already-a-string");
+    expect(store.get).toHaveBeenCalledWith("k");
   });
 
-  it("getItem returns null when key does not exist", async () => {
-    vi.stubGlobal("localStorage", {
-      getItem: vi.fn(() => null),
-    });
+  it("getItem normalizes a legacy raw-object value to a JSON string", async () => {
+    const legacy = { theme: "dark", extras: { a: 1 } };
+    const store = makeStore({ get: vi.fn(async () => legacy) });
+    getPreferencesStore.mockResolvedValue(store);
 
-    const result = await desktopProductStorage.getItem("nonexistent-key");
+    const result = await desktopProductStorage.getItem("user_preferences");
 
-    expect(result).toBeNull();
-    expect(window.localStorage.getItem).toHaveBeenCalledWith("nonexistent-key");
+    expect(result).toBe(JSON.stringify(legacy));
   });
 
-  it("setItem writes the value to localStorage", async () => {
-    const setItemMock = vi.fn();
-    vi.stubGlobal("localStorage", {
-      setItem: setItemMock,
-    });
+  it("getItem falls back to localStorage when the store is unavailable", async () => {
+    getPreferencesStore.mockResolvedValue(null);
+    window.localStorage.setItem("k", "browser-value");
 
-    await desktopProductStorage.setItem("test-key", "test-value");
+    const result = await desktopProductStorage.getItem("k");
 
-    expect(setItemMock).toHaveBeenCalledWith("test-key", "test-value");
+    expect(result).toBe("browser-value");
   });
 
-  it("removeItem removes the key from localStorage", async () => {
-    const removeItemMock = vi.fn();
-    vi.stubGlobal("localStorage", {
-      removeItem: removeItemMock,
-    });
+  it("getItem reads through to localStorage on a store miss", async () => {
+    const store = makeStore({ get: vi.fn(async () => undefined) });
+    getPreferencesStore.mockResolvedValue(store);
+    window.localStorage.setItem("proliferate.chatDiffPreferences.v1", "legacy-only");
 
-    await desktopProductStorage.removeItem("test-key");
-
-    expect(removeItemMock).toHaveBeenCalledWith("test-key");
-  });
-
-  it("getItem rejects when localStorage throws", async () => {
-    vi.stubGlobal("localStorage", {
-      getItem: vi.fn(() => {
-        throw new Error("Storage quota exceeded");
-      }),
-    });
-
-    await expect(desktopProductStorage.getItem("test-key")).rejects.toThrow(
-      "Storage quota exceeded"
+    const result = await desktopProductStorage.getItem(
+      "proliferate.chatDiffPreferences.v1",
     );
+
+    expect(result).toBe("legacy-only");
   });
 
-  it("setItem rejects when localStorage throws", async () => {
-    vi.stubGlobal("localStorage", {
-      setItem: vi.fn(() => {
-        throw new Error("Storage quota exceeded");
-      }),
-    });
+  it("setItem writes to the canonical Tauri store when available", async () => {
+    const store = makeStore();
+    getPreferencesStore.mockResolvedValue(store);
 
-    await expect(
-      desktopProductStorage.setItem("test-key", "test-value")
-    ).rejects.toThrow("Storage quota exceeded");
+    await desktopProductStorage.setItem("k", "v");
+
+    expect(store.set).toHaveBeenCalledWith("k", "v");
   });
 
-  it("removeItem rejects when localStorage throws", async () => {
-    vi.stubGlobal("localStorage", {
-      removeItem: vi.fn(() => {
-        throw new Error("Storage quota exceeded");
-      }),
-    });
+  it("setItem falls back to localStorage when the store is unavailable", async () => {
+    getPreferencesStore.mockResolvedValue(null);
 
-    await expect(desktopProductStorage.removeItem("test-key")).rejects.toThrow(
-      "Storage quota exceeded"
-    );
+    await desktopProductStorage.setItem("k", "v");
+
+    expect(window.localStorage.getItem("k")).toBe("v");
   });
 
+  it("removeItem deletes from the store and clears any read-through value", async () => {
+    const store = makeStore();
+    getPreferencesStore.mockResolvedValue(store);
+    window.localStorage.setItem("k", "legacy");
+
+    await desktopProductStorage.removeItem("k");
+
+    expect(store.delete).toHaveBeenCalledWith("k");
+    expect(window.localStorage.getItem("k")).toBeNull();
+  });
+
+  it("removeItem falls back to localStorage when the store is unavailable", async () => {
+    getPreferencesStore.mockResolvedValue(null);
+    window.localStorage.setItem("k", "legacy");
+
+    await desktopProductStorage.removeItem("k");
+
+    expect(window.localStorage.getItem("k")).toBeNull();
+  });
 });

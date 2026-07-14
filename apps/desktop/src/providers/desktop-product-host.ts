@@ -8,6 +8,7 @@ import type {
   ProductDeploymentHost,
   ProductEntry,
   ProductLinks,
+  ProductRouteChange,
   ProductTelemetry,
 } from "@proliferate/product-client/host/product-host";
 
@@ -309,8 +310,11 @@ export const desktopTelemetry: ProductTelemetry = {
   setTag(key: string, value: string): void {
     setTelemetryTag(key, value);
   },
-  routeChanged(pathname: string): void {
-    const route = resolveDesktopTelemetryRoute(pathname);
+  routeChanged(change: ProductRouteChange): void {
+    // S1: signature updated mechanically to the classified ProductRouteChange.
+    // The route classification / single-screen_viewed rework lands in S4; this
+    // adapter still resolves from the pathname to preserve current behavior.
+    const route = resolveDesktopTelemetryRoute(change.pathname);
     if (previousTelemetryRoute === route) {
       return;
     }
