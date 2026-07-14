@@ -33,7 +33,7 @@ export function ProductSidebarThreadRow({
     <SidebarRowSurface
       active={active}
       onPress={onSelect}
-      className={`${hasSubtitle ? "h-[40px]" : "h-[28px]"} pl-2 pr-1 py-1 focus-visible:outline-offset-[-2px] ${className}`}
+      className={`${hasSubtitle ? "h-[40px]" : "h-[28px]"} pl-2 pr-1 py-1 text-sidebar-row focus-visible:outline-offset-[-2px] ${className}`}
       {...props}
     >
       {hoverAction ? (
@@ -41,13 +41,13 @@ export function ProductSidebarThreadRow({
           {hoverAction}
         </div>
       ) : null}
-      <div className="flex w-full items-center gap-1.5 text-sm leading-4">
+      <div className="flex w-full items-center gap-1.5">
         <div className="flex w-4 shrink-0 items-center justify-center">
           {status}
         </div>
 
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <div className={`flex min-w-0 flex-1 ${hasSubtitle ? "flex-col items-start justify-center gap-0.5" : "items-center gap-2"} truncate text-ui leading-5 text-sidebar-foreground`}>
+          <div className={`flex min-w-0 flex-1 ${hasSubtitle ? "flex-col items-start justify-center gap-0.5" : "items-center gap-2"} truncate text-sidebar-foreground`}>
             <span className="max-w-full truncate">
               {label}
             </span>
@@ -66,7 +66,7 @@ export function ProductSidebarThreadRow({
 
         <div className="flex shrink-0 items-center gap-1">
           {trailingLabel && !active && !expandControl ? (
-            <div className="truncate text-right text-sm leading-4 tabular-nums text-sidebar-muted-foreground group-focus-within:opacity-0 group-hover:opacity-0">
+            <div className="truncate text-right text-ui tabular-nums text-sidebar-muted-foreground group-focus-within:opacity-0 group-hover:opacity-0">
               {trailingLabel}
             </div>
           ) : null}
