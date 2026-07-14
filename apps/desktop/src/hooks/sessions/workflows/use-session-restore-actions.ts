@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   useDismissSessionMutation,
   useRestoreDismissedSessionMutation,
@@ -7,7 +8,7 @@ import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use
 import type { SessionLatencyFlowOptions } from "@/hooks/sessions/workflows/session-selection-options";
 import {
   buildLatencyRequestOptions,
-  ensureRuntimeReadyForSessions,
+  resolveRuntimeUrlForWorkspaceSessions,
 } from "@/hooks/sessions/workflows/session-selection-runtime";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
 import {
@@ -32,6 +33,7 @@ import {
 } from "@/hooks/sessions/workflows/session-replacement-dismissals";
 
 export function useSessionRestoreActions() {
+  const localRuntime = useProductHost().desktop?.runtime ?? null;
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const showToast = useToastStore((state) => state.show);
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
@@ -77,7 +79,7 @@ export function useSessionRestoreActions() {
 
     try {
       const runtimeReadyStartedAt = startLatencyTimer();
-      const runtimeUrl = await ensureRuntimeReadyForSessions();
+      const runtimeUrl = await resolveRuntimeUrlForWorkspaceSessions(workspaceId, localRuntime);
       logLatency("session.restore.runtime_ready", {
         workspaceId,
         flowId: options?.latencyFlowId ?? null,
@@ -172,6 +174,7 @@ export function useSessionRestoreActions() {
     }
   }, [
     getWorkspaceRuntimeBlockReason,
+    localRuntime,
     dismissSessionMutation,
     restoreDismissedSessionMutation,
     showToast,

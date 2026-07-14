@@ -37,8 +37,8 @@ canonical feature spec are the durable handoff.
 
 Current handoff:
 
-- Current PR: Desktop Native UI Adoption — implementing.
-- Next PR: Desktop Local Runtime Adoption — queued.
+- Current PR: Desktop Local Runtime Adoption — implementing.
+- Next PR: not yet selected — not started.
 
 - Repository: `proliferate-ai/proliferate`.
 - Canonical contract:
@@ -55,8 +55,12 @@ Current handoff:
   `90926523c3662067e02f8511db6c8e0058e119f1`.
 - Desktop Native UI Adoption contract:
   `specs/codebase/features/web-desktop-client-unification-d1b.md`, revision
-  `D1b-r1`, exact implementation base
-  `2ec6907391f57a3e449b5b77c43c18600f64fdaa`.
+  `D1b-r2`, final PR #1165 reviewed head
+  `32632bd487e9be28592579728b87f0c18d73ee9c`, merge
+  `736d181575e4d81389d19ba7a78afd14566e1fda`.
+- Desktop Local Runtime Adoption contract:
+  `specs/codebase/features/web-desktop-client-unification-d1c.md`, exact
+  implementation base `736d181575e4d81389d19ba7a78afd14566e1fda`.
 - Current role: implementation. Material scope changes are decided with the
   founder and recorded before the slice broadens.
 
@@ -67,8 +71,8 @@ Current handoff:
 | Preparation: embedded browser | Delete the embedded workspace browser and its native child-WebView capability. | PR #1154, merge `4f7fe6ee5` | Complete |
 | Preparation: ProductClient foundation | Add the compiled package, `ProductHost`, `DesktopBridge`, `ProductHostProvider`, tests, and enforcement. | PR #1153, merge `0b33e116d` | Complete |
 | Desktop Host Adoption | Construct the concrete Desktop host, mount the provider, replace reactive snapshots, and gate running-agent export through one Desktop-only lifecycle root while product files remain in Desktop. | [`web-desktop-client-unification-d1a.md`](../../codebase/features/web-desktop-client-unification-d1a.md), `D1a-r2`; PR #1157 merge `a76ab5911e2af39593b4b31530535f0811a3558b` | Complete |
-| Desktop Native UI Adoption | Route native menus, native commands, Dock attention, and Desktop zoom through the mounted bridge while product files remain in Desktop. | [`web-desktop-client-unification-d1b.md`](../../codebase/features/web-desktop-client-unification-d1b.md), `D1b-r1`, base `2ec6907391f57a3e449b5b77c43c18600f64fdaa` | Implementing |
-| Desktop Local Runtime Adoption | Route product-owned local AnyHarness discovery, restart, and connection through the Desktop bridge while raw sidecar/process startup remains Desktop-owned. | Shape directly with the founder after the current PR is reviewed. | Queued |
+| Desktop Native UI Adoption | Route native menus, native commands, Dock attention, and Desktop zoom through the mounted bridge while product files remain in Desktop. | [`web-desktop-client-unification-d1b.md`](../../codebase/features/web-desktop-client-unification-d1b.md); PR #1165 merge `736d181575e4d81389d19ba7a78afd14566e1fda` | Complete |
+| Desktop Local Runtime Adoption | Route product-owned local AnyHarness discovery, restart, readiness, and connection through the Desktop bridge while raw sidecar/process startup remains Desktop-owned. | [`web-desktop-client-unification-d1c.md`](../../codebase/features/web-desktop-client-unification-d1c.md), base `736d181575e4d81389d19ba7a78afd14566e1fda` | Implementing |
 | Remaining Desktop capability adoption | Route only real remaining product consumers through coherent bridge slices while paths remain stable. | Specify only from current consumers; no bridge-completeness work for its own sake. | Directional |
 | Shared-client extraction readiness | Prove the host mount envelope, compiled assets/builds, move ledger/codemod, minimal browser host, and fail-closed boundaries. | Shape the focused checklist together before the source move. | Directional |
 | Mechanical Desktop extraction | Move the working Desktop product into ProductClient and leave Desktop as a thin native host. | Exact file ledger, landing window, codemod, builds, and behavior proof required. | Directional |
@@ -104,7 +108,7 @@ The accepted r2 deviations are narrow and recorded in the complete contract:
 - the exact Desktop test command has one founder-approved waiver for
   base-identical pretest violations in unchanged files.
 
-## 3. Desktop Native UI Adoption working record
+## 3. Desktop Native UI Adoption acceptance record
 
 Desktop Native UI Adoption has one observable outcome: every product-owned
 native menu, native menu-command subscription, Dock attention export, and
@@ -127,10 +131,29 @@ microtask, and disables later native attempts for that hook instance. This
 adds no availability capability, retry, persistence, queue, or nullable
 Desktop host.
 
-The complete frozen contract is
+The implementation merged in PR #1165 from reviewed head
+`32632bd487e9be28592579728b87f0c18d73ee9c` at merge
+`736d181575e4d81389d19ba7a78afd14566e1fda`. The complete contract is
 [`web-desktop-client-unification-d1b.md`](../../codebase/features/web-desktop-client-unification-d1b.md).
 
-## 4. Remaining migration map and gates
+## 4. Desktop Local Runtime Adoption working record
+
+Desktop Local Runtime Adoption routes local runtime discovery, restart,
+readiness, and connection through `host.desktop.runtime`. Raw Tauri commands
+and sidecar/process ownership remain Desktop-native; resolved workspace and
+session operations continue through the AnyHarness SDK.
+
+The exact implementation base is
+`736d181575e4d81389d19ba7a78afd14566e1fda`. The contract preserves native
+runtime status so a failed sidecar remains an immediate failure, moves initial
+bootstrap beneath the existing Desktop-only lifecycle root, starts the shared
+runtime scope empty/fail-closed, and explicitly keeps cloud and SSH-target
+flows independent of local discovery.
+
+The complete living contract is
+[`web-desktop-client-unification-d1c.md`](../../codebase/features/web-desktop-client-unification-d1c.md).
+
+## 5. Remaining migration map and gates
 
 The plain sequence after the current PR is:
 
@@ -160,7 +183,7 @@ exact base and acceptance proof. The durable external-configuration evidence
 requirements in §5 remain binding. Do not reuse retired phase mechanics by
 implication.
 
-## 5. Later Web cutover external-configuration gate
+## 6. Later Web cutover external-configuration gate
 
 The future Web cutover must inventory every external producer of a hosted Web
 URL, including OAuth registrations, Stripe checkout/portal return URLs,

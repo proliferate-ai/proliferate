@@ -43,7 +43,6 @@ import {
   recordBootDiagnostic,
   recordBootDiagnosticOnce,
 } from "@/lib/infra/measurement/boot-stall-diagnostics"
-import { bootstrapHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap"
 import { AppErrorBoundary } from "@/components/app/AppErrorBoundary"
 import { RepoSetupModalHost } from "@/components/workspace/repo-setup/RepoSetupModalHost"
 import { SupportModalHost } from "@/components/support/SupportModalHost"
@@ -228,24 +227,6 @@ function AppRuntime() {
       })
     })
   }, [bootstrapAuth])
-
-  useEffect(() => {
-    if (authStatus !== "bootstrapping") {
-      const runtimeBootstrapStartedAt = startStartupTimer()
-      recordAppRendererEvent("app.runtime_bootstrap.start")
-      logStartupDebug("app.runtime_bootstrap.start", { authStatus })
-      void bootstrapHarnessRuntime().finally(() => {
-        recordAppRendererEvent(
-          "app.runtime_bootstrap.completed",
-          elapsedStartupMs(runtimeBootstrapStartedAt),
-        )
-        logStartupDebug("app.runtime_bootstrap.completed", {
-          elapsedMs: elapsedStartupMs(runtimeBootstrapStartedAt),
-          authStatus,
-        })
-      })
-    }
-  }, [authStatus])
 
   recordBootDiagnosticOnce("app_runtime.render.before_return", { authStatus })
 

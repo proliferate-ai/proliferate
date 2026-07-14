@@ -97,6 +97,7 @@ describe("runWorkspaceSelection", () => {
     });
 
     await runWorkspaceSelection({
+      localRuntime: null,
       cache: selectionCache(),
       logicalWorkspaces,
       rawWorkspaces: [],
@@ -119,6 +120,7 @@ describe("runWorkspaceSelection", () => {
     vi.mocked(resolveCloudWorkspaceReadiness).mockReset();
 
     await expect(runWorkspaceSelection({
+      localRuntime: null,
       cache: selectionCache(),
       logicalWorkspaces: [
         ...logicalWorkspaces,
@@ -174,6 +176,7 @@ describe("runWorkspaceSelection", () => {
     });
 
     await runWorkspaceSelection({
+      localRuntime: null,
       cache,
       logicalWorkspaces,
       rawWorkspaces: [],
@@ -209,6 +212,7 @@ describe("runWorkspaceSelection", () => {
     });
 
     await runWorkspaceSelection({
+      localRuntime: null,
       cache: selectionCache(),
       logicalWorkspaces,
       rawWorkspaces: [],
@@ -251,6 +255,7 @@ describe("runWorkspaceSelection", () => {
     });
 
     await runWorkspaceSelection({
+      localRuntime: null,
       cache: selectionCache(),
       logicalWorkspaces,
       rawWorkspaces: [],
@@ -287,6 +292,7 @@ describe("runWorkspaceSelection", () => {
     });
 
     await runWorkspaceSelection({
+      localRuntime: null,
       cache: selectionCache(),
       logicalWorkspaces,
       rawWorkspaces: [],
@@ -319,6 +325,7 @@ describe("runWorkspaceSelection", () => {
     });
 
     await runWorkspaceSelection({
+      localRuntime: null,
       cache: selectionCache(),
       logicalWorkspaces,
       rawWorkspaces: [],
@@ -385,6 +392,7 @@ describe("runWorkspaceSelection", () => {
     });
 
     await runWorkspaceSelection({
+      localRuntime: null,
       cache: selectionCache(),
       logicalWorkspaces,
       rawWorkspaces: [],

@@ -130,31 +130,37 @@ describe("desktopBridge identity", () => {
 });
 
 describe("runtime", () => {
-  it("maps RuntimeInfo.url to a runtime connection without an auth token", async () => {
+  it("maps RuntimeInfo to a runtime snapshot without an auth token", async () => {
     mocks.getRuntimeInfo.mockResolvedValue({
       url: "http://127.0.0.1:8457",
       port: 8457,
       status: "healthy",
     });
 
-    const connection = await desktopBridge.runtime.getConnection();
+    const snapshot = await desktopBridge.runtime.getConnection();
 
     expect(mocks.getRuntimeInfo).toHaveBeenCalledTimes(1);
-    expect(connection).toEqual({ runtimeUrl: "http://127.0.0.1:8457" });
-    expect(connection).not.toHaveProperty("authToken");
+    expect(snapshot).toEqual({
+      connection: { runtimeUrl: "http://127.0.0.1:8457" },
+      status: "healthy",
+    });
+    expect(snapshot.connection).not.toHaveProperty("authToken");
   });
 
-  it("maps the restarted runtime url the same way", async () => {
+  it("preserves the restarted runtime status and url", async () => {
     mocks.restartRuntime.mockResolvedValue({
       url: "http://127.0.0.1:9000",
       port: 9000,
       status: "starting",
     });
 
-    const connection = await desktopBridge.runtime.restart();
+    const snapshot = await desktopBridge.runtime.restart();
 
     expect(mocks.restartRuntime).toHaveBeenCalledTimes(1);
-    expect(connection).toEqual({ runtimeUrl: "http://127.0.0.1:9000" });
+    expect(snapshot).toEqual({
+      connection: { runtimeUrl: "http://127.0.0.1:9000" },
+      status: "starting",
+    });
   });
 });
 

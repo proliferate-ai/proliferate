@@ -117,6 +117,7 @@ describe("runHotWorkspaceReopen", () => {
 
 function depsForHotReopen(): WorkspaceSelectionDeps {
   return {
+    localRuntime: null,
     cache: {
       cancelPreviousWorkspaceDisplayQueries: vi.fn(),
       invalidateCloudWorkspaceStartState: vi.fn().mockResolvedValue(undefined),

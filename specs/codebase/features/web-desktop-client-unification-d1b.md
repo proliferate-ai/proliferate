@@ -1,6 +1,6 @@
 # Desktop Native UI Adoption (D1b)
 
-Status: **current implementation scope**.
+Status: **complete**.
 
 - Revision: `D1b-r2`
 - Approved starting scope: 2026-07-13
@@ -9,6 +9,9 @@ Status: **current implementation scope**.
 - Prior implementation: PR #1157, reviewed head
   `90926523c3662067e02f8511db6c8e0058e119f1`, merge
   `a76ab5911e2af39593b4b31530535f0811a3558b`
+- Final implementation: PR #1165, reviewed head
+  `32632bd487e9be28592579728b87f0c18d73ee9c`, merge
+  `736d181575e4d81389d19ba7a78afd14566e1fda`
 - Parent architecture:
   [`web-desktop-client-unification.md`](web-desktop-client-unification.md)
 - Prior completed contract:
@@ -16,10 +19,7 @@ Status: **current implementation scope**.
 - Pipeline ledger:
   [`../../developing/deploying/web-desktop-unification-rollout.md`](../../developing/deploying/web-desktop-unification-rollout.md)
 
-This is the current implementation contract for Desktop Native UI Adoption
-only. The founder and implementation agent may update it together when code
-evidence requires a material adjustment; record that decision before
-broadening the slice.
+This is the completed implementation contract for Desktop Native UI Adoption.
 
 ## 1. Observable outcome
 

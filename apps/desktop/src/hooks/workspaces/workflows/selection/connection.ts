@@ -25,7 +25,7 @@ export async function resolveSelectionConnection(
     ? cloudReadiness.runtimeWorkspaceId ?? context.workspaceId
     : context.workspaceId;
   const desktopRuntimeUrl = cloudReadiness.kind === "local" && !targetWorkspace
-    ? await ensureRuntimeReady()
+    ? await ensureRuntimeReady(deps.localRuntime)
     : useHarnessConnectionStore.getState().runtimeUrl;
   logLatency("workspace.select.runtime_ready", {
     workspaceId: context.workspaceId,

@@ -8,8 +8,8 @@ import type { AnyHarnessClientConnection } from "@anyharness/sdk-react";
  * (those flow through AnyHarness). Methods are added only when a migrated
  * product consumer actually needs them.
  *
- * This package defines the shared contract; the Desktop adapter is implemented
- * in a later PR. Types here mirror the concrete shapes Desktop already uses so
+ * This package defines the shared contract; Desktop supplies the concrete
+ * adapter. Types here mirror the concrete shapes Desktop already uses so
  * migrated product code keeps its behavior.
  */
 export interface DesktopBridge {
@@ -33,9 +33,21 @@ export interface DesktopBridge {
  */
 export type LocalRuntimeConnection = AnyHarnessClientConnection;
 
+export type LocalRuntimeStatus = "starting" | "healthy" | "failed" | "stopped";
+
+/**
+ * The latest native sidecar snapshot. ProductClient uses the connection with
+ * the normal AnyHarness SDK and uses the status only to preserve Desktop's
+ * startup/restart failure behavior.
+ */
+export interface LocalRuntimeSnapshot {
+  connection: LocalRuntimeConnection;
+  status: LocalRuntimeStatus;
+}
+
 export interface DesktopRuntimeBridge {
-  getConnection(): Promise<LocalRuntimeConnection>;
-  restart(): Promise<LocalRuntimeConnection>;
+  getConnection(): Promise<LocalRuntimeSnapshot>;
+  restart(): Promise<LocalRuntimeSnapshot>;
 }
 
 // --- Local files and repositories -----------------------------------------

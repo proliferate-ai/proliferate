@@ -178,7 +178,7 @@ function WorkspaceProviders({ children }: { children: ReactNode }) {
   );
 
   return (
-    <AnyHarnessRuntime runtimeUrl={runtimeUrl} cacheScopeKey={cacheScopeKey}>
+    <AnyHarnessRuntime runtimeUrl={runtimeUrl || null} cacheScopeKey={cacheScopeKey}>
       <CloudWorkspaceMaterializationCacheBoundary>
         <AnyHarnessWorkspace
           workspaceId={providerWorkspaceId}

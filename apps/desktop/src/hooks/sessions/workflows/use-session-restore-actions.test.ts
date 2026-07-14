@@ -16,6 +16,7 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import { useSessionRestoreActions } from "./use-session-restore-actions";
 
 const mocks = vi.hoisted(() => ({
+  localRuntime: {},
   getWorkspaceClientAndId: vi.fn(async () => ({
     target: {
       anyharnessWorkspaceId: "workspace-1",
@@ -24,9 +25,14 @@ const mocks = vi.hoisted(() => ({
   })),
   dismissMutateAsync: vi.fn(),
   restoreMutateAsync: vi.fn(),
+  resolveRuntimeUrlForWorkspaceSessions: vi.fn(async () => "http://runtime.test"),
   showToast: vi.fn(),
   upsertWorkspaceSessionRecord: vi.fn(),
   writeSessionReplacementTombstones: vi.fn(() => true),
+}));
+
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => ({ desktop: { runtime: mocks.localRuntime } }),
 }));
 
 vi.mock("@/lib/access/browser/session-replacement-tombstones-storage", () => ({
@@ -53,7 +59,7 @@ vi.mock("@/hooks/workspaces/derived/use-workspace-runtime-block", () => ({
 
 vi.mock("@/hooks/sessions/workflows/session-selection-runtime", () => ({
   buildLatencyRequestOptions: () => undefined,
-  ensureRuntimeReadyForSessions: async () => "http://runtime.test",
+  resolveRuntimeUrlForWorkspaceSessions: mocks.resolveRuntimeUrlForWorkspaceSessions,
 }));
 
 vi.mock("@/lib/access/anyharness/session-runtime", () => ({
@@ -117,6 +123,10 @@ describe("useSessionRestoreActions", () => {
     });
 
     expect(restoredId).toBe("runtime-old");
+    expect(mocks.resolveRuntimeUrlForWorkspaceSessions).toHaveBeenCalledWith(
+      "workspace-1",
+      mocks.localRuntime,
+    );
     expect(isReplacedSessionTombstoned("workspace-1", "runtime-old")).toBe(false);
     expect(isReplacedSessionTombstoned("workspace-1", "client-old")).toBe(false);
     expect(mocks.upsertWorkspaceSessionRecord).toHaveBeenCalledWith(

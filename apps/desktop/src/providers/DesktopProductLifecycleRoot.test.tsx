@@ -3,10 +3,21 @@ import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DesktopBridge } from "@proliferate/product-client/host/desktop-bridge";
-import type { ProductHost } from "@proliferate/product-client/host/product-host";
+import type {
+  AuthState,
+  ProductHost,
+} from "@proliferate/product-client/host/product-host";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+
+const runtimeMocks = vi.hoisted(() => ({
+  bootstrapHarnessRuntime: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("@/lib/access/anyharness/runtime-bootstrap", () => ({
+  bootstrapHarnessRuntime: runtimeMocks.bootstrapHarnessRuntime,
+}));
 
 vi.mock("@proliferate/product-domain/sessions/activity", () => ({
   isSessionSlotBusy: (snapshot: { busy?: boolean } | null) =>
@@ -39,6 +50,10 @@ function makeBridge(
   nativeUiOverrides: Partial<DesktopBridge["nativeUi"]> = {},
 ) {
   return {
+    runtime: {
+      getConnection: vi.fn(),
+      restart: vi.fn(),
+    },
     nativeUi: {
       setRunningAgentCount,
       subscribeMenuCommands: () => () => {},
@@ -49,13 +64,16 @@ function makeBridge(
   } as unknown as DesktopBridge;
 }
 
-function makeHost(desktop: DesktopBridge | null): ProductHost {
+function makeHost(
+  desktop: DesktopBridge | null,
+  authStatus: ProductHost["auth"]["state"]["status"] = "loading",
+): ProductHost {
   return {
     surface: desktop ? "desktop" : "web",
     deployment: { apiBaseUrl: "https://api.example.test" },
     auth: {
       authRequired: true,
-      state: { status: "loading" },
+      state: makeAuthState(authStatus),
       restoreSession: async () => {},
       startLogin: async () => {},
       finishLogin: async () => {},
@@ -86,6 +104,16 @@ function makeHost(desktop: DesktopBridge | null): ProductHost {
   };
 }
 
+function makeAuthState(status: AuthState["status"]): AuthState {
+  if (status === "authenticated") {
+    return { status, user: { id: "user-1" } };
+  }
+  if (status === "anonymous") {
+    return { status, methods: [] };
+  }
+  return { status };
+}
+
 function renderRoot(host: ProductHost) {
   return render(
     <ProductHostProvider host={host}>
@@ -96,6 +124,7 @@ function renderRoot(host: ProductHost) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  runtimeMocks.bootstrapHarnessRuntime.mockResolvedValue(undefined);
   setEntries({});
 });
 
@@ -105,6 +134,35 @@ afterEach(() => {
 });
 
 describe("DesktopProductLifecycleRoot", () => {
+  it("does not bootstrap a local runtime when desktop is null", () => {
+    renderRoot(makeHost(null, "authenticated"));
+    expect(runtimeMocks.bootstrapHarnessRuntime).not.toHaveBeenCalled();
+  });
+
+  it("keeps one runtime bootstrap across a host snapshot replacement", () => {
+    const bridge = makeBridge(vi.fn().mockResolvedValue(undefined));
+    const { rerender } = renderRoot(makeHost(bridge, "authenticated"));
+
+    expect(runtimeMocks.bootstrapHarnessRuntime).toHaveBeenCalledTimes(1);
+    expect(runtimeMocks.bootstrapHarnessRuntime.mock.calls[0]?.[0]).toBe(bridge.runtime);
+    const signal = runtimeMocks.bootstrapHarnessRuntime.mock.calls[0]?.[1] as AbortSignal;
+    expect(signal.aborted).toBe(false);
+
+    rerender(
+      <ProductHostProvider host={makeHost(bridge, "authenticated")}>
+        <DesktopProductLifecycleRoot />
+      </ProductHostProvider>,
+    );
+    expect(runtimeMocks.bootstrapHarnessRuntime).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <ProductHostProvider host={makeHost(null, "authenticated")}>
+        <DesktopProductLifecycleRoot />
+      </ProductHostProvider>,
+    );
+    expect(signal.aborted).toBe(true);
+  });
+
   it("does not export or subscribe when desktop is null", () => {
     const subscribeSpy = vi.spyOn(useSessionDirectoryStore, "subscribe");
     renderRoot(makeHost(null));

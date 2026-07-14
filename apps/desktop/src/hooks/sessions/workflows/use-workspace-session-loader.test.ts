@@ -9,11 +9,16 @@ import {
 import { useWorkspaceSessionLoader } from "./use-workspace-session-loader";
 
 const mocks = vi.hoisted(() => ({
+  localRuntime: {},
   ensureRuntimeReadyForSessions: vi.fn(async () => "http://runtime.test"),
   fetchWorkspaceSessions: vi.fn(),
   getWorkspaceRuntimeBlockReason: vi.fn(() => null),
   getWorkspaceSessionCacheSnapshot: vi.fn(),
   setWorkspaceSessions: vi.fn(),
+}));
+
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => ({ desktop: { runtime: mocks.localRuntime } }),
 }));
 
 vi.mock("@/hooks/access/anyharness/sessions/use-workspace-session-cache", () => ({
@@ -76,6 +81,7 @@ describe("useWorkspaceSessionLoader replacement filtering", () => {
     const sessions = await result.current.ensureWorkspaceSessions("workspace-1");
 
     expect(sessions).toEqual([{ id: "runtime-new", workspaceId: "workspace-1" }]);
+    expect(mocks.ensureRuntimeReadyForSessions).toHaveBeenCalledWith(mocks.localRuntime);
     const updater = mocks.setWorkspaceSessions.mock.calls[0]?.[1] as
       ((current: unknown) => unknown) | undefined;
     expect(updater?.(undefined)).toEqual([
