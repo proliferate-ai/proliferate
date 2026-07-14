@@ -126,6 +126,56 @@ impl SessionRuntime {
         })
     }
 
+    /// Domain-owned text-only prompt seam with a caller-supplied deterministic
+    /// `prompt_id`. Reuses the normal access check, live handle, actor command,
+    /// and `Started`/`Queued` result. No provenance, no wire `PromptInputBlock`.
+    pub(crate) async fn send_text_prompt_with_id(
+        &self,
+        session_id: &str,
+        text: String,
+        prompt_id: String,
+    ) -> Result<SendPromptOutcome, SendPromptError> {
+        self.access_gate
+            .assert_can_mutate_for_session(session_id)
+            .map_err(|error| SendPromptError::Internal(anyhow::anyhow!(error.to_string())))?;
+        if text.trim().is_empty() {
+            return Err(SendPromptError::EmptyPrompt);
+        }
+        let record = self
+            .get_session_or_not_found(session_id)
+            .map_err(map_lifecycle_error_to_prompt)?;
+        let handle = self
+            .ensure_live_session_handle(&record, None)
+            .await
+            .map_err(map_start_error_to_prompt)?;
+        let payload = crate::domains::sessions::prompt::PromptPayload::text(text);
+        let acceptance = handle
+            .send_prompt(payload, Some(prompt_id))
+            .await
+            .map_err(|error| match error {
+                LiveSessionCommandError::ActorUnavailable => {
+                    SendPromptError::Internal(anyhow::anyhow!("session actor channel closed"))
+                }
+                LiveSessionCommandError::ResponseDropped => {
+                    SendPromptError::Internal(anyhow::anyhow!("session actor dropped response"))
+                }
+                LiveSessionCommandError::Rejected(PromptAcceptError::EnqueueFailed(detail)) => {
+                    SendPromptError::Internal(anyhow::anyhow!("failed to enqueue prompt: {detail}"))
+                }
+            })?;
+        let session = self
+            .session_service
+            .get_session(session_id)
+            .map_err(SendPromptError::Internal)?
+            .unwrap_or(record);
+        Ok(match acceptance {
+            PromptAcceptance::Started { turn_id } => {
+                SendPromptOutcome::Running { session, turn_id }
+            }
+            PromptAcceptance::Queued { seq } => SendPromptOutcome::Queued { session, seq },
+        })
+    }
+
     pub(crate) async fn send_text_prompt_with_provenance(
         &self,
         session_id: &str,

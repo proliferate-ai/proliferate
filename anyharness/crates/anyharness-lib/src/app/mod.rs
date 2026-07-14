@@ -1,5 +1,6 @@
 mod product_mcp;
 mod sessions;
+mod workflows;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -8,6 +9,10 @@ use crate::adapters::git::WorkspaceFileSearchCache;
 use crate::adapters::hosting::PrStatusCache;
 use crate::adapters::processes::ProcessService;
 use crate::api::auth::AuthManager;
+use crate::domains::activity::feeds::FeedService;
+use crate::domains::activity::runtime::{ActivityRuntime, ActivitySessionHooks};
+use crate::domains::activity::service::ActivityService;
+use crate::domains::activity::store::ActivityStore;
 use crate::domains::agents::catalog::gateway_probe::GatewayProbeStore;
 use crate::domains::agents::catalog::gateway_resolver::GatewayModelResolver;
 use crate::domains::agents::catalog::service::AgentCatalogService;
@@ -15,10 +20,6 @@ use crate::domains::agents::catalog::sync::CatalogSyncService;
 use crate::domains::agents::installer::reconcile::execution::AgentReconcileService;
 use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::domains::agents::runtime::AgentRuntime;
-use crate::domains::activity::feeds::FeedService;
-use crate::domains::activity::runtime::{ActivityRuntime, ActivitySessionHooks};
-use crate::domains::activity::service::ActivityService;
-use crate::domains::activity::store::ActivityStore;
 use crate::domains::artifacts::protection::ArtifactProtectionService;
 use crate::domains::artifacts::runtime::ArtifactRuntime;
 use crate::domains::cowork::artifacts::CoworkArtifactRuntime;
@@ -64,6 +65,7 @@ use crate::domains::sessions::subagents::mcp::auth::SubagentMcpAuth;
 use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::sessions::subagents::store::SubagentStore;
 use crate::domains::terminals::store::TerminalStore;
+use crate::domains::workflows::runtime::WorkflowRunRuntime;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
 use crate::domains::workspaces::access_store::WorkspaceAccessStore;
 use crate::domains::workspaces::checkout_gate::CheckoutDeletionGate;
@@ -97,6 +99,8 @@ pub enum AppStateInitError {
     InvalidDataKey(String),
     #[error("Invalid product MCP endpoint registry: {0}")]
     InvalidProductMcpRegistry(#[source] anyhow::Error),
+    #[error("Failed to fence interrupted workflow runs during startup: {0}")]
+    WorkflowFencingFailed(#[source] anyhow::Error),
 }
 
 #[derive(Clone)]
@@ -145,6 +149,7 @@ pub struct AppState {
     pub plan_runtime: Arc<PlanRuntime>,
     pub goal_service: Arc<GoalService>,
     pub goal_runtime: Arc<GoalRuntime>,
+    pub workflow_run_runtime: Arc<WorkflowRunRuntime>,
     pub loop_service: Arc<LoopService>,
     pub loop_runtime: Arc<LoopRuntime>,
     pub activity_service: Arc<ActivityService>,
@@ -351,6 +356,10 @@ impl AppState {
             acp_manager.clone(),
         ));
         let activity_session_hooks = Arc::new(ActivitySessionHooks::new(activity_runtime.clone()));
+        // Workflow runs — phase 1 (before SessionRuntime::new): service,
+        // startup fencing, main-handle capture, completion extension.
+        let workflow_wiring = workflows::wire_workflows_before_sessions(&db)?;
+        let workflow_run_session_extension = workflow_wiring.session_extension.clone();
         let session_extensions: Vec<
             Arc<dyn crate::domains::sessions::extensions::SessionExtension>,
         > = vec![
@@ -361,6 +370,7 @@ impl AppState {
             goal_session_hooks,
             loop_session_hooks,
             activity_session_hooks,
+            workflow_run_session_extension,
         ];
         let session_runtime = Arc::new(SessionRuntime::new(
             session_service.clone(),
@@ -379,6 +389,12 @@ impl AppState {
             loop_service.clone(),
             activity_service.clone(),
         ));
+        // Workflow runs — phase 2 (after SessionRuntime): the async facade.
+        let workflow_run_runtime = workflows::wire_workflow_runtime(
+            workflow_wiring,
+            session_runtime.clone(),
+            workspace_operation_gate.clone(),
+        );
         let retire_preflight_checker = Arc::new(RetirePreflightChecker::new(
             workspace_runtime.clone(),
             workspace_access_gate.clone(),
@@ -520,6 +536,7 @@ impl AppState {
             plan_runtime,
             goal_service,
             goal_runtime,
+            workflow_run_runtime,
             loop_service,
             loop_runtime,
             activity_service,

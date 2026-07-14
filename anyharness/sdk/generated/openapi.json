@@ -3612,6 +3612,126 @@
         }
       }
     },
+    "/v1/workflow-runs/{run_id}": {
+      "get": {
+        "tags": [
+          "workflow-runs"
+        ],
+        "operationId": "get_workflow_run",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "description": "Canonical UUID for the workflow run",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Durable run and step status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "workflow-runs"
+        ],
+        "operationId": "put_workflow_run",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "description": "Canonical UUID for the workflow run",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutWorkflowRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Exact replay of an identical invocation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "New durable acceptance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid ID, definition, arguments, or rendered prompt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Referenced resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Same ID, different invocation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces": {
       "get": {
         "tags": [
@@ -13435,6 +13555,36 @@
           }
         }
       },
+      "PutWorkflowRunRequest": {
+        "type": "object",
+        "description": "`PUT /v1/workflow-runs/{runId}` request body. The `runId` lives in the path\nonly and never appears in the body.",
+        "required": [
+          "schemaVersion",
+          "workspaceId",
+          "definition"
+        ],
+        "properties": {
+          "arguments": {
+            "type": "object",
+            "description": "Concrete scalar argument values keyed by declared input name. Values are\nvalidated against declared input types after decode; the wire type is\nleft open so a type mismatch produces our own coded 400 rather than a\nserde shape error.",
+            "additionalProperties": {},
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "definition": {
+            "$ref": "#/components/schemas/WorkflowRunDefinition"
+          },
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "RawSessionConfigOption": {
         "type": "object",
         "description": "A raw ACP session configuration option as exposed by the active session.\n\nThis is the transport-fidelity layer. It should match the live ACP state as\nclosely as possible without applying product-specific interpretation.",
@@ -17589,6 +17739,290 @@
             ]
           }
         }
+      },
+      "WorkflowRun": {
+        "type": "object",
+        "description": "The durable run view.",
+        "required": [
+          "id",
+          "schemaVersion",
+          "definition",
+          "arguments",
+          "status",
+          "workspaceId",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "arguments": {
+            "type": "object",
+            "additionalProperties": {},
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/WorkflowRunDefinition"
+          },
+          "failureCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "finishedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sessionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "startedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkflowRunStatus"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkflowRunDefinition": {
+        "type": "object",
+        "description": "The frozen executable definition: inputs plus exactly one stage.",
+        "required": [
+          "stages"
+        ],
+        "properties": {
+          "inputs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowRunInput"
+            }
+          },
+          "stages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowRunStage"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "WorkflowRunHarnessConfig": {
+        "type": "object",
+        "description": "Harness selection for the stage's session.",
+        "required": [
+          "agentKind",
+          "modelId",
+          "modeId"
+        ],
+        "properties": {
+          "agentKind": {
+            "type": "string"
+          },
+          "modeId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Required key; `null` requests existing `SessionRuntime` mode behavior."
+          },
+          "modelId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Required key; `null` requests the target-default model. The\n`schema(required)` override keeps the generated OpenAPI/SDK in sync\nwith the wire rule (present key, nullable value) that `nullable_string`\nenforces at deserialization."
+          }
+        },
+        "additionalProperties": false
+      },
+      "WorkflowRunInput": {
+        "type": "object",
+        "description": "A declared scalar input.",
+        "required": [
+          "name",
+          "type",
+          "required"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "type": {
+            "$ref": "#/components/schemas/WorkflowRunInputType"
+          }
+        },
+        "additionalProperties": false
+      },
+      "WorkflowRunInputType": {
+        "type": "string",
+        "description": "The only permitted input types (scalars). Defaults, arrays, objects,\nchoices, and secret types are rejected by omission from this enum.",
+        "enum": [
+          "string",
+          "number",
+          "boolean"
+        ]
+      },
+      "WorkflowRunPromptStep": {
+        "type": "object",
+        "description": "The single `agent.prompt` step.",
+        "required": [
+          "kind",
+          "prompt"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "WorkflowRunResponse": {
+        "type": "object",
+        "description": "PUT/GET response envelope.",
+        "required": [
+          "run",
+          "steps"
+        ],
+        "properties": {
+          "run": {
+            "$ref": "#/components/schemas/WorkflowRun"
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowRunStep"
+            }
+          }
+        }
+      },
+      "WorkflowRunStage": {
+        "type": "object",
+        "description": "Exactly one stage: a harness configuration plus exactly one prompt step.",
+        "required": [
+          "harnessConfig",
+          "steps"
+        ],
+        "properties": {
+          "harnessConfig": {
+            "$ref": "#/components/schemas/WorkflowRunHarnessConfig"
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowRunPromptStep"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "WorkflowRunStatus": {
+        "type": "string",
+        "description": "Durable run status.",
+        "enum": [
+          "accepted",
+          "running",
+          "completed",
+          "failed"
+        ]
+      },
+      "WorkflowRunStep": {
+        "type": "object",
+        "description": "The durable materialized step view.",
+        "required": [
+          "stageIndex",
+          "stepIndex",
+          "status",
+          "promptId",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string"
+          },
+          "failureCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "finishedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "promptId": {
+            "type": "string"
+          },
+          "stageIndex": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "startedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkflowRunStepStatus"
+          },
+          "stepIndex": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "turnId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkflowRunStepStatus": {
+        "type": "string",
+        "description": "Durable step status.",
+        "enum": [
+          "pending",
+          "running",
+          "completed",
+          "failed"
+        ]
       },
       "Workspace": {
         "type": "object",

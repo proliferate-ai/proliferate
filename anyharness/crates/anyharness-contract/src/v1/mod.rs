@@ -24,6 +24,7 @@ pub mod reviews;
 pub mod session_config;
 pub mod sessions;
 pub mod terminals;
+pub mod workflow_runs;
 pub mod workspaces;
 pub mod worktrees;
 
@@ -53,5 +54,6 @@ pub use reviews::*;
 pub use session_config::*;
 pub use sessions::*;
 pub use terminals::*;
+pub use workflow_runs::*;
 pub use workspaces::*;
 pub use worktrees::*;

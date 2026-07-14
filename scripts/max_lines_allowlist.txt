@@ -9,8 +9,9 @@
 
 anyharness/crates/anyharness-contract/src/v1/events.rs 1092 existing AnyHarness contract oversized file
 anyharness/crates/anyharness-contract/src/v1/sessions.rs 767 existing AnyHarness contract oversized file
-anyharness/crates/anyharness-lib/src/api/openapi.rs 633 existing AnyHarness oversized file (+hosting schema registration, +agent-auth state response, +gateway catalog endpoints) + enriched gateway-models schema fields (model-table §1)
+anyharness/crates/anyharness-lib/src/api/openapi.rs 650 existing AnyHarness oversized file (+hosting schema registration, +agent-auth state response, +gateway catalog endpoints) + enriched gateway-models schema fields (model-table §1) + workflow-runs paths/schemas
 anyharness/crates/anyharness-lib/src/api/router_tests.rs 1364 existing AnyHarness oversized test file (+hosting PR-status route tests, +catalog version + enrichment tests)
+anyharness/crates/anyharness-lib/src/domains/workflows/service_tests.rs 923 workflow-runs merge-gated domain suite (validation matrix, rendering, replay/conflict, transitions, completion races, restart fencing)
 anyharness/crates/anyharness-lib/src/api/http/agent_gateway_catalog.rs 632 gateway model enrichment (own vs foreign match) + catalog version endpoint
 anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_resolver.rs 704 provider filtering + family normalizer (bedrock/date/version forms) with tests
 anyharness/crates/anyharness-lib/src/domains/agents/catalog/validation.rs 605 defaultAgentKind must name a declared agent (was already at 598)
@@ -49,8 +50,8 @@ server/tests/integration/test_billing_api.py 1918 existing server oversized inte
 server/tests/integration/test_stripe_webhooks.py 1456 existing server oversized integration test
 apps/packages/product-ui/src/chat/transcript/MarkdownBody.tsx 492 existing markdown transcript renderer pending split
 apps/packages/ui/src/icons/core.tsx 413 existing consolidated icon barrel pending split
-anyharness/crates/anyharness-lib/src/api/router.rs 603 AnyHarness router (+goals/loops/activity/feed routes, +gateway catalog version route)
-anyharness/crates/anyharness-lib/src/app/mod.rs 608 AnyHarness app wiring (+goal/loop/activity/feed services)
+anyharness/crates/anyharness-lib/src/api/router.rs 609 AnyHarness router (+goals/loops/activity/feed routes, +gateway catalog version route, +workflow-runs route)
+anyharness/crates/anyharness-lib/src/app/mod.rs 625 AnyHarness app wiring (+goal/loop/activity/feed services, +two-phase workflow-run wiring calls into app/workflows.rs)
 anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs 861 loops runtime — native write path + emulated Codex scheduler
 anyharness/crates/anyharness-lib/src/live/sessions/actor/startup.rs 686 session startup (+goal/loop capability parsing, roster reconcile-on-attach)
 server/tests/integration/test_organizations_api.py 624 added admin-only coverage for GET .../invitations

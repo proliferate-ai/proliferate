@@ -9,9 +9,20 @@ use crate::domains::sessions::mcp_bindings::summaries::{
     serialize_binding_summaries, SessionMcpSummaryError,
 };
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
+use crate::domains::workspaces::access_gate::WorkspaceAccessError;
 use crate::origin::OriginContext;
 
 use super::{CreateAndStartSessionError, SessionRuntime};
+
+/// Typed input for an internal (system-owned) durable session creation. Kept
+/// generic: nothing here is workflow-specific.
+pub(crate) struct InternalSessionCreateInput {
+    pub workspace_id: String,
+    pub agent_kind: String,
+    pub model_id: Option<String>,
+    pub mode_id: Option<String>,
+    pub origin: OriginContext,
+}
 
 impl SessionRuntime {
     #[tracing::instrument(skip_all, fields(workspace_id = %workspace_id, agent_kind = %agent_kind))]
@@ -111,6 +122,37 @@ impl SessionRuntime {
 
     pub async fn has_live_session(&self, session_id: &str) -> bool {
         self.acp_manager.get_handle(session_id).await.is_some()
+    }
+
+    /// Checked, crate-visible internal-session creation seam: assert workspace
+    /// access, then create (but do not start) an InternalOnly,
+    /// subagents-disabled durable session. Preserving `session_id` before
+    /// startup requires this create/start split; the combined
+    /// `create_and_start_session` path cannot checkpoint on startup failure.
+    pub(crate) fn create_persisted_internal_session(
+        &self,
+        input: InternalSessionCreateInput,
+    ) -> Result<SessionRecord, CreateAndStartSessionError> {
+        self.access_gate
+            .assert_can_mutate_for_workspace(&input.workspace_id)
+            .map_err(|error| match error {
+                WorkspaceAccessError::WorkspaceNotFound(_) => {
+                    CreateAndStartSessionError::WorkspaceNotFound
+                }
+                other => CreateAndStartSessionError::Invalid(other.to_string()),
+            })?;
+        self.create_durable_session(
+            &input.workspace_id,
+            &input.agent_kind,
+            input.model_id.as_deref(),
+            input.mode_id.as_deref(),
+            None,   // no system-prompt append
+            vec![], // no supplied MCP servers
+            None,   // no binding summaries
+            SessionMcpBindingPolicy::InternalOnly,
+            false, // subagents disabled
+            input.origin,
+        )
     }
 }
 

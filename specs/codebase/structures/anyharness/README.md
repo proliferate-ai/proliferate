@@ -142,6 +142,7 @@ domains/cowork
 domains/reviews
 domains/plans
 domains/mobility
+domains/workflows
 domains/sessions/subagents
 ```
 
@@ -319,6 +320,7 @@ which guide to read and where the code belongs.
 | Applied runtime config for a session: MCP/skill/plugin manifest, credential values, session context | `anyharness-lib/src/domains/runtime_config/**` | `domains/runtime_config/**` | [guides/domains.md](guides/domains.md), [../../primitives/mcp-skills.md](../../primitives/mcp-skills.md) |
 | Session link graph: subagent, cowork, review-agent, fork relationships | `anyharness-lib/src/domains/sessions/links/**` | `domains/sessions/links/**` | [guides/domains.md](guides/domains.md), [specs/session-engine.md](specs/session-engine.md) |
 | Reviews, plans, mobility, or repo-root product behavior | `domains/reviews/**`, `domains/plans/**`, `domains/mobility/**`, `domains/repo_roots/**` | owning `domains/<domain>/**` | [guides/domains.md](guides/domains.md) |
+| Durable one-prompt workflow execution in an existing workspace (run/step records, canonical-JSON replay, restart fencing) | `anyharness-lib/src/domains/workflows/**` | `domains/workflows/**` | [guides/domains.md](guides/domains.md), [../../features/workflow-runs.md](../../features/workflow-runs.md) |
 | Latency tracing, request measurement, diagnostic ids | `observability/latency.rs` and scattered measurement helpers | `observability/**` | [guides/observability.md](guides/observability.md) |
 | Splitting large files, moving modules, or creating new folders | any AnyHarness path | target layer from this table | [guides/repo-shape.md](guides/repo-shape.md) |
 
