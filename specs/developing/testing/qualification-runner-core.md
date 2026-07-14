@@ -22,6 +22,15 @@ This contract owns test selection, run identity, normalized results, the
 combined report, and diagnostic/strict exit behavior. It does not provision
 providers or worlds, build candidates, or add scenarios.
 
+## Successor boundary
+
+[`exact-test-matrix.md`](exact-test-matrix.md) preserves this contract's run
+identity, terminal-state normalization, preflight, diagnostic/strict policy,
+and report-derived exits while replacing the selected unit with exact child
+test cells and advancing the combined report to V3. This document records the
+frozen foundation as implemented; the successor document owns current
+selected-cell and report shape.
+
 ## Vocabulary
 
 A **selected test** is one current `ScenarioDefinition` expanded across one of

@@ -5,7 +5,12 @@
   `draft-7-candidate-only`; founder-authorized 2026-07-14)
 - Repository: `proliferate-ai/proliferate`
 - Base SHA: `7850bcffd84263aca0d65a7fcd46743b8145adbe`
-- Pipeline stage: **specification frozen; implementation in progress**
+- Pipeline stage: **implemented and merged in PR #1159**
+
+[`exact-test-matrix.md`](exact-test-matrix.md) preserves the candidate evidence
+introduced by report V2 while advancing the runner's current aggregate to
+report V3. This document remains authoritative for candidate build-map,
+materialization, and AnyHarness handoff behavior.
 
 ## Outcome
 

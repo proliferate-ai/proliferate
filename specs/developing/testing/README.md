@@ -5,11 +5,14 @@ live, what gates merges vs releases, and how a change decides which tests it
 must add. [`core-release-validation.md`](core-release-validation.md) owns the
 complete target guarantee and qualification semantics;
 [`qualification-runner-core.md`](qualification-runner-core.md) owns the frozen
-test runner and results-reporting contract: selection, run identity, one final
-result per selected test, the combined report, and diagnostic/strict behavior;
+test-runner foundation: run identity, normalized terminal states, and
+diagnostic/strict behavior;
 [`candidate-build-handoff.md`](candidate-build-handoff.md) owns the frozen
 candidate build map (`CandidateBuildMapV1`), its runner validation, and the
-report V2 candidate-artifact evidence;
+bounded candidate-artifact evidence first introduced in report V2;
+[`exact-test-matrix.md`](exact-test-matrix.md) owns the frozen exact-cell
+planning and execution contract, one explicit result per selected cell, and
+the current report V3 aggregate;
 [`release-worlds-and-fixtures.md`](release-worlds-and-fixtures.md),
 [`tier-3-scenario-contract.md`](tier-3-scenario-contract.md), and
 [`tier-4-scenario-contract.md`](tier-4-scenario-contract.md) own the live world
