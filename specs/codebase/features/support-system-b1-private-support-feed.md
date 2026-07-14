@@ -237,7 +237,8 @@ At minimum:
 
 ```bash
 cd server
-DEBUG=true uv run pytest -q tests/integration/test_support_feed.py
+DEBUG=true uv run pytest -q tests/integration/test_support_feed.py \
+  tests/integration/test_support_feed_deploy_render.py
 ```
 
 > [!note] Bounded amendment (2026-07-14, implementation evidence)
@@ -247,6 +248,14 @@ DEBUG=true uv run pytest -q tests/integration/test_support_feed.py
 > the edited `specs/developing/reference/env-vars.yaml` entries and workflow
 > YAML directly. This amendment removes only the unrunnable command; the
 > approved outcome is unchanged.
+
+> [!note] Bounded amendment (2026-07-14, implementation evidence)
+> The repo-shape 600-line source cap (`scripts/check_max_lines.py`, enforced by
+> the CI `Repo shape checks` job; evidence: CI run 29365666345 on the reviewed
+> revision) forces the task-render contract tests out of
+> `tests/integration/test_support_feed.py` into the sibling
+> `tests/integration/test_support_feed_deploy_render.py`. The tests were
+> relocated byte-identically; the approved outcome is unchanged.
 
 Focused tests prove:
 
