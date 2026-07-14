@@ -230,3 +230,19 @@ test("deleteActorSubjects deletes key + user + team and is idempotent on 404", a
   assert.equal(result.litellmSubjectsDeleted, true);
   assert.deepEqual(deleted.sort(), ["/key/delete", "/team/delete", "/user/delete"]);
 });
+
+test("deleteActorSubjects fails closed when the team_id is absent", async () => {
+  const deleted: string[] = [];
+  const fetch: FetchLike = async (url) => {
+    deleted.push(url.replace(CONFIG.adminBaseUrl, ""));
+    return response(200, {});
+  };
+  const result = await new QualificationLiteLlmController(CONFIG, { fetch }).deleteActorSubjects({
+    ...actor(),
+    teamId: "",
+  });
+  // No /team/delete is issued because we have no identifier, and the missing
+  // team must not be reported as a successful deletion (would falsely stay green).
+  assert.equal(result.litellmSubjectsDeleted, false);
+  assert.ok(!deleted.includes("/team/delete"));
+});

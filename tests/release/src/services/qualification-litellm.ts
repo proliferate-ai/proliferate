@@ -468,9 +468,13 @@ export class QualificationLiteLlmController {
   async deleteActorSubjects(actor: ActorKeyIdentity): Promise<ActorSubjectsDeletion> {
     const virtualKeyDeleted = await this.idempotentDelete("/key/delete", { keys: [actor.tokenId] });
     const userDeleted = await this.idempotentDelete("/user/delete", { user_ids: [actor.litellmUserId] });
+    // Fail closed: an absent team_id means the run-created team is unaccounted
+    // for, not proven deleted. The frozen cleanup contract requires the team to
+    // be deleted, so a missing identifier must fail green-ness rather than be
+    // silently reported as a successful deletion.
     const teamDeleted = actor.teamId
       ? await this.idempotentDelete("/team/delete", { team_ids: [actor.teamId] })
-      : true;
+      : false;
     return {
       virtualKeyDeleted,
       litellmSubjectsDeleted: userDeleted && teamDeleted,
