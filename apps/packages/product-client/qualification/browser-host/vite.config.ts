@@ -3,7 +3,7 @@ import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
 
 // Minimal PRODUCTION Vite build for the browser build fixture. It lives inside
-// the product-client package and imports the build canary through the package's
+// the product-client package and imports the real ProductClient entry through the package's
 // public export map, proving external host resolution end to end. `manifest`
 // is enabled so the verification script can assert the lazy authenticated split
 // and fetch every emitted asset URL.

@@ -2,22 +2,22 @@ import { createProliferateClient } from "@proliferate/cloud-sdk";
 import { CloudClientProvider } from "@proliferate/cloud-sdk-react";
 import type { ProductHost } from "@proliferate/product-client/host/product-host";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
-import { ProductClientBuildCanary } from "@proliferate/product-client/qualification/ProductClientBuildCanary";
+import { ProductClient } from "@proliferate/product-client/ProductClient";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Routes } from "react-router-dom";
 
 // QUALIFICATION-ONLY minimal browser host. It proves the host/package contract
 // only — it is NOT a second Web product and does not implement product pages or
-// auth policy. It builds through a production Vite build to prove that a
-// browser host with NO native bridge (`desktop: null`, `surface: "web"`) can
-// compile and ship the ProductClient build canary, its lazy authenticated
+// auth policy of its own. It builds through a production Vite build to prove
+// that a browser host with NO native bridge (`desktop: null`, `surface: "web"`)
+// can compile and ship the real ProductClient entry, its lazy authenticated
 // split, and every representative resource shape (generated JSON, `?raw` text,
 // image, audio, svg, font, and shared product CSS) via the package export.
 //
-// The canary is imported through the package's public export map exactly as an
-// external consumer would; the compiled canary resolves its authenticated root
+// ProductClient is imported through the package's public export map exactly as
+// an external consumer would; the compiled entry resolves its authenticated root
 // and assets through the package-private `#product/*` -> dist mechanism.
 
 // A cheap real Cloud client. `createProliferateClient` builds an openapi-fetch
@@ -67,26 +67,16 @@ const qualificationHost: ProductHost = {
   desktop: null,
 };
 
-// Plain React Router `Routes` — the browser qualification host passes plain
-// Routes as the `RoutesComponent`. ProductClient imports no Sentry.
-function QualificationRoutes() {
-  return (
-    <Routes>
-      <Route
-        path="*"
-        element={<div data-testid="browser-qualification-route" />}
-      />
-    </Routes>
-  );
-}
-
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <StrictMode>
     <BrowserRouter>
       <QueryClientProvider client={queryClient}>
         <CloudClientProvider client={cloudClient}>
           <ProductHostProvider host={qualificationHost}>
-            <ProductClientBuildCanary RoutesComponent={QualificationRoutes} />
+            {/* Plain React Router `Routes` — the browser qualification host
+                passes plain Routes as the routes container. ProductClient
+                imports no Sentry. */}
+            <ProductClient RoutesComponent={Routes} />
           </ProductHostProvider>
         </CloudClientProvider>
       </QueryClientProvider>

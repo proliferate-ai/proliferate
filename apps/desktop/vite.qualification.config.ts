@@ -2,7 +2,7 @@ import react from "@vitejs/plugin-react";
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
 
-// Dedicated, isolated Vite config for the ProductClient DESKTOP BUILD CANARY.
+// Dedicated, isolated Vite config for the real ProductClient DESKTOP BUILD FIXTURE.
 // It is intentionally separate from `vite.config.ts` so the normal desktop
 // build (`pnpm --filter proliferate build`) is untouched: different root,
 // different index.html, different output directory, and `manifest: true`
@@ -19,7 +19,7 @@ const outDir = fileURLToPath(
 export default defineConfig({
   root,
   plugins: [react()],
-  // The canary imports shared product CSS as prebuilt plain CSS from
+  // ProductClient imports shared product CSS as prebuilt plain CSS from
   // `@proliferate/design/product.css` (no Tailwind directives), so the Tailwind
   // plugin the real desktop app uses is not required to qualify the build.
   clearScreen: false,
