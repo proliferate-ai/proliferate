@@ -1,17 +1,17 @@
 import type {
   AgentModelGroup,
   AgentModelInfo,
-} from "@/lib/domain/agents/model-options";
+} from "#product/lib/domain/agents/model-options";
 import type {
   ModelSelectorProps,
   ModelSelectorSelection,
-} from "@/lib/domain/chat/models/model-selector-types";
-import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
-import type { ConfiguredSessionControlValue } from "@/lib/domain/chat/session-controls/presentation";
+} from "#product/lib/domain/chat/models/model-selector-types";
+import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
+import type { ConfiguredSessionControlValue } from "#product/lib/domain/chat/session-controls/presentation";
 import type {
   HomeNextDestination,
   ModelAvailabilityState,
-} from "@/lib/domain/home/home-next-launch";
+} from "#product/lib/domain/home/home-next-launch";
 
 /**
  * Adapters that let the home screen drive the SAME composer controls the chat

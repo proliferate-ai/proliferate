@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { fetchServerCapabilities } from "@/lib/access/cloud/server-capabilities";
-import type { ServerCapabilityContract } from "@/lib/domain/capabilities/server-capability-contract";
-import { serverCapabilitiesKey } from "./query-keys";
+import { fetchServerCapabilities } from "#product/lib/access/cloud/server-capabilities";
+import type { ServerCapabilityContract } from "#product/lib/domain/capabilities/server-capability-contract";
+import { serverCapabilitiesKey } from "#product/hooks/access/cloud/server-capabilities/query-keys";
 
 /**
  * The connected control plane's self-host capability contract (`GET /meta`).

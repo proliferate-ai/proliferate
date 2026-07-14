@@ -4,7 +4,7 @@ import {
   renderTranscriptCodeBlock,
   renderTranscriptInlineCode,
   renderTranscriptLink,
-} from "@/components/workspace/chat/transcript/transcript-markdown";
+} from "#product/components/workspace/chat/transcript/transcript-markdown";
 import type { PromptDisplayPlanPart } from "@proliferate/product-domain/chats/composer/prompt-display-parts";
 
 interface PlanReferencePreviewDialogProps {

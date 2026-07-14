@@ -2,26 +2,26 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { FileViewerContent } from "./FileViewerContent";
-import { LoadingState } from "@/components/feedback/LoadingIllustration";
+import { FileViewerContent } from "#product/components/workspace/files/FileViewerContent";
+import { LoadingState } from "#product/components/feedback/LoadingIllustration";
 import { useReadWorkspaceFileQuery } from "@anyharness/sdk-react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { CenterMessage } from "@/components/workspace/files/viewer/CenterMessage";
-import { FileViewerFrame } from "@/components/workspace/files/viewer/FileViewerFrame";
-import { FileTreeOverlay } from "@/components/workspace/files/tree/FileTreeOverlay";
-import { useFileReferenceActions } from "@/hooks/workspaces/workflows/files/use-file-reference-actions";
-import { useWorkspaceFileContext } from "@/hooks/workspaces/derived/files/use-workspace-file-context";
-import { useWorkspaceFileTargetActions } from "@/hooks/workspaces/workflows/files/use-workspace-file-target-actions";
-import { canPreviewAsRichFile } from "@/lib/domain/files/document-preview";
-import type { FileDiffTarget } from "@/lib/domain/workspaces/viewer/file-diff-options";
+import { CenterMessage } from "#product/components/workspace/files/viewer/CenterMessage";
+import { FileViewerFrame } from "#product/components/workspace/files/viewer/FileViewerFrame";
+import { FileTreeOverlay } from "#product/components/workspace/files/tree/FileTreeOverlay";
+import { useFileReferenceActions } from "#product/hooks/workspaces/workflows/files/use-file-reference-actions";
+import { useWorkspaceFileContext } from "#product/hooks/workspaces/derived/files/use-workspace-file-context";
+import { useWorkspaceFileTargetActions } from "#product/hooks/workspaces/workflows/files/use-workspace-file-target-actions";
+import { canPreviewAsRichFile } from "#product/lib/domain/files/document-preview";
+import type { FileDiffTarget } from "#product/lib/domain/workspaces/viewer/file-diff-options";
 import {
   defaultFileViewerMode,
   normalizeFileViewerMode,
   type ViewerTargetKey,
-} from "@/lib/domain/workspaces/viewer/viewer-target";
-import { useContentSearchStore } from "@/stores/search/content-search-store";
-import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
-import { useGitChangedPaths } from "@/hooks/workspaces/derived/files/use-git-changed-paths";
+} from "#product/lib/domain/workspaces/viewer/viewer-target";
+import { useContentSearchStore } from "#product/stores/search/content-search-store";
+import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
+import { useGitChangedPaths } from "#product/hooks/workspaces/derived/files/use-git-changed-paths";
 
 interface FileEditorViewProps {
   filePath: string;

@@ -1,9 +1,9 @@
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
-import type { WorkspaceSessionCacheSnapshot } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
+import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
+import type { WorkspaceSessionCacheSnapshot } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import {
   getMaterializedSessionId,
   getWorkspaceSessionRecords,
-} from "@/stores/sessions/session-records";
+} from "#product/stores/sessions/session-records";
 
 /**
  * The user-set display-name override, ignoring the computed branch/repo

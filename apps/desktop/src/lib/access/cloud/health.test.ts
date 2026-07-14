@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   checkControlPlaneReachable,
   getLastKnownControlPlaneReachable,
-} from "./health";
+} from "#product/lib/access/cloud/health";
 
 describe("control plane health", () => {
   afterEach(() => {

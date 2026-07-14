@@ -2,15 +2,15 @@ import { useCallback, useMemo } from "react";
 import {
   buildLiveSessionControlDescriptors,
   type LiveSessionControlDescriptor,
-} from "@/lib/domain/chat/session-controls/session-controls";
+} from "#product/lib/domain/chat/session-controls/session-controls";
 import {
   buildComposerSessionControlGroups,
   filterComposerSessionControlsForSurface,
-} from "@/lib/domain/chat/session-controls/composer-control-groups";
-import { useSessionConfigActions } from "@/hooks/sessions/workflows/use-session-config-actions";
-import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/derived/use-workspace-surface-lookup";
-import { useToastStore } from "@/stores/toast/toast-store";
-import { useActiveSessionConfigState } from "@/hooks/chat/derived/use-active-session-config-state";
+} from "#product/lib/domain/chat/session-controls/composer-control-groups";
+import { useSessionConfigActions } from "#product/hooks/sessions/workflows/use-session-config-actions";
+import { useWorkspaceSurfaceLookup } from "#product/hooks/workspaces/derived/use-workspace-surface-lookup";
+import { useToastStore } from "#product/stores/toast/toast-store";
+import { useActiveSessionConfigState } from "#product/hooks/chat/derived/use-active-session-config-state";
 
 const EMPTY_CONTROLS: LiveSessionControlDescriptor[] = [];
 

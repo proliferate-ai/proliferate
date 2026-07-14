@@ -1,7 +1,7 @@
 import {
   isSameDropPlacement,
   type DropPlacement,
-} from "./drag";
+} from "#product/lib/domain/workspaces/tabs/drag";
 
 export interface TabDragController {
   start: (args: { rowId: string; pointerId: number; pointerX: number }) => void;

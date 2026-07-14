@@ -5,14 +5,14 @@ import {
   type RightPanelHeaderEntryKey,
   type RightPanelTool,
   type RightPanelWorkspaceState,
-} from "@/lib/domain/workspaces/shell/right-panel-model";
+} from "#product/lib/domain/workspaces/shell/right-panel-model";
 import {
   type ViewerTargetKey,
-} from "@/lib/domain/workspaces/viewer/viewer-target";
+} from "#product/lib/domain/workspaces/viewer/viewer-target";
 import {
   reconcileRightPanelWorkspaceState,
   resolveNearestRightPanelFallbackEntryKey,
-} from "@/lib/domain/workspaces/shell/right-panel-state-normalization";
+} from "#product/lib/domain/workspaces/shell/right-panel-state-normalization";
 
 export function removeTerminalFromRightPanelState(
   input: Partial<RightPanelWorkspaceState> | undefined,

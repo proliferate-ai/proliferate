@@ -3,7 +3,7 @@ import type { IntegrationHealthItem } from "@proliferate/cloud-sdk/client/integr
 import {
   integrationReauthChipLabel,
   integrationsNeedingReauth,
-} from "./integration-reauth";
+} from "#product/lib/domain/cloud/integration-reauth";
 
 function makeHealthItem(
   overrides: Partial<IntegrationHealthItem> = {},

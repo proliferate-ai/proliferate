@@ -7,16 +7,16 @@ import {
   EnvironmentSearchSelect,
   type EnvironmentSearchSelectOption,
 } from "@proliferate/ui/primitives/EnvironmentSearchSelect";
-import { useCloudRepoEnvironmentEditor } from "@/hooks/settings/workflows/use-cloud-repo-environment-editor";
-import { useRepositorySettings } from "@/hooks/settings/workflows/use-repository-settings";
-import { type SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
-import { RepoCloudGate } from "./RepoCloudGate";
+import { useCloudRepoEnvironmentEditor } from "#product/hooks/settings/workflows/use-cloud-repo-environment-editor";
+import { useRepositorySettings } from "#product/hooks/settings/workflows/use-repository-settings";
+import { type SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
+import { RepoCloudGate } from "#product/components/settings/panes/repo/RepoCloudGate";
 import {
   LocalNoCheckoutState,
   RepoScopeEmptyState,
   type RepoScopePaneProps,
   type RepoScopeSelectionCallbacks,
-} from "./RepoScopeStates";
+} from "#product/components/settings/panes/repo/RepoScopeStates";
 
 /**
  * Repo → Configure: defaults applied when agents create workspaces for this

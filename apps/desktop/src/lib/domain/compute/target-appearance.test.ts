@@ -5,7 +5,7 @@ import {
   defaultComputeTargetIconId,
   normalizeComputeTargetAppearancePreference,
   resolveComputeTargetAppearance,
-} from "./target-appearance";
+} from "#product/lib/domain/compute/target-appearance";
 
 describe("compute target appearance", () => {
   it("chooses stable default colors by target id", () => {

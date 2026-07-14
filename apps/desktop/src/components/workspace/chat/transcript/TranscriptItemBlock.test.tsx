@@ -7,8 +7,8 @@ import {
   thoughtItem,
   toolItem,
 } from "@proliferate/product-domain/chats/transcript/transcript-presentation-test-fixtures";
-import { ProposedPlanToolCallIdsProvider } from "./ProposedPlanToolCallIdsContext";
-import { TranscriptItemBlock } from "./TranscriptItemBlock";
+import { ProposedPlanToolCallIdsProvider } from "#product/components/workspace/chat/transcript/ProposedPlanToolCallIdsContext";
+import { TranscriptItemBlock } from "#product/components/workspace/chat/transcript/TranscriptItemBlock";
 
 vi.mock("@/hooks/cowork/workflows/use-open-cowork-coding-session", () => ({
   useOpenCoworkCodingSession: () => vi.fn(),

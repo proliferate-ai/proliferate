@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { createMemoryProductStorage } from "@/test/product-storage-test-utils";
+import { createMemoryProductStorage } from "#product/test/product-storage-test-utils";
 import {
   hydrateSessionReplacementTombstones,
   resetSessionReplacementTombstonesStorageForTests,
   setSessionReplacementTombstonesStorageContext,
   writeSessionReplacementTombstones,
-} from "@/lib/access/persistence/session-replacement-tombstones-storage";
+} from "#product/lib/access/persistence/session-replacement-tombstones-storage";
 
 const KEY = "proliferate.session-replacement-tombstones.v1";
 

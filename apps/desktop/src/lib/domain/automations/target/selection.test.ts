@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
+import type { SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
 import type {
   AutomationTargetCloudWorkspaceRecord,
   AutomationTargetRepoConfigRecord,
-} from "./records";
+} from "#product/lib/domain/automations/target/records";
 import {
   buildAutomationTargetState,
   type AutomationTargetSelection,
-} from "./selection";
+} from "#product/lib/domain/automations/target/selection";
 
 function repoConfig(
   overrides: Partial<AutomationTargetRepoConfigRecord> & {

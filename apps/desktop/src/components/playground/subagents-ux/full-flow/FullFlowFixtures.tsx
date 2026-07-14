@@ -7,8 +7,8 @@
 import type {
   PrototypeAgentStatus,
   PrototypeGit,
-} from "../popover-pane/PopoverPaneFixtures";
-import type { SubagentReceiptModel } from "../identity-receipts/SubagentCreationReceipt";
+} from "#product/components/playground/subagents-ux/popover-pane/PopoverPaneFixtures";
+import type { SubagentReceiptModel } from "#product/components/playground/subagents-ux/identity-receipts/SubagentCreationReceipt";
 
 export interface FullFlowMessage {
   speaker: "user" | "agent" | "tool";

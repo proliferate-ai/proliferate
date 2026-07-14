@@ -5,12 +5,12 @@ import {
 } from "@proliferate/product-surfaces/settings/BillingSettingsSurface";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 
-import { PROLIFERATE_PRICING_URL } from "@/config/capabilities";
-import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
-import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
-import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
-import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
-import { buildSettingsHref } from "@/lib/domain/settings/navigation";
+import { PROLIFERATE_PRICING_URL } from "#product/config/capabilities";
+import { useIsAdmin } from "#product/hooks/access/cloud/organizations/use-is-admin";
+import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
+import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
+import { buildSettingsHref } from "#product/lib/domain/settings/navigation";
 
 export function BillingPane() {
   const navigate = useNavigate();

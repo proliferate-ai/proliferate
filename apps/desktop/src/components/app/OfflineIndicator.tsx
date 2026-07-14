@@ -1,5 +1,5 @@
 import { WifiOff } from "lucide-react";
-import { useConnectivityStore } from "@/stores/infra/connectivity-store";
+import { useConnectivityStore } from "#product/stores/infra/connectivity-store";
 
 /**
  * Persistent banner when the app is offline. Auto-hides on reconnect.

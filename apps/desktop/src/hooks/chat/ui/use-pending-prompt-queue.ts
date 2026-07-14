@@ -3,14 +3,14 @@ import {
   derivePendingPromptQueueRow,
   type PendingPromptQueueRow,
 } from "@proliferate/product-domain/chats/pending-prompts/pending-prompt-queue";
-import { useActiveSessionId } from "@/hooks/chat/derived/use-active-session-identity";
-import { usePromptOutboxActions } from "@/hooks/chat/workflows/use-prompt-outbox-actions";
-import { useQueuedPromptEditReader } from "@/hooks/chat/ui/use-queued-prompt-edit";
-import { useDeletePendingPrompt } from "@/hooks/sessions/workflows/use-delete-pending-prompt";
-import { useReorderPendingPrompts } from "@/hooks/sessions/workflows/use-reorder-pending-prompts";
-import { useSteerPendingPrompt } from "@/hooks/sessions/workflows/use-steer-pending-prompt";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useToastStore } from "@/stores/toast/toast-store";
+import { useActiveSessionId } from "#product/hooks/chat/derived/use-active-session-identity";
+import { usePromptOutboxActions } from "#product/hooks/chat/workflows/use-prompt-outbox-actions";
+import { useQueuedPromptEditReader } from "#product/hooks/chat/ui/use-queued-prompt-edit";
+import { useDeletePendingPrompt } from "#product/hooks/sessions/workflows/use-delete-pending-prompt";
+import { useReorderPendingPrompts } from "#product/hooks/sessions/workflows/use-reorder-pending-prompts";
+import { useSteerPendingPrompt } from "#product/hooks/sessions/workflows/use-steer-pending-prompt";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 export interface PendingPromptQueueState {
   rows: PendingPromptQueueRow[];

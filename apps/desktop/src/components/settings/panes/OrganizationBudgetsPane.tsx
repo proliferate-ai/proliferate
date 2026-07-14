@@ -15,10 +15,10 @@ import {
 } from "@proliferate/ui/primitives/SegmentedControl";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
-import { SkeletonBlock, shimmerDelay } from "@/components/feedback/Skeleton";
-import { useOrganizationMembers } from "@/hooks/access/cloud/organizations/use-organization-members";
-import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
-import type { OrganizationMemberRecord } from "@/lib/domain/organizations/organization-records";
+import { SkeletonBlock, shimmerDelay } from "#product/components/feedback/Skeleton";
+import { useOrganizationMembers } from "#product/hooks/access/cloud/organizations/use-organization-members";
+import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
+import type { OrganizationMemberRecord } from "#product/lib/domain/organizations/organization-records";
 import {
   USAGE_GRANULARITY_OPTIONS,
   USAGE_KIND_ITEMS,
@@ -36,8 +36,8 @@ import {
   type UsageChartPoint,
   type UsageGranularity,
   type UsageRangeDays,
-} from "@/lib/domain/settings/organization-limits-presentation";
-import { LimitsEditor } from "./OrganizationLimitsEditor";
+} from "#product/lib/domain/settings/organization-limits-presentation";
+import { LimitsEditor } from "#product/components/settings/panes/OrganizationLimitsEditor";
 
 const EMPTY_MEMBERS: OrganizationMemberRecord[] = [];
 

@@ -1,8 +1,8 @@
 import { useEffect } from "react";
-import { useSupportModalStore } from "@/stores/support/support-modal-store";
-import { useSupportAvailability } from "@/hooks/support/facade/use-support-availability";
-import { SendFeedbackModal } from "./SendFeedbackModal";
-import { SubmitPromptModal } from "./SubmitPromptModal";
+import { useSupportModalStore } from "#product/stores/support/support-modal-store";
+import { useSupportAvailability } from "#product/hooks/support/facade/use-support-availability";
+import { SendFeedbackModal } from "#product/components/support/SendFeedbackModal";
+import { SubmitPromptModal } from "#product/components/support/SubmitPromptModal";
 
 export function SupportModalHost() {
   const open = useSupportModalStore((state) => state.open);

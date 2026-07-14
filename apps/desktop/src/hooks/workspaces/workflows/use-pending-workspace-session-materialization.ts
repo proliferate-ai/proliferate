@@ -2,16 +2,16 @@ import { useCallback } from "react";
 import {
   buildPendingWorkspaceUiKey,
   type PendingWorkspaceEntry,
-} from "@/lib/domain/workspaces/creation/pending-entry";
-import { useSessionCreationActions } from "@/hooks/sessions/workflows/use-session-creation-actions";
+} from "#product/lib/domain/workspaces/creation/pending-entry";
+import { useSessionCreationActions } from "#product/hooks/sessions/workflows/use-session-creation-actions";
 import {
   getWorkspaceSessionRecords,
   patchSessionRecord,
-} from "@/stores/sessions/session-records";
-import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
+} from "#product/stores/sessions/session-records";
+import type { SessionRuntimeRecord } from "#product/stores/sessions/session-types";
 import type {
   CreateEmptySessionWithResolvedConfigOptions,
-} from "@/hooks/sessions/workflows/session-creation-types";
+} from "#product/hooks/sessions/workflows/session-creation-types";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 
 interface PendingWorkspaceSessionMaterializationOptions {

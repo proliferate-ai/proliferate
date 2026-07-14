@@ -2,8 +2,8 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { HomeTargetPicker } from "./HomeTargetPicker";
-import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
+import { HomeTargetPicker } from "#product/components/home/screen/HomeTargetPicker";
+import type { SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
 
 const keystoneRepository: SettingsRepositoryEntry = {
   sourceRoot: "/Users/pablo/keystone",

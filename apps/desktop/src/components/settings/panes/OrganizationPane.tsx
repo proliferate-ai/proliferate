@@ -11,25 +11,25 @@ import {
   useGitHubAppInstallationStatus,
   useStartGitHubAppInstallation,
 } from "@proliferate/cloud-sdk-react";
-import { UpgradeGateDialog } from "@/components/billing/UpgradeGateDialog";
-import { OrganizationBillingLinkSection } from "@/components/settings/panes/organization/OrganizationBillingLinkSection";
-import { OrganizationSettingsCard } from "@/components/settings/panes/organization/OrganizationSettingsCard";
+import { UpgradeGateDialog } from "#product/components/billing/UpgradeGateDialog";
+import { OrganizationBillingLinkSection } from "#product/components/settings/panes/organization/OrganizationBillingLinkSection";
+import { OrganizationSettingsCard } from "#product/components/settings/panes/organization/OrganizationSettingsCard";
 import {
   GitHubAppInstallationSection,
   isOrganizationAdminRole,
-} from "@/components/settings/panes/organization/GitHubAppInstallationSection";
+} from "#product/components/settings/panes/organization/GitHubAppInstallationSection";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
-import { useOrganizationActions } from "@/hooks/access/cloud/organizations/use-organization-actions";
+import { useOrganizationActions } from "#product/hooks/access/cloud/organizations/use-organization-actions";
 import {
   useCurrentTeamCheckout,
   useTeamCheckoutActions,
-} from "@/hooks/access/cloud/billing/use-team-checkout";
-import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
-import { TEAM_UPGRADE_GATE_COPY } from "@/copy/billing/upgrade-gate-copy";
-import { organizationLogoImageValidationError } from "@/lib/domain/organizations/logo-image";
-import { useProductAuthStatus } from "@/hooks/auth/facade/use-product-auth";
+} from "#product/hooks/access/cloud/billing/use-team-checkout";
+import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
+import { TEAM_UPGRADE_GATE_COPY } from "#product/copy/billing/upgrade-gate-copy";
+import { organizationLogoImageValidationError } from "#product/lib/domain/organizations/logo-image";
+import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth";
 
 function readLogoImage(file: File): Promise<string> {
   return new Promise((resolve, reject) => {

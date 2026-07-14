@@ -3,14 +3,14 @@ import { CloudSecretsSettingsSurface } from "@proliferate/product-surfaces/setti
 import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { useCloudRepoEnvironmentEditor } from "@/hooks/settings/workflows/use-cloud-repo-environment-editor";
-import { type RepoSettingsContext } from "@/lib/domain/settings/repo-scope-selection";
-import { type SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
-import { RepoCloudGate } from "./RepoCloudGate";
+import { useCloudRepoEnvironmentEditor } from "#product/hooks/settings/workflows/use-cloud-repo-environment-editor";
+import { type RepoSettingsContext } from "#product/lib/domain/settings/repo-scope-selection";
+import { type SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
+import { RepoCloudGate } from "#product/components/settings/panes/repo/RepoCloudGate";
 import {
   RepoScopeEmptyState,
   type RepoScopePaneProps,
-} from "./RepoScopeStates";
+} from "#product/components/settings/panes/repo/RepoScopeStates";
 
 /**
  * Repo → Environment: variables and files synced into cloud workspaces for

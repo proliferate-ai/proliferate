@@ -2,13 +2,13 @@
 
 import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
-import type { HeaderStripRow } from "@/lib/domain/workspaces/tabs/group-rows";
-import type { DisplayManualChatGroup } from "@/lib/domain/workspaces/tabs/manual-groups";
-import type { ShellChatTab } from "@/lib/domain/workspaces/tabs/shell-rows";
-import { WORKSPACE_UI_DEFAULTS } from "@/lib/domain/preferences/workspace-ui/model";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useWorkspaceShellTabsState } from "@/hooks/workspaces/ui/tabs/use-workspace-shell-tabs-state";
+import type { HeaderStripRow } from "#product/lib/domain/workspaces/tabs/group-rows";
+import type { DisplayManualChatGroup } from "#product/lib/domain/workspaces/tabs/manual-groups";
+import type { ShellChatTab } from "#product/lib/domain/workspaces/tabs/shell-rows";
+import { WORKSPACE_UI_DEFAULTS } from "#product/lib/domain/preferences/workspace-ui/model";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useWorkspaceShellTabsState } from "#product/hooks/workspaces/ui/tabs/use-workspace-shell-tabs-state";
 
 const EMPTY_MANUAL_GROUPS: readonly DisplayManualChatGroup[] = [];
 const EMPTY_CHILDREN = new Map<string, readonly string[]>();

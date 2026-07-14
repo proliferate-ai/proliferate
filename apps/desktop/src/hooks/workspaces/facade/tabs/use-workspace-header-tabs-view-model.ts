@@ -1,45 +1,45 @@
 import { useMemo } from "react";
 import { useWorkspaceSessionsQuery } from "@anyharness/sdk-react";
-import { useWorkspaceHeaderSubagentHierarchy } from "@/hooks/workspaces/cache/tabs/use-workspace-header-subagent-hierarchy";
+import { useWorkspaceHeaderSubagentHierarchy } from "#product/hooks/workspaces/cache/tabs/use-workspace-header-subagent-hierarchy";
 import {
   buildKnownHeaderSessions,
   type KnownHeaderSession,
-} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-model-helpers";
+} from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-model-helpers";
 import {
   buildHeaderDisplayShellRows,
   buildHeaderChatTabs,
   buildHeaderClosedChatTabs,
   resolveHighlightedChatSessionId,
   selectHeaderStripChatSessionIds,
-} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-derivation";
-import { createWorkspaceHeaderLiveSlotsSelector } from "@/lib/domain/workspaces/tabs/workspace-header-live-slots-selector";
+} from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-derivation";
+import { createWorkspaceHeaderLiveSlotsSelector } from "#product/lib/domain/workspaces/tabs/workspace-header-live-slots-selector";
 import type {
   HeaderChatMenuEntry,
   HeaderChatTabEntry,
   HeaderWorkspaceShellStripRow,
-} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
-import { buildHeaderStripRows } from "@/lib/domain/workspaces/tabs/group-rows";
+} from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
+import { buildHeaderStripRows } from "#product/lib/domain/workspaces/tabs/group-rows";
 import {
   resolveManualChatGroupColor,
-} from "@/lib/domain/workspaces/tabs/manual-groups";
+} from "#product/lib/domain/workspaces/tabs/manual-groups";
 import {
   useWorkspaceShellTabsState,
-} from "@/hooks/workspaces/ui/tabs/use-workspace-shell-tabs-state";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+} from "#product/hooks/workspaces/ui/tabs/use-workspace-shell-tabs-state";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
-import { useWorkspaceHeaderTabsPreferenceEffects } from "@/hooks/workspaces/lifecycle/use-workspace-header-tabs-preference-effects";
+import { useWorkspaceHeaderTabsPreferenceEffects } from "#product/hooks/workspaces/lifecycle/use-workspace-header-tabs-preference-effects";
 import {
   shouldUseLocalRuntimeWorkspaceSessionsQuery,
-} from "@/lib/domain/workspaces/tabs/workspace-session-query-target";
-import { useStableStringArray } from "@/hooks/workspaces/facade/tabs/use-stable-string-array";
-import { useWorkspaceHeaderTabsWorkspaceState } from "@/hooks/workspaces/facade/tabs/use-workspace-header-tabs-workspace-state";
-import { useWorkspaceHeaderTabsDebugLogging } from "@/hooks/workspaces/lifecycle/use-workspace-header-tabs-debug-logging";
-import { useWorkspaceHeaderTabsPreferences } from "@/hooks/workspaces/facade/tabs/use-workspace-header-tabs-preferences";
-import { useWorkspaceHeaderTabsVisibility } from "@/hooks/workspaces/facade/tabs/use-workspace-header-tabs-visibility";
+} from "#product/lib/domain/workspaces/tabs/workspace-session-query-target";
+import { useStableStringArray } from "#product/hooks/workspaces/facade/tabs/use-stable-string-array";
+import { useWorkspaceHeaderTabsWorkspaceState } from "#product/hooks/workspaces/facade/tabs/use-workspace-header-tabs-workspace-state";
+import { useWorkspaceHeaderTabsDebugLogging } from "#product/hooks/workspaces/lifecycle/use-workspace-header-tabs-debug-logging";
+import { useWorkspaceHeaderTabsPreferences } from "#product/hooks/workspaces/facade/tabs/use-workspace-header-tabs-preferences";
+import { useWorkspaceHeaderTabsVisibility } from "#product/hooks/workspaces/facade/tabs/use-workspace-header-tabs-visibility";
 import {
   filterReplacedSessionIds,
   filterReplacedSessionTombstones,
-} from "@/hooks/sessions/workflows/session-replacement-tombstones";
+} from "#product/hooks/sessions/workflows/session-replacement-tombstones";
 
 export function useWorkspaceHeaderTabsViewModel() {
   const {

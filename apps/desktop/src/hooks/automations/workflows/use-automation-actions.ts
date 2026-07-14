@@ -1,6 +1,6 @@
 import { useCallback } from "react";
-import { useAutomationMutations } from "@/hooks/access/cloud/automations/use-automation-mutations";
-import { useToastStore } from "@/stores/toast/toast-store";
+import { useAutomationMutations } from "#product/hooks/access/cloud/automations/use-automation-mutations";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Workflow action failed.";

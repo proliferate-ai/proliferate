@@ -4,14 +4,14 @@ import {
   type TerminalRecord,
 } from "@anyharness/sdk";
 import { describe, expect, it, vi } from "vitest";
-import { isMissingTerminalError } from "@/lib/access/anyharness/terminals";
-import { RUN_TERMINAL_TITLE } from "@/lib/domain/terminals/run-terminal";
+import { isMissingTerminalError } from "#product/lib/access/anyharness/terminals";
+import { RUN_TERMINAL_TITLE } from "#product/lib/domain/terminals/run-terminal";
 import {
   closeTerminalTabWorkflow,
   createRunTerminalTabWorkflow,
   type CloseTerminalTabDeps,
   type CreateRunTerminalTabDeps,
-} from "./terminal-record-workflows";
+} from "#product/lib/workflows/terminals/terminal-record-workflows";
 
 interface TestConnection {
   id: string;

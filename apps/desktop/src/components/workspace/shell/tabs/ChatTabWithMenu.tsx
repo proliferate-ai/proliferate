@@ -5,24 +5,24 @@ import type {
   Ref,
 } from "react";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { SessionTitleRenamePopover } from "@/components/workspace/shell/tabs/SessionTitleRenamePopover";
-import { ChromeWorkspaceTab } from "@/components/workspace/shell/tabs/ChromeWorkspaceTab";
-import { DelegatedAgentHoverCard } from "@/components/workspace/shell/tabs/DelegatedAgentHoverCard";
-import type { ManualChatGroupEditorAnchorRect } from "@/components/workspace/shell/tabs/ManualChatGroupEditorPopover";
-import { TabContextMenu } from "@/components/workspace/shell/tabs/TabContextMenu";
+import { SessionTitleRenamePopover } from "#product/components/workspace/shell/tabs/SessionTitleRenamePopover";
+import { ChromeWorkspaceTab } from "#product/components/workspace/shell/tabs/ChromeWorkspaceTab";
+import { DelegatedAgentHoverCard } from "#product/components/workspace/shell/tabs/DelegatedAgentHoverCard";
+import type { ManualChatGroupEditorAnchorRect } from "#product/components/workspace/shell/tabs/ManualChatGroupEditorPopover";
+import { TabContextMenu } from "#product/components/workspace/shell/tabs/TabContextMenu";
 import {
   getChatTabLabel,
   renderChatTabIcon,
   renderChatTabStatusBadge,
-} from "@/components/workspace/shell/tabs/tab-rendering";
-import { useWorkspaceTabNativeContextMenu } from "@/hooks/workspaces/ui/tabs/use-workspace-tab-native-context-menu";
+} from "#product/components/workspace/shell/tabs/tab-rendering";
+import { useWorkspaceTabNativeContextMenu } from "#product/hooks/workspaces/ui/tabs/use-workspace-tab-native-context-menu";
 import type {
   HeaderChatTabEntry,
-} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
+} from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 import {
   buildChatTabContextMenuItems,
   type WorkspaceTabContextMenuCommand,
-} from "@/lib/domain/workspaces/tabs/context-menu";
+} from "#product/lib/domain/workspaces/tabs/context-menu";
 
 export function ChatTabWithMenu({
   tab,

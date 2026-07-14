@@ -2,33 +2,33 @@ import { useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { Workspace } from "@anyharness/sdk";
 import { useRepositories } from "@proliferate/cloud-sdk-react";
-import { APP_ROUTES } from "@/config/app-routes";
-import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
-import { useCloudBilling } from "@/hooks/cloud/facade/use-cloud-billing";
-import { useCreateCloudWorkspace } from "@/hooks/cloud/workflows/use-create-cloud-workspace";
-import { useHomeNextRepositorySelection } from "@/hooks/home/derived/use-home-next-repository-selection";
-import { useHomeNextTargetSelectionSnapshot } from "@/hooks/home/ui/use-home-next-target-selection-state";
-import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
-import { useWorkspaceEntryActions } from "@/hooks/workspaces/workflows/use-workspace-entry-actions";
-import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-navigation-workflow";
-import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
+import { APP_ROUTES } from "#product/config/app-routes";
+import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+import { useCloudBilling } from "#product/hooks/cloud/facade/use-cloud-billing";
+import { useCreateCloudWorkspace } from "#product/hooks/cloud/workflows/use-create-cloud-workspace";
+import { useHomeNextRepositorySelection } from "#product/hooks/home/derived/use-home-next-repository-selection";
+import { useHomeNextTargetSelectionSnapshot } from "#product/hooks/home/ui/use-home-next-target-selection-state";
+import { useStandardRepoProjection } from "#product/hooks/workspaces/derived/use-standard-repo-projection";
+import { useWorkspaceEntryActions } from "#product/hooks/workspaces/workflows/use-workspace-entry-actions";
+import { useWorkspaceNavigationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-navigation-workflow";
+import { buildCloudRepoSettingsHref } from "#product/lib/domain/settings/navigation";
 import {
   buildConfiguredCloudRepoKeys,
   resolveCloudRepoActionState,
-} from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import {
   buildRepositoryNewWorkspaceCommandScope,
   buildSelectedWorkspaceNewWorkspaceCommandScope,
   resolveNewWorkspaceCommandTarget,
-} from "@/lib/domain/workspaces/creation/new-workspace-command";
+} from "#product/lib/domain/workspaces/creation/new-workspace-command";
 import {
   failLatencyFlow,
   startLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useToastStore } from "@/stores/toast/toast-store";
-import { useNewWorkspaceCommandScopeStore } from "@/stores/workspaces/new-workspace-command-scope-store";
-import type { AppCommandActions, AppCommandInvocation } from "./app-command-action-types";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
+import { useNewWorkspaceCommandScopeStore } from "#product/stores/workspaces/new-workspace-command-scope-store";
+import type { AppCommandActions, AppCommandInvocation } from "#product/hooks/app/workflows/app-command-action-types";
 
 const EMPTY_WORKSPACES: Workspace[] = [];
 

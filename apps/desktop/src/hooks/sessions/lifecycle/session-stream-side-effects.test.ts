@@ -12,10 +12,10 @@ import {
 import {
   applyBatchedStreamSideEffects,
   resetStreamWorkspaceActivityForTests,
-} from "@/hooks/sessions/lifecycle/session-stream-side-effects";
-import type { SessionStreamCache } from "@/hooks/sessions/cache/use-session-stream-cache";
+} from "#product/hooks/sessions/lifecycle/session-stream-side-effects";
+import type { SessionStreamCache } from "#product/hooks/sessions/cache/use-session-stream-cache";
 import type { PendingSessionConfigChanges } from "@proliferate/product-domain/sessions/pending-config";
-import type { SessionRelationship } from "@/lib/domain/sessions/directory/relationship";
+import type { SessionRelationship } from "#product/lib/domain/sessions/directory/relationship";
 
 const mocks = vi.hoisted(() => ({
   effectOrder: [] as string[],

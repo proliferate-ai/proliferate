@@ -6,23 +6,23 @@ import { renderableOutboxEntriesForTranscript } from "@proliferate/product-domai
 import {
   buildPendingWorkspaceUiKey,
   buildSubmittingPendingWorkspaceEntry,
-} from "@/lib/domain/workspaces/creation/pending-entry";
+} from "#product/lib/domain/workspaces/creation/pending-entry";
 import {
   createEmptySessionRecord,
   getSessionRecord,
   putSessionRecord,
-} from "@/stores/sessions/session-records";
+} from "#product/stores/sessions/session-records";
 import {
   getPromptOutboxEntriesForSession,
   useSessionIntentStore,
-} from "@/stores/sessions/session-intent-store";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
-import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
-import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
-import { useToastStore } from "@/stores/toast/toast-store";
-import { useHomeNextLaunch } from "./use-home-next-launch";
+} from "#product/stores/sessions/session-intent-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
+import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
+import { useDeferredHomeLaunchStore } from "#product/stores/home/deferred-home-launch-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
+import { useHomeNextLaunch } from "#product/hooks/home/workflows/use-home-next-launch";
 
 const mocks = vi.hoisted(() => ({
   createCloudWorkspaceAndEnterWithResult: vi.fn(),

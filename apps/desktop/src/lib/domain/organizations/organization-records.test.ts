@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   invitationStatusBadge,
   membershipStatusBadge,
-} from "./organization-records";
+} from "#product/lib/domain/organizations/organization-records";
 
 describe("membershipStatusBadge", () => {
   it("maps known membership statuses to presentation badges", () => {

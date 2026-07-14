@@ -1,4 +1,4 @@
-import type { ShortcutDigit } from "@/lib/domain/shortcuts/matching";
+import type { ShortcutDigit } from "#product/lib/domain/shortcuts/matching";
 
 export function shortcutDigitForRangeIndex(
   index: number,

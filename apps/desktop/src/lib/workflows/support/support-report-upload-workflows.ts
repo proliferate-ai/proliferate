@@ -1,14 +1,14 @@
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
 import type { SupportBundle } from "@proliferate/product-client/host/desktop-bridge";
-import { sanitizeSupportUploadPayload } from "@/lib/domain/support/report-upload-sanitizer";
+import { sanitizeSupportUploadPayload } from "#product/lib/domain/support/report-upload-sanitizer";
 import type {
   SupportReportJob,
   SupportReportServerCorrelation,
-} from "@/lib/domain/support/report-types";
+} from "#product/lib/domain/support/report-types";
 import type {
   SessionDebugClient,
   SessionDebugResolvedWorkspace,
-} from "@/lib/workflows/support/session-debug-export-workflows";
+} from "#product/lib/workflows/support/session-debug-export-workflows";
 
 const MAX_WORKSPACES = 5;
 const MAX_SESSIONS_PER_WORKSPACE = 3;

@@ -2,7 +2,7 @@
 
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { CopyMessageButton } from "./CopyMessageButton";
+import { CopyMessageButton } from "#product/components/workspace/chat/transcript/CopyMessageButton";
 
 afterEach(() => {
   cleanup();

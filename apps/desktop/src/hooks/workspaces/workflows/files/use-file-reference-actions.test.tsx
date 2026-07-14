@@ -3,8 +3,8 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
-import { WorkspacePathProvider } from "@/providers/WorkspacePathProvider";
-import { useFileReferenceActions } from "./use-file-reference-actions";
+import { WorkspacePathProvider } from "#product/providers/WorkspacePathProvider";
+import { useFileReferenceActions } from "#product/hooks/workspaces/workflows/files/use-file-reference-actions";
 
 const editorMocks = vi.hoisted(() => ({
   openInDefaultEditor: vi.fn(async () => undefined),

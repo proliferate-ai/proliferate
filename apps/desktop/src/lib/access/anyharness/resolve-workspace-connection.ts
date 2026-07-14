@@ -1,7 +1,7 @@
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
 import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
-import type { CloudSandboxGatewayUrlSource } from "@/lib/access/cloud/cloud-sandbox-gateway";
-import { resolveRuntimeTargetForWorkspace } from "./runtime-target";
+import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/cloud-sandbox-gateway";
+import { resolveRuntimeTargetForWorkspace } from "#product/lib/access/anyharness/runtime-target";
 
 export type AnyHarnessDesktopResolvedConnection = AnyHarnessResolvedConnection & {
   runtimeGeneration?: number;

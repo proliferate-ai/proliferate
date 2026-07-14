@@ -5,7 +5,7 @@ import {
   shouldMountWorkspaceShell,
   shouldKeepBootstrappedWorkspaceLoading,
   type ResolveChatSurfaceStateInput,
-} from "@/lib/domain/chat/surface/chat-surface";
+} from "#product/lib/domain/chat/surface/chat-surface";
 
 function surfaceInput(
   overrides: Partial<ResolveChatSurfaceStateInput> = {},

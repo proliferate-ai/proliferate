@@ -9,22 +9,22 @@ import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSectio
 import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
-import { SkeletonBlock, shimmerDelay } from "@/components/feedback/Skeleton";
-import { RunCommandHelp } from "@/components/settings/shared/RunCommandHelp";
-import { useCloudRepoEnvironmentEditor } from "@/hooks/settings/workflows/use-cloud-repo-environment-editor";
-import { useRepositorySettings } from "@/hooks/settings/workflows/use-repository-settings";
+import { SkeletonBlock, shimmerDelay } from "#product/components/feedback/Skeleton";
+import { RunCommandHelp } from "#product/components/settings/shared/RunCommandHelp";
+import { useCloudRepoEnvironmentEditor } from "#product/hooks/settings/workflows/use-cloud-repo-environment-editor";
+import { useRepositorySettings } from "#product/hooks/settings/workflows/use-repository-settings";
 import {
   isSetupHintEnabled,
   toggleSetupHint,
-} from "@/lib/domain/settings/setup-hints";
-import { type SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
-import { RepoCloudGate } from "./RepoCloudGate";
+} from "#product/lib/domain/settings/setup-hints";
+import { type SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
+import { RepoCloudGate } from "#product/components/settings/panes/repo/RepoCloudGate";
 import {
   LocalNoCheckoutState,
   RepoScopeEmptyState,
   type RepoScopePaneProps,
   type RepoScopeSelectionCallbacks,
-} from "./RepoScopeStates";
+} from "#product/components/settings/panes/repo/RepoScopeStates";
 
 const SCRIPT_PLACEHOLDER = "pnpm install\npnpm prisma generate";
 const RUN_COMMAND_INPUT_CLASS = "h-8 w-72 px-2.5 font-mono text-ui-sm";

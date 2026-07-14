@@ -3,7 +3,7 @@ import type {
   CloudAgentCatalogModelInput,
   DesktopAgentLaunchControl,
   DesktopSessionDefaultControl,
-} from "./cloud-launch-catalog-types";
+} from "#product/lib/domain/agents/cloud-launch-catalog-types";
 
 const SESSION_DEFAULT_CONTROL_KEYS: ReadonlyArray<{
   key: DesktopSessionDefaultControl["key"];

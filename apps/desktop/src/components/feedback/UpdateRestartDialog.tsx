@@ -2,7 +2,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
 import { RefreshCw } from "@proliferate/ui/icons";
 import { useUpdater } from "@/hooks/access/tauri/use-updater";
-import { useRunningAgentCount } from "@/hooks/app/lifecycle/use-running-agent-count";
+import { useRunningAgentCount } from "#product/hooks/app/lifecycle/use-running-agent-count";
 
 export function UpdateRestartDialog() {
   const {

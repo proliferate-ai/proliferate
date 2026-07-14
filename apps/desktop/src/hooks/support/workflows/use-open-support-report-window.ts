@@ -1,8 +1,8 @@
 import { useCallback } from "react";
-import { useSupportModalStore } from "@/stores/support/support-modal-store";
-import { useSupportAvailability } from "@/hooks/support/facade/use-support-availability";
-import { useToastStore } from "@/stores/toast/toast-store";
-import type { SupportMessageContext } from "@/lib/domain/support/types";
+import { useSupportModalStore } from "#product/stores/support/support-modal-store";
+import { useSupportAvailability } from "#product/hooks/support/facade/use-support-availability";
+import { useToastStore } from "#product/stores/toast/toast-store";
+import type { SupportMessageContext } from "#product/lib/domain/support/types";
 
 interface UseOpenSupportReportWindowOptions {
   source: SupportMessageContext["source"];

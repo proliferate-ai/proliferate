@@ -1,6 +1,6 @@
 import { Input } from "@proliferate/ui/primitives/Input";
-import { ComposerCardFooter } from "./ComposerAttachedPanel";
-import { McpElicitationInlineError } from "./McpElicitationInlineError";
+import { ComposerCardFooter } from "#product/components/workspace/chat/input/ComposerAttachedPanel";
+import { McpElicitationInlineError } from "#product/components/workspace/chat/input/McpElicitationInlineError";
 
 interface McpElicitationUrlPanelProps {
   message: string;

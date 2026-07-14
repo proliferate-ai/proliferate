@@ -6,8 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
   WORKSPACE_CHAT_COMPOSER_INPUT,
-} from "@/config/chat";
-import { useComposerTextareaAutosize } from "./use-composer-textarea-autosize";
+} from "#product/config/chat";
+import { useComposerTextareaAutosize } from "#product/hooks/chat/ui/use-composer-textarea-autosize";
 
 let textareaLineHeightPx = 16;
 let textareaScrollHeightPx = 400;

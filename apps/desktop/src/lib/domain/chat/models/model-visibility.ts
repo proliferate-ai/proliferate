@@ -3,8 +3,8 @@ import type {
   DesktopAgentLaunchModel,
   DesktopLaunchModelRegistry,
   DesktopLaunchModelRegistryModel,
-} from "@/lib/domain/agents/cloud-launch-catalog";
-import type { ChatModelVisibilityOverridesByAgentKind } from "@/lib/domain/preferences/user/session-defaults";
+} from "#product/lib/domain/agents/cloud-launch-catalog";
+import type { ChatModelVisibilityOverridesByAgentKind } from "#product/lib/domain/preferences/user/session-defaults";
 
 /**
  * v2 catalogs carry no per-model opt-in flag: every model that survives the

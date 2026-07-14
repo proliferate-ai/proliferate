@@ -4,11 +4,11 @@ import {
   buildHeaderClosedChatTabs,
   buildHeaderDisplayShellRows,
   hasUnreadSessionActivity,
-} from "./workspace-header-tabs-view-model-derivation";
+} from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-derivation";
 import type {
   HeaderHierarchyChildRow,
   KnownHeaderSession,
-} from "./workspace-header-tabs-model-helpers";
+} from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-model-helpers";
 
 describe("workspace header tab view model derivation", () => {
   it("adds generated delegated-agent identity to child tabs", () => {

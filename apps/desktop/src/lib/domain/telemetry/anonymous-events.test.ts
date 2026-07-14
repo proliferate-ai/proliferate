@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createDefaultAnonymousTelemetryPersistedState,
   deriveAnonymousTelemetryDirectives,
-} from "./anonymous-events";
+} from "#product/lib/domain/telemetry/anonymous-events";
 
 describe("createDefaultAnonymousTelemetryPersistedState", () => {
   it("starts with empty milestone and usage state", () => {

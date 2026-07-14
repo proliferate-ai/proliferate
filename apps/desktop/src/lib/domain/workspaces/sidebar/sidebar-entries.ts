@@ -1,21 +1,21 @@
 import type { Workspace } from "@anyharness/sdk";
-import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import { cloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import {
   cloudWorkspaceGroupKey,
   localWorkspaceGroupKey,
-} from "@/lib/domain/workspaces/cloud/collections";
+} from "#product/lib/domain/workspaces/cloud/collections";
 import {
   humanizeBranchName,
   workspaceCurrentBranchName,
-} from "@/lib/domain/workspaces/creation/branch-naming";
-import { workspaceDisplayName } from "@/lib/domain/workspaces/display/workspace-display";
-import type { SidebarCloudWorkspaceSummary } from "@/lib/domain/workspaces/sidebar/cloud-workspace";
+} from "#product/lib/domain/workspaces/creation/branch-naming";
+import { workspaceDisplayName } from "#product/lib/domain/workspaces/display/workspace-display";
+import type { SidebarCloudWorkspaceSummary } from "#product/lib/domain/workspaces/sidebar/cloud-workspace";
 import type {
   CloudSidebarWorkspaceEntry,
   SidebarEntryGitMetadata,
   SidebarRepoGroupEntry,
   SidebarWorkspaceEntry,
-} from "@/lib/domain/workspaces/sidebar/sidebar-model";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 
 export function buildSidebarWorkspaceEntries(
   localWorkspaces: Workspace[],

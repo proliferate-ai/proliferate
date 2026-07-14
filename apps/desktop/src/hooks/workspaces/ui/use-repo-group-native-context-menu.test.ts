@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildRepoGroupNativeContextMenuItems } from "./use-repo-group-native-context-menu";
+import { buildRepoGroupNativeContextMenuItems } from "#product/hooks/workspaces/ui/use-repo-group-native-context-menu";
 
 describe("buildRepoGroupNativeContextMenuItems", () => {
   it("models settings and destructive remove as separate commands", () => {

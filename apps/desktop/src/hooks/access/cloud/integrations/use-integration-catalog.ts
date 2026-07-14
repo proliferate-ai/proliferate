@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { getIntegrationCatalog } from "@proliferate/cloud-sdk/client/integrations";
-import { useProductAuthStatus } from "@/hooks/auth/facade/use-product-auth";
-import { cloudIntegrationsCatalogKey } from "./query-keys";
+import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth";
+import { cloudIntegrationsCatalogKey } from "#product/hooks/access/cloud/integrations/query-keys";
 
 export function useIntegrationCatalog(
   organizationId: string | null,

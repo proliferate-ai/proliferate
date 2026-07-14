@@ -1,26 +1,26 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
-import { DiffLineContent } from "@/components/content/ui/diff/DiffLineContent";
+import { DiffLineContent } from "#product/components/content/ui/diff/DiffLineContent";
 import {
   DiffCollapsedContextCluster,
   DiffContextExpander,
   DiffGapInfoRow,
   type ExpandDirection,
-} from "@/components/content/ui/diff/DiffContextExpander";
-import { HunkActionPill, type HunkActionMode } from "@/components/content/ui/diff/HunkActionPill";
+} from "#product/components/content/ui/diff/DiffContextExpander";
+import { HunkActionPill, type HunkActionMode } from "#product/components/content/ui/diff/HunkActionPill";
 import type {
   CollapsedContext,
   DiffHunk,
   DiffLine,
   InterHunkGap,
   ParsedPatch,
-} from "@/lib/domain/files/diff-parser";
+} from "#product/lib/domain/files/diff-parser";
 import {
   clampGapReveal,
   resolveGapLineCount,
   useGapExpansion,
-} from "@/hooks/ui/diff/use-gap-expansion";
-import type { HighlightedToken } from "@/lib/infra/editor/highlighting";
+} from "#product/hooks/ui/diff/use-gap-expansion";
+import type { HighlightedToken } from "#product/lib/infra/editor/highlighting";
 
 function getLineType(type: DiffLine["type"]): string {
   if (type === "added") return "change-addition";

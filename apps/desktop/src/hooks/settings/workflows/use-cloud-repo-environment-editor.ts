@@ -14,13 +14,13 @@ import {
   useCloudEnvironmentDraft,
   type CloudEnvironmentDraft,
 } from "@proliferate/product-surfaces/settings/cloud-environments/use-cloud-environment-draft";
-import { useCloudRepoBranches } from "@/hooks/access/cloud/use-cloud-repo-branches";
+import { useCloudRepoBranches } from "#product/hooks/access/cloud/use-cloud-repo-branches";
 import {
   isCloudRepository,
   type CloudSettingsRepositoryEntry,
   type SettingsRepositoryEntry,
-} from "@/lib/domain/settings/repositories";
-import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
+} from "#product/lib/domain/settings/repositories";
+import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
 
 const MATERIALIZATION_POLL_INTERVAL_MS = 5000;
 

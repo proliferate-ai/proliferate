@@ -1,6 +1,6 @@
 import { useCallback } from "react";
-import { useSessionInteractionActions } from "@/hooks/sessions/workflows/use-session-interaction-actions";
-import { useToastStore } from "@/stores/toast/toast-store";
+import { useSessionInteractionActions } from "#product/hooks/sessions/workflows/use-session-interaction-actions";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 export function useChatPermissionActions() {
   const showToast = useToastStore((state) => state.show);

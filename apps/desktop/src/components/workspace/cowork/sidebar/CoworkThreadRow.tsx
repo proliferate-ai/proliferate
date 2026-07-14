@@ -4,11 +4,11 @@ import {
   ChevronRight,
 } from "@proliferate/ui/icons";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { SidebarStatusIndicatorView } from "@/components/workspace/shell/sidebar/SidebarIndicators";
+import { SidebarStatusIndicatorView } from "#product/components/workspace/shell/sidebar/SidebarIndicators";
 import type { SidebarSessionActivityState } from "@proliferate/product-domain/sessions/activity";
-import { sidebarStatusIndicatorFromActivity } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
-import { formatSidebarRelativeTime } from "@/lib/domain/workspaces/display/workspace-display";
-import { coworkThreadTitle } from "@/lib/domain/cowork/threads";
+import { sidebarStatusIndicatorFromActivity } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
+import { formatSidebarRelativeTime } from "#product/lib/domain/workspaces/display/workspace-display";
+import { coworkThreadTitle } from "#product/lib/domain/cowork/threads";
 import { ProductSidebarThreadRow } from "@proliferate/product-ui/sidebar/ProductSidebarThreads";
 
 interface CoworkThreadRowProps {

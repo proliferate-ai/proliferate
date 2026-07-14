@@ -4,11 +4,11 @@ import type { TerminalWebSocketAuthTransport } from "@anyharness/sdk";
 import {
   type CloudSandboxGatewayUrlSource,
   resolveCloudSandboxGatewayConnectionForWorkspace,
-} from "@/lib/access/cloud/cloud-sandbox-gateway";
-import { getCloudWorkspaceWithRetry } from "@/lib/access/cloud/workspace-connection-retry";
-import { parseTargetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { resolveCloudWorkspaceStatus } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
+} from "#product/lib/access/cloud/cloud-sandbox-gateway";
+import { getCloudWorkspaceWithRetry } from "#product/lib/access/cloud/workspace-connection-retry";
+import { parseTargetWorkspaceSyntheticId } from "#product/lib/domain/compute/target-workspace-id";
+import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import { resolveCloudWorkspaceStatus } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
 
 type CloudWorkspaceCommandMetadata = CloudWorkspaceDetail & {
   targetId?: string | null;

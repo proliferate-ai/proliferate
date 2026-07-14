@@ -1,10 +1,10 @@
 import type { PromptCapabilities } from "@anyharness/sdk";
 import { isSessionSlotBusy } from "@proliferate/product-domain/sessions/activity";
 import { useRef } from "react";
-import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
+import { activitySnapshotFromDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-activity";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { resolveWorkspaceUiKey } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
 
 export function useActiveSessionId(): string | null {
   return useSessionSelectionStore((state) => state.activeSessionId);

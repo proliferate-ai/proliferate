@@ -1,7 +1,7 @@
 import {
   parseRightPanelHeaderEntryKey,
   type RightPanelActiveEntryKey,
-} from "@/lib/domain/workspaces/shell/right-panel-model";
+} from "#product/lib/domain/workspaces/shell/right-panel-model";
 
 export function RightPanelPlaceholder({ activeEntryKey }: { activeEntryKey: RightPanelActiveEntryKey }) {
   const entry = parseRightPanelHeaderEntryKey(activeEntryKey);

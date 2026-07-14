@@ -1,8 +1,8 @@
 import type { ProductAuthIssue } from "@proliferate/product-client/host/product-host";
 
-import type { AuthUser } from "@/lib/domain/auth/auth-user";
-import { authUserFromStoredSession } from "@/lib/domain/auth/session-mapping";
-import type { StoredAuthSession } from "@/lib/domain/auth/stored-auth-session";
+import type { AuthUser } from "#product/lib/domain/auth/auth-user";
+import { authUserFromStoredSession } from "#product/lib/domain/auth/session-mapping";
+import type { StoredAuthSession } from "#product/lib/domain/auth/stored-auth-session";
 
 export type AuthClientStatus = "bootstrapping" | "anonymous" | "authenticated";
 

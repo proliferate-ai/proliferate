@@ -1,9 +1,9 @@
-import { compareChatLaunchKinds } from "@/config/chat-launch";
+import { compareChatLaunchKinds } from "#product/config/chat-launch";
 import {
   type DesktopAgentLaunchAgent,
-} from "@/lib/domain/agents/cloud-launch-catalog";
-import { filterTargetReadyLaunchAgents } from "@/lib/domain/agents/target-ready-launch-agents";
-import { buildLocalSlotLogicalWorkspaceId } from "@/lib/domain/workspaces/cloud/logical-workspace-id";
+} from "#product/lib/domain/agents/cloud-launch-catalog";
+import { filterTargetReadyLaunchAgents } from "#product/lib/domain/agents/target-ready-launch-agents";
+import { buildLocalSlotLogicalWorkspaceId } from "#product/lib/domain/workspaces/cloud/logical-workspace-id";
 
 export function resolveLastViewedSessionForWorkspace(
   lastViewedSessionByWorkspace: Record<string, string>,

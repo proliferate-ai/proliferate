@@ -7,7 +7,7 @@ import type {
   DesktopRuntimeBridge,
 } from "@proliferate/product-client/host/desktop-bridge";
 
-import { bootstrapHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap";
+import { bootstrapHarnessRuntime } from "#product/lib/access/anyharness/runtime-bootstrap";
 import {
   recordBootDiagnostic,
 } from "@/lib/infra/measurement/boot-stall-diagnostics";
@@ -16,7 +16,7 @@ import {
   logStartupDebug,
   startStartupTimer,
 } from "@/lib/infra/measurement/debug-startup";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
 export function useDesktopRuntimeBootstrapLifecycle(
   runtime: DesktopRuntimeBridge,

@@ -1,4 +1,4 @@
-import { SkeletonBlock } from "@/components/feedback/Skeleton";
+import { SkeletonBlock } from "#product/components/feedback/Skeleton";
 
 /**
  * Full loading state: icon + message + optional subtext.

@@ -3,9 +3,9 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ChatInputControlRow } from "./ChatInputControlRow";
-import type { ModelSelectorProps } from "@/lib/domain/chat/models/model-selector-types";
-import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
+import { ChatInputControlRow } from "#product/components/workspace/chat/input/ChatInputControlRow";
+import type { ModelSelectorProps } from "#product/lib/domain/chat/models/model-selector-types";
+import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 
 // Mock hooks that depend on app providers / external packages
 vi.mock("@/hooks/activity/derived/use-session-goal", () => ({

@@ -1,5 +1,5 @@
 import type { AgentSummary } from "@anyharness/sdk";
-import { agentNeedsInstall } from "@/lib/domain/agents/status";
+import { agentNeedsInstall } from "#product/lib/domain/agents/status";
 
 /**
  * First-run auth adoption (spec §9, PR 12).

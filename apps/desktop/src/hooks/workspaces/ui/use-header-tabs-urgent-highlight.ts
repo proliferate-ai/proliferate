@@ -4,9 +4,9 @@ import {
   useRef,
 } from "react";
 import { flushSync } from "react-dom";
-import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
-import type { WorkspaceShellTab } from "@/lib/domain/workspaces/tabs/shell-tabs";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+import { scheduleAfterNextPaint } from "#product/lib/infra/scheduling/schedule-after-next-paint";
+import type { WorkspaceShellTab } from "#product/lib/domain/workspaces/tabs/shell-tabs";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 
 export function useHeaderTabsUrgentHighlight({
   workspaceUiKey,

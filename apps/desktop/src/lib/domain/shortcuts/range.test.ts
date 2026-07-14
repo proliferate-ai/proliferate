@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   resolveShortcutRangeDigitTarget,
   shortcutDigitForRangeIndex,
-} from "@/lib/domain/shortcuts/range";
+} from "#product/lib/domain/shortcuts/range";
 
 describe("shortcut range", () => {
   it("labels first eight range targets and uses digit nine for the final target", () => {

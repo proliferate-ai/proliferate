@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { DesktopAgentLaunchAgent } from "@/lib/domain/agents/cloud-launch-catalog";
-import { resolveEffectiveLaunchSelection } from "./launch-selection-defaults";
+import type { DesktopAgentLaunchAgent } from "#product/lib/domain/agents/cloud-launch-catalog";
+import { resolveEffectiveLaunchSelection } from "#product/lib/domain/chat/models/launch-selection-defaults";
 
 function launchAgent(
   kind: string,

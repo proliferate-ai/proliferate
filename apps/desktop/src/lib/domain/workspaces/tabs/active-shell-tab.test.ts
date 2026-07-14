@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   resolveActiveWorkspaceShellTab,
   resolveStoredWorkspaceShellTab,
-} from "@/lib/domain/workspaces/tabs/active-shell-tab";
-import { chatWorkspaceShellTabKey, type WorkspaceShellTab } from "@/lib/domain/workspaces/tabs/shell-tabs";
+} from "#product/lib/domain/workspaces/tabs/active-shell-tab";
+import { chatWorkspaceShellTabKey, type WorkspaceShellTab } from "#product/lib/domain/workspaces/tabs/shell-tabs";
 
 const tabs: WorkspaceShellTab[] = [
   { kind: "chat", sessionId: "a" },

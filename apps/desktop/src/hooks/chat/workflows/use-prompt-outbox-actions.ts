@@ -1,13 +1,13 @@
 import { useCallback } from "react";
-import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
+import { createPromptId } from "#product/lib/domain/chat/composer/prompt-id";
 import {
   canCancelPromptOutboxEntryLocally,
   canDismissPromptOutboxEntry,
   canRetryPromptOutboxEntry,
 } from "@proliferate/product-domain/sessions/intents/session-intent-actions";
-import { useSessionCreationActions } from "@/hooks/sessions/workflows/use-session-creation-actions";
-import { getSessionRecord } from "@/stores/sessions/session-records";
-import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
+import { useSessionCreationActions } from "#product/hooks/sessions/workflows/use-session-creation-actions";
+import { getSessionRecord } from "#product/stores/sessions/session-records";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
 
 export function usePromptOutboxActions() {
   const { createSessionWithResolvedConfig } = useSessionCreationActions();

@@ -3,25 +3,25 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { ArrowRight } from "@proliferate/ui/icons";
 import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
-import { ChatInputControlRow } from "@/components/workspace/chat/input/ChatInputControlRow";
-import { ComposerSlashCommandSearch } from "@/components/workspace/chat/input/ComposerSlashCommandSearch";
+import { ChatInputControlRow } from "#product/components/workspace/chat/input/ChatInputControlRow";
+import { ComposerSlashCommandSearch } from "#product/components/workspace/chat/input/ComposerSlashCommandSearch";
 import { ComposerTextarea } from "@proliferate/ui/primitives/ComposerTextarea";
 import { ComposerTextareaFrame } from "@proliferate/ui/primitives/ComposerTextareaFrame";
 import {
   CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
   WORKSPACE_CHAT_COMPOSER_INPUT,
-} from "@/config/chat";
-import type { ScenarioKey } from "@/config/playground";
-import { useComposerTextareaAutosize } from "@/hooks/chat/ui/use-composer-textarea-autosize";
-import type { PlaygroundReplayState } from "@/hooks/playground/lifecycle/use-replay-session";
+} from "#product/config/chat";
+import type { ScenarioKey } from "#product/config/playground";
+import { useComposerTextareaAutosize } from "#product/hooks/chat/ui/use-composer-textarea-autosize";
+import type { PlaygroundReplayState } from "#product/hooks/playground/lifecycle/use-replay-session";
 import {
   createPlaygroundModelSelectorProps,
   createPlaygroundSessionConfigControls,
   PLAYGROUND_LONG_COMPOSER_DRAFT,
   PLAYGROUND_SLASH_COMMANDS,
-} from "@/lib/domain/chat/__fixtures__/playground/composer-surface-fixtures";
-import type { SessionSlashCommandViewModel } from "@/lib/domain/chat/composer/session-slash-command-policy";
-import { noop } from "@/components/playground/PlaygroundComposerActions";
+} from "#product/lib/domain/chat/__fixtures__/playground/composer-surface-fixtures";
+import type { SessionSlashCommandViewModel } from "#product/lib/domain/chat/composer/session-slash-command-policy";
+import { noop } from "#product/components/playground/PlaygroundComposerActions";
 
 export function renderComposerSurfaceForScenario(scenario: ScenarioKey): ReactNode {
   switch (scenario) {

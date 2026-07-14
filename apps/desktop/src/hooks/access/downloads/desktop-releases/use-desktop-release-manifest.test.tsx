@@ -11,7 +11,7 @@ const downloadsMocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/access/downloads/desktop-release-manifest", () => downloadsMocks);
 
-import { useDesktopReleaseManifest } from "./use-desktop-release-manifest";
+import { useDesktopReleaseManifest } from "#product/hooks/access/downloads/desktop-releases/use-desktop-release-manifest";
 
 function createWrapper() {
   const queryClient = new QueryClient({

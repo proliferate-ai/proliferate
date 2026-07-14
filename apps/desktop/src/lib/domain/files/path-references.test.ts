@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pickFuzzyPathMatch, resolveFileReference } from "./path-references";
+import { pickFuzzyPathMatch, resolveFileReference } from "#product/lib/domain/files/path-references";
 
 describe("pickFuzzyPathMatch", () => {
   const tree = [

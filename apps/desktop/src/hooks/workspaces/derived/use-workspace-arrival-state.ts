@@ -1,11 +1,11 @@
 import { useMemo } from "react";
 import type { RepoRoot, SetupScriptExecution, Workspace } from "@anyharness/sdk";
 import { useSetupStatusQuery } from "@anyharness/sdk-react";
-import { buildWorkspaceArrivalViewModel } from "@/lib/domain/workspaces/creation/arrival";
-import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
-import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/derived/use-hot-paint-gate";
+import { buildWorkspaceArrivalViewModel } from "#product/lib/domain/workspaces/creation/arrival";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
+import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useIsHotPaintGatePendingForWorkspace } from "#product/hooks/workspaces/derived/use-hot-paint-gate";
 
 const EMPTY_WORKSPACES: Workspace[] = [];
 

@@ -4,7 +4,7 @@ import {
   buildLiveSessionControlDescriptors,
   mergeSessionConfigControlDescriptors,
   type LiveSessionControlDescriptor,
-} from "./session-controls";
+} from "#product/lib/domain/chat/session-controls/session-controls";
 
 const NORMALIZED_CONTROLS: NormalizedSessionControls = {
   model: null,

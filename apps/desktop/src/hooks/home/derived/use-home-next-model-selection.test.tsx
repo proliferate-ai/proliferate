@@ -3,9 +3,9 @@
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentSummary } from "@anyharness/sdk";
-import type { AgentModelRegistry as ModelRegistry } from "@/lib/domain/agents/model-options";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { useHomeNextModelSelection } from "./use-home-next-model-selection";
+import type { AgentModelRegistry as ModelRegistry } from "#product/lib/domain/agents/model-options";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
+import { useHomeNextModelSelection } from "#product/hooks/home/derived/use-home-next-model-selection";
 
 const selectionMocks = vi.hoisted(() => ({
   agentCatalog: {

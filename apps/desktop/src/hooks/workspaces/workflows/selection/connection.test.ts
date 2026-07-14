@@ -4,11 +4,11 @@ import type {
   DesktopSshBridge,
 } from "@proliferate/product-client/host/desktop-bridge";
 
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import type {
   WorkspaceSelectionContext,
   WorkspaceSelectionDeps,
-} from "./types";
+} from "#product/hooks/workspaces/workflows/selection/types";
 
 const mocks = vi.hoisted(() => ({
   ensureRuntimeReady: vi.fn(),
@@ -22,7 +22,7 @@ vi.mock("@/lib/access/anyharness/resolve-workspace-connection", () => ({
   resolveWorkspaceConnection: mocks.resolveWorkspaceConnection,
 }));
 
-import { resolveSelectionConnection } from "./connection";
+import { resolveSelectionConnection } from "#product/hooks/workspaces/workflows/selection/connection";
 
 const context = (workspaceId: string): WorkspaceSelectionContext => ({
   workspaceId,

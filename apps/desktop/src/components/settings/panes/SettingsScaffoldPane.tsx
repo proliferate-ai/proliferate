@@ -2,7 +2,7 @@ import {
   SETTINGS_SCAFFOLD_COPY,
   type SettingsScaffoldPageCopy,
   type SettingsScaffoldPageId,
-} from "@/copy/settings/settings-scaffold-copy";
+} from "#product/copy/settings/settings-scaffold-copy";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";

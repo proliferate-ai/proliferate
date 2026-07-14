@@ -1,21 +1,21 @@
 import { useMemo } from "react";
 import { useLocation } from "react-router-dom";
-import { humanizeBranchName, workspaceCurrentBranchName } from "@/lib/domain/workspaces/creation/branch-naming";
+import { humanizeBranchName, workspaceCurrentBranchName } from "#product/lib/domain/workspaces/creation/branch-naming";
 import {
   cloudWorkspaceSyntheticId,
   isCloudWorkspaceId,
-} from "@/lib/domain/workspaces/cloud/cloud-ids";
-import type { CloudWorkspaceSummary } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
-import { workspaceDisplayName } from "@/lib/domain/workspaces/display/workspace-display";
-import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+} from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
+import { workspaceDisplayName } from "#product/lib/domain/workspaces/display/workspace-display";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import type {
   SupportReportWindowSnapshot,
   SupportReportWorkspaceOption,
-} from "@/lib/domain/support/report-types";
-import type { SupportMessageContext } from "@/lib/domain/support/types";
+} from "#product/lib/domain/support/report-types";
+import type { SupportMessageContext } from "#product/lib/domain/support/types";
 
 const MAX_LOCAL_SESSION_REFS_PER_WORKSPACE = 12;
 

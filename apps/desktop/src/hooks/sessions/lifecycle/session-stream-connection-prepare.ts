@@ -3,13 +3,13 @@ import {
   recordMeasurementMetric,
   recordMeasurementWorkflowStep,
 } from "@/lib/infra/measurement/debug-measurement";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { getSessionRecord } from "@/stores/sessions/session-records";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { getSessionRecord } from "#product/stores/sessions/session-records";
 import type {
   RefreshSessionSlotMeta,
   RehydrateSessionSlotFromHistory,
   SessionStreamConnectOptions,
-} from "@/hooks/sessions/lifecycle/session-stream-connection-types";
+} from "#product/hooks/sessions/lifecycle/session-stream-connection-types";
 
 interface PrepareSessionStreamConnectionDeps {
   refreshSessionSlotMeta: RefreshSessionSlotMeta;

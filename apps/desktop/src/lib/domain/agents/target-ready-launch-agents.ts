@@ -1,4 +1,4 @@
-import type { DesktopAgentLaunchAgent } from "@/lib/domain/agents/cloud-launch-catalog";
+import type { DesktopAgentLaunchAgent } from "#product/lib/domain/agents/cloud-launch-catalog";
 
 interface TargetAgentReadiness {
   readiness: string;

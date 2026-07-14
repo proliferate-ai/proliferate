@@ -1,5 +1,5 @@
-import { latestLogicalWorkspaceTimestamp } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
+import { latestLogicalWorkspaceTimestamp } from "#product/lib/domain/workspaces/cloud/logical-workspace-lookup";
+import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
 
 export interface LogicalWorkspaceRecency {
   activityAt: string | null;

@@ -1,8 +1,8 @@
 import type {
   DesktopAgentLaunchAgent,
   DesktopAgentLaunchModel,
-} from "@/lib/domain/agents/cloud-launch-catalog";
-import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
+} from "#product/lib/domain/agents/cloud-launch-catalog";
+import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 
 export interface SlackSessionDefaultsDraft {
   agentKind: string | null;

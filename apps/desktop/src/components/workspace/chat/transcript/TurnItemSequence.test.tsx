@@ -14,7 +14,7 @@ import {
   TurnItemSequence,
   resolveTurnItemFrontierBlockKey,
   shouldRenderCompletedArtifactCards,
-} from "./TurnItemSequence";
+} from "#product/components/workspace/chat/transcript/TurnItemSequence";
 
 vi.mock("./TranscriptTreeNode", () => ({
   TranscriptTreeNode: ({ itemId }: { itemId: string }) => (

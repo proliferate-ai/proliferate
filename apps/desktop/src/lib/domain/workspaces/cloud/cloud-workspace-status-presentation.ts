@@ -1,18 +1,18 @@
 import type {
   CloudWorkspaceStatus,
   CloudWorkspaceSummary,
-} from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
 import {
   CLOUD_STATUS_ACTION_COPY,
   CLOUD_STATUS_COMPACT_COPY,
-} from "@/copy/cloud/cloud-status-copy";
+} from "#product/copy/cloud/cloud-status-copy";
 import {
   isCloudStartBlockReason,
   isCloudWorkspacePending,
   isCloudWorkspacePostReadyPending,
   resolveCloudWorkspaceStatus,
   type CloudStartBlockReason,
-} from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
 
 export interface CloudWorkspaceStepDefinition {
   status: CloudWorkspaceStatus;

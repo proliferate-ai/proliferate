@@ -1,10 +1,10 @@
 import type {
   SessionMaterializationDeps,
-} from "@/lib/workflows/sessions/session-materialization";
+} from "#product/lib/workflows/sessions/session-materialization";
 import {
   getMaterializedSessionId,
-} from "@/stores/sessions/session-records";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+} from "#product/stores/sessions/session-records";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 
 export const sessionMaterializationDeps: SessionMaterializationDeps = {
   getMaterializedSessionId,

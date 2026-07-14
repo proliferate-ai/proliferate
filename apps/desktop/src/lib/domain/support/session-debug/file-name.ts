@@ -1,4 +1,4 @@
-import type { SessionDebugScopeKind } from "@/lib/domain/support/session-debug/export-models";
+import type { SessionDebugScopeKind } from "#product/lib/domain/support/session-debug/export-models";
 
 export function suggestSessionDebugFileName(
   scope: SessionDebugScopeKind,

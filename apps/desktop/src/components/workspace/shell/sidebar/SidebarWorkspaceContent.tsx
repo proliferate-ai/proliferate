@@ -1,21 +1,21 @@
 import {
   resolveCloudRepoActionState,
   type CloudWorkspaceRepoTarget,
-} from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
-import { cloudRepositoryKey } from "@/lib/domain/settings/repositories";
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
+import { cloudRepositoryKey } from "#product/lib/domain/settings/repositories";
 import {
   SIDEBAR_REPO_GROUP_ITEM_LIMIT,
   type SidebarEmptyState,
   type SidebarGroupState,
-} from "@/lib/domain/workspaces/sidebar/sidebar-model";
-import { buildSidebarNewWorkspaceCommandScope } from "@/lib/domain/workspaces/creation/new-workspace-command";
-import { visibleSidebarGroupItems } from "@/lib/domain/workspaces/sidebar/sidebar-visible-items";
-import type { SidebarIndicatorAction } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
-import { SkeletonBlock } from "@/components/feedback/Skeleton";
-import { useWorkspaceCopyActions } from "@/hooks/workspaces/workflows/use-workspace-copy-actions";
-import { RepoGroup, type RepoGroupEnvironmentKind } from "./RepoGroup";
-import { SidebarShowToggleRow } from "./SidebarShowToggleRow";
-import { WorkspaceItem } from "./WorkspaceItem";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-model";
+import { buildSidebarNewWorkspaceCommandScope } from "#product/lib/domain/workspaces/creation/new-workspace-command";
+import { visibleSidebarGroupItems } from "#product/lib/domain/workspaces/sidebar/sidebar-visible-items";
+import type { SidebarIndicatorAction } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
+import { SkeletonBlock } from "#product/components/feedback/Skeleton";
+import { useWorkspaceCopyActions } from "#product/hooks/workspaces/workflows/use-workspace-copy-actions";
+import { RepoGroup, type RepoGroupEnvironmentKind } from "#product/components/workspace/shell/sidebar/RepoGroup";
+import { SidebarShowToggleRow } from "#product/components/workspace/shell/sidebar/SidebarShowToggleRow";
+import { WorkspaceItem } from "#product/components/workspace/shell/sidebar/WorkspaceItem";
 
 interface SidebarWorkspaceContentProps {
   emptyState: SidebarEmptyState;

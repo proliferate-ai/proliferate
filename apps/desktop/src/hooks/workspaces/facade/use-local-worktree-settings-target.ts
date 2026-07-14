@@ -1,12 +1,12 @@
 import { useCallback, useMemo } from "react";
-import { useWorktreeTargetActions } from "@/hooks/access/anyharness/worktrees/use-worktree-target-actions";
-import type { WorktreeTargetInventoryState } from "@/hooks/access/anyharness/worktrees/use-worktree-target-inventories";
-import { useWorktreeSettingsTargetCache } from "@/hooks/workspaces/cache/use-worktree-settings-target-cache";
+import { useWorktreeTargetActions } from "#product/hooks/access/anyharness/worktrees/use-worktree-target-actions";
+import type { WorktreeTargetInventoryState } from "#product/hooks/access/anyharness/worktrees/use-worktree-target-inventories";
+import { useWorktreeSettingsTargetCache } from "#product/hooks/workspaces/cache/use-worktree-settings-target-cache";
 import {
   buildLocalWorktreeSettingsTarget,
   type WorktreeSettingsTarget,
-} from "@/lib/domain/workspaces/worktrees/worktree-settings-target";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+} from "#product/lib/domain/workspaces/worktrees/worktree-settings-target";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
 const EMPTY_TARGETS: WorktreeTargetInventoryState[] = [];
 

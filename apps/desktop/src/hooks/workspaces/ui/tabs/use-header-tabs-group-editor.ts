@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ManualChatGroupEditorAnchorRect } from "@/components/workspace/shell/tabs/ManualChatGroupEditorPopover";
-import { useManualChatGroupActions } from "@/hooks/workspaces/workflows/tabs/use-manual-chat-group-actions";
+import type { ManualChatGroupEditorAnchorRect } from "#product/components/workspace/shell/tabs/ManualChatGroupEditorPopover";
+import { useManualChatGroupActions } from "#product/hooks/workspaces/workflows/tabs/use-manual-chat-group-actions";
 import {
   createManualChatGroupId,
   getRandomManualChatGroupColorId,
   type DisplayManualChatGroup,
   type ManualChatGroupColorId,
   type ManualChatGroupId,
-} from "@/lib/domain/workspaces/tabs/manual-groups";
+} from "#product/lib/domain/workspaces/tabs/manual-groups";
 
 export function useHeaderTabsGroupEditor({
   workspaceId,

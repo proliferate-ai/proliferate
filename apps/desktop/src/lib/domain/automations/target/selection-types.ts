@@ -1,10 +1,10 @@
-import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
-import type { ComputeLaunchTargetOption } from "@/lib/domain/compute/target-options";
+import type { SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
+import type { ComputeLaunchTargetOption } from "#product/lib/domain/compute/target-options";
 import type {
   AutomationExecutionTarget,
   AutomationTargetCloudWorkspaceRecord,
   AutomationTargetRepoConfigRecord,
-} from "@/lib/domain/automations/target/records";
+} from "#product/lib/domain/automations/target/records";
 
 export type { AutomationExecutionTarget };
 

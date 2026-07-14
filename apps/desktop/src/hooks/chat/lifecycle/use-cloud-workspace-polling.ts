@@ -1,23 +1,23 @@
 import { useEffect } from "react";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
-import { useCloudWorkspaceActions } from "@/hooks/cloud/workflows/use-cloud-workspace-actions";
-import { useWorkspaceSelection } from "@/hooks/workspaces/workflows/selection/use-workspace-selection";
-import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/creation/arrival";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
+import { useCloudWorkspaceActions } from "#product/hooks/cloud/workflows/use-cloud-workspace-actions";
+import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
+import { buildWorkspaceArrivalEvent } from "#product/lib/domain/workspaces/creation/arrival";
 import {
   usePendingWorkspaceSessionMaterialization,
-} from "@/hooks/workspaces/workflows/use-pending-workspace-session-materialization";
+} from "#product/hooks/workspaces/workflows/use-pending-workspace-session-materialization";
 import {
   resolveActiveProjectedSessionForPendingWorkspace,
-} from "@/hooks/workspaces/workflows/pending-workspace-projected-session";
+} from "#product/hooks/workspaces/workflows/pending-workspace-projected-session";
 import {
   isCloudWorkspacePostReadyPending,
   resolveCloudWorkspaceStatus,
   shouldPollCloudWorkspaceForUpdates,
   shouldShowCloudWorkspaceStatusScreen,
-} from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { trackWorkspaceInteraction } from "@/stores/preferences/workspace-ui-store";
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
+import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import { trackWorkspaceInteraction } from "#product/stores/preferences/workspace-ui-store";
 import {
   elapsedMs,
   elapsedSince,

@@ -1,6 +1,6 @@
 import { Button } from "@proliferate/ui/primitives/Button";
-import type { NavigationCloseChildAgent } from "@/lib/domain/playground/subagents-ux/navigation-close-model";
-import { SubagentIdentityGlyph } from "../identity-receipts/SubagentIdentityGlyph";
+import type { NavigationCloseChildAgent } from "#product/lib/domain/playground/subagents-ux/navigation-close-model";
+import { SubagentIdentityGlyph } from "#product/components/playground/subagents-ux/identity-receipts/SubagentIdentityGlyph";
 
 export function NavigationClosePaneRow({
   child,

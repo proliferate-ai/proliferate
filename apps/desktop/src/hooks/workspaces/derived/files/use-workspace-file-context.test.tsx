@@ -3,8 +3,8 @@
 import { cleanup, renderHook } from "@testing-library/react";
 import type { Workspace } from "@anyharness/sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useWorkspaceFileContext } from "./use-workspace-file-context";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useWorkspaceFileContext } from "#product/hooks/workspaces/derived/files/use-workspace-file-context";
 
 const mocks = vi.hoisted(() => ({
   useWorkspaces: vi.fn(),

@@ -4,15 +4,15 @@ import type {
   Session,
   SessionLiveConfigSnapshot,
 } from "@anyharness/sdk";
-import type { DesktopSessionDefaultControl } from "@/lib/domain/agents/cloud-launch-catalog";
+import type { DesktopSessionDefaultControl } from "#product/lib/domain/agents/cloud-launch-catalog";
 import type {
   SessionConfigModel,
   SessionConfigModelRegistry,
-} from "@/lib/domain/chat/launch/session-config";
+} from "#product/lib/domain/chat/launch/session-config";
 import type {
   DefaultLiveSessionControlKey,
   DefaultLiveSessionControlValuesByAgentKind,
-} from "@/lib/domain/preferences/user/session-defaults";
+} from "#product/lib/domain/preferences/user/session-defaults";
 
 const LIVE_CONFIG_AVAILABILITY_ATTEMPTS = 3;
 const QUEUED_APPLY_ATTEMPTS = 10;

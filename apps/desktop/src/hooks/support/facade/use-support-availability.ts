@@ -1,4 +1,4 @@
-import { useProductAuthStatus } from "@/hooks/auth/facade/use-product-auth";
+import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth";
 
 export interface SupportAvailability {
   /** True only when a real Cloud session exists (uploads will succeed). */

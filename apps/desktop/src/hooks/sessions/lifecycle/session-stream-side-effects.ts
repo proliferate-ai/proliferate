@@ -10,27 +10,27 @@ import {
 import {
   planBatchedStreamSideEffects,
   type ReconciledStreamConfigIntent,
-} from "@/lib/domain/sessions/stream/stream-side-effect-plan";
+} from "#product/lib/domain/sessions/stream/stream-side-effect-plan";
 import {
   trackSessionInteraction,
   trackWorkspaceInteraction,
-} from "@/stores/preferences/workspace-ui-store";
+} from "#product/stores/preferences/workspace-ui-store";
 import {
   notifyTurnEnd,
   notifyUserFacingTurnEnd,
-} from "@/lib/infra/events/turn-end-events";
+} from "#product/lib/infra/events/turn-end-events";
 import type {
   SessionChildRelationship,
   SessionRelationship,
-} from "@/lib/domain/sessions/directory/relationship";
+} from "#product/lib/domain/sessions/directory/relationship";
 import {
   clearPendingConfigRollbackCheck,
-} from "@/hooks/sessions/lifecycle/session-runtime-pending-config";
-import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
-import type { SessionStreamCache } from "@/hooks/sessions/cache/use-session-stream-cache";
+} from "#product/hooks/sessions/lifecycle/session-runtime-pending-config";
+import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
+import type { SessionStreamCache } from "#product/hooks/sessions/cache/use-session-stream-cache";
 import {
   createLatestTimestampThrottle,
-} from "@/lib/domain/sessions/stream/latest-timestamp-throttle";
+} from "#product/lib/domain/sessions/stream/latest-timestamp-throttle";
 
 const STREAM_WORKSPACE_ACTIVITY_WRITE_INTERVAL_MS = 1_000;
 

@@ -2,16 +2,16 @@ import { useMemo } from "react";
 import type { GitBranchRef, RepoRoot, Workspace } from "@anyharness/sdk";
 import { useRepoRootGitBranchesQuery } from "@anyharness/sdk-react";
 import { useRepositories } from "@proliferate/cloud-sdk-react";
-import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
-import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
-import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
+import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+import { useLogicalWorkspaces } from "#product/hooks/workspaces/derived/use-logical-workspaces";
+import { useStandardRepoProjection } from "#product/hooks/workspaces/derived/use-standard-repo-projection";
 import {
   buildCloudRepoActionBySourceRoot,
   buildConfiguredCloudRepoKeys,
   resolveCloudRepoActionState,
   type CloudRepoActionState,
   type CloudWorkspaceRepoTarget,
-} from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import {
   findHomeNextLocalWorkspace,
   localBranchNames,
@@ -22,11 +22,11 @@ import {
   type HomeNextDestination,
   type HomeNextRepoLaunchKind,
   type HomeNextRepositorySelection,
-} from "@/lib/domain/home/home-next-launch";
-import { expandLogicalWorkspaceRelatedIdSet } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
-import { buildSettingsRepositoryEntries } from "@/lib/domain/settings/repositories";
-import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+} from "#product/lib/domain/home/home-next-launch";
+import { expandLogicalWorkspaceRelatedIdSet } from "#product/lib/domain/workspaces/cloud/logical-workspace-lookup";
+import { buildSettingsRepositoryEntries } from "#product/lib/domain/settings/repositories";
+import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 
 const EMPTY_WORKSPACES: Workspace[] = [];
 const EMPTY_REPO_ROOTS: RepoRoot[] = [];

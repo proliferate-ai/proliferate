@@ -1,26 +1,26 @@
 import { useEffect } from "react";
-import { useProductStorageContext } from "@/hooks/persistence/facade/use-product-storage-context";
+import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
 import {
   hydrateChatDiffPreferences,
   setChatDiffPreferencesStorageContext,
-} from "@/stores/chat/chat-diff-preferences-store";
+} from "#product/stores/chat/chat-diff-preferences-store";
 import {
   hydrateFileTreeStore,
   setFileTreeStoreStorageContext,
-} from "@/stores/editor/file-tree-store";
+} from "#product/stores/editor/file-tree-store";
 import {
   hydrateHomeNextTargetSelection,
   setHomeNextTargetSelectionStorageContext,
-} from "@/hooks/home/ui/use-home-next-target-selection-state";
+} from "#product/hooks/home/ui/use-home-next-target-selection-state";
 import {
   hydrateCloudDisplayNameSuppression,
   setCloudDisplayNameSuppressionStorageContext,
-} from "@/hooks/workspaces/lifecycle/cloud-display-name-backfill-suppression";
+} from "#product/hooks/workspaces/lifecycle/cloud-display-name-backfill-suppression";
 import {
   hydrateSessionReplacementTombstones,
   setSessionReplacementTombstonesStorageContext,
-} from "@/lib/access/persistence/session-replacement-tombstones-storage";
-import { hydrateCommittedReplacedSessionTombstones } from "@/hooks/sessions/workflows/session-replacement-tombstones";
+} from "#product/lib/access/persistence/session-replacement-tombstones-storage";
+import { hydrateCommittedReplacedSessionTombstones } from "#product/hooks/sessions/workflows/session-replacement-tombstones";
 
 /**
  * Wires the injected ProductStorage backend into the module-singleton product

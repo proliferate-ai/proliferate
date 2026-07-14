@@ -1,10 +1,10 @@
-import { batchSessionStoreWrites } from "@/lib/infra/scheduling/react-batching";
+import { batchSessionStoreWrites } from "#product/lib/infra/scheduling/react-batching";
 import {
   patchSessionRecord,
   removeSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
+} from "#product/stores/sessions/session-records";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import type { SessionRuntimeRecord } from "#product/stores/sessions/session-types";
 
 export function materializeSessionRecord(
   clientSessionId: string,

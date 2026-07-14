@@ -1,21 +1,21 @@
 import type { TerminalPurpose, TerminalRecord } from "@anyharness/sdk";
 import { useCallback } from "react";
-import { useTerminalCache } from "@/hooks/access/anyharness/terminals/use-terminal-cache";
-import { useTerminalWorkspaceConnection } from "@/hooks/terminals/workflows/use-terminal-workspace-connection";
+import { useTerminalCache } from "#product/hooks/access/anyharness/terminals/use-terminal-cache";
+import { useTerminalWorkspaceConnection } from "#product/hooks/terminals/workflows/use-terminal-workspace-connection";
 import {
   clearTerminalIntentionalClose,
   markTerminalIntentionalClose,
-} from "@/lib/infra/terminals/terminal-close-intent";
+} from "#product/lib/infra/terminals/terminal-close-intent";
 import {
   clearTerminal,
-} from "@/lib/infra/terminals/terminal-stream-registry";
-import { measureWorkspaceTerminalGrid } from "@/lib/infra/terminals/terminal-grid-probe";
+} from "#product/lib/infra/terminals/terminal-stream-registry";
+import { measureWorkspaceTerminalGrid } from "#product/lib/infra/terminals/terminal-grid-probe";
 import {
   DEFAULT_TERMINAL_GRID,
   type TerminalGrid,
-} from "@/lib/domain/terminals/terminal-grid";
-import { resolveReadableCodeFontScale } from "@/lib/domain/preferences/appearance";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+} from "#product/lib/domain/terminals/terminal-grid";
+import { resolveReadableCodeFontScale } from "#product/lib/domain/preferences/appearance";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import {
   closeTerminal,
   createWorkspaceTerminal,
@@ -24,14 +24,14 @@ import {
   resizeTerminal,
   runTerminalCommand,
   updateTerminalTitle,
-} from "@/lib/access/anyharness/terminals";
+} from "#product/lib/access/anyharness/terminals";
 import {
   closeTerminalTabWorkflow,
   createRunTerminalTabWorkflow,
   type CloseTerminalResult,
-} from "@/lib/workflows/terminals/terminal-record-workflows";
-import { useToastStore } from "@/stores/toast/toast-store";
-import { useTerminalStore } from "@/stores/terminal/terminal-store";
+} from "#product/lib/workflows/terminals/terminal-record-workflows";
+import { useToastStore } from "#product/stores/toast/toast-store";
+import { useTerminalStore } from "#product/stores/terminal/terminal-store";
 
 // Owns terminal record user actions. Does not own terminal rendering or stream lifecycle.
 export function useTerminalActions() {

@@ -1,16 +1,16 @@
 import { useEffect } from "react";
-import { useProductStorageContext } from "@/hooks/persistence/facade/use-product-storage-context";
+import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
 import {
   selectPersistedUserPreferencesSlice,
   type PersistedUserPreferencesMetadata,
-} from "@/lib/domain/preferences/persisted-metadata";
-import type { UserPreferences } from "@/lib/domain/preferences/user/model";
-import type { ProductStorageContext } from "@/lib/infra/persistence/product-storage";
+} from "#product/lib/domain/preferences/persisted-metadata";
+import type { UserPreferences } from "#product/lib/domain/preferences/user/model";
+import type { ProductStorageContext } from "#product/lib/infra/persistence/product-storage";
 import {
   loadUserPreferences,
   persistUserPreferences,
-} from "@/lib/workflows/preferences/user-preferences-persistence";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+} from "#product/lib/workflows/preferences/user-preferences-persistence";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
 function sameJson(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);

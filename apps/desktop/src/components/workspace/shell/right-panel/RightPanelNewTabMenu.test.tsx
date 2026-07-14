@@ -2,7 +2,7 @@
 
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { RightPanelNewTabMenu } from "@/components/workspace/shell/right-panel/RightPanelNewTabMenu";
+import { RightPanelNewTabMenu } from "#product/components/workspace/shell/right-panel/RightPanelNewTabMenu";
 
 describe("RightPanelNewTabMenu", () => {
 

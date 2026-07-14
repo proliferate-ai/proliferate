@@ -1,13 +1,13 @@
 import {
   GIT_DIFF_FETCH_CONCURRENCY_LIMIT,
   resolveDiffDisplayPolicy,
-} from "@/lib/domain/workspaces/changes/diff-display-policy";
+} from "#product/lib/domain/workspaces/changes/diff-display-policy";
 import type {
   GitPanelMode,
   GitPanelReviewScope,
   GitPanelSection,
-} from "@/lib/domain/workspaces/changes/git-panel-diff";
-import type { GitReviewFileEntry } from "@/lib/domain/workspaces/changes/git-review-entries";
+} from "#product/lib/domain/workspaces/changes/git-panel-diff";
+import type { GitReviewFileEntry } from "#product/lib/domain/workspaces/changes/git-review-entries";
 
 export interface GitPanelSectionStats {
   additions: number;

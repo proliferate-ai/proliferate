@@ -1,16 +1,16 @@
 import type { ReactNode } from "react";
-import { ApprovalCard } from "@/components/workspace/chat/input/ApprovalCard";
-import { McpElicitationCard } from "@/components/workspace/chat/input/McpElicitationCard";
+import { ApprovalCard } from "#product/components/workspace/chat/input/ApprovalCard";
+import { McpElicitationCard } from "#product/components/workspace/chat/input/McpElicitationCard";
 import {
   TodoTrackerPanel,
   TodoTrackerStrip,
-} from "@/components/workspace/chat/input/TodoTrackerPanel";
-import { UserInputCard } from "@/components/workspace/chat/input/UserInputCard";
-import { PlaygroundInteractionMotionFixture } from "@/components/playground/composer-slots/PlaygroundInteractionMotionFixture";
-import { CloudRuntimeAttachedPanelView } from "@/components/workspace/chat/surface/CloudRuntimeAttachedPanel";
-import { WorkspaceArrivalAttachedPanelView } from "@/components/workspace/chat/surface/WorkspaceArrivalAttachedPanel";
-import { WorkspaceArrivalCloudPanel } from "@/components/workspace/chat/surface/WorkspaceArrivalCloudPanel";
-import type { ScenarioKey } from "@/config/playground";
+} from "#product/components/workspace/chat/input/TodoTrackerPanel";
+import { UserInputCard } from "#product/components/workspace/chat/input/UserInputCard";
+import { PlaygroundInteractionMotionFixture } from "#product/components/playground/composer-slots/PlaygroundInteractionMotionFixture";
+import { CloudRuntimeAttachedPanelView } from "#product/components/workspace/chat/surface/CloudRuntimeAttachedPanel";
+import { WorkspaceArrivalAttachedPanelView } from "#product/components/workspace/chat/surface/WorkspaceArrivalAttachedPanel";
+import { WorkspaceArrivalCloudPanel } from "#product/components/workspace/chat/surface/WorkspaceArrivalCloudPanel";
+import type { ScenarioKey } from "#product/config/playground";
 import {
   CLOUD_RUNTIME_RECONNECT_ERROR,
   CLOUD_RUNTIME_RECONNECTING,
@@ -20,7 +20,7 @@ import {
   CLOUD_STATUS_FIRST_RUNTIME,
   CLOUD_STATUS_PROVISIONING,
   WORKSPACE_ARRIVAL_CREATED,
-} from "@/lib/domain/chat/__fixtures__/playground/panel-cloud-fixtures";
+} from "#product/lib/domain/chat/__fixtures__/playground/panel-cloud-fixtures";
 import {
   EDIT_OPTIONS,
   EXECUTE_OPTIONS,
@@ -35,13 +35,13 @@ import {
   USER_INPUT_SECRET,
   USER_INPUT_SINGLE_FREEFORM,
   USER_INPUT_SINGLE_OPTION,
-} from "@/lib/domain/chat/__fixtures__/playground/panel-interaction-fixtures";
+} from "#product/lib/domain/chat/__fixtures__/playground/panel-interaction-fixtures";
 import {
   TODOS_LONG,
   TODOS_MID,
   TODOS_SHORT,
-} from "@/lib/domain/chat/__fixtures__/playground/panel-todo-fixtures";
-import { noop, noopAsync, revealExampleUrl } from "@/components/playground/PlaygroundComposerActions";
+} from "#product/lib/domain/chat/__fixtures__/playground/panel-todo-fixtures";
+import { noop, noopAsync, revealExampleUrl } from "#product/components/playground/PlaygroundComposerActions";
 
 export function renderPanelSlotFixture(scenario: ScenarioKey): ReactNode | null {
   switch (scenario) {

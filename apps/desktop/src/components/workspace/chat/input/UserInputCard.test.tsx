@@ -3,7 +3,7 @@
 import type { UserInputQuestion, UserInputSubmittedAnswer } from "@anyharness/sdk";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { UserInputCard } from "./UserInputCard";
+import { UserInputCard } from "#product/components/workspace/chat/input/UserInputCard";
 
 const OPTION_PLUS_OTHER: UserInputQuestion[] = [{
   questionId: "strategy",

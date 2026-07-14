@@ -5,8 +5,8 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import type { ProductHost } from "@proliferate/product-client/host/product-host";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
-import type { WorkspaceGitStatus } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
-import { WorkspaceItem } from "./WorkspaceItem";
+import type { WorkspaceGitStatus } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
+import { WorkspaceItem } from "#product/components/workspace/shell/sidebar/WorkspaceItem";
 
 const webTestHost = { desktop: null } as ProductHost;
 

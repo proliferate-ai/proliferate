@@ -5,9 +5,9 @@ import {
   useAnyHarnessWorkspaceContext,
   useWriteWorkspaceFileMutation,
 } from "@anyharness/sdk-react";
-import { useWorkspaceFilesCache } from "@/hooks/access/anyharness/files/use-workspace-files-cache";
-import type { WorkspaceFileContext } from "@/hooks/workspaces/derived/files/use-workspace-file-context";
-import { useWorkspaceFileBuffersStore } from "@/stores/editor/workspace-file-buffers-store";
+import { useWorkspaceFilesCache } from "#product/hooks/access/anyharness/files/use-workspace-files-cache";
+import type { WorkspaceFileContext } from "#product/hooks/workspaces/derived/files/use-workspace-file-context";
+import { useWorkspaceFileBuffersStore } from "#product/stores/editor/workspace-file-buffers-store";
 
 export function useWorkspaceFileBufferActions(fileContext: WorkspaceFileContext) {
   const workspace = useAnyHarnessWorkspaceContext();

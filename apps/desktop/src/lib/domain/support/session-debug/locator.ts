@@ -1,5 +1,5 @@
 import type { HealthResponse } from "@anyharness/sdk";
-import type { SessionDebugLocatorSession } from "@/lib/domain/support/session-debug/session-summary";
+import type { SessionDebugLocatorSession } from "#product/lib/domain/support/session-debug/session-summary";
 
 export type SessionDebugRuntimeLocation = "local" | "cloud";
 

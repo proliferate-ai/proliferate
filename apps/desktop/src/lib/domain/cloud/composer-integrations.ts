@@ -5,7 +5,7 @@ import type {
 import {
   integrationReauthChipLabel,
   integrationsNeedingReauth,
-} from "./integration-reauth";
+} from "#product/lib/domain/cloud/integration-reauth";
 
 /**
  * How the single composer integrations control presents itself, escalating

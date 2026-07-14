@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { Workspace } from "@anyharness/sdk";
 import {
   resolveWorkspaceShellSurface,
-} from "@/lib/domain/workspaces/shell/shell-surface";
-import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
+} from "#product/lib/domain/workspaces/shell/shell-surface";
+import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
 
 function makeWorkspace(overrides: Partial<Workspace>): Workspace {
   return {

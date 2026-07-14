@@ -10,8 +10,8 @@ import { deriveGenericToolOutput } from "@proliferate/product-domain/chats/tools
 import {
   ActionDisclosureRow,
   PlainActionRow,
-} from "./CollapsedActionRowPrimitives";
-import { CollapsedActionIcon } from "./CollapsedActionIcon";
+} from "#product/components/workspace/chat/tool-calls/CollapsedActionRowPrimitives";
+import { CollapsedActionIcon } from "#product/components/workspace/chat/tool-calls/CollapsedActionIcon";
 
 export function GenericActionRow({ item }: { item: ToolCallItem }) {
   const [expanded, setExpanded] = useState(false);

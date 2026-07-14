@@ -3,14 +3,14 @@ import type { ReactNode } from "react";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import { Check, CloudIcon, KeyRound, SquareTerminal } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
-import { gatewaySubtitle } from "@/copy/settings/agent-auth-copy";
+import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
+import { gatewaySubtitle } from "#product/copy/settings/agent-auth-copy";
 import {
   isMultiSourceHarness,
   type AuthMethod,
-} from "@/lib/domain/settings/harness-auth-sources";
-import { HarnessPanelBlock, type HarnessBlockVariant } from "./HarnessPanelBlock";
-import type { HarnessAuthEditorApi } from "@/hooks/agents/workflows/use-harness-auth-editor";
+} from "#product/lib/domain/settings/harness-auth-sources";
+import { HarnessPanelBlock, type HarnessBlockVariant } from "#product/components/settings/panes/agents/harness/HarnessPanelBlock";
+import type { HarnessAuthEditorApi } from "#product/hooks/agents/workflows/use-harness-auth-editor";
 
 export type { AuthMethod };
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LatencyFlowRecord } from "@/lib/infra/measurement/latency-flow";
-import { collectTelemetryLatencyFlowCompletions } from "./latency-flow-completion";
+import { collectTelemetryLatencyFlowCompletions } from "#product/lib/domain/telemetry/latency-flow-completion";
 
 function createFlow(overrides: Partial<LatencyFlowRecord>): LatencyFlowRecord {
   return {

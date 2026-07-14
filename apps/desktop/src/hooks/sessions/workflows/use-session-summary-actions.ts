@@ -20,17 +20,17 @@ import {
 import {
   sessionIntentsForSession,
 } from "@proliferate/product-domain/sessions/intents/session-intent-state";
-import { buildSessionSlotPatchFromSummary } from "@/lib/domain/sessions/summary";
-import { activityFromTranscript } from "@/lib/domain/sessions/directory/directory-activity";
-import { batchSessionStoreWrites } from "@/lib/infra/scheduling/react-batching";
-import { persistDefaultSessionModePreference } from "@/hooks/sessions/workflows/session-mode-preferences";
-import { clearPendingConfigRollbackCheck } from "@/hooks/sessions/lifecycle/session-runtime-pending-config";
-import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/derived/use-workspace-surface-lookup";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { getSessionRecord } from "@/stores/sessions/session-records";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
-import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
-import { trackWorkspaceInteraction } from "@/stores/preferences/workspace-ui-store";
+import { buildSessionSlotPatchFromSummary } from "#product/lib/domain/sessions/summary";
+import { activityFromTranscript } from "#product/lib/domain/sessions/directory/directory-activity";
+import { batchSessionStoreWrites } from "#product/lib/infra/scheduling/react-batching";
+import { persistDefaultSessionModePreference } from "#product/hooks/sessions/workflows/session-mode-preferences";
+import { clearPendingConfigRollbackCheck } from "#product/hooks/sessions/lifecycle/session-runtime-pending-config";
+import { useWorkspaceSurfaceLookup } from "#product/hooks/workspaces/derived/use-workspace-surface-lookup";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { getSessionRecord } from "#product/stores/sessions/session-records";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
+import { trackWorkspaceInteraction } from "#product/stores/preferences/workspace-ui-store";
 
 /**
  * Owns applying authoritative session summaries to the session stores.

@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import type { PlanEntry } from "@anyharness/sdk";
 import { afterEach, describe, expect, it } from "vitest";
-import { TodoTrackerPanel, TodoTrackerStrip } from "./TodoTrackerPanel";
+import { TodoTrackerPanel, TodoTrackerStrip } from "#product/components/workspace/chat/input/TodoTrackerPanel";
 
 afterEach(() => {
   cleanup();

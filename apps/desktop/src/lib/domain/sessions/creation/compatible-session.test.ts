@@ -3,7 +3,7 @@ import type { Session } from "@anyharness/sdk";
 import {
   findCompatibleExistingSession,
   shouldProbeCompatibleRuntimeSessions,
-} from "@/lib/domain/sessions/creation/compatible-session";
+} from "#product/lib/domain/sessions/creation/compatible-session";
 
 function session(overrides: Partial<Session>): Session {
   return {

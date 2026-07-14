@@ -5,9 +5,9 @@ import {
   useAnyHarnessCacheScopeKey,
 } from "@anyharness/sdk-react";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
-import { getAgentLaunchOptions } from "@/lib/access/anyharness/agents";
+import { getAgentLaunchOptions } from "#product/lib/access/anyharness/agents";
 import type { CloudConnectionInfo } from "@/lib/access/cloud/client";
-import { withFreshCloudSandboxGatewayAccessToken } from "@/lib/access/cloud/cloud-sandbox-gateway";
+import { withFreshCloudSandboxGatewayAccessToken } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 
 export function useWorkspaceAgentLaunchOptionsQuery({
   workspaceId,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createTabDragController } from "./drag-controller";
+import { createTabDragController } from "#product/lib/domain/workspaces/tabs/drag-controller";
 
 describe("tab drag controller", () => {
   it("activates only after crossing the movement threshold", () => {

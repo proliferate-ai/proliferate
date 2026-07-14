@@ -7,11 +7,11 @@ import {
 import {
   useAddCloudEnvironment,
 } from "@proliferate/product-surfaces/settings/cloud-environments/use-add-cloud-environment";
-import { useAddRepo } from "@/hooks/workspaces/workflows/use-add-repo";
-import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
-import { isSettingsAdminRole } from "@/lib/domain/settings/admin-roles";
-import { useAddRepoFlowStore } from "@/stores/ui/add-repo-flow-store";
-import { useToastStore } from "@/stores/toast/toast-store";
+import { useAddRepo } from "#product/hooks/workspaces/workflows/use-add-repo";
+import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
+import { isSettingsAdminRole } from "#product/lib/domain/settings/admin-roles";
+import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 /**
  * App-level host for the unified add-repository flow (UX_SPEC §4).

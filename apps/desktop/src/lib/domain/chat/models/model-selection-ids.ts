@@ -1,12 +1,12 @@
 import type {
   DesktopAgentLaunchAgent,
   DesktopAgentLaunchModel,
-} from "@/lib/domain/agents/cloud-launch-catalog";
-import { resolveSavedModelId } from "@/lib/domain/agents/saved-model-intent";
-import type { ModelSelectorSelection } from "@/lib/domain/chat/models/model-selector-types";
+} from "#product/lib/domain/agents/cloud-launch-catalog";
+import { resolveSavedModelId } from "#product/lib/domain/agents/saved-model-intent";
+import type { ModelSelectorSelection } from "#product/lib/domain/chat/models/model-selector-types";
 import {
   normalizeDefaultChatModelId,
-} from "@/lib/domain/preferences/user/session-defaults";
+} from "#product/lib/domain/preferences/user/session-defaults";
 
 export type ModelSelectionMatchKind = "none" | "direct" | "equivalent";
 

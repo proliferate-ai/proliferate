@@ -3,9 +3,9 @@ import {
   normalizeRightPanelDurableState,
   type RightPanelDurableState,
   type RightPanelMaterializedState,
-} from "@/lib/domain/workspaces/shell/right-panel-model";
-import { normalizeRightPanelMaterializedState } from "@/lib/domain/workspaces/shell/right-panel-state-normalization";
-import { migrateLegacyRightPanelWorkspaceState } from "@/lib/domain/workspaces/shell/right-panel-migration";
+} from "#product/lib/domain/workspaces/shell/right-panel-model";
+import { normalizeRightPanelMaterializedState } from "#product/lib/domain/workspaces/shell/right-panel-state-normalization";
+import { migrateLegacyRightPanelWorkspaceState } from "#product/lib/domain/workspaces/shell/right-panel-migration";
 
 export function migrateLegacyRightPanelPreferences(args: {
   rightPanelByWorkspace?: Record<string, unknown>;

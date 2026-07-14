@@ -1,6 +1,6 @@
 import { useEffect } from "react";
-import { useConnectivityStore } from "@/stores/infra/connectivity-store";
-import { flushOfflineSessionReconnects } from "@/lib/workflows/sessions/session-reconnect-state";
+import { useConnectivityStore } from "#product/stores/infra/connectivity-store";
+import { flushOfflineSessionReconnects } from "#product/lib/workflows/sessions/session-reconnect-state";
 
 /**
  * Wires up window online/offline listeners to the connectivity store.

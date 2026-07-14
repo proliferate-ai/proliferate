@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import type { ProductStorageContext } from "@/lib/infra/persistence/product-storage";
+import type { ProductStorageContext } from "#product/lib/infra/persistence/product-storage";
 
 /**
  * Bind the injected {@link ProductStorageContext} (storage + guarded

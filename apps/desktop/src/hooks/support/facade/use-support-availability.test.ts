@@ -5,8 +5,8 @@ import {
   productHostWrapper,
   makeTestProductHost,
   testAuthState,
-} from "@/test/product-host-test-utils";
-import { useSupportAvailability } from "./use-support-availability";
+} from "#product/test/product-host-test-utils";
+import { useSupportAvailability } from "#product/hooks/support/facade/use-support-availability";
 
 function wrapperForStatus(status: "loading" | "anonymous" | "authenticated") {
   return productHostWrapper(

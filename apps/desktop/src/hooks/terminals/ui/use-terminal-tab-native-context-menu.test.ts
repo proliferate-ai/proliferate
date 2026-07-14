@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildTerminalTabNativeContextMenuItems } from "./use-terminal-tab-native-context-menu";
+import { buildTerminalTabNativeContextMenuItems } from "#product/hooks/terminals/ui/use-terminal-tab-native-context-menu";
 
 describe("buildTerminalTabNativeContextMenuItems", () => {
   it("models rename and runtime-gated close commands", () => {

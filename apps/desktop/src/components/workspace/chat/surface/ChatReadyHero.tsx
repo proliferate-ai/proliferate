@@ -1,4 +1,4 @@
-import { CHAT_PRE_MESSAGE_LABELS } from "@/copy/chat/chat-copy";
+import { CHAT_PRE_MESSAGE_LABELS } from "#product/copy/chat/chat-copy";
 
 /**
  * Hero variant shown when a session is hydrated but has no turns yet. Loading

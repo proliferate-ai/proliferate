@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   isPersistableLogicalWorkspaceSelection,
   normalizePersistedLogicalWorkspaceSelection,
-} from "./persisted-logical-workspace-selection";
+} from "#product/lib/domain/workspaces/selection/persisted-logical-workspace-selection";
 
 describe("persisted logical workspace selection", () => {
   it("keeps stable logical workspace ids", () => {

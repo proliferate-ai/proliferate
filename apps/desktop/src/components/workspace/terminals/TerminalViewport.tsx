@@ -1,5 +1,5 @@
 import type { TerminalRecord } from "@anyharness/sdk";
-import { useTerminalViewport } from "@/hooks/terminals/lifecycle/use-terminal-viewport";
+import { useTerminalViewport } from "#product/hooks/terminals/lifecycle/use-terminal-viewport";
 
 interface TerminalViewportProps {
   terminal: TerminalRecord;

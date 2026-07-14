@@ -1,7 +1,7 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
-import { buildBranchName } from "@/lib/domain/workspaces/creation/branch-naming";
-import type { AuthUser } from "@/lib/domain/auth/auth-user";
-import type { BranchPrefixType } from "@/lib/domain/preferences/user/model";
+import { buildBranchName } from "#product/lib/domain/workspaces/creation/branch-naming";
+import type { AuthUser } from "#product/lib/domain/auth/auth-user";
+import type { BranchPrefixType } from "#product/lib/domain/preferences/user/model";
 
 export type WorktreeNameConflictPolicy = "fail" | "suffix_path" | "suffix_path_and_branch";
 export type WorktreeCheckoutMode = "new_branch" | "detached_ref";

@@ -1,5 +1,5 @@
-import { sameStringArray } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
-import type { WorkspaceUiGet, WorkspaceUiSet, WorkspaceUiState } from "@/stores/preferences/workspace-ui-store-types";
+import { sameStringArray } from "#product/lib/domain/workspaces/selection/workspace-keyed-preferences";
+import type { WorkspaceUiGet, WorkspaceUiSet, WorkspaceUiState } from "#product/stores/preferences/workspace-ui-store-types";
 
 type WorkspaceUiShellActions = Pick<
   WorkspaceUiState,

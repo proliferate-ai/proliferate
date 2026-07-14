@@ -4,7 +4,7 @@ import { renderToStaticMarkup as renderReactToStaticMarkup } from "react-dom/ser
 import { describe, expect, it } from "vitest";
 import type { ProductHost } from "@proliferate/product-client/host/product-host";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
-import { DiffViewer } from "./DiffViewer";
+import { DiffViewer } from "#product/components/content/ui/DiffViewer";
 
 const webTestHost = { desktop: null } as ProductHost;
 

@@ -1,18 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { createElement, isValidElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ChatComposerDock } from "@/components/workspace/chat/input/ChatComposerDock";
-import { SCENARIOS, type ScenarioKey } from "./playground";
-import { renderDelegationSlot } from "@/components/playground/delegation/PlaygroundComposerDelegation";
-import { renderActiveSlot } from "@/components/playground/composer-slots/PlaygroundActiveSlotFixtures";
-import { renderAttachedSlot } from "@/components/playground/composer-slots/PlaygroundAttachedSlotFixtures";
-import { renderOutboundSlot } from "@/components/playground/composer-slots/PlaygroundOutboundSlotFixtures";
-import { PlaygroundLoadingStates } from "@/components/playground/loading/PlaygroundLoadingStates";
-import { renderComposerSurfaceForScenario } from "@/components/playground/PlaygroundComposerSurfaces";
-import { PLAYGROUND_SLASH_COMMANDS } from "@/lib/domain/chat/__fixtures__/playground/composer-surface-fixtures";
+import { ChatComposerDock } from "#product/components/workspace/chat/input/ChatComposerDock";
+import { SCENARIOS, type ScenarioKey } from "#product/config/playground";
+import { renderDelegationSlot } from "#product/components/playground/delegation/PlaygroundComposerDelegation";
+import { renderActiveSlot } from "#product/components/playground/composer-slots/PlaygroundActiveSlotFixtures";
+import { renderAttachedSlot } from "#product/components/playground/composer-slots/PlaygroundAttachedSlotFixtures";
+import { renderOutboundSlot } from "#product/components/playground/composer-slots/PlaygroundOutboundSlotFixtures";
+import { PlaygroundLoadingStates } from "#product/components/playground/loading/PlaygroundLoadingStates";
+import { renderComposerSurfaceForScenario } from "#product/components/playground/PlaygroundComposerSurfaces";
+import { PLAYGROUND_SLASH_COMMANDS } from "#product/lib/domain/chat/__fixtures__/playground/composer-surface-fixtures";
 import {
   PLAYGROUND_SUBAGENT_STRIP_ROWS,
-} from "@/lib/domain/chat/__fixtures__/playground/delegation-fixtures";
+} from "#product/lib/domain/chat/__fixtures__/playground/delegation-fixtures";
 
 const USER_INPUT_SCENARIOS: ScenarioKey[] = [
   "user-input-single-option",

@@ -4,28 +4,28 @@ import {
   useStageGitPathsMutation,
   useUnstageGitPathsMutation,
 } from "@anyharness/sdk-react";
-import { GitPanelHeader } from "./GitPanelHeader";
-import { SkeletonBlock, shimmerDelay } from "@/components/feedback/Skeleton";
-import { GitReviewFileTree } from "./GitReviewFileTree";
-import { GitPanelReviewBody } from "./GitPanelReviewBody";
-import { formatGitPanelUndoError } from "./GitPanelReviewChrome";
-import { PaneSideOverlay } from "@/components/workspace/pane/PaneSideOverlay";
-import { useDiffReviewMeasurement } from "@/hooks/workspaces/ui/files/use-diff-review-measurement";
-import { useWorkspaceFileActions } from "@/hooks/workspaces/facade/files/use-workspace-file-actions";
-import { useWorkspaceFileContext } from "@/hooks/workspaces/derived/files/use-workspace-file-context";
-import { useGitPanelState } from "@/hooks/workspaces/derived/use-git-panel-state";
+import { GitPanelHeader } from "#product/components/workspace/git/GitPanelHeader";
+import { SkeletonBlock, shimmerDelay } from "#product/components/feedback/Skeleton";
+import { GitReviewFileTree } from "#product/components/workspace/git/GitReviewFileTree";
+import { GitPanelReviewBody } from "#product/components/workspace/git/GitPanelReviewBody";
+import { formatGitPanelUndoError } from "#product/components/workspace/git/GitPanelReviewChrome";
+import { PaneSideOverlay } from "#product/components/workspace/pane/PaneSideOverlay";
+import { useDiffReviewMeasurement } from "#product/hooks/workspaces/ui/files/use-diff-review-measurement";
+import { useWorkspaceFileActions } from "#product/hooks/workspaces/facade/files/use-workspace-file-actions";
+import { useWorkspaceFileContext } from "#product/hooks/workspaces/derived/files/use-workspace-file-context";
+import { useGitPanelState } from "#product/hooks/workspaces/derived/use-git-panel-state";
 import {
   type GitPanelMode,
   type GitPanelReviewScope,
-} from "@/lib/domain/workspaces/changes/git-panel-diff";
+} from "#product/lib/domain/workspaces/changes/git-panel-diff";
 import {
   resolveDiffDisplayPolicy,
   summarizeDiffDisplayPolicies,
-} from "@/lib/domain/workspaces/changes/diff-display-policy";
+} from "#product/lib/domain/workspaces/changes/diff-display-policy";
 import {
   buildGitReviewFileEntries,
   type GitReviewFileEntry,
-} from "@/lib/domain/workspaces/changes/git-review-entries";
+} from "#product/lib/domain/workspaces/changes/git-review-entries";
 import {
   buildGitPanelDiffFetchScopeKey,
   countUniqueReviewPatchPaths,
@@ -33,9 +33,9 @@ import {
   resolvePermittedGitPanelDiffFetchKeys,
   summarizeGitPanelSectionStats,
   toggleReviewSetValue,
-} from "@/lib/domain/workspaces/changes/git-panel-review-model";
-import { useGitPanelUiStore } from "@/stores/editor/git-panel-ui-store";
-import { useToastStore } from "@/stores/toast/toast-store";
+} from "#product/lib/domain/workspaces/changes/git-panel-review-model";
+import { useGitPanelUiStore } from "#product/stores/editor/git-panel-ui-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 const EMPTY_COLLAPSED_FILE_KEYS = new Set<string>();
 const EMPTY_LAST_TURN_REVERT_PATCHES = {

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identity";
-import type { DelegatedWorkTabIdentity } from "@/lib/domain/delegated-work/model";
-import { getChatTabLabel, renderChatTabIcon } from "./tab-rendering";
+import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
+import type { DelegatedWorkTabIdentity } from "#product/lib/domain/delegated-work/model";
+import { getChatTabLabel, renderChatTabIcon } from "#product/components/workspace/shell/tabs/tab-rendering";
 
 describe("getChatTabLabel", () => {
   it("uses only the generated agent name for delegated header tabs", () => {

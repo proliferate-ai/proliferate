@@ -3,14 +3,14 @@ import {
   isManualChatGroupId,
   normalizeManualChatGroupsForMutation,
   type ManualChatGroup,
-} from "@/lib/domain/workspaces/tabs/manual-groups";
+} from "#product/lib/domain/workspaces/tabs/manual-groups";
 import {
   sameStringArray,
   shouldWriteReferencePreference,
   shouldWriteStringArrayPreference,
   type WorkspaceFallbackResult,
-} from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+} from "#product/lib/domain/workspaces/selection/workspace-keyed-preferences";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 
 export function useWorkspaceHeaderTabsPreferenceEffects({
   workspaceUiKey,

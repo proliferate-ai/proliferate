@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveReasoningEffortPresentation } from "./session-reasoning-effort-control";
+import { resolveReasoningEffortPresentation } from "#product/lib/domain/chat/session-controls/session-reasoning-effort-control";
 
 describe("resolveReasoningEffortPresentation", () => {
   it("normalizes legacy max reasoning to xhigh presentation", () => {

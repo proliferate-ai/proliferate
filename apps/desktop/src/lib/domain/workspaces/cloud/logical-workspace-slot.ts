@@ -2,12 +2,12 @@ import type { Workspace } from "@anyharness/sdk";
 import type {
   CloudMobilityWorkspaceSummary,
   CloudWorkspaceSummary,
-} from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
-import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { cloudWorkspaceUsesCloudRuntime } from "@/lib/domain/workspaces/cloud/cloud-runtime-kind";
-import { humanizeBranchName } from "@/lib/domain/workspaces/creation/branch-naming";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
-import { workspaceDisplayName } from "@/lib/domain/workspaces/display/workspace-display";
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
+import { cloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import { cloudWorkspaceUsesCloudRuntime } from "#product/lib/domain/workspaces/cloud/cloud-runtime-kind";
+import { humanizeBranchName } from "#product/lib/domain/workspaces/creation/branch-naming";
+import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
+import { workspaceDisplayName } from "#product/lib/domain/workspaces/display/workspace-display";
 
 export function cloudWorkspaceMatchesSelection(
   workspace: CloudWorkspaceSummary,

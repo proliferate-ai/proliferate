@@ -8,11 +8,11 @@ import {
 } from "lucide-react";
 import { ArrowUpRight, Discord, Mail } from "@proliferate/ui/icons";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { PROLIFERATE_DOCS_URL } from "@/config/capabilities";
-import { SHORTCUTS } from "@/config/shortcuts/registry";
-import type { WebAppTarget } from "@/hooks/capabilities/derived/use-web-app-target";
-import type { SupportMenuAction } from "@/lib/domain/support/support-menu-action";
-import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
+import { PROLIFERATE_DOCS_URL } from "#product/config/capabilities";
+import { SHORTCUTS } from "#product/config/shortcuts/registry";
+import type { WebAppTarget } from "#product/hooks/capabilities/derived/use-web-app-target";
+import type { SupportMenuAction } from "#product/lib/domain/support/support-menu-action";
+import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 
 const PROLIFERATE_CHANGELOG_URL = "https://proliferate.com/changelog";
 const PROLIFERATE_DISCORD_URL = "https://discord.gg/7b5afMTqW";

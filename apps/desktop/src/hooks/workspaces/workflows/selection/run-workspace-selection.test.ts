@@ -1,30 +1,30 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import {
   createEmptySessionRecord,
   getSessionRecord,
   putSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
-import { chatWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
+} from "#product/stores/sessions/session-records";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
+import { chatWorkspaceShellTabKey } from "#product/lib/domain/workspaces/tabs/shell-tabs";
 import {
   buildPendingWorkspaceUiKey,
   buildSubmittingPendingWorkspaceEntry,
-} from "@/lib/domain/workspaces/creation/pending-entry";
+} from "#product/lib/domain/workspaces/creation/pending-entry";
 import {
   listActiveLatencyFlows,
   resetLatencyFlowsForTest,
   startLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
 import { ProliferateClientError } from "@/lib/access/cloud/client";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
-import { buildLocalSlotLogicalWorkspaceId } from "@/lib/domain/workspaces/cloud/logical-workspace-id";
-import { runWorkspaceSelection } from "./run-workspace-selection";
-import { resolveCloudWorkspaceReadiness } from "./cloud-readiness";
-import { resolveSelectionConnection } from "./connection";
-import type { WorkspaceSelectionDeps } from "./types";
+import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
+import { buildLocalSlotLogicalWorkspaceId } from "#product/lib/domain/workspaces/cloud/logical-workspace-id";
+import { runWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/run-workspace-selection";
+import { resolveCloudWorkspaceReadiness } from "#product/hooks/workspaces/workflows/selection/cloud-readiness";
+import { resolveSelectionConnection } from "#product/hooks/workspaces/workflows/selection/connection";
+import type { WorkspaceSelectionDeps } from "#product/hooks/workspaces/workflows/selection/types";
 
 vi.mock("./cloud-readiness", () => ({
   resolveCloudWorkspaceReadiness: vi.fn(),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { SupportCapability } from "@/lib/domain/capabilities/server-capability-contract";
-import { deriveSupportMenuAction } from "./support-menu-action";
+import type { SupportCapability } from "#product/lib/domain/capabilities/server-capability-contract";
+import { deriveSupportMenuAction } from "#product/lib/domain/support/support-menu-action";
 
 describe("deriveSupportMenuAction", () => {
   it("vendor: routes to the existing feedback/prompt report flow", () => {

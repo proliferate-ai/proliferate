@@ -1,5 +1,5 @@
-import { PlanReferenceAttachmentCard } from "@/components/workspace/chat/content/PlanReferenceAttachmentCard";
-import { PLAN_IMPLEMENT_HERE_ROW_LABEL } from "@/copy/plans/plan-prompts";
+import { PlanReferenceAttachmentCard } from "#product/components/workspace/chat/content/PlanReferenceAttachmentCard";
+import { PLAN_IMPLEMENT_HERE_ROW_LABEL } from "#product/copy/plans/plan-prompts";
 import type { PromptDisplayPlanPart } from "@proliferate/product-domain/chats/composer/prompt-display-parts";
 
 /**

@@ -1,9 +1,9 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { GitPanel } from "./GitPanel";
-import { GitPanelHeader } from "./GitPanelHeader";
-import { GitReviewTargetSelector } from "./GitReviewTargetSelector";
+import { GitPanel } from "#product/components/workspace/git/GitPanel";
+import { GitPanelHeader } from "#product/components/workspace/git/GitPanelHeader";
+import { GitReviewTargetSelector } from "#product/components/workspace/git/GitReviewTargetSelector";
 
 const mockGitPanelState = vi.hoisted(() => vi.fn());
 const gitDiffQuery = vi.hoisted(() => ({

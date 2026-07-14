@@ -9,16 +9,16 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import type { CloudMobilityWorkspaceSummary } from "@/lib/access/cloud/client";
-import { cloudBillingKey, cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
+import { cloudBillingKey, cloudMobilityWorkspacesKey } from "#product/hooks/access/cloud/query-keys";
 import {
   useProductAuthStatus,
   useProductAuthUserId,
-} from "@/hooks/auth/facade/use-product-auth";
-import type { WorkspaceCollections } from "@/lib/domain/workspaces/cloud/collections";
+} from "#product/hooks/auth/facade/use-product-auth";
+import type { WorkspaceCollections } from "#product/lib/domain/workspaces/cloud/collections";
 import {
   getWorkspaceCollectionsFromCache,
   workspaceCollectionsScopeKey,
-} from "@/hooks/workspaces/cache/query-keys";
+} from "#product/hooks/workspaces/cache/query-keys";
 
 export interface WorkspaceSelectionCacheSnapshot {
   workspaceCollections: WorkspaceCollections | undefined;

@@ -1,24 +1,24 @@
 import { useCallback, useMemo } from "react";
-import { useActiveSessionLaunchState } from "@/hooks/chat/derived/use-active-session-config-state";
-import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
-import { useCloseActiveWorkspaceTab } from "@/hooks/workspaces/workflows/tabs/use-close-active-workspace-tab";
-import { useChatTabVisibilityActions } from "@/hooks/workspaces/workflows/tabs/use-chat-tab-visibility-actions";
-import { useWorkspaceShellActivation } from "@/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
-import { useSessionCreationActions } from "@/hooks/sessions/workflows/use-session-creation-actions";
+import { useActiveSessionLaunchState } from "#product/hooks/chat/derived/use-active-session-config-state";
+import { useConfiguredLaunchReadiness } from "#product/hooks/chat/derived/use-configured-launch-readiness";
+import { useCloseActiveWorkspaceTab } from "#product/hooks/workspaces/workflows/tabs/use-close-active-workspace-tab";
+import { useChatTabVisibilityActions } from "#product/hooks/workspaces/workflows/tabs/use-chat-tab-visibility-actions";
+import { useWorkspaceShellActivation } from "#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
+import { useSessionCreationActions } from "#product/hooks/sessions/workflows/use-session-creation-actions";
 import {
   resolveWorkspaceShellTabFromKey,
   resolveRelativeWorkspaceShellTab,
   resolveWorkspaceShellTabByShortcutIndex,
   type WorkspaceShellTab,
-} from "@/lib/domain/workspaces/tabs/shell-tabs";
-import { resolveAvailableLaunchSelection } from "@/lib/domain/chat/models/launch-selection-defaults";
-import { resolveStoredWorkspaceShellTab } from "@/lib/domain/workspaces/tabs/active-shell-tab";
+} from "#product/lib/domain/workspaces/tabs/shell-tabs";
+import { resolveAvailableLaunchSelection } from "#product/lib/domain/chat/models/launch-selection-defaults";
+import { resolveStoredWorkspaceShellTab } from "#product/lib/domain/workspaces/tabs/active-shell-tab";
 import type {
   HeaderWorkspaceShellStripRow,
-} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useToastStore } from "@/stores/toast/toast-store";
+} from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
 import {
   failLatencyFlow,
   startLatencyFlow,

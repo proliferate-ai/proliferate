@@ -3,7 +3,7 @@ import {
   confirmRepoRemoval,
   repoRemovalConfirmationCopy,
   requestRepoRemovalConfirmation,
-} from "./repo-context-menu";
+} from "#product/lib/domain/workspaces/sidebar/repo-context-menu";
 
 describe("repoRemovalConfirmationCopy", () => {
   it("models removal as destructive confirmation outside the menu", () => {

@@ -10,7 +10,7 @@ import {
 import type {
   AutomationTargetGroup,
   AutomationTargetSelection,
-} from "@/lib/domain/automations/target/selection";
+} from "#product/lib/domain/automations/target/selection";
 import {
   findDefaultAutomationTargetRow,
   findSelectedAutomationTargetRow,
@@ -20,7 +20,7 @@ import {
   RunLocationSectionHeader,
   type AutomationRunLocationConfigureTarget,
   type AutomationRunOwnerScope,
-} from "@/components/automations/controls/run-location/AutomationRunLocationMenu";
+} from "#product/components/automations/controls/run-location/AutomationRunLocationMenu";
 
 interface AutomationOwnerOption {
   value: AutomationRunOwnerScope;

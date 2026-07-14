@@ -1,10 +1,10 @@
 import { useState, type ReactNode } from "react";
 import { Badge } from "@proliferate/ui/primitives/Badge";
-import { UPDATE_PREVIEW_STATES } from "@/config/update-playground";
-import { UpdateDialogContent } from "@/components/feedback/UpdateDialogContent";
-import { ReleaseNoticeCard } from "@/components/workspace/shell/sidebar/ReleaseNoticeCard";
-import { SidebarUpdatePill } from "@/components/workspace/shell/sidebar/SidebarUpdatePill";
-import { UpdateUiPlaygroundControls } from "@/components/playground/UpdateUiPlaygroundControls";
+import { UPDATE_PREVIEW_STATES } from "#product/config/update-playground";
+import { UpdateDialogContent } from "#product/components/feedback/UpdateDialogContent";
+import { ReleaseNoticeCard } from "#product/components/workspace/shell/sidebar/ReleaseNoticeCard";
+import { SidebarUpdatePill } from "#product/components/workspace/shell/sidebar/SidebarUpdatePill";
+import { UpdateUiPlaygroundControls } from "#product/components/playground/UpdateUiPlaygroundControls";
 
 const PREVIEW_VERSION = "0.1.42";
 

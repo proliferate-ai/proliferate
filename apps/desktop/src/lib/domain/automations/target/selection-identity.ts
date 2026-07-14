@@ -1,7 +1,7 @@
 import type {
   AutomationTargetRepoIdentity,
   AutomationTargetSelection,
-} from "@/lib/domain/automations/target/selection-types";
+} from "#product/lib/domain/automations/target/selection-types";
 
 export function isSameAutomationRepo(
   left: AutomationTargetRepoIdentity | null | undefined,

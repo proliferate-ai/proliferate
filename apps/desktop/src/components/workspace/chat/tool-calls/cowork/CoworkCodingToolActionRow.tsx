@@ -7,12 +7,12 @@ import {
   Spinner,
 } from "@proliferate/ui/icons";
 import { ProliferateIcon } from "@proliferate/ui/proliferate-icons";
-import { ToolActionRow } from "@/components/workspace/chat/tool-calls/ToolActionRow";
+import { ToolActionRow } from "#product/components/workspace/chat/tool-calls/ToolActionRow";
 import {
   CoworkCodingLedger,
   CoworkCodingResultDetails,
   shouldShowCoworkCodingLedger,
-} from "@/components/workspace/chat/tool-calls/cowork/CoworkCodingToolLedger";
+} from "#product/components/workspace/chat/tool-calls/cowork/CoworkCodingToolLedger";
 import {
   deriveCoworkCodingToolPresentation,
   type CoworkCodingAction,

@@ -1,4 +1,4 @@
-import type { TelemetryFailureKind } from "./failures";
+import type { TelemetryFailureKind } from "#product/lib/domain/telemetry/failures";
 
 export type DesktopTelemetryRoute =
   | "integrations"

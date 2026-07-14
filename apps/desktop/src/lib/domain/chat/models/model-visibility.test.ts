@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 import type {
   DesktopAgentLaunchAgent,
   DesktopLaunchModelRegistry,
-} from "@/lib/domain/agents/cloud-launch-catalog";
+} from "#product/lib/domain/agents/cloud-launch-catalog";
 import {
   filterVisibleLaunchModels,
   filterVisibleRegistryModels,
   resolveVisibleRegistryModelIds,
   withUpdatedModelVisibilityOverride,
-} from "./model-visibility";
+} from "#product/lib/domain/chat/models/model-visibility";
 
 describe("withUpdatedModelVisibilityOverride", () => {
   it("stores an override when the choice differs from the catalog default", () => {

@@ -1,7 +1,7 @@
 import {
   AUTOMATION_REASONING_EFFORT_VALUES,
   type AutomationSupportedAgentKind,
-} from "@/config/automations";
+} from "#product/config/automations";
 
 export const AUTOMATION_AGENT_KIND_LABELS: Record<AutomationSupportedAgentKind, string> = {
   claude: "Claude",

@@ -19,7 +19,7 @@ import {
   organizationInvitationsKey,
   organizationMembersKey,
   organizationsListKey,
-} from "./query-keys";
+} from "#product/hooks/access/cloud/organizations/query-keys";
 
 export function useOrganizationActions(organizationId: string | null) {
   const queryClient = useQueryClient();

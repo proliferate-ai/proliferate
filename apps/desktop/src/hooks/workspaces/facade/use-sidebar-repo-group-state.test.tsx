@@ -2,18 +2,18 @@
 
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
+import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
 import {
   buildGroups,
   makeLocalLogicalWorkspace,
-} from "@/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import {
   WORKSPACE_SIDEBAR_SHOW_MORE_DEFAULTS,
   useWorkspaceSidebarShowMoreStore,
-} from "@/stores/workspaces/workspace-sidebar-show-more-store";
-import { useSidebarRepoGroupState } from "./use-sidebar-repo-group-state";
+} from "#product/stores/workspaces/workspace-sidebar-show-more-store";
+import { useSidebarRepoGroupState } from "#product/hooks/workspaces/facade/use-sidebar-repo-group-state";
 
 const mocks = vi.hoisted(() => ({
   logicalWorkspaces: [] as LogicalWorkspace[],

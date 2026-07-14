@@ -1,6 +1,6 @@
-import type { HotSessionTarget } from "@/lib/domain/sessions/hot-session-policy";
+import type { HotSessionTarget } from "#product/lib/domain/sessions/hot-session-policy";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
-import { useSessionIngestStore } from "@/stores/sessions/session-ingest-store";
+import { useSessionIngestStore } from "#product/stores/sessions/session-ingest-store";
 
 interface EnsureSessionStreamOptions {
   awaitOpen?: boolean;

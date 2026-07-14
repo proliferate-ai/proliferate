@@ -1,17 +1,17 @@
 import { useCallback, useMemo, useState } from "react";
-import { SkeletonBlock } from "@/components/feedback/Skeleton";
+import { SkeletonBlock } from "#product/components/feedback/Skeleton";
 import { ChevronDownUp, ChevronUpDown, Plus } from "@proliferate/ui/icons";
-import { SidebarShowToggleRow } from "@/components/workspace/shell/sidebar/SidebarShowToggleRow";
-import { useCoworkStatus } from "@/hooks/access/anyharness/cowork/use-cowork-status";
-import { useCoworkThreadWorkflow } from "@/hooks/cowork/workflows/use-cowork-thread-workflow";
-import { useCoworkThreads } from "@/hooks/access/anyharness/cowork/use-cowork-threads";
-import { useWorkspaceSidebarActivityStates } from "@/hooks/workspaces/derived/use-workspace-sidebar-activities";
-import { buildPendingWorkspaceUiKey } from "@/lib/domain/workspaces/creation/pending-entry";
-import { SidebarStatusIndicatorView } from "@/components/workspace/shell/sidebar/SidebarIndicators";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+import { SidebarShowToggleRow } from "#product/components/workspace/shell/sidebar/SidebarShowToggleRow";
+import { useCoworkStatus } from "#product/hooks/access/anyharness/cowork/use-cowork-status";
+import { useCoworkThreadWorkflow } from "#product/hooks/cowork/workflows/use-cowork-thread-workflow";
+import { useCoworkThreads } from "#product/hooks/access/anyharness/cowork/use-cowork-threads";
+import { useWorkspaceSidebarActivityStates } from "#product/hooks/workspaces/derived/use-workspace-sidebar-activities";
+import { buildPendingWorkspaceUiKey } from "#product/lib/domain/workspaces/creation/pending-entry";
+import { SidebarStatusIndicatorView } from "#product/components/workspace/shell/sidebar/SidebarIndicators";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { SidebarActionButton } from "@proliferate/ui/layout/SidebarActionButton";
-import { CoworkThreadItem } from "./CoworkThreadItem";
+import { CoworkThreadItem } from "#product/components/workspace/cowork/sidebar/CoworkThreadItem";
 import { ProductSidebarSectionHeader } from "@proliferate/product-ui/sidebar/ProductSidebarLayout";
 import { ProductSidebarThreadRow } from "@proliferate/product-ui/sidebar/ProductSidebarThreads";
 

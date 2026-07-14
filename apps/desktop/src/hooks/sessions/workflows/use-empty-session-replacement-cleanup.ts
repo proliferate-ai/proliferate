@@ -1,18 +1,18 @@
-import { isSessionEmptyWithIntents } from "@/lib/domain/sessions/session-emptiness";
+import { isSessionEmptyWithIntents } from "#product/lib/domain/sessions/session-emptiness";
 import {
   getSessionRecord,
   putSessionRecord,
   removeSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useSessionIntentStore, getPromptOutboxEntriesForSession } from "@/stores/sessions/session-intent-store";
-import { clearViewedSessionErrors } from "@/stores/preferences/workspace-ui-store";
+} from "#product/stores/sessions/session-records";
+import { useSessionIntentStore, getPromptOutboxEntriesForSession } from "#product/stores/sessions/session-intent-store";
+import { clearViewedSessionErrors } from "#product/stores/preferences/workspace-ui-store";
 import { useDismissSessionMutation } from "@anyharness/sdk-react";
 import { AnyHarnessError } from "@anyharness/sdk";
 import {
   commitSupersededSessionCreation,
   rollbackSupersededSessionCreation,
   supersedeInFlightSessionCreation,
-} from "@/hooks/sessions/workflows/session-creation-supersession";
+} from "#product/hooks/sessions/workflows/session-creation-supersession";
 import type { ErrorContext } from "@proliferate/product-client/host/product-host";
 import {
   clearStagedReplacedClientSessionAlias,
@@ -23,10 +23,10 @@ import {
   retireStagedReplacedSessionTombstone,
   stageReplacedClientSessionAlias,
   stageReplacedSessionTombstone,
-} from "@/hooks/sessions/workflows/session-replacement-tombstones";
+} from "#product/hooks/sessions/workflows/session-replacement-tombstones";
 import {
   runTrackedReplacementDismissal,
-} from "@/hooks/sessions/workflows/session-replacement-dismissals";
+} from "#product/hooks/sessions/workflows/session-replacement-dismissals";
 
 const DISMISS_RETRY_DELAYS_MS = [0, 100, 500] as const;
 

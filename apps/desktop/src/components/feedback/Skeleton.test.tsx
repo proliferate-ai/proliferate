@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import type { CSSProperties } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { SkeletonBlock } from "@/components/feedback/Skeleton";
+import { SkeletonBlock } from "#product/components/feedback/Skeleton";
 
 const testDir = dirname(fileURLToPath(import.meta.url));
 const domCss = readFileSync(

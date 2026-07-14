@@ -8,7 +8,7 @@ import {
   deriveCommandOutput,
   formatCommandExecutionLabel,
 } from "@proliferate/product-domain/chats/tools/collapsed-action-labels";
-import { ActionDisclosureRow } from "./CollapsedActionRowPrimitives";
+import { ActionDisclosureRow } from "#product/components/workspace/chat/tool-calls/CollapsedActionRowPrimitives";
 
 export function CommandActionRow({ item }: { item: ToolCallItem }) {
   const [expanded, setExpanded] = useState(false);

@@ -3,10 +3,10 @@ import type { GoalArmState } from "@anyharness/sdk";
 import { useClearSessionGoalMutation, useSetSessionGoalMutation } from "@anyharness/sdk-react";
 import type { GoalWire } from "@proliferate/product-domain/activity/goal";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
-import { useActiveSessionId } from "@/hooks/chat/derived/use-active-session-identity";
-import { goalResultDismissKey, useGoalBarStore } from "@/stores/activity/goal-bar-store";
-import { getSessionRecord } from "@/stores/sessions/session-records";
-import { useToastStore } from "@/stores/toast/toast-store";
+import { useActiveSessionId } from "#product/hooks/chat/derived/use-active-session-identity";
+import { goalResultDismissKey, useGoalBarStore } from "#product/stores/activity/goal-bar-store";
+import { getSessionRecord } from "#product/stores/sessions/session-records";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 export interface SessionGoalActions {
   editGoal: (objective: string) => void;

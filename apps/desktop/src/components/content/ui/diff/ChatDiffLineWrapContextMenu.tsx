@@ -12,8 +12,8 @@ import {
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import {
   useChatDiffLineWrapNativeContextMenu,
-} from "@/hooks/ui/native/use-chat-diff-line-wrap-native-context-menu";
-import { useChatDiffPreferencesStore } from "@/stores/chat/chat-diff-preferences-store";
+} from "#product/hooks/ui/native/use-chat-diff-line-wrap-native-context-menu";
+import { useChatDiffPreferencesStore } from "#product/stores/chat/chat-diff-preferences-store";
 
 interface ChatDiffLineWrapContextMenuProps {
   trigger: ReactElement<{

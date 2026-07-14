@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ComposerAttachedPanel } from "./ComposerAttachedPanel";
+import { ComposerAttachedPanel } from "#product/components/workspace/chat/input/ComposerAttachedPanel";
 import { ListChecks } from "lucide-react";
 import { CheckCircleFilled, Circle, Spinner } from "@proliferate/ui/icons";
 import type { PlanEntry } from "@anyharness/sdk";

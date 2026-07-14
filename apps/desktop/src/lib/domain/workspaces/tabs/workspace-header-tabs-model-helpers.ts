@@ -1,12 +1,12 @@
 import type { Session } from "@anyharness/sdk";
-import { getProviderDisplayName } from "@/lib/domain/agents/provider-display";
+import { getProviderDisplayName } from "#product/lib/domain/agents/provider-display";
 import {
   resolveSessionViewState,
   type SessionViewState,
 } from "@proliferate/product-domain/sessions/activity";
-import type { ChatVisibilityCandidate } from "@/lib/domain/workspaces/tabs/visibility";
-import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
-import type { SessionDirectoryEntry } from "@/lib/domain/sessions/directory/directory-entry";
+import type { ChatVisibilityCandidate } from "#product/lib/domain/workspaces/tabs/visibility";
+import { activitySnapshotFromDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-activity";
+import type { SessionDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-entry";
 
 export type KnownHeaderSession =
   | { kind: "slot"; slot: SessionDirectoryEntry; session?: Session }

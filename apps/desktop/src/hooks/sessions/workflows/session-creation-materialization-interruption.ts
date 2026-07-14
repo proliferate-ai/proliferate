@@ -1,6 +1,6 @@
 import {
   subscribeToSessionCreationSupersession,
-} from "@/hooks/sessions/workflows/session-creation-supersession";
+} from "#product/hooks/sessions/workflows/session-creation-supersession";
 
 /**
  * Races a long materialization request with replace-in-place supersession.

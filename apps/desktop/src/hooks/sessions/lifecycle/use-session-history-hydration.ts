@@ -3,11 +3,11 @@ import { useProductHost } from "@proliferate/product-client/host/ProductHostProv
 import {
   mergeFetchedHistoryWithExistingEvents,
   mergeFetchedHistoryWithNewerEvents,
-} from "@/lib/domain/sessions/history/history-event-merge";
+} from "#product/lib/domain/sessions/history/history-event-merge";
 import {
   appendHistoryTail,
   replaySessionHistory,
-} from "@/lib/domain/sessions/stream/stream-state";
+} from "#product/lib/domain/sessions/stream/stream-state";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import {
   recordMeasurementMetric,
@@ -16,11 +16,11 @@ import {
 } from "@/lib/infra/measurement/debug-measurement";
 import type {
   MeasurementOperationId,
-} from "@/lib/domain/telemetry/debug-measurement-catalog";
+} from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import { uniqueMeasurementOperationIds } from "@/lib/infra/measurement/operation-ids";
-import { fetchSessionHistory } from "@/lib/access/anyharness/session-runtime";
-import { useLinkedSessionMounting } from "@/hooks/chat/workflows/subagents/use-linked-session-mounting";
-import { getSessionRecord } from "@/stores/sessions/session-records";
+import { fetchSessionHistory } from "#product/lib/access/anyharness/session-runtime";
+import { useLinkedSessionMounting } from "#product/hooks/chat/workflows/subagents/use-linked-session-mounting";
+import { getSessionRecord } from "#product/stores/sessions/session-records";
 import {
   applyHistoryStateToStores,
   finishStandaloneApplyOperation,
@@ -30,7 +30,7 @@ import {
   resolveHistoryApplyOperationKind,
   SESSION_APPLY_MEASUREMENT_SURFACES,
   SESSION_HISTORY_APPLY_MAX_DURATION_MS,
-} from "@/hooks/sessions/lifecycle/session-history-hydration-helpers";
+} from "#product/hooks/sessions/lifecycle/session-history-hydration-helpers";
 
 interface SessionHistoryHydrationOptions {
   afterSeq?: number;

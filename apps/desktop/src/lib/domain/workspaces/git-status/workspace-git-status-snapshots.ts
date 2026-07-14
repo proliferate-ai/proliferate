@@ -6,7 +6,7 @@ import {
   snapshotSpeaksForBranch,
   type PersistedWorkspaceGitStatusSnapshot,
   type WorkspaceGitStatus,
-} from "./workspace-git-status-model";
+} from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
 
 // Persisted snapshot write planning: computes the compact per-logical-
 // workspace snapshots that back instant paint on relaunch. Read-side

@@ -1,10 +1,10 @@
 import { useMemo } from "react";
-import type { HeaderWorkspaceShellStripRow } from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
+import type { HeaderWorkspaceShellStripRow } from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 import {
   CHROME_DELEGATED_TAB_MAX_WIDTH,
   computeHeaderStripLayout,
-} from "@/lib/domain/workspaces/tabs/chrome-layout";
-import type { WorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
+} from "#product/lib/domain/workspaces/tabs/chrome-layout";
+import type { WorkspaceShellTabKey } from "#product/lib/domain/workspaces/tabs/shell-tabs";
 
 export function useHeaderTabsLayout({
   width,

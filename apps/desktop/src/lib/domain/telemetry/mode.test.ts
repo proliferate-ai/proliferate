@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveDesktopTelemetryRoutingState } from "./mode";
+import { resolveDesktopTelemetryRoutingState } from "#product/lib/domain/telemetry/mode";
 
 const HOSTED_ORIGINS = ["https://app.proliferate.com", "https://api.proliferate.com"];
 

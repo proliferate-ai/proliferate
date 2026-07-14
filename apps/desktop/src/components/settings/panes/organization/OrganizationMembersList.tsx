@@ -9,16 +9,16 @@ import {
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { SettingsEyebrow } from "@proliferate/product-ui/settings/SettingsEyebrow";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { Avatar } from "@/components/settings/panes/organization/OrganizationLogo";
+import { Avatar } from "#product/components/settings/panes/organization/OrganizationLogo";
 import { buildProliferateApiUrl } from "@/lib/infra/proliferate-api";
 import {
   membershipStatusBadge,
   type OrganizationInvitationRecord,
   type OrganizationMemberRecord,
   type OrganizationRole,
-} from "@/lib/domain/organizations/organization-records";
-import { invitationDeliveryHint, type MemberListRow } from "@/lib/domain/organizations/member-list-rows";
-import { useToastStore } from "@/stores/toast/toast-store";
+} from "#product/lib/domain/organizations/organization-records";
+import { invitationDeliveryHint, type MemberListRow } from "#product/lib/domain/organizations/member-list-rows";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 const PEOPLE_GRID_CLASS =
   "grid grid-cols-[minmax(0,1fr)_6.75rem_5.25rem_8rem_2.25rem] items-center gap-x-3";

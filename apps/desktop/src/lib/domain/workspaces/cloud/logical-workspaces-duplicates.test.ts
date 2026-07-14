@@ -2,20 +2,20 @@ import type { Workspace } from "@anyharness/sdk";
 import { describe, expect, it } from "vitest";
 import {
   buildLogicalWorkspaces,
-} from "@/lib/domain/workspaces/cloud/logical-workspaces";
+} from "#product/lib/domain/workspaces/cloud/logical-workspaces";
 import {
   findLogicalWorkspace,
   logicalWorkspaceRelatedIds,
-} from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
+} from "#product/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import {
   buildLocalSlotLogicalWorkspaceId,
   buildRemoteLogicalWorkspaceId,
-} from "@/lib/domain/workspaces/cloud/logical-workspace-id";
+} from "#product/lib/domain/workspaces/cloud/logical-workspace-id";
 import {
   makeCloudWorkspace,
   makeRepoRoot,
   makeWorkspace,
-} from "@/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
 
 const DEFAULT_UPDATED_AT = "2026-04-13T10:00:00.000Z";
 type WorkspaceExecutionSummary = NonNullable<Workspace["executionSummary"]>;

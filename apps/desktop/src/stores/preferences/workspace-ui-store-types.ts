@@ -1,11 +1,11 @@
 import type { SetStateAction } from "react";
-import type { PersistedWorkspaceUiState } from "@/lib/domain/preferences/workspace-ui/model";
-import type { PersistedWorkspaceGitStatusSnapshot } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
-import type { RightPanelDurableState, RightPanelMaterializedState, RightPanelWorkspaceState } from "@/lib/domain/workspaces/shell/right-panel-model";
-import type { SidebarWorkspaceVariant } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
-import type { ManualChatGroup } from "@/lib/domain/workspaces/tabs/manual-groups";
-import type { PendingChatActivation } from "@/lib/domain/workspaces/tabs/shell-activation";
-import type { WorkspaceShellIntentKey, WorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
+import type { PersistedWorkspaceUiState } from "#product/lib/domain/preferences/workspace-ui/model";
+import type { PersistedWorkspaceGitStatusSnapshot } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
+import type { RightPanelDurableState, RightPanelMaterializedState, RightPanelWorkspaceState } from "#product/lib/domain/workspaces/shell/right-panel-model";
+import type { SidebarWorkspaceVariant } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
+import type { ManualChatGroup } from "#product/lib/domain/workspaces/tabs/manual-groups";
+import type { PendingChatActivation } from "#product/lib/domain/workspaces/tabs/shell-activation";
+import type { WorkspaceShellIntentKey, WorkspaceShellTabKey } from "#product/lib/domain/workspaces/tabs/shell-tabs";
 
 export interface WorkspaceUiState {
   _hydrated: boolean;

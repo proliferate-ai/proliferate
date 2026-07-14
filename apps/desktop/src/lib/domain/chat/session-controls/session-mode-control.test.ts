@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveSessionControlPresentation } from "./session-mode-control";
+import { resolveSessionControlPresentation } from "#product/lib/domain/chat/session-controls/session-mode-control";
 
 describe("resolveSessionControlPresentation", () => {
   it.each([

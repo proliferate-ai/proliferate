@@ -5,7 +5,7 @@ import {
   buildGroupPillContextMenuItems,
   resolveChatTabContextMenuSessionIds,
   resolveFileTabContextMenuPaths,
-} from "@/lib/domain/workspaces/tabs/context-menu";
+} from "#product/lib/domain/workspaces/tabs/context-menu";
 
 describe("workspace tab context menu", () => {
   it("builds chat tab commands from feature flags", () => {

@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
-import { ToolActionDetailsPanel } from "./ToolActionDetailsPanel";
-import { ToolActionRow, type ToolActionStatus } from "./ToolActionRow";
+import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
+import { ToolActionRow, type ToolActionStatus } from "#product/components/workspace/chat/tool-calls/ToolActionRow";
 
 interface GenericToolResultRowProps {
   icon?: ReactNode;

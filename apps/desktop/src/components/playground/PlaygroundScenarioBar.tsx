@@ -4,8 +4,8 @@ import {
   SCENARIOS,
   type PlaygroundScenarioSelection,
   type ScenarioKey,
-} from "@/config/playground";
-import type { PlaygroundReplayState } from "@/hooks/playground/lifecycle/use-replay-session";
+} from "#product/config/playground";
+import type { PlaygroundReplayState } from "#product/hooks/playground/lifecycle/use-replay-session";
 
 interface PlaygroundScenarioBarProps {
   selection: PlaygroundScenarioSelection;

@@ -15,7 +15,7 @@ import {
   settingsReturnUrlForSection,
   settingsSectionForPath,
   withLocation,
-} from "@/lib/domain/auth/desktop-navigation-codec";
+} from "#product/lib/domain/auth/desktop-navigation-codec";
 
 /**
  * Decode a raw Desktop deep-link URL into the shared {@link ProductEntry}

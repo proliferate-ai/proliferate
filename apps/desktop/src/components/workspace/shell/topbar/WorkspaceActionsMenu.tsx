@@ -13,9 +13,9 @@ import {
   Pencil,
   Trash,
 } from "@proliferate/ui/icons";
-import { SHORTCUTS } from "@/config/shortcuts/registry";
-import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
-import { useWorkspaceActionsNativeMenu } from "@/hooks/workspaces/ui/use-workspace-actions-native-menu";
+import { SHORTCUTS } from "#product/config/shortcuts/registry";
+import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
+import { useWorkspaceActionsNativeMenu } from "#product/hooks/workspaces/ui/use-workspace-actions-native-menu";
 
 export interface WorkspaceActionsMenuSessionProps {
   canRename: boolean;

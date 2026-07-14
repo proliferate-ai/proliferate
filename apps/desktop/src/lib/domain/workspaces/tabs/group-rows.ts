@@ -1,5 +1,5 @@
-import type { GroupedChatTab } from "./grouping";
-import type { DisplayManualChatGroup, ManualChatGroupId } from "./manual-groups";
+import type { GroupedChatTab } from "#product/lib/domain/workspaces/tabs/grouping";
+import type { DisplayManualChatGroup, ManualChatGroupId } from "#product/lib/domain/workspaces/tabs/manual-groups";
 
 interface BasePillRow {
   kind: "pill";

@@ -1,7 +1,7 @@
 import { createTranscriptState, type PendingInteraction } from "@anyharness/sdk";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { activitySnapshotFromDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-activity";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 
 describe("session directory store invariants", () => {
   beforeEach(() => {

@@ -1,17 +1,17 @@
 import { useNavigate } from "react-router-dom";
-import { APP_ROUTES } from "@/config/app-routes";
-import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
-import { clearWorkspaceRuntimeState } from "@/hooks/workspaces/workflows/selection/clear-runtime-state";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
+import { APP_ROUTES } from "#product/config/app-routes";
+import { useWorkspaceCollectionsInvalidation } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
+import { clearWorkspaceRuntimeState } from "#product/hooks/workspaces/workflows/selection/clear-runtime-state";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 import {
   getWorkspace,
   purgeWorkspace,
   retryPurgeWorkspace,
   retryRetireWorkspaceCleanup,
-} from "@/lib/access/anyharness/workspaces";
+} from "#product/lib/access/anyharness/workspaces";
 
 export function useWorkspaceRetireActions() {
   const navigate = useNavigate();

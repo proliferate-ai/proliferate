@@ -16,9 +16,9 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { ModelTable, type ModelTableRow } from "@proliferate/product-ui/settings/ModelTable";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
-import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
-import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
-import { useToastStore } from "@/stores/toast/toast-store";
+import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
+import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+import { useToastStore } from "#product/stores/toast/toast-store";
 import {
   buildEnabledOverridePatchJson,
   buildRuntimeCatalogModelsJson,
@@ -26,7 +26,7 @@ import {
   normalizeCatalogModels,
   normalizeGatewayModels,
   normalizeRuntimeLaunchModels,
-} from "@/lib/domain/settings/harness-catalog";
+} from "#product/lib/domain/settings/harness-catalog";
 
 interface HarnessAllModelsSectionProps {
   harnessKind: string;

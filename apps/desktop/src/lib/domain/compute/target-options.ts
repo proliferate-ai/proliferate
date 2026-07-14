@@ -2,12 +2,12 @@ import {
   resolveComputeTargetAppearance,
   type ComputeTargetAppearance,
   type ComputeTargetAppearancePreference,
-} from "@/lib/domain/compute/target-appearance";
+} from "#product/lib/domain/compute/target-appearance";
 import {
   computeTargetOwnerLabel,
   computeTargetStatusLabel,
-} from "@/lib/domain/compute/target-presentation";
-import type { ComputeTargetSummary } from "@/lib/domain/compute/target-types";
+} from "#product/lib/domain/compute/target-presentation";
+import type { ComputeTargetSummary } from "#product/lib/domain/compute/target-types";
 
 export interface ComputeLaunchTargetOption {
   id: string;

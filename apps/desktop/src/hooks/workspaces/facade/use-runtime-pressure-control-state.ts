@@ -8,19 +8,19 @@ import type {
   WorktreeInventoryRow,
 } from "@anyharness/sdk";
 import { useCallback, useMemo } from "react";
-import { useWorktreeTargetHealth } from "@/hooks/access/anyharness/worktrees/use-worktree-target-health";
-import { useSelectedLogicalWorkspace } from "@/hooks/workspaces/derived/use-selected-logical-workspace";
-import { useWorktreeSettingsTargets } from "@/hooks/workspaces/facade/use-worktree-settings-targets";
+import { useWorktreeTargetHealth } from "#product/hooks/access/anyharness/worktrees/use-worktree-target-health";
+import { useSelectedLogicalWorkspace } from "#product/hooks/workspaces/derived/use-selected-logical-workspace";
+import { useWorktreeSettingsTargets } from "#product/hooks/workspaces/facade/use-worktree-settings-targets";
 import {
   WORKTREE_AUTO_DELETE_LIMIT_DEFAULT,
-} from "@/lib/domain/preferences/user/worktree-auto-delete";
+} from "#product/lib/domain/preferences/user/worktree-auto-delete";
 import {
   worktreeRetentionRunMessage,
   worktreeSettingsActionFailureMessage,
-} from "@/lib/domain/workspaces/sidebar/worktree-settings-actions";
-import type { WorktreeSettingsTarget } from "@/lib/domain/workspaces/worktrees/worktree-settings-target";
-import { useToastStore } from "@/stores/toast/toast-store";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+} from "#product/lib/domain/workspaces/sidebar/worktree-settings-actions";
+import type { WorktreeSettingsTarget } from "#product/lib/domain/workspaces/worktrees/worktree-settings-target";
+import { useToastStore } from "#product/stores/toast/toast-store";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
 export type RuntimePressureTone = "success" | "warning" | "destructive" | "quiet";
 

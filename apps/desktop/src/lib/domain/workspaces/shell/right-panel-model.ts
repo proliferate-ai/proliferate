@@ -3,7 +3,7 @@ import {
   viewerTargetKey,
   type ViewerTarget,
   type ViewerTargetKey,
-} from "@/lib/domain/workspaces/viewer/viewer-target";
+} from "#product/lib/domain/workspaces/viewer/viewer-target";
 
 export type RightPanelTool = "scratch" | "git";
 export type RightPanelHeaderEntryKey =

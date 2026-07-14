@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { useHomeDraftHandoffStore } from "./home-draft-handoff-store";
+import { useHomeDraftHandoffStore } from "#product/stores/home/home-draft-handoff-store";
 
 describe("home draft handoff store", () => {
   beforeEach(() => {

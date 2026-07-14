@@ -1,6 +1,6 @@
-import { useChatPromptRecoveryStore } from "@/stores/chat/chat-prompt-recovery-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
+import { useChatPromptRecoveryStore } from "#product/stores/chat/chat-prompt-recovery-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { resolveWorkspaceUiKey } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
 
 const EMPTY_RECOVERIES = [] as const;
 

@@ -1,29 +1,29 @@
 import { useMemo } from "react";
 import { useSetupStatusQuery } from "@anyharness/sdk-react";
-import type { CloudWorkspaceStatusScreenModel } from "@/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
+import type { CloudWorkspaceStatusScreenModel } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
 import {
   buildCloudWorkspaceStatusScreenModel,
-} from "@/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
 import {
   isCloudWorkspacePostReadyPending,
   resolveCloudWorkspaceStatus,
   shouldShowCloudWorkspaceStatusScreen,
-} from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
+import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import {
   buildPendingWorkspaceArrivalViewModel,
   summarizeSetupFailure,
-} from "@/lib/domain/workspaces/creation/arrival";
-import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
-import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
-import { useWorkspaceArrivalState } from "@/hooks/workspaces/derived/use-workspace-arrival-state";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/selection/workspace-ui-key";
-import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
-import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
-import type { WorkspaceArrivalViewModel } from "@/lib/domain/workspaces/creation/arrival";
-import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/derived/use-hot-paint-gate";
+} from "#product/lib/domain/workspaces/creation/arrival";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
+import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
+import { useWorkspaceArrivalState } from "#product/hooks/workspaces/derived/use-workspace-arrival-state";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { resolveSelectedWorkspaceIdentity } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
+import { resolveWithWorkspaceFallback } from "#product/lib/domain/workspaces/selection/workspace-keyed-preferences";
+import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
+import type { WorkspaceArrivalViewModel } from "#product/lib/domain/workspaces/creation/arrival";
+import { useIsHotPaintGatePendingForWorkspace } from "#product/hooks/workspaces/derived/use-hot-paint-gate";
 
 export type WorkspaceStatusPanelState =
   | {

@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { useEffect } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
-import { AuthenticatedAppHost } from "@/pages/AuthenticatedAppHost";
+import { AuthenticatedAppHost } from "#product/pages/AuthenticatedAppHost";
 
 vi.mock("@/hooks/organizations/lifecycle/use-organization-selection-lifecycle", () => ({
   useOrganizationSelectionLifecycle: vi.fn(),

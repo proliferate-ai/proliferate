@@ -3,13 +3,13 @@ import { useShallow } from "zustand/react/shallow";
 import type { LoopCapabilities, LoopWire } from "@proliferate/product-domain/activity/loop";
 import type { ActivityProcessWire } from "@proliferate/product-domain/activity/process";
 import type { ActivitySubagentWire } from "@proliferate/product-domain/activity/subagent";
-import { resolveActivityFixture } from "@/lib/domain/chat/__fixtures__/playground/activity-fixtures";
+import { resolveActivityFixture } from "#product/lib/domain/chat/__fixtures__/playground/activity-fixtures";
 import {
   loopCapabilitiesForSession,
   projectSessionActivity,
-} from "@/lib/domain/sessions/activity-mirror";
-import { useActiveSessionId } from "@/hooks/chat/derived/use-active-session-identity";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+} from "#product/lib/domain/sessions/activity-mirror";
+import { useActiveSessionId } from "#product/hooks/chat/derived/use-active-session-identity";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 
 export interface SessionActivityState {
   loops: LoopWire[];

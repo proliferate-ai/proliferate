@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { isSessionSlotBusy } from "@proliferate/product-domain/sessions/activity";
-import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { activitySnapshotFromDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-activity";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 
 const DEV_OVERRIDE_KEY = "proliferate.dev.runningAgentCount";
 const DEV_OVERRIDE_EVENT = "proliferate:dev-running-agent-count";

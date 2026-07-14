@@ -4,7 +4,7 @@ import {
   formatSessionCreateFailureMessage,
   formatSessionCreateToastMessage,
   toSessionCreateFailureDisplayError,
-} from "@/lib/domain/sessions/creation/create-session-error";
+} from "#product/lib/domain/sessions/creation/create-session-error";
 
 describe("session create failure presentation", () => {
   it("maps unsupported model errors to target update guidance", () => {

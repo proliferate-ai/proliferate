@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSettingsRepositoryEntries } from "@/lib/domain/settings/repositories";
+import { buildSettingsRepositoryEntries } from "#product/lib/domain/settings/repositories";
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import type { RepoConfigResponse, RepoEnvironmentResponse } from "@proliferate/cloud-sdk";
 

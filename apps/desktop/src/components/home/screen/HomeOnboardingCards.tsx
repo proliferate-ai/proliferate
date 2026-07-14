@@ -2,13 +2,13 @@ import type { ReactNode } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { GitHub, Settings, SlidersHorizontal, Spinner, X } from "@proliferate/ui/icons";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
-import { ThinkingText } from "@/components/feedback/ThinkingText";
-import { HOME_SCREEN_LABELS } from "@/copy/home/home-screen-copy";
+import { ThinkingText } from "#product/components/feedback/ThinkingText";
+import { HOME_SCREEN_LABELS } from "#product/copy/home/home-screen-copy";
 import type {
   HomeModelProbeCardState,
   HomeOnboardingCardModel,
   HomeOnboardingIcon,
-} from "@/lib/domain/home/home-screen";
+} from "#product/lib/domain/home/home-screen";
 
 function resolveOnboardingIcon(icon: HomeOnboardingIcon) {
   switch (icon) {

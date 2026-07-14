@@ -1,7 +1,7 @@
 import type { ComponentProps, MouseEventHandler } from "react";
-import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
-import { RightPanel } from "@/components/workspace/shell/right-panel/RightPanel";
-import { WorkspaceResizeSeparator } from "@/components/workspace/shell/screen/WorkspaceResizeSeparator";
+import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
+import { RightPanel } from "#product/components/workspace/shell/right-panel/RightPanel";
+import { WorkspaceResizeSeparator } from "#product/components/workspace/shell/screen/WorkspaceResizeSeparator";
 
 interface WorkspaceShellRightRailProps
   extends Omit<ComponentProps<typeof RightPanel>, "isOpen"> {

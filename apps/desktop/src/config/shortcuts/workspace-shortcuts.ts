@@ -1,4 +1,4 @@
-import type { ShortcutDef } from "./types";
+import type { ShortcutDef } from "#product/config/shortcuts/types";
 
 export const WORKSPACE_SHORTCUTS = {
   newDefault: {

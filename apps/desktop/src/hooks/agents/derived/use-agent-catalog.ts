@@ -8,7 +8,7 @@ import {
   getAgentsNeedingSetup,
   getReadyAgentKinds,
   getReadyAgents,
-} from "@/lib/domain/agents/status";
+} from "#product/lib/domain/agents/status";
 
 const EMPTY_AGENTS: AgentSummary[] = [];
 const EMPTY_RECONCILE_RESULTS: NonNullable<

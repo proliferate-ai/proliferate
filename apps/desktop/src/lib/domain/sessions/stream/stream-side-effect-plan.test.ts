@@ -7,7 +7,7 @@ import {
 } from "@anyharness/sdk";
 import { describe, expect, it } from "vitest";
 import type { PendingSessionConfigChanges } from "@proliferate/product-domain/sessions/pending-config";
-import { planBatchedStreamSideEffects } from "@/lib/domain/sessions/stream/stream-side-effect-plan";
+import { planBatchedStreamSideEffects } from "#product/lib/domain/sessions/stream/stream-side-effect-plan";
 
 describe("planBatchedStreamSideEffects", () => {
   it("plans ordered terminal and new-turn effects without executing them", () => {

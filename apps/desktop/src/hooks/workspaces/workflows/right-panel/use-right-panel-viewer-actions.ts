@@ -5,18 +5,18 @@ import {
 import {
   type RightPanelHeaderEntryKey,
   type RightPanelWorkspaceState,
-} from "@/lib/domain/workspaces/shell/right-panel-model";
+} from "#product/lib/domain/workspaces/shell/right-panel-model";
 import {
   removeViewerTargetFromRightPanelState,
   resolveViewerTargetKeyAfterHeaderEntryRemoval,
-} from "@/lib/domain/workspaces/shell/right-panel-state";
+} from "#product/lib/domain/workspaces/shell/right-panel-state";
 import {
   viewerTargetEditablePath,
   viewerTargetKey,
   type ViewerTarget,
   type ViewerTargetKey,
-} from "@/lib/domain/workspaces/viewer/viewer-target";
-import type { WorkspaceFileBuffer } from "@/stores/editor/workspace-file-buffers-store";
+} from "#product/lib/domain/workspaces/viewer/viewer-target";
+import type { WorkspaceFileBuffer } from "#product/stores/editor/workspace-file-buffers-store";
 
 type RightPanelStateUpdater = (value: SetStateAction<RightPanelWorkspaceState>) => void;
 

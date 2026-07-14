@@ -4,18 +4,18 @@ import type {
 } from "@anyharness/sdk";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { useRevertGitPatchesMutation } from "@anyharness/sdk-react";
-import { TurnDiffPanel } from "./TurnDiffPanel";
-import { TranscriptPatchTurnDiffPanel } from "./TranscriptPatchTurnDiffPanel";
+import { TurnDiffPanel } from "#product/components/workspace/chat/transcript/TurnDiffPanel";
+import { TranscriptPatchTurnDiffPanel } from "#product/components/workspace/chat/transcript/TranscriptPatchTurnDiffPanel";
 import {
   TurnAssistantActionRow,
   TURN_ITEM_GAP_CLASS,
   TurnGoalMetMarker,
   TurnShell,
   resolveTurnTrailingStatus,
-} from "./TranscriptTurnChrome";
+} from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
 import { goalMetMarkerLabel } from "@proliferate/product-domain/activity/goal";
-import { useSessionGoal } from "@/hooks/activity/derived/use-session-goal";
-import { TurnItemSequence } from "./TurnItemSequence";
+import { useSessionGoal } from "#product/hooks/activity/derived/use-session-goal";
+import { TurnItemSequence } from "#product/components/workspace/chat/transcript/TurnItemSequence";
 import {
   findTailAssistantProseRootId,
   getAssistantProseContent,
@@ -41,7 +41,7 @@ import type { TranscriptVirtualRow } from "@proliferate/product-domain/chats/tra
 import type { TurnDisplayBlock } from "@proliferate/product-domain/chats/transcript/transcript-presentation";
 import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
 import type { SessionViewState } from "@proliferate/product-domain/sessions/activity";
-import { useToastStore } from "@/stores/toast/toast-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
 

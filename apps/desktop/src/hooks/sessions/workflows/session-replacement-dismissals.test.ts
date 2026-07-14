@@ -4,7 +4,7 @@ import {
   resetSessionReplacementDismissalsForTests,
   runTrackedReplacementDismissal,
   withWorkspaceReplacementRestoreFence,
-} from "@/hooks/sessions/workflows/session-replacement-dismissals";
+} from "#product/hooks/sessions/workflows/session-replacement-dismissals";
 
 function deferred<T = void>() {
   let resolve!: (value: T | PromiseLike<T>) => void;

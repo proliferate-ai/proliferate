@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   resolveChatDraftWorkspaceId,
   resolveChatInputAvailability,
-} from "./chat-input";
+} from "#product/lib/domain/chat/composer/chat-input";
 
 describe("resolveChatDraftWorkspaceId", () => {
   it("prefers the logical workspace when one is selected", () => {

@@ -7,9 +7,9 @@ import type {
 import type {
   AgentModelRegistry,
   AgentModelRegistryModel,
-} from "@/lib/domain/agents/model-options";
-import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
-import { buildLocalSlotLogicalWorkspaceId } from "@/lib/domain/workspaces/cloud/logical-workspace-id";
+} from "#product/lib/domain/agents/model-options";
+import type { SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
+import { buildLocalSlotLogicalWorkspaceId } from "#product/lib/domain/workspaces/cloud/logical-workspace-id";
 import {
   buildHomeNextModelGroups,
   buildHomeNextAgentOptions,
@@ -21,7 +21,7 @@ import {
   resolveHomeModelAvailabilityState,
   resolveHomeNextDefaultBranchName,
   resolveSelectedHomeNextAgentOption,
-} from "./home-next-launch";
+} from "#product/lib/domain/home/home-next-launch";
 
 function branch(overrides: Partial<GitBranchRef> & { name: string }): GitBranchRef {
   return {

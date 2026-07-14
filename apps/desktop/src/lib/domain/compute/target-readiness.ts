@@ -3,7 +3,7 @@ import type {
   ComputeRuntimeConfigStatus,
   ComputeTargetStatus,
   ComputeTargetSummary,
-} from "@/lib/domain/compute/target-types";
+} from "#product/lib/domain/compute/target-types";
 
 export interface ComputeReadinessItem {
   key: "target" | "worker" | "git" | "node" | "python" | "runtime-config";

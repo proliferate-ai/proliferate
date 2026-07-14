@@ -5,7 +5,7 @@ import {
   findContentSearchMatches,
   findContentSearchTokenMatchSegments,
   normalizeContentSearchQuery,
-} from "./content-search";
+} from "#product/lib/domain/content-search/content-search";
 
 describe("content search domain", () => {
   it("normalizes empty and padded queries", () => {

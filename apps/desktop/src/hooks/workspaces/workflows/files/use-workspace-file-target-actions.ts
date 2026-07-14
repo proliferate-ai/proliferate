@@ -1,17 +1,17 @@
 import { useCallback } from "react";
-import { useWorkspaceShellActivation } from "@/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
-import type { WorkspaceFileContext } from "@/hooks/workspaces/derived/files/use-workspace-file-context";
-import type { GitPanelMode } from "@/lib/domain/workspaces/changes/git-panel-diff";
-import { rightPanelToolHeaderKey } from "@/lib/domain/workspaces/shell/right-panel-model";
+import { useWorkspaceShellActivation } from "#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
+import type { WorkspaceFileContext } from "#product/hooks/workspaces/derived/files/use-workspace-file-context";
+import type { GitPanelMode } from "#product/lib/domain/workspaces/changes/git-panel-diff";
+import { rightPanelToolHeaderKey } from "#product/lib/domain/workspaces/shell/right-panel-model";
 import {
   fileDiffViewerTarget,
   fileViewerTarget,
   type FileDiffViewerScope,
   type ViewerTarget,
-} from "@/lib/domain/workspaces/viewer/viewer-target";
-import { useGitPanelUiStore } from "@/stores/editor/git-panel-ui-store";
-import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+} from "#product/lib/domain/workspaces/viewer/viewer-target";
+import { useGitPanelUiStore } from "#product/stores/editor/git-panel-ui-store";
+import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 
 export function useWorkspaceFileTargetActions(fileContext: WorkspaceFileContext) {
   const openTarget = useWorkspaceViewerTabsStore((state) => state.openTarget);

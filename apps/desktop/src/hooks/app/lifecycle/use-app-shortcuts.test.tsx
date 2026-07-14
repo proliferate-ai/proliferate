@@ -2,15 +2,15 @@
 
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AppCommandActions } from "@/hooks/app/workflows/app-command-action-types";
-import { useAppShortcuts } from "@/hooks/app/lifecycle/use-app-shortcuts";
+import type { AppCommandActions } from "#product/hooks/app/workflows/app-command-action-types";
+import { useAppShortcuts } from "#product/hooks/app/lifecycle/use-app-shortcuts";
 import {
   clearShortcutHandlerRegistryForTests,
   runShortcutHandler,
-} from "@/lib/domain/shortcuts/registry";
-import { USER_PREFERENCE_DEFAULTS } from "@/lib/domain/preferences/user/model";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { requestRightPanelTabByIndex } from "@/lib/workflows/workspaces/right-panel-shortcut-requests";
+} from "#product/lib/domain/shortcuts/registry";
+import { USER_PREFERENCE_DEFAULTS } from "#product/lib/domain/preferences/user/model";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
+import { requestRightPanelTabByIndex } from "#product/lib/workflows/workspaces/right-panel-shortcut-requests";
 
 const navigationMocks = vi.hoisted(() => ({
   selectWorkspaceFromSurface: vi.fn(),

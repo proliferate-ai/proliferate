@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { listOrganizationMembers } from "@proliferate/cloud-sdk/client/organizations";
-import { organizationMembersKey } from "./query-keys";
+import { organizationMembersKey } from "#product/hooks/access/cloud/organizations/query-keys";
 
 export function useOrganizationMembers(organizationId: string | null) {
   return useQuery({

@@ -4,26 +4,26 @@ import {
   latestLogicalWorkspaceTimestamp,
   logicalWorkspaceMatchesId,
   logicalWorkspaceRelatedIds,
-} from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
-import { humanizeBranchName } from "@/lib/domain/workspaces/creation/branch-naming";
-import { workspaceDefaultDisplayName } from "@/lib/domain/workspaces/display/workspace-display";
-import type { ComputeTargetAppearance } from "@/lib/domain/compute/target-appearance";
-import type { WorkspaceGitStatus } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
-import type { SidebarCloudWorkspaceStatus } from "@/lib/domain/workspaces/sidebar/cloud-workspace";
-import { cloudSidebarEntryDefaultDisplayName } from "@/lib/domain/workspaces/sidebar/sidebar-entries";
-import type { SidebarWorkspaceItemState } from "@/lib/domain/workspaces/sidebar/sidebar-model";
+} from "#product/lib/domain/workspaces/cloud/logical-workspace-lookup";
+import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
+import { humanizeBranchName } from "#product/lib/domain/workspaces/creation/branch-naming";
+import { workspaceDefaultDisplayName } from "#product/lib/domain/workspaces/display/workspace-display";
+import type { ComputeTargetAppearance } from "#product/lib/domain/compute/target-appearance";
+import type { WorkspaceGitStatus } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
+import type { SidebarCloudWorkspaceStatus } from "#product/lib/domain/workspaces/sidebar/cloud-workspace";
+import { cloudSidebarEntryDefaultDisplayName } from "#product/lib/domain/workspaces/sidebar/sidebar-entries";
+import type { SidebarWorkspaceItemState } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 import {
   activeWorkspaceActivity,
   logicalWorkspaceSshTargetId,
   sidebarStatusIndicatorFromActivity,
   sidebarWorkspaceVariantForLogicalWorkspace,
-} from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
-import { detailIndicatorsForWorkspace } from "@/lib/domain/workspaces/sidebar/sidebar-detail-indicators";
-import { isWorkspaceNeedsReview } from "@/lib/domain/workspaces/sidebar/sidebar-review";
-import { logicalWorkspaceHasUnreadSessionActivity } from "@/lib/domain/workspaces/sidebar/workspace-activity-indicator";
-import { workspaceCopyMetadataForLogicalWorkspace } from "@/lib/domain/workspaces/workspace-copy-metadata";
-import { resolveLogicalWorkspaceRecency } from "@/lib/domain/workspaces/sidebar/recency";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
+import { detailIndicatorsForWorkspace } from "#product/lib/domain/workspaces/sidebar/sidebar-detail-indicators";
+import { isWorkspaceNeedsReview } from "#product/lib/domain/workspaces/sidebar/sidebar-review";
+import { logicalWorkspaceHasUnreadSessionActivity } from "#product/lib/domain/workspaces/sidebar/workspace-activity-indicator";
+import { workspaceCopyMetadataForLogicalWorkspace } from "#product/lib/domain/workspaces/workspace-copy-metadata";
+import { resolveLogicalWorkspaceRecency } from "#product/lib/domain/workspaces/sidebar/recency";
 
 export interface SidebarWorkspaceItemWithWorkspace {
   workspace: LogicalWorkspace;

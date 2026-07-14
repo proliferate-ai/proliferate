@@ -2,7 +2,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 
 // Drive the busy count off a plain `busy` flag on each entry so the test does
 // not depend on the full directory-entry / activity shapes.
@@ -16,7 +16,7 @@ vi.mock("@/lib/domain/sessions/directory/directory-activity", () => ({
   activityFromTranscript: () => ({}),
 }));
 
-import { useExportRunningAgentCount } from "./use-export-running-agent-count";
+import { useExportRunningAgentCount } from "#product/hooks/app/lifecycle/use-export-running-agent-count";
 
 type Entries = Record<string, { busy: boolean }>;
 

@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
-import type { DesktopAgentLaunchAgent } from "@/lib/domain/agents/cloud-launch-catalog";
+import type { DesktopAgentLaunchAgent } from "#product/lib/domain/agents/cloud-launch-catalog";
 import type {
   AgentCatalogSummary,
   AgentModelRegistry,
   AgentModelRegistryModel,
-} from "@/lib/domain/agents/model-options";
+} from "#product/lib/domain/agents/model-options";
 import {
   resolveConfiguredLaunchSelection,
   resolveEffectiveChatDefaults,
   resolvePreferredOpenTarget,
-} from "./preference-resolvers";
+} from "#product/lib/domain/chat/composer/preference-resolvers";
 
 function agent(overrides: Partial<AgentCatalogSummary> & { kind: string }): AgentCatalogSummary {
   return {

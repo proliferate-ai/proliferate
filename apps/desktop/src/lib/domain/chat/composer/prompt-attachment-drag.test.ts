@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canAcceptChatFileDrop, isFileDrag } from "./prompt-attachment-drag";
+import { canAcceptChatFileDrop, isFileDrag } from "#product/lib/domain/chat/composer/prompt-attachment-drag";
 
 describe("prompt attachment drag", () => {
   it("detects file drags from file count or drag types", () => {

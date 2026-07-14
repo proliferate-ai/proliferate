@@ -4,7 +4,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { Check } from "@proliferate/ui/icons";
 import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
-import type { OrganizationInvitationRecord } from "@/lib/domain/organizations/organization-records";
+import type { OrganizationInvitationRecord } from "#product/lib/domain/organizations/organization-records";
 
 export function CurrentUserInvitationsSection({
   invitations,

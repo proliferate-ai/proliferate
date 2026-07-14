@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { COMPOSER_SHORTCUTS } from "@/config/shortcuts/composer-shortcuts";
-import { SHORTCUTS } from "@/config/shortcuts/registry";
+import { COMPOSER_SHORTCUTS } from "#product/config/shortcuts/composer-shortcuts";
+import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import {
   getShortcutDisplayLabel,
   isTextEntryTarget,
   matchShortcut,
   matchShortcutDef,
-} from "@/lib/domain/shortcuts/matching";
+} from "#product/lib/domain/shortcuts/matching";
 
 describe("shortcut matching", () => {
   beforeEach(() => {

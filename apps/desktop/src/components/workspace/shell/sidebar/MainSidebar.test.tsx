@@ -4,8 +4,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MainSidebar } from "@/components/workspace/shell/sidebar/MainSidebar";
-import { useSupportModalStore } from "@/stores/support/support-modal-store";
+import { MainSidebar } from "#product/components/workspace/shell/sidebar/MainSidebar";
+import { useSupportModalStore } from "#product/stores/support/support-modal-store";
 
 const releaseNoticeState = vi.hoisted(() => ({
   notice: null as null | {

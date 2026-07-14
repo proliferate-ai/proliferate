@@ -1,6 +1,6 @@
 import type { Workspace } from "@anyharness/sdk";
-import { humanizeBranchName, workspaceCurrentBranchName } from "@/lib/domain/workspaces/creation/branch-naming";
-import { isCloudWorkspaceId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import { humanizeBranchName, workspaceCurrentBranchName } from "#product/lib/domain/workspaces/creation/branch-naming";
+import { isCloudWorkspaceId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 
 const AUTOMATION_BRANCH_PATTERN = /^automation\/(.+)-[a-f0-9]{16}$/i;
 

@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   compareLogicalWorkspaceRecency,
   resolveLogicalWorkspaceRecency,
-} from "./recency";
-import { makeLocalLogicalWorkspace } from "./sidebar-test-fixtures";
+} from "#product/lib/domain/workspaces/sidebar/recency";
+import { makeLocalLogicalWorkspace } from "#product/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
 
 describe("logical workspace recency", () => {
   it("uses work activity as the sort and display timestamp when present", () => {

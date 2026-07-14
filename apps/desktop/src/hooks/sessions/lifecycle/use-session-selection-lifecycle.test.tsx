@@ -3,16 +3,16 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MockInstance } from "vitest";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import {
   createMemoryProductStorage,
   type MemoryProductStorage,
-} from "@/test/product-storage-test-utils";
+} from "#product/test/product-storage-test-utils";
 import {
   makeTestProductHost,
   productHostWrapper,
-} from "@/test/product-host-test-utils";
-import { useSessionSelectionLifecycle } from "./use-session-selection-lifecycle";
+} from "#product/test/product-host-test-utils";
+import { useSessionSelectionLifecycle } from "#product/hooks/sessions/lifecycle/use-session-selection-lifecycle";
 
 let memory: MemoryProductStorage;
 let setItemSpy: MockInstance;

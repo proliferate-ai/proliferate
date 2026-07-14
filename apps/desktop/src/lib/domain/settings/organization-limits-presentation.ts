@@ -6,7 +6,7 @@ import type {
   OrgUserUsageRow,
   UsageTimeseriesBucket,
 } from "@proliferate/cloud-sdk";
-import type { OrganizationMemberRecord } from "@/lib/domain/organizations/organization-records";
+import type { OrganizationMemberRecord } from "#product/lib/domain/organizations/organization-records";
 
 export type UsageRangeDays = 7 | 30 | 90;
 export type UsageGranularity = "day" | "week" | "month";

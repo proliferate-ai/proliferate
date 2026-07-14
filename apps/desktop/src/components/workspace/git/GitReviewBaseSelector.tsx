@@ -11,7 +11,7 @@ import {
 } from "@proliferate/ui/icons";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import type { GitPanelMode } from "@/lib/domain/workspaces/changes/git-panel-diff";
+import type { GitPanelMode } from "#product/lib/domain/workspaces/changes/git-panel-diff";
 
 type GitReviewBaseMode = Exclude<GitPanelMode, "working_tree_composite">;
 

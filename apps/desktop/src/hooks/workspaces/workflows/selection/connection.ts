@@ -1,18 +1,18 @@
-import { resolveWorkspaceConnection } from "@/lib/access/anyharness/resolve-workspace-connection";
+import { resolveWorkspaceConnection } from "#product/lib/access/anyharness/resolve-workspace-connection";
 import {
   elapsedMs,
   logLatency,
   startLatencyTimer,
 } from "@/lib/infra/measurement/debug-latency";
-import { ensureRuntimeReady } from "@/hooks/workspaces/workflows/runtime-ready";
-import { parseTargetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { ensureRuntimeReady } from "#product/hooks/workspaces/workflows/runtime-ready";
+import { parseTargetWorkspaceSyntheticId } from "#product/lib/domain/compute/target-workspace-id";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import type {
   ReadyCloudReadinessResult,
   WorkspaceConnectionResult,
   WorkspaceSelectionContext,
   WorkspaceSelectionDeps,
-} from "./types";
+} from "#product/hooks/workspaces/workflows/selection/types";
 
 export async function resolveSelectionConnection(
   deps: WorkspaceSelectionDeps,

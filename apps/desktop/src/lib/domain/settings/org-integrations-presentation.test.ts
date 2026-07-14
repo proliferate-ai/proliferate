@@ -6,7 +6,7 @@ import {
   customIntegrationCreatedMessage,
   customIntegrationSubmitError,
   validateCustomIntegrationForm,
-} from "@/lib/domain/settings/org-integrations-presentation";
+} from "#product/lib/domain/settings/org-integrations-presentation";
 
 describe("adminIntegrationSourceLabel", () => {
   it("marks seed definitions as built-in and org customs as custom", () => {

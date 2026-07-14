@@ -1,14 +1,14 @@
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { WorkflowDefinitionsSurface } from "@proliferate/product-surfaces/workflows/WorkflowDefinitionsSurface";
-import { WorkflowDefinitionsAccessScreen } from "@/components/workflows/definitions/WorkflowDefinitionsAccessScreen";
-import { MainSidebarPageShell } from "@/components/workspace/shell/screen/MainSidebarPageShell";
-import { APP_ROUTES } from "@/config/app-routes";
-import { WORKFLOW_AUTH_COPY } from "@/copy/workflows/workflow-copy";
-import { isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
+import { WorkflowDefinitionsAccessScreen } from "#product/components/workflows/definitions/WorkflowDefinitionsAccessScreen";
+import { MainSidebarPageShell } from "#product/components/workspace/shell/screen/MainSidebarPageShell";
+import { APP_ROUTES } from "#product/config/app-routes";
+import { WORKFLOW_AUTH_COPY } from "#product/copy/workflows/workflow-copy";
+import { isDevAuthBypassed } from "#product/lib/domain/auth/auth-mode";
 import {
   useProductAuthStatus,
   useProductAuthUserId,
-} from "@/hooks/auth/facade/use-product-auth";
+} from "#product/hooks/auth/facade/use-product-auth";
 
 export function WorkflowsPage() {
   const location = useLocation();

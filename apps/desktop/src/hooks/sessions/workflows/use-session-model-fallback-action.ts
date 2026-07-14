@@ -2,13 +2,13 @@ import { useCallback } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useSetSessionConfigOptionMutation } from "@anyharness/sdk-react";
 import { resolveStatusFromExecutionSummary } from "@proliferate/product-domain/sessions/activity";
-import { resolveFallbackSessionModelId } from "@/lib/domain/sessions/model-fallback";
-import { getSessionClientAndWorkspace } from "@/lib/access/anyharness/session-runtime";
+import { resolveFallbackSessionModelId } from "#product/lib/domain/sessions/model-fallback";
+import { getSessionClientAndWorkspace } from "#product/lib/access/anyharness/session-runtime";
 import {
   getSessionRecord,
   patchSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
+} from "#product/stores/sessions/session-records";
+import { useWorkspaceSessionCache } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
 
 export function useSessionModelFallbackAction() {
   const host = useProductHost();

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { getOrganizationJoinLink } from "@proliferate/cloud-sdk/client/organizations";
-import { organizationJoinLinkKey } from "./query-keys";
+import { organizationJoinLinkKey } from "#product/hooks/access/cloud/organizations/query-keys";
 
 export function useOrganizationJoinLink(
   organizationId: string | null,

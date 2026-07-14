@@ -1,6 +1,6 @@
-import type { ShortcutDigit } from "@/lib/domain/shortcuts/matching";
-import type { RightPanelHeaderEntry } from "@/lib/domain/workspaces/shell/right-panel-header-entry";
-import type { RightPanelHeaderEntryKey } from "@/lib/domain/workspaces/shell/right-panel-model";
+import type { ShortcutDigit } from "#product/lib/domain/shortcuts/matching";
+import type { RightPanelHeaderEntry } from "#product/lib/domain/workspaces/shell/right-panel-header-entry";
+import type { RightPanelHeaderEntryKey } from "#product/lib/domain/workspaces/shell/right-panel-model";
 
 export function resolveRelativeRightPanelHeaderEntryKey({
   activeEntryKey,

@@ -6,12 +6,12 @@ import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPag
 import { Button } from "@proliferate/ui/primitives/Button";
 import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
 import { Switch } from "@proliferate/ui/primitives/Switch";
-import { OpenTargetIcon } from "@/components/workspace/open-target/OpenTargetIcon";
+import { OpenTargetIcon } from "#product/components/workspace/open-target/OpenTargetIcon";
 import { useAvailableEditors } from "@/hooks/access/tauri/shell/use-available-editors";
-import { resolvePreferredOpenTarget } from "@/lib/domain/chat/composer/preference-resolvers";
-import { emitTurnEnd } from "@/lib/infra/events/turn-end-events";
-import type { DefaultNewWorkspaceMode } from "@/lib/domain/preferences/user/model";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+import { resolvePreferredOpenTarget } from "#product/lib/domain/chat/composer/preference-resolvers";
+import { emitTurnEnd } from "#product/lib/infra/events/turn-end-events";
+import type { DefaultNewWorkspaceMode } from "#product/lib/domain/preferences/user/model";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
 type SettingsOpenTargetIconId =
   | "cursor"

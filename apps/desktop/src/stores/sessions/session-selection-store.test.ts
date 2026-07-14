@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { HotPaintGate } from "@/lib/domain/sessions/hot-paint-gate";
-import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import type { HotPaintGate } from "#product/lib/domain/sessions/hot-paint-gate";
+import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 describe("session selection store invariants", () => {
   beforeEach(() => {

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react"
-import { isApplePlatform } from "@/lib/domain/shortcuts/matching"
-import { useShortcutRevealStore } from "@/stores/shortcuts/shortcut-reveal-store"
+import { isApplePlatform } from "#product/lib/domain/shortcuts/matching"
+import { useShortcutRevealStore } from "#product/stores/shortcuts/shortcut-reveal-store"
 
 export const SHORTCUT_REVEAL_DELAY_MS = 1000
 export const SHORTCUT_REVEAL_RESET_EVENT = "proliferate:shortcut-reveal-reset"

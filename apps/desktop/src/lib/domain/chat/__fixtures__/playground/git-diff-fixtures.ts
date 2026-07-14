@@ -1,5 +1,5 @@
 import type { TranscriptState } from "@anyharness/sdk";
-import { toolCallItem } from "@/lib/domain/chat/__fixtures__/playground/tool-call-item-fixture";
+import { toolCallItem } from "#product/lib/domain/chat/__fixtures__/playground/tool-call-item-fixture";
 
 export const PLAYGROUND_PATCH_README = [
   "@@ -1,4 +1,5 @@",

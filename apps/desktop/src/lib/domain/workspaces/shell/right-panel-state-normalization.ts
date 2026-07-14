@@ -10,11 +10,11 @@ import {
   type RightPanelMaterializedState,
   type RightPanelTerminalRecord,
   type RightPanelWorkspaceState,
-} from "@/lib/domain/workspaces/shell/right-panel-model";
+} from "#product/lib/domain/workspaces/shell/right-panel-model";
 import {
   viewerTargetKey,
   type ViewerTarget,
-} from "@/lib/domain/workspaces/viewer/viewer-target";
+} from "#product/lib/domain/workspaces/viewer/viewer-target";
 
 export function normalizeRightPanelMaterializedState(
   input: Partial<RightPanelMaterializedState> | undefined,

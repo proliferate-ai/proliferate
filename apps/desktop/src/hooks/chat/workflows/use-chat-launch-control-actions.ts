@@ -1,7 +1,7 @@
 import { useCallback } from "react";
-import { useSessionConfigActions } from "@/hooks/sessions/workflows/use-session-config-actions";
-import type { SupportedLiveControlKey } from "@/lib/domain/chat/session-controls/session-controls";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+import { useSessionConfigActions } from "#product/hooks/sessions/workflows/use-session-config-actions";
+import type { SupportedLiveControlKey } from "#product/lib/domain/chat/session-controls/session-controls";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
 export function useChatLaunchControlActions({
   activeLaunchAgentKind,

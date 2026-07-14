@@ -1,9 +1,9 @@
-import { ProposedPlanCard } from "./ProposedPlanCard";
+import { ProposedPlanCard } from "#product/components/workspace/chat/transcript/ProposedPlanCard";
 import {
   renderTranscriptCodeBlock,
   renderTranscriptInlineCode,
   renderTranscriptLink,
-} from "./transcript-markdown";
+} from "#product/components/workspace/chat/transcript/transcript-markdown";
 
 interface ClaudePlanCardProps {
   content: string;

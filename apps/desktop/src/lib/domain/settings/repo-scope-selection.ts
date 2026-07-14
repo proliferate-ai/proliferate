@@ -1,5 +1,5 @@
-import type { SettingsFocus } from "@/lib/domain/settings/navigation";
-import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
+import type { SettingsFocus } from "#product/lib/domain/settings/navigation";
+import type { SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
 
 /** Which side of the picked repo the Repo-scope pages edit. */
 export type RepoSettingsContext = "cloud" | "local";

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
-import { useOrganizationMembers } from "@/hooks/access/cloud/organizations/use-organization-members";
-import { isSettingsAdminRole, isSettingsOwnerRole } from "@/lib/domain/settings/admin-roles";
-import { useProductAuthUserId } from "@/hooks/auth/facade/use-product-auth";
+import { useOrganizationMembers } from "#product/hooks/access/cloud/organizations/use-organization-members";
+import { isSettingsAdminRole, isSettingsOwnerRole } from "#product/lib/domain/settings/admin-roles";
+import { useProductAuthUserId } from "#product/hooks/auth/facade/use-product-auth";
 
 export function useIsAdmin(organizationId: string | null) {
   const currentUserId = useProductAuthUserId();

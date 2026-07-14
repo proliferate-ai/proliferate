@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ProviderPickerModal } from "./ProviderPickerModal";
+import { ProviderPickerModal } from "#product/components/settings/panes/agents/harness/ProviderPickerModal";
 
 // ModalShell wraps Radix Dialog (no jsdom polyfills) — stub to a passthrough
 // that renders its body when open.

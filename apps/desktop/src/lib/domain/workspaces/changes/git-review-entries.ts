@@ -2,7 +2,7 @@ import type {
   GitPanelSection,
   GitPanelReviewFile,
   GitPanelReviewScope,
-} from "@/lib/domain/workspaces/changes/git-panel-diff";
+} from "#product/lib/domain/workspaces/changes/git-panel-diff";
 
 export interface GitReviewFileEntry {
   key: string;

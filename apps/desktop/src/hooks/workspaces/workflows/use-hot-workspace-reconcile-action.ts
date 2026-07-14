@@ -2,13 +2,13 @@ import type { AnyHarnessRequestOptions } from "@anyharness/sdk";
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
 import { useCallback } from "react";
 import { resolveStatusFromExecutionSummary } from "@proliferate/product-domain/sessions/activity";
-import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
-import type { WorkspaceCollections } from "@/lib/domain/workspaces/cloud/collections";
-import { workspaceFileTreeStateKey } from "@/lib/domain/workspaces/cloud/collections";
+import type { WorkspaceSession } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
+import type { WorkspaceCollections } from "#product/lib/domain/workspaces/cloud/collections";
+import { workspaceFileTreeStateKey } from "#product/lib/domain/workspaces/cloud/collections";
 import type {
   MeasurementFinishReason,
   MeasurementOperationId,
-} from "@/lib/domain/telemetry/debug-measurement-catalog";
+} from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import {
   startLatencyTimer,
 } from "@/lib/infra/measurement/debug-latency";
@@ -22,12 +22,12 @@ import {
 import { hashMeasurementScope } from "@/lib/infra/measurement/debug-measurement-env";
 import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
 import { getLatencyFlowRequestHeaders } from "@/lib/infra/measurement/latency-flow";
-import type { DeferredWorkspaceFileTreePrefetchInput } from "@/hooks/workspaces/lifecycle/files/use-deferred-workspace-file-tree-prefetch";
-import { markWorkspaceBootstrappedInSession } from "@/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
+import type { DeferredWorkspaceFileTreePrefetchInput } from "#product/hooks/workspaces/lifecycle/files/use-deferred-workspace-file-tree-prefetch";
+import { markWorkspaceBootstrappedInSession } from "#product/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
 import {
   getSessionRecord,
   patchSessionRecord,
-} from "@/stores/sessions/session-records";
+} from "#product/stores/sessions/session-records";
 
 const EMPTY_WORKSPACES = [] as const;
 const WORKSPACE_RECONCILE_SESSION_LIST_TIMEOUT_MS = 3_000;

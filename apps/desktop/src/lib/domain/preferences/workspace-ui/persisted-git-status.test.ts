@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { PersistedWorkspaceGitStatusSnapshot } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
+import type { PersistedWorkspaceGitStatusSnapshot } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
 import {
   MAX_PERSISTED_GIT_STATUS_SNAPSHOTS,
   sanitizeGitStatusSnapshotsByWorkspace,
-} from "./persisted-git-status";
+} from "#product/lib/domain/preferences/workspace-ui/persisted-git-status";
 
 function snapshot(
   overrides?: Partial<PersistedWorkspaceGitStatusSnapshot>,

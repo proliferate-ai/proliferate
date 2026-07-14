@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildFileSearchTree, truncatePathLabel } from "./file-search-tree";
+import { buildFileSearchTree, truncatePathLabel } from "#product/lib/domain/files/file-search-tree";
 
 describe("buildFileSearchTree", () => {
   it("groups matches by parent directory preserving result order", () => {

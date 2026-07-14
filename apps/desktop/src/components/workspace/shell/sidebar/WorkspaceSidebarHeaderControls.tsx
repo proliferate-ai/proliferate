@@ -1,5 +1,5 @@
-import { SidebarUpdatePill } from "@/components/workspace/shell/sidebar/SidebarUpdatePill";
-import type { UpdaterPhase } from "@/stores/updater/updater-store";
+import { SidebarUpdatePill } from "#product/components/workspace/shell/sidebar/SidebarUpdatePill";
+import type { UpdaterPhase } from "#product/stores/updater/updater-store";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { SplitPanelLeft } from "@proliferate/ui/icons";
 

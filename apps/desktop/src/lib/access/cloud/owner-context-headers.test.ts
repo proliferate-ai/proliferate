@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it } from "vitest";
-import { applySelectedOrganizationHeaders } from "@/lib/access/cloud/owner-context-headers";
-import { useOrganizationStore } from "@/stores/organizations/organization-store";
+import { applySelectedOrganizationHeaders } from "#product/lib/access/cloud/owner-context-headers";
+import { useOrganizationStore } from "#product/stores/organizations/organization-store";
 
 describe("owner context headers", () => {
   afterEach(() => {

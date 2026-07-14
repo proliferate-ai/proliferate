@@ -9,11 +9,11 @@ import {
   isLocalEnvironmentDraftDirty,
   normalizeLocalEnvironmentDraft,
   type LocalEnvironmentDraft,
-} from "@/lib/domain/settings/environment-draft";
-import { resolveAutoDetectedBranch } from "@/lib/domain/settings/branch-selection";
-import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
+} from "#product/lib/domain/settings/environment-draft";
+import { resolveAutoDetectedBranch } from "#product/lib/domain/settings/branch-selection";
+import type { SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
 import { loadAnonymousTelemetryBootstrap } from "@/lib/integrations/telemetry/anonymous-storage";
-import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
+import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
 
 const EMPTY_BRANCHES: GitBranchRef[] = [];
 

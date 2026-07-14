@@ -2,15 +2,15 @@ import {
   buildPendingWorkspaceUiKey,
   type PendingWorkspaceEntry,
   type PendingWorkspaceInitialSession,
-} from "@/lib/domain/workspaces/creation/pending-entry";
-import { createPendingSessionId } from "@/lib/workflows/sessions/session-runtime";
+} from "#product/lib/domain/workspaces/creation/pending-entry";
+import { createPendingSessionId } from "#product/lib/workflows/sessions/session-runtime";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import {
   createEmptySessionRecord,
   getWorkspaceSessionRecords,
   putSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
+} from "#product/stores/sessions/session-records";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
 
 export function ensurePendingWorkspaceSessionShell(input: {
   entry: PendingWorkspaceEntry;

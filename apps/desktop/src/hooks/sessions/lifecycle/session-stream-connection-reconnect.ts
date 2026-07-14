@@ -3,13 +3,13 @@ import {
   nextSessionReconnectDelayMs,
   registerOfflineSessionReconnect,
   scheduleSessionReconnectTimer,
-} from "@/lib/workflows/sessions/session-reconnect-state";
-import { isConnectivityOnline } from "@/stores/infra/connectivity-store";
-import { shouldReconnectStream } from "@/hooks/sessions/lifecycle/session-runtime-helpers";
+} from "#product/lib/workflows/sessions/session-reconnect-state";
+import { isConnectivityOnline } from "#product/stores/infra/connectivity-store";
+import { shouldReconnectStream } from "#product/hooks/sessions/lifecycle/session-runtime-helpers";
 import type {
   RefreshSessionSlotMeta,
   SessionStreamConnectOptions,
-} from "@/hooks/sessions/lifecycle/session-stream-connection-types";
+} from "#product/hooks/sessions/lifecycle/session-stream-connection-types";
 
 interface ScheduleSessionStreamReconnectInput {
   sessionId: string;

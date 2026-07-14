@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import type { DesktopWorkerBridge } from "@proliferate/product-client/host/desktop-bridge";
 import type { AuthState } from "@proliferate/product-client/host/product-host";
-import { desktopWorkerStartupFailureCopy } from "@/copy/cloud/desktop-worker-copy";
+import { desktopWorkerStartupFailureCopy } from "#product/copy/cloud/desktop-worker-copy";
 import {
   ensureDesktopWorker,
   teardownDesktopWorker,
-} from "@/lib/workflows/cloud/ensure-desktop-worker";
-import { useOrganizationStore } from "@/stores/organizations/organization-store";
-import { useToastStore } from "@/stores/toast/toast-store";
+} from "#product/lib/workflows/cloud/ensure-desktop-worker";
+import { useOrganizationStore } from "#product/stores/organizations/organization-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 // (user, org) key the desktop worker is currently enrolled for. Module-level
 // so remounts (or StrictMode double-effects) don't re-enroll for the same

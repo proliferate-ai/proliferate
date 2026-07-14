@@ -6,9 +6,9 @@ import {
   createTextDraft,
   serializeChatDraftToPrompt,
   type ChatComposerDraft,
-} from "@/lib/domain/chat/composer/file-mention-draft-model";
-import type { SessionSlashCommandViewModel } from "@/lib/domain/chat/composer/session-slash-command-policy";
-import { ComposerCommandEditor } from "./ComposerCommandEditor";
+} from "#product/lib/domain/chat/composer/file-mention-draft-model";
+import type { SessionSlashCommandViewModel } from "#product/lib/domain/chat/composer/session-slash-command-policy";
+import { ComposerCommandEditor } from "#product/components/workspace/chat/input/ComposerCommandEditor";
 
 const slashCommandMock = vi.hoisted(() => ({
   commands: [] as SessionSlashCommandViewModel[],

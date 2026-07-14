@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { AppCommandActions } from "@/hooks/app/workflows/app-command-action-types";
-import { buildWorkspaceCommandPaletteEntries } from "./workspace-command-palette-entries";
+import type { AppCommandActions } from "#product/hooks/app/workflows/app-command-action-types";
+import { buildWorkspaceCommandPaletteEntries } from "#product/hooks/workspaces/facade/workspace-command-palette-entries";
 
 // Mirrors the sidebar hiding its support action under `support.kind ===
 // "none"` (`SidebarHelpSection`): the command-palette "Open Support" entry

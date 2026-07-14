@@ -11,7 +11,7 @@ import {
   pendingInteractionMarkerKind,
   resolvePendingPromptTrailingStatus,
   resolveTurnTrailingStatus,
-} from "./TranscriptTurnChrome";
+} from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
 
 afterEach(() => {
   cleanup();

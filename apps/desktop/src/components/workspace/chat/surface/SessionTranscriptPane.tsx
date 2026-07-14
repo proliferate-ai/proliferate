@@ -1,21 +1,21 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
-import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
-import { useActiveTranscriptPaneState } from "@/hooks/chat/derived/use-active-session-transcript-state";
-import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
-import { MessageList } from "@/components/workspace/chat/transcript/MessageList";
-import { ConnectedPlanHandoffDialog } from "@/components/workspace/chat/plans/ConnectedPlanHandoffDialog";
-import { usePlanHandoffDialogState } from "@/hooks/plans/ui/use-plan-handoff-dialog-state";
-import { useSessionHistoryHydration } from "@/hooks/sessions/lifecycle/use-session-history-hydration";
-import { useWorkspaceShellActivation } from "@/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
-import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-activation-workflow";
-import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
-import { useCoworkManagedWorkspaces } from "@/hooks/access/anyharness/cowork/use-cowork-managed-workspaces";
-import { TranscriptSwitchingPlaceholder } from "@/components/workspace/chat/surface/TranscriptSwitchingPlaceholder";
+import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
+import { useActiveTranscriptPaneState } from "#product/hooks/chat/derived/use-active-session-transcript-state";
+import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
+import { MessageList } from "#product/components/workspace/chat/transcript/MessageList";
+import { ConnectedPlanHandoffDialog } from "#product/components/workspace/chat/plans/ConnectedPlanHandoffDialog";
+import { usePlanHandoffDialogState } from "#product/hooks/plans/ui/use-plan-handoff-dialog-state";
+import { useSessionHistoryHydration } from "#product/hooks/sessions/lifecycle/use-session-history-hydration";
+import { useWorkspaceShellActivation } from "#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
+import { useWorkspaceActivationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-activation-workflow";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
+import { useCoworkManagedWorkspaces } from "#product/hooks/access/anyharness/cowork/use-cowork-managed-workspaces";
+import { TranscriptSwitchingPlaceholder } from "#product/components/workspace/chat/surface/TranscriptSwitchingPlaceholder";
 import {
   resolveTranscriptOpenSessionWorkspaceId,
   type TranscriptOpenSessionRole,
 } from "@proliferate/product-domain/chats/transcript/transcript-open-target";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import type { GoalTranscriptEvent } from "@proliferate/product-domain/activity/goal-transcript-events";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import {
@@ -23,9 +23,9 @@ import {
   getSessionRecord,
   getSessionRecords,
   patchSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+} from "#product/stores/sessions/session-records";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 interface SessionTranscriptPaneProps {
   bottomInsetPx: number;

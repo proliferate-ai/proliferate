@@ -1,4 +1,4 @@
-import { SubagentsUxPlayground } from "@/components/playground/subagents-ux/SubagentsUxPlayground";
+import { SubagentsUxPlayground } from "#product/components/playground/subagents-ux/SubagentsUxPlayground";
 
 export function SubagentsUxPlaygroundPage() {
   return <SubagentsUxPlayground />;

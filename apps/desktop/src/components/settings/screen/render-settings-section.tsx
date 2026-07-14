@@ -1,36 +1,36 @@
 import { type ReactNode } from "react";
-import { type SettingsSection } from "@/config/settings";
-import { AccountPane } from "@/components/settings/panes/AccountPane";
-import { ApiKeysPane } from "@/components/settings/panes/agents/api-keys/ApiKeysPane";
-import { HarnessPane } from "@/components/settings/panes/agents/harness/HarnessPane";
-import { AppearancePane } from "@/components/settings/panes/AppearancePane";
-import { CloudGuard, type CloudGateFlags } from "@/components/cloud/CloudGuard";
-import { GeneralPane } from "@/components/settings/panes/GeneralPane";
-import { OrganizationBudgetsPane } from "@/components/settings/panes/OrganizationBudgetsPane";
-import { OrganizationIntegrationsPane } from "@/components/settings/panes/OrganizationIntegrationsPane";
-import { OrganizationMembersPane } from "@/components/settings/panes/OrganizationMembersPane";
-import { OrganizationPane } from "@/components/settings/panes/OrganizationPane";
-import { OrganizationSecretsPane } from "@/components/settings/panes/OrganizationSecretsPane";
-import { OrganizationSsoPane } from "@/components/settings/panes/OrganizationSsoPane";
-import { PersonalSecretsPane } from "@/components/settings/panes/PersonalSecretsPane";
-import { UserIntegrationsPane } from "@/components/settings/panes/UserIntegrationsPane";
-import { OrganizationModelPolicyPane } from "@/components/settings/panes/OrganizationModelPolicyPane";
-import { SettingsScaffoldPane } from "@/components/settings/panes/SettingsScaffoldPane";
-import { BillingPane } from "@/components/settings/panes/BillingPane";
-import { RepoActionsPane } from "@/components/settings/panes/repo/RepoActionsPane";
-import { RepoConfigurePane } from "@/components/settings/panes/repo/RepoConfigurePane";
-import { RepoEnvironmentPane } from "@/components/settings/panes/repo/RepoEnvironmentPane";
-import { WorktreesPane } from "@/components/settings/panes/WorktreesPane";
-import { type SettingsFocus } from "@/lib/domain/settings/navigation";
+import { type SettingsSection } from "#product/config/settings";
+import { AccountPane } from "#product/components/settings/panes/AccountPane";
+import { ApiKeysPane } from "#product/components/settings/panes/agents/api-keys/ApiKeysPane";
+import { HarnessPane } from "#product/components/settings/panes/agents/harness/HarnessPane";
+import { AppearancePane } from "#product/components/settings/panes/AppearancePane";
+import { CloudGuard, type CloudGateFlags } from "#product/components/cloud/CloudGuard";
+import { GeneralPane } from "#product/components/settings/panes/GeneralPane";
+import { OrganizationBudgetsPane } from "#product/components/settings/panes/OrganizationBudgetsPane";
+import { OrganizationIntegrationsPane } from "#product/components/settings/panes/OrganizationIntegrationsPane";
+import { OrganizationMembersPane } from "#product/components/settings/panes/OrganizationMembersPane";
+import { OrganizationPane } from "#product/components/settings/panes/OrganizationPane";
+import { OrganizationSecretsPane } from "#product/components/settings/panes/OrganizationSecretsPane";
+import { OrganizationSsoPane } from "#product/components/settings/panes/OrganizationSsoPane";
+import { PersonalSecretsPane } from "#product/components/settings/panes/PersonalSecretsPane";
+import { UserIntegrationsPane } from "#product/components/settings/panes/UserIntegrationsPane";
+import { OrganizationModelPolicyPane } from "#product/components/settings/panes/OrganizationModelPolicyPane";
+import { SettingsScaffoldPane } from "#product/components/settings/panes/SettingsScaffoldPane";
+import { BillingPane } from "#product/components/settings/panes/BillingPane";
+import { RepoActionsPane } from "#product/components/settings/panes/repo/RepoActionsPane";
+import { RepoConfigurePane } from "#product/components/settings/panes/repo/RepoConfigurePane";
+import { RepoEnvironmentPane } from "#product/components/settings/panes/repo/RepoEnvironmentPane";
+import { WorktreesPane } from "#product/components/settings/panes/WorktreesPane";
+import { type SettingsFocus } from "#product/lib/domain/settings/navigation";
 import {
   type RepoScopeSelection,
   type RepoSettingsContext,
-} from "@/lib/domain/settings/repo-scope-selection";
+} from "#product/lib/domain/settings/repo-scope-selection";
 import {
   getHarnessKindForSettingsSection,
   isSettingsHarnessSection,
-} from "@/lib/domain/settings/navigation-presentation";
-import { isSettingsScaffoldPageId } from "@/copy/settings/settings-scaffold-copy";
+} from "#product/lib/domain/settings/navigation-presentation";
+import { isSettingsScaffoldPageId } from "#product/copy/settings/settings-scaffold-copy";
 
 /** Cloud-gated sections: unavailable build → sign-in states → the pane itself. */
 function renderCloudGatedPane(flags: CloudGateFlags, pane: () => ReactNode): ReactNode {

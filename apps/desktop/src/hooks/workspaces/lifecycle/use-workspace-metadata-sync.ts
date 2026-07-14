@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useGitStatusQuery } from "@anyharness/sdk-react";
-import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
-import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
+import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 import { resolveSessionViewState } from "@proliferate/product-domain/sessions/activity";
 import { updateCloudWorkspaceDisplayName } from "@proliferate/cloud-sdk/client/workspaces";
 import {
@@ -10,17 +10,17 @@ import {
   resolveCloudDisplayNameSyncAttempt,
   shouldBackfillCloudDisplayNameFromRuntime,
   type CloudDisplayNameSyncState,
-} from "@/lib/domain/workspaces/cloud/cloud-display-name-sync";
-import { isCloudDisplayNameBackfillSuppressed } from "./cloud-display-name-backfill-suppression";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { getWorkspace } from "@/lib/access/anyharness/workspaces";
-import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/derived/use-hot-paint-gate";
-import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
-import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
-import { withFreshCloudSandboxGatewayAccessToken } from "@/lib/access/cloud/cloud-sandbox-gateway";
+} from "#product/lib/domain/workspaces/cloud/cloud-display-name-sync";
+import { isCloudDisplayNameBackfillSuppressed } from "#product/hooks/workspaces/lifecycle/cloud-display-name-backfill-suppression";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { getWorkspace } from "#product/lib/access/anyharness/workspaces";
+import { activitySnapshotFromDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-activity";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useIsHotPaintGatePendingForWorkspace } from "#product/hooks/workspaces/derived/use-hot-paint-gate";
+import { useWorkspaceCollectionsInvalidation } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
+import { useWorkspaceCollectionsMutationCache } from "#product/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
+import { withFreshCloudSandboxGatewayAccessToken } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 
 const WORKSPACE_METADATA_POLL_INTERVAL_MS = 250;
 

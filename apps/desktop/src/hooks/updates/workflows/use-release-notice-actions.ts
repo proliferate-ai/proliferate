@@ -1,8 +1,8 @@
 import { useCallback, useMemo } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { RELEASE_NOTICE_CHANGELOG_URL } from "@/config/release-notice";
-import type { ReleaseNotice } from "@/lib/domain/updates/release-notice";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+import { RELEASE_NOTICE_CHANGELOG_URL } from "#product/config/release-notice";
+import type { ReleaseNotice } from "#product/lib/domain/updates/release-notice";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
 export function useReleaseNoticeActions(notice: ReleaseNotice | null) {
   const setPreference = useUserPreferencesStore(

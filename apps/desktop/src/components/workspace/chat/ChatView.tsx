@@ -7,41 +7,41 @@ import {
   type DragEvent,
   type JSX,
 } from "react";
-import { ChatInput } from "@/components/workspace/chat/input/ChatInput";
-import { ChatComposerDock } from "@/components/workspace/chat/input/ChatComposerDock";
-import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
-import { ChatLaunchIntentPane } from "@/components/workspace/chat/surface/ChatLaunchIntentPane";
-import { ChatLoadingHero } from "@/components/workspace/chat/surface/ChatLoadingHero";
-import { ChatPreMessageCanvas } from "@/components/workspace/chat/surface/ChatPreMessageCanvas";
-import { ChatReadyHero } from "@/components/workspace/chat/surface/ChatReadyHero";
-import { NoWorkspaceState } from "@/components/workspace/chat/surface/NoWorkspaceState";
-import { SessionTranscriptPane } from "@/components/workspace/chat/surface/SessionTranscriptPane";
-import { SessionContentSearchOverlay } from "@/components/workspace/chat/surface/SessionContentSearchOverlay";
-import { TranscriptSwitchingPlaceholder } from "@/components/workspace/chat/surface/TranscriptSwitchingPlaceholder";
-import { type ChatSurfaceState, useChatSurfaceState } from "@/hooks/chat/derived/use-chat-surface-state";
+import { ChatInput } from "#product/components/workspace/chat/input/ChatInput";
+import { ChatComposerDock } from "#product/components/workspace/chat/input/ChatComposerDock";
+import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
+import { ChatLaunchIntentPane } from "#product/components/workspace/chat/surface/ChatLaunchIntentPane";
+import { ChatLoadingHero } from "#product/components/workspace/chat/surface/ChatLoadingHero";
+import { ChatPreMessageCanvas } from "#product/components/workspace/chat/surface/ChatPreMessageCanvas";
+import { ChatReadyHero } from "#product/components/workspace/chat/surface/ChatReadyHero";
+import { NoWorkspaceState } from "#product/components/workspace/chat/surface/NoWorkspaceState";
+import { SessionTranscriptPane } from "#product/components/workspace/chat/surface/SessionTranscriptPane";
+import { SessionContentSearchOverlay } from "#product/components/workspace/chat/surface/SessionContentSearchOverlay";
+import { TranscriptSwitchingPlaceholder } from "#product/components/workspace/chat/surface/TranscriptSwitchingPlaceholder";
+import { type ChatSurfaceState, useChatSurfaceState } from "#product/hooks/chat/derived/use-chat-surface-state";
 import {
   useActiveSessionId,
   useActiveSessionPromptCapabilities,
   useSelectedWorkspaceUiKey,
-} from "@/hooks/chat/derived/use-active-session-identity";
-import { useChatAvailabilityState } from "@/hooks/chat/derived/use-chat-availability-state";
-import { useChatDockInset } from "@/hooks/chat/ui/use-chat-dock-inset";
-import { useChatPromptAttachments } from "@/hooks/chat/ui/use-chat-prompt-attachments";
-import { useChatRootFocus } from "@/hooks/chat/ui/use-chat-root-focus";
-import { useCloudWorkspacePolling } from "@/hooks/chat/lifecycle/use-cloud-workspace-polling";
-import { useComposerDockSlots } from "@/hooks/chat/ui/use-composer-dock-slots";
-import { useQueuedPromptEditStatus } from "@/hooks/chat/ui/use-queued-prompt-edit";
-import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
-import { useSessionErrorAcknowledgement } from "@/hooks/sessions/lifecycle/use-session-error-acknowledgement";
-import { useSelectedCloudRuntimeRehydration } from "@/hooks/workspaces/lifecycle/use-selected-cloud-runtime-rehydration";
-import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
+} from "#product/hooks/chat/derived/use-active-session-identity";
+import { useChatAvailabilityState } from "#product/hooks/chat/derived/use-chat-availability-state";
+import { useChatDockInset } from "#product/hooks/chat/ui/use-chat-dock-inset";
+import { useChatPromptAttachments } from "#product/hooks/chat/ui/use-chat-prompt-attachments";
+import { useChatRootFocus } from "#product/hooks/chat/ui/use-chat-root-focus";
+import { useCloudWorkspacePolling } from "#product/hooks/chat/lifecycle/use-cloud-workspace-polling";
+import { useComposerDockSlots } from "#product/hooks/chat/ui/use-composer-dock-slots";
+import { useQueuedPromptEditStatus } from "#product/hooks/chat/ui/use-queued-prompt-edit";
+import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
+import { useSessionErrorAcknowledgement } from "#product/hooks/sessions/lifecycle/use-session-error-acknowledgement";
+import { useSelectedCloudRuntimeRehydration } from "#product/hooks/workspaces/lifecycle/use-selected-cloud-runtime-rehydration";
+import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import { canAttachPromptContent } from "@proliferate/product-domain/chats/composer/prompt-attachment-rules";
 import {
   canAcceptChatFileDrop,
   isFileDrag,
   readFileDragInput,
-} from "@/lib/domain/chat/composer/prompt-attachment-drag";
-import type { WorkspaceRenderSurface } from "@/lib/domain/workspaces/tabs/shell-activation";
+} from "#product/lib/domain/chat/composer/prompt-attachment-drag";
+import type { WorkspaceRenderSurface } from "#product/lib/domain/workspaces/tabs/shell-activation";
 
 function ChatContent({
   dockSafeAreaPx,

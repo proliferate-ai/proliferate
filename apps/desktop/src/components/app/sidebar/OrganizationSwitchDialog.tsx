@@ -1,7 +1,7 @@
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
-import { useOrganizationSwitchAction } from "@/hooks/organizations/workflows/use-organization-switch-action";
-import type { OrganizationRecord } from "@/lib/domain/organizations/organization-records";
-import { useToastStore } from "@/stores/toast/toast-store";
+import { useOrganizationSwitchAction } from "#product/hooks/organizations/workflows/use-organization-switch-action";
+import type { OrganizationRecord } from "#product/lib/domain/organizations/organization-records";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 /**
  * Confirmation for the semi-destructive org->org switch: the desktop worker's

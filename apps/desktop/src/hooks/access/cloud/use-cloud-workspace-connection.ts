@@ -1,15 +1,15 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import type { CloudConnectionInfo } from "@/lib/access/cloud/client";
-import type { CloudSandboxGatewayUrlSource } from "@/lib/access/cloud/cloud-sandbox-gateway";
-import { cloudWorkspaceConnectionKey } from "@/hooks/access/cloud/query-keys";
+import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/cloud-sandbox-gateway";
+import { cloudWorkspaceConnectionKey } from "#product/hooks/access/cloud/query-keys";
 import {
   CLOUD_WORKSPACE_CONNECTION_MAX_RETRIES,
   CLOUD_WORKSPACE_CONNECTION_RETRY_DELAY_MS,
   getResolvedCloudWorkspaceConnection,
   isCloudWorkspaceNotReadyError,
   isRetryableCloudWorkspaceConnectionError,
-} from "@/lib/access/cloud/workspace-connection-retry";
+} from "#product/lib/access/cloud/workspace-connection-retry";
 
 export {
   CLOUD_WORKSPACE_CONNECTION_MAX_RETRIES,

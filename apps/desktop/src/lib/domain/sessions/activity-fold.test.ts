@@ -6,7 +6,7 @@ import type {
   SessionActivity,
   SessionEvent,
 } from "@anyharness/sdk";
-import { foldActivityEvent } from "@/lib/domain/sessions/activity-fold";
+import { foldActivityEvent } from "#product/lib/domain/sessions/activity-fold";
 
 function loop(overrides?: Partial<Loop>): Loop {
   return {

@@ -3,9 +3,9 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RepoGroup } from "@/components/workspace/shell/sidebar/RepoGroup";
-import type { NewWorkspaceCommandScope } from "@/lib/domain/workspaces/creation/new-workspace-command";
-import { useNewWorkspaceCommandScopeStore } from "@/stores/workspaces/new-workspace-command-scope-store";
+import { RepoGroup } from "#product/components/workspace/shell/sidebar/RepoGroup";
+import type { NewWorkspaceCommandScope } from "#product/lib/domain/workspaces/creation/new-workspace-command";
+import { useNewWorkspaceCommandScopeStore } from "#product/stores/workspaces/new-workspace-command-scope-store";
 
 vi.mock("@proliferate/ui/icons", () => ({
   ChevronRight: () => <span data-icon="chevron" />,

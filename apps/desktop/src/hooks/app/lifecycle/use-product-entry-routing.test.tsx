@@ -11,9 +11,9 @@ import type {
 } from "@proliferate/product-client/host/product-host";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 
-import { decodeDesktopProductEntry } from "@/lib/domain/auth/desktop-navigation";
-import { useProductEntryRouting } from "@/hooks/app/lifecycle/use-product-entry-routing";
-import { makeTestProductHost } from "@/test/product-host-fixtures";
+import { decodeDesktopProductEntry } from "#product/lib/domain/auth/desktop-navigation";
+import { useProductEntryRouting } from "#product/hooks/app/lifecycle/use-product-entry-routing";
+import { makeTestProductHost } from "#product/test/product-host-fixtures";
 
 // A toggle the mocked useNavigate reads at call time so one test can force the
 // router navigate to throw while every other test keeps the real navigate.

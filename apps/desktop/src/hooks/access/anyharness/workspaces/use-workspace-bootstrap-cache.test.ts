@@ -14,14 +14,14 @@ import {
   isReplacedSessionTombstoned,
   resetReplacedSessionTombstonesForTests,
   stageReplacedSessionTombstone,
-} from "@/hooks/sessions/workflows/session-replacement-tombstones";
+} from "#product/hooks/sessions/workflows/session-replacement-tombstones";
 import {
   reconcileReplacedSessionTombstones,
   useWorkspaceBootstrapCache,
-} from "./use-workspace-bootstrap-cache";
+} from "#product/hooks/access/anyharness/workspaces/use-workspace-bootstrap-cache";
 import {
   resetSessionReplacementDismissalsForTests,
-} from "@/hooks/sessions/workflows/session-replacement-dismissals";
+} from "#product/hooks/sessions/workflows/session-replacement-dismissals";
 
 const mocks = vi.hoisted(() => ({
   dismissSession: vi.fn(async () => undefined),

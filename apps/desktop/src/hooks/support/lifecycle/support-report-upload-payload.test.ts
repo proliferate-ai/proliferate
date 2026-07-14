@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { ProductSupportTelemetryContext } from "@proliferate/product-client/host/product-host";
-import type { SupportReportJob } from "@/lib/domain/support/report-types";
+import type { SupportReportJob } from "#product/lib/domain/support/report-types";
 
 import {
   buildCreateReportRequest,
   completeRequestForUpload,
-} from "./support-report-upload-payload";
+} from "#product/hooks/support/lifecycle/support-report-upload-payload";
 
 // The support context now arrives injected from the product telemetry facade,
 // standing in for the values Desktop previously read from the telemetry client.

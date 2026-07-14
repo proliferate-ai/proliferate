@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { SIDEBAR_REPO_GROUP_ITEM_LIMIT } from "@/lib/domain/workspaces/sidebar/sidebar-model";
+import { SIDEBAR_REPO_GROUP_ITEM_LIMIT } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 import {
   resolveAdjacentSidebarShortcutTarget,
   resolveSidebarShortcutDigitTarget,
   visibleSidebarShortcutTargetIds,
-} from "@/lib/domain/workspaces/sidebar/sidebar-shortcut-targets";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-shortcut-targets";
 import {
   buildGroups,
   makeCloudLogicalWorkspace,
   makeLocalLogicalWorkspace,
-} from "@/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
 
 describe("visibleSidebarShortcutTargetIds", () => {
   it("returns visible repository rows in sidebar group and item order", () => {

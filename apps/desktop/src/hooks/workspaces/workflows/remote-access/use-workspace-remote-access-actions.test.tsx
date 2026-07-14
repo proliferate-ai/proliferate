@@ -2,7 +2,7 @@
 
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useWorkspaceRemoteAccessActions } from "@/hooks/workspaces/workflows/remote-access/use-workspace-remote-access-actions";
+import { useWorkspaceRemoteAccessActions } from "#product/hooks/workspaces/workflows/remote-access/use-workspace-remote-access-actions";
 
 const hookMocks = vi.hoisted(() => ({
   showToast: vi.fn(),

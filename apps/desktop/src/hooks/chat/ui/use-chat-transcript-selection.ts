@@ -7,9 +7,9 @@ import {
   isExactRootSelection,
   nodeInsideRoot,
   setCollapsedRootMarker,
-} from "./chat-transcript-selection-dom";
-import { createChatTranscriptSelectionHandlers } from "./chat-transcript-selection-handlers";
-import { attachChatTranscriptSelectionListeners } from "./chat-transcript-selection-listeners";
+} from "#product/hooks/chat/ui/chat-transcript-selection-dom";
+import { createChatTranscriptSelectionHandlers } from "#product/hooks/chat/ui/chat-transcript-selection-handlers";
+import { attachChatTranscriptSelectionListeners } from "#product/hooks/chat/ui/chat-transcript-selection-listeners";
 
 interface UseChatTranscriptSelectionArgs {
   rootRef: RefObject<HTMLElement | null>;

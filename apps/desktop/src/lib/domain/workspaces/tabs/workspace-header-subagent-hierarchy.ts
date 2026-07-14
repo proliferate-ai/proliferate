@@ -11,15 +11,15 @@ import type { SubagentSessionRelationshipHint } from "@proliferate/product-domai
 import {
   reviewAssignmentHeaderStatusLabel,
   reviewKindLabel,
-} from "@/lib/domain/reviews/review-runs";
-import type { ReviewSessionRelationshipHint } from "@/lib/domain/reviews/session-relationship-hints";
+} from "#product/lib/domain/reviews/review-runs";
+import type { ReviewSessionRelationshipHint } from "#product/lib/domain/reviews/session-relationship-hints";
 import {
   buildCoworkChildRows,
   coworkResponseSignature,
-} from "@/lib/domain/workspaces/tabs/workspace-header-cowork-hierarchy";
+} from "#product/lib/domain/workspaces/tabs/workspace-header-cowork-hierarchy";
 import type {
   HeaderHierarchyChildRow,
-} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-model-helpers";
+} from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-model-helpers";
 
 export interface HeaderSubagentParentRow {
   sessionId: string;

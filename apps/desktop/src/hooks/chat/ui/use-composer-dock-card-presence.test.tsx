@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   useComposerDockCardPresence,
   useHeldInteractionPayload,
-} from "./use-composer-dock-card-presence";
+} from "#product/hooks/chat/ui/use-composer-dock-card-presence";
 
 function PresenceHarness({
   entryKey,

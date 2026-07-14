@@ -1,4 +1,4 @@
-import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
+import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 
 export interface SelectSessionOptionsWithoutGuard {
   latencyFlowId?: string | null;

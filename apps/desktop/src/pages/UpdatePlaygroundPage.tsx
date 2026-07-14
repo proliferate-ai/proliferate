@@ -1,4 +1,4 @@
-import { UpdateUiPlayground } from "@/components/playground/UpdateUiPlayground";
+import { UpdateUiPlayground } from "#product/components/playground/UpdateUiPlayground";
 
 export function UpdatePlaygroundPage() {
   return <UpdateUiPlayground />;

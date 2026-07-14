@@ -7,7 +7,7 @@ import {
   type ReactNode,
   type WheelEvent as ReactWheelEvent,
 } from "react";
-import { DiffLineContent } from "@/components/content/ui/diff/DiffLineContent";
+import { DiffLineContent } from "#product/components/content/ui/diff/DiffLineContent";
 import {
   DiffCollapsedContentLabel,
   DiffCollapsedGutterIcon,
@@ -15,18 +15,18 @@ import {
   DiffGapGutterControls,
   DiffGapInfoRow,
   type ExpandDirection,
-} from "@/components/content/ui/diff/DiffContextExpander";
-import { ChatDiffLineWrapContextMenu } from "@/components/content/ui/diff/ChatDiffLineWrapContextMenu";
-import { HunkActionPill } from "@/components/content/ui/diff/HunkActionPill";
-import type { UnifiedDiffHunkActions } from "@/components/content/ui/diff/UnifiedDiffViewer";
-import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";
+} from "#product/components/content/ui/diff/DiffContextExpander";
+import { ChatDiffLineWrapContextMenu } from "#product/components/content/ui/diff/ChatDiffLineWrapContextMenu";
+import { HunkActionPill } from "#product/components/content/ui/diff/HunkActionPill";
+import type { UnifiedDiffHunkActions } from "#product/components/content/ui/diff/UnifiedDiffViewer";
+import { useResolvedMode } from "#product/hooks/theme/derived/use-resolved-mode";
 import {
   buildContentSearchLineMatchIds,
   normalizeContentSearchQuery,
-} from "@/lib/domain/content-search/content-search";
+} from "#product/lib/domain/content-search/content-search";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { chainVerticalWheelScroll } from "@proliferate/ui/utils/scroll-chain";
-import type { CollapsedContext, DiffLine, InterHunkGap, ParsedPatch } from "@/lib/domain/files/diff-parser";
+import type { CollapsedContext, DiffLine, InterHunkGap, ParsedPatch } from "#product/lib/domain/files/diff-parser";
 import {
   getChatDiffRows,
   getChatLineNumber,
@@ -34,15 +34,15 @@ import {
   getDiffLineIndex,
   getDiffLineNumberColumnWidth,
   type ChatDiffRow,
-} from "@/lib/domain/files/diff-view-rows";
+} from "#product/lib/domain/files/diff-view-rows";
 import {
   clampGapReveal,
   resolveGapLineCount,
   useGapExpansion,
   type GapExpansionState,
-} from "@/hooks/ui/diff/use-gap-expansion";
-import type { HighlightedToken } from "@/lib/infra/editor/highlighting";
-import { useContentSearchStore } from "@/stores/search/content-search-store";
+} from "#product/hooks/ui/diff/use-gap-expansion";
+import type { HighlightedToken } from "#product/lib/infra/editor/highlighting";
+import { useContentSearchStore } from "#product/stores/search/content-search-store";
 
 const CHAT_DIFF_PRE_STYLE = {
   color: "var(--diffs-fg)",

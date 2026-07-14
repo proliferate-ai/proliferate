@@ -1,4 +1,4 @@
-import type { SettingsSection } from "@/config/settings";
+import type { SettingsSection } from "#product/config/settings";
 
 export interface SettingsShortcutSectionTarget {
   disabled: boolean;

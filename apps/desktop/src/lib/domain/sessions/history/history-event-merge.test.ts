@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   mergeFetchedHistoryWithExistingEvents,
   mergeFetchedHistoryWithNewerEvents,
-} from "@/lib/domain/sessions/history/history-event-merge";
+} from "#product/lib/domain/sessions/history/history-event-merge";
 
 function event(seq: number, marker = `event-${seq}`): SessionEventEnvelope {
   return { seq, marker } as unknown as SessionEventEnvelope;

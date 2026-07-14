@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { SHORTCUTS } from "@/config/shortcuts/registry";
-import { getShortcutNativeAccelerator } from "@/lib/domain/shortcuts/native-accelerators";
+import { SHORTCUTS } from "#product/config/shortcuts/registry";
+import { getShortcutNativeAccelerator } from "#product/lib/domain/shortcuts/native-accelerators";
 
 describe("getShortcutNativeAccelerator", () => {
   it("converts fixed primary-modifier shortcuts to Tauri accelerators", () => {

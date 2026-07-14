@@ -1,9 +1,9 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
-import type { CloudWorkspaceSummary } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
-import { localWorkspaceGroupKey } from "@/lib/domain/workspaces/cloud/collections";
-import { isCloudWorkspaceId, parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import type { CloudWorkspaceRepoTarget } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
-import { isStandardWorkspace } from "@/lib/domain/workspaces/display/usability";
+import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
+import { localWorkspaceGroupKey } from "#product/lib/domain/workspaces/cloud/collections";
+import { isCloudWorkspaceId, parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import type { CloudWorkspaceRepoTarget } from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
+import { isStandardWorkspace } from "#product/lib/domain/workspaces/display/usability";
 
 export function getRepoForSelectedWorkspace(
   selectedWorkspaceId: string | null,

@@ -1,14 +1,14 @@
 import { useCallback, useMemo } from "react";
-import { WorkspaceActions } from "@/components/workspace/shell/topbar/WorkspaceActionsMenu";
+import { WorkspaceActions } from "#product/components/workspace/shell/topbar/WorkspaceActionsMenu";
 import {
   useOptionalWorkspaceHeaderTabsViewModelContext,
-} from "@/components/workspace/shell/providers/WorkspaceHeaderTabsViewModelContext";
-import { useChatTabVisibilityActions } from "@/hooks/workspaces/workflows/tabs/use-chat-tab-visibility-actions";
-import { useSessionDismissActions } from "@/hooks/sessions/workflows/use-session-dismiss-actions";
-import { useSessionForkActions } from "@/hooks/sessions/workflows/use-session-fork-actions";
-import { useManualChatGroupActions } from "@/hooks/workspaces/workflows/tabs/use-manual-chat-group-actions";
-import { runShortcutHandler } from "@/lib/domain/shortcuts/registry";
-import { useToastStore } from "@/stores/toast/toast-store";
+} from "#product/components/workspace/shell/providers/WorkspaceHeaderTabsViewModelContext";
+import { useChatTabVisibilityActions } from "#product/hooks/workspaces/workflows/tabs/use-chat-tab-visibility-actions";
+import { useSessionDismissActions } from "#product/hooks/sessions/workflows/use-session-dismiss-actions";
+import { useSessionForkActions } from "#product/hooks/sessions/workflows/use-session-fork-actions";
+import { useManualChatGroupActions } from "#product/hooks/workspaces/workflows/tabs/use-manual-chat-group-actions";
+import { runShortcutHandler } from "#product/lib/domain/shortcuts/registry";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 /**
  * Wires the workspace three-dot menu to session tab actions. Git and publish

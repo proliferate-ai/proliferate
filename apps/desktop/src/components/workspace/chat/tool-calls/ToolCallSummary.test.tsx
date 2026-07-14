@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { ToolCallSummary } from "./ToolCallSummary";
+import { ToolCallSummary } from "#product/components/workspace/chat/tool-calls/ToolCallSummary";
 
 afterEach(cleanup);
 

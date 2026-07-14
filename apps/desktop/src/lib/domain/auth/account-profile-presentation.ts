@@ -1,6 +1,6 @@
 import type { AccountProviderView } from "@proliferate/product-ui/account/AccountSettingsPane";
-import { AUTH_ACCOUNT_LABELS } from "@/copy/auth/auth-copy";
-import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
+import { AUTH_ACCOUNT_LABELS } from "#product/copy/auth/auth-copy";
+import { CAPABILITY_COPY } from "#product/copy/capabilities/capability-copy";
 
 export interface AccountDisplayNameInput {
   email: string | null | undefined;

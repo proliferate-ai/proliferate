@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { migrateUserPreferences } from "@/lib/domain/preferences/user/migration";
-import { USER_PREFERENCE_DEFAULTS } from "@/lib/domain/preferences/user/model";
-import { normalizeDefaultChatModelId } from "@/lib/domain/preferences/user/session-defaults";
+import { migrateUserPreferences } from "#product/lib/domain/preferences/user/migration";
+import { USER_PREFERENCE_DEFAULTS } from "#product/lib/domain/preferences/user/model";
+import { normalizeDefaultChatModelId } from "#product/lib/domain/preferences/user/session-defaults";
 import {
   WORKTREE_AUTO_DELETE_LIMIT_DEFAULT,
-} from "@/lib/domain/preferences/user/worktree-auto-delete";
+} from "#product/lib/domain/preferences/user/worktree-auto-delete";
 
 describe("user preference migration", () => {
   it("migrates legacy model preferences into the current shape", () => {

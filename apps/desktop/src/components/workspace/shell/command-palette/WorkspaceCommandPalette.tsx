@@ -7,13 +7,13 @@ import {
   CommandPaletteRoot,
   useCommandPaletteClose,
 } from "@proliferate/ui/primitives/CommandPalette";
-import { FileTreeEntryIcon } from "@/components/workspace/files/file-icons";
+import { FileTreeEntryIcon } from "#product/components/workspace/files/file-icons";
 import { CommandPaletteGlyph } from "@proliferate/ui/command-palette-icons";
-import { useWorkspaceCommandPalette } from "@/hooks/workspaces/facade/use-workspace-command-palette";
+import { useWorkspaceCommandPalette } from "#product/hooks/workspaces/facade/use-workspace-command-palette";
 import type {
   CommandPaletteEntry,
   CommandPaletteIconId,
-} from "@/lib/domain/command-palette/entries";
+} from "#product/lib/domain/command-palette/entries";
 
 interface RunCommandState {
   onRun: () => void;

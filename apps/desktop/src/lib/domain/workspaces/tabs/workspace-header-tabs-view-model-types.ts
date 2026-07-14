@@ -1,9 +1,9 @@
 import type { SessionViewState } from "@proliferate/product-domain/sessions/activity";
-import type { DelegatedWorkTabIdentity } from "@/lib/domain/delegated-work/model";
-import type { GroupedChatTab } from "@/lib/domain/workspaces/tabs/grouping";
-import type { HeaderStripRow } from "@/lib/domain/workspaces/tabs/group-rows";
-import type { ManualChatGroupId } from "@/lib/domain/workspaces/tabs/manual-groups";
-import type { HeaderShellStripRow } from "@/lib/domain/workspaces/tabs/shell-rows";
+import type { DelegatedWorkTabIdentity } from "#product/lib/domain/delegated-work/model";
+import type { GroupedChatTab } from "#product/lib/domain/workspaces/tabs/grouping";
+import type { HeaderStripRow } from "#product/lib/domain/workspaces/tabs/group-rows";
+import type { ManualChatGroupId } from "#product/lib/domain/workspaces/tabs/manual-groups";
+import type { HeaderShellStripRow } from "#product/lib/domain/workspaces/tabs/shell-rows";
 
 export interface HeaderChatTabEntry extends GroupedChatTab {
   id: string;

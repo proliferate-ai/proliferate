@@ -2,7 +2,7 @@ import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import type {
   CloudMobilityWorkspaceSummary,
   CloudWorkspaceSummary,
-} from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
 
 export interface LogicalWorkspace {
   id: string;

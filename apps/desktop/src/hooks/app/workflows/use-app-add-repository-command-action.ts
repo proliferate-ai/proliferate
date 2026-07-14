@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react";
-import { useAddRepo } from "@/hooks/workspaces/workflows/use-add-repo";
-import { useAddRepoFlowStore } from "@/stores/ui/add-repo-flow-store";
-import type { AppCommandAction } from "./app-command-action-types";
+import { useAddRepo } from "#product/hooks/workspaces/workflows/use-add-repo";
+import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
+import type { AppCommandAction } from "#product/hooks/app/workflows/app-command-action-types";
 
 export function useAppAddRepositoryCommandAction(): AppCommandAction {
   const {

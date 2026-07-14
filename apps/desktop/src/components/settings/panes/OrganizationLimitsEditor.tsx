@@ -8,8 +8,8 @@ import { Select } from "@proliferate/ui/primitives/Select";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
-import { SkeletonBlock, shimmerDelay } from "@/components/feedback/Skeleton";
-import type { OrganizationMemberRecord } from "@/lib/domain/organizations/organization-records";
+import { SkeletonBlock, shimmerDelay } from "#product/components/feedback/Skeleton";
+import type { OrganizationMemberRecord } from "#product/lib/domain/organizations/organization-records";
 import {
   capInputValue,
   capValueFromInput,
@@ -22,7 +22,7 @@ import {
   type BudgetLimitDraftRow,
   type BudgetLimitKind,
   type BudgetLimitWindow,
-} from "@/lib/domain/settings/organization-limits-presentation";
+} from "#product/lib/domain/settings/organization-limits-presentation";
 
 export function LimitsEditor({
   organizationId,

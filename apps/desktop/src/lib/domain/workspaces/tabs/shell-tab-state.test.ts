@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { HeaderStripRow } from "@/lib/domain/workspaces/tabs/group-rows";
-import { resolveWorkspaceShellTabsState } from "@/lib/domain/workspaces/tabs/shell-tab-state";
+import type { HeaderStripRow } from "#product/lib/domain/workspaces/tabs/group-rows";
+import { resolveWorkspaceShellTabsState } from "#product/lib/domain/workspaces/tabs/shell-tab-state";
 import {
   chatWorkspaceShellTabKey,
   fileWorkspaceShellTabKey,
-} from "@/lib/domain/workspaces/tabs/shell-tabs";
-import type { ShellChatTab } from "@/lib/domain/workspaces/tabs/shell-rows";
-import { fileViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
+} from "#product/lib/domain/workspaces/tabs/shell-tabs";
+import type { ShellChatTab } from "#product/lib/domain/workspaces/tabs/shell-rows";
+import { fileViewerTarget } from "#product/lib/domain/workspaces/viewer/viewer-target";
 
 interface TestChatTab extends ShellChatTab {
   title: string;

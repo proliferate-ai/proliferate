@@ -13,11 +13,11 @@ import { sessionIntentsForSession } from "@proliferate/product-domain/sessions/i
 import type { SessionEventEnvelope, SessionLiveConfigSnapshot, TranscriptState } from "@anyharness/sdk";
 import { useMemo, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { resolveCurrentModeLabel } from "@/lib/domain/chat/composer/chat-input";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
-import { useActiveSessionId } from "./use-active-session-identity";
+import { resolveCurrentModeLabel } from "#product/lib/domain/chat/composer/chat-input";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
+import { useActiveSessionId } from "#product/hooks/chat/derived/use-active-session-identity";
 
 const EMPTY_CONFIG_INTENTS: readonly SessionUpdateConfigIntent[] = [];
 

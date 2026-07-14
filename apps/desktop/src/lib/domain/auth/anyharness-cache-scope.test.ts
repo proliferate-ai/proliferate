@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildAnyHarnessCacheScopeKey } from "./anyharness-cache-scope";
+import { buildAnyHarnessCacheScopeKey } from "#product/lib/domain/auth/anyharness-cache-scope";
 
 describe("buildAnyHarnessCacheScopeKey", () => {
   it("isolates authenticated actors on the same deployment", () => {

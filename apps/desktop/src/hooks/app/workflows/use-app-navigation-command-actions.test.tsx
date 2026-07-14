@@ -4,8 +4,8 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { SupportMenuAction } from "@/lib/domain/support/support-menu-action";
-import { useAppNavigationCommandActions } from "@/hooks/app/workflows/use-app-navigation-command-actions";
+import type { SupportMenuAction } from "#product/lib/domain/support/support-menu-action";
+import { useAppNavigationCommandActions } from "#product/hooks/app/workflows/use-app-navigation-command-actions";
 
 // This mirrors the sidebar's support-kind gating (`SidebarHelpSection`):
 // vendor keeps the auth-gated feedback modal, operator routes straight to the

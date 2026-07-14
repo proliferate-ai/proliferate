@@ -6,12 +6,12 @@ import {
 import type { TerminalRecord } from "@anyharness/sdk";
 import {
   reconcileRightPanelWorkspaceState,
-} from "@/lib/domain/workspaces/shell/right-panel-state-normalization";
+} from "#product/lib/domain/workspaces/shell/right-panel-state-normalization";
 import {
   rightPanelStateEqual,
-} from "@/lib/domain/workspaces/shell/right-panel-view";
-import type { RightPanelWorkspaceState } from "@/lib/domain/workspaces/shell/right-panel-model";
-import type { ViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
+} from "#product/lib/domain/workspaces/shell/right-panel-view";
+import type { RightPanelWorkspaceState } from "#product/lib/domain/workspaces/shell/right-panel-model";
+import type { ViewerTarget } from "#product/lib/domain/workspaces/viewer/viewer-target";
 
 export interface RightPanelTerminalActivationRequest {
   token: number;

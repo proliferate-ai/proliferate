@@ -1,16 +1,16 @@
 import { useMemo } from "react";
-import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
-import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
+import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import {
   resolveChatSurfaceState,
   type ChatSurfaceState,
-} from "@/lib/domain/chat/surface/chat-surface";
-import { shouldShowCloudWorkspaceStatusScreen } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useActiveSessionSurfaceSnapshot } from "@/hooks/chat/derived/use-active-session-transcript-state";
-import type { WorkspaceRenderSurface } from "@/lib/domain/workspaces/tabs/shell-activation";
+} from "#product/lib/domain/chat/surface/chat-surface";
+import { shouldShowCloudWorkspaceStatusScreen } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
+import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useActiveSessionSurfaceSnapshot } from "#product/hooks/chat/derived/use-active-session-transcript-state";
+import type { WorkspaceRenderSurface } from "#product/lib/domain/workspaces/tabs/shell-activation";
 import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
 
 export type { ChatSurfaceState };

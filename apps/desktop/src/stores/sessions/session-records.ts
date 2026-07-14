@@ -11,20 +11,20 @@ import {
 } from "@anyharness/sdk";
 import { resolveStatusFromExecutionSummary } from "@proliferate/product-domain/sessions/activity";
 import type { PendingSessionConfigChanges } from "@proliferate/product-domain/sessions/pending-config";
-import { activityFromTranscript } from "@/lib/domain/sessions/directory/directory-activity";
+import { activityFromTranscript } from "#product/lib/domain/sessions/directory/directory-activity";
 import {
   createDirectoryEntry,
   DEFAULT_SESSION_ACTION_CAPABILITIES,
   type SessionDirectoryEntry,
-} from "@/lib/domain/sessions/directory/directory-entry";
-import type { SessionRelationship } from "@/lib/domain/sessions/directory/relationship";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
+} from "#product/lib/domain/sessions/directory/directory-entry";
+import type { SessionRelationship } from "#product/lib/domain/sessions/directory/relationship";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 import type {
   SessionRuntimeRecord,
   SessionTranscriptEntry,
-} from "@/stores/sessions/session-types";
-import { batchSessionStoreWrites } from "@/lib/infra/scheduling/react-batching";
+} from "#product/stores/sessions/session-types";
+import { batchSessionStoreWrites } from "#product/lib/infra/scheduling/react-batching";
 
 // Imperative facade over the split session stores. The underlying stores stay
 // single-purpose; workflow hooks use this module when a logical session record

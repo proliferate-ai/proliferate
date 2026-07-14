@@ -2,10 +2,10 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { USER_PREFERENCE_DEFAULTS } from "@/lib/domain/preferences/user/model";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+import { USER_PREFERENCE_DEFAULTS } from "#product/lib/domain/preferences/user/model";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
-import { useDesktopZoomPreferenceLifecycle } from "./use-desktop-zoom-preference-lifecycle";
+import { useDesktopZoomPreferenceLifecycle } from "#product/hooks/preferences/lifecycle/use-desktop-zoom-preference-lifecycle";
 
 beforeEach(() => {
   useUserPreferencesStore.setState({

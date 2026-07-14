@@ -1,8 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { getIntegrationHealth } from "@proliferate/cloud-sdk/client/integrations";
-import { useProductAuthStatus } from "@/hooks/auth/facade/use-product-auth";
-import { cloudIntegrationsHealthKey, cloudIntegrationsRootKey } from "./query-keys";
+import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth";
+import { cloudIntegrationsHealthKey, cloudIntegrationsRootKey } from "#product/hooks/access/cloud/integrations/query-keys";
 
 export function useIntegrationHealth(
   organizationId: string | null,

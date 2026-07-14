@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { runWorkspacePublishWorkflow } from "./run-workspace-publish-workflow";
+import { runWorkspacePublishWorkflow } from "#product/lib/workflows/workspaces/run-workspace-publish-workflow";
 
 describe("runWorkspacePublishWorkflow", () => {
   it("runs commit-only workflows", async () => {

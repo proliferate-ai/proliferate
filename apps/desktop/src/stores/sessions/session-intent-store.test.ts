@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getDebugMeasurementDump } from "@/lib/infra/measurement/debug-measurement-dump";
 import { resetDebugMeasurementForTest } from "@/lib/infra/measurement/debug-measurement";
-import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
 
 describe("session intent store", () => {
   beforeEach(() => {

@@ -1,4 +1,4 @@
-import type { SupportReportJob } from "@/lib/domain/support/report-types";
+import type { SupportReportJob } from "#product/lib/domain/support/report-types";
 
 export const SUPPORT_REPORT_JOB_EVENT = "support://report-job";
 

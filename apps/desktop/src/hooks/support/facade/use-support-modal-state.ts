@@ -12,11 +12,11 @@ import { useProductHost } from "@proliferate/product-client/host/ProductHostProv
 import type {
   SupportReportAttachmentPayload,
   SupportReportJob,
-} from "@/lib/domain/support/report-types";
-import { useSupportReportSnapshot } from "@/hooks/support/derived/use-support-report-snapshot";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import type { SupportModalKind } from "@/stores/support/support-modal-store";
-import { enqueueSupportReportJob } from "@/lib/access/browser/support-report-job-events";
+} from "#product/lib/domain/support/report-types";
+import { useSupportReportSnapshot } from "#product/hooks/support/derived/use-support-report-snapshot";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import type { SupportModalKind } from "#product/stores/support/support-modal-store";
+import { enqueueSupportReportJob } from "#product/lib/access/browser/support-report-job-events";
 
 export interface StagedAttachment extends SupportReportAttachmentPayload {
   id: string;

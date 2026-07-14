@@ -1,15 +1,15 @@
-import type { ComputeLaunchTargetOption } from "@/lib/domain/compute/target-options";
+import type { ComputeLaunchTargetOption } from "#product/lib/domain/compute/target-options";
 import type {
   AutomationTargetGroup,
   AutomationTargetRow,
   AutomationTargetSelection,
   TargetRepoDraft,
-} from "@/lib/domain/automations/target/selection-types";
+} from "#product/lib/domain/automations/target/selection-types";
 import {
   automationTargetId,
   isSameAutomationTarget,
   repoKey,
-} from "@/lib/domain/automations/target/selection-identity";
+} from "#product/lib/domain/automations/target/selection-identity";
 
 export function buildTargetGroups(
   repoDrafts: TargetRepoDraft[],

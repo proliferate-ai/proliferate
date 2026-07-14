@@ -1,8 +1,8 @@
-import type { AgentLoginTerminalSession } from "@/hooks/agents/workflows/use-agent-login-terminal-workflow";
+import type { AgentLoginTerminalSession } from "#product/hooks/agents/workflows/use-agent-login-terminal-workflow";
 import { useCallback } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { TerminalErrorBoundary } from "@/components/workspace/terminals/TerminalErrorBoundary";
-import { useAgentLoginTerminalViewport } from "@/hooks/agents/lifecycle/use-agent-login-terminal-viewport";
+import { TerminalErrorBoundary } from "#product/components/workspace/terminals/TerminalErrorBoundary";
+import { useAgentLoginTerminalViewport } from "#product/hooks/agents/lifecycle/use-agent-login-terminal-viewport";
 
 interface AgentLoginTerminalPanelProps {
   session: AgentLoginTerminalSession;

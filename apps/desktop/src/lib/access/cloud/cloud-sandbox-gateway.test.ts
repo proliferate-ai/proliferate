@@ -7,7 +7,7 @@ import {
 import {
   type CloudSandboxGatewayUrlSource,
   resolveCloudSandboxGatewayConnectionForWorkspace,
-} from "@/lib/access/cloud/cloud-sandbox-gateway";
+} from "#product/lib/access/cloud/cloud-sandbox-gateway";
 
 vi.mock("@/lib/access/cloud/client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/access/cloud/client")>();

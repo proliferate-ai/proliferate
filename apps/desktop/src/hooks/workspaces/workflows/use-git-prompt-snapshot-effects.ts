@@ -1,12 +1,12 @@
 import { useCallback, useMemo } from "react";
-import { useRefreshPrStatuses } from "@/hooks/workspaces/cache/use-pr-status-refresh";
-import { useWorkspaceGitStatuses } from "@/hooks/workspaces/derived/use-workspace-git-statuses";
-import { persistedSnapshotFromStatus } from "@/lib/domain/workspaces/git-status/workspace-git-status-snapshots";
+import { useRefreshPrStatuses } from "#product/hooks/workspaces/cache/use-pr-status-refresh";
+import { useWorkspaceGitStatuses } from "#product/hooks/workspaces/derived/use-workspace-git-statuses";
+import { persistedSnapshotFromStatus } from "#product/lib/domain/workspaces/git-status/workspace-git-status-snapshots";
 import {
   recordWorkspaceGitStatusSnapshot,
   stampWorkspaceGitPrompt,
   useWorkspaceUiStore,
-} from "@/stores/preferences/workspace-ui-store";
+} from "#product/stores/preferences/workspace-ui-store";
 
 // Owns the message-send git side effects: capture the current composed git
 // status into the persisted snapshot, stamp lastPromptAt, and expose the

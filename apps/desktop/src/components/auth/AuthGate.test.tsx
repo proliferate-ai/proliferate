@@ -4,10 +4,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { BootstrappedRoute } from "@/components/auth/AuthGate";
-import { AuthScreenLayout } from "@/components/auth/AuthScreenLayout";
-import { LoginScreen } from "@/components/auth/LoginScreen";
-import { SessionCheckScreen } from "@/components/auth/SessionCheckScreen";
+import { BootstrappedRoute } from "#product/components/auth/AuthGate";
+import { AuthScreenLayout } from "#product/components/auth/AuthScreenLayout";
+import { LoginScreen } from "#product/components/auth/LoginScreen";
+import { SessionCheckScreen } from "#product/components/auth/SessionCheckScreen";
 
 // Bridge the mocked host to the auth store so the existing setState-driven
 // tests keep steering the gate: the gate now reads normalized auth state
@@ -90,7 +90,7 @@ import {
   buildUiTextScaleCssVariables,
   DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES,
   UI_FONT_SCALES,
-} from "@/lib/domain/preferences/appearance";
+} from "#product/lib/domain/preferences/appearance";
 import { useAuthStore } from "@/stores/auth/auth-store";
 
 afterEach(() => {

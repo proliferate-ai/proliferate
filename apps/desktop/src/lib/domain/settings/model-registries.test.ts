@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import type {
   DesktopLaunchModelRegistry as ModelRegistry,
   RuntimeAgentLaunchOptions,
-} from "@/lib/domain/agents/cloud-launch-catalog";
-import { mergeRuntimeLaunchOptionsIntoModelRegistries } from "./model-registries";
+} from "#product/lib/domain/agents/cloud-launch-catalog";
+import { mergeRuntimeLaunchOptionsIntoModelRegistries } from "#product/lib/domain/settings/model-registries";
 
 describe("mergeRuntimeLaunchOptionsIntoModelRegistries", () => {
   it("preserves catalog aliases when runtime launch options are merged", () => {

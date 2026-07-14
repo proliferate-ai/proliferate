@@ -2,9 +2,9 @@ import { useCallback, useMemo } from "react";
 import { useClearSessionLoopMutation, useSetSessionLoopMutation } from "@anyharness/sdk-react";
 import type { LoopArmInput } from "@proliferate/product-ui/activity/LoopsPanel";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
-import { useActiveSessionId } from "@/hooks/chat/derived/use-active-session-identity";
-import { getSessionRecord } from "@/stores/sessions/session-records";
-import { useToastStore } from "@/stores/toast/toast-store";
+import { useActiveSessionId } from "#product/hooks/chat/derived/use-active-session-identity";
+import { getSessionRecord } from "#product/stores/sessions/session-records";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 export interface SessionLoopActions {
   armLoop: (input: LoopArmInput) => void;

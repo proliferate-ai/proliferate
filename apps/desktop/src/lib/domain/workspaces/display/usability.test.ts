@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   isUsableWorkspace,
-} from "@/lib/domain/workspaces/display/usability";
+} from "#product/lib/domain/workspaces/display/usability";
 import type { Workspace } from "@anyharness/sdk";
 
 function makeWorkspace(overrides: Partial<Workspace>): Workspace {

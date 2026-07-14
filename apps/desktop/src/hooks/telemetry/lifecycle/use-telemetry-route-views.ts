@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
-import type { DesktopTelemetryRoute } from "@/lib/domain/telemetry/events";
-import { resolveDesktopTelemetryRoute } from "@/lib/domain/telemetry/routes";
-import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
+import type { DesktopTelemetryRoute } from "#product/lib/domain/telemetry/events";
+import { resolveDesktopTelemetryRoute } from "#product/lib/domain/telemetry/routes";
+import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
 
 // Owns product route classification, screen-view deduplication, and the single
 // `screen_viewed` product event. Classifies the current pathname here (product

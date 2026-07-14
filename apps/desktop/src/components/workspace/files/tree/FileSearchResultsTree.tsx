@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import { useSearchWorkspaceFilesQuery } from "@anyharness/sdk-react";
-import { FileTreeRow } from "@/components/workspace/files/tree/FileTreeRow";
+import { FileTreeRow } from "#product/components/workspace/files/tree/FileTreeRow";
 import {
   buildFileSearchTree,
   truncatePathLabel,
-} from "@/lib/domain/files/file-search-tree";
+} from "#product/lib/domain/files/file-search-tree";
 
 interface FileSearchResultsTreeProps {
   workspaceId: string | null;

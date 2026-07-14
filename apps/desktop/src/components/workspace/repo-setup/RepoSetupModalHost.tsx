@@ -1,5 +1,5 @@
-import { useRepoSetupModalStore } from "@/stores/ui/repo-setup-modal-store";
-import { RepoSetupModal } from "./RepoSetupModal";
+import { useRepoSetupModalStore } from "#product/stores/ui/repo-setup-modal-store";
+import { RepoSetupModal } from "#product/components/workspace/repo-setup/RepoSetupModal";
 
 export function RepoSetupModalHost() {
   const repoSetupModal = useRepoSetupModalStore((state) => state.modal);

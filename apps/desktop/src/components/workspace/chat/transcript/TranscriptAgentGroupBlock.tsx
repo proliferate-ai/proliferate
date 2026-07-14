@@ -12,12 +12,12 @@ import type {
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Robot } from "@proliferate/ui/icons";
 import { MarkdownBody } from "@proliferate/product-ui/chat/transcript/MarkdownBody";
-import { renderDesktopCodeBlock } from "@/components/content/ui/desktop-markdown-code-block";
-import { SubagentLaunchLedger } from "@/components/workspace/chat/transcript/SubagentLaunchLedger";
-import { TurnSeparator } from "@/components/workspace/chat/transcript/TurnSeparator";
+import { renderDesktopCodeBlock } from "#product/components/content/ui/desktop-markdown-code-block";
+import { SubagentLaunchLedger } from "#product/components/workspace/chat/transcript/SubagentLaunchLedger";
+import { TurnSeparator } from "#product/components/workspace/chat/transcript/TurnSeparator";
 import {
   ScopedTranscriptBlocks,
-} from "@/components/workspace/chat/transcript/ScopedTranscriptBlocks";
+} from "#product/components/workspace/chat/transcript/ScopedTranscriptBlocks";
 import {
   parseSubagentLaunchResult,
   parseSubagentProvisioningStatus,
@@ -33,11 +33,11 @@ import {
 import {
   buildTranscriptDisplayBlocks,
 } from "@proliferate/product-domain/chats/transcript/transcript-presentation";
-import { useTranscriptOpenSession } from "./TranscriptContexts";
+import { useTranscriptOpenSession } from "#product/components/workspace/chat/transcript/TranscriptContexts";
 import {
   collectDescendantItems,
   formatCollapsedSummary,
-} from "./TranscriptToolGroupUtils";
+} from "#product/components/workspace/chat/transcript/TranscriptToolGroupUtils";
 
 export function TranscriptAgentGroupBlock({
   item,

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { GitPanelMode } from "@/lib/domain/workspaces/changes/git-panel-diff";
+import type { GitPanelMode } from "#product/lib/domain/workspaces/changes/git-panel-diff";
 
 export interface GitPanelModeRequest {
   mode: GitPanelMode;

@@ -1,14 +1,14 @@
-import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
+import type { WorkspaceSession } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import {
   isOptimisticWorkspaceSessionPlaceholder,
-} from "@/lib/domain/workspaces/selection/optimistic-session-shell";
-import { writeChatShellIntentForEmptySurface } from "@/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
+} from "#product/lib/domain/workspaces/selection/optimistic-session-shell";
+import { writeChatShellIntentForEmptySurface } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
 import {
   getSessionRecord,
   removeSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+} from "#product/stores/sessions/session-records";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 export function findLoadedSessionForClientSession(
   clientSessionId: string,

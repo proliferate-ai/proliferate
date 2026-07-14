@@ -9,9 +9,9 @@ import { useCallback } from "react";
 import {
   worktreeSettingsTargetInventoryKey,
   worktreeSettingsTargetRetentionPolicyKey,
-} from "@/hooks/access/anyharness/worktrees/query-keys";
-import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/cache/query-keys";
-import type { WorktreeSettingsTarget } from "@/lib/domain/workspaces/worktrees/worktree-settings-target";
+} from "#product/hooks/access/anyharness/worktrees/query-keys";
+import { workspaceCollectionsScopeKey } from "#product/hooks/workspaces/cache/query-keys";
+import type { WorktreeSettingsTarget } from "#product/lib/domain/workspaces/worktrees/worktree-settings-target";
 
 // Owns cache invalidation for the product-composed Worktree Settings target view.
 export function useWorktreeSettingsTargetCache(workspaceCollectionsRuntimeUrl: string | null) {

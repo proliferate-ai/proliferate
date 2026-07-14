@@ -1,22 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionEventEnvelope } from "@anyharness/sdk";
-import { replaySessionHistory } from "@/lib/domain/sessions/stream/stream-state";
+import { replaySessionHistory } from "#product/lib/domain/sessions/stream/stream-state";
 import {
   createEmptySessionRecord,
   getSessionRecord,
   patchSessionRecord,
   putSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
-import { clearPendingConfigRollbackCheck } from "@/hooks/sessions/lifecycle/session-runtime-pending-config";
+} from "#product/stores/sessions/session-records";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
+import { clearPendingConfigRollbackCheck } from "#product/hooks/sessions/lifecycle/session-runtime-pending-config";
 import {
   animationFrameSessionStreamFlushScheduler,
   createSessionStreamFlushController,
   type SessionStreamFlushScheduler,
-} from "@/hooks/sessions/lifecycle/use-session-stream-flush";
-import type { SessionStreamCache } from "@/hooks/sessions/cache/use-session-stream-cache";
+} from "#product/hooks/sessions/lifecycle/use-session-stream-flush";
+import type { SessionStreamCache } from "#product/hooks/sessions/cache/use-session-stream-cache";
 
 const originalPatchTranscriptEntry = useSessionTranscriptStore.getState().patchEntry;
 

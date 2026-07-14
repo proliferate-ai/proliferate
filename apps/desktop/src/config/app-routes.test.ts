@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { APP_ROUTES, LEGACY_APP_ROUTES } from "@/config/app-routes";
+import { APP_ROUTES, LEGACY_APP_ROUTES } from "#product/config/app-routes";
 
 describe("app routes", () => {
   it("registers workflows as a top-level route", () => {

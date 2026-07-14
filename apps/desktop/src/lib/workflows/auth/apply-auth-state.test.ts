@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import type { AuthClientStatePatch } from "@/lib/domain/auth/auth-state-mapping";
-import type { StoredAuthSession } from "@/lib/domain/auth/stored-auth-session";
+import type { AuthClientStatePatch } from "#product/lib/domain/auth/auth-state-mapping";
+import type { StoredAuthSession } from "#product/lib/domain/auth/stored-auth-session";
 import {
   applyAnonymousAuthState,
   applyPersistedAuthenticatedAuthState,
   applyVolatileAuthenticatedAuthState,
-} from "./apply-auth-state";
+} from "#product/lib/workflows/auth/apply-auth-state";
 
 const storedSession: StoredAuthSession = {
   access_token: "access-token",

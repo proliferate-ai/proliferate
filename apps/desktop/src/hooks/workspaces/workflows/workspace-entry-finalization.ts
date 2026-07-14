@@ -1,10 +1,10 @@
 import {
   buildWorkspaceArrivalEvent,
-} from "@/lib/domain/workspaces/creation/arrival";
+} from "#product/lib/domain/workspaces/creation/arrival";
 import {
   buildPendingWorkspaceUiKey,
   type PendingWorkspaceEntry,
-} from "@/lib/domain/workspaces/creation/pending-entry";
+} from "#product/lib/domain/workspaces/creation/pending-entry";
 import {
   annotateLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
@@ -14,7 +14,7 @@ import {
   logLatency,
   startLatencyTimer,
 } from "@/lib/infra/measurement/debug-latency";
-import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
+import type { SessionRuntimeRecord } from "#product/stores/sessions/session-types";
 
 export interface WorkspaceEntrySelectionDeps {
   expandRepoGroup: (repoGroupKey: string) => void;

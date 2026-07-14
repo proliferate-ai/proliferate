@@ -1,5 +1,5 @@
-import { SHORTCUTS, type ShortcutId } from "@/config/shortcuts/registry";
-import type { ShortcutDigit } from "@/lib/domain/shortcuts/matching";
+import { SHORTCUTS, type ShortcutId } from "#product/config/shortcuts/registry";
+import type { ShortcutDigit } from "#product/lib/domain/shortcuts/matching";
 
 export interface ShortcutTrigger {
   source: "keyboard" | "menu" | "palette";

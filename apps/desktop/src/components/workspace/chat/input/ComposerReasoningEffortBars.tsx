@@ -2,12 +2,12 @@ import { useMemo } from "react";
 import {
   resolveReasoningEffortEmphasis,
   resolveReasoningEffortPresentation,
-} from "@/lib/domain/chat/session-controls/session-reasoning-effort-control";
-import { resolveSessionControlTooltip } from "@/lib/domain/chat/session-controls/session-toggle-control";
-import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
+} from "#product/lib/domain/chat/session-controls/session-reasoning-effort-control";
+import { resolveSessionControlTooltip } from "#product/lib/domain/chat/session-controls/session-toggle-control";
+import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { LevelBarsButton } from "@proliferate/ui/primitives/LevelBarsButton";
-import { PendingConfigIndicator } from "./PendingConfigIndicator";
+import { PendingConfigIndicator } from "#product/components/workspace/chat/input/PendingConfigIndicator";
 
 interface ComposerReasoningEffortBarsProps {
   control: LiveSessionControlDescriptor;

@@ -1,8 +1,8 @@
-import { isWorkspaceSetupActive } from "@/lib/domain/chat/submit/workspace-setup-activity";
-import type { CachedWorkspaceSetupStatus } from "@/lib/domain/chat/submit/workspace-setup-activity";
-import type { DesktopProductEventMap } from "@/lib/domain/telemetry/events";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import type { WorkspaceArrivalEvent } from "@/lib/domain/workspaces/creation/arrival";
+import { isWorkspaceSetupActive } from "#product/lib/domain/chat/submit/workspace-setup-activity";
+import type { CachedWorkspaceSetupStatus } from "#product/lib/domain/chat/submit/workspace-setup-activity";
+import type { DesktopProductEventMap } from "#product/lib/domain/telemetry/events";
+import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import type { WorkspaceArrivalEvent } from "#product/lib/domain/workspaces/creation/arrival";
 
 type TrackChatPromptSubmitted = (
   name: "chat_prompt_submitted",

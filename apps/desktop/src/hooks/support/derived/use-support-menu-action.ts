@@ -1,8 +1,8 @@
-import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
+import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
 import {
   deriveSupportMenuAction,
   type SupportMenuAction,
-} from "@/lib/domain/support/support-menu-action";
+} from "#product/lib/domain/support/support-menu-action";
 
 /**
  * What the sidebar/command-palette support action should do for the

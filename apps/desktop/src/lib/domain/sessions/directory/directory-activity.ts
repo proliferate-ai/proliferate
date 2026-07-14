@@ -7,7 +7,7 @@ import { resolveSessionErrorAttentionKey } from "@proliferate/product-domain/ses
 import type {
   SessionDirectoryActivitySummary,
   SessionDirectoryEntry,
-} from "@/lib/domain/sessions/directory/directory-entry";
+} from "#product/lib/domain/sessions/directory/directory-entry";
 
 export function activityFromTranscript(
   transcript: TranscriptState,

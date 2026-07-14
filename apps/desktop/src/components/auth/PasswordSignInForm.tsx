@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ArrowRight } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { AUTH_LOGIN_LABELS } from "@/copy/auth/auth-copy";
+import { AUTH_LOGIN_LABELS } from "#product/copy/auth/auth-copy";
 
 // Minimal email/password form for the sign-in surface. Shown as the default
 // when the connected server reports GitHub OAuth is not configured (the

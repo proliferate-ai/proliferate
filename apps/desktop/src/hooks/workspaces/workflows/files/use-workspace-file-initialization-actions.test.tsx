@@ -3,12 +3,12 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import type { ReadWorkspaceFileResponse } from "@anyharness/sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useWorkspaceFileBuffersStore } from "@/stores/editor/workspace-file-buffers-store";
-import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
+import { useWorkspaceFileBuffersStore } from "#product/stores/editor/workspace-file-buffers-store";
+import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
 import {
   useWorkspaceFileInitializationActions,
   type WorkspaceFileAccessContext,
-} from "./use-workspace-file-initialization-actions";
+} from "#product/hooks/workspaces/workflows/files/use-workspace-file-initialization-actions";
 
 const mocks = vi.hoisted(() => ({
   getWorkspaceRuntimeBlockReason: vi.fn(),

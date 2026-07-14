@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OpenTarget } from "@proliferate/product-client/host/desktop-bridge";
 
-import { GlobalHeader } from "./GlobalHeader";
+import { GlobalHeader } from "#product/components/workspace/shell/topbar/GlobalHeader";
 
 const mocks = vi.hoisted(() => ({
   files: null as null | {

@@ -3,17 +3,17 @@ import { useNavigate } from "react-router-dom";
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import { useTerminalsQuery } from "@anyharness/sdk-react";
 import { useRepositories } from "@proliferate/cloud-sdk-react";
-import { useTerminalActions } from "@/hooks/terminals/workflows/use-terminal-actions";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { findReusableRunTerminalId } from "@/lib/domain/terminals/run-terminal";
-import type { CloudWorkspaceSummary } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
+import { useTerminalActions } from "#product/hooks/terminals/workflows/use-terminal-actions";
+import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
+import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import { findReusableRunTerminalId } from "#product/lib/domain/terminals/run-terminal";
+import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
 import {
   buildCloudRepoSettingsHref,
   buildSettingsHref,
-} from "@/lib/domain/settings/navigation";
-import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
-import { useToastStore } from "@/stores/toast/toast-store";
+} from "#product/lib/domain/settings/navigation";
+import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 interface UseRunWorkspaceCommandArgs {
   selectedWorkspaceId: string | null;

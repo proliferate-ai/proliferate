@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { encodeBase64UrlUtf8 } from "@/lib/infra/encoding/base64url";
+import { encodeBase64UrlUtf8 } from "#product/lib/infra/encoding/base64url";
 import {
   allChangesViewerTarget,
   defaultFileViewerMode,
@@ -11,7 +11,7 @@ import {
   remapViewerTargetPathWithinWorkspaceEntry,
   viewerTargetEditablePath,
   viewerTargetKey,
-} from "./viewer-target";
+} from "#product/lib/domain/workspaces/viewer/viewer-target";
 
 describe("viewer target keys", () => {
   it("round-trips UTF-8 paths and colon-containing refs", () => {

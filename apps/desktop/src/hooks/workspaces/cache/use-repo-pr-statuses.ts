@@ -8,9 +8,9 @@ import { useMemo } from "react";
 import {
   listRepoRootPullRequestStatuses,
   type RepoPullRequestStatusesResult,
-} from "@/lib/access/anyharness/pull-requests";
-import type { WorkspacePrStatusAvailability } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+} from "#product/lib/access/anyharness/pull-requests";
+import type { WorkspacePrStatusAvailability } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
 const PR_STATUS_STALE_MS = 60_000;
 

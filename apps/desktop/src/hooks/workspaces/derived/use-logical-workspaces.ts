@@ -1,8 +1,8 @@
 import { useMemo } from "react";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { buildLogicalWorkspaces } from "@/lib/domain/workspaces/cloud/logical-workspaces";
-import { useStandardRepoProjection } from "./use-standard-repo-projection";
+import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { buildLogicalWorkspaces } from "#product/lib/domain/workspaces/cloud/logical-workspaces";
+import { useStandardRepoProjection } from "#product/hooks/workspaces/derived/use-standard-repo-projection";
 
 const EMPTY_LOGICAL_WORKSPACES: LogicalWorkspace[] = [];
 

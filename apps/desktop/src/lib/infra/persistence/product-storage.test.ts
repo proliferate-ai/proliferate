@@ -11,7 +11,7 @@ import {
   removePersistedKey,
   writePersistedJson,
   writePersistedString,
-} from "./product-storage";
+} from "#product/lib/infra/persistence/product-storage";
 
 interface Shape {
   value: number;

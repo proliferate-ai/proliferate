@@ -1,4 +1,4 @@
-import { splitPathLineSuffix } from "@/lib/domain/files/path-detection";
+import { splitPathLineSuffix } from "#product/lib/domain/files/path-detection";
 
 export interface ResolvedFileReference {
   rawPath: string;

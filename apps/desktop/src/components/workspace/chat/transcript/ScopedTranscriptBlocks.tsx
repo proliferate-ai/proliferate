@@ -1,13 +1,13 @@
 import { Fragment, type ReactNode } from "react";
 import {
   CollapsedActions,
-} from "@/components/workspace/chat/tool-calls/CollapsedActions";
+} from "#product/components/workspace/chat/tool-calls/CollapsedActions";
 import type {
   TranscriptState,
 } from "@anyharness/sdk";
 import type { TurnDisplayBlock } from "@proliferate/product-domain/chats/transcript/transcript-presentation";
-import { SubagentCreationGroupBlock } from "./SubagentCreationGroupBlock";
-import { TranscriptActivityBlock } from "./TranscriptActivityBlock";
+import { SubagentCreationGroupBlock } from "#product/components/workspace/chat/transcript/SubagentCreationGroupBlock";
+import { TranscriptActivityBlock } from "#product/components/workspace/chat/transcript/TranscriptActivityBlock";
 
 export function ScopedTranscriptBlocks({
   displayBlocks,

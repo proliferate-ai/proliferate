@@ -1,14 +1,14 @@
 import {
   COMPOSER_SHORTCUT_GROUPS,
   SHORTCUT_GROUPS,
-} from "@/config/shortcuts/groups";
+} from "#product/config/shortcuts/groups";
 import {
   COMPOSER_SHORTCUTS,
   type ComposerShortcutKey,
-} from "@/config/shortcuts/composer-shortcuts";
-import { SHORTCUTS, type ShortcutKey } from "@/config/shortcuts/registry";
-import type { ComposerShortcutDef, ShortcutDef } from "@/config/shortcuts/types";
-import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
+} from "#product/config/shortcuts/composer-shortcuts";
+import { SHORTCUTS, type ShortcutKey } from "#product/config/shortcuts/registry";
+import type { ComposerShortcutDef, ShortcutDef } from "#product/config/shortcuts/types";
+import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 
 export interface ShortcutEntryView {
   id: string;

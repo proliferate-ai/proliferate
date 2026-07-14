@@ -2,14 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   buildPendingWorkspaceUiKey,
   buildSubmittingPendingWorkspaceEntry,
-} from "@/lib/domain/workspaces/creation/pending-entry";
-import { buildPendingSidebarProjection } from "./pending-sidebar-projection";
+} from "#product/lib/domain/workspaces/creation/pending-entry";
+import { buildPendingSidebarProjection } from "#product/lib/domain/workspaces/sidebar/pending-sidebar-projection";
 import {
   buildGroups,
   makeCloudLogicalWorkspace,
   makeLocalLogicalWorkspace,
   makeRepoRoot,
-} from "./sidebar-test-fixtures";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
 
 describe("pending sidebar projection", () => {
   it("projects a pending worktree into its repo group before materialization", () => {

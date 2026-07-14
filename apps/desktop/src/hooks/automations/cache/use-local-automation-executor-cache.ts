@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { automationRunsKey } from "@/hooks/access/cloud/automations/query-keys";
-import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/cache/query-keys";
+import { automationRunsKey } from "#product/hooks/access/cloud/automations/query-keys";
+import { workspaceCollectionsScopeKey } from "#product/hooks/workspaces/cache/query-keys";
 
 export function useLocalAutomationExecutorCache() {
   const queryClient = useQueryClient();

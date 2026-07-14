@@ -2,7 +2,7 @@
 
 import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { useAgentAutoReconcile } from "./use-agent-auto-reconcile";
+import { useAgentAutoReconcile } from "#product/hooks/agents/lifecycle/use-agent-auto-reconcile";
 
 const mocks = vi.hoisted(() => ({
   invalidateAgentListResources: vi.fn(),

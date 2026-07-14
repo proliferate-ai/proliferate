@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   planGatewayCatalogMirrorPushes,
   type GatewayModelsSnapshot,
-} from "./gateway-catalog-mirror";
+} from "#product/lib/domain/agents/gateway-catalog-mirror";
 
 describe("planGatewayCatalogMirrorPushes", () => {
   it("pushes a harness with a fresh, never-mirrored probe", () => {

@@ -1,8 +1,8 @@
 import { useCallback } from "react";
 import { useSteerPendingPromptMutation } from "@anyharness/sdk-react";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
-import { getMaterializedSessionId, getSessionRecord } from "@/stores/sessions/session-records";
+import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
+import { getMaterializedSessionId, getSessionRecord } from "#product/stores/sessions/session-records";
 
 export function useSteerPendingPrompt() {
   const mutation = useSteerPendingPromptMutation();

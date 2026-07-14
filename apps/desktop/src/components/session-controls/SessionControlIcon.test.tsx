@@ -1,10 +1,10 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { SESSION_CONTROL_PRESENTATIONS } from "@/lib/domain/chat/session-controls/presentation";
-import type { SessionControlIconKey } from "@/lib/domain/chat/session-controls/presentation";
-import { resolveConfiguredSessionControlValue } from "@/lib/domain/chat/session-controls/session-mode-control";
-import { SessionControlIcon } from "@/components/session-controls/SessionControlIcon";
+import { SESSION_CONTROL_PRESENTATIONS } from "#product/lib/domain/chat/session-controls/presentation";
+import type { SessionControlIconKey } from "#product/lib/domain/chat/session-controls/presentation";
+import { resolveConfiguredSessionControlValue } from "#product/lib/domain/chat/session-controls/session-mode-control";
+import { SessionControlIcon } from "#product/components/session-controls/SessionControlIcon";
 
 describe("SessionControlIcon", () => {
   it("renders every icon used by configured session controls", () => {

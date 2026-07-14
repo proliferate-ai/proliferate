@@ -4,18 +4,18 @@ import {
   PaneFileTreeBadge,
   type PaneFileTreeNode,
   type PaneFileTreeSection,
-} from "@/components/workspace/pane/PaneFileTree";
+} from "#product/components/workspace/pane/PaneFileTree";
 import {
   buildChangedFileTree,
   type ChangedFileTreeNode,
-} from "@/lib/domain/workspaces/changes/changed-file-tree";
+} from "#product/lib/domain/workspaces/changes/changed-file-tree";
 import type {
   GitPanelReviewFile,
   GitPanelSection,
   GitPanelReviewScope,
-} from "@/lib/domain/workspaces/changes/git-panel-diff";
-import { getGitFileStatusPresentation } from "@/lib/domain/workspaces/changes/git-file-status-presentation";
-import type { GitReviewFileEntry } from "@/lib/domain/workspaces/changes/git-review-entries";
+} from "#product/lib/domain/workspaces/changes/git-panel-diff";
+import { getGitFileStatusPresentation } from "#product/lib/domain/workspaces/changes/git-file-status-presentation";
+import type { GitReviewFileEntry } from "#product/lib/domain/workspaces/changes/git-review-entries";
 
 interface GitReviewFileTreeProps {
   sections: GitPanelSection[];

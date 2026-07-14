@@ -2,10 +2,10 @@ import { Fragment } from "react";
 import type { ContentPart } from "@anyharness/sdk";
 import { FileIcon, Link2, Spinner, X } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { FilePathLink } from "@/components/content/ui/FilePathLink";
-import { FileTreeEntryIcon } from "@/components/workspace/files/file-icons";
-import { PlanReferenceAttachmentCard } from "@/components/workspace/chat/content/PlanReferenceAttachmentCard";
-import { usePromptAttachmentUrl } from "@/hooks/access/anyharness/sessions/use-prompt-attachment-url";
+import { FilePathLink } from "#product/components/content/ui/FilePathLink";
+import { FileTreeEntryIcon } from "#product/components/workspace/files/file-icons";
+import { PlanReferenceAttachmentCard } from "#product/components/workspace/chat/content/PlanReferenceAttachmentCard";
+import { usePromptAttachmentUrl } from "#product/hooks/access/anyharness/sessions/use-prompt-attachment-url";
 import {
   normalizeContentParts,
   normalizeDraftAttachments,
@@ -13,7 +13,7 @@ import {
   type PromptDisplayPart,
 } from "@proliferate/product-domain/chats/composer/prompt-display-parts";
 import type { PromptDraftAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-attachment-rules";
-import { tokenizeSerializedFileLinks } from "@/lib/domain/chat/composer/file-mention-links";
+import { tokenizeSerializedFileLinks } from "#product/lib/domain/chat/composer/file-mention-links";
 
 type PromptContentRendererVariant = "transcript" | "compact";
 type PromptContentRendererLayout = "stack" | "wrap" | "auto";

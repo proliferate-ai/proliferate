@@ -1,10 +1,10 @@
-import { SHORTCUTS } from "@/config/shortcuts/registry";
-import type { ShortcutDef } from "@/config/shortcuts/types";
-import { getFocusZone } from "@/lib/domain/focus-zone";
+import { SHORTCUTS } from "#product/config/shortcuts/registry";
+import type { ShortcutDef } from "#product/config/shortcuts/types";
+import { getFocusZone } from "#product/lib/domain/focus-zone";
 import {
   isTextEntryTarget,
   matchShortcutDef,
-} from "@/lib/domain/shortcuts/matching";
+} from "#product/lib/domain/shortcuts/matching";
 
 type KeyboardShortcutEventLike = Pick<
   KeyboardEvent,

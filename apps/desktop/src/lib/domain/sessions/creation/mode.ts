@@ -1,4 +1,4 @@
-import { resolveCoworkDefaultSessionModeId } from "@/lib/domain/cowork/session-mode-defaults";
+import { resolveCoworkDefaultSessionModeId } from "#product/lib/domain/cowork/session-mode-defaults";
 
 export function resolveSessionCreationModeId(input: {
   explicitModeId?: string | null;

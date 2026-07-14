@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWorkspaceSidebarNativeContextMenuItems } from "./use-workspace-sidebar-native-context-menu";
+import { buildWorkspaceSidebarNativeContextMenuItems } from "#product/hooks/workspaces/ui/use-workspace-sidebar-native-context-menu";
 
 describe("buildWorkspaceSidebarNativeContextMenuItems", () => {
   it("shows rename and archive for an active workspace", () => {

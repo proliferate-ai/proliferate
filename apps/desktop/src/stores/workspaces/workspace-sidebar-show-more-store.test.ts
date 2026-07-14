@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   WORKSPACE_SIDEBAR_SHOW_MORE_DEFAULTS,
   useWorkspaceSidebarShowMoreStore,
-} from "./workspace-sidebar-show-more-store";
+} from "#product/stores/workspaces/workspace-sidebar-show-more-store";
 
 describe("workspace sidebar show-more store", () => {
   beforeEach(() => {

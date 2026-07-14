@@ -4,11 +4,11 @@ import { Input } from "@proliferate/ui/primitives/Input";
 import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { CloudUpload, FileText, X } from "@proliferate/ui/icons";
-import { useSupportModalState, type StagedAttachment } from "@/hooks/support/facade/use-support-modal-state";
-import { useSupportOutreachEmail } from "@/hooks/support/facade/use-support-outreach-email";
-import { SupportCheckboxRow } from "./SupportCheckboxRow";
-import { SupportCreditField } from "./SupportCreditField";
-import { SupportModalFooter } from "./SupportModalFooter";
+import { useSupportModalState, type StagedAttachment } from "#product/hooks/support/facade/use-support-modal-state";
+import { useSupportOutreachEmail } from "#product/hooks/support/facade/use-support-outreach-email";
+import { SupportCheckboxRow } from "#product/components/support/SupportCheckboxRow";
+import { SupportCreditField } from "#product/components/support/SupportCreditField";
+import { SupportModalFooter } from "#product/components/support/SupportModalFooter";
 
 export function SendFeedbackModal({ onClose }: { onClose: () => void }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);

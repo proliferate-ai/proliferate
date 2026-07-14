@@ -1,7 +1,7 @@
 import type {
   DelegatedAgentIdentity,
   DelegatedAgentOpenTarget,
-} from "@/lib/domain/delegated-work/model";
+} from "#product/lib/domain/delegated-work/model";
 
 const FRIENDLY_NAMES = [
   "Mary",

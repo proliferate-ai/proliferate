@@ -5,7 +5,7 @@ import {
   getAccountDisplayName,
   getAccountInitials,
   getGitHubStatusLabel,
-} from "./account-profile-presentation";
+} from "#product/lib/domain/auth/account-profile-presentation";
 
 describe("getAccountDisplayName", () => {
   it("prefers explicit display names, then GitHub login, then email prefix", () => {

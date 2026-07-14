@@ -1,10 +1,10 @@
 import { useMemo } from "react";
-import { useComputeTargetAppearancePreferences } from "@/hooks/compute/workflows/use-compute-target-appearance-preferences";
+import { useComputeTargetAppearancePreferences } from "#product/hooks/compute/workflows/use-compute-target-appearance-preferences";
 import {
   buildComputeTargetAppearanceById,
   buildSshTargetOptions,
-} from "@/lib/domain/compute/target-options";
-import type { ComputeTargetSummary } from "@/lib/domain/compute/target-types";
+} from "#product/lib/domain/compute/target-options";
+import type { ComputeTargetSummary } from "#product/lib/domain/compute/target-types";
 
 const EMPTY_TARGETS: ComputeTargetSummary[] = [];
 

@@ -1,4 +1,4 @@
-import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
+import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 
 function AssistantMessageSkeleton() {
   return (

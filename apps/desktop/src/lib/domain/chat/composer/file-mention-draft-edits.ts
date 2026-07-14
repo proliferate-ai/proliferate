@@ -9,13 +9,13 @@ import {
   type ChatComposerDraftNode,
   type DraftEditResult,
   type DraftSelection,
-} from "@/lib/domain/chat/composer/file-mention-draft-model";
+} from "#product/lib/domain/chat/composer/file-mention-draft-model";
 import {
   collapseSelection,
   getDraftEndPosition,
   linearOffsetFromPosition,
   positionFromLinearOffset,
-} from "@/lib/domain/chat/composer/file-mention-draft-position";
+} from "#product/lib/domain/chat/composer/file-mention-draft-position";
 
 export function appendTextToDraft(draft: ChatComposerDraft, text: string): DraftEditResult {
   if (text.length === 0) {

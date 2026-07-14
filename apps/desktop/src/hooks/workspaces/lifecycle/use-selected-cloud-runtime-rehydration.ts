@@ -1,17 +1,17 @@
 import { useEffect, useRef } from "react";
-import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/creation/arrival";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { buildWorkspaceArrivalEvent } from "#product/lib/domain/workspaces/creation/arrival";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { logLatency, startLatencyTimer } from "@/lib/infra/measurement/debug-latency";
-import { useWorkspaceBootstrapActions } from "@/hooks/workspaces/workflows/use-workspace-bootstrap-actions";
+import { useWorkspaceBootstrapActions } from "#product/hooks/workspaces/workflows/use-workspace-bootstrap-actions";
 import {
   usePendingWorkspaceSessionMaterialization,
   useReadyWorkspaceProjectedSessionMaterialization,
-} from "@/hooks/workspaces/workflows/use-pending-workspace-session-materialization";
-import { hasWorkspaceBootstrappedInSession } from "./workspace-bootstrap-memory";
-import type { SelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
-import { withFreshCloudSandboxGatewayAccessToken } from "@/lib/access/cloud/cloud-sandbox-gateway";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+} from "#product/hooks/workspaces/workflows/use-pending-workspace-session-materialization";
+import { hasWorkspaceBootstrappedInSession } from "#product/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
+import type { SelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
+import { withFreshCloudSandboxGatewayAccessToken } from "#product/lib/access/cloud/cloud-sandbox-gateway";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 
 export function useSelectedCloudRuntimeRehydration(
   selectedCloudRuntime: SelectedCloudRuntimeState,

@@ -1,14 +1,14 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
-import type { CloudWorkspaceSummary } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
+import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
 import {
   workspaceCurrentBranchName,
-} from "@/lib/domain/workspaces/creation/branch-naming";
+} from "#product/lib/domain/workspaces/creation/branch-naming";
 import {
   buildPathLogicalWorkspaceId,
   buildRemoteLogicalWorkspaceId,
   buildRepoRootLogicalWorkspaceId,
   normalizeLogicalWorkspaceBranchKey,
-} from "@/lib/domain/workspaces/cloud/logical-workspace-id";
+} from "#product/lib/domain/workspaces/cloud/logical-workspace-id";
 
 export function workspaceBranchKey(workspace: Workspace): string {
   const originalBranch = workspace.originalBranch?.trim();

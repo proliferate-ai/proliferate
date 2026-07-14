@@ -1,8 +1,8 @@
 import { useCallback, useMemo } from "react";
-import { useSelectedLogicalWorkspace } from "@/hooks/workspaces/derived/use-selected-logical-workspace";
-import { useWorkspaceCopyActions } from "@/hooks/workspaces/workflows/use-workspace-copy-actions";
-import { workspaceCopyMetadataForLogicalWorkspace } from "@/lib/domain/workspaces/workspace-copy-metadata";
-import type { AppCommandActions } from "./app-command-action-types";
+import { useSelectedLogicalWorkspace } from "#product/hooks/workspaces/derived/use-selected-logical-workspace";
+import { useWorkspaceCopyActions } from "#product/hooks/workspaces/workflows/use-workspace-copy-actions";
+import { workspaceCopyMetadataForLogicalWorkspace } from "#product/lib/domain/workspaces/workspace-copy-metadata";
+import type { AppCommandActions } from "#product/hooks/app/workflows/app-command-action-types";
 
 export type AppWorkspaceCopyCommandActions = Pick<
   AppCommandActions,

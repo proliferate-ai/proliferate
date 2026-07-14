@@ -1,25 +1,25 @@
 import { useEffect, useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { CHAT_MODEL_SELECTOR_LABELS } from "@/copy/chat/chat-copy";
-import { getProviderDisplayName } from "@/lib/domain/agents/provider-display";
-import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
-import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
+import { CHAT_MODEL_SELECTOR_LABELS } from "#product/copy/chat/chat-copy";
+import { getProviderDisplayName } from "#product/lib/domain/agents/provider-display";
+import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
+import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import { getPendingSessionConfigChange } from "@proliferate/product-domain/sessions/pending-config";
 import {
   resolveMatchingModelControlLabel,
-} from "@/lib/domain/chat/models/model-display";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
-import { useActiveSessionLaunchState } from "@/hooks/chat/derived/use-active-session-config-state";
-import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
-import { useChatLaunchActions } from "@/hooks/chat/workflows/use-chat-launch-actions";
-import { useChatLaunchCatalog } from "@/hooks/chat/derived/use-chat-launch-catalog";
-import { useChatLaunchControlActions } from "@/hooks/chat/workflows/use-chat-launch-control-actions";
-import { buildLaunchControlDescriptors } from "@/lib/domain/chat/models/launch-control-descriptors";
-import { resolveCurrentModelDisplayName } from "@/lib/domain/chat/models/model-selector-current";
+} from "#product/lib/domain/chat/models/model-display";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
+import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
+import { useActiveSessionLaunchState } from "#product/hooks/chat/derived/use-active-session-config-state";
+import { useConfiguredLaunchReadiness } from "#product/hooks/chat/derived/use-configured-launch-readiness";
+import { useChatLaunchActions } from "#product/hooks/chat/workflows/use-chat-launch-actions";
+import { useChatLaunchCatalog } from "#product/hooks/chat/derived/use-chat-launch-catalog";
+import { useChatLaunchControlActions } from "#product/hooks/chat/workflows/use-chat-launch-control-actions";
+import { buildLaunchControlDescriptors } from "#product/lib/domain/chat/models/launch-control-descriptors";
+import { resolveCurrentModelDisplayName } from "#product/lib/domain/chat/models/model-selector-current";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 // Facade for the composer model selector: derived catalog/readiness state plus
 // the workflow callbacks needed by selector items and launch controls.

@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AddCustomIntegrationDialog } from "./AddCustomIntegrationDialog";
+import { AddCustomIntegrationDialog } from "#product/components/settings/panes/integrations/AddCustomIntegrationDialog";
 
 function renderDialog(
   overrides: Partial<Parameters<typeof AddCustomIntegrationDialog>[0]> = {},

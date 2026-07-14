@@ -3,7 +3,7 @@ import { renderToStaticMarkup as renderReactToStaticMarkup } from "react-dom/ser
 import { describe, expect, it, vi } from "vitest";
 import type { ProductHost } from "@proliferate/product-client/host/product-host";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
-import { FileChangeCall } from "./FileChangeCall";
+import { FileChangeCall } from "#product/components/workspace/chat/tool-calls/FileChangeCall";
 
 const webTestHost = { desktop: null } as ProductHost;
 

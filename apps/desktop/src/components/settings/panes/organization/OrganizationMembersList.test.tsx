@@ -1,8 +1,8 @@
 /* @vitest-environment jsdom */
 
 import { describe, expect, it } from "vitest";
-import { buildMemberRows } from "@/lib/domain/organizations/member-list-rows";
-import type { OrganizationMemberRecord } from "@/lib/domain/organizations/organization-records";
+import { buildMemberRows } from "#product/lib/domain/organizations/member-list-rows";
+import type { OrganizationMemberRecord } from "#product/lib/domain/organizations/organization-records";
 
 describe("buildMemberRows", () => {
   it("uses member auth methods instead of defaulting to GitHub", () => {

@@ -1,10 +1,10 @@
-import { DelegatedWorkComposerControl } from "@/components/workspace/chat/input/delegated-work/DelegatedWorkComposerControl";
-import { DelegatedWorkComposerPanel } from "@/components/workspace/chat/input/DelegatedWorkComposerPanel";
-import type { ScenarioKey } from "@/config/playground";
+import { DelegatedWorkComposerControl } from "#product/components/workspace/chat/input/delegated-work/DelegatedWorkComposerControl";
+import { DelegatedWorkComposerPanel } from "#product/components/workspace/chat/input/DelegatedWorkComposerPanel";
+import type { ScenarioKey } from "#product/config/playground";
 import {
   PLAYGROUND_SUBAGENT_STRIP_ROWS,
-} from "@/lib/domain/chat/__fixtures__/playground/delegation-fixtures";
-import { buildPlaygroundDelegatedWorkViewModel } from "@/components/playground/delegation/PlaygroundDelegatedWorkViewModel";
+} from "#product/lib/domain/chat/__fixtures__/playground/delegation-fixtures";
+import { buildPlaygroundDelegatedWorkViewModel } from "#product/components/playground/delegation/PlaygroundDelegatedWorkViewModel";
 
 export function renderDelegationSlot(scenario: ScenarioKey) {
   switch (scenario) {

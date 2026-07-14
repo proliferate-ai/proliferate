@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useDesktopReleaseManifest } from "@/hooks/access/downloads/desktop-releases/use-desktop-release-manifest";
+import { useDesktopReleaseManifest } from "#product/hooks/access/downloads/desktop-releases/use-desktop-release-manifest";
 import { useAppVersion } from "@/hooks/access/tauri/app/use-app-version";
 import { useUpdater } from "@/hooks/access/tauri/use-updater";
 import {
@@ -9,8 +9,8 @@ import {
   type DesktopReleaseManifest,
   type InstalledReleaseManifestStatus,
   type ReleaseNotice,
-} from "@/lib/domain/updates/release-notice";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+} from "#product/lib/domain/updates/release-notice";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
 export interface ReleaseNoticeModel {
   notice: ReleaseNotice | null;

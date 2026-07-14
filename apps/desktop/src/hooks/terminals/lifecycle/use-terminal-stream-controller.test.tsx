@@ -7,8 +7,8 @@ import type { ReactNode } from "react";
 import { connectTerminal } from "@anyharness/sdk";
 import type { ProductHost } from "@proliferate/product-client/host/product-host";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
-import { resetTerminalStreamRegistryForTests } from "@/lib/infra/terminals/terminal-stream-registry";
-import { useTerminalStreamController } from "./use-terminal-stream-controller";
+import { resetTerminalStreamRegistryForTests } from "#product/lib/infra/terminals/terminal-stream-registry";
+import { useTerminalStreamController } from "#product/hooks/terminals/lifecycle/use-terminal-stream-controller";
 
 const mockState = vi.hoisted(() => ({
   token: "token-a",

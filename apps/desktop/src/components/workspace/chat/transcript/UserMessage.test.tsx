@@ -6,8 +6,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   PLAN_IMPLEMENT_HERE_PROMPT,
   PLAN_IMPLEMENT_HERE_ROW_LABEL,
-} from "@/copy/plans/plan-prompts";
-import { UserMessage } from "./UserMessage";
+} from "#product/copy/plans/plan-prompts";
+import { UserMessage } from "#product/components/workspace/chat/transcript/UserMessage";
 
 afterEach(() => {
   cleanup();

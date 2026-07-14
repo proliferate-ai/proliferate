@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
-import type { WorkspaceSessionCacheSnapshot } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
+import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
+import type { WorkspaceSessionCacheSnapshot } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
 
 const mocks = vi.hoisted(() => ({
   getMaterializedSessionId: vi.fn(),
@@ -15,7 +15,7 @@ vi.mock("@/stores/sessions/session-records", () => ({
 import {
   workspaceDisplayNameOverride,
   workspaceHasOtherPromptedSession,
-} from "@/hooks/workspaces/workflows/workspace-name-eligibility";
+} from "#product/hooks/workspaces/workflows/workspace-name-eligibility";
 
 function makeLogicalWorkspace(overrides: Partial<LogicalWorkspace>): LogicalWorkspace {
   return {

@@ -4,9 +4,9 @@ import type {
   DesktopSshBridge,
 } from "@proliferate/product-client/host/desktop-bridge";
 import type { Workspace } from "@anyharness/sdk";
-import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
-import type { CloudSandboxGatewayUrlSource } from "@/lib/access/cloud/cloud-sandbox-gateway";
+import type { WorkspaceSession } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
+import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
+import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 
 export interface WorkspaceSelectionOptions {
   force?: boolean;

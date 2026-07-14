@@ -5,8 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   productHostWrapper,
   makeTestProductHost,
-} from "@/test/product-host-test-utils";
-import { useOrgSlugSsoSignIn } from "./use-org-slug-sso-sign-in";
+} from "#product/test/product-host-test-utils";
+import { useOrgSlugSsoSignIn } from "#product/hooks/auth/workflows/use-org-slug-sso-sign-in";
 
 // The generic answer the host raises for a slug that does not resolve to
 // enabled SSO (missing org / no SSO / disabled all collapse to one message).

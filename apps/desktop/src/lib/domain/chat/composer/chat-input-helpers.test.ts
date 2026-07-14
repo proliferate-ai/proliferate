@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parsePermissionOptionActions } from "./chat-input-helpers";
+import { parsePermissionOptionActions } from "#product/lib/domain/chat/composer/chat-input-helpers";
 
 describe("chat input helpers", () => {
   it("parses typed permission option labels and option ids", () => {

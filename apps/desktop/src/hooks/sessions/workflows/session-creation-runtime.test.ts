@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DesktopRuntimeBridge } from "@proliferate/product-client/host/desktop-bridge";
 
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
 const mocks = vi.hoisted(() => ({
   bootstrapHarnessRuntime: vi.fn(),
@@ -11,7 +11,7 @@ vi.mock("@/lib/access/anyharness/runtime-bootstrap", () => ({
   bootstrapHarnessRuntime: mocks.bootstrapHarnessRuntime,
 }));
 
-import { resolveDesktopRuntimeUrlForWorkspace } from "./session-creation-runtime";
+import { resolveDesktopRuntimeUrlForWorkspace } from "#product/hooks/sessions/workflows/session-creation-runtime";
 
 beforeEach(() => {
   vi.clearAllMocks();

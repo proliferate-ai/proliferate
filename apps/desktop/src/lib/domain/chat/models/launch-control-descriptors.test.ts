@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { DesktopAgentLaunchControl } from "@/lib/domain/agents/cloud-launch-catalog";
-import { buildLaunchControlDescriptors } from "./launch-control-descriptors";
+import type { DesktopAgentLaunchControl } from "#product/lib/domain/agents/cloud-launch-catalog";
+import { buildLaunchControlDescriptors } from "#product/lib/domain/chat/models/launch-control-descriptors";
 
 function control(
   key: string,

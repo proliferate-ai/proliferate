@@ -1,17 +1,17 @@
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ArrowLeft, RefreshCw } from "@proliferate/ui/icons";
-import { UserMessage } from "@/components/workspace/chat/transcript/UserMessage";
+import { UserMessage } from "#product/components/workspace/chat/transcript/UserMessage";
 import {
   TURN_ITEM_GAP_CLASS,
   TurnAssistantActionRow,
   TurnShell,
   resolvePendingPromptTrailingStatus,
-} from "@/components/workspace/chat/transcript/TranscriptTurnChrome";
-import { CHAT_COLUMN_CLASSNAME, CHAT_SURFACE_GUTTER_CLASSNAME } from "@/config/chat-layout";
-import { useChatLaunchIntentActions } from "@/hooks/chat/workflows/use-chat-launch-intent-actions";
-import { resolveChatLaunchIntentView } from "@/lib/domain/chat/launch/launch-intent";
-import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
+} from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
+import { CHAT_COLUMN_CLASSNAME, CHAT_SURFACE_GUTTER_CLASSNAME } from "#product/config/chat-layout";
+import { useChatLaunchIntentActions } from "#product/hooks/chat/workflows/use-chat-launch-intent-actions";
+import { resolveChatLaunchIntentView } from "#product/lib/domain/chat/launch/launch-intent";
+import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import { formatTranscriptActionTime } from "@proliferate/product-domain/chats/transcript/transcript-action-time";
 
 interface ChatLaunchIntentPaneProps {

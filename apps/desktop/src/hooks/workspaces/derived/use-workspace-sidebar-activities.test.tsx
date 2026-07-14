@@ -2,8 +2,8 @@
 
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { useWorkspaceSidebarActivityStates } from "./use-workspace-sidebar-activities";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useWorkspaceSidebarActivityStates } from "#product/hooks/workspaces/derived/use-workspace-sidebar-activities";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 
 describe("useWorkspaceSidebarActivityStates", () => {
   beforeEach(() => {

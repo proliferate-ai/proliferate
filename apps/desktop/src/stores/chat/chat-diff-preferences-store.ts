@@ -3,7 +3,7 @@ import {
   readPersistedJson,
   writePersistedJson,
   type ProductStorageContext,
-} from "@/lib/infra/persistence/product-storage";
+} from "#product/lib/infra/persistence/product-storage";
 
 export const CHAT_DIFF_PREFERENCES_STORAGE_KEY = "proliferate.chatDiffPreferences.v1";
 

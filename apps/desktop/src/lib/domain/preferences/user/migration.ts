@@ -1,28 +1,28 @@
 import {
   resolveAppearanceSizeId,
   resolveWindowZoomId,
-} from "@/lib/domain/preferences/appearance";
+} from "#product/lib/domain/preferences/appearance";
 import {
   sanitizeReviewDefaultsByKind,
   sanitizeReviewPersonalitiesByKind,
-} from "@/lib/domain/preferences/review-preferences";
+} from "#product/lib/domain/preferences/review-preferences";
 import {
   normalizeDefaultChatModelId,
   sanitizeChatModelVisibilityOverridesByAgentKind,
   sanitizeDefaultChatModelIdByAgentKind,
   sanitizeDefaultLiveSessionControlValuesByAgentKind,
   sanitizeDefaultSessionModeByAgentKind,
-} from "@/lib/domain/preferences/user/session-defaults";
+} from "#product/lib/domain/preferences/user/session-defaults";
 import {
   PERSISTED_RECORD_BACKFILL,
   type UserPreferences,
-} from "@/lib/domain/preferences/user/model";
-import { isValidWorktreeAutoDeleteLimit } from "@/lib/domain/preferences/user/worktree-auto-delete";
-import type { LegacyUserPreferencesInput } from "@/lib/domain/preferences/user/persisted-keys";
+} from "#product/lib/domain/preferences/user/model";
+import { isValidWorktreeAutoDeleteLimit } from "#product/lib/domain/preferences/user/worktree-auto-delete";
+import type { LegacyUserPreferencesInput } from "#product/lib/domain/preferences/user/persisted-keys";
 import {
   normalizeReleaseTitlePair,
   normalizeReleaseVersion,
-} from "@/lib/domain/updates/release-notice";
+} from "#product/lib/domain/updates/release-notice";
 
 export function migrateUserPreferences(preferences: LegacyUserPreferencesInput): {
   preferences: UserPreferences;

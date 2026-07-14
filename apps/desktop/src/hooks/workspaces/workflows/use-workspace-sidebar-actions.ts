@@ -1,20 +1,20 @@
 import { useCallback } from "react";
 import type { WorkspacePurgeResponse, WorkspaceRetireResponse } from "@anyharness/sdk";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { useToastStore } from "@/stores/toast/toast-store";
-import { APP_ROUTES } from "@/config/app-routes";
-import { useCreateCloudWorkspace } from "@/hooks/cloud/workflows/use-create-cloud-workspace";
-import type { CloudWorkspaceRepoTarget } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
-import type { SidebarIndicatorAction } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
-import { useAddRepoFlowStore } from "@/stores/ui/add-repo-flow-store";
-import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-activation-workflow";
-import { useWorkspaceEntryActions } from "@/hooks/workspaces/workflows/use-workspace-entry-actions";
+import { useToastStore } from "#product/stores/toast/toast-store";
+import { APP_ROUTES } from "#product/config/app-routes";
+import { useCreateCloudWorkspace } from "#product/hooks/cloud/workflows/use-create-cloud-workspace";
+import type { CloudWorkspaceRepoTarget } from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
+import type { SidebarIndicatorAction } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
+import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
+import { useWorkspaceActivationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-activation-workflow";
+import { useWorkspaceEntryActions } from "#product/hooks/workspaces/workflows/use-workspace-entry-actions";
 import {
   failLatencyFlow,
   startLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
-import { useWorkspaceRetireActions } from "@/hooks/workspaces/workflows/use-workspace-retire-actions";
-import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-navigation-workflow";
+import { useWorkspaceRetireActions } from "#product/hooks/workspaces/workflows/use-workspace-retire-actions";
+import { useWorkspaceNavigationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-navigation-workflow";
 
 export function useWorkspaceSidebarActions() {
   const { openWorkspaceSession } = useWorkspaceActivationWorkflow();

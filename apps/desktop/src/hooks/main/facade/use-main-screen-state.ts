@@ -9,17 +9,17 @@ import {
   type MouseEvent,
   type SetStateAction,
 } from "react";
-import { useResize } from "@/hooks/ui/layout/use-resize";
-import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
-import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/derived/use-hot-paint-gate";
-import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
-import { shouldMountWorkspaceShell } from "@/lib/domain/chat/surface/chat-surface";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import { useResize } from "#product/hooks/ui/layout/use-resize";
+import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
+import { useIsHotPaintGatePendingForWorkspace } from "#product/hooks/workspaces/derived/use-hot-paint-gate";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
+import { shouldMountWorkspaceShell } from "#product/lib/domain/chat/surface/chat-surface";
+import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import {
   WORKSPACE_SIDEBAR_MAX_WIDTH,
   WORKSPACE_SIDEBAR_MIN_WIDTH,
-} from "@/lib/domain/preferences/workspace-ui/sidebar";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+} from "#product/lib/domain/preferences/workspace-ui/sidebar";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import {
   DEFAULT_RIGHT_PANEL_DURABLE_STATE,
   DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE,
@@ -30,17 +30,17 @@ import {
   normalizeRightPanelDurableState,
   type RightPanelDurableState,
   type RightPanelWorkspaceState,
-} from "@/lib/domain/workspaces/shell/right-panel-model";
-import { reconcileRightPanelWorkspaceState } from "@/lib/domain/workspaces/shell/right-panel-state-normalization";
-import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/selection/workspace-ui-key";
-import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
-import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import type { CloudWorkspaceSummary } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
+} from "#product/lib/domain/workspaces/shell/right-panel-model";
+import { reconcileRightPanelWorkspaceState } from "#product/lib/domain/workspaces/shell/right-panel-state-normalization";
+import { resolveSelectedWorkspaceIdentity } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
+import { resolveWithWorkspaceFallback } from "#product/lib/domain/workspaces/selection/workspace-keyed-preferences";
+import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
 import {
   CLOSED_PUBLISH_DIALOG_STATE,
   type PublishDialogState,
-} from "@/lib/domain/workspaces/creation/publish-dialog-state";
+} from "#product/lib/domain/workspaces/creation/publish-dialog-state";
 
 const EMPTY_WORKSPACES: Workspace[] = [];
 

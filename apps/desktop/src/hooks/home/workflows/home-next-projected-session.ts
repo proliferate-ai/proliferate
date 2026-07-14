@@ -1,6 +1,6 @@
-import { getSessionRecord } from "@/stores/sessions/session-records";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { buildPendingWorkspaceUiKey } from "@/lib/domain/workspaces/creation/pending-entry";
+import { getSessionRecord } from "#product/stores/sessions/session-records";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { buildPendingWorkspaceUiKey } from "#product/lib/domain/workspaces/creation/pending-entry";
 
 export interface ProjectedPendingWorkspaceSession {
   sessionId: string;

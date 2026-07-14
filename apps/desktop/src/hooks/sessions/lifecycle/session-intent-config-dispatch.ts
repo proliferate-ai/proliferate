@@ -1,6 +1,6 @@
 import type { Session } from "@anyharness/sdk";
 import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
-import type { CloudSandboxGatewayUrlSource } from "@/lib/access/cloud/cloud-sandbox-gateway";
+import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 import type { useSetSessionConfigOptionMutation } from "@anyharness/sdk-react";
 import {
   getAuthoritativeConfigValue,
@@ -14,15 +14,15 @@ import type {
 } from "@proliferate/product-domain/sessions/intents/session-intent-model";
 import {
   getSessionClientAndWorkspace,
-} from "@/lib/access/anyharness/session-runtime";
+} from "#product/lib/access/anyharness/session-runtime";
 import {
   persistDefaultSessionModePreference,
-} from "@/hooks/sessions/workflows/session-mode-preferences";
+} from "#product/hooks/sessions/workflows/session-mode-preferences";
 import {
   getSessionRecord,
   patchSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
+} from "#product/stores/sessions/session-records";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 
 type SetSessionConfigOptionMutation = ReturnType<typeof useSetSessionConfigOptionMutation>;

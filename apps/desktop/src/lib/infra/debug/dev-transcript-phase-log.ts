@@ -1,5 +1,5 @@
 import type { SessionEventEnvelope } from "@anyharness/sdk";
-import type { DevSSEEventStatus } from "@/lib/infra/debug/dev-sse-event-record";
+import type { DevSSEEventStatus } from "#product/lib/infra/debug/dev-sse-event-record";
 
 type DevTranscriptPhaseKind =
   | "turn"

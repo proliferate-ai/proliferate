@@ -1,12 +1,12 @@
 import { resolveSessionViewState } from "@proliferate/product-domain/sessions/activity";
-import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
-import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
+import { activitySnapshotFromDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-activity";
+import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import type {
   RefreshSessionSlotMeta,
   SessionStreamConnectOptions,
-} from "@/hooks/sessions/lifecycle/session-stream-connection-types";
+} from "#product/hooks/sessions/lifecycle/session-stream-connection-types";
 
 const ACTIVE_SUMMARY_REFRESH_DELAY_MS = 8_000;
 

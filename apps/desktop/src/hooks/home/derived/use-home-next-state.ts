@@ -4,11 +4,11 @@ import {
   type HomeNextModelSelection,
   type HomeNextRepoLaunchKind,
   type HomeNextRepositorySelection,
-} from "@/lib/domain/home/home-next-launch";
-import { useHomeNextModelSelection } from "@/hooks/home/derived/use-home-next-model-selection";
-import { useHomeNextModeSelection } from "@/hooks/home/derived/use-home-next-mode-selection";
-import { useHomeNextRepositorySelection } from "@/hooks/home/derived/use-home-next-repository-selection";
-import { useComputeTargetOptions } from "@/hooks/compute/derived/use-compute-target-options";
+} from "#product/lib/domain/home/home-next-launch";
+import { useHomeNextModelSelection } from "#product/hooks/home/derived/use-home-next-model-selection";
+import { useHomeNextModeSelection } from "#product/hooks/home/derived/use-home-next-mode-selection";
+import { useHomeNextRepositorySelection } from "#product/hooks/home/derived/use-home-next-repository-selection";
+import { useComputeTargetOptions } from "#product/hooks/compute/derived/use-compute-target-options";
 
 interface UseHomeNextStateArgs {
   destination: HomeNextDestination;

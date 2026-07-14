@@ -3,7 +3,7 @@ import { CircleAlert, FileCode } from "@proliferate/ui/icons";
 import {
   GitReviewEmptyState,
   GitReviewEmptyStateAction,
-} from "@/components/workspace/git/GitReviewEmptyState";
+} from "#product/components/workspace/git/GitReviewEmptyState";
 
 export function DiffDisplayPolicyPlaceholder({
   title,

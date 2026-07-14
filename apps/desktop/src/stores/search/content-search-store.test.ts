@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   selectVisibleContentSearchMatchIds,
   useContentSearchStore,
-} from "./content-search-store";
+} from "#product/stores/search/content-search-store";
 
 function resetStore() {
   useContentSearchStore.setState({

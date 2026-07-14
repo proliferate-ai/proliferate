@@ -6,7 +6,7 @@ import type {
 import {
   composerIntegrationHealthDot,
   deriveComposerIntegrationsModel,
-} from "./composer-integrations";
+} from "#product/lib/domain/cloud/composer-integrations";
 
 function makeHealthItem(
   overrides: Partial<IntegrationHealthItem> = {},

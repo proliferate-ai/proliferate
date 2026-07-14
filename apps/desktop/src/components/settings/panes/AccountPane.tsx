@@ -13,35 +13,35 @@ import {
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { ExternalLink, RefreshCw } from "@proliferate/ui/icons";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
-import { ConnectServerDialog } from "@/components/auth/ConnectServerDialog";
-import { CurrentUserInvitationsSection } from "@/components/settings/panes/organization/CurrentUserInvitationsSection";
-import { AUTH_ACCOUNT_LABELS, CONNECT_SERVER_LABELS } from "@/copy/auth/auth-copy";
-import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
+import { ConnectServerDialog } from "#product/components/auth/ConnectServerDialog";
+import { CurrentUserInvitationsSection } from "#product/components/settings/panes/organization/CurrentUserInvitationsSection";
+import { AUTH_ACCOUNT_LABELS, CONNECT_SERVER_LABELS } from "#product/copy/auth/auth-copy";
+import { CAPABILITY_COPY } from "#product/copy/capabilities/capability-copy";
 import { useAuthViewer } from "@/hooks/access/cloud/auth/use-auth-viewer";
-import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
+import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import { useGitHubDesktopAuthAvailability } from "@/hooks/access/cloud/auth/use-github-auth-availability";
-import { useCurrentUserOrganizationInvitations } from "@/hooks/access/cloud/organizations/use-current-user-organization-invitations";
-import { useOrganizationActions } from "@/hooks/access/cloud/organizations/use-organization-actions";
+import { useCurrentUserOrganizationInvitations } from "#product/hooks/access/cloud/organizations/use-current-user-organization-invitations";
+import { useOrganizationActions } from "#product/hooks/access/cloud/organizations/use-organization-actions";
 import {
   buildAccountProviderViews,
   getAccountActionDescription,
   getAccountDisplayName,
   getAccountProfileSummary,
   getGitHubStatusLabel,
-} from "@/lib/domain/auth/account-profile-presentation";
-import { isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
+} from "#product/lib/domain/auth/account-profile-presentation";
+import { isDevAuthBypassed } from "#product/lib/domain/auth/auth-mode";
 import {
   useProductAuthStatus,
   useProductAuthUser,
-} from "@/hooks/auth/facade/use-product-auth";
-import { useAuditedAuth } from "@/hooks/auth/facade/use-audited-auth";
+} from "#product/hooks/auth/facade/use-product-auth";
+import { useAuditedAuth } from "#product/hooks/auth/facade/use-audited-auth";
 import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
 import { useOrganizationJoinInvitationFlow } from "@/hooks/organizations/workflows/use-organization-join-invitation-flow";
-import { useJoinedOrganizationActivation } from "@/hooks/organizations/workflows/use-joined-organization-activation";
+import { useJoinedOrganizationActivation } from "#product/hooks/organizations/workflows/use-joined-organization-activation";
 import { buildGitHubOAuthAppSettingsUrl } from "@/lib/integrations/auth/proliferate-auth";
-import type { OrganizationInvitationRecord } from "@/lib/domain/organizations/organization-records";
-import { useToastStore } from "@/stores/toast/toast-store";
-import { buildGitHubAppUserAuthorizationServiceView } from "./account/GitHubAppUserAuthorizationService";
+import type { OrganizationInvitationRecord } from "#product/lib/domain/organizations/organization-records";
+import { useToastStore } from "#product/stores/toast/toast-store";
+import { buildGitHubAppUserAuthorizationServiceView } from "#product/components/settings/panes/account/GitHubAppUserAuthorizationService";
 
 const EMPTY_INVITATIONS: OrganizationInvitationRecord[] = [];
 

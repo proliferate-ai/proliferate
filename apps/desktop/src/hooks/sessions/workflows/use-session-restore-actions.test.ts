@@ -7,13 +7,13 @@ import {
   commitReplacedSessionTombstone,
   isReplacedSessionTombstoned,
   resetReplacedSessionTombstonesForTests,
-} from "@/hooks/sessions/workflows/session-replacement-tombstones";
+} from "#product/hooks/sessions/workflows/session-replacement-tombstones";
 import {
   resetSessionReplacementDismissalsForTests,
   runTrackedReplacementDismissal,
-} from "@/hooks/sessions/workflows/session-replacement-dismissals";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useSessionRestoreActions } from "./use-session-restore-actions";
+} from "#product/hooks/sessions/workflows/session-replacement-dismissals";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useSessionRestoreActions } from "#product/hooks/sessions/workflows/use-session-restore-actions";
 
 const mocks = vi.hoisted(() => ({
   localRuntime: {},

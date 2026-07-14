@@ -1,9 +1,9 @@
-import { MessageList } from "@/components/workspace/chat/transcript/MessageList";
-import type { PlaygroundReplayState } from "@/hooks/playground/lifecycle/use-replay-session";
+import { MessageList } from "#product/components/workspace/chat/transcript/MessageList";
+import type { PlaygroundReplayState } from "#product/hooks/playground/lifecycle/use-replay-session";
 import { resolveSessionViewState } from "@proliferate/product-domain/sessions/activity";
-import { combineSessionRecord } from "@/stores/sessions/session-records";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
+import { combineSessionRecord } from "#product/stores/sessions/session-records";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 
 interface PlaygroundRecordingTranscriptProps {
   replay: PlaygroundReplayState;

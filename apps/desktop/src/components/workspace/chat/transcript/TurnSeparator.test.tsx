@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { TurnSeparator } from "./TurnSeparator";
+import { TurnSeparator } from "#product/components/workspace/chat/transcript/TurnSeparator";
 
 describe("TurnSeparator", () => {
 

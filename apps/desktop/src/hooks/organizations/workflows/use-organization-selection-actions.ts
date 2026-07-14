@@ -2,8 +2,8 @@ import { useCallback } from "react";
 import {
   clearSelectedOrganizationCookie,
   writeSelectedOrganizationCookie,
-} from "@/lib/access/browser/organization-selection-cookie";
-import { useOrganizationStore } from "@/stores/organizations/organization-store";
+} from "#product/lib/access/browser/organization-selection-cookie";
+import { useOrganizationStore } from "#product/stores/organizations/organization-store";
 
 export function useOrganizationSelectionActions() {
   const setStoredActiveOrganizationId = useOrganizationStore(

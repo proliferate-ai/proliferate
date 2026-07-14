@@ -3,14 +3,14 @@ import { CheckCircleFilled, ChevronRight, GitBranchIcon, RefreshCw, Undo } from 
 import {
   GitReviewEmptyState,
   GitReviewEmptyStateAction,
-} from "./GitReviewEmptyState";
+} from "#product/components/workspace/git/GitReviewEmptyState";
 import {
   gitPanelEmptyDescription,
   gitPanelEmptyMessage,
   type GitPanelMode,
   type GitPanelSection,
-} from "@/lib/domain/workspaces/changes/git-panel-diff";
-import type { DiffDisplayPolicySummary } from "@/lib/domain/workspaces/changes/diff-display-policy";
+} from "#product/lib/domain/workspaces/changes/git-panel-diff";
+import type { DiffDisplayPolicySummary } from "#product/lib/domain/workspaces/changes/diff-display-policy";
 
 export function GitLastTurnUndoAction({
   fileCount,

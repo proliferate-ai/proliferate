@@ -11,9 +11,9 @@ import { ProductHostProvider } from "@proliferate/product-client/host/ProductHos
 import {
   makeTestProductHost,
   testAuthState,
-} from "@/test/product-host-test-utils";
-import { useTelemetryRouteViews } from "./use-telemetry-route-views";
-import { useTelemetryAuthIdentity } from "./use-telemetry-auth-identity";
+} from "#product/test/product-host-test-utils";
+import { useTelemetryRouteViews } from "#product/hooks/telemetry/lifecycle/use-telemetry-route-views";
+import { useTelemetryAuthIdentity } from "#product/hooks/telemetry/lifecycle/use-telemetry-auth-identity";
 
 function spyTelemetry(): ProductTelemetry {
   return {

@@ -1,5 +1,5 @@
 import type { PendingSessionConfigChangeStatus } from "@proliferate/product-domain/sessions/pending-config";
-import type { ChatModelVisibilityOverridesByAgentKind } from "@/lib/domain/preferences/user/session-defaults";
+import type { ChatModelVisibilityOverridesByAgentKind } from "#product/lib/domain/preferences/user/session-defaults";
 
 export interface ModelSelectorSelection {
   kind: string;

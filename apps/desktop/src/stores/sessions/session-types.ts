@@ -3,8 +3,8 @@ import type {
   SessionEventEnvelope,
   TranscriptState,
 } from "@anyharness/sdk";
-import type { SessionDirectoryEntry } from "@/lib/domain/sessions/directory/directory-entry";
-export type { HotPaintGate } from "@/lib/domain/sessions/hot-paint-gate";
+import type { SessionDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-entry";
+export type { HotPaintGate } from "#product/lib/domain/sessions/hot-paint-gate";
 
 export type HarnessConnectionState = "connecting" | "healthy" | "failed";
 

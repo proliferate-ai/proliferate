@@ -3,7 +3,7 @@
 import { renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { IntegrationHealthItem } from "@proliferate/cloud-sdk/client/integrations";
-import { useComposerIntegrationsState } from "./use-composer-integrations-state";
+import { useComposerIntegrationsState } from "#product/hooks/cloud/derived/use-composer-integrations-state";
 
 const mocks = vi.hoisted(() => ({
   useIntegrationHealth: vi.fn(),

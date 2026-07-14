@@ -1,12 +1,12 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import { describe, expect, it } from "vitest";
-import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
+import type { SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
 import {
   buildRepositoryNewWorkspaceCommandScope,
   buildSelectedWorkspaceNewWorkspaceCommandScope,
   buildSidebarNewWorkspaceCommandScope,
   resolveNewWorkspaceCommandTarget,
-} from "@/lib/domain/workspaces/creation/new-workspace-command";
+} from "#product/lib/domain/workspaces/creation/new-workspace-command";
 
 const repoRoot = {
   id: "repo-root-1",

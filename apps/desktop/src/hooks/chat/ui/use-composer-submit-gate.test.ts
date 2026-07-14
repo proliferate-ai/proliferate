@@ -2,7 +2,7 @@
 
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { useComposerSubmitGate } from "./use-composer-submit-gate";
+import { useComposerSubmitGate } from "#product/hooks/chat/ui/use-composer-submit-gate";
 
 function deferred<T = void>() {
   let resolve!: (value: T | PromiseLike<T>) => void;

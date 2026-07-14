@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   useChatPromptRecoveryStore,
   type ChatPromptRecovery,
-} from "@/stores/chat/chat-prompt-recovery-store";
+} from "#product/stores/chat/chat-prompt-recovery-store";
 import {
   createPromptOutboxEntry,
 } from "@proliferate/product-domain/sessions/intents/session-intent-model";

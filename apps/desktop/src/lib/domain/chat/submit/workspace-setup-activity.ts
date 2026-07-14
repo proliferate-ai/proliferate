@@ -1,5 +1,5 @@
 import type { GetSetupStatusResponse } from "@anyharness/sdk";
-import type { WorkspaceArrivalEvent } from "@/lib/domain/workspaces/creation/arrival";
+import type { WorkspaceArrivalEvent } from "#product/lib/domain/workspaces/creation/arrival";
 
 export type CachedWorkspaceSetupStatus = GetSetupStatusResponse["status"] | null;
 

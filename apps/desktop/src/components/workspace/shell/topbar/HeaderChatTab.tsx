@@ -2,14 +2,14 @@ import type {
   MouseEvent,
   PointerEvent,
 } from "react";
-import { ChatTabWithMenu } from "@/components/workspace/shell/tabs/ChatTabWithMenu";
-import type { ManualChatGroupEditorAnchorRect } from "@/components/workspace/shell/tabs/ManualChatGroupEditorPopover";
-import { useOpenCoworkCodingSession } from "@/hooks/cowork/workflows/use-open-cowork-coding-session";
+import { ChatTabWithMenu } from "#product/components/workspace/shell/tabs/ChatTabWithMenu";
+import type { ManualChatGroupEditorAnchorRect } from "#product/components/workspace/shell/tabs/ManualChatGroupEditorPopover";
+import { useOpenCoworkCodingSession } from "#product/hooks/cowork/workflows/use-open-cowork-coding-session";
 import {
   isPrimaryMultiSelectClick,
   isPrimaryMultiSelectPointer,
-} from "@/hooks/workspaces/ui/tabs/use-header-tabs-multi-select";
-import type { HeaderChatTabEntry } from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
+} from "#product/hooks/workspaces/ui/tabs/use-header-tabs-multi-select";
+import type { HeaderChatTabEntry } from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 
 interface HeaderChatTabProps {
   tab: HeaderChatTabEntry;

@@ -2,9 +2,9 @@ import {
   anonymousAuthState,
   authenticatedAuthState,
   type AuthClientStatePatch,
-} from "@/lib/domain/auth/auth-state-mapping";
-import type { AuthUser } from "@/lib/domain/auth/auth-user";
-import type { StoredAuthSession } from "@/lib/domain/auth/stored-auth-session";
+} from "#product/lib/domain/auth/auth-state-mapping";
+import type { AuthUser } from "#product/lib/domain/auth/auth-user";
+import type { StoredAuthSession } from "#product/lib/domain/auth/stored-auth-session";
 
 export interface AuthStateWriterDeps {
   setAuthState(state: AuthClientStatePatch): void;

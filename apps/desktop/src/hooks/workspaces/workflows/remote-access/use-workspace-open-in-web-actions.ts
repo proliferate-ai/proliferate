@@ -1,9 +1,9 @@
 import { useCallback, useMemo } from "react";
 import { webWorkspaceDeepLink } from "@proliferate/cloud-sdk";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { useWebAppTarget } from "@/hooks/capabilities/derived/use-web-app-target";
-import { useSelectedLogicalWorkspace } from "@/hooks/workspaces/derived/use-selected-logical-workspace";
-import { useToastStore } from "@/stores/toast/toast-store";
+import { useWebAppTarget } from "#product/hooks/capabilities/derived/use-web-app-target";
+import { useSelectedLogicalWorkspace } from "#product/hooks/workspaces/derived/use-selected-logical-workspace";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 export function useWorkspaceOpenInWebActions() {
   const { selectedLogicalWorkspace } = useSelectedLogicalWorkspace();

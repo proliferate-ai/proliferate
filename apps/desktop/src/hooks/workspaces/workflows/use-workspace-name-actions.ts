@@ -1,14 +1,14 @@
 import { useCallback, useRef } from "react";
 import { generateWorkspaceName } from "@proliferate/cloud-sdk/client/ai-magic";
-import { findLogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
-import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
-import { useWorkspaceDisplayNameActions } from "@/hooks/workspaces/workflows/use-workspace-display-name-actions";
-import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
+import { findLogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-lookup";
+import { useLogicalWorkspaces } from "#product/hooks/workspaces/derived/use-logical-workspaces";
+import { useWorkspaceDisplayNameActions } from "#product/hooks/workspaces/workflows/use-workspace-display-name-actions";
+import { useWorkspaceSessionCache } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import {
   workspaceDisplayNameOverride,
   workspaceHasOtherPromptedSession,
-} from "@/hooks/workspaces/workflows/workspace-name-eligibility";
-import { useProductAuthStatus } from "@/hooks/auth/facade/use-product-auth";
+} from "#product/hooks/workspaces/workflows/workspace-name-eligibility";
+import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth";
 
 const requestedAutoWorkspaceNames = new Map<string, number>();
 const MAX_TRACKED_AUTO_WORKSPACE_NAMES = 500;

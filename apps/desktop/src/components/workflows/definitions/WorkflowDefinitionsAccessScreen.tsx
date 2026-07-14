@@ -1,7 +1,7 @@
 import { ProductPageShell } from "@proliferate/product-ui/layout/ProductPageShell";
 import { EmptyState } from "@proliferate/ui/layout/EmptyState";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { MainSidebarPageShell } from "@/components/workspace/shell/screen/MainSidebarPageShell";
+import { MainSidebarPageShell } from "#product/components/workspace/shell/screen/MainSidebarPageShell";
 
 interface WorkflowDefinitionsAccessScreenProps {
   title: string;

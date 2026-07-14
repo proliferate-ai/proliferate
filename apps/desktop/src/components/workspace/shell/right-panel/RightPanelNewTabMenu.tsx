@@ -9,7 +9,7 @@ import {
   AppShellPlusIcon,
   AppShellTerminalIcon,
 } from "@proliferate/ui/icons";
-import type { RightPanelNewTabMenuDefault } from "@/lib/infra/right-panel-new-tab-menu";
+import type { RightPanelNewTabMenuDefault } from "#product/lib/infra/right-panel-new-tab-menu";
 
 interface RightPanelNewTabMenuProps {
   open: boolean;

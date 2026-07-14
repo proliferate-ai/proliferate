@@ -8,18 +8,18 @@ import {
 } from "@proliferate/product-domain/sessions/intents/session-intent-state";
 import {
   materializeSessionRecord,
-} from "@/hooks/sessions/workflows/session-creation-local-state";
+} from "#product/hooks/sessions/workflows/session-creation-local-state";
 import { annotateLatencyFlow } from "@/lib/infra/measurement/latency-flow";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
-import { rememberLastViewedSession } from "@/stores/preferences/workspace-ui-store";
-import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
+import { rememberLastViewedSession } from "#product/stores/preferences/workspace-ui-store";
+import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import {
   createEmptySessionRecord,
   getSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
+} from "#product/stores/sessions/session-records";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import type { SessionRuntimeRecord } from "#product/stores/sessions/session-types";
 
 export function materializeExistingSession({
   existingProjectedRecord,

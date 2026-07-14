@@ -3,7 +3,7 @@ import {
   removePersistedKey,
   writePersistedJson,
   type ProductStorageContext,
-} from "@/lib/infra/persistence/product-storage";
+} from "#product/lib/infra/persistence/product-storage";
 
 const PENDING_ORGANIZATION_JOIN_TARGET_KEY = "proliferate.organizationJoinTarget";
 const PENDING_ORGANIZATION_JOIN_TARGET_MAX_AGE_MS = 60 * 60 * 1000;

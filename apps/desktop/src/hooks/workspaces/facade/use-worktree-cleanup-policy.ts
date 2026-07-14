@@ -1,17 +1,17 @@
 import { useCallback, useState } from "react";
-import { usePutCloudWorktreeRetentionPolicy } from "@/hooks/access/cloud/use-cloud-worktree-retention-policy";
-import { useWorktreeAutoDeleteAdoption } from "@/hooks/preferences/workflows/use-worktree-auto-delete-adoption";
+import { usePutCloudWorktreeRetentionPolicy } from "#product/hooks/access/cloud/use-cloud-worktree-retention-policy";
+import { useWorktreeAutoDeleteAdoption } from "#product/hooks/preferences/workflows/use-worktree-auto-delete-adoption";
 import {
   type SyncPolicyToTarget,
   type WorktreeCleanupPolicySyncTargetState,
   useWorktreeCleanupPolicySync,
-} from "@/hooks/workspaces/lifecycle/use-worktree-cleanup-policy-sync";
+} from "#product/hooks/workspaces/lifecycle/use-worktree-cleanup-policy-sync";
 import {
   WORKTREE_AUTO_DELETE_LIMIT_MAX,
   WORKTREE_AUTO_DELETE_LIMIT_MIN,
-} from "@/lib/domain/preferences/user/worktree-auto-delete";
-import { useProductAuthStatus } from "@/hooks/auth/facade/use-product-auth";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+} from "#product/lib/domain/preferences/user/worktree-auto-delete";
+import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
 export interface WorktreeCleanupPolicyState {
   value: number;

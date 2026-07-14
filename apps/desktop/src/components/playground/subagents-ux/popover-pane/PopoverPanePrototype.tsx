@@ -7,13 +7,13 @@ import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatC
 import {
   ActivityAggregatePopover,
   type PrototypeSourceControlAction,
-} from "./ActivityAggregatePopover";
-import { GlobalAgentsPanePrototype } from "./GlobalAgentsPanePrototype";
+} from "#product/components/playground/subagents-ux/popover-pane/ActivityAggregatePopover";
+import { GlobalAgentsPanePrototype } from "#product/components/playground/subagents-ux/popover-pane/GlobalAgentsPanePrototype";
 import {
   POPOVER_PANE_SCENARIOS,
   resolvePopoverPaneScenario,
   type PopoverPaneScenarioKey,
-} from "./PopoverPaneFixtures";
+} from "#product/components/playground/subagents-ux/popover-pane/PopoverPaneFixtures";
 
 /**
  * Visual prototyping lane for the aggregate activity popover + the global

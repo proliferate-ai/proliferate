@@ -1,7 +1,7 @@
-import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
-import { MainSidebar } from "@/components/workspace/shell/sidebar/MainSidebar";
-import { WorkspaceSidebarHeaderControls } from "@/components/workspace/shell/sidebar/WorkspaceSidebarHeaderControls";
-import type { UpdaterPhase } from "@/stores/updater/updater-store";
+import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
+import { MainSidebar } from "#product/components/workspace/shell/sidebar/MainSidebar";
+import { WorkspaceSidebarHeaderControls } from "#product/components/workspace/shell/sidebar/WorkspaceSidebarHeaderControls";
+import type { UpdaterPhase } from "#product/stores/updater/updater-store";
 
 interface WorkspaceShellSidebarProps {
   open: boolean;

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { ThinkingText } from "@/components/feedback/ThinkingText";
-import { CHAT_STREAMING_STATUS_LABELS } from "@/copy/chat/chat-copy";
-import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
-import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
+import { ThinkingText } from "#product/components/feedback/ThinkingText";
+import { CHAT_STREAMING_STATUS_LABELS } from "#product/copy/chat/chat-copy";
+import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
+import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 
 // Only surface the elapsed suffix once a wait is long enough to be worth
 // acknowledging — short "Thinking" flashes stay clean.

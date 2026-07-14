@@ -1,12 +1,12 @@
 import type { WorktreeInventoryResponse } from "@anyharness/sdk";
 import { useQueries } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { getWorktreeInventory } from "@/lib/access/anyharness/worktrees";
+import { getWorktreeInventory } from "#product/lib/access/anyharness/worktrees";
 import {
   type WorktreeSettingsTarget,
   worktreeSettingsTargetRuntimeConnection,
-} from "@/lib/domain/workspaces/worktrees/worktree-settings-target";
-import { worktreeSettingsTargetInventoryKey } from "./query-keys";
+} from "#product/lib/domain/workspaces/worktrees/worktree-settings-target";
+import { worktreeSettingsTargetInventoryKey } from "#product/hooks/access/anyharness/worktrees/query-keys";
 
 export interface WorktreeTargetInventoryState {
   target: WorktreeSettingsTarget;

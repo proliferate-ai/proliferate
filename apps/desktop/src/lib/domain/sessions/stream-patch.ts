@@ -9,7 +9,7 @@ import type {
   SessionStatus,
   TranscriptState,
 } from "@anyharness/sdk";
-import { foldActivityEvent } from "./activity-fold";
+import { foldActivityEvent } from "#product/lib/domain/sessions/activity-fold";
 
 export interface SessionStreamPatchInput {
   slot: {

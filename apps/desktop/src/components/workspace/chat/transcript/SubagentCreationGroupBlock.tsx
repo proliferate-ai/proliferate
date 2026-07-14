@@ -3,14 +3,14 @@ import type { ToolCallItem, TranscriptState } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Robot } from "@proliferate/ui/icons";
 import { MarkdownBody } from "@proliferate/product-ui/chat/transcript/MarkdownBody";
-import { renderDesktopCodeBlock } from "@/components/content/ui/desktop-markdown-code-block";
+import { renderDesktopCodeBlock } from "#product/components/content/ui/desktop-markdown-code-block";
 import {
   parseSubagentLaunchResult,
   resolveSubagentLaunchDisplay,
   isSubagentWorkComplete,
 } from "@proliferate/product-domain/chats/subagents/subagent-launch";
-import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identity";
-import { useTranscriptOpenSession } from "./TranscriptContexts";
+import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
+import { useTranscriptOpenSession } from "#product/components/workspace/chat/transcript/TranscriptContexts";
 
 const CHAT_BUTTON_TEXT_CLASS = "text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)]";
 

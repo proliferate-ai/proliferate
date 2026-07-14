@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
-import type { ScenarioKey } from "@/config/playground";
-import { renderGoalBarSlot } from "@/components/playground/activity/GoalBarFixtures";
+import type { ScenarioKey } from "#product/config/playground";
+import { renderGoalBarSlot } from "#product/components/playground/activity/GoalBarFixtures";
 import {
   renderActivityChipsSlot,
   renderActivityWithGoalSlot,
-} from "@/components/playground/activity/ActivityFixtures";
-import { renderDelegationSlot } from "@/components/playground/delegation/PlaygroundComposerDelegation";
-import { renderPanelSlotFixture } from "@/components/playground/composer-slots/PlaygroundPanelSlotFixtures";
+} from "#product/components/playground/activity/ActivityFixtures";
+import { renderDelegationSlot } from "#product/components/playground/delegation/PlaygroundComposerDelegation";
+import { renderPanelSlotFixture } from "#product/components/playground/composer-slots/PlaygroundPanelSlotFixtures";
 
 export function renderAttachedSlot(scenario: ScenarioKey): ReactNode | null {
   const contextPanel = (() => {

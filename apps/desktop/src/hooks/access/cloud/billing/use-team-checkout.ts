@@ -4,7 +4,7 @@ import {
   createTeamCheckoutSession,
   getCurrentTeamCheckout,
 } from "@proliferate/cloud-sdk/client/billing";
-import { desktopBillingReturnOptions } from "@/lib/access/cloud/billing-return";
+import { desktopBillingReturnOptions } from "#product/lib/access/cloud/billing-return";
 
 const TEAM_CHECKOUT_CURRENT_QUERY_KEY = ["cloud", "billing", "team-checkout", "current"] as const;
 

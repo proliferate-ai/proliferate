@@ -1,15 +1,15 @@
 import { useCallback } from "react";
-import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
+import type { WorkspaceSession } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import {
   commitActiveSession,
   commitHotActiveSession,
   isSessionActivationCurrent,
   type SessionActivationOutcome,
-} from "@/hooks/sessions/workflows/session-activation-guard";
-import type { SessionLatencyFlowOptions } from "@/hooks/sessions/workflows/session-selection-options";
+} from "#product/hooks/sessions/workflows/session-activation-guard";
+import type { SessionLatencyFlowOptions } from "#product/hooks/sessions/workflows/session-selection-options";
 import { resolveStatusFromExecutionSummary } from "@proliferate/product-domain/sessions/activity";
-import { isHotReopenEligibleSessionSlot } from "@/lib/domain/workspaces/selection/hot-reopen";
-import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
+import { isHotReopenEligibleSessionSlot } from "#product/lib/domain/workspaces/selection/hot-reopen";
+import { resolveWorkspaceUiKey } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
 import {
   elapsedMs,
   logLatency,
@@ -23,24 +23,24 @@ import {
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
-import { HOT_PAINT_MEASUREMENT_SUMMARY_BUDGET } from "@/lib/domain/telemetry/debug-measurement-catalog";
+import { HOT_PAINT_MEASUREMENT_SUMMARY_BUDGET } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import { annotateLatencyFlow } from "@/lib/infra/measurement/latency-flow";
-import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
-import { rememberLastViewedSession } from "@/stores/preferences/workspace-ui-store";
+import { scheduleAfterNextPaint } from "#product/lib/infra/scheduling/schedule-after-next-paint";
+import { rememberLastViewedSession } from "#product/stores/preferences/workspace-ui-store";
 import {
   createEmptySessionRecord,
   getSessionRecord,
   isPendingSessionId,
   patchSessionRecord,
   putSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
-import { classifyTrustedSessionSelection } from "@/hooks/sessions/workflows/session-selection-relationship";
+} from "#product/stores/sessions/session-records";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
+import { classifyTrustedSessionSelection } from "#product/hooks/sessions/workflows/session-selection-relationship";
 import {
   SESSION_HOT_SWITCH_MEASUREMENT_SURFACES,
   SESSION_SWITCH_MEASUREMENT_SURFACES,
-} from "@/hooks/sessions/workflows/session-selection-measurement";
+} from "#product/hooks/sessions/workflows/session-selection-measurement";
 
 interface UseSessionSelectionWorkflowActionsOptions {
   activateSession: (sessionId: string) => void;

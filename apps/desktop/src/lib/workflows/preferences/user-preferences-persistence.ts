@@ -1,35 +1,35 @@
 import {
   migrateUserPreferences,
-} from "@/lib/domain/preferences/user/migration";
+} from "#product/lib/domain/preferences/user/migration";
 import {
   getForwardCompatibleUserPreferenceExtras,
   hasDeprecatedUserPreferenceKeys,
   pickLegacyUserPreferencesInput,
   type LegacyUserPreferencesInput,
-} from "@/lib/domain/preferences/user/persisted-keys";
+} from "#product/lib/domain/preferences/user/persisted-keys";
 import {
   NEW_USER_DEFAULTS,
   PERSISTED_RECORD_BACKFILL,
   type BranchPrefixType,
   type UserPreferences,
-} from "@/lib/domain/preferences/user/model";
-import { isValidWorktreeAutoDeleteLimit } from "@/lib/domain/preferences/user/worktree-auto-delete";
+} from "#product/lib/domain/preferences/user/model";
+import { isValidWorktreeAutoDeleteLimit } from "#product/lib/domain/preferences/user/worktree-auto-delete";
 import {
   buildPersistedUserPreferencesRecord,
   hasAppliedModelVisibilityDefaultsReset,
   markModelVisibilityDefaultsReset,
   WORKTREE_AUTO_DELETE_LIMIT_ADOPTION_PENDING_KEY,
   type PersistedUserPreferencesMetadata,
-} from "@/lib/domain/preferences/persisted-metadata";
+} from "#product/lib/domain/preferences/persisted-metadata";
 import {
   readPersistedJsonValue,
   readPersistedStringValue,
   writePersistedJson,
   type ProductStorageContext,
-} from "@/lib/infra/persistence/product-storage";
+} from "#product/lib/infra/persistence/product-storage";
 import {
   resetFrontierModelVisibilityOverrides,
-} from "@/lib/domain/preferences/user/session-defaults";
+} from "#product/lib/domain/preferences/user/session-defaults";
 
 const USER_PREFERENCES_KEY = "user_preferences";
 const LEGACY_THEME_KEY = "proliferate-theme";

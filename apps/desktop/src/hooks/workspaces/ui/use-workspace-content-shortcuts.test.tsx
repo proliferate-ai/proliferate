@@ -5,14 +5,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearShortcutHandlerRegistryForTests,
   runShortcutHandler,
-} from "@/lib/domain/shortcuts/registry";
-import { useWorkspaceContentShortcuts } from "@/hooks/workspaces/ui/use-workspace-content-shortcuts";
-import { useContentSearchStore } from "@/stores/search/content-search-store";
+} from "#product/lib/domain/shortcuts/registry";
+import { useWorkspaceContentShortcuts } from "#product/hooks/workspaces/ui/use-workspace-content-shortcuts";
+import { useContentSearchStore } from "#product/stores/search/content-search-store";
 import {
   requestRightPanelCloseActiveTab,
   requestRightPanelRelativeTab,
   requestRightPanelTabByIndex,
-} from "@/lib/workflows/workspaces/right-panel-shortcut-requests";
+} from "#product/lib/workflows/workspaces/right-panel-shortcut-requests";
 
 function createActions(overrides: Partial<{
   activateRelativeTab: ReturnType<typeof vi.fn>;

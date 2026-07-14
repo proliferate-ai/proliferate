@@ -3,7 +3,7 @@ import {
   getForwardCompatibleUserPreferenceExtras,
   hasDeprecatedUserPreferenceKeys,
   pickLegacyUserPreferencesInput,
-} from "@/lib/domain/preferences/user/persisted-keys";
+} from "#product/lib/domain/preferences/user/persisted-keys";
 
 describe("persisted user preference keys", () => {
   it("splits known legacy input from forward-compatible extras", () => {

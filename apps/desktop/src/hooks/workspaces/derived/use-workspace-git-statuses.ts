@@ -1,18 +1,18 @@
 import type { BranchPullRequestStatus } from "@anyharness/sdk";
 import { useWorktreeInventoryQuery } from "@anyharness/sdk-react";
 import { useMemo, useRef } from "react";
-import { useRepoPrStatuses } from "@/hooks/workspaces/cache/use-repo-pr-statuses";
-import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
-import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
+import { useRepoPrStatuses } from "#product/hooks/workspaces/cache/use-repo-pr-statuses";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
+import { useLogicalWorkspaces } from "#product/hooks/workspaces/derived/use-logical-workspaces";
+import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
 import {
   composeWorkspaceGitStatus,
   pathsEqualCanonical,
   workspaceGitStatusesMateriallyEqual,
   type WorkspaceGitStatus,
   type WorkspacePrStatusAvailability,
-} from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+} from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 
 export interface WorkspaceGitStatusSync {
   repoRootId: string | null;

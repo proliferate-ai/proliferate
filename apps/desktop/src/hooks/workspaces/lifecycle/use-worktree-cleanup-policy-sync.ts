@@ -2,16 +2,16 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   useCloudWorktreeRetentionPolicy,
   usePutCloudWorktreeRetentionPolicy,
-} from "@/hooks/access/cloud/use-cloud-worktree-retention-policy";
-import { useWorktreeRetentionPolicy } from "@/hooks/access/anyharness/worktrees/use-worktree-retention-policy";
-import { useHasPendingWorktreeAutoDeleteAdoption } from "@/hooks/preferences/derived/use-pending-worktree-auto-delete-adoption";
-import { useWorktreeAutoDeleteAdoption } from "@/hooks/preferences/workflows/use-worktree-auto-delete-adoption";
+} from "#product/hooks/access/cloud/use-cloud-worktree-retention-policy";
+import { useWorktreeRetentionPolicy } from "#product/hooks/access/anyharness/worktrees/use-worktree-retention-policy";
+import { useHasPendingWorktreeAutoDeleteAdoption } from "#product/hooks/preferences/derived/use-pending-worktree-auto-delete-adoption";
+import { useWorktreeAutoDeleteAdoption } from "#product/hooks/preferences/workflows/use-worktree-auto-delete-adoption";
 import {
   WORKTREE_AUTO_DELETE_LIMIT_DEFAULT,
-} from "@/lib/domain/preferences/user/worktree-auto-delete";
-import type { WorktreeSettingsTarget } from "@/lib/domain/workspaces/worktrees/worktree-settings-target";
-import { useProductAuthStatus } from "@/hooks/auth/facade/use-product-auth";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+} from "#product/lib/domain/preferences/user/worktree-auto-delete";
+import type { WorktreeSettingsTarget } from "#product/lib/domain/workspaces/worktrees/worktree-settings-target";
+import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
 const seededCloudPolicyRuntimeKeys = new Set<string>();
 const syncedPolicyKeys = new Set<string>();

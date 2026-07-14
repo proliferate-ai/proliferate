@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DIFF_HARD_INLINE_BYTE_LIMIT,
   resolveDiffDisplayPolicy,
-} from "./diff-display-policy";
+} from "#product/lib/domain/workspaces/changes/diff-display-policy";
 
 describe("resolveDiffDisplayPolicy", () => {
   it("keeps normal source diffs renderable", () => {

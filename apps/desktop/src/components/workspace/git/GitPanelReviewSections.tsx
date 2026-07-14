@@ -1,13 +1,13 @@
 import type { AnyHarnessQueryTimingOptions } from "@anyharness/sdk-react";
-import { GitReviewFileRow } from "@/components/workspace/git/GitReviewFileRow";
-import { GitReviewSectionHeader } from "@/components/workspace/git/GitPanelReviewChrome";
-import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
+import { GitReviewFileRow } from "#product/components/workspace/git/GitReviewFileRow";
+import { GitReviewSectionHeader } from "#product/components/workspace/git/GitPanelReviewChrome";
+import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import type {
   GitPanelMode,
   GitPanelReviewScope,
   GitPanelSection,
-} from "@/lib/domain/workspaces/changes/git-panel-diff";
-import { gitReviewEntryForFile } from "@/lib/domain/workspaces/changes/git-review-entries";
+} from "#product/lib/domain/workspaces/changes/git-panel-diff";
+import { gitReviewEntryForFile } from "#product/lib/domain/workspaces/changes/git-review-entries";
 
 interface GitPanelReviewSectionsProps {
   changesFilter: GitPanelMode;

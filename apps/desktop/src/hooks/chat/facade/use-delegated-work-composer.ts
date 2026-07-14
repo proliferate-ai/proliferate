@@ -1,20 +1,20 @@
 import { useMemo } from "react";
 import { useScheduleSubagentWakeMutation } from "@anyharness/sdk-react";
-import { useSubagentComposerStrip } from "@/hooks/chat/facade/subagents/use-subagent-composer-strip";
+import { useSubagentComposerStrip } from "#product/hooks/chat/facade/subagents/use-subagent-composer-strip";
 import {
   deriveDelegatedWorkSummary,
   type DelegatedWorkSummary,
   type DelegatedWorkSummaryCandidate,
 } from "@proliferate/product-domain/chats/subagents/delegated-work";
-import type { DelegatedAgentIdentity } from "@/lib/domain/delegated-work/model";
+import type { DelegatedAgentIdentity } from "#product/lib/domain/delegated-work/model";
 import {
   type DelegatedAgentTriggerCandidate,
   selectSingleDelegatedAgentTriggerIdentity,
   shouldShowDelegatedWorkInComposer,
-} from "@/lib/domain/delegated-work/presentation";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useToastStore } from "@/stores/toast/toast-store";
+} from "#product/lib/domain/delegated-work/presentation";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 export interface DelegatedWorkComposerViewModel {
   summary: DelegatedWorkSummary;

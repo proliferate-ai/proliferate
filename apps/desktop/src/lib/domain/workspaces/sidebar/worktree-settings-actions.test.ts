@@ -4,7 +4,7 @@ import type {
   WorktreeRetentionRunRow,
 } from "@anyharness/sdk";
 import { describe, expect, it } from "vitest";
-import { worktreeRetentionRunMessage } from "./worktree-settings-actions";
+import { worktreeRetentionRunMessage } from "#product/lib/domain/workspaces/sidebar/worktree-settings-actions";
 
 describe("worktreeRetentionRunMessage", () => {
   it("reports already-running cleanup", () => {

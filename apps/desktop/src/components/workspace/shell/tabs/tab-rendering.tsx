@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { SkeletonBlock } from "@/components/feedback/Skeleton";
+import { SkeletonBlock } from "#product/components/feedback/Skeleton";
 import {
   CircleAlert,
   Clock,
@@ -8,11 +8,11 @@ import {
   Spinner,
 } from "@proliferate/ui/icons";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
-import type { DelegatedWorkTabIdentity } from "@/lib/domain/delegated-work/model";
+import type { DelegatedWorkTabIdentity } from "#product/lib/domain/delegated-work/model";
 import type {
   HeaderChatMenuEntry,
   HeaderChatTabEntry,
-} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
+} from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 
 export function renderChatTabIcon(
   tab: Pick<HeaderChatTabEntry, "agentKind" | "viewState" | "delegatedAgent" | "isResolvingSession">

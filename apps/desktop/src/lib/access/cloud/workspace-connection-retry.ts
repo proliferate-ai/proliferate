@@ -11,7 +11,7 @@ import {
 import {
   type CloudSandboxGatewayUrlSource,
   resolveCloudSandboxGatewayConnectionForWorkspace,
-} from "@/lib/access/cloud/cloud-sandbox-gateway";
+} from "#product/lib/access/cloud/cloud-sandbox-gateway";
 
 export const CLOUD_WORKSPACE_CONNECTION_RETRY_DELAY_MS = 750;
 export const CLOUD_WORKSPACE_CONNECTION_MAX_RETRIES = 8;

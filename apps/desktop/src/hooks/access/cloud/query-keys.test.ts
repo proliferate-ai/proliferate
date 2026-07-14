@@ -4,7 +4,7 @@ import {
   cloudWorktreeRetentionPolicyKey,
   cloudWorkspaceConnectionKey,
   isCloudWorkspaceConnectionQueryKey,
-} from "./query-keys";
+} from "#product/hooks/access/cloud/query-keys";
 
 describe("cloud query keys", () => {
   it("scopes billing keys by personal and organization owners", () => {

@@ -2,24 +2,24 @@ import type {
   DesktopLaunchModelRegistry as SettingsAgentModelRegistry,
   DesktopLaunchModelRegistryModel as SettingsAgentModel,
   DesktopSessionDefaultControl,
-} from "@/lib/domain/agents/cloud-launch-catalog";
+} from "#product/lib/domain/agents/cloud-launch-catalog";
 import {
   resolveEffectiveConfiguredSessionControlValue,
   listConfiguredSessionControlValues,
-} from "@/lib/domain/chat/session-controls/session-mode-control";
-import { resolveModelForRegistry } from "@/lib/domain/chat/launch/session-config";
-import { resolveModelDisplayName } from "@/lib/domain/chat/models/model-display";
+} from "#product/lib/domain/chat/session-controls/session-mode-control";
+import { resolveModelForRegistry } from "#product/lib/domain/chat/launch/session-config";
+import { resolveModelDisplayName } from "#product/lib/domain/chat/models/model-display";
 import {
   filterVisibleRegistryModels,
   resolveVisibleRegistryModelIds,
   resolveRegistryModelCatalogDefaultOptIn,
-} from "@/lib/domain/chat/models/model-visibility";
-import type { ConfiguredSessionControlValue } from "@/lib/domain/chat/session-controls/presentation";
+} from "#product/lib/domain/chat/models/model-visibility";
+import type { ConfiguredSessionControlValue } from "#product/lib/domain/chat/session-controls/presentation";
 import type {
   ChatModelVisibilityOverridesByAgentKind,
   DefaultLiveSessionControlKey,
   DefaultLiveSessionControlValuesByAgentKind,
-} from "@/lib/domain/preferences/user/session-defaults";
+} from "#product/lib/domain/preferences/user/session-defaults";
 
 export type SessionDefaultControlMetadata =
   DesktopSessionDefaultControl;

@@ -1,7 +1,7 @@
-import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { targetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
-import { cloudWorkspaceUsesCloudRuntime } from "@/lib/domain/workspaces/cloud/cloud-runtime-kind";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
+import { cloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import { targetWorkspaceSyntheticId } from "#product/lib/domain/compute/target-workspace-id";
+import { cloudWorkspaceUsesCloudRuntime } from "#product/lib/domain/workspaces/cloud/cloud-runtime-kind";
+import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
 
 export function logicalWorkspaceTargetMaterializationId(
   workspace: Pick<LogicalWorkspace, "cloudWorkspace">,

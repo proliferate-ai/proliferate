@@ -5,7 +5,7 @@ import {
   resolveCloudDisplayNameSyncAttempt,
   shouldBackfillCloudDisplayNameFromRuntime,
   type CloudDisplayNameSyncState,
-} from "./cloud-display-name-sync";
+} from "#product/lib/domain/workspaces/cloud/cloud-display-name-sync";
 
 describe("cloud display name sync", () => {
   it("retries after a failed cloud update leaves the sync incomplete", () => {

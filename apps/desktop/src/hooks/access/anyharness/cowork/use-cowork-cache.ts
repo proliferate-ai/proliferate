@@ -8,7 +8,7 @@ import {
 } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
 export function useCoworkCache() {
   const queryClient = useQueryClient();

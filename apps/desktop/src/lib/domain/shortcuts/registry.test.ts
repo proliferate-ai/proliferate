@@ -4,7 +4,7 @@ import {
   getShortcutHandler,
   registerShortcutHandler,
   runShortcutHandler,
-} from "@/lib/domain/shortcuts/registry";
+} from "#product/lib/domain/shortcuts/registry";
 
 describe("shortcut registry", () => {
   beforeEach(() => {

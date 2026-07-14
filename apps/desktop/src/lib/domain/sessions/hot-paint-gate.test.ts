@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   type HotPaintGate,
   isHotPaintGatePendingForWorkspace,
-} from "./hot-paint-gate";
+} from "#product/lib/domain/sessions/hot-paint-gate";
 
 const gate: HotPaintGate = {
   workspaceId: "workspace-1",

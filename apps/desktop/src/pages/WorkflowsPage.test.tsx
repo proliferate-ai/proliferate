@@ -9,7 +9,7 @@ import {
   Routes,
   useLocation,
 } from "react-router-dom";
-import { WorkflowsPage } from "@/pages/WorkflowsPage";
+import { WorkflowsPage } from "#product/pages/WorkflowsPage";
 import { useAuthStore } from "@/stores/auth/auth-store";
 
 const workflowSurface = vi.hoisted(() => vi.fn());
@@ -31,7 +31,7 @@ vi.mock("@/lib/domain/auth/auth-mode", () => ({
 // existing setState-driven tests keep steering it.
 vi.mock("@proliferate/product-client/host/ProductHostProvider", async () => {
   const { useAuthStore } = await import("@/stores/auth/auth-store");
-  const { authStoreBridgedHost } = await import("@/test/product-host-fixtures");
+  const { authStoreBridgedHost } = await import("#product/test/product-host-fixtures");
   return {
     useProductHost: () =>
       authStoreBridgedHost(

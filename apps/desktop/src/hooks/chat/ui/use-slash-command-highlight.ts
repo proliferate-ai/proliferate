@@ -2,8 +2,8 @@ import { useMemo } from "react";
 import {
   recognizeLeadingSlashCommand,
   type RecognizedSlashCommand,
-} from "@/lib/domain/chat/composer/slash-command-recognition";
-import type { SessionSlashCommandViewModel } from "@/lib/domain/chat/composer/session-slash-command-policy";
+} from "#product/lib/domain/chat/composer/slash-command-recognition";
+import type { SessionSlashCommandViewModel } from "#product/lib/domain/chat/composer/session-slash-command-policy";
 
 /**
  * Memoized recognition of a leading slash command in the draft text.

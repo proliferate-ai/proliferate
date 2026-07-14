@@ -6,9 +6,9 @@ import {
   projectCloudAgentCatalogToDesktopLaunchCatalog,
   type CloudAgentCatalogResponseInput,
   type DesktopAgentLaunchCatalog,
-} from "@/lib/domain/agents/cloud-launch-catalog";
-import { getBundledDesktopAgentLaunchCatalog } from "@/lib/domain/agents/bundled-agent-catalog";
-import { cloudAgentCatalogKey } from "./query-keys";
+} from "#product/lib/domain/agents/cloud-launch-catalog";
+import { getBundledDesktopAgentLaunchCatalog } from "#product/lib/domain/agents/bundled-agent-catalog";
+import { cloudAgentCatalogKey } from "#product/hooks/access/cloud/agent-catalog/query-keys";
 
 async function fetchCloudAgentCatalogProjection(): Promise<DesktopAgentLaunchCatalog> {
   // The cloud endpoint serves the raw schemaVersion-2 catalog document; the

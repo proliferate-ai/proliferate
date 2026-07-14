@@ -11,7 +11,7 @@ import {
   stepWindowZoomId,
   UI_FONT_SCALES,
   WINDOW_ZOOM_SCALES,
-} from "./appearance";
+} from "#product/lib/domain/preferences/appearance";
 
 function cssLengthToPx(value: string): number {
   if (value.endsWith("rem")) {

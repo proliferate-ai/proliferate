@@ -4,12 +4,12 @@ import {
   commitReplacedSessionTombstone,
   resetReplacedSessionTombstonesForTests,
   stageReplacedSessionTombstone,
-} from "@/hooks/sessions/workflows/session-replacement-tombstones";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+} from "#product/hooks/sessions/workflows/session-replacement-tombstones";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import {
   fetchWorkspaceSessions,
   resolveRuntimeUrlForWorkspaceSessions,
-} from "./session-selection-runtime";
+} from "#product/hooks/sessions/workflows/session-selection-runtime";
 
 const mocks = vi.hoisted(() => ({
   bootstrapHarnessRuntime: vi.fn(),

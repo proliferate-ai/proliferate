@@ -2,8 +2,8 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { PermissionOptionAction } from "@/lib/domain/chat/composer/chat-input-helpers";
-import { ApprovalCard } from "./ApprovalCard";
+import type { PermissionOptionAction } from "#product/lib/domain/chat/composer/chat-input-helpers";
+import { ApprovalCard } from "#product/components/workspace/chat/input/ApprovalCard";
 
 const HARNESS_OPTIONS: PermissionOptionAction[] = [
   { optionId: "allow_always", label: "Always Allow", kind: "allow_always" },

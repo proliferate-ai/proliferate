@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type {
   ChatLaunchIntent,
   ChatLaunchIntentFailure,
-} from "@/lib/domain/chat/launch/launch-intent";
+} from "#product/lib/domain/chat/launch/launch-intent";
 
 interface ChatLaunchIntentState {
   activeIntent: ChatLaunchIntent | null;

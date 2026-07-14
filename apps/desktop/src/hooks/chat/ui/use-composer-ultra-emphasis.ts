@@ -1,7 +1,7 @@
 import { useMemo } from "react";
-import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
-import { buildComposerSessionControlGroups } from "@/lib/domain/chat/session-controls/composer-control-groups";
-import { resolveReasoningEffortEmphasis } from "@/lib/domain/chat/session-controls/session-reasoning-effort-control";
+import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
+import { buildComposerSessionControlGroups } from "#product/lib/domain/chat/session-controls/composer-control-groups";
+import { resolveReasoningEffortEmphasis } from "#product/lib/domain/chat/session-controls/session-reasoning-effort-control";
 
 /**
  * Ultra tier (frontier model at its ultra reasoning level) tints the whole

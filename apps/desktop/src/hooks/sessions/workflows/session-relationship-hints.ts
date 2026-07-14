@@ -1,4 +1,4 @@
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 
 export interface RecordChildRelationshipHintInput {
   sessionId: string;

@@ -1,10 +1,10 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
-import type { WorkspaceCollections } from "@/lib/domain/workspaces/cloud/collections";
+import type { WorkspaceCollections } from "#product/lib/domain/workspaces/cloud/collections";
 import {
   buildLogicalWorkspaces,
-} from "@/lib/domain/workspaces/cloud/logical-workspaces";
-import { findLogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
-import { sourceRootForGitPanel } from "@/lib/domain/workspaces/changes/git-panel-diff";
+} from "#product/lib/domain/workspaces/cloud/logical-workspaces";
+import { findLogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-lookup";
+import { sourceRootForGitPanel } from "#product/lib/domain/workspaces/changes/git-panel-diff";
 
 export interface GitPanelWorkspaceContext {
   activeWorkspaceId: string | null;

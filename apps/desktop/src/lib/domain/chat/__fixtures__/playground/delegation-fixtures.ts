@@ -1,11 +1,11 @@
 import type {
   DelegatedAgentIdentity,
   DelegatedWorkStatusCategory,
-} from "@/lib/domain/delegated-work/model";
-import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identity";
+} from "#product/lib/domain/delegated-work/model";
+import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
 import {
   delegatedWorkStatusCategoryFromLabel,
-} from "@/lib/domain/delegated-work/presentation";
+} from "#product/lib/domain/delegated-work/presentation";
 
 type PlaygroundSubagentStripRow = {
   sessionLinkId: string;

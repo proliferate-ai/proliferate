@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useQuery } from "@tanstack/react-query";
 import { useFetchPromptAttachmentMutation } from "@anyharness/sdk-react";
-import { getSessionClientAndWorkspace } from "@/lib/access/anyharness/session-runtime";
+import { getSessionClientAndWorkspace } from "#product/lib/access/anyharness/session-runtime";
 
 export function usePromptAttachmentUrl(
   sessionId: string | null | undefined,

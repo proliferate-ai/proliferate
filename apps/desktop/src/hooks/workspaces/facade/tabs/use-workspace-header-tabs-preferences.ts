@@ -1,13 +1,13 @@
 import { useMemo } from "react";
 import {
   resolveWithWorkspaceFallback,
-} from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
+} from "#product/lib/domain/workspaces/selection/workspace-keyed-preferences";
 import {
   type DisplayManualChatGroup,
-} from "@/lib/domain/workspaces/tabs/manual-groups";
-import { uniqueIds } from "@/lib/domain/workspaces/tabs/visibility";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useStableStringArray } from "@/hooks/workspaces/facade/tabs/use-stable-string-array";
+} from "#product/lib/domain/workspaces/tabs/manual-groups";
+import { uniqueIds } from "#product/lib/domain/workspaces/tabs/visibility";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useStableStringArray } from "#product/hooks/workspaces/facade/tabs/use-stable-string-array";
 
 const EMPTY_SESSION_ID_LIST: string[] = [];
 const EMPTY_MANUAL_GROUPS: DisplayManualChatGroup[] = [];

@@ -11,36 +11,36 @@ import { createPortal } from "react-dom";
 import {
   CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
   WORKSPACE_CHAT_COMPOSER_INPUT,
-} from "@/config/chat";
-import { useChatSlashCommandMenu } from "@/hooks/chat/ui/use-chat-slash-command-menu";
-import { useSlashCommandHighlight } from "@/hooks/chat/ui/use-slash-command-highlight";
-import { useComposerTextareaAutosize } from "@/hooks/chat/ui/use-composer-textarea-autosize";
-import { useRunnableSlashCommands } from "@/hooks/chat/ui/use-runnable-slash-commands";
+} from "#product/config/chat";
+import { useChatSlashCommandMenu } from "#product/hooks/chat/ui/use-chat-slash-command-menu";
+import { useSlashCommandHighlight } from "#product/hooks/chat/ui/use-slash-command-highlight";
+import { useComposerTextareaAutosize } from "#product/hooks/chat/ui/use-composer-textarea-autosize";
+import { useRunnableSlashCommands } from "#product/hooks/chat/ui/use-runnable-slash-commands";
 import {
   isComposerOverlaySelectKey,
   isRawComposerSubmitKey,
   isRepeatedComposerSubmitKey,
-} from "@/lib/domain/chat/composer/composer-keyboard";
+} from "#product/lib/domain/chat/composer/composer-keyboard";
 import {
   createTextDraft,
   serializeChatDraftToPrompt,
   type ChatComposerDraft,
-} from "@/lib/domain/chat/composer/file-mention-draft-model";
+} from "#product/lib/domain/chat/composer/file-mention-draft-model";
 import {
   findSlashCommandTrigger,
   type SlashCommandTrigger,
-} from "@/lib/domain/chat/composer/slash-command-draft-edits";
-import type { SessionSlashCommandViewModel } from "@/lib/domain/chat/composer/session-slash-command-policy";
+} from "#product/lib/domain/chat/composer/slash-command-draft-edits";
+import type { SessionSlashCommandViewModel } from "#product/lib/domain/chat/composer/session-slash-command-policy";
 import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
 import { recordTypingKeystrokeLatency } from "@/lib/infra/measurement/typing-latency-probe";
-import { markTypingActivity } from "@/lib/infra/interaction/typing-activity-store";
-import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
-import { ComposerSlashCommandSearch } from "./ComposerSlashCommandSearch";
-import { ComposerSlashHighlight } from "./ComposerSlashHighlight";
+import { markTypingActivity } from "#product/lib/infra/interaction/typing-activity-store";
+import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
+import { ComposerSlashCommandSearch } from "#product/components/workspace/chat/input/ComposerSlashCommandSearch";
+import { ComposerSlashHighlight } from "#product/components/workspace/chat/input/ComposerSlashHighlight";
 import { ComposerTextarea } from "@proliferate/ui/primitives/ComposerTextarea";
 import { ComposerTextareaFrame, type ComposerTextareaFrameTopInset } from "@proliferate/ui/primitives/ComposerTextareaFrame";
 

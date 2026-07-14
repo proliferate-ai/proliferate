@@ -5,7 +5,7 @@ import {
   WrapText,
 } from "@proliferate/ui/icons";
 import { PaneOptionsMenuItem } from "@proliferate/ui/layout/PaneOptionsMenuItem";
-import { PaneOptionsMenu } from "@/components/workspace/pane/PaneOptionsMenu";
+import { PaneOptionsMenu } from "#product/components/workspace/pane/PaneOptionsMenu";
 
 export function GitReviewOptionsMenu({
   allFilesCollapsed,

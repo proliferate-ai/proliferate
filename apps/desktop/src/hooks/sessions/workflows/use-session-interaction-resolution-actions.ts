@@ -13,16 +13,16 @@ import { useProductHost } from "@proliferate/product-client/host/ProductHostProv
 import {
   sessionIntentsForSession,
 } from "@proliferate/product-domain/sessions/intents/session-intent-state";
-import { getSessionRecord } from "@/stores/sessions/session-records";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
-import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
-import { getSessionClientAndWorkspace } from "@/lib/access/anyharness/session-runtime";
+import { getSessionRecord } from "#product/stores/sessions/session-records";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
+import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
+import type { SessionRuntimeRecord } from "#product/stores/sessions/session-types";
+import { getSessionClientAndWorkspace } from "#product/lib/access/anyharness/session-runtime";
 import {
   logInteractionDebug,
   type InteractionAction,
-} from "@/hooks/sessions/workflows/session-interaction-debug";
+} from "#product/hooks/sessions/workflows/session-interaction-debug";
 
 // Resolves pending session interactions (permissions, user input, MCP elicitations).
 export function useSessionInteractionResolutionActions() {

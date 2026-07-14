@@ -1,17 +1,17 @@
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
 import { useCallback } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { useWorkspaceBootstrapCache } from "@/hooks/access/anyharness/workspaces/use-workspace-bootstrap-cache";
-import { useCloudAgentCatalogCache } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
-import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
-import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
-import { useWorkspaceFileActions } from "@/hooks/workspaces/facade/files/use-workspace-file-actions";
-import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
-import { useSessionCreationActions } from "@/hooks/sessions/workflows/use-session-creation-actions";
-import { useSessionHistoryHydration } from "@/hooks/sessions/lifecycle/use-session-history-hydration";
-import { useSessionSelectionActions } from "@/hooks/sessions/facade/use-session-selection-actions";
-import { useSessionSummaryActions } from "@/hooks/sessions/workflows/use-session-summary-actions";
-import { workspaceFileTreeStateKey } from "@/lib/domain/workspaces/cloud/collections";
+import { useWorkspaceBootstrapCache } from "#product/hooks/access/anyharness/workspaces/use-workspace-bootstrap-cache";
+import { useCloudAgentCatalogCache } from "#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
+import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
+import type { WorkspaceSession } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
+import { useWorkspaceFileActions } from "#product/hooks/workspaces/facade/files/use-workspace-file-actions";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
+import { useSessionCreationActions } from "#product/hooks/sessions/workflows/use-session-creation-actions";
+import { useSessionHistoryHydration } from "#product/hooks/sessions/lifecycle/use-session-history-hydration";
+import { useSessionSelectionActions } from "#product/hooks/sessions/facade/use-session-selection-actions";
+import { useSessionSummaryActions } from "#product/hooks/sessions/workflows/use-session-summary-actions";
+import { workspaceFileTreeStateKey } from "#product/lib/domain/workspaces/cloud/collections";
 import {
   elapsedMs,
   logLatency,
@@ -30,32 +30,32 @@ import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-meas
 import { hashMeasurementScope } from "@/lib/infra/measurement/debug-measurement-env";
 import type {
   MeasurementFinishReason,
-} from "@/lib/domain/telemetry/debug-measurement-catalog";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+} from "#product/lib/domain/telemetry/debug-measurement-catalog";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import {
   clearLastViewedSession,
   useWorkspaceUiStore,
-} from "@/stores/preferences/workspace-ui-store";
+} from "#product/stores/preferences/workspace-ui-store";
 import {
   getSessionRecord,
   patchSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { markWorkspaceBootstrappedInSession } from "@/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
-import { useDeferredWorkspaceFileTreePrefetch } from "@/hooks/workspaces/lifecycle/files/use-deferred-workspace-file-tree-prefetch";
-import { useHotWorkspaceReconcileAction } from "@/hooks/workspaces/workflows/use-hot-workspace-reconcile-action";
+} from "#product/stores/sessions/session-records";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { markWorkspaceBootstrappedInSession } from "#product/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
+import { useDeferredWorkspaceFileTreePrefetch } from "#product/hooks/workspaces/lifecycle/files/use-deferred-workspace-file-tree-prefetch";
+import { useHotWorkspaceReconcileAction } from "#product/hooks/workspaces/workflows/use-hot-workspace-reconcile-action";
 import {
   clearInvalidOptimisticActiveSession,
   findLoadedSessionForClientSession,
-} from "@/hooks/workspaces/workflows/workspace-bootstrap-session-state";
+} from "#product/hooks/workspaces/workflows/workspace-bootstrap-session-state";
 import {
   isOptimisticWorkspaceSessionPlaceholder,
-} from "@/lib/domain/workspaces/selection/optimistic-session-shell";
-import { handleEmptyWorkspaceBootstrap } from "@/hooks/workspaces/workflows/workspace-bootstrap-empty-session";
-import { handleRememberedWorkspaceSessionBootstrap } from "@/hooks/workspaces/workflows/workspace-bootstrap-remembered-session";
+} from "#product/lib/domain/workspaces/selection/optimistic-session-shell";
+import { handleEmptyWorkspaceBootstrap } from "#product/hooks/workspaces/workflows/workspace-bootstrap-empty-session";
+import { handleRememberedWorkspaceSessionBootstrap } from "#product/hooks/workspaces/workflows/workspace-bootstrap-remembered-session";
 import {
   shouldPreserveStagedReplacementShell,
-} from "@/hooks/sessions/workflows/session-replacement-tombstones";
+} from "#product/hooks/sessions/workflows/session-replacement-tombstones";
 
 interface BootstrapWorkspaceInput {
   workspaceId: string;

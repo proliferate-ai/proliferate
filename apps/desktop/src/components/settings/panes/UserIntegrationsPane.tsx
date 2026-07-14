@@ -7,25 +7,25 @@ import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmp
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { IntegrationConnectDialog, type IntegrationConnectSubmit } from "@/components/settings/panes/integrations/IntegrationConnectDialog";
-import { IntegrationRow } from "@/components/settings/panes/integrations/IntegrationRow";
+import { IntegrationConnectDialog, type IntegrationConnectSubmit } from "#product/components/settings/panes/integrations/IntegrationConnectDialog";
+import { IntegrationRow } from "#product/components/settings/panes/integrations/IntegrationRow";
 import {
   useCloudIntegrationActions,
   useCloudIntegrationOauthFlow,
   useCloudIntegrations,
   type CloudIntegrationView,
-} from "@/hooks/cloud/facade/use-cloud-integrations";
-import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
+} from "#product/hooks/cloud/facade/use-cloud-integrations";
+import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
 import {
   isTerminalIntegrationOauthFlowStatus,
-} from "@/lib/domain/cloud/integrations";
-import { buildSettingsHref, type SettingsFocus } from "@/lib/domain/settings/navigation";
+} from "#product/lib/domain/cloud/integrations";
+import { buildSettingsHref, type SettingsFocus } from "#product/lib/domain/settings/navigation";
 import {
   filterIntegrationsByQuery,
   integrationOauthReturnToast,
   integrationSearchState,
-} from "@/lib/domain/settings/integrations-presentation";
-import { useToastStore } from "@/stores/toast/toast-store";
+} from "#product/lib/domain/settings/integrations-presentation";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 interface UserIntegrationsPaneProps {
   /** OAuth browser-return params (flowId/status/failureCode) from the deep link. */

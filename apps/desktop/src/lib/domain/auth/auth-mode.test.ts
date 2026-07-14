@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveProductAuthRequired } from "./auth-mode";
+import { resolveProductAuthRequired } from "#product/lib/domain/auth/auth-mode";
 
 describe("resolveProductAuthRequired", () => {
   it("requires auth by default for production desktop builds", () => {

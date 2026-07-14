@@ -1,13 +1,13 @@
 import { useCallback } from "react";
-import { useSessionCreationActions } from "@/hooks/sessions/workflows/use-session-creation-actions";
-import { useSessionPromptWorkflow } from "@/hooks/sessions/workflows/use-session-prompt-workflow";
-import type { HomeNextModelSelection } from "@/lib/domain/home/home-next-launch";
-import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
-import { modeOptions } from "@/hooks/home/workflows/home-next-launch-intent";
+import { useSessionCreationActions } from "#product/hooks/sessions/workflows/use-session-creation-actions";
+import { useSessionPromptWorkflow } from "#product/hooks/sessions/workflows/use-session-prompt-workflow";
+import type { HomeNextModelSelection } from "#product/lib/domain/home/home-next-launch";
+import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
+import { modeOptions } from "#product/hooks/home/workflows/home-next-launch-intent";
 import {
   resolveProjectedPendingWorkspaceSession,
   waitForProjectedPendingWorkspaceSession,
-} from "@/hooks/home/workflows/home-next-projected-session";
+} from "#product/hooks/home/workflows/home-next-projected-session";
 
 export function useHomeNextLaunchPromptActions() {
   const { promptSession } = useSessionPromptWorkflow();

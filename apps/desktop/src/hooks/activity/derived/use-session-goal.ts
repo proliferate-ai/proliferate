@@ -5,12 +5,12 @@ import {
   type GoalCapabilities,
   type GoalWire,
 } from "@proliferate/product-domain/activity/goal";
-import { resolveGoalFixture } from "@/lib/domain/chat/__fixtures__/playground/goal-fixtures";
+import { resolveGoalFixture } from "#product/lib/domain/chat/__fixtures__/playground/goal-fixtures";
 import {
   goalCapabilitiesForSession,
   goalWireFromMirror,
-} from "@/lib/domain/sessions/goal-mirror";
-import { useActiveSessionId } from "@/hooks/chat/derived/use-active-session-identity";
+} from "#product/lib/domain/sessions/goal-mirror";
+import { useActiveSessionId } from "#product/hooks/chat/derived/use-active-session-identity";
 import {
   goalResultDismissKey,
   selectComposing,
@@ -18,8 +18,8 @@ import {
   selectPendingGoal,
   useGoalBarStore,
   type PendingGoalEntry,
-} from "@/stores/activity/goal-bar-store";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+} from "#product/stores/activity/goal-bar-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 
 export interface SessionGoalState {
   goal: GoalWire | null;

@@ -1,17 +1,17 @@
 import type {
   DesktopLaunchModelRegistry as SettingsChatModelRegistry,
   DesktopLaunchModelRegistryModel as SettingsChatModel,
-} from "@/lib/domain/agents/cloud-launch-catalog";
-import { withUpdatedDefaultModelIdByAgentKind } from "@/lib/domain/agents/model-options";
-import { resolveModelForRegistry } from "@/lib/domain/chat/launch/session-config";
+} from "#product/lib/domain/agents/cloud-launch-catalog";
+import { withUpdatedDefaultModelIdByAgentKind } from "#product/lib/domain/agents/model-options";
+import { resolveModelForRegistry } from "#product/lib/domain/chat/launch/session-config";
 import {
   listConfiguredSessionControlValues,
   resolveEffectiveConfiguredSessionControlValue,
   withUpdatedDefaultSessionModeByAgentKind,
-} from "@/lib/domain/chat/session-controls/session-mode-control";
+} from "#product/lib/domain/chat/session-controls/session-mode-control";
 import type {
   ConfiguredSessionControlValue,
-} from "@/lib/domain/chat/session-controls/presentation";
+} from "#product/lib/domain/chat/session-controls/presentation";
 
 export interface SettingsChatDefaultPreferences {
   defaultChatAgentKind: string;

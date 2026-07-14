@@ -1,17 +1,17 @@
 import { useCallback } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { useWorkspaceBootstrapActions } from "@/hooks/workspaces/workflows/use-workspace-bootstrap-actions";
-import { useCloudWorkspaceConnectionCache } from "@/hooks/access/cloud/use-cloud-workspace-connection-cache";
-import { useWorkspaceSelectionCache } from "@/hooks/workspaces/cache/use-workspace-selection-cache";
-import { buildLogicalWorkspaces } from "@/lib/domain/workspaces/cloud/logical-workspaces";
-import { buildStandardRepoProjection } from "@/lib/domain/workspaces/cloud/standard-projection";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
-import { clearWorkspaceRuntimeState } from "./clear-runtime-state";
-import { runHotWorkspaceReopen } from "./run-hot-workspace-reopen";
-import { runWorkspaceSelection } from "./run-workspace-selection";
+import { useWorkspaceBootstrapActions } from "#product/hooks/workspaces/workflows/use-workspace-bootstrap-actions";
+import { useCloudWorkspaceConnectionCache } from "#product/hooks/access/cloud/use-cloud-workspace-connection-cache";
+import { useWorkspaceSelectionCache } from "#product/hooks/workspaces/cache/use-workspace-selection-cache";
+import { buildLogicalWorkspaces } from "#product/lib/domain/workspaces/cloud/logical-workspaces";
+import { buildStandardRepoProjection } from "#product/lib/domain/workspaces/cloud/standard-projection";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
+import { clearWorkspaceRuntimeState } from "#product/hooks/workspaces/workflows/selection/clear-runtime-state";
+import { runHotWorkspaceReopen } from "#product/hooks/workspaces/workflows/selection/run-hot-workspace-reopen";
+import { runWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/run-workspace-selection";
 
 function removeWorkspaceSessionRecordsForWorkspace(workspaceId: string): void {
   const removedSessionIds =

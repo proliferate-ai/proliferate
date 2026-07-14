@@ -1,6 +1,6 @@
-import { useLoginPage } from "@/hooks/auth/facade/use-login-page";
-import { AuthScreenLayout } from "@/components/auth/AuthScreenLayout";
-import { OrgSsoLoginLink } from "@/components/auth/OrgSsoLoginLink";
+import { useLoginPage } from "#product/hooks/auth/facade/use-login-page";
+import { AuthScreenLayout } from "#product/components/auth/AuthScreenLayout";
+import { OrgSsoLoginLink } from "#product/components/auth/OrgSsoLoginLink";
 
 export function LoginPage() {
   const {

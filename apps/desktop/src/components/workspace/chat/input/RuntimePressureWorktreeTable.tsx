@@ -7,7 +7,7 @@ import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import {
   worktreeGitStatusView,
   worktreeRowLabel,
-} from "@/lib/domain/workspaces/worktrees/worktree-inventory-presentation";
+} from "#product/lib/domain/workspaces/worktrees/worktree-inventory-presentation";
 
 /** Shared column template — header and rows are separate grids, so the
  * template must stay identical for the columns to align. Name flexes; the

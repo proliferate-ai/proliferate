@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { AgentApiKey } from "@proliferate/cloud-sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { KeyPicker } from "./KeyPicker";
+import { KeyPicker } from "#product/components/settings/panes/agent-auth/KeyPicker";
 
 const createKeyMutate = vi.hoisted(() => vi.fn());
 const showToast = vi.hoisted(() => vi.fn());

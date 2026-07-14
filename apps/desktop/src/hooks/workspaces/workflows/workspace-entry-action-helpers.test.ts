@@ -1,8 +1,8 @@
 import type { Workspace } from "@anyharness/sdk";
 import { describe, expect, it } from "vitest";
 
-import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
-import { buildMaterializedWorktreePendingEntry } from "./workspace-entry-action-helpers";
+import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
+import { buildMaterializedWorktreePendingEntry } from "#product/hooks/workspaces/workflows/workspace-entry-action-helpers";
 
 const baseEntry: PendingWorkspaceEntry = {
   attemptId: "attempt-1",

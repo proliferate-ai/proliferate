@@ -6,7 +6,7 @@ import {
   parseDesktopReleaseManifest,
   resolveInstalledReleaseTitle,
   selectReleaseNotice,
-} from "@/lib/domain/updates/release-notice";
+} from "#product/lib/domain/updates/release-notice";
 
 describe("release notice normalization", () => {
   it("normalizes transport whitespace without changing version identity", () => {

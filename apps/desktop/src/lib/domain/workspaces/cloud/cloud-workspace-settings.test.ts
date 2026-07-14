@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatCloudWorkspaceSettingsError } from "./cloud-workspace-settings";
+import { formatCloudWorkspaceSettingsError } from "#product/lib/domain/workspaces/cloud/cloud-workspace-settings";
 
 describe("formatCloudWorkspaceSettingsError", () => {
   it("returns null when nothing is set", () => {

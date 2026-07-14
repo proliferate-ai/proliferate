@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearShortcutHandlerRegistryForTests,
   runShortcutHandler,
-} from "@/lib/domain/shortcuts/registry";
-import { useMainScreenShortcuts } from "./use-main-screen-shortcuts";
+} from "#product/lib/domain/shortcuts/registry";
+import { useMainScreenShortcuts } from "#product/hooks/main/lifecycle/use-main-screen-shortcuts";
 
 const harnessState = vi.hoisted(() => ({
   selectedWorkspaceId: null as string | null,

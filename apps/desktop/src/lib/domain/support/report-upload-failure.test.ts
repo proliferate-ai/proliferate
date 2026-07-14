@@ -3,7 +3,7 @@ import {
   describeSupportReportUploadFailure,
   shouldShowSupportReportUploadFailureToast,
   supportReportRetriesExhausted,
-} from "./report-upload-failure";
+} from "#product/lib/domain/support/report-upload-failure";
 
 describe("describeSupportReportUploadFailure", () => {
   it("surfaces missing Cloud sign-in as an actionable queued failure", () => {

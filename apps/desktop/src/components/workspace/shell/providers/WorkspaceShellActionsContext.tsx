@@ -1,6 +1,6 @@
 import { createContext, useContext, type ReactNode } from "react";
-import type { PublishIntent } from "@/lib/domain/workspaces/creation/publish-workflow-model";
-import type { RightPanelTool } from "@/lib/domain/workspaces/shell/right-panel-model";
+import type { PublishIntent } from "#product/lib/domain/workspaces/creation/publish-workflow-model";
+import type { RightPanelTool } from "#product/lib/domain/workspaces/shell/right-panel-model";
 
 export interface WorkspaceWebActions {
   disabled: boolean;

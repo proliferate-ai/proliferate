@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ComputeTargetSwatch } from "@/components/compute/ComputeTargetSwatch";
+import { ComputeTargetSwatch } from "#product/components/compute/ComputeTargetSwatch";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import {
   Check,
@@ -12,7 +12,7 @@ import type {
   AutomationTargetGroup,
   AutomationTargetRow,
   AutomationTargetSelection,
-} from "@/lib/domain/automations/target/selection";
+} from "#product/lib/domain/automations/target/selection";
 
 export type AutomationRunOwnerScope = "personal" | "organization";
 

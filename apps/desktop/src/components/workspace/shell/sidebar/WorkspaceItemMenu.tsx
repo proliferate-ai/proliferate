@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { SHORTCUTS } from "@/config/shortcuts/registry";
+import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import {
   Archive,
   Folder,
@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@proliferate/ui/kit/DropdownMenu";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
+import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 
 interface WorkspaceItemMenuProps {
   archived: boolean;

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
-import { handleEmptyWorkspaceBootstrap } from "@/hooks/workspaces/workflows/workspace-bootstrap-empty-session";
+import type { WorkspaceSession } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
+import { handleEmptyWorkspaceBootstrap } from "#product/hooks/workspaces/workflows/workspace-bootstrap-empty-session";
 
 function session(id: string): WorkspaceSession {
   return { id, workspaceId: "workspace-1" } as unknown as WorkspaceSession;

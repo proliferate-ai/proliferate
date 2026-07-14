@@ -1,5 +1,5 @@
-import { OPEN_TARGET_NATIVE_ICON_RESOURCE_PATHS } from "@/config/open-target-icon-assets";
-import { useNativeContextMenu } from "@/hooks/ui/native/use-native-context-menu";
+import { OPEN_TARGET_NATIVE_ICON_RESOURCE_PATHS } from "#product/config/open-target-icon-assets";
+import { useNativeContextMenu } from "#product/hooks/ui/native/use-native-context-menu";
 import type {
   NativeMenuIcon,
   NativeMenuItem,

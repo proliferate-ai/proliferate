@@ -1,12 +1,12 @@
-import type { PersistedWorkspaceGitStatusSnapshot } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
-import type { RightPanelDurableState, RightPanelMaterializedState } from "@/lib/domain/workspaces/shell/right-panel-model";
+import type { PersistedWorkspaceGitStatusSnapshot } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
+import type { RightPanelDurableState, RightPanelMaterializedState } from "#product/lib/domain/workspaces/shell/right-panel-model";
 import {
   DEFAULT_SIDEBAR_WORKSPACE_TYPES,
-} from "@/lib/domain/workspaces/sidebar/sidebar-model";
-import type { SidebarWorkspaceVariant } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
-import type { ManualChatGroup } from "@/lib/domain/workspaces/tabs/manual-groups";
-import type { WorkspaceShellIntentKey, WorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
-import { WORKSPACE_SIDEBAR_DEFAULT_WIDTH } from "@/lib/domain/preferences/workspace-ui/sidebar";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-model";
+import type { SidebarWorkspaceVariant } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
+import type { ManualChatGroup } from "#product/lib/domain/workspaces/tabs/manual-groups";
+import type { WorkspaceShellIntentKey, WorkspaceShellTabKey } from "#product/lib/domain/workspaces/tabs/shell-tabs";
+import { WORKSPACE_SIDEBAR_DEFAULT_WIDTH } from "#product/lib/domain/preferences/workspace-ui/sidebar";
 
 /**
  * We have not launched yet, so persisted workspace UI state is allowed to

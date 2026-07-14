@@ -1,20 +1,20 @@
-import type { ColorMode } from "@/config/theme";
+import type { ColorMode } from "#product/config/theme";
 import type {
   ReadableCodeFontSizeId,
   UiFontSizeId,
   WindowZoomId,
-} from "@/lib/domain/preferences/appearance";
+} from "#product/lib/domain/preferences/appearance";
 import type {
   ChatModelVisibilityOverridesByAgentKind,
   DefaultLiveSessionControlValuesByAgentKind,
-} from "@/lib/domain/preferences/user/session-defaults";
-import { WORKTREE_AUTO_DELETE_LIMIT_DEFAULT } from "@/lib/domain/preferences/user/worktree-auto-delete";
+} from "#product/lib/domain/preferences/user/session-defaults";
+import { WORKTREE_AUTO_DELETE_LIMIT_DEFAULT } from "#product/lib/domain/preferences/user/worktree-auto-delete";
 import type {
   ReviewDefaultsByKind,
   ReviewPersonalitiesByKind,
-} from "@/lib/domain/preferences/review-preferences";
-import { DEFAULT_OPEN_IN_TARGET_ID } from "@/config/open-target-defaults";
-import type { ReleaseTitle } from "@/lib/domain/updates/release-notice";
+} from "#product/lib/domain/preferences/review-preferences";
+import { DEFAULT_OPEN_IN_TARGET_ID } from "#product/config/open-target-defaults";
+import type { ReleaseTitle } from "#product/lib/domain/updates/release-notice";
 
 export type BranchPrefixType = "none" | "proliferate" | "github_username";
 export type TurnEndSoundId = "ding";

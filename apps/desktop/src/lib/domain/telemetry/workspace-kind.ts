@@ -1,5 +1,5 @@
-import type { DesktopWorkspaceKind } from "@/lib/domain/telemetry/events";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import type { DesktopWorkspaceKind } from "#product/lib/domain/telemetry/events";
+import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 
 export function resolveDesktopTelemetryWorkspaceKind(
   workspaceId: string | null,

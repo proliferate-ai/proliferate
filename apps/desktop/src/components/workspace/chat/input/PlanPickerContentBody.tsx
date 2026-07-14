@@ -1,12 +1,12 @@
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { ClipboardList, Spinner } from "@proliferate/ui/icons";
-import { usePlanPicker } from "@/hooks/plans/ui/use-plan-picker";
+import { usePlanPicker } from "#product/hooks/plans/ui/use-plan-picker";
 import {
   formatPlanAgentKindLabel,
   formatPlanDecisionStateLabel,
-} from "@/lib/domain/plans/plan-presentation";
-import { PLAN_PICKER_SEARCH_PLACEHOLDER } from "@/copy/plans/plan-picker-copy";
+} from "#product/lib/domain/plans/plan-presentation";
+import { PLAN_PICKER_SEARCH_PLACEHOLDER } from "#product/copy/plans/plan-picker-copy";
 
 export function PlanPickerContentBody({
   workspaceUiKey,

@@ -4,7 +4,7 @@ import {
   type WorkspaceShellIntentKey,
   type WorkspaceShellTab,
   type WorkspaceShellTabKey,
-} from "@/lib/domain/workspaces/tabs/shell-tabs";
+} from "#product/lib/domain/workspaces/tabs/shell-tabs";
 
 interface ActiveShellTabStateSnapshot {
   activeShellTabKeyByWorkspace: Record<string, WorkspaceShellIntentKey | null>;

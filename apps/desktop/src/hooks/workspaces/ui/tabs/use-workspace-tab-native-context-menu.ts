@@ -1,10 +1,10 @@
-import { SHORTCUTS } from "@/config/shortcuts/registry";
-import { useNativeContextMenu } from "@/hooks/ui/native/use-native-context-menu";
-import { getShortcutNativeAccelerator } from "@/lib/domain/shortcuts/native-accelerators";
+import { SHORTCUTS } from "#product/config/shortcuts/registry";
+import { useNativeContextMenu } from "#product/hooks/ui/native/use-native-context-menu";
+import { getShortcutNativeAccelerator } from "#product/lib/domain/shortcuts/native-accelerators";
 import type {
   WorkspaceTabContextMenuCommand,
   WorkspaceTabContextMenuItem,
-} from "@/lib/domain/workspaces/tabs/context-menu";
+} from "#product/lib/domain/workspaces/tabs/context-menu";
 import type { NativeMenuItem } from "@proliferate/product-client/host/desktop-bridge";
 
 export function useWorkspaceTabNativeContextMenu({

@@ -3,7 +3,7 @@ import {
   collectRunningLocalSessionIds,
   isLocalWorkspaceId,
   type RunningLocalSessionCandidate,
-} from "./running-local-sessions";
+} from "#product/lib/domain/sessions/running-local-sessions";
 
 function candidate(
   workspaceId: string | null,

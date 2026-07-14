@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   MAX_FEED_CONTENT_CHARS,
   appendCappedFeedContent,
-} from "@/hooks/activity/derived/feed-content-buffer";
+} from "#product/hooks/activity/derived/feed-content-buffer";
 
 describe("appendCappedFeedContent", () => {
   it("appends verbatim while under the cap", () => {

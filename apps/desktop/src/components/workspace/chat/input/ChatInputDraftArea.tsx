@@ -1,16 +1,16 @@
 import type { KeyboardEventHandler, RefObject } from "react";
-import { WORKSPACE_CHAT_COMPOSER_INPUT } from "@/config/chat";
-import { CHAT_COMPOSER_LABELS } from "@/copy/chat/chat-copy";
-import type { ChatComposerDraft } from "@/lib/domain/chat/composer/file-mention-draft-model";
+import { WORKSPACE_CHAT_COMPOSER_INPUT } from "#product/config/chat";
+import { CHAT_COMPOSER_LABELS } from "#product/copy/chat/chat-copy";
+import type { ChatComposerDraft } from "#product/lib/domain/chat/composer/file-mention-draft-model";
 import {
   DraftAttachmentPreviewList,
   type DraftAttachmentPreviewListProps,
-} from "@/components/workspace/chat/content/PromptContentRenderer";
-import { useChatDraftValue } from "@/hooks/chat/ui/use-chat-draft-state";
-import { ComposerCommandEditor } from "./ComposerCommandEditor";
+} from "#product/components/workspace/chat/content/PromptContentRenderer";
+import { useChatDraftValue } from "#product/hooks/chat/ui/use-chat-draft-state";
+import { ComposerCommandEditor } from "#product/components/workspace/chat/input/ComposerCommandEditor";
 import { ComposerTextarea } from "@proliferate/ui/primitives/ComposerTextarea";
 import { ComposerTextareaFrame } from "@proliferate/ui/primitives/ComposerTextareaFrame";
-import { QueuedPromptEditBanner } from "./QueuedPromptEditBanner";
+import { QueuedPromptEditBanner } from "#product/components/workspace/chat/input/QueuedPromptEditBanner";
 
 interface ChatInputDraftAreaProps {
   /** Picks the follow-up placeholder once the session transcript has turns. */

@@ -1,12 +1,12 @@
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
+import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
 import {
   logicalWorkspaceCloudMaterializationId,
   logicalWorkspaceTargetMaterializationId,
-} from "@/lib/domain/workspaces/cloud/logical-workspace-materialization";
+} from "#product/lib/domain/workspaces/cloud/logical-workspace-materialization";
 import {
   buildLocalSlotLogicalWorkspaceId,
   parseLogicalWorkspaceId,
-} from "@/lib/domain/workspaces/cloud/logical-workspace-id";
+} from "#product/lib/domain/workspaces/cloud/logical-workspace-id";
 
 export function logicalWorkspaceMatchesId(
   workspace: LogicalWorkspace,

@@ -1,10 +1,10 @@
-import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
-import type { useSessionSelectionActions } from "@/hooks/sessions/facade/use-session-selection-actions";
-import type { useSessionHistoryHydration } from "@/hooks/sessions/lifecycle/use-session-history-hydration";
-import { selectSessionWithShellIntentRollback } from "@/hooks/sessions/workflows/session-shell-selection";
+import type { WorkspaceSession } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
+import type { useSessionSelectionActions } from "#product/hooks/sessions/facade/use-session-selection-actions";
+import type { useSessionHistoryHydration } from "#product/hooks/sessions/lifecycle/use-session-history-hydration";
+import { selectSessionWithShellIntentRollback } from "#product/hooks/sessions/workflows/session-shell-selection";
 import {
   choosePreferredWorkspaceSession,
-} from "@/lib/domain/workspaces/selection/selection";
+} from "#product/lib/domain/workspaces/selection/selection";
 import {
   elapsedMs,
   logLatency,
@@ -13,11 +13,11 @@ import {
 import {
   recordMeasurementWorkflowStep,
 } from "@/lib/infra/measurement/debug-measurement";
-import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
+import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import {
   resolveLastViewedSessionForWorkspace,
-} from "@/lib/domain/workspaces/selection/workspace-bootstrap-selection";
-import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
+} from "#product/lib/domain/workspaces/selection/workspace-bootstrap-selection";
+import type { SessionRuntimeRecord } from "#product/stores/sessions/session-types";
 
 export async function handleRememberedWorkspaceSessionBootstrap(
   input: {

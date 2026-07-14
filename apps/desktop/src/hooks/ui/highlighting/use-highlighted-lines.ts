@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";
+import { useResolvedMode } from "#product/hooks/theme/derived/use-resolved-mode";
 import {
   highlightLines,
   resolveHighlightTheme,
   type HighlightedToken,
-} from "@/lib/infra/editor/highlighting";
+} from "#product/lib/infra/editor/highlighting";
 
 export function useHighlightedLines(
   code: string,

@@ -1,13 +1,13 @@
 import { createTranscriptState } from "@anyharness/sdk";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import {
   createEmptySessionRecord,
   patchSessionRecord,
   putSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
+} from "#product/stores/sessions/session-records";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 
 describe("session split stores", () => {
   beforeEach(() => {

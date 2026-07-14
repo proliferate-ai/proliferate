@@ -2,7 +2,7 @@
 
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useChatLaunchActions } from "./use-chat-launch-actions";
+import { useChatLaunchActions } from "#product/hooks/chat/workflows/use-chat-launch-actions";
 
 const mocks = vi.hoisted(() => ({
   createEmptySessionWithResolvedConfig: vi.fn(async () => "client-new"),

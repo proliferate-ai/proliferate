@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getTerminalTheme, onThemeChange } from "@/config/theme";
-import { resolveReadableCodeFontScale } from "@/lib/domain/preferences/appearance";
-import { TERMINAL_FONT_FAMILY } from "@/lib/domain/terminals/terminal-grid";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+import { getTerminalTheme, onThemeChange } from "#product/config/theme";
+import { resolveReadableCodeFontScale } from "#product/lib/domain/preferences/appearance";
+import { TERMINAL_FONT_FAMILY } from "#product/lib/domain/terminals/terminal-grid";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
 interface UseXtermSurfaceInput {
   visible: boolean;

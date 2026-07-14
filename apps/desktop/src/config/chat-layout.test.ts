@@ -4,7 +4,7 @@ import {
   computeChatDockLowerBackdropTopPx,
   computeChatStableBottomInsetPx,
   computeChatSurfaceBottomInsetPx,
-} from "./chat-layout";
+} from "#product/config/chat-layout";
 
 describe("chat layout", () => {
 

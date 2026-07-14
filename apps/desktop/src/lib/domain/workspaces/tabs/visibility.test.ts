@@ -6,7 +6,7 @@ import {
   resolveFallbackAfterHidingChatTabs,
   resolveMostRecentHiddenChatTab,
   resolveVisibleChatSessionIds,
-} from "./visibility";
+} from "#product/lib/domain/workspaces/tabs/visibility";
 
 describe("chat tab visibility", () => {
   it("defaults to top-level live sessions and adds a parent anchor for an active child", () => {

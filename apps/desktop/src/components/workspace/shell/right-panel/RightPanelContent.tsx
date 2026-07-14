@@ -1,18 +1,18 @@
-import { FileEditorView } from "@/components/workspace/files/FileEditorView";
-import { GitPanel } from "@/components/workspace/git/GitPanel";
-import { ScratchPadPanel } from "@/components/workspace/scratch/ScratchPadPanel";
-import { RightPanelPlaceholder } from "@/components/workspace/shell/right-panel/RightPanelPlaceholder";
-import { TerminalPanel } from "@/components/workspace/terminals/TerminalPanel";
-import { TERMINAL_GRID_PROBE_ATTRIBUTE } from "@/lib/infra/terminals/terminal-grid-probe";
+import { FileEditorView } from "#product/components/workspace/files/FileEditorView";
+import { GitPanel } from "#product/components/workspace/git/GitPanel";
+import { ScratchPadPanel } from "#product/components/workspace/scratch/ScratchPadPanel";
+import { RightPanelPlaceholder } from "#product/components/workspace/shell/right-panel/RightPanelPlaceholder";
+import { TerminalPanel } from "#product/components/workspace/terminals/TerminalPanel";
+import { TERMINAL_GRID_PROBE_ATTRIBUTE } from "#product/lib/infra/terminals/terminal-grid-probe";
 import type { TerminalRecord } from "@anyharness/sdk";
 import type {
   RightPanelActiveEntryKey,
   RightPanelTool,
-} from "@/lib/domain/workspaces/shell/right-panel-model";
+} from "#product/lib/domain/workspaces/shell/right-panel-model";
 import {
   viewerTargetKey,
   type ViewerTarget,
-} from "@/lib/domain/workspaces/viewer/viewer-target";
+} from "#product/lib/domain/workspaces/viewer/viewer-target";
 
 interface RightPanelContentProps {
   workspaceId: string | null;

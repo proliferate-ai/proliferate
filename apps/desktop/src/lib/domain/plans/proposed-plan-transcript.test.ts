@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ProposedPlanDetail, TranscriptState } from "@anyharness/sdk";
-import { patchProposedPlanDecisionInTranscript } from "./proposed-plan-transcript";
+import { patchProposedPlanDecisionInTranscript } from "#product/lib/domain/plans/proposed-plan-transcript";
 
 describe("patchProposedPlanDecisionInTranscript", () => {
   it("updates the matching proposed plan decision", () => {

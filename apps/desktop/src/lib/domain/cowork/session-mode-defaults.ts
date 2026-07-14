@@ -1,4 +1,4 @@
-import { COWORK_DEFAULT_MODE_ID_BY_AGENT_KIND } from "@/config/cowork-session-mode-defaults";
+import { COWORK_DEFAULT_MODE_ID_BY_AGENT_KIND } from "#product/config/cowork-session-mode-defaults";
 
 export function resolveCoworkDefaultSessionModeId(
   agentKind: string | null | undefined,

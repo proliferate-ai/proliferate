@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   resolveWorkspaceShellStateKey,
   resolveWorkspaceUiKey,
-} from "./workspace-ui-key";
+} from "#product/lib/domain/workspaces/selection/workspace-ui-key";
 
 describe("workspace ui keys", () => {
   it("uses the logical workspace key for selected shell state", () => {

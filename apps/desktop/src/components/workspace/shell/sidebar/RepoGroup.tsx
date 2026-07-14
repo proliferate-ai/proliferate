@@ -5,17 +5,17 @@ import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { ShortcutBadge } from "@proliferate/ui/layout/ShortcutBadge";
-import { SidebarWorkspaceVariantIcon } from "@/components/workspace/shell/sidebar/SidebarWorkspaceVariantIcon";
-import { SHORTCUTS } from "@/config/shortcuts/registry";
-import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
-import type { NewWorkspaceCommandScope } from "@/lib/domain/workspaces/creation/new-workspace-command";
+import { SidebarWorkspaceVariantIcon } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceVariantIcon";
+import { SHORTCUTS } from "#product/config/shortcuts/registry";
+import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
+import type { NewWorkspaceCommandScope } from "#product/lib/domain/workspaces/creation/new-workspace-command";
 import {
   confirmRepoRemoval,
   repoRemovalConfirmationCopy,
   requestRepoRemovalConfirmation,
-} from "@/lib/domain/workspaces/sidebar/repo-context-menu";
-import { useRepoGroupNativeContextMenu } from "@/hooks/workspaces/ui/use-repo-group-native-context-menu";
-import { useNewWorkspaceCommandScopeStore } from "@/stores/workspaces/new-workspace-command-scope-store";
+} from "#product/lib/domain/workspaces/sidebar/repo-context-menu";
+import { useRepoGroupNativeContextMenu } from "#product/hooks/workspaces/ui/use-repo-group-native-context-menu";
+import { useNewWorkspaceCommandScopeStore } from "#product/stores/workspaces/new-workspace-command-scope-store";
 import { SidebarActionButton } from "@proliferate/ui/layout/SidebarActionButton";
 import { ProductSidebarRepoGroupHeader } from "@proliferate/product-ui/sidebar/ProductSidebarRepositories";
 

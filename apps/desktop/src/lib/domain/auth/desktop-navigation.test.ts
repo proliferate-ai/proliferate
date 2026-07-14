@@ -4,7 +4,7 @@ import {
   decodeDesktopProductEntry,
   encodeDesktopReturnUrl,
   productEntryRoute,
-} from "@/lib/domain/auth/desktop-navigation";
+} from "#product/lib/domain/auth/desktop-navigation";
 
 describe("productEntryRoute", () => {
   // Each entry is the decoded form of the deep link named in the case; the

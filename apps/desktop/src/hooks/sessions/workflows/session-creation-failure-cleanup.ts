@@ -1,28 +1,28 @@
 import type { ErrorContext } from "@proliferate/product-client/host/product-host";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
-import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import {
   getSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useChatPromptRecoveryStore } from "@/stores/chat/chat-prompt-recovery-store";
+} from "#product/stores/sessions/session-records";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useChatPromptRecoveryStore } from "#product/stores/chat/chat-prompt-recovery-store";
 import {
   getPromptOutboxEntriesForSession,
   useSessionIntentStore,
-} from "@/stores/sessions/session-intent-store";
+} from "#product/stores/sessions/session-intent-store";
 import {
   markProjectedSessionPromptCreateFailed,
-} from "@/hooks/sessions/workflows/session-creation-failure";
+} from "#product/hooks/sessions/workflows/session-creation-failure";
 import {
   removeSessionRecordAndClearSelection,
-} from "@/hooks/sessions/workflows/session-creation-local-state";
+} from "#product/hooks/sessions/workflows/session-creation-local-state";
 import type {
   EmptySessionReplacementTransaction,
-} from "@/hooks/sessions/workflows/use-empty-session-replacement-cleanup";
+} from "#product/hooks/sessions/workflows/use-empty-session-replacement-cleanup";
 import type {
   ReplacementShellPreferencesTransaction,
-} from "@/hooks/sessions/workflows/session-replacement-shell-preferences";
+} from "#product/hooks/sessions/workflows/session-replacement-shell-preferences";
 
 interface SessionCreationFailureCleanupInput {
   agentKind: string;

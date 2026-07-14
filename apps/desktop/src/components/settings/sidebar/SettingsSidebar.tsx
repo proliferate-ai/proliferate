@@ -20,13 +20,13 @@ import {
 import { SidebarNavRow } from "@proliferate/ui/layout/SidebarNavRow";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { SettingsEyebrow } from "@proliferate/product-ui/settings/SettingsEyebrow";
-import { SidebarAccountFooter } from "@/components/app/sidebar/SidebarAccountFooter";
-import { HarnessStatusDot } from "@/components/settings/sidebar/HarnessStatusDot";
-import { SHORTCUTS } from "@/config/shortcuts/registry";
+import { SidebarAccountFooter } from "#product/components/app/sidebar/SidebarAccountFooter";
+import { HarnessStatusDot } from "#product/components/settings/sidebar/HarnessStatusDot";
+import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import {
   TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION,
   type SettingsSection,
-} from "@/config/settings";
+} from "#product/config/settings";
 import {
   SETTINGS_HELP_ITEMS,
   getHarnessKindForSettingsSection,
@@ -36,14 +36,14 @@ import {
   type SettingsNavIconId,
   type SettingsNavItem,
   type SettingsScope,
-} from "@/lib/domain/settings/navigation-presentation";
-import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
+} from "#product/lib/domain/settings/navigation-presentation";
+import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
 import { useAppVersion } from "@/hooks/access/tauri/app/use-app-version";
-import { useSettingsSectionShortcuts } from "@/hooks/settings/ui/use-settings-section-shortcuts";
-import { useShortcutRevealVisible } from "@/providers/ShortcutRevealProvider";
-import { buildShortcutRangeLabelById } from "@/lib/domain/shortcuts/presentation";
-import { buildSettingsShortcutSectionTargets } from "@/lib/domain/settings/shortcut-targets";
-import { useOpenSupportReportWindow } from "@/hooks/support/workflows/use-open-support-report-window";
+import { useSettingsSectionShortcuts } from "#product/hooks/settings/ui/use-settings-section-shortcuts";
+import { useShortcutRevealVisible } from "#product/providers/ShortcutRevealProvider";
+import { buildShortcutRangeLabelById } from "#product/lib/domain/shortcuts/presentation";
+import { buildSettingsShortcutSectionTargets } from "#product/lib/domain/settings/shortcut-targets";
+import { useOpenSupportReportWindow } from "#product/hooks/support/workflows/use-open-support-report-window";
 import type { UpdaterPhase } from "@/hooks/access/tauri/use-updater";
 
 interface SettingsSidebarProps {

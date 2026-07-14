@@ -3,14 +3,14 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
 import { useRepositories } from "@proliferate/cloud-sdk-react";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
-import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
-import { SidebarAccountFooter } from "@/components/app/sidebar/SidebarAccountFooter";
-import { ReleaseNoticeCard } from "./ReleaseNoticeCard";
-import { SidebarPrimaryNavigation } from "./SidebarPrimaryNavigation";
-import { SidebarRepositoriesHeader } from "./SidebarRepositoriesHeader";
-import { SidebarWorkspaceContent } from "./SidebarWorkspaceContent";
-import { WorkspaceCleanupAttentionSection } from "./WorkspaceCleanupAttentionSection";
-import { CoworkThreadsSection } from "@/components/workspace/cowork/sidebar/CoworkThreadsSection";
+import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
+import { SidebarAccountFooter } from "#product/components/app/sidebar/SidebarAccountFooter";
+import { ReleaseNoticeCard } from "#product/components/workspace/shell/sidebar/ReleaseNoticeCard";
+import { SidebarPrimaryNavigation } from "#product/components/workspace/shell/sidebar/SidebarPrimaryNavigation";
+import { SidebarRepositoriesHeader } from "#product/components/workspace/shell/sidebar/SidebarRepositoriesHeader";
+import { SidebarWorkspaceContent } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceContent";
+import { WorkspaceCleanupAttentionSection } from "#product/components/workspace/shell/sidebar/WorkspaceCleanupAttentionSection";
+import { CoworkThreadsSection } from "#product/components/workspace/cowork/sidebar/CoworkThreadsSection";
 import {
   ProductSidebarBody,
   ProductSidebarFrame,
@@ -18,38 +18,38 @@ import {
 } from "@proliferate/product-ui/sidebar/ProductSidebarLayout";
 import {
   isDefaultSidebarWorkspaceTypes,
-} from "@/lib/domain/workspaces/sidebar/sidebar-workspace-types";
-import { buildConfiguredCloudRepoKeys } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-workspace-types";
+import { buildConfiguredCloudRepoKeys } from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import {
   titleForStartBlockReason,
-} from "@/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
-import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
-import { APP_ROUTES } from "@/config/app-routes";
-import { SHORTCUTS } from "@/config/shortcuts/registry";
-import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
-import { useCloudBilling } from "@/hooks/cloud/facade/use-cloud-billing";
-import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
-import { useSidebarShortcutTargets } from "@/hooks/workspaces/derived/use-sidebar-shortcut-targets";
-import { useOpenSupportReportWindow } from "@/hooks/support/workflows/use-open-support-report-window";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useWorkspaceDisplayNameActions } from "@/hooks/workspaces/workflows/use-workspace-display-name-actions";
-import { useWorkspaceSidebarActions } from "@/hooks/workspaces/workflows/use-workspace-sidebar-actions";
-import { useCloudWorkspaceActions } from "@/hooks/cloud/workflows/use-cloud-workspace-actions";
-import { useSidebarRepoGroupState } from "@/hooks/workspaces/facade/use-sidebar-repo-group-state";
-import { useWorkspaceSidebarState } from "@/hooks/workspaces/derived/use-workspace-sidebar-state";
-import { useSessionActivityReconciler } from "@/hooks/sessions/lifecycle/use-session-activity-reconciler";
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
+import { CAPABILITY_COPY } from "#product/copy/capabilities/capability-copy";
+import { APP_ROUTES } from "#product/config/app-routes";
+import { SHORTCUTS } from "#product/config/shortcuts/registry";
+import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+import { useCloudBilling } from "#product/hooks/cloud/facade/use-cloud-billing";
+import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
+import { useSidebarShortcutTargets } from "#product/hooks/workspaces/derived/use-sidebar-shortcut-targets";
+import { useOpenSupportReportWindow } from "#product/hooks/support/workflows/use-open-support-report-window";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useWorkspaceDisplayNameActions } from "#product/hooks/workspaces/workflows/use-workspace-display-name-actions";
+import { useWorkspaceSidebarActions } from "#product/hooks/workspaces/workflows/use-workspace-sidebar-actions";
+import { useCloudWorkspaceActions } from "#product/hooks/cloud/workflows/use-cloud-workspace-actions";
+import { useSidebarRepoGroupState } from "#product/hooks/workspaces/facade/use-sidebar-repo-group-state";
+import { useWorkspaceSidebarState } from "#product/hooks/workspaces/derived/use-workspace-sidebar-state";
+import { useSessionActivityReconciler } from "#product/hooks/sessions/lifecycle/use-session-activity-reconciler";
 import {
   buildCloudRepoSettingsHref,
   buildSettingsHref,
-} from "@/lib/domain/settings/navigation";
-import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
-import { buildShortcutRangeLabelById } from "@/lib/domain/shortcuts/presentation";
+} from "#product/lib/domain/settings/navigation";
+import { cloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
+import { buildShortcutRangeLabelById } from "#product/lib/domain/shortcuts/presentation";
 import { startMeasurementOperation } from "@/lib/infra/measurement/debug-measurement";
-import { useShortcutRevealVisible } from "@/providers/ShortcutRevealProvider";
-import { useToastStore } from "@/stores/toast/toast-store";
-import { useReleaseNotice } from "@/hooks/updates/facade/use-release-notice";
+import { useShortcutRevealVisible } from "#product/providers/ShortcutRevealProvider";
+import { useToastStore } from "#product/stores/toast/toast-store";
+import { useReleaseNotice } from "#product/hooks/updates/facade/use-release-notice";
 
 interface ArchiveConfirmationState {
   workspaceId: string;

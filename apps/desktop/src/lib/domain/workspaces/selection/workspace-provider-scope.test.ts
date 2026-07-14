@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { APP_ROUTES } from "@/config/app-routes";
+import { APP_ROUTES } from "#product/config/app-routes";
 import {
   isWorkspaceProviderRoute,
   resolveRouteScopedWorkspaceProviderId,
-} from "./workspace-provider-scope";
+} from "#product/lib/domain/workspaces/selection/workspace-provider-scope";
 
 describe("workspace provider scope", () => {
   it("keeps the workspace provider active on workspace shell routes", () => {

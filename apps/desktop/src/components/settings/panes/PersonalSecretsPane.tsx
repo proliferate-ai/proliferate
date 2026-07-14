@@ -4,8 +4,8 @@ import { Plus } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { CloudSecretsSettingsSurface } from "@proliferate/product-surfaces/settings/CloudSecretsSettingsSurface";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
-import { ApiKeyCreatorModal } from "@/components/settings/panes/agent-auth/ApiKeyCreatorModal";
-import { useToastStore } from "@/stores/toast/toast-store";
+import { ApiKeyCreatorModal } from "#product/components/settings/panes/agent-auth/ApiKeyCreatorModal";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 const PERSONAL_SCOPE = { kind: "personal" } as const;
 

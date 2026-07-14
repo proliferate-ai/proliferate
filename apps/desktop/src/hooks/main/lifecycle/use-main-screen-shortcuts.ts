@@ -1,6 +1,6 @@
-import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-handler";
-import { focusChatInput } from "@/lib/domain/focus-zone";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
+import { focusChatInput } from "#product/lib/domain/focus-zone";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 interface UseMainScreenShortcutsArgs {
   enabled?: boolean;

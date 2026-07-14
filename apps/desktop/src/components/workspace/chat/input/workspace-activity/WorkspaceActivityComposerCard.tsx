@@ -12,13 +12,13 @@ import {
   StackedFiles,
 } from "@proliferate/ui/icons";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
-import { useComposerWorkspaceActivityModel } from "@/hooks/workspaces/derived/use-composer-workspace-activity-model";
+import { useComposerWorkspaceActivityModel } from "#product/hooks/workspaces/derived/use-composer-workspace-activity-model";
 import type {
   ComposerWorkspaceActivityModel,
   WorkspaceActivityFact,
-} from "@/lib/domain/workspaces/activity/composer-workspace-activity";
-import { useWorkspaceShellActions } from "@/components/workspace/shell/providers/WorkspaceShellActionsContext";
-import { useWorkspaceCopyActions } from "@/hooks/workspaces/workflows/use-workspace-copy-actions";
+} from "#product/lib/domain/workspaces/activity/composer-workspace-activity";
+import { useWorkspaceShellActions } from "#product/components/workspace/shell/providers/WorkspaceShellActionsContext";
+import { useWorkspaceCopyActions } from "#product/hooks/workspaces/workflows/use-workspace-copy-actions";
 
 export function ConnectedWorkspaceActivityComposerCard() {
   const { model, runtimeBlockedReason, hasExistingPullRequest } =

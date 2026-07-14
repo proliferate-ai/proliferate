@@ -5,7 +5,7 @@ import {
   removeIntegrationAccount,
   type AuthenticateIntegrationRequest,
 } from "@proliferate/cloud-sdk/client/integrations";
-import { useInvalidateCloudIntegrations } from "./use-integration-health";
+import { useInvalidateCloudIntegrations } from "#product/hooks/access/cloud/integrations/use-integration-health";
 
 export function useIntegrationActions() {
   const invalidateCloudIntegrations = useInvalidateCloudIntegrations();

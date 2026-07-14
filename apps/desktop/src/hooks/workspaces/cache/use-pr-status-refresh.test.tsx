@@ -6,11 +6,11 @@ import {
 } from "@anyharness/sdk-react";
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { RepoPullRequestStatusesResult } from "@/lib/access/anyharness/pull-requests";
+import type { RepoPullRequestStatusesResult } from "#product/lib/access/anyharness/pull-requests";
 import {
   resetPrStatusRefreshForTests,
   scheduleRepoPrStatusRefresh,
-} from "./use-pr-status-refresh";
+} from "#product/hooks/workspaces/cache/use-pr-status-refresh";
 
 const mocks = vi.hoisted(() => ({
   listRepoRootPullRequestStatuses: vi.fn(),

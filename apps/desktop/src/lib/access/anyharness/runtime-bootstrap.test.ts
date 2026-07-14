@@ -11,12 +11,12 @@ vi.mock("@anyharness/sdk-react", () => ({
   }),
 }));
 
-import { DEFAULT_RUNTIME_URL } from "@/config/runtime";
+import { DEFAULT_RUNTIME_URL } from "#product/config/runtime";
 import {
   bootstrapHarnessRuntime,
   restartHarnessRuntime,
-} from "@/lib/access/anyharness/runtime-bootstrap";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+} from "#product/lib/access/anyharness/runtime-bootstrap";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
 function makeRuntime(): DesktopRuntimeBridge {
   return {

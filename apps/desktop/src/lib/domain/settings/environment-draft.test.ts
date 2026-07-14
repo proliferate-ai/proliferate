@@ -3,7 +3,7 @@ import {
   buildLocalEnvironmentSavePatch,
   isLocalEnvironmentDraftDirty,
   normalizeLocalEnvironmentDraft,
-} from "@/lib/domain/settings/environment-draft";
+} from "#product/lib/domain/settings/environment-draft";
 
 describe("local environment drafts", () => {
   it("marks local branch, run command, and setup edits dirty without producing a save patch until requested", () => {

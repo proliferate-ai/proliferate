@@ -8,10 +8,10 @@ import {
   Sparkles,
 } from "@proliferate/ui/icons";
 import type { PendingInteraction } from "@anyharness/sdk";
-import { CopyMessageButton } from "@/components/workspace/chat/transcript/CopyMessageButton";
-import { StreamingIndicator } from "@/components/workspace/chat/transcript/StreamingIndicator";
-import { CHAT_STREAMING_STATUS_LABELS } from "@/copy/chat/chat-copy";
-import { useActivePendingInteractionState } from "@/hooks/chat/derived/use-active-pending-session-interactions";
+import { CopyMessageButton } from "#product/components/workspace/chat/transcript/CopyMessageButton";
+import { StreamingIndicator } from "#product/components/workspace/chat/transcript/StreamingIndicator";
+import { CHAT_STREAMING_STATUS_LABELS } from "#product/copy/chat/chat-copy";
+import { useActivePendingInteractionState } from "#product/hooks/chat/derived/use-active-pending-session-interactions";
 import type { SessionViewState } from "@proliferate/product-domain/sessions/activity";
 
 /**

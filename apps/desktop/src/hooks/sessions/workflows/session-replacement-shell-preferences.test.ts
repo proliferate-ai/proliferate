@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { createManualChatGroupId } from "@/lib/domain/workspaces/tabs/manual-groups";
-import { chatWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { beginReplacementShellPreferences } from "./session-replacement-shell-preferences";
+import { createManualChatGroupId } from "#product/lib/domain/workspaces/tabs/manual-groups";
+import { chatWorkspaceShellTabKey } from "#product/lib/domain/workspaces/tabs/shell-tabs";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { beginReplacementShellPreferences } from "#product/hooks/sessions/workflows/session-replacement-shell-preferences";
 
 describe("replacement shell preferences", () => {
   beforeEach(() => {

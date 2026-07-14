@@ -1,17 +1,17 @@
 import type { ReactNode } from "react";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { SplitPanelLeft } from "@proliferate/ui/icons";
-import { useResize } from "@/hooks/ui/layout/use-resize";
-import { useTransparentChromeEnabled } from "@/hooks/theme/derived/use-transparent-chrome";
+import { useResize } from "#product/hooks/ui/layout/use-resize";
+import { useTransparentChromeEnabled } from "#product/hooks/theme/derived/use-transparent-chrome";
 import { useUpdater } from "@/hooks/access/tauri/use-updater";
-import { resolveStandardWorkspaceChromeClasses } from "@/lib/domain/preferences/workspace-chrome";
+import { resolveStandardWorkspaceChromeClasses } from "#product/lib/domain/preferences/workspace-chrome";
 import {
   WORKSPACE_SIDEBAR_MAX_WIDTH,
   WORKSPACE_SIDEBAR_MIN_WIDTH,
-} from "@/lib/domain/preferences/workspace-ui/sidebar";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { SidebarUpdatePill } from "@/components/workspace/shell/sidebar/SidebarUpdatePill";
-import { MainSidebar } from "@/components/workspace/shell/sidebar/MainSidebar";
+} from "#product/lib/domain/preferences/workspace-ui/sidebar";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { SidebarUpdatePill } from "#product/components/workspace/shell/sidebar/SidebarUpdatePill";
+import { MainSidebar } from "#product/components/workspace/shell/sidebar/MainSidebar";
 
 interface MainSidebarPageShellProps {
   children: ReactNode;

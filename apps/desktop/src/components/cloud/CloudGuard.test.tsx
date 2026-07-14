@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import { CloudGuard, type CloudGateFlags } from "./CloudGuard";
+import { CloudGuard, type CloudGateFlags } from "#product/components/cloud/CloudGuard";
 
 vi.mock("@/components/settings/panes/CloudUnavailablePane", () => ({
   CloudUnavailablePane: () => <div>unavailable</div>,

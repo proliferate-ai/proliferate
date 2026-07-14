@@ -6,8 +6,8 @@ import {
   reviewRunStatusCategory,
   selectSingleDelegatedAgentTriggerIdentity,
   shouldShowDelegatedWorkInComposer,
-} from "@/lib/domain/delegated-work/presentation";
-import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identity";
+} from "#product/lib/domain/delegated-work/presentation";
+import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
 
 describe("delegatedWorkKindFromSource", () => {
   it("derives plan/code review kinds from review run kind", () => {

@@ -1,10 +1,10 @@
 import { useMemo } from "react";
 import { useLocation } from "react-router-dom";
-import { humanizeBranchName } from "@/lib/domain/workspaces/creation/branch-naming";
-import { isCloudWorkspaceId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { workspaceDisplayName } from "@/lib/domain/workspaces/display/workspace-display";
-import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { humanizeBranchName } from "#product/lib/domain/workspaces/creation/branch-naming";
+import { isCloudWorkspaceId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import { workspaceDisplayName } from "#product/lib/domain/workspaces/display/workspace-display";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 export function useSidebarSupportContext() {
   const location = useLocation();

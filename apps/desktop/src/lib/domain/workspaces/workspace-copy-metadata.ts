@@ -1,5 +1,5 @@
-import { workspaceCurrentBranchName } from "@/lib/domain/workspaces/creation/branch-naming";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
+import { workspaceCurrentBranchName } from "#product/lib/domain/workspaces/creation/branch-naming";
+import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
 
 export interface WorkspaceCopyMetadata {
   workspaceLocation: WorkspaceCopyLocationTarget | null;

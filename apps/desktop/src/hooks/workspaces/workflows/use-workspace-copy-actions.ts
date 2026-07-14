@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import type { WorkspaceCopyLocationTarget } from "@/lib/domain/workspaces/workspace-copy-metadata";
-import { useToastStore } from "@/stores/toast/toast-store";
+import type { WorkspaceCopyLocationTarget } from "#product/lib/domain/workspaces/workspace-copy-metadata";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 export function useWorkspaceCopyActions() {
   const { writeText } = useProductHost().clipboard;

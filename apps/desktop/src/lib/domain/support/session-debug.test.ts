@@ -14,15 +14,15 @@ import {
   resolveRuntimeLocation,
   resolveWorkspaceIdForInvestigation,
   type SessionDebugActionState,
-} from "@/lib/domain/support/session-debug/action-state";
-import { buildSessionDebugExport } from "@/lib/domain/support/session-debug/export-models";
-import { suggestSessionDebugFileName } from "@/lib/domain/support/session-debug/file-name";
-import { buildSessionDebugLocator } from "@/lib/domain/support/session-debug/locator";
+} from "#product/lib/domain/support/session-debug/action-state";
+import { buildSessionDebugExport } from "#product/lib/domain/support/session-debug/export-models";
+import { suggestSessionDebugFileName } from "#product/lib/domain/support/session-debug/file-name";
+import { buildSessionDebugLocator } from "#product/lib/domain/support/session-debug/locator";
 import {
   sanitizeSessionDebugContentParts,
   sanitizeSessionDebugExportedSession,
-} from "@/lib/domain/support/session-debug/sanitizer";
-import { sessionLocatorFromSession } from "@/lib/domain/support/session-debug/session-summary";
+} from "#product/lib/domain/support/session-debug/sanitizer";
+import { sessionLocatorFromSession } from "#product/lib/domain/support/session-debug/session-summary";
 
 const generatedAt = "2026-04-16T18:30:00.000Z";
 const localHealth = {

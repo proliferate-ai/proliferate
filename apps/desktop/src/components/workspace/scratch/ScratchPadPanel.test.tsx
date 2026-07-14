@@ -2,7 +2,7 @@
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ScratchPadPanel } from "@/components/workspace/scratch/ScratchPadPanel";
+import { ScratchPadPanel } from "#product/components/workspace/scratch/ScratchPadPanel";
 
 const scratchQueryMocks = vi.hoisted(() => ({
   record: {

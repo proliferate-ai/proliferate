@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SessionLiveConfigSnapshot } from "@anyharness/sdk";
-import { resolveFallbackSessionModelId } from "./model-fallback";
+import { resolveFallbackSessionModelId } from "#product/lib/domain/sessions/model-fallback";
 
 const LIVE_CONFIG: SessionLiveConfigSnapshot = {
   rawConfigOptions: [],

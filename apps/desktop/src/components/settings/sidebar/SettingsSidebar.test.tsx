@@ -4,18 +4,18 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SettingsSidebar } from "@/components/settings/sidebar/SettingsSidebar";
+import { SettingsSidebar } from "#product/components/settings/sidebar/SettingsSidebar";
 import {
   TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION,
   type SettingsSection,
-} from "@/config/settings";
-import { type SettingsScope } from "@/lib/domain/settings/navigation-presentation";
+} from "#product/config/settings";
+import { type SettingsScope } from "#product/lib/domain/settings/navigation-presentation";
 import {
   clearShortcutHandlerRegistryForTests,
   getShortcutHandler,
   runShortcutHandler,
-} from "@/lib/domain/shortcuts/registry";
-import { useSupportModalStore } from "@/stores/support/support-modal-store";
+} from "#product/lib/domain/shortcuts/registry";
+import { useSupportModalStore } from "#product/stores/support/support-modal-store";
 
 const updaterMocks = vi.hoisted(() => ({
   isSupported: vi.fn(() => false),

@@ -3,8 +3,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Cloud, Laptop } from "lucide-react";
 import { SegmentedControl } from "@proliferate/ui/primitives/SegmentedControl";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { HarnessPane } from "@/components/settings/panes/agents/harness/HarnessPane";
-import { useAgentSurfaceStore } from "@/stores/ui/agent-surface-store";
+import { HarnessPane } from "#product/components/settings/panes/agents/harness/HarnessPane";
+import { useAgentSurfaceStore } from "#product/stores/ui/agent-surface-store";
 
 type ScenarioId =
   | "claude-unconfigured"

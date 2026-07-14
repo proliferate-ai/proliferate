@@ -1,48 +1,48 @@
-import { HomeNextScreen } from "@/components/home/screen/HomeNextScreen";
+import { HomeNextScreen } from "#product/components/home/screen/HomeNextScreen";
 import {
   useCallback,
   useEffect,
   useMemo,
 } from "react";
-import { PublishDialog } from "@/components/workspace/git/PublishDialog";
-import { ChatView } from "@/components/workspace/chat/ChatView";
-import { GlobalHeader } from "@/components/workspace/shell/topbar/GlobalHeader";
-import { WorkspaceContentView } from "@/components/workspace/shell/screen/WorkspaceContentView";
-import { WorkspaceShellShortcuts } from "@/components/workspace/shell/screen/WorkspaceShellShortcuts";
-import { WorkspaceResizeSeparator } from "@/components/workspace/shell/screen/WorkspaceResizeSeparator";
+import { PublishDialog } from "#product/components/workspace/git/PublishDialog";
+import { ChatView } from "#product/components/workspace/chat/ChatView";
+import { GlobalHeader } from "#product/components/workspace/shell/topbar/GlobalHeader";
+import { WorkspaceContentView } from "#product/components/workspace/shell/screen/WorkspaceContentView";
+import { WorkspaceShellShortcuts } from "#product/components/workspace/shell/screen/WorkspaceShellShortcuts";
+import { WorkspaceResizeSeparator } from "#product/components/workspace/shell/screen/WorkspaceResizeSeparator";
 import {
   WorkspaceHeaderTabsViewModelProvider,
-} from "@/components/workspace/shell/providers/WorkspaceHeaderTabsViewModelContext";
-import { WorkspaceShellActionsProvider } from "@/components/workspace/shell/providers/WorkspaceShellActionsContext";
-import { WorkspaceCommandPalette } from "@/components/workspace/shell/command-palette/WorkspaceCommandPalette";
-import { WorkspaceShellRightRail } from "@/components/workspace/shell/screen/WorkspaceShellRightRail";
-import { WorkspaceShellSidebar } from "@/components/workspace/shell/sidebar/WorkspaceShellSidebar";
+} from "#product/components/workspace/shell/providers/WorkspaceHeaderTabsViewModelContext";
+import { WorkspaceShellActionsProvider } from "#product/components/workspace/shell/providers/WorkspaceShellActionsContext";
+import { WorkspaceCommandPalette } from "#product/components/workspace/shell/command-palette/WorkspaceCommandPalette";
+import { WorkspaceShellRightRail } from "#product/components/workspace/shell/screen/WorkspaceShellRightRail";
+import { WorkspaceShellSidebar } from "#product/components/workspace/shell/sidebar/WorkspaceShellSidebar";
 import {
   WorkspaceSidebarHeaderControls,
-} from "@/components/workspace/shell/sidebar/WorkspaceSidebarHeaderControls";
-import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
-import { OfflineIndicator } from "@/components/app/OfflineIndicator";
-import { useMainScreenState } from "@/hooks/main/facade/use-main-screen-state";
-import { useMainScreenShortcuts } from "@/hooks/main/lifecycle/use-main-screen-shortcuts";
-import { useMainScreenActions } from "@/hooks/main/workflows/use-main-screen-actions";
-import { useTransparentChromeEnabled } from "@/hooks/theme/derived/use-transparent-chrome";
-import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
+} from "#product/components/workspace/shell/sidebar/WorkspaceSidebarHeaderControls";
+import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
+import { OfflineIndicator } from "#product/components/app/OfflineIndicator";
+import { useMainScreenState } from "#product/hooks/main/facade/use-main-screen-state";
+import { useMainScreenShortcuts } from "#product/hooks/main/lifecycle/use-main-screen-shortcuts";
+import { useMainScreenActions } from "#product/hooks/main/workflows/use-main-screen-actions";
+import { useTransparentChromeEnabled } from "#product/hooks/theme/derived/use-transparent-chrome";
+import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 import { useUpdater } from "@/hooks/access/tauri/use-updater";
-import { useRunWorkspaceCommand } from "@/hooks/workspaces/workflows/use-run-workspace-command";
-import { useWorkspaceOpenInWebActions } from "@/hooks/workspaces/workflows/remote-access/use-workspace-open-in-web-actions";
-import { useWorkspaceRemoteAccessActions } from "@/hooks/workspaces/workflows/remote-access/use-workspace-remote-access-actions";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
-import { useWorkspaceActivityAcknowledgement } from "@/hooks/workspaces/lifecycle/use-workspace-activity-acknowledgement";
-import { resolveStandardWorkspaceChromeClasses } from "@/lib/domain/preferences/workspace-chrome";
-import { WorkspacePathProvider } from "@/providers/WorkspacePathProvider";
-import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useRunWorkspaceCommand } from "#product/hooks/workspaces/workflows/use-run-workspace-command";
+import { useWorkspaceOpenInWebActions } from "#product/hooks/workspaces/workflows/remote-access/use-workspace-open-in-web-actions";
+import { useWorkspaceRemoteAccessActions } from "#product/hooks/workspaces/workflows/remote-access/use-workspace-remote-access-actions";
+import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
+import { useWorkspaceActivityAcknowledgement } from "#product/hooks/workspaces/lifecycle/use-workspace-activity-acknowledgement";
+import { resolveStandardWorkspaceChromeClasses } from "#product/lib/domain/preferences/workspace-chrome";
+import { WorkspacePathProvider } from "#product/providers/WorkspacePathProvider";
+import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import {
   buildSettingsHref,
   resolveWorkspaceRepoSettingsHref,
-} from "@/lib/domain/settings/navigation";
-import type { WorkspaceRenderSurface } from "@/lib/domain/workspaces/tabs/shell-activation";
-import { resolvePendingWorkspacePath } from "@/lib/domain/workspaces/creation/pending-entry";
+} from "#product/lib/domain/settings/navigation";
+import type { WorkspaceRenderSurface } from "#product/lib/domain/workspaces/tabs/shell-activation";
+import { resolvePendingWorkspacePath } from "#product/lib/domain/workspaces/creation/pending-entry";
 
 const CHAT_SHELL_RENDER_SURFACE: WorkspaceRenderSurface = { kind: "chat-shell" };
 

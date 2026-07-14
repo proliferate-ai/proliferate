@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { UpdateRestartDialog } from "./UpdateRestartDialog";
+import { UpdateRestartDialog } from "#product/components/feedback/UpdateRestartDialog";
 
 const updaterMocks = vi.hoisted(() => ({
   phase: "ready",

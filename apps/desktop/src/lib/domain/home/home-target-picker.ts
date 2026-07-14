@@ -1,9 +1,9 @@
 import type {
   HomeNextDestination,
   HomeNextRepoLaunchKind,
-} from "@/lib/domain/home/home-next-launch";
-import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
-import type { CloudRepoActionState } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
+} from "#product/lib/domain/home/home-next-launch";
+import type { SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
+import type { CloudRepoActionState } from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
 
 export function homeRepoLaunchKindLabel(kind: HomeNextRepoLaunchKind): string {
   switch (kind) {

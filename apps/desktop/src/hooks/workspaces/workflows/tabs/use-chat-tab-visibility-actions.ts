@@ -1,22 +1,22 @@
 import { useCallback } from "react";
-import { useSessionRestoreActions } from "@/hooks/sessions/workflows/use-session-restore-actions";
+import { useSessionRestoreActions } from "#product/hooks/sessions/workflows/use-session-restore-actions";
 import {
   collectGroupIds,
   resolveFallbackAfterHidingChatTabs,
   resolveMostRecentHiddenChatTab,
   uniqueIds,
-} from "@/lib/domain/workspaces/tabs/visibility";
+} from "#product/lib/domain/workspaces/tabs/visibility";
 import { resolveSessionErrorAttentionKey } from "@proliferate/product-domain/sessions/activity";
 import {
   failLatencyFlow,
   startLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { getSessionRecord } from "@/stores/sessions/session-records";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useToastStore } from "@/stores/toast/toast-store";
-import { useWorkspaceShellActivation } from "@/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
-import { recordLinkedChildRelationshipHint } from "@/hooks/sessions/workflows/session-relationship-hints";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { getSessionRecord } from "#product/stores/sessions/session-records";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
+import { useWorkspaceShellActivation } from "#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
+import { recordLinkedChildRelationshipHint } from "#product/hooks/sessions/workflows/session-relationship-hints";
 
 interface ChatTabVisibilityContext {
   workspaceUiKey?: string | null;

@@ -1,8 +1,8 @@
 import type { TerminalRecord } from "@anyharness/sdk";
 import { useCallback, useEffect, useRef } from "react";
-import { useTerminalActions } from "@/hooks/terminals/workflows/use-terminal-actions";
-import { useTerminalStreamController } from "@/hooks/terminals/lifecycle/use-terminal-stream-controller";
-import { useXtermSurface } from "@/hooks/terminals/lifecycle/use-xterm-surface";
+import { useTerminalActions } from "#product/hooks/terminals/workflows/use-terminal-actions";
+import { useTerminalStreamController } from "#product/hooks/terminals/lifecycle/use-terminal-stream-controller";
+import { useXtermSurface } from "#product/hooks/terminals/lifecycle/use-xterm-surface";
 import {
   sendInput,
   sendResize,
@@ -10,8 +10,8 @@ import {
   TERMINAL_OUTPUT_GAP_MESSAGE,
   type TerminalReplayEntry,
   type TerminalStreamIdentity,
-} from "@/lib/infra/terminals/terminal-stream-registry";
-import { useTerminalStore } from "@/stores/terminal/terminal-store";
+} from "#product/lib/infra/terminals/terminal-stream-registry";
+import { useTerminalStore } from "#product/stores/terminal/terminal-store";
 
 interface UseTerminalViewportInput {
   terminal: TerminalRecord;

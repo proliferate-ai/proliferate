@@ -1,23 +1,23 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { useWorkspaceFileActions } from "@/hooks/workspaces/facade/files/use-workspace-file-actions";
-import { useWorkspaceFileSearch } from "@/hooks/workspaces/ui/files/use-workspace-file-search";
-import { useWorkspaceCommandPaletteOpenFiles } from "@/hooks/workspaces/derived/use-workspace-command-palette-open-files";
-import { useWorkspaceCommandPaletteTabs } from "@/hooks/workspaces/workflows/use-workspace-command-palette-tabs";
-import { useAppCommandActionsContext } from "@/providers/AppCommandActionsProvider";
+import { useWorkspaceFileActions } from "#product/hooks/workspaces/facade/files/use-workspace-file-actions";
+import { useWorkspaceFileSearch } from "#product/hooks/workspaces/ui/files/use-workspace-file-search";
+import { useWorkspaceCommandPaletteOpenFiles } from "#product/hooks/workspaces/derived/use-workspace-command-palette-open-files";
+import { useWorkspaceCommandPaletteTabs } from "#product/hooks/workspaces/workflows/use-workspace-command-palette-tabs";
+import { useAppCommandActionsContext } from "#product/providers/AppCommandActionsProvider";
 import {
   commandPaletteFileValue,
   filterCommandPaletteEntries,
   groupCommandPaletteEntries,
   splitFilePath,
   type CommandPaletteEntry,
-} from "@/lib/domain/command-palette/entries";
+} from "#product/lib/domain/command-palette/entries";
 import {
   buildWorkspaceCommandPaletteEntries,
   type RunCommandState,
   type WorkspaceRemoteAccessActionState,
   type WorkspaceWebActionState,
-} from "@/hooks/workspaces/facade/workspace-command-palette-entries";
+} from "#product/hooks/workspaces/facade/workspace-command-palette-entries";
 
 interface UseWorkspaceCommandPaletteArgs {
   open: boolean;

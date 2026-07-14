@@ -1,4 +1,4 @@
-import type { SupportCapability } from "@/lib/domain/capabilities/server-capability-contract";
+import type { SupportCapability } from "#product/lib/domain/capabilities/server-capability-contract";
 
 /**
  * What the sidebar/command-palette support action should do, derived from the

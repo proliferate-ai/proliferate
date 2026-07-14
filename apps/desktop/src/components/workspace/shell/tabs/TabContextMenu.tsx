@@ -10,12 +10,12 @@ import {
   Trash,
   X,
 } from "@proliferate/ui/icons";
-import { SHORTCUTS } from "@/config/shortcuts/registry";
-import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
+import { SHORTCUTS } from "#product/config/shortcuts/registry";
+import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 import type {
   WorkspaceTabContextMenuCommand,
   WorkspaceTabContextMenuItem,
-} from "@/lib/domain/workspaces/tabs/context-menu";
+} from "#product/lib/domain/workspaces/tabs/context-menu";
 
 export function TabContextMenu({
   items,

@@ -1,15 +1,15 @@
 import { useState } from "react";
 import type { GitBranchRef } from "@anyharness/sdk";
-import { GitReviewOptionsMenu } from "./GitReviewOptionsMenu";
-import { GitReviewBaseSelector } from "./GitReviewBaseSelector";
-import { GitReviewTargetSelector } from "./GitReviewTargetSelector";
+import { GitReviewOptionsMenu } from "#product/components/workspace/git/GitReviewOptionsMenu";
+import { GitReviewBaseSelector } from "#product/components/workspace/git/GitReviewBaseSelector";
+import { GitReviewTargetSelector } from "#product/components/workspace/git/GitReviewTargetSelector";
 import { CollapseAll, Columns2, ExpandAll, FolderTree, Search } from "@proliferate/ui/icons";
 import { PaneIconButton } from "@proliferate/ui/layout/PaneIconButton";
 import { PopoverButton, POPOVER_SURFACE_CLASS } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchField";
-import type { GitPanelMode } from "@/lib/domain/workspaces/changes/git-panel-diff";
-import type { GitReviewFileEntry } from "@/lib/domain/workspaces/changes/git-review-entries";
+import type { GitPanelMode } from "#product/lib/domain/workspaces/changes/git-panel-diff";
+import type { GitReviewFileEntry } from "#product/lib/domain/workspaces/changes/git-review-entries";
 
 interface GitPanelHeaderProps {
   changesFilter: GitPanelMode;

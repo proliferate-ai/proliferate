@@ -1,28 +1,28 @@
 import { useCallback } from "react";
 import { sessionSlotBelongsToWorkspace } from "@proliferate/product-domain/sessions/activity";
-import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
-import { useSessionRuntimeActions } from "@/hooks/sessions/workflows/use-session-runtime-actions";
+import { useWorkspaceSessionCache } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
+import { useSessionRuntimeActions } from "#product/hooks/sessions/workflows/use-session-runtime-actions";
 import {
   clearLastViewedSession,
   clearViewedSessionErrors,
-} from "@/stores/preferences/workspace-ui-store";
+} from "#product/stores/preferences/workspace-ui-store";
 import {
   resolveWithWorkspaceFallback,
-} from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
-import { resolveWorkspaceShellStateKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+} from "#product/lib/domain/workspaces/selection/workspace-keyed-preferences";
+import { resolveWorkspaceShellStateKey } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import {
   getSessionRecord,
   getWorkspaceSessionRecords,
   removeSessionRecord,
-} from "@/stores/sessions/session-records";
-import { invalidateSessionActivationIntent } from "@/hooks/sessions/workflows/session-activation-guard";
+} from "#product/stores/sessions/session-records";
+import { invalidateSessionActivationIntent } from "#product/hooks/sessions/workflows/session-activation-guard";
 import {
   writeChatShellIntentForEmptySurface,
   writeChatShellIntentForSession,
-} from "@/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
-import { chatWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+} from "#product/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
+import { chatWorkspaceShellTabKey } from "#product/lib/domain/workspaces/tabs/shell-tabs";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 
 export function useDismissedSessionCleanup() {
   const { activateSession, closeSessionSlotStream } = useSessionRuntimeActions();

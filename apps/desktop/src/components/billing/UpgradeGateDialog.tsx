@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
 import { Check } from "@proliferate/ui/icons";
-import type { UpgradeGateCopy } from "@/copy/billing/upgrade-gate-copy";
+import type { UpgradeGateCopy } from "#product/copy/billing/upgrade-gate-copy";
 
 interface UpgradeGateDialogProps {
   open: boolean;

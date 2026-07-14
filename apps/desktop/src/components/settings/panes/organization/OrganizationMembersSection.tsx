@@ -2,14 +2,14 @@ import { useState } from "react";
 import { Search } from "@proliferate/ui/icons";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
-import { OrganizationMembersList } from "@/components/settings/panes/organization/OrganizationMembersList";
-import { OrganizationSelectMenu } from "@/components/settings/panes/organization/OrganizationSelectMenu";
-import { buildMemberRows } from "@/lib/domain/organizations/member-list-rows";
+import { OrganizationMembersList } from "#product/components/settings/panes/organization/OrganizationMembersList";
+import { OrganizationSelectMenu } from "#product/components/settings/panes/organization/OrganizationSelectMenu";
+import { buildMemberRows } from "#product/lib/domain/organizations/member-list-rows";
 import type {
   OrganizationInvitationRecord,
   OrganizationMemberRecord,
   OrganizationRole,
-} from "@/lib/domain/organizations/organization-records";
+} from "#product/lib/domain/organizations/organization-records";
 
 type RoleFilter = "all" | OrganizationRole;
 type StatusFilter = "all" | "active" | "invited";

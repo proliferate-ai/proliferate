@@ -5,7 +5,7 @@ import {
   ScratchPadIcon,
   type IconProps,
 } from "@proliferate/ui/icons";
-import type { RightPanelTool } from "@/lib/domain/workspaces/shell/right-panel-model";
+import type { RightPanelTool } from "#product/lib/domain/workspaces/shell/right-panel-model";
 
 const HEADER_TOOL_TAB_CLASS = "ui-tab-system-tab right-panel-tool-tab";
 

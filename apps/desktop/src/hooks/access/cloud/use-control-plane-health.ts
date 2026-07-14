@@ -3,8 +3,8 @@ import { useProductHost } from "@proliferate/product-client/host/ProductHostProv
 import {
   checkControlPlaneReachable,
   getLastKnownControlPlaneReachable,
-} from "@/lib/access/cloud/health";
-import { controlPlaneHealthKey } from "./query-keys";
+} from "#product/lib/access/cloud/health";
+import { controlPlaneHealthKey } from "#product/hooks/access/cloud/query-keys";
 
 // Core probe keyed on an explicitly-supplied deployment base URL. Callers under
 // the host use `useControlPlaneHealth`; the host provider, which builds the host

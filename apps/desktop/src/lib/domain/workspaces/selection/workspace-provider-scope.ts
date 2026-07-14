@@ -1,4 +1,4 @@
-import { APP_ROUTES } from "@/config/app-routes";
+import { APP_ROUTES } from "#product/config/app-routes";
 
 export function isWorkspaceProviderRoute(pathname: string): boolean {
   return pathname === APP_ROUTES.home || pathname === APP_ROUTES.settings;

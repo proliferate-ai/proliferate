@@ -2,7 +2,7 @@
 
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { IntegrationIcon } from "./IntegrationIcon";
+import { IntegrationIcon } from "#product/components/settings/panes/integrations/IntegrationIcon";
 
 /** Seed namespaces whose logos ship as image assets. */
 const IMAGE_NAMESPACES = [

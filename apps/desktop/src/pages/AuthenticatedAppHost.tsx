@@ -1,12 +1,12 @@
 import { useEffect, useRef, type ComponentType } from "react";
 import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
-import { APP_ROUTES } from "@/config/app-routes";
-import { DesktopWorkspaceDeepLinkPage } from "@/pages/DesktopWorkspaceDeepLinkPage";
-import { MainPage } from "@/pages/MainPage";
-import { SettingsPage } from "@/pages/SettingsPage";
-import { WorkflowsPage } from "@/pages/WorkflowsPage";
-import { WorkspacesPage } from "@/pages/WorkspacesPage";
-import { useOrganizationSelectionLifecycle } from "@/hooks/organizations/lifecycle/use-organization-selection-lifecycle";
+import { APP_ROUTES } from "#product/config/app-routes";
+import { DesktopWorkspaceDeepLinkPage } from "#product/pages/DesktopWorkspaceDeepLinkPage";
+import { MainPage } from "#product/pages/MainPage";
+import { SettingsPage } from "#product/pages/SettingsPage";
+import { WorkflowsPage } from "#product/pages/WorkflowsPage";
+import { WorkspacesPage } from "#product/pages/WorkspacesPage";
+import { useOrganizationSelectionLifecycle } from "#product/hooks/organizations/lifecycle/use-organization-selection-lifecycle";
 
 type MainRouteComponent = ComponentType<{ workspaceVisible?: boolean }>;
 type SettingsRouteComponent = ComponentType<{ returnTo?: string }>;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { migrateUserPreferences } from "@/lib/domain/preferences/user/migration";
-import { USER_PREFERENCE_DEFAULTS } from "@/lib/domain/preferences/user/model";
-import type { LegacyUserPreferencesInput } from "@/lib/domain/preferences/user/persisted-keys";
+import { migrateUserPreferences } from "#product/lib/domain/preferences/user/migration";
+import { USER_PREFERENCE_DEFAULTS } from "#product/lib/domain/preferences/user/model";
+import type { LegacyUserPreferencesInput } from "#product/lib/domain/preferences/user/persisted-keys";
 
 describe("release notice preference migration", () => {
   it("preserves exact normalized version keys and one current cached title", () => {

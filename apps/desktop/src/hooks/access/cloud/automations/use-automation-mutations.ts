@@ -17,7 +17,7 @@ import {
   automationDetailKey,
   automationRunsKey,
   automationsRootKey,
-} from "./query-keys";
+} from "#product/hooks/access/cloud/automations/query-keys";
 
 export function useAutomationMutations() {
   const queryClient = useQueryClient();

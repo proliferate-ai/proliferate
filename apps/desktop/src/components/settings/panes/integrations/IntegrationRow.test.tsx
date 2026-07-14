@@ -2,8 +2,8 @@
 
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { CloudIntegrationView } from "@/lib/domain/cloud/integrations";
-import { IntegrationRow } from "./IntegrationRow";
+import type { CloudIntegrationView } from "#product/lib/domain/cloud/integrations";
+import { IntegrationRow } from "#product/components/settings/panes/integrations/IntegrationRow";
 
 function makeIntegration(overrides: Partial<CloudIntegrationView> = {}): CloudIntegrationView {
   return {

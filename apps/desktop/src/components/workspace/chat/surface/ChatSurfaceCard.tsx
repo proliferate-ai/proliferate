@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Badge } from "@proliferate/ui/primitives/Badge";
-import { CHAT_COLUMN_CLASSNAME, CHAT_SURFACE_GUTTER_CLASSNAME } from "@/config/chat-layout";
+import { CHAT_COLUMN_CLASSNAME, CHAT_SURFACE_GUTTER_CLASSNAME } from "#product/config/chat-layout";
 
 interface ChatSurfaceCardProps {
   badge?: string;

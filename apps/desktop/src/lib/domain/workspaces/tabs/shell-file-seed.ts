@@ -2,8 +2,8 @@ import {
   getWorkspaceShellTabKey,
   parseWorkspaceShellTabKey,
   type WorkspaceShellTabKey,
-} from "@/lib/domain/workspaces/tabs/shell-tabs";
-import { viewerTargetKey, type ViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
+} from "#product/lib/domain/workspaces/tabs/shell-tabs";
+import { viewerTargetKey, type ViewerTarget } from "#product/lib/domain/workspaces/viewer/viewer-target";
 
 export interface WorkspaceFileTabSeed {
   shellOrderKeys: WorkspaceShellTabKey[];

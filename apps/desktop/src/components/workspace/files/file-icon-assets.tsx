@@ -62,7 +62,7 @@ import typescriptIcon from "@/assets/file-icons/material/typescript.svg?raw";
 import xmlIcon from "@/assets/file-icons/material/xml.svg?raw";
 import yamlIcon from "@/assets/file-icons/material/yaml.svg?raw";
 import yarnIcon from "@/assets/file-icons/material/yarn.svg?raw";
-import type { FileVisualKind } from "@/lib/domain/files/file-visuals";
+import type { FileVisualKind } from "#product/lib/domain/files/file-visuals";
 
 export type FileIconTone =
   | "accent"

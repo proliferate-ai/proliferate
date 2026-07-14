@@ -7,11 +7,11 @@ import {
   VSCodeIcon,
   WindsurfIcon,
   ZedIcon,
-} from "@/components/workspace/open-target/app-icons";
+} from "#product/components/workspace/open-target/app-icons";
 import {
   OPEN_TARGET_FALLBACK_ICON,
   OPEN_TARGET_ICON_DEFINITIONS,
-} from "./open-targets";
+} from "#product/config/open-targets";
 
 describe("open target icon definitions", () => {
   it("uses dedicated components for locally sourced app icons", () => {

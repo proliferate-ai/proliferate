@@ -9,7 +9,7 @@ import {
   getComputeTargetAppearancePreferences,
   setComputeTargetAppearancePreference,
   type ComputeTargetAppearancePreferencesDependencies,
-} from "./compute-target-appearance-preferences";
+} from "#product/lib/workflows/preferences/compute-target-appearance-preferences";
 
 const dependencies: ComputeTargetAppearancePreferencesDependencies = {
   readPersistedValue: mocks.readPersistedValue,

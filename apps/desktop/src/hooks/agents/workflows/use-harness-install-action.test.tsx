@@ -3,7 +3,7 @@
 import { act, renderHook } from "@testing-library/react";
 import type { AgentSummary } from "@anyharness/sdk";
 import { beforeEach, expect, it, vi } from "vitest";
-import { useHarnessInstallAction } from "./use-harness-install-action";
+import { useHarnessInstallAction } from "#product/hooks/agents/workflows/use-harness-install-action";
 
 const installAgent = vi.hoisted(() => vi.fn());
 const refreshAgentResources = vi.hoisted(() => vi.fn());

@@ -2,11 +2,11 @@ import {
   resolveChatLaunchRetryMode,
   resolveLaunchIntentPendingWorkspaceId,
   type ChatLaunchRetryMode,
-} from "@/lib/domain/chat/launch/launch-intent";
-import type { HomeNextModelSelection } from "@/lib/domain/home/home-next-launch";
-import type { PendingWorkspaceInitialSession } from "@/lib/domain/workspaces/creation/pending-entry";
-import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+} from "#product/lib/domain/chat/launch/launch-intent";
+import type { HomeNextModelSelection } from "#product/lib/domain/home/home-next-launch";
+import type { PendingWorkspaceInitialSession } from "#product/lib/domain/workspaces/creation/pending-entry";
+import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 export function homeNextLaunchErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);

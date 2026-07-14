@@ -2,8 +2,8 @@ import type {
   AgentSummary,
   ReconcileAgentResult,
 } from "@anyharness/sdk";
-import { AGENT_SETUP_COPY } from "@/copy/agents/agents-copy";
-import { AGENT_READINESS_LABELS } from "@/lib/domain/agents/readiness-presentation";
+import { AGENT_SETUP_COPY } from "#product/copy/agents/agents-copy";
+import { AGENT_READINESS_LABELS } from "#product/lib/domain/agents/readiness-presentation";
 
 export type AgentStatusTone =
   | "muted"

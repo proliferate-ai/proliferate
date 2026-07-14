@@ -2,11 +2,11 @@
 
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useChatPromptRecoveryActions } from "@/hooks/chat/workflows/use-chat-prompt-recovery-actions";
+import { useChatPromptRecoveryActions } from "#product/hooks/chat/workflows/use-chat-prompt-recovery-actions";
 import {
   useChatPromptRecoveryStore,
   type ChatPromptRecovery,
-} from "@/stores/chat/chat-prompt-recovery-store";
+} from "#product/stores/chat/chat-prompt-recovery-store";
 import { createPromptOutboxEntry } from "@proliferate/product-domain/sessions/intents/session-intent-model";
 
 const mocks = vi.hoisted(() => ({

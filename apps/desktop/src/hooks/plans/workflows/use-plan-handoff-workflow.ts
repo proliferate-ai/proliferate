@@ -7,36 +7,36 @@ import type {
   PromptInputBlock,
 } from "@anyharness/sdk";
 import { useSetSessionConfigOptionMutation } from "@anyharness/sdk-react";
-import { PLAN_HANDOFF_DEFAULT_PROMPT } from "@/copy/plans/plan-prompts";
-import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
-import { useActiveSessionLaunchState } from "@/hooks/chat/derived/use-active-session-config-state";
-import { useChatLaunchCatalog } from "@/hooks/chat/derived/use-chat-launch-catalog";
-import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
-import { useSessionCreationActions } from "@/hooks/sessions/workflows/use-session-creation-actions";
-import { useSessionDismissActions } from "@/hooks/sessions/workflows/use-session-dismiss-actions";
-import type { SessionActivationOutcome } from "@/hooks/sessions/workflows/session-activation-guard";
-import { useSessionPromptWorkflow } from "@/hooks/sessions/workflows/use-session-prompt-workflow";
-import { useWorkspaceShellActivation } from "@/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
-import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
+import { PLAN_HANDOFF_DEFAULT_PROMPT } from "#product/copy/plans/plan-prompts";
+import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
+import { useActiveSessionLaunchState } from "#product/hooks/chat/derived/use-active-session-config-state";
+import { useChatLaunchCatalog } from "#product/hooks/chat/derived/use-chat-launch-catalog";
+import { useConfiguredLaunchReadiness } from "#product/hooks/chat/derived/use-configured-launch-readiness";
+import { useSessionCreationActions } from "#product/hooks/sessions/workflows/use-session-creation-actions";
+import { useSessionDismissActions } from "#product/hooks/sessions/workflows/use-session-dismiss-actions";
+import type { SessionActivationOutcome } from "#product/hooks/sessions/workflows/session-activation-guard";
+import { useSessionPromptWorkflow } from "#product/hooks/sessions/workflows/use-session-prompt-workflow";
+import { useWorkspaceShellActivation } from "#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
+import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
-import { buildPlanHandoffPrompt } from "@/lib/domain/plans/handoff-prompt";
+import { buildPlanHandoffPrompt } from "#product/lib/domain/plans/handoff-prompt";
 import {
   listPlanHandoffModeOptions,
   resolvePlanHandoffModeId,
   resolvePlanHandoffModeIdFromOptions,
   resolvePlanHandoffPrePromptConfigChanges,
-} from "@/lib/domain/plans/handoff-mode";
+} from "#product/lib/domain/plans/handoff-mode";
 import type {
   ModelSelectorProps,
   ModelSelectorSelection,
-} from "@/lib/domain/chat/models/model-selector-types";
-import { resolveModelDisplayName } from "@/lib/domain/chat/models/model-display";
-import { getSessionClientAndWorkspace } from "@/lib/access/anyharness/session-runtime";
-import type { CloudSandboxGatewayUrlSource } from "@/lib/access/cloud/cloud-sandbox-gateway";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { getSessionRecord } from "@/stores/sessions/session-records";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useToastStore } from "@/stores/toast/toast-store";
+} from "#product/lib/domain/chat/models/model-selector-types";
+import { resolveModelDisplayName } from "#product/lib/domain/chat/models/model-display";
+import { getSessionClientAndWorkspace } from "#product/lib/access/anyharness/session-runtime";
+import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/cloud-sandbox-gateway";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { getSessionRecord } from "#product/stores/sessions/session-records";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 // Owns the plan handoff dialog form and submit workflow wiring. Does not own session runtime.
 export function usePlanHandoffWorkflow({

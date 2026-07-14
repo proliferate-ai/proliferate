@@ -1,6 +1,6 @@
 import { Folder } from "@proliferate/ui/icons";
-import { WORKSPACE_ARRIVAL_LABELS } from "@/copy/workspaces/workspace-arrival-copy";
-import { ChatSurfaceCard } from "./ChatSurfaceCard";
+import { WORKSPACE_ARRIVAL_LABELS } from "#product/copy/workspaces/workspace-arrival-copy";
+import { ChatSurfaceCard } from "#product/components/workspace/chat/surface/ChatSurfaceCard";
 
 interface NoWorkspaceStateProps {
   bottomInsetPx: number;

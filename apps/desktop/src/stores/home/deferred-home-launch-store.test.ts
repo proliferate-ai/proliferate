@@ -3,7 +3,7 @@ import {
   buildDeferredHomeLaunchId,
   useDeferredHomeLaunchStore,
   type DeferredHomeLaunch,
-} from "./deferred-home-launch-store";
+} from "#product/stores/home/deferred-home-launch-store";
 
 function launch(overrides: Partial<DeferredHomeLaunch> = {}): DeferredHomeLaunch {
   return {

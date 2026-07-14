@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { PrStatusDot, prStatusTooltip, type PrStatusKind } from "@proliferate/product-ui/workspaces/PrStatusBadge";
-import { WorkspaceItem } from "@/components/workspace/shell/sidebar/WorkspaceItem";
-import type { SidebarStatusIndicator } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
-import type { WorkspaceGitStatus } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
+import { WorkspaceItem } from "#product/components/workspace/shell/sidebar/WorkspaceItem";
+import type { SidebarStatusIndicator } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
+import type { WorkspaceGitStatus } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
 
 function makeGitStatus(overrides: Partial<WorkspaceGitStatus> = {}): WorkspaceGitStatus {
   return {

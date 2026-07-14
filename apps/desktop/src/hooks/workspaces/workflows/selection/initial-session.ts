@@ -1,11 +1,11 @@
-import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
-import { writeChatShellIntentForSession } from "@/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
-import { isPendingWorkspaceUiKey } from "@/lib/domain/workspaces/creation/pending-entry";
+import type { SessionRuntimeRecord } from "#product/stores/sessions/session-types";
+import { writeChatShellIntentForSession } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
+import { isPendingWorkspaceUiKey } from "#product/lib/domain/workspaces/creation/pending-entry";
 import {
   OPTIMISTIC_WORKSPACE_SESSION_AGENT_KIND,
   OPTIMISTIC_WORKSPACE_SESSION_TITLE,
   resolveOptimisticWorkspaceSessionId,
-} from "@/lib/domain/workspaces/selection/optimistic-session-shell";
+} from "#product/lib/domain/workspaces/selection/optimistic-session-shell";
 
 export interface InitialSessionRecordDeps {
   createEmptySessionRecord: (

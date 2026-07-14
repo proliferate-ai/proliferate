@@ -1,6 +1,6 @@
 import { Cloud, Laptop } from "lucide-react";
 import { SegmentedControl } from "@proliferate/ui/primitives/SegmentedControl";
-import { useAgentSurfaceStore } from "@/stores/ui/agent-surface-store";
+import { useAgentSurfaceStore } from "#product/stores/ui/agent-surface-store";
 
 /**
  * Right slot of the settings scope-tab bar, Agents scope only: the Cloud|Local

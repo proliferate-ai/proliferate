@@ -6,8 +6,8 @@ import type {
   HomeNextDestination,
   HomeNextRepoLaunchKind,
   ModelAvailabilityState,
-} from "@/lib/domain/home/home-next-launch";
-import { useHomeNextState } from "./use-home-next-state";
+} from "#product/lib/domain/home/home-next-launch";
+import { useHomeNextState } from "#product/hooks/home/derived/use-home-next-state";
 
 const stateMocks = vi.hoisted(() => {
   const model = {

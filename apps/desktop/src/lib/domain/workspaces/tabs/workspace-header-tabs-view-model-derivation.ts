@@ -8,20 +8,20 @@ import {
   getLinkedChildViewState,
   type HeaderHierarchyChildRow,
   type KnownHeaderSession,
-} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-model-helpers";
+} from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-model-helpers";
 import {
   resolveManualChatGroupColor,
   type DisplayManualChatGroup,
-} from "@/lib/domain/workspaces/tabs/manual-groups";
-import { parseWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
+} from "#product/lib/domain/workspaces/tabs/manual-groups";
+import { parseWorkspaceShellTabKey } from "#product/lib/domain/workspaces/tabs/shell-tabs";
 import type {
   HeaderChatMenuEntry,
   HeaderChatStripRow,
   HeaderChatTabEntry,
   HeaderWorkspaceShellStripRow,
-} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
-import type { GroupedChatTab } from "@/lib/domain/workspaces/tabs/grouping";
-import { buildDelegatedWorkTabIdentity } from "@/lib/domain/delegated-work/presentation";
+} from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
+import type { GroupedChatTab } from "#product/lib/domain/workspaces/tabs/grouping";
+import { buildDelegatedWorkTabIdentity } from "#product/lib/domain/delegated-work/presentation";
 
 export function buildManualGroupByTopLevelSessionId(
   displayManualGroups: readonly DisplayManualChatGroup[],

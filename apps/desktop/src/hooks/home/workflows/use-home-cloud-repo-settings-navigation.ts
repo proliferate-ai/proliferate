@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
-import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
+import { buildCloudRepoSettingsHref } from "#product/lib/domain/settings/navigation";
+import type { SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
 
 interface CloudRepoSettingsTarget {
   gitOwner?: string | null;

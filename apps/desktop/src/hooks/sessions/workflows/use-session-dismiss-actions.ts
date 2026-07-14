@@ -1,12 +1,12 @@
 import { useCallback } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useDismissSessionMutation } from "@anyharness/sdk-react";
-import { useDismissedSessionCleanup } from "@/hooks/sessions/workflows/use-dismissed-session-cleanup";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
-import { getSessionClientAndWorkspace } from "@/lib/access/anyharness/session-runtime";
-import { getSessionRecord } from "@/stores/sessions/session-records";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useToastStore } from "@/stores/toast/toast-store";
+import { useDismissedSessionCleanup } from "#product/hooks/sessions/workflows/use-dismissed-session-cleanup";
+import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
+import { getSessionClientAndWorkspace } from "#product/lib/access/anyharness/session-runtime";
+import { getSessionRecord } from "#product/stores/sessions/session-records";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 export function useSessionDismissActions() {
   const host = useProductHost();

@@ -5,7 +5,7 @@ import {
   applyScratchListOutdentFormatting,
   parseScratchMarkdownListPrefix,
   shouldScratchBackspaceOutdent,
-} from "./scratch-list-formatting";
+} from "#product/lib/domain/workspaces/scratch/scratch-list-formatting";
 
 describe("parseScratchMarkdownListPrefix", () => {
   it("parses markdown bullet prefixes", () => {

@@ -1,4 +1,4 @@
-import type { PublishIntent } from "@/lib/domain/workspaces/creation/publish-workflow-model";
+import type { PublishIntent } from "#product/lib/domain/workspaces/creation/publish-workflow-model";
 
 export interface PublishDialogState {
   open: boolean;

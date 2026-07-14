@@ -9,7 +9,7 @@ import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import {
   createCloudWorkspaceMaterializationCacheTracker,
-} from "./cloud-workspace-materialization-cache";
+} from "#product/hooks/workspaces/cache/cloud-workspace-materialization-cache";
 
 const CACHE_SCOPE_KEY = "https://api.test::user:user-1";
 const CLOUD_WORKSPACE_ID = "cloud-workspace-1";

@@ -5,7 +5,7 @@ import {
   buildGitPanelSections,
   gitPanelRuntimeBlockWorkspaceId,
   resolveGitPanelBaseRef,
-} from "./git-panel-diff";
+} from "#product/lib/domain/workspaces/changes/git-panel-diff";
 
 function changedFile(overrides: Partial<GitChangedFile>): GitChangedFile {
   return {

@@ -7,10 +7,10 @@ import { useEffect, useMemo, useRef } from "react";
 import type { DesktopDiagnosticsBridge } from "@proliferate/product-client/host/desktop-bridge";
 import type { ProductSupportTelemetryContext } from "@proliferate/product-client/host/product-host";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
-import { useProductStorageContext } from "@/hooks/persistence/facade/use-product-storage-context";
-import type { DesktopProductEventMap } from "@/lib/domain/telemetry/events";
-import type { ProductStorageContext } from "@/lib/infra/persistence/product-storage";
+import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
+import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
+import type { DesktopProductEventMap } from "#product/lib/domain/telemetry/events";
+import type { ProductStorageContext } from "#product/lib/infra/persistence/product-storage";
 import {
   completeSupportReportUpload,
   createSupportReport,
@@ -20,22 +20,22 @@ import type {
   SupportReportCompleteRequest,
   SupportReportUploadTargetsRequest,
 } from "@proliferate/cloud-sdk/types";
-import { listenSupportReportJobs } from "@/lib/access/browser/support-report-job-events";
-import { createSessionDebugClient } from "@/lib/access/anyharness/debug-client";
+import { listenSupportReportJobs } from "#product/lib/access/browser/support-report-job-events";
+import { createSessionDebugClient } from "#product/lib/access/anyharness/debug-client";
 import type {
   SupportReportJob,
-} from "@/lib/domain/support/report-types";
+} from "#product/lib/domain/support/report-types";
 import {
   describeSupportReportUploadFailure,
   shouldShowSupportReportUploadFailureToast,
   supportReportRetriesExhausted,
-} from "@/lib/domain/support/report-upload-failure";
+} from "#product/lib/domain/support/report-upload-failure";
 import {
   buildSupportReportPackage,
   type SupportReportUploadDependencies,
-} from "@/lib/workflows/support/support-report-upload-workflows";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { useToastStore } from "@/stores/toast/toast-store";
+} from "#product/lib/workflows/support/support-report-upload-workflows";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
 import {
   deleteSupportReportJobAttachments,
   markPersistedJobFailed,
@@ -43,7 +43,7 @@ import {
   readPersistedJobs,
   removePersistedJob,
   scheduleNextRetry,
-} from "./support-report-upload-persistence";
+} from "#product/hooks/support/lifecycle/support-report-upload-persistence";
 import {
   attachmentUploadFiles,
   buildCreateReportRequest,
@@ -56,7 +56,7 @@ import {
   toLocalServerCorrelation,
   trackSupportReportSubmitted,
   validateAttachmentSizes,
-} from "./support-report-upload-payload";
+} from "#product/hooks/support/lifecycle/support-report-upload-payload";
 
 interface SupportReportUploadResult {
   reportId: string;

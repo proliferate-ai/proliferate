@@ -1,4 +1,4 @@
-import { FileChangeStats } from "@/components/content/ui/FileChangeStats";
+import { FileChangeStats } from "#product/components/content/ui/FileChangeStats";
 import { ArrowRight, FilePen, Undo } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 

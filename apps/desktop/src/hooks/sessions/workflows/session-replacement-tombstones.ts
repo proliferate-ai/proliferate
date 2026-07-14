@@ -1,7 +1,7 @@
 import {
   type PersistedSessionReplacementTombstones,
   writeSessionReplacementTombstones,
-} from "@/lib/access/persistence/session-replacement-tombstones-storage";
+} from "#product/lib/access/persistence/session-replacement-tombstones-storage";
 
 type SessionIdentity = { id: string };
 

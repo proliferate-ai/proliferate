@@ -5,11 +5,11 @@ import {
   prStatusCompoundLabel,
   prStatusViewFromGitStatus,
   sidebarGitGlyphForStatus,
-} from "@/lib/domain/workspaces/git-status/pr-status-presentation";
+} from "#product/lib/domain/workspaces/git-status/pr-status-presentation";
 import type {
   WorkspaceGitStatus,
   WorkspacePrStatus,
-} from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
+} from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
 
 const NOW = "2026-07-02T12:00:00.000Z";
 const THREE_HOURS_AGO = "2026-07-02T09:00:00.000Z";

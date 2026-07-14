@@ -1,13 +1,13 @@
 import { useMemo } from "react";
-import { ComposerAttachedPanel } from "./ComposerAttachedPanel";
+import { ComposerAttachedPanel } from "#product/components/workspace/chat/input/ComposerAttachedPanel";
 import {
   ComposerOptionRow,
   useComposerOptionNumberKeys,
-} from "./ComposerOptionRow";
-import { useActivePendingApproval } from "@/hooks/chat/derived/use-active-pending-session-interactions";
-import { useHeldInteractionPayload } from "@/hooks/chat/ui/use-composer-dock-card-presence";
-import { useChatPermissionActions } from "@/hooks/chat/workflows/use-chat-permission-actions";
-import type { PermissionOptionAction } from "@/lib/domain/chat/composer/chat-input-helpers";
+} from "#product/components/workspace/chat/input/ComposerOptionRow";
+import { useActivePendingApproval } from "#product/hooks/chat/derived/use-active-pending-session-interactions";
+import { useHeldInteractionPayload } from "#product/hooks/chat/ui/use-composer-dock-card-presence";
+import { useChatPermissionActions } from "#product/hooks/chat/workflows/use-chat-permission-actions";
+import type { PermissionOptionAction } from "#product/lib/domain/chat/composer/chat-input-helpers";
 
 // The header carries a fixed kind identity — a shield glyph + "Permission
 // request" — so every approval reads as the same kind of prompt no matter what

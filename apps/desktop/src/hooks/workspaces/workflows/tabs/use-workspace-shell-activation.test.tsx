@@ -5,15 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createEmptySessionRecord,
   putSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
+} from "#product/stores/sessions/session-records";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 import {
   WORKSPACE_UI_DEFAULTS,
-} from "@/lib/domain/preferences/workspace-ui/model";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useWorkspaceShellActivation } from "@/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
+} from "#product/lib/domain/preferences/workspace-ui/model";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useWorkspaceShellActivation } from "#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
 
 const hookMocks = vi.hoisted(() => ({
   selectSession: vi.fn(),

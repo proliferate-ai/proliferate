@@ -1,4 +1,4 @@
-import { getFileVisual, type FileVisualKind } from "@/lib/domain/files/file-visuals";
+import { getFileVisual, type FileVisualKind } from "#product/lib/domain/files/file-visuals";
 
 /**
  * Codex-style per-filetype icon tints for the file tree overlay.

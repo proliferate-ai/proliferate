@@ -3,12 +3,12 @@ import {
   FILE_ICON_ASSETS,
   FILE_ICON_TONES,
   type FileIconTone,
-} from "./file-icon-assets";
+} from "#product/components/workspace/files/file-icon-assets";
 import {
   getExpandedFileVisualKind,
   getFileVisual,
   type FileVisualKind,
-} from "@/lib/domain/files/file-visuals";
+} from "#product/lib/domain/files/file-visuals";
 
 function toneClass(tone: FileIconTone): string {
   switch (tone) {

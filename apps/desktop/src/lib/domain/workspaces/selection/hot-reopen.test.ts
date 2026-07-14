@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { createTranscriptState, type TranscriptState } from "@anyharness/sdk";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
+import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
 import {
   hotReopenWorkspaceLookupIds,
   isHotReopenEligibleSessionSlot,
   resolveHotReopenCandidate,
   type HotReopenSessionSlotSnapshot,
-} from "@/lib/domain/workspaces/selection/hot-reopen";
+} from "#product/lib/domain/workspaces/selection/hot-reopen";
 
 describe("hotReopenWorkspaceLookupIds", () => {
   it("uses the resolved workspace id, logical id, related materializations, and de-dupes", () => {

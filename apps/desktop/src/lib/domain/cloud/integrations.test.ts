@@ -6,7 +6,7 @@ import type {
 import {
   isTerminalIntegrationOauthFlowStatus,
   mergeCloudIntegrations,
-} from "./integrations";
+} from "#product/lib/domain/cloud/integrations";
 
 function catalogItem(overrides: Partial<IntegrationCatalogItem> = {}): IntegrationCatalogItem {
   return {

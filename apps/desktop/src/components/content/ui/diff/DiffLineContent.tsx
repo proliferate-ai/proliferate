@@ -1,10 +1,10 @@
-import type { DiffLine } from "@/lib/domain/files/diff-parser";
-import type { HighlightedToken } from "@/lib/infra/editor/highlighting";
+import type { DiffLine } from "#product/lib/domain/files/diff-parser";
+import type { HighlightedToken } from "#product/lib/infra/editor/highlighting";
 import {
   renderContentSearchMarkedText,
   renderContentSearchMarkedToken,
-} from "@/components/content/ui/search/ContentSearchMarks";
-import { findContentSearchTokenMatchSegments } from "@/lib/domain/content-search/content-search";
+} from "#product/components/content/ui/search/ContentSearchMarks";
+import { findContentSearchTokenMatchSegments } from "#product/lib/domain/content-search/content-search";
 
 export function DiffLineContent({
   line,

@@ -3,18 +3,18 @@ import { useShallow } from "zustand/react/shallow";
 import {
   findLogicalWorkspace,
   logicalWorkspaceRelatedIds,
-} from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
+} from "#product/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import {
   resolveAutoShowMoreRepoKey,
-} from "@/lib/domain/workspaces/sidebar/sidebar-groups";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-groups";
 import {
   SIDEBAR_REPO_GROUP_ITEM_LIMIT,
   type SidebarGroupState,
-} from "@/lib/domain/workspaces/sidebar/sidebar-model";
-import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useWorkspaceSidebarShowMoreStore } from "@/stores/workspaces/workspace-sidebar-show-more-store";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-model";
+import { useLogicalWorkspaces } from "#product/hooks/workspaces/derived/use-logical-workspaces";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useWorkspaceSidebarShowMoreStore } from "#product/stores/workspaces/workspace-sidebar-show-more-store";
 
 interface UseSidebarRepoGroupStateArgs {
   groups: SidebarGroupState[];

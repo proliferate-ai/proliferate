@@ -2,8 +2,8 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { UpgradeGateDialog } from "@/components/billing/UpgradeGateDialog";
-import { TEAM_UPGRADE_GATE_COPY } from "@/copy/billing/upgrade-gate-copy";
+import { UpgradeGateDialog } from "#product/components/billing/UpgradeGateDialog";
+import { TEAM_UPGRADE_GATE_COPY } from "#product/copy/billing/upgrade-gate-copy";
 
 afterEach(() => {
   cleanup();

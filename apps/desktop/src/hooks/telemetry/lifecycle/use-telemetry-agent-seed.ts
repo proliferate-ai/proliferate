@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useRuntimeHealthQuery } from "@anyharness/sdk-react";
-import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
 // Owns agent seed hydration telemetry emitted from runtime health changes.
 // Reports through the typed telemetry adapter. Does not own runtime health

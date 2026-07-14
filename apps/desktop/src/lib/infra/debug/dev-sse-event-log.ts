@@ -2,9 +2,9 @@ import type { SessionEventEnvelope } from "@anyharness/sdk";
 import type {
   DevSSEEventRecord,
   DevSSEEventStatus,
-} from "@/lib/infra/debug/dev-sse-event-record";
-import { sanitizeDevSSEEnvelope } from "@/lib/infra/debug/dev-sse-envelope-sanitizer";
-import { logDevTranscriptPhaseEvent } from "@/lib/infra/debug/dev-transcript-phase-log";
+} from "#product/lib/infra/debug/dev-sse-event-record";
+import { sanitizeDevSSEEnvelope } from "#product/lib/infra/debug/dev-sse-envelope-sanitizer";
+import { logDevTranscriptPhaseEvent } from "#product/lib/infra/debug/dev-transcript-phase-log";
 
 export function logDevSSEEvent(
   sessionId: string,

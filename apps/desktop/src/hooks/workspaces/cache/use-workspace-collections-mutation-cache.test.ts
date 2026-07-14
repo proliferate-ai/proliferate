@@ -4,14 +4,14 @@ import type { Workspace } from "@anyharness/sdk";
 import type { CloudWorkspaceDetail } from "@/lib/access/cloud/client";
 import {
   buildWorkspaceCollections,
-} from "@/lib/domain/workspaces/cloud/collections";
+} from "#product/lib/domain/workspaces/cloud/collections";
 import {
   getWorkspaceCollectionsFromCache,
   workspaceCollectionsKey,
-} from "@/hooks/workspaces/cache/query-keys";
+} from "#product/hooks/workspaces/cache/query-keys";
 import {
   upsertCloudWorkspaceForRuntime,
-} from "./use-workspace-collections-mutation-cache";
+} from "#product/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
 
 function makeCloudWorkspace(overrides: Partial<CloudWorkspaceDetail> = {}): CloudWorkspaceDetail {
   return {

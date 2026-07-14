@@ -1,10 +1,10 @@
-import { closeSessionStreamHandle } from "@/lib/access/anyharness/session-stream-handles";
-import { clearSessionReconnectTimer } from "@/lib/workflows/sessions/session-reconnect-state";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { closeSessionStreamHandle } from "#product/lib/access/anyharness/session-stream-handles";
+import { clearSessionReconnectTimer } from "#product/lib/workflows/sessions/session-reconnect-state";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import {
   getMaterializedSessionId,
   getSessionRecord,
-} from "@/stores/sessions/session-records";
+} from "#product/stores/sessions/session-records";
 
 export function closeSessionSlotStream(sessionId: string): void {
   clearSessionReconnectTimer(sessionId);

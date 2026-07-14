@@ -6,10 +6,10 @@ import {
   AgentHarnessModelSelector,
   type AgentHarnessModelGroup,
   type AgentHarnessModelOption,
-} from "@/components/agents/AgentHarnessModelSelector";
-import { SessionConfigControls } from "@/components/workspace/chat/input/SessionConfigControls";
-import { CHAT_COMPOSER_LABELS } from "@/copy/chat/chat-copy";
-import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
+} from "#product/components/agents/AgentHarnessModelSelector";
+import { SessionConfigControls } from "#product/components/workspace/chat/input/SessionConfigControls";
+import { CHAT_COMPOSER_LABELS } from "#product/copy/chat/chat-copy";
+import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 
 export type AgentHarnessConfigModelOption = AgentHarnessModelOption;
 export type AgentHarnessConfigModelGroup = AgentHarnessModelGroup;

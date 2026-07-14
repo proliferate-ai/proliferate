@@ -1,7 +1,7 @@
 import { useCallback } from "react";
-import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/selection/workspace-ui-key";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { resolveSelectedWorkspaceIdentity } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 export function useTabGroupActions() {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);

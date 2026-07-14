@@ -3,7 +3,7 @@ import type {
   DiffLine,
   InterHunkGap,
   ParsedPatch,
-} from "@/lib/domain/files/diff-parser";
+} from "#product/lib/domain/files/diff-parser";
 
 export type DiffLineDisplayType =
   | "context"

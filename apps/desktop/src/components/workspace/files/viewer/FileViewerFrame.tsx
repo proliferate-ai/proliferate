@@ -15,9 +15,9 @@ import { PaneOptionsMenuItem } from "@proliferate/ui/layout/PaneOptionsMenuItem"
 import {
   PaneOptionsMenu,
   PaneOptionsMenuSeparator,
-} from "@/components/workspace/pane/PaneOptionsMenu";
-import { SessionContentSearchOverlay } from "@/components/workspace/chat/surface/SessionContentSearchOverlay";
-import { useWorkspacePath } from "@/providers/WorkspacePathProvider";
+} from "#product/components/workspace/pane/PaneOptionsMenu";
+import { SessionContentSearchOverlay } from "#product/components/workspace/chat/surface/SessionContentSearchOverlay";
+import { useWorkspacePath } from "#product/providers/WorkspacePathProvider";
 
 export function FileViewerFrame({
   rootRef,

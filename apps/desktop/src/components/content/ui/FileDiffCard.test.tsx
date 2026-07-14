@@ -4,8 +4,8 @@ import { renderToStaticMarkup as renderReactToStaticMarkup } from "react-dom/ser
 import { describe, expect, it } from "vitest";
 import type { ProductHost } from "@proliferate/product-client/host/product-host";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
-import { FileChangesCard } from "./FileChangesCard";
-import { FileDiffCard } from "./FileDiffCard";
+import { FileChangesCard } from "#product/components/content/ui/FileChangesCard";
+import { FileDiffCard } from "#product/components/content/ui/FileDiffCard";
 
 const webTestHost = { desktop: null } as ProductHost;
 

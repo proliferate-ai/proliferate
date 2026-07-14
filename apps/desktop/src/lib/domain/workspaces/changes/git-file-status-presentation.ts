@@ -1,4 +1,4 @@
-import type { GitPanelFile } from "@/lib/domain/workspaces/changes/git-panel-diff";
+import type { GitPanelFile } from "#product/lib/domain/workspaces/changes/git-panel-diff";
 
 export interface GitFileStatusPresentation {
   label: string;

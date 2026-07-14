@@ -2,7 +2,7 @@ import bundledAgentCatalogJson from "../../../../../../catalogs/agents/catalog.j
 import {
   projectCloudAgentCatalogToDesktopLaunchCatalog,
   type DesktopAgentLaunchCatalog,
-} from "./cloud-launch-catalog";
+} from "#product/lib/domain/agents/cloud-launch-catalog";
 
 const BUNDLED_DESKTOP_AGENT_LAUNCH_CATALOG = projectCloudAgentCatalogToDesktopLaunchCatalog(
   JSON.parse(bundledAgentCatalogJson),

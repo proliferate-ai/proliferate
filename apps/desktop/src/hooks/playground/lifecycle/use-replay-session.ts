@@ -1,30 +1,30 @@
 import type { ReplayRecordingSummary } from "@anyharness/sdk";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { resolveSessionViewState } from "@proliferate/product-domain/sessions/activity";
-import { DESKTOP_ORIGIN } from "@/lib/domain/sessions/desktop-origin";
-import { closeSessionStreamHandle } from "@/lib/access/anyharness/session-stream-handles";
-import { closeSession } from "@/lib/access/anyharness/sessions";
+import { DESKTOP_ORIGIN } from "#product/lib/domain/sessions/desktop-origin";
+import { closeSessionStreamHandle } from "#product/lib/access/anyharness/session-stream-handles";
+import { closeSession } from "#product/lib/access/anyharness/sessions";
 import {
   advanceReplaySession,
   createReplaySession as createReplaySessionAccess,
   getReplayRuntimeHealth,
   listReplayRecordings,
-} from "@/lib/access/anyharness/replay";
+} from "#product/lib/access/anyharness/replay";
 import {
   getWorkspace,
   resolveWorkspaceFromPath,
-} from "@/lib/access/anyharness/workspaces";
-import { useSessionRuntimeActions } from "@/hooks/sessions/workflows/use-session-runtime-actions";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+} from "#product/lib/access/anyharness/workspaces";
+import { useSessionRuntimeActions } from "#product/hooks/sessions/workflows/use-session-runtime-actions";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import {
   combineSessionRecord,
   createEmptySessionRecord,
   putSessionRecord,
   removeSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
+} from "#product/stores/sessions/session-records";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 
 const PLAYGROUND_REPLAY_WORKSPACE_PATH =
   import.meta.env.VITE_PLAYGROUND_REPLAY_WORKSPACE_PATH ?? ".";

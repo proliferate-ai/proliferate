@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PromptInputBlock } from "@anyharness/sdk";
-import { dedupePlanReferenceBlocks, hasPromptContent } from "./prompt-input";
+import { dedupePlanReferenceBlocks, hasPromptContent } from "#product/lib/domain/chat/composer/prompt-input";
 
 describe("prompt input helpers", () => {
   it("treats plan-only prompts as prompt content", () => {

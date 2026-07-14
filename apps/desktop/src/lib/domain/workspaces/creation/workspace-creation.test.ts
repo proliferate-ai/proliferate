@@ -1,7 +1,7 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import { describe, expect, it } from "vitest";
 
-import { resolveWorktreeCreationParams } from "./workspace-creation";
+import { resolveWorktreeCreationParams } from "#product/lib/domain/workspaces/creation/workspace-creation";
 
 const repoRoot = {
   id: "repo-root-1",

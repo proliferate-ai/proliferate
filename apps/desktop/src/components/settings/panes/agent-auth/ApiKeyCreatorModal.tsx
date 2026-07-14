@@ -3,7 +3,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
 import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
-import { isValidEnvVarName } from "@/lib/domain/settings/harness-auth-sources";
+import { isValidEnvVarName } from "#product/lib/domain/settings/harness-auth-sources";
 
 export interface ApiKeyCreatorSubmit {
   /** Human label for the vault key. Empty when the title field is hidden. */

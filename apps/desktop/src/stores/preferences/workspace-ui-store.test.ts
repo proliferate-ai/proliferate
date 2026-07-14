@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { WORKSPACE_UI_DEFAULTS } from "@/lib/domain/preferences/workspace-ui/model";
-import { createManualChatGroupId } from "@/lib/domain/workspaces/tabs/manual-groups";
-import { useWorkspaceUiStore } from "./workspace-ui-store";
+import { WORKSPACE_UI_DEFAULTS } from "#product/lib/domain/preferences/workspace-ui/model";
+import { createManualChatGroupId } from "#product/lib/domain/workspaces/tabs/manual-groups";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 
 afterEach(() => {
   vi.useRealTimers();

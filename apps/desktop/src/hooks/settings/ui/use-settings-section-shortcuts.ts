@@ -1,8 +1,8 @@
-import { SHORTCUTS } from "@/config/shortcuts/registry";
-import { type SettingsSection } from "@/config/settings";
-import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-handler";
-import { resolveShortcutRangeDigitTarget } from "@/lib/domain/shortcuts/range";
-import type { SettingsShortcutSectionTarget } from "@/lib/domain/settings/shortcut-targets";
+import { SHORTCUTS } from "#product/config/shortcuts/registry";
+import { type SettingsSection } from "#product/config/settings";
+import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
+import { resolveShortcutRangeDigitTarget } from "#product/lib/domain/shortcuts/range";
+import type { SettingsShortcutSectionTarget } from "#product/lib/domain/settings/shortcut-targets";
 
 interface UseSettingsSectionShortcutsArgs {
   targets: readonly SettingsShortcutSectionTarget[];

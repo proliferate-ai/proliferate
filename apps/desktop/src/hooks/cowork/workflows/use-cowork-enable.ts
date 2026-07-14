@@ -1,6 +1,6 @@
 import { useEnableCoworkMutation } from "@anyharness/sdk-react";
 import { useCallback } from "react";
-import { useToastStore } from "@/stores/toast/toast-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 export function useCoworkEnable() {
   const enableMutation = useEnableCoworkMutation();

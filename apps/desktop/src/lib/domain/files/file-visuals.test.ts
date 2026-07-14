@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getExpandedFileVisualKind,
   getFileVisual,
-} from "./file-visuals";
+} from "#product/lib/domain/files/file-visuals";
 
 describe("getFileVisual", () => {
   it("maps directories to specialized folder icons", () => {

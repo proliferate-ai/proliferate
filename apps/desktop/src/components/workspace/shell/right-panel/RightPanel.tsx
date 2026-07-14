@@ -3,12 +3,12 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
-import { RightPanelFrame } from "@/components/workspace/shell/right-panel/RightPanelFrame";
+import { RightPanelFrame } from "#product/components/workspace/shell/right-panel/RightPanelFrame";
 import {
   useRightPanelController,
   type RightPanelTerminalActivationRequest,
-} from "@/hooks/workspaces/facade/use-right-panel-controller";
-import type { RightPanelWorkspaceState } from "@/lib/domain/workspaces/shell/right-panel-model";
+} from "#product/hooks/workspaces/facade/use-right-panel-controller";
+import type { RightPanelWorkspaceState } from "#product/lib/domain/workspaces/shell/right-panel-model";
 
 interface RightPanelProps {
   workspaceId: string | null;

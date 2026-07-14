@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { migrateWorkspaceUiState } from "@/lib/domain/preferences/workspace-ui/migration";
+import { migrateWorkspaceUiState } from "#product/lib/domain/preferences/workspace-ui/migration";
 import {
   WORKSPACE_UI_DEFAULTS,
   WORKSPACE_UI_MIGRATION_VERSION,
   type PersistedWorkspaceUiState,
-} from "@/lib/domain/preferences/workspace-ui/model";
-import { WORKSPACE_SIDEBAR_MAX_WIDTH } from "@/lib/domain/preferences/workspace-ui/sidebar";
-import { createManualChatGroupId } from "@/lib/domain/workspaces/tabs/manual-groups";
+} from "#product/lib/domain/preferences/workspace-ui/model";
+import { WORKSPACE_SIDEBAR_MAX_WIDTH } from "#product/lib/domain/preferences/workspace-ui/sidebar";
+import { createManualChatGroupId } from "#product/lib/domain/workspaces/tabs/manual-groups";
 import {
   chatShellWorkspaceIntentKey,
   chatWorkspaceShellTabKey,
   fileWorkspaceShellTabKey,
-} from "@/lib/domain/workspaces/tabs/shell-tabs";
+} from "#product/lib/domain/workspaces/tabs/shell-tabs";
 
 describe("workspace UI state migration", () => {
   it("applies migration defaults and resets pre-identity-cutover persisted state", () => {

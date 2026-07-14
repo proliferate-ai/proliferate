@@ -1,6 +1,6 @@
 import type { Workspace } from "@anyharness/sdk";
 import { WORKSPACE_ANIMAL_NAMES } from "@proliferate/product-domain/workspaces/workspace-name-catalog.generated";
-import { localWorkspaceGroupKey } from "@/lib/domain/workspaces/cloud/collections";
+import { localWorkspaceGroupKey } from "#product/lib/domain/workspaces/cloud/collections";
 
 function randomIndex(length: number): number {
   const bytes = new Uint32Array(1);

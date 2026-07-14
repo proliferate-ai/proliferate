@@ -3,8 +3,8 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { GitChangedFile, GitStatusSnapshot } from "@anyharness/sdk";
-import type { PublishIntent } from "@/lib/domain/workspaces/creation/publish-workflow-model";
-import { useWorkspacePublishWorkflow } from "./use-workspace-publish-workflow";
+import type { PublishIntent } from "#product/lib/domain/workspaces/creation/publish-workflow-model";
+import { useWorkspacePublishWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-publish-workflow";
 
 interface QueryMock<T> {
   data: T;

@@ -2,15 +2,15 @@ import { useEffect, useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Label } from "@proliferate/ui/primitives/Label";
 import { RangeSlider } from "@proliferate/ui/primitives/RangeSlider";
-import { useToastStore } from "@/stores/toast/toast-store";
-import { setDevRunningAgentCount } from "@/hooks/app/lifecycle/use-running-agent-count";
+import { useToastStore } from "#product/stores/toast/toast-store";
+import { setDevRunningAgentCount } from "#product/hooks/app/lifecycle/use-running-agent-count";
 import { useUpdater, type UpdaterErrorSource } from "@/hooks/access/tauri/use-updater";
 import {
   updateDevUpdaterMock,
   writeDevUpdaterMock,
   type DevUpdaterMockState,
 } from "@/hooks/access/tauri/updater-dev-mock";
-import { SidebarUpdatePill } from "@/components/workspace/shell/sidebar/SidebarUpdatePill";
+import { SidebarUpdatePill } from "#product/components/workspace/shell/sidebar/SidebarUpdatePill";
 
 type ProductionSurfacePreview =
   | "available"

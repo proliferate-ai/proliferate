@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   normalizeRepoConfig,
   normalizeRepoConfigs,
-} from "@/lib/domain/preferences/repo-preferences";
+} from "#product/lib/domain/preferences/repo-preferences";
 
 describe("repo preferences", () => {
   it("normalizes persisted repo config values", () => {

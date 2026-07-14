@@ -1,13 +1,13 @@
 import type { useDeletePendingPromptMutation, useEditPendingPromptMutation, useResolveSessionInteractionMutation } from "@anyharness/sdk-react";
 import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
-import type { CloudSandboxGatewayUrlSource } from "@/lib/access/cloud/cloud-sandbox-gateway";
+import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 import type {
   SessionIntent,
 } from "@proliferate/product-domain/sessions/intents/session-intent-model";
 import {
   getSessionClientAndWorkspace,
-} from "@/lib/access/anyharness/session-runtime";
-import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
+} from "#product/lib/access/anyharness/session-runtime";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
 
 type ResolveInteractionMutation = ReturnType<typeof useResolveSessionInteractionMutation>;
 type EditPendingPromptMutation = ReturnType<typeof useEditPendingPromptMutation>;

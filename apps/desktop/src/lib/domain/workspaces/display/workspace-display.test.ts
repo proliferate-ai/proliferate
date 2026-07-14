@@ -4,7 +4,7 @@ import {
   automationWorkspaceDefaultDisplayNameFromBranch,
   workspaceDefaultDisplayName,
   workspaceHeaderTitle,
-} from "./workspace-display";
+} from "#product/lib/domain/workspaces/display/workspace-display";
 
 function workspace(overrides: Partial<Workspace> = {}): Workspace {
   return {

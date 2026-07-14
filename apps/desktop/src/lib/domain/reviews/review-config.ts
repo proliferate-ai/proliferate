@@ -4,14 +4,14 @@ import type {
   StartCodeReviewRequest,
   StartPlanReviewRequest,
 } from "@anyharness/sdk";
-import { REVIEW_DEFAULT_MODE_ID_BY_AGENT_KIND } from "@/config/review-session-mode-defaults";
-import { listConfiguredSessionControlValues } from "@/lib/domain/chat/session-controls/session-mode-control";
+import { REVIEW_DEFAULT_MODE_ID_BY_AGENT_KIND } from "#product/config/review-session-mode-defaults";
+import { listConfiguredSessionControlValues } from "#product/lib/domain/chat/session-controls/session-mode-control";
 import {
   findReviewPersonaTemplateForReviewer,
   isBuiltInReviewPersonaId,
   listReviewPersonaTemplates,
   type ReviewPersonaTemplate,
-} from "@/lib/domain/reviews/review-personas";
+} from "#product/lib/domain/reviews/review-personas";
 
 export const DEFAULT_REVIEW_MAX_ROUNDS = 2;
 export const MAX_REVIEWERS_PER_RUN = 4;

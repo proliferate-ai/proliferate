@@ -1,8 +1,8 @@
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { ShortcutBadge } from "@proliferate/ui/layout/ShortcutBadge";
 import { Settings, SplitPanel } from "@proliferate/ui/icons";
-import { SHORTCUTS } from "@/config/shortcuts/registry";
-import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
+import { SHORTCUTS } from "#product/config/shortcuts/registry";
+import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 
 interface RightPanelHeaderActionsProps {
   onOpenRepoSettings: () => void;

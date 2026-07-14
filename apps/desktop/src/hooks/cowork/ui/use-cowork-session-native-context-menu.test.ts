@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildCoworkSessionNativeContextMenuItems } from "./use-cowork-session-native-context-menu";
+import { buildCoworkSessionNativeContextMenuItems } from "#product/hooks/cowork/ui/use-cowork-session-native-context-menu";
 
 describe("buildCoworkSessionNativeContextMenuItems", () => {
   it("models rename and archive commands", () => {

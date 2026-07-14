@@ -4,9 +4,9 @@ import type {
   OpenTarget,
 } from "@proliferate/product-client/host/desktop-bridge";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { resolvePreferredOpenTarget } from "@/lib/domain/chat/composer/preference-resolvers";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { splitPathLineSuffix } from "@/lib/domain/files/path-detection";
+import { resolvePreferredOpenTarget } from "#product/lib/domain/chat/composer/preference-resolvers";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
+import { splitPathLineSuffix } from "#product/lib/domain/files/path-detection";
 
 /**
  * Per-bridge cache so every chat message doesn't re-query the installed editor

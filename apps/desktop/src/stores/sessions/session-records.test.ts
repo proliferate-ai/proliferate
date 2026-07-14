@@ -1,8 +1,8 @@
 import { createTranscriptState, type Session } from "@anyharness/sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildSessionSlotPatchFromSummary } from "@/lib/domain/sessions/summary";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionIngestStore } from "@/stores/sessions/session-ingest-store";
+import { buildSessionSlotPatchFromSummary } from "#product/lib/domain/sessions/summary";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionIngestStore } from "#product/stores/sessions/session-ingest-store";
 import {
   createEmptySessionRecord,
   createSessionRecordFromSummary,
@@ -17,9 +17,9 @@ import {
   putSessionRecord,
   removeSessionRecord,
   requireMaterializedSessionId,
-} from "@/stores/sessions/session-records";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
+} from "#product/stores/sessions/session-records";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 
 describe("session records facade invariants", () => {
   beforeEach(() => {

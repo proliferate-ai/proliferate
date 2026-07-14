@@ -11,7 +11,7 @@ import { useCallback } from "react";
 import {
   listWorkspaceFiles,
   readWorkspaceFile,
-} from "@/lib/access/anyharness/workspace-file-transport";
+} from "#product/lib/access/anyharness/workspace-file-transport";
 
 function buildConnection(
   runtimeUrl: string,

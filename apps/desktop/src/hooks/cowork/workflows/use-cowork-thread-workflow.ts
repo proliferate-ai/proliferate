@@ -7,44 +7,44 @@ import {
 import { useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
-import { resolveEffectiveChatDefaults } from "@/lib/domain/chat/composer/preference-resolvers";
-import { createPendingWorkspaceAttemptId } from "@/lib/domain/workspaces/creation/pending-entry";
-import { createCoworkThreadWorkflow } from "@/lib/workflows/cowork/create-cowork-thread";
+import { resolveEffectiveChatDefaults } from "#product/lib/domain/chat/composer/preference-resolvers";
+import { createPendingWorkspaceAttemptId } from "#product/lib/domain/workspaces/creation/pending-entry";
+import { createCoworkThreadWorkflow } from "#product/lib/workflows/cowork/create-cowork-thread";
 import {
   elapsedMs,
   elapsedSince,
   logLatency,
   startLatencyTimer,
 } from "@/lib/infra/measurement/debug-latency";
-import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
-import { useWorkspaceSelection } from "@/hooks/workspaces/workflows/selection/use-workspace-selection";
-import { useWorkspaceFileActions } from "@/hooks/workspaces/facade/files/use-workspace-file-actions";
-import { useWorkspaceEntryFlow } from "@/hooks/workspaces/workflows/use-workspace-entry-flow";
-import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
-import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
-import { useCloudLaunchModelRegistries } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
-import { mergeRuntimeLaunchOptionsIntoModelRegistries } from "@/lib/domain/settings/model-registries";
+import { useWorkspaceCollectionsMutationCache } from "#product/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
+import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
+import { useWorkspaceFileActions } from "#product/hooks/workspaces/facade/files/use-workspace-file-actions";
+import { useWorkspaceEntryFlow } from "#product/hooks/workspaces/workflows/use-workspace-entry-flow";
+import { useWorkspaceSessionCache } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
+import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
+import { useCloudLaunchModelRegistries } from "#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
+import { mergeRuntimeLaunchOptionsIntoModelRegistries } from "#product/lib/domain/settings/model-registries";
 import {
   isStoredDefaultModelStale,
   withClearedDefaultModelIdByAgentKind,
-} from "@/lib/domain/agents/model-options";
-import type { DesktopLaunchModelRegistry as ModelRegistry } from "@/lib/domain/agents/cloud-launch-catalog";
-import { applySessionLaunchDefaults } from "@/lib/workflows/sessions/session-launch-defaults";
-import { mergeLiveDefaultLaunchControls } from "@/lib/domain/sessions/creation/launch-controls";
-import { createSessionLaunchDefaultsClient } from "@/lib/access/anyharness/session-launch-defaults-client";
+} from "#product/lib/domain/agents/model-options";
+import type { DesktopLaunchModelRegistry as ModelRegistry } from "#product/lib/domain/agents/cloud-launch-catalog";
+import { applySessionLaunchDefaults } from "#product/lib/workflows/sessions/session-launch-defaults";
+import { mergeLiveDefaultLaunchControls } from "#product/lib/domain/sessions/creation/launch-controls";
+import { createSessionLaunchDefaultsClient } from "#product/lib/access/anyharness/session-launch-defaults-client";
 import {
   markWorkspaceViewed,
   rememberLastViewedSession,
   trackWorkspaceInteraction,
   useWorkspaceUiStore,
-} from "@/stores/preferences/workspace-ui-store";
-import { useChatInputStore } from "@/stores/chat/chat-input-store";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useToastStore } from "@/stores/toast/toast-store";
-import { markWorkspaceBootstrappedInSession } from "@/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
-import { recordCreatedCoworkSession } from "@/hooks/cowork/workflows/cowork-thread-session-record";
+} from "#product/stores/preferences/workspace-ui-store";
+import { useChatInputStore } from "#product/stores/chat/chat-input-store";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
+import { markWorkspaceBootstrappedInSession } from "#product/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
+import { recordCreatedCoworkSession } from "#product/hooks/cowork/workflows/cowork-thread-session-record";
 
 const EMPTY_MODEL_REGISTRIES: ModelRegistry[] = [];
 

@@ -1,12 +1,12 @@
-import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-handler";
-import { getFocusZone, isRightPanelFocusZone } from "@/lib/domain/focus-zone";
-import { useContentSearchStore } from "@/stores/search/content-search-store";
+import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
+import { getFocusZone, isRightPanelFocusZone } from "#product/lib/domain/focus-zone";
+import { useContentSearchStore } from "#product/stores/search/content-search-store";
 import {
   requestRightPanelCloseActiveTab,
   requestRightPanelRelativeTab,
   requestRightPanelTabByIndex,
-} from "@/lib/workflows/workspaces/right-panel-shortcut-requests";
-import type { WorkspaceTabActions } from "@/hooks/workspaces/workflows/tabs/use-workspace-tab-actions";
+} from "#product/lib/workflows/workspaces/right-panel-shortcut-requests";
+import type { WorkspaceTabActions } from "#product/hooks/workspaces/workflows/tabs/use-workspace-tab-actions";
 
 type WorkspaceContentShortcutActions = Pick<
   WorkspaceTabActions,

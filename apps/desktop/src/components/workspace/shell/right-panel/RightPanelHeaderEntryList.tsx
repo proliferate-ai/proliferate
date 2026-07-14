@@ -1,23 +1,23 @@
-import { RightPanelHeaderEntryDropZone } from "@/components/workspace/shell/right-panel/RightPanelHeaderEntryDropZone";
-import { TerminalHeaderButton } from "@/components/workspace/shell/right-panel/TerminalHeaderButton";
-import { ToolHeaderButton } from "@/components/workspace/shell/right-panel/ToolHeaderButton";
-import { ViewerHeaderButton } from "@/components/workspace/shell/right-panel/ViewerHeaderButton";
-import type { RightPanelHeaderDragController } from "@/hooks/workspaces/ui/use-right-panel-header-drag";
+import { RightPanelHeaderEntryDropZone } from "#product/components/workspace/shell/right-panel/RightPanelHeaderEntryDropZone";
+import { TerminalHeaderButton } from "#product/components/workspace/shell/right-panel/TerminalHeaderButton";
+import { ToolHeaderButton } from "#product/components/workspace/shell/right-panel/ToolHeaderButton";
+import { ViewerHeaderButton } from "#product/components/workspace/shell/right-panel/ViewerHeaderButton";
+import type { RightPanelHeaderDragController } from "#product/hooks/workspaces/ui/use-right-panel-header-drag";
 import {
   terminalHeaderDisplayTitle,
   type RightPanelHeaderEntry,
-} from "@/lib/domain/workspaces/shell/right-panel-header-entry";
+} from "#product/lib/domain/workspaces/shell/right-panel-header-entry";
 import type {
   RightPanelHeaderEntryKey,
-} from "@/lib/domain/workspaces/shell/right-panel-model";
+} from "#product/lib/domain/workspaces/shell/right-panel-model";
 import {
   viewerTargetEditablePath,
   viewerTargetKey,
   type FileViewerMode,
-} from "@/lib/domain/workspaces/viewer/viewer-target";
-import type { WorkspaceFileBuffer } from "@/stores/editor/workspace-file-buffers-store";
-import { SHORTCUTS } from "@/config/shortcuts/registry";
-import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
+} from "#product/lib/domain/workspaces/viewer/viewer-target";
+import type { WorkspaceFileBuffer } from "#product/stores/editor/workspace-file-buffers-store";
+import { SHORTCUTS } from "#product/config/shortcuts/registry";
+import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 
 interface RightPanelHeaderEntryListProps {
   entries: readonly RightPanelHeaderEntry[];

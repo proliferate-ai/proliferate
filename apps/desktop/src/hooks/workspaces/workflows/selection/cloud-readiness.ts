@@ -1,16 +1,16 @@
 import type { CloudWorkspaceDetail } from "@/lib/access/cloud/client";
 import { getCloudWorkspace } from "@proliferate/cloud-sdk/client/workspaces";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { resolveCloudWorkspaceStatus } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
+import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import { resolveCloudWorkspaceStatus } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
 import {
   elapsedMs,
   logLatency,
   startLatencyTimer,
 } from "@/lib/infra/measurement/debug-latency";
-import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-state";
-import { markWorkspaceViewed } from "@/stores/preferences/workspace-ui-store";
-import { isWorkspaceSelectionCurrent } from "./guards";
-import type { CloudReadinessResult, WorkspaceSelectionContext } from "./types";
+import { resetWorkspaceEditorState } from "#product/stores/editor/workspace-editor-state";
+import { markWorkspaceViewed } from "#product/stores/preferences/workspace-ui-store";
+import { isWorkspaceSelectionCurrent } from "#product/hooks/workspaces/workflows/selection/guards";
+import type { CloudReadinessResult, WorkspaceSelectionContext } from "#product/hooks/workspaces/workflows/selection/types";
 
 export async function resolveCloudWorkspaceReadiness(
   context: WorkspaceSelectionContext,

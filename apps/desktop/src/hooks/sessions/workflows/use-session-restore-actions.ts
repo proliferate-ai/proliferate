@@ -4,13 +4,13 @@ import {
   useDismissSessionMutation,
   useRestoreDismissedSessionMutation,
 } from "@anyharness/sdk-react";
-import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
-import type { SessionLatencyFlowOptions } from "@/hooks/sessions/workflows/session-selection-options";
+import { useWorkspaceSessionCache } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
+import type { SessionLatencyFlowOptions } from "#product/hooks/sessions/workflows/session-selection-options";
 import {
   buildLatencyRequestOptions,
   resolveRuntimeUrlForWorkspaceSessions,
-} from "@/hooks/sessions/workflows/session-selection-runtime";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
+} from "#product/hooks/sessions/workflows/session-selection-runtime";
+import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
 import {
   elapsedMs,
   logLatency,
@@ -20,17 +20,17 @@ import {
   annotateLatencyFlow,
   cancelLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
-import { getWorkspaceClientAndId } from "@/lib/access/anyharness/session-runtime";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useToastStore } from "@/stores/toast/toast-store";
+import { getWorkspaceClientAndId } from "#product/lib/access/anyharness/session-runtime";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
 import {
   canPersistReplacedSessionTombstones,
   releaseReplacedSessionSuppression,
-} from "@/hooks/sessions/workflows/session-replacement-tombstones";
+} from "#product/hooks/sessions/workflows/session-replacement-tombstones";
 import {
   cancelQueuedReplacementDismissal,
   withWorkspaceReplacementRestoreFence,
-} from "@/hooks/sessions/workflows/session-replacement-dismissals";
+} from "#product/hooks/sessions/workflows/session-replacement-dismissals";
 
 export function useSessionRestoreActions() {
   const host = useProductHost();

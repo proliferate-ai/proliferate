@@ -1,8 +1,8 @@
 import { CloudSecretsSettingsSurface } from "@proliferate/product-surfaces/settings/CloudSecretsSettingsSurface";
 import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
-import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
-import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
+import { useIsAdmin } from "#product/hooks/access/cloud/organizations/use-is-admin";
+import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
 
 export function OrganizationSecretsPane() {
   const {

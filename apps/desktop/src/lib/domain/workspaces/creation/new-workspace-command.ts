@@ -1,18 +1,18 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
-import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
+import type { SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
 import {
   type CloudRepoActionState,
   type CloudWorkspaceRepoTarget,
-} from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
-import type { CloudWorkspaceSummary } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
+import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
 import {
   getCloudRepoTargetForSelectedWorkspace,
   getRepoForSelectedWorkspace,
-} from "@/lib/domain/workspaces/cloud/selected-repo-target";
+} from "#product/lib/domain/workspaces/cloud/selected-repo-target";
 import {
   sidebarRepoGroupKeyForCloudTarget,
   sidebarRepoGroupKeyForWorkspace,
-} from "@/lib/domain/workspaces/sidebar/sidebar-group-key";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-group-key";
 
 export type NewWorkspaceCommandKind = "local" | "worktree" | "cloud";
 

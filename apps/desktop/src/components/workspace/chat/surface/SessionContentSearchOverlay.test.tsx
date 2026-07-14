@@ -2,8 +2,8 @@
 import { createElement } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useContentSearchStore } from "@/stores/search/content-search-store";
-import { SessionContentSearchOverlay } from "./SessionContentSearchOverlay";
+import { useContentSearchStore } from "#product/stores/search/content-search-store";
+import { SessionContentSearchOverlay } from "#product/components/workspace/chat/surface/SessionContentSearchOverlay";
 
 function resetContentSearchStore() {
   useContentSearchStore.setState({

@@ -1,7 +1,7 @@
 import type {
   CloudWorkspaceStatus,
   CloudWorkspaceVisibility,
-} from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
 
 export type SelectedCloudRuntimePhase = "ready" | "resuming" | "failed" | "claim_required";
 export type SelectedCloudRuntimeVariant = "initial" | "warm";

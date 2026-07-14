@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shouldUseLocalRuntimeWorkspaceSessionsQuery } from "./workspace-session-query-target";
+import { shouldUseLocalRuntimeWorkspaceSessionsQuery } from "#product/lib/domain/workspaces/tabs/workspace-session-query-target";
 
 describe("workspace session query target", () => {
   it("uses the local runtime query for ordinary AnyHarness workspace ids", () => {

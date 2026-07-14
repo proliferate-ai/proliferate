@@ -3,7 +3,7 @@ import {
   choosePreferredWorkspaceSession,
   getLatestWorkspaceInteractionTimestamp,
   hasHiddenDismissedWorkspaceSessions,
-} from "./selection";
+} from "#product/lib/domain/workspaces/selection/selection";
 
 describe("hasHiddenDismissedWorkspaceSessions", () => {
   it("detects hidden dismissed sessions when the visible list is empty", () => {

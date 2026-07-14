@@ -1,4 +1,4 @@
-import { OrganizationAvatar } from "@/components/organizations/OrganizationAvatar";
+import { OrganizationAvatar } from "#product/components/organizations/OrganizationAvatar";
 
 interface OrganizationLogoRecord {
   name: string;

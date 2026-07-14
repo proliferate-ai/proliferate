@@ -4,13 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ProductCommand } from "@proliferate/product-client/host/desktop-bridge";
 
-import { SHORTCUT_REVEAL_RESET_EVENT } from "@/hooks/shortcuts/lifecycle/use-shortcut-reveal-state";
+import { SHORTCUT_REVEAL_RESET_EVENT } from "#product/hooks/shortcuts/lifecycle/use-shortcut-reveal-state";
 import {
   clearShortcutHandlerRegistryForTests,
   registerShortcutHandler,
-} from "@/lib/domain/shortcuts/registry";
+} from "#product/lib/domain/shortcuts/registry";
 
-import { useNativeMenuCommandDispatcher } from "./use-native-menu-command-dispatcher";
+import { useNativeMenuCommandDispatcher } from "#product/hooks/shortcuts/lifecycle/use-native-menu-command-dispatcher";
 
 function makeSubscription() {
   let listener: ((command: ProductCommand) => void) | null = null;

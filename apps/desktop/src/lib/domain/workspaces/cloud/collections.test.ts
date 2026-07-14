@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
-import type { CloudWorkspaceSummary } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
+import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
 import {
   buildWorkspaceCollections,
   workspaceFileTreeStateKey,
   upsertCloudWorkspaceCollections,
   upsertLocalWorkspaceCollections,
   workspaceCollectionsNeedActivityRefresh,
-} from "./collections";
+} from "#product/lib/domain/workspaces/cloud/collections";
 
 function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
   return {

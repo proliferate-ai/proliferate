@@ -2,7 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import {
   cloudWorkspaceConnectionKey,
   isCloudWorkspaceConnectionQueryKey,
-} from "@/hooks/access/cloud/query-keys";
+} from "#product/hooks/access/cloud/query-keys";
 
 export async function clearCachedCloudConnections(
   queryClient: QueryClient,

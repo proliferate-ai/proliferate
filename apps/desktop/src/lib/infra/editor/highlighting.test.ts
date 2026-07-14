@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { highlightMarkdownDiffLines } from "./highlighting";
+import { highlightMarkdownDiffLines } from "#product/lib/infra/editor/highlighting";
 
 describe("highlightMarkdownDiffLines", () => {
   it("keeps fenced Markdown code plain while highlighting Markdown syntax", () => {

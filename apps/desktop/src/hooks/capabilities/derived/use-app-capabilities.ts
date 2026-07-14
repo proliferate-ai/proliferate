@@ -1,13 +1,13 @@
 import { useMemo } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { PROLIFERATE_PRICING_URL, SUPPORT_EMAIL_ADDRESS } from "@/config/capabilities";
-import { useServerCapabilitiesFor } from "@/hooks/access/cloud/server-capabilities/use-server-capabilities";
-import { useControlPlaneHealthFor } from "@/hooks/access/cloud/use-control-plane-health";
+import { PROLIFERATE_PRICING_URL, SUPPORT_EMAIL_ADDRESS } from "#product/config/capabilities";
+import { useServerCapabilitiesFor } from "#product/hooks/access/cloud/server-capabilities/use-server-capabilities";
+import { useControlPlaneHealthFor } from "#product/hooks/access/cloud/use-control-plane-health";
 import {
   type AppCapabilities,
   deriveAppCapabilities,
   resolveEffectiveContract,
-} from "@/lib/domain/capabilities/app-capabilities";
+} from "#product/lib/domain/capabilities/app-capabilities";
 import { isOfficialHostedApiBaseUrl } from "@/lib/infra/proliferate-api";
 
 function connectedServerHost(apiBaseUrl: string): string | null {

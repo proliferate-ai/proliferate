@@ -15,7 +15,7 @@ import {
   shouldPreserveStagedReplacementShell,
   stageReplacedClientSessionAlias,
   stageReplacedSessionTombstone,
-} from "@/hooks/sessions/workflows/session-replacement-tombstones";
+} from "#product/hooks/sessions/workflows/session-replacement-tombstones";
 
 const storageMocks = vi.hoisted(() => ({
   writeTombstones: vi.fn(() => true),

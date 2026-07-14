@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { useRef } from "react";
-import { useChatRootFocus } from "@/hooks/chat/ui/use-chat-root-focus";
+import { useChatRootFocus } from "#product/hooks/chat/ui/use-chat-root-focus";
 
 function ChatRootFocusHarness() {
   const rootRef = useRef<HTMLDivElement>(null);

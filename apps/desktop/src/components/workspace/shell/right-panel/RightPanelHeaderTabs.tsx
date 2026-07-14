@@ -2,18 +2,18 @@ import {
   useEffect,
   useState,
 } from "react";
-import { RightPanelHeaderActions } from "@/components/workspace/shell/right-panel/RightPanelHeaderActions";
-import { RightPanelHeaderEntryList } from "@/components/workspace/shell/right-panel/RightPanelHeaderEntryList";
-import { RightPanelNewTabMenu } from "@/components/workspace/shell/right-panel/RightPanelNewTabMenu";
-import { useRightPanelHeaderDrag } from "@/hooks/workspaces/ui/use-right-panel-header-drag";
+import { RightPanelHeaderActions } from "#product/components/workspace/shell/right-panel/RightPanelHeaderActions";
+import { RightPanelHeaderEntryList } from "#product/components/workspace/shell/right-panel/RightPanelHeaderEntryList";
+import { RightPanelNewTabMenu } from "#product/components/workspace/shell/right-panel/RightPanelNewTabMenu";
+import { useRightPanelHeaderDrag } from "#product/hooks/workspaces/ui/use-right-panel-header-drag";
 import {
   type RightPanelHeaderEntryKey,
-} from "@/lib/domain/workspaces/shell/right-panel-model";
-import type { RightPanelHeaderEntry } from "@/lib/domain/workspaces/shell/right-panel-header-entry";
-import type { RightPanelNewTabMenuDefault } from "@/lib/infra/right-panel-new-tab-menu";
-import type { FileViewerMode } from "@/lib/domain/workspaces/viewer/viewer-target";
-import type { WorkspaceFileBuffer } from "@/stores/editor/workspace-file-buffers-store";
-import { useShortcutRevealVisible } from "@/providers/ShortcutRevealProvider";
+} from "#product/lib/domain/workspaces/shell/right-panel-model";
+import type { RightPanelHeaderEntry } from "#product/lib/domain/workspaces/shell/right-panel-header-entry";
+import type { RightPanelNewTabMenuDefault } from "#product/lib/infra/right-panel-new-tab-menu";
+import type { FileViewerMode } from "#product/lib/domain/workspaces/viewer/viewer-target";
+import type { WorkspaceFileBuffer } from "#product/stores/editor/workspace-file-buffers-store";
+import { useShortcutRevealVisible } from "#product/providers/ShortcutRevealProvider";
 
 interface RightPanelHeaderTabsProps {
   entries: readonly RightPanelHeaderEntry[];

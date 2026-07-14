@@ -1,6 +1,6 @@
-import type { ModelSelectorProps } from "@/lib/domain/chat/models/model-selector-types";
-import type { SessionSlashCommandViewModel } from "@/lib/domain/chat/composer/session-slash-command-policy";
-import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
+import type { ModelSelectorProps } from "#product/lib/domain/chat/models/model-selector-types";
+import type { SessionSlashCommandViewModel } from "#product/lib/domain/chat/composer/session-slash-command-policy";
+import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 
 export const PLAYGROUND_SLASH_COMMANDS: SessionSlashCommandViewModel[] = [
   {

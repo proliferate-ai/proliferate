@@ -1,5 +1,5 @@
-import type { AuthUser } from "@/lib/domain/auth/auth-user";
-import type { StoredAuthSession } from "@/lib/domain/auth/stored-auth-session";
+import type { AuthUser } from "#product/lib/domain/auth/auth-user";
+import type { StoredAuthSession } from "#product/lib/domain/auth/stored-auth-session";
 
 export function authUserFromStoredSession(session: StoredAuthSession): AuthUser {
   return {

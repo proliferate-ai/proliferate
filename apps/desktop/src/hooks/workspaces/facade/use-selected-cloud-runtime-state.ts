@@ -4,18 +4,18 @@ import type {
 } from "@/lib/access/cloud/client";
 import type { TerminalWebSocketAuthTransport } from "@anyharness/sdk";
 import { useMemo } from "react";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
+import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import {
   buildSelectedCloudRuntimeViewModel,
   type SelectedCloudRuntimeViewModel,
-} from "@/lib/domain/workspaces/cloud/cloud-runtime-state";
-import { cloudWorkspaceUsesCloudRuntime } from "@/lib/domain/workspaces/cloud/cloud-runtime-kind";
-import { resolveCloudWorkspaceStatus } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
-import { useCloudWorkspaceConnection } from "@/hooks/access/cloud/use-cloud-workspace-connection";
-import { useSelectedCloudRuntimeActions } from "@/hooks/workspaces/workflows/use-selected-cloud-runtime-actions";
-import { hasWorkspaceBootstrappedInSession } from "@/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
+} from "#product/lib/domain/workspaces/cloud/cloud-runtime-state";
+import { cloudWorkspaceUsesCloudRuntime } from "#product/lib/domain/workspaces/cloud/cloud-runtime-kind";
+import { resolveCloudWorkspaceStatus } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
+import { useCloudWorkspaceConnection } from "#product/hooks/access/cloud/use-cloud-workspace-connection";
+import { useSelectedCloudRuntimeActions } from "#product/hooks/workspaces/workflows/use-selected-cloud-runtime-actions";
+import { hasWorkspaceBootstrappedInSession } from "#product/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
 
 export interface SelectedCloudRuntimeState {
   workspaceId: string | null;

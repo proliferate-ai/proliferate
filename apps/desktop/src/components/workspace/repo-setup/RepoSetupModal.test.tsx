@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RepoSetupModal } from "./RepoSetupModal";
+import { RepoSetupModal } from "#product/components/workspace/repo-setup/RepoSetupModal";
 
 const SOURCE_ROOT = "/tmp/proliferate";
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveCoworkDefaultSessionModeId } from "@/lib/domain/cowork/session-mode-defaults";
+import { resolveCoworkDefaultSessionModeId } from "#product/lib/domain/cowork/session-mode-defaults";
 
 describe("resolveCoworkDefaultSessionModeId", () => {
   it("returns the vetted cowork default for supported agent families", () => {

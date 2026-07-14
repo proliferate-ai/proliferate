@@ -3,13 +3,13 @@ import type {
   CreateCoworkThreadResponse,
   Session,
 } from "@anyharness/sdk";
-import { resolveCoworkDefaultSessionModeId } from "@/lib/domain/cowork/session-mode-defaults";
-import { workspaceFileTreeStateKey } from "@/lib/domain/workspaces/cloud/collections";
+import { resolveCoworkDefaultSessionModeId } from "#product/lib/domain/cowork/session-mode-defaults";
+import { workspaceFileTreeStateKey } from "#product/lib/domain/workspaces/cloud/collections";
 import {
   buildPendingWorkspaceOriginTarget,
   type PendingCoworkRequestInput,
   type PendingWorkspaceEntry,
-} from "@/lib/domain/workspaces/creation/pending-entry";
+} from "#product/lib/domain/workspaces/creation/pending-entry";
 
 export interface CreateCoworkThreadWorkflowInput {
   agentKind: string;

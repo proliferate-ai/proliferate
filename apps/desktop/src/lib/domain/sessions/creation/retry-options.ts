@@ -3,7 +3,7 @@ import type {
   PromptInputBlock,
 } from "@anyharness/sdk";
 import type { PromptAttachmentSnapshot } from "@proliferate/product-domain/chats/composer/prompt-attachment-snapshot";
-import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
+import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 
 export interface SessionCreateWithResolvedConfigRetryOptions {
   text: string;

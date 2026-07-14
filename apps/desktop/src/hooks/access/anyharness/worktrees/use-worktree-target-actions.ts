@@ -7,16 +7,16 @@ import {
   pruneOrphanWorktree,
   runWorktreeRetention,
   updateWorktreeRetentionPolicy,
-} from "@/lib/access/anyharness/worktrees";
+} from "#product/lib/access/anyharness/worktrees";
 import {
   purgeWorkspace,
   retryPurgeWorkspace,
   retireWorkspace,
-} from "@/lib/access/anyharness/workspaces";
+} from "#product/lib/access/anyharness/workspaces";
 import {
   type WorktreeSettingsTarget,
   worktreeSettingsTargetRuntimeConnection,
-} from "@/lib/domain/workspaces/worktrees/worktree-settings-target";
+} from "#product/lib/domain/workspaces/worktrees/worktree-settings-target";
 
 export function useWorktreeTargetActions() {
   const updateRetentionPolicy = useCallback((

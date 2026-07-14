@@ -5,7 +5,7 @@ import type {
 import {
   waitForSessionMaterialization,
   type SessionMaterializationDeps,
-} from "@/lib/workflows/sessions/session-materialization";
+} from "#product/lib/workflows/sessions/session-materialization";
 
 // Review launch is a user-triggered overlay action; fail quickly so the user
 // can retry instead of leaving the setup dialog in an ambiguous starting state.

@@ -1,8 +1,8 @@
-import type { ConfiguredSessionControlValue } from "@/lib/domain/chat/session-controls/presentation";
+import type { ConfiguredSessionControlValue } from "#product/lib/domain/chat/session-controls/presentation";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { Check, ChevronDown } from "@proliferate/ui/icons";
-import { SessionControlIcon } from "@/components/session-controls/SessionControlIcon";
+import { SessionControlIcon } from "#product/components/session-controls/SessionControlIcon";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
 

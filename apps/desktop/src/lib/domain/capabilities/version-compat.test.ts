@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compareSemver, isDesktopVersionSupported } from "./version-compat";
+import { compareSemver, isDesktopVersionSupported } from "#product/lib/domain/capabilities/version-compat";
 
 describe("compareSemver", () => {
   it("orders by major, minor, then patch", () => {

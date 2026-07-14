@@ -7,7 +7,7 @@ import {
   type ChatComposerDraft,
   type DraftPosition,
   type DraftSelection,
-} from "@/lib/domain/chat/composer/file-mention-draft-model";
+} from "#product/lib/domain/chat/composer/file-mention-draft-model";
 
 export function collapseSelection(position: DraftPosition): DraftSelection {
   return { anchor: position, focus: position };

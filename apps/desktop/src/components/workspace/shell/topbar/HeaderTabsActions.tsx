@@ -1,13 +1,13 @@
 import { Button } from "@proliferate/ui/primitives/Button";
 import { History, Plus } from "@proliferate/ui/icons";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { ClosedChatTabsMenu } from "@/components/workspace/shell/tabs/ClosedChatTabsMenu";
+import { ClosedChatTabsMenu } from "#product/components/workspace/shell/tabs/ClosedChatTabsMenu";
 import {
   renderChatTabIcon,
-} from "@/components/workspace/shell/tabs/tab-rendering";
+} from "#product/components/workspace/shell/tabs/tab-rendering";
 import type {
   HeaderChatMenuEntry,
-} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
+} from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 
 const HEADER_FLAT_ICON_BUTTON_CLASS =
   "workspace-shell-icon-button workspace-shell-icon-button--flat shrink-0 disabled:pointer-events-none disabled:opacity-40";

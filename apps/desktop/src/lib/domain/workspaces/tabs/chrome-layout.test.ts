@@ -8,7 +8,7 @@ import {
   computeChromeTabPositions,
   computeChromeTabWidths,
   computeHeaderStripLayout,
-} from "./chrome-layout";
+} from "#product/lib/domain/workspaces/tabs/chrome-layout";
 
 describe("computeChromeTabWidths", () => {
   it("distributes available width evenly with deterministic remainder pixels", () => {

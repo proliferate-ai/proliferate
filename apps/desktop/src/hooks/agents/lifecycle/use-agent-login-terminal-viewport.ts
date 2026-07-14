@@ -1,7 +1,7 @@
 import type { AgentLoginTerminalRecord } from "@anyharness/sdk";
 import { connectAgentLoginTerminal, type TerminalStreamHandle } from "@anyharness/sdk";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useXtermSurface } from "@/hooks/terminals/lifecycle/use-xterm-surface";
+import { useXtermSurface } from "#product/hooks/terminals/lifecycle/use-xterm-surface";
 
 interface UseAgentLoginTerminalViewportInput {
   terminal: AgentLoginTerminalRecord | null;

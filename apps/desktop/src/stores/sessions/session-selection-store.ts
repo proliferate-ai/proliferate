@@ -1,10 +1,10 @@
 import { create } from "zustand";
-import type { HotPaintGate } from "@/lib/domain/sessions/hot-paint-gate";
-import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
+import type { HotPaintGate } from "#product/lib/domain/sessions/hot-paint-gate";
+import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
 import {
   buildPendingWorkspaceUiKey,
-} from "@/lib/domain/workspaces/creation/pending-entry";
-import type { WorkspaceArrivalEvent } from "@/lib/domain/workspaces/creation/arrival";
+} from "#product/lib/domain/workspaces/creation/pending-entry";
+import type { WorkspaceArrivalEvent } from "#product/lib/domain/workspaces/creation/arrival";
 
 interface ActivateWorkspaceOptions {
   logicalWorkspaceId: string | null;

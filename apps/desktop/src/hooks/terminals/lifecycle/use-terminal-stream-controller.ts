@@ -1,7 +1,7 @@
 import type { TerminalRecord } from "@anyharness/sdk";
 import { useCallback } from "react";
-import { useTerminalCache } from "@/hooks/access/anyharness/terminals/use-terminal-cache";
-import { useTerminalWorkspaceConnection } from "@/hooks/terminals/workflows/use-terminal-workspace-connection";
+import { useTerminalCache } from "#product/hooks/access/anyharness/terminals/use-terminal-cache";
+import { useTerminalWorkspaceConnection } from "#product/hooks/terminals/workflows/use-terminal-workspace-connection";
 import {
   adoptTerminalStreamIdentity,
   ensureConnected,
@@ -9,11 +9,11 @@ import {
   markExited,
   markReadOnly,
   type TerminalStreamIdentity,
-} from "@/lib/infra/terminals/terminal-stream-registry";
-import { isTerminalIntentionalClose } from "@/lib/infra/terminals/terminal-close-intent";
-import { createTerminalRuntimeIdentity } from "@/lib/infra/terminals/terminal-stream-key";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useTerminalStore } from "@/stores/terminal/terminal-store";
+} from "#product/lib/infra/terminals/terminal-stream-registry";
+import { isTerminalIntentionalClose } from "#product/lib/infra/terminals/terminal-close-intent";
+import { createTerminalRuntimeIdentity } from "#product/lib/infra/terminals/terminal-stream-key";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useTerminalStore } from "#product/stores/terminal/terminal-store";
 
 // Owns terminal stream attachment and reconnect wiring. Rendering stays in components.
 export function useTerminalStreamController() {

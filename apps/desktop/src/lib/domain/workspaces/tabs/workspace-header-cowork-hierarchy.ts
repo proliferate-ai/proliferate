@@ -4,7 +4,7 @@ import type {
 } from "@anyharness/sdk";
 import type {
   HeaderHierarchyChildRow,
-} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-model-helpers";
+} from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-model-helpers";
 
 export interface HeaderCoworkRelationshipHint {
   sessionId: string;

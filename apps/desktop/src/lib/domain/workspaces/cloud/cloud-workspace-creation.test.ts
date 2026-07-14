@@ -11,7 +11,7 @@ import {
   isCreateCloudWorkspaceRequest,
   resolveCloudRepoActionState,
   resolveCloudWorkspaceCreateFailureMessage,
-} from "./cloud-workspace-creation";
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
 
 describe("cloud workspace creation helpers", () => {
   afterEach(() => {

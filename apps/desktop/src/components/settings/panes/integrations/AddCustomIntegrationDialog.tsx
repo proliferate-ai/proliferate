@@ -11,7 +11,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
 import { Select } from "@proliferate/ui/primitives/Select";
-import { integrationApiErrorMessage } from "@/hooks/access/cloud/integrations/use-admin-integration-definitions";
+import { integrationApiErrorMessage } from "#product/hooks/access/cloud/integrations/use-admin-integration-definitions";
 import {
   CUSTOM_INTEGRATION_AUTH_OPTIONS,
   customIntegrationSubmitError,
@@ -19,7 +19,7 @@ import {
   type CustomIntegrationAuthChoice,
   type CustomIntegrationFormErrors,
   type CustomIntegrationFormInput,
-} from "@/lib/domain/settings/org-integrations-presentation";
+} from "#product/lib/domain/settings/org-integrations-presentation";
 
 interface AddCustomIntegrationDialogProps {
   open: boolean;

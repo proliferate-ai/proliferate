@@ -1,6 +1,6 @@
 import type { RepoRoot } from "@anyharness/sdk";
 import { describe, expect, it, vi } from "vitest";
-import { runAddRepoWorkflow } from "./add-repo-workflow";
+import { runAddRepoWorkflow } from "#product/lib/domain/workspaces/creation/add-repo-workflow";
 
 function makeRepoRoot(overrides: Partial<RepoRoot> = {}): RepoRoot {
   return {

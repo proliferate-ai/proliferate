@@ -7,7 +7,7 @@ import {
   shouldDiscardSupersededSessionCreation,
   subscribeToSessionCreationSupersession,
   supersedeInFlightSessionCreation,
-} from "@/hooks/sessions/workflows/session-creation-supersession";
+} from "#product/hooks/sessions/workflows/session-creation-supersession";
 
 beforeEach(() => {
   resetSessionCreationSupersessionForTests();

@@ -12,7 +12,7 @@ import {
   loopCapabilitiesForSession,
   loopWireFromMirror,
   projectSessionActivity,
-} from "@/lib/domain/sessions/activity-mirror";
+} from "#product/lib/domain/sessions/activity-mirror";
 
 describe("loopCapabilitiesForSession", () => {
   it("projects supported + native from action capabilities", () => {

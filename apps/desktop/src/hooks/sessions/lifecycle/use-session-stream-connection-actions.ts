@@ -1,12 +1,12 @@
 import { useCallback } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { openSessionStreamConnection } from "@/hooks/sessions/lifecycle/session-stream-connection-open";
-import { prepareSessionStreamConnection } from "@/hooks/sessions/lifecycle/session-stream-connection-prepare";
-import { closeSessionSlotStream as closeSessionSlotStreamForSession } from "@/hooks/sessions/lifecycle/session-stream-slot-connection";
+import { openSessionStreamConnection } from "#product/hooks/sessions/lifecycle/session-stream-connection-open";
+import { prepareSessionStreamConnection } from "#product/hooks/sessions/lifecycle/session-stream-connection-prepare";
+import { closeSessionSlotStream as closeSessionSlotStreamForSession } from "#product/hooks/sessions/lifecycle/session-stream-slot-connection";
 import type {
   SessionStreamConnectOptions,
   UseSessionStreamConnectionActionsOptions,
-} from "@/hooks/sessions/lifecycle/session-stream-connection-types";
+} from "#product/hooks/sessions/lifecycle/session-stream-connection-types";
 
 export function useSessionStreamConnectionActions({
   createSessionStreamFlushController,

@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { sameStringArray } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
+import { sameStringArray } from "#product/lib/domain/workspaces/selection/workspace-keyed-preferences";
 
 export function useStableStringArray<T extends readonly string[]>(value: T): T {
   const previousRef = useRef<T | null>(null);

@@ -1,11 +1,11 @@
 import { create } from "zustand";
-import { appendTextToDraft } from "@/lib/domain/chat/composer/file-mention-draft-edits";
+import { appendTextToDraft } from "#product/lib/domain/chat/composer/file-mention-draft-edits";
 import {
   coerceChatDraft,
   EMPTY_CHAT_DRAFT,
   isChatDraftEmpty,
   type ChatComposerDraft,
-} from "@/lib/domain/chat/composer/file-mention-draft-model";
+} from "#product/lib/domain/chat/composer/file-mention-draft-model";
 
 interface ChatInputState {
   draftByWorkspaceId: Record<string, ChatComposerDraft>;

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
-import { selectSessionWithShellIntentRollback } from "@/hooks/sessions/workflows/session-shell-selection";
-import { handleRememberedWorkspaceSessionBootstrap } from "@/hooks/workspaces/workflows/workspace-bootstrap-remembered-session";
+import type { WorkspaceSession } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
+import { selectSessionWithShellIntentRollback } from "#product/hooks/sessions/workflows/session-shell-selection";
+import { handleRememberedWorkspaceSessionBootstrap } from "#product/hooks/workspaces/workflows/workspace-bootstrap-remembered-session";
 
 vi.mock("@/hooks/sessions/workflows/session-shell-selection", () => ({
   selectSessionWithShellIntentRollback: vi.fn(),

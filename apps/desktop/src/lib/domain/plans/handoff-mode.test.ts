@@ -5,7 +5,7 @@ import {
   resolvePlanHandoffModeId,
   resolvePlanHandoffModeIdFromOptions,
   resolvePlanHandoffPrePromptConfigChanges,
-} from "./handoff-mode";
+} from "#product/lib/domain/plans/handoff-mode";
 
 describe("plan handoff mode helpers", () => {
   it("returns the vetted handoff defaults for supported agent families", () => {

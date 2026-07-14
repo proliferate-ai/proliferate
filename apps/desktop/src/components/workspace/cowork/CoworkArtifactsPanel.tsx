@@ -2,12 +2,12 @@ import { useMemo } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ArrowLeft } from "@proliferate/ui/icons";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
-import { useCoworkArtifactDetail } from "@/hooks/access/anyharness/cowork/use-cowork-artifact-detail";
-import { useCoworkArtifactManifest } from "@/hooks/access/anyharness/cowork/use-cowork-artifact-manifest";
-import { useCoworkArtifactRefresh } from "@/hooks/cowork/lifecycle/use-cowork-artifact-refresh";
-import { useCoworkUiStore } from "@/stores/cowork/cowork-ui-store";
-import { CoworkArtifactRow } from "./CoworkArtifactRow";
-import { CoworkArtifactViewer } from "./CoworkArtifactViewer";
+import { useCoworkArtifactDetail } from "#product/hooks/access/anyharness/cowork/use-cowork-artifact-detail";
+import { useCoworkArtifactManifest } from "#product/hooks/access/anyharness/cowork/use-cowork-artifact-manifest";
+import { useCoworkArtifactRefresh } from "#product/hooks/cowork/lifecycle/use-cowork-artifact-refresh";
+import { useCoworkUiStore } from "#product/stores/cowork/cowork-ui-store";
+import { CoworkArtifactRow } from "#product/components/workspace/cowork/CoworkArtifactRow";
+import { CoworkArtifactViewer } from "#product/components/workspace/cowork/CoworkArtifactViewer";
 
 interface CoworkArtifactsPanelProps {
   workspaceId: string;

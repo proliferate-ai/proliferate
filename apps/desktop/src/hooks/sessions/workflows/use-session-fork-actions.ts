@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useForkSessionMutation } from "@anyharness/sdk-react";
 import type { ForkSessionResponse } from "@anyharness/sdk";
-import { useToastStore } from "@/stores/toast/toast-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 interface UseSessionForkActionsOptions {
   workspaceId?: string | null;

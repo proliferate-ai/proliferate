@@ -1,6 +1,6 @@
 import { createTranscriptState, selectPendingApprovalInteraction, type Session } from "@anyharness/sdk";
 import { describe, expect, it } from "vitest";
-import { buildSessionSlotPatchFromSummary } from "./summary";
+import { buildSessionSlotPatchFromSummary } from "#product/lib/domain/sessions/summary";
 
 describe("session summary patching", () => {
   it("hydrates pending approval state from execution summary", () => {

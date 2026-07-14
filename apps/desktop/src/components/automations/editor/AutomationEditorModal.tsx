@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { useAutomationTargetSelection } from "@/hooks/automations/derived/use-automation-target-selection";
-import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
-import { useAgentRunConfigMutations } from "@/hooks/access/cloud/agent-run-configs/use-agent-run-config-mutations";
-import type { AutomationTargetSelection } from "@/lib/domain/automations/target/selection";
-import type { AutomationRecord, CreateAutomationInput, UpdateAutomationInput } from "@/lib/domain/automations/run/ui-records";
+import { useAutomationTargetSelection } from "#product/hooks/automations/derived/use-automation-target-selection";
+import { useCloudAgentCatalog } from "#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
+import { useAgentRunConfigMutations } from "#product/hooks/access/cloud/agent-run-configs/use-agent-run-config-mutations";
+import type { AutomationTargetSelection } from "#product/lib/domain/automations/target/selection";
+import type { AutomationRecord, CreateAutomationInput, UpdateAutomationInput } from "#product/lib/domain/automations/run/ui-records";
 import type {
   AutomationOwnerScope,
   AutomationTargetMode,
-} from "@/lib/domain/automations/run/types";
-import { buildLaunchControlDescriptors } from "@/lib/domain/chat/models/launch-control-descriptors";
-import type { SupportedLiveControlKey } from "@/lib/domain/chat/session-controls/session-controls";
+} from "#product/lib/domain/automations/run/types";
+import { buildLaunchControlDescriptors } from "#product/lib/domain/chat/models/launch-control-descriptors";
+import type { SupportedLiveControlKey } from "#product/lib/domain/chat/session-controls/session-controls";
 import {
   automationControlValuesEqual,
   automationRunConfigName,
@@ -17,15 +17,15 @@ import {
   resolveAutomationAgent,
   resolveAutomationModel,
   selectedAutomationControlValues,
-} from "@/lib/domain/automations/editor/run-config";
+} from "#product/lib/domain/automations/editor/run-config";
 import {
   defaultAutomationTimezone,
   presetForRrule,
   rruleForPresetAtTime,
   validateAutomationRrule,
   validateAutomationTimezone,
-} from "@/lib/domain/automations/schedule/schedule";
-import { AutomationEditorDialog } from "@/components/automations/editor/AutomationEditorDialog";
+} from "#product/lib/domain/automations/schedule/schedule";
+import { AutomationEditorDialog } from "#product/components/automations/editor/AutomationEditorDialog";
 
 interface AutomationEditorModalProps {
   open: boolean;

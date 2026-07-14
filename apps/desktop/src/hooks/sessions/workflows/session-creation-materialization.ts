@@ -3,58 +3,58 @@ import type {
   DesktopRuntimeBridge,
   DesktopSshBridge,
 } from "@proliferate/product-client/host/desktop-bridge";
-import { applySessionLaunchDefaults } from "@/lib/workflows/sessions/session-launch-defaults";
-import { createSessionLaunchDefaultsClient } from "@/lib/access/anyharness/session-launch-defaults-client";
-import { resolveRuntimeTargetForWorkspace } from "@/lib/access/anyharness/runtime-target";
-import type { CloudSandboxGatewayUrlSource } from "@/lib/access/cloud/cloud-sandbox-gateway";
+import { applySessionLaunchDefaults } from "#product/lib/workflows/sessions/session-launch-defaults";
+import { createSessionLaunchDefaultsClient } from "#product/lib/access/anyharness/session-launch-defaults-client";
+import { resolveRuntimeTargetForWorkspace } from "#product/lib/access/anyharness/runtime-target";
+import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 import { resolveStatusFromExecutionSummary } from "@proliferate/product-domain/sessions/activity";
 import {
   findCompatibleExistingSession,
   shouldProbeCompatibleRuntimeSessions,
-} from "@/lib/domain/sessions/creation/compatible-session";
-import { mergeLiveDefaultLaunchControls } from "@/lib/domain/sessions/creation/launch-controls";
+} from "#product/lib/domain/sessions/creation/compatible-session";
+import { mergeLiveDefaultLaunchControls } from "#product/lib/domain/sessions/creation/launch-controls";
 import type { ErrorContext } from "@proliferate/product-client/host/product-host";
-import type { DesktopProductEventMap } from "@/lib/domain/telemetry/events";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+import type { DesktopProductEventMap } from "#product/lib/domain/telemetry/events";
+import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import {
   createEmptySessionRecord,
   getSessionRecord,
   putSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
-import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
+} from "#product/stores/sessions/session-records";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import type { SessionRuntimeRecord } from "#product/stores/sessions/session-types";
+import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import {
   assertDirectSessionCreateSupported,
-} from "@/lib/access/anyharness/direct-session-create-guard";
-import { DESKTOP_ORIGIN } from "@/lib/domain/sessions/desktop-origin";
+} from "#product/lib/access/anyharness/direct-session-create-guard";
+import { DESKTOP_ORIGIN } from "#product/lib/domain/sessions/desktop-origin";
 import {
   createSession,
   listWorkspaceSessions,
-} from "@/lib/access/anyharness/sessions";
-import { rememberLastViewedSession } from "@/stores/preferences/workspace-ui-store";
-import { buildLatencyRequestOptions } from "@/hooks/sessions/workflows/session-creation-request-options";
+} from "#product/lib/access/anyharness/sessions";
+import { rememberLastViewedSession } from "#product/stores/preferences/workspace-ui-store";
+import { buildLatencyRequestOptions } from "#product/hooks/sessions/workflows/session-creation-request-options";
 import {
   materializeSessionRecord,
-} from "@/hooks/sessions/workflows/session-creation-local-state";
+} from "#product/hooks/sessions/workflows/session-creation-local-state";
 import {
   materializeExistingSession,
   pendingConfigValuesForSession,
   requeuePromptIntentsBlockedOnMaterialization,
-} from "@/hooks/sessions/workflows/session-creation-materialization-helpers";
-import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
-import { buildDesktopLaunchModelRegistries } from "@/lib/domain/agents/cloud-launch-catalog";
-import type { CreateSessionWithResolvedConfigOptions } from "@/hooks/sessions/workflows/session-creation-types";
-import { resolveDesktopRuntimeUrlForWorkspace } from "@/hooks/sessions/workflows/session-creation-runtime";
+} from "#product/hooks/sessions/workflows/session-creation-materialization-helpers";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
+import { buildDesktopLaunchModelRegistries } from "#product/lib/domain/agents/cloud-launch-catalog";
+import type { CreateSessionWithResolvedConfigOptions } from "#product/hooks/sessions/workflows/session-creation-types";
+import { resolveDesktopRuntimeUrlForWorkspace } from "#product/hooks/sessions/workflows/session-creation-runtime";
 import { annotateLatencyFlow } from "@/lib/infra/measurement/latency-flow";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import {
   shouldDiscardSupersededSessionCreation,
-} from "@/hooks/sessions/workflows/session-creation-supersession";
-import { filterReplacedSessionTombstones } from "@/hooks/sessions/workflows/session-replacement-tombstones";
-import { scheduleCreatedRuntimeSessionCleanup } from "@/hooks/sessions/workflows/session-created-runtime-cleanup";
-import { runInterruptibleSessionCreationStep } from "@/hooks/sessions/workflows/session-creation-materialization-interruption";
+} from "#product/hooks/sessions/workflows/session-creation-supersession";
+import { filterReplacedSessionTombstones } from "#product/hooks/sessions/workflows/session-replacement-tombstones";
+import { scheduleCreatedRuntimeSessionCleanup } from "#product/hooks/sessions/workflows/session-created-runtime-cleanup";
+import { runInterruptibleSessionCreationStep } from "#product/hooks/sessions/workflows/session-creation-materialization-interruption";
 
 /**
  * Narrow typed telemetry dependencies injected from the calling hook (which

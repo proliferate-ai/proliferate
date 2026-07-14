@@ -6,7 +6,7 @@ import type { DesktopBridge } from "@proliferate/product-client/host/desktop-bri
 import type { ProductHost } from "@proliferate/product-client/host/product-host";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 
-import { useNativeContextMenu } from "./use-native-context-menu";
+import { useNativeContextMenu } from "#product/hooks/ui/native/use-native-context-menu";
 
 afterEach(() => {
   cleanup();

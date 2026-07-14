@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { groupComputeTargetsByOwnerScope } from "@/lib/domain/compute/target-presentation";
-import type { ComputeTargetSummary } from "@/lib/domain/compute/target-types";
+import { groupComputeTargetsByOwnerScope } from "#product/lib/domain/compute/target-presentation";
+import type { ComputeTargetSummary } from "#product/lib/domain/compute/target-types";
 
 function target(
   id: string,

@@ -34,9 +34,9 @@ const worker = {} as DesktopWorkerBridge;
 // harness drives it through rerender rather than the auth store.
 async function loadEnrollmentHarness() {
   vi.resetModules();
-  const { useOrganizationStore } = await import("@/stores/organizations/organization-store");
-  const { useToastStore } = await import("@/stores/toast/toast-store");
-  const { useDesktopWorkerEnrollment } = await import("./use-desktop-worker-enrollment");
+  const { useOrganizationStore } = await import("#product/stores/organizations/organization-store");
+  const { useToastStore } = await import("#product/stores/toast/toast-store");
+  const { useDesktopWorkerEnrollment } = await import("#product/hooks/cloud/lifecycle/use-desktop-worker-enrollment");
   useOrganizationStore.setState({
     activeOrganizationId: null,
     activeOrganizationValidated: false,

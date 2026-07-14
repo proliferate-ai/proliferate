@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { ApprovalCard } from "@/components/workspace/chat/input/ApprovalCard";
-import { UserInputCard } from "@/components/workspace/chat/input/UserInputCard";
-import { useComposerDockCardPresence } from "@/hooks/chat/ui/use-composer-dock-card-presence";
+import { ApprovalCard } from "#product/components/workspace/chat/input/ApprovalCard";
+import { UserInputCard } from "#product/components/workspace/chat/input/UserInputCard";
+import { useComposerDockCardPresence } from "#product/hooks/chat/ui/use-composer-dock-card-presence";
 import {
   EXECUTE_OPTIONS,
   USER_INPUT_SINGLE_OPTION,
-} from "@/lib/domain/chat/__fixtures__/playground/panel-interaction-fixtures";
-import { noop } from "@/components/playground/PlaygroundComposerActions";
+} from "#product/lib/domain/chat/__fixtures__/playground/panel-interaction-fixtures";
+import { noop } from "#product/components/playground/PlaygroundComposerActions";
 
 /** How long each card holds the slot before "resolving". */
 const PENDING_MS = 3_600;

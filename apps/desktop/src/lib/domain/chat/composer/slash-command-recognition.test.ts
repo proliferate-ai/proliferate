@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { recognizeLeadingSlashCommand } from "./slash-command-recognition";
-import type { SessionSlashCommandViewModel } from "./session-slash-command-policy";
+import { recognizeLeadingSlashCommand } from "#product/lib/domain/chat/composer/slash-command-recognition";
+import type { SessionSlashCommandViewModel } from "#product/lib/domain/chat/composer/session-slash-command-policy";
 
 const COMMANDS: SessionSlashCommandViewModel[] = [
   { id: "loop", name: "loop", displayName: "/loop", description: "Run repeatedly", inputHint: "interval", group: "Commands" },

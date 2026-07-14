@@ -1,4 +1,4 @@
-import type { ComputeTargetKind } from "@/lib/domain/compute/target-types";
+import type { ComputeTargetKind } from "#product/lib/domain/compute/target-types";
 
 export const COMPUTE_TARGET_ICON_IDS = [
   "monitor",

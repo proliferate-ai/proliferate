@@ -4,13 +4,13 @@ import {
   useCallback,
   useEffect,
 } from "react";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { resolvePreferredOpenTarget } from "@/lib/domain/chat/composer/preference-resolvers";
-import { HeaderTabs } from "@/components/workspace/shell/topbar/HeaderTabs";
-import { WorkspaceActionsMenuContainer } from "@/components/workspace/shell/topbar/WorkspaceActionsMenuContainer";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
+import { resolvePreferredOpenTarget } from "#product/lib/domain/chat/composer/preference-resolvers";
+import { HeaderTabs } from "#product/components/workspace/shell/topbar/HeaderTabs";
+import { WorkspaceActionsMenuContainer } from "#product/components/workspace/shell/topbar/WorkspaceActionsMenuContainer";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
-import { SplitButton } from "@/components/workspace/open-target/SplitButton";
+import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
+import { SplitButton } from "#product/components/workspace/open-target/SplitButton";
 import {
   type OpenTarget,
 } from "@proliferate/product-client/host/desktop-bridge";
@@ -21,8 +21,8 @@ import {
   SplitPanel,
 } from "@proliferate/ui/icons";
 import type { Workspace } from "@anyharness/sdk";
-import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
-import { workspaceHeaderTitle } from "@/lib/domain/workspaces/display/workspace-display";
+import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
+import { workspaceHeaderTitle } from "#product/lib/domain/workspaces/display/workspace-display";
 
 const HEADER_ICON_BUTTON_CLASS = "workspace-shell-icon-button";
 const HEADER_RUN_BUTTON_CLASS = "workspace-shell-action-button font-medium";

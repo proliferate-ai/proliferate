@@ -3,7 +3,7 @@ import type {
   Session,
   SessionEventEnvelope,
 } from "@anyharness/sdk";
-import type { SessionDebugExportedSession } from "@/lib/domain/support/session-debug/export-models";
+import type { SessionDebugExportedSession } from "#product/lib/domain/support/session-debug/export-models";
 
 export function sanitizeSessionDebugExportedSession(
   session: SessionDebugExportedSession,

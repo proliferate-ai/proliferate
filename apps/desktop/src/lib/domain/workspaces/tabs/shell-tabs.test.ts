@@ -12,8 +12,8 @@ import {
   resolveWorkspaceShellTabByShortcutIndex,
   sanitizeWorkspaceShellTabOrder,
   type WorkspaceShellTab,
-} from "./shell-tabs";
-import { fileViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
+} from "#product/lib/domain/workspaces/tabs/shell-tabs";
+import { fileViewerTarget } from "#product/lib/domain/workspaces/viewer/viewer-target";
 
 describe("workspace shell tab keys", () => {
   it("parses file paths without splitting on later colons", () => {

@@ -1,13 +1,13 @@
 import { useState, type CSSProperties } from "react";
-import { DiffViewer } from "@/components/content/ui/DiffViewer";
-import { FileDiffCard } from "@/components/content/ui/FileDiffCard";
+import { DiffViewer } from "#product/components/content/ui/DiffViewer";
+import { FileDiffCard } from "#product/components/content/ui/FileDiffCard";
 import { CheckCircleFilled } from "@proliferate/ui/icons";
-import { GitReviewEmptyState } from "@/components/workspace/git/GitReviewEmptyState";
+import { GitReviewEmptyState } from "#product/components/workspace/git/GitReviewEmptyState";
 import {
   PLAYGROUND_SIDEBAR_GIT_DIFF_FILES,
   PLAYGROUND_SIDEBAR_GIT_DIFF_SECTIONS,
   type PlaygroundSidebarGitDiffFile,
-} from "@/lib/domain/chat/__fixtures__/playground/git-diff-fixtures";
+} from "#product/lib/domain/chat/__fixtures__/playground/git-diff-fixtures";
 
 const SIDEBAR_DIFF_VIEWPORT_CLASS = "max-h-[calc(var(--diffs-line-height)*18)]";
 const SIDEBAR_DIFF_SURFACE_STYLE = {

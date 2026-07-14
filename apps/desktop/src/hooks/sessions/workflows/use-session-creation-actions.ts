@@ -1,61 +1,61 @@
 import { useCallback } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
-import { hasPromptContent } from "@/lib/domain/chat/composer/prompt-input";
-import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
+import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
+import { hasPromptContent } from "#product/lib/domain/chat/composer/prompt-input";
+import { createPromptId } from "#product/lib/domain/chat/composer/prompt-id";
 import {
   formatSessionCreateFailureMessage,
   toSessionCreateFailureDisplayError,
-} from "@/lib/domain/sessions/creation/create-session-error";
-import { pickLiveDefaultLaunchControls } from "@/lib/domain/sessions/creation/launch-controls";
-import { resolveSessionCreationModeId } from "@/lib/domain/sessions/creation/mode";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { useToastStore } from "@/stores/toast/toast-store";
+} from "#product/lib/domain/sessions/creation/create-session-error";
+import { pickLiveDefaultLaunchControls } from "#product/lib/domain/sessions/creation/launch-controls";
+import { resolveSessionCreationModeId } from "#product/lib/domain/sessions/creation/mode";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
 import {
   createEmptySessionRecord,
   getSessionRecord,
   putSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
-import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
-import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/derived/use-workspace-surface-lookup";
-import { useSessionPromptWorkflow } from "@/hooks/sessions/workflows/use-session-prompt-workflow";
+} from "#product/stores/sessions/session-records";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import type { SessionRuntimeRecord } from "#product/stores/sessions/session-types";
+import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
+import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
+import { useWorkspaceSurfaceLookup } from "#product/hooks/workspaces/derived/use-workspace-surface-lookup";
+import { useSessionPromptWorkflow } from "#product/hooks/sessions/workflows/use-session-prompt-workflow";
 import {
   createPendingSessionId,
   pruneInactiveSessionStreams,
-} from "@/lib/workflows/sessions/session-runtime";
-import { useSessionRuntimeActions } from "@/hooks/sessions/workflows/use-session-runtime-actions";
-import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
+} from "#product/lib/workflows/sessions/session-runtime";
+import { useSessionRuntimeActions } from "#product/hooks/sessions/workflows/use-session-runtime-actions";
+import { useWorkspaceSessionCache } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import {
   annotateLatencyFlow,
   cancelLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
-import { writeChatShellIntentForSession } from "@/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
-import type { WorkspaceShellIntentKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { inFlightSessionCreatesByWorkspace } from "@/hooks/sessions/workflows/session-creation-in-flight";
-import { useCloudAgentCatalogCache } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
+import { writeChatShellIntentForSession } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
+import type { WorkspaceShellIntentKey } from "#product/lib/domain/workspaces/tabs/shell-tabs";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { inFlightSessionCreatesByWorkspace } from "#product/hooks/sessions/workflows/session-creation-in-flight";
+import { useCloudAgentCatalogCache } from "#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import type {
   CreateEmptySessionWithResolvedConfigOptions,
   CreateSessionWithResolvedConfigOptions,
-} from "@/hooks/sessions/workflows/session-creation-types";
-import { sessionStreamPruningDeps } from "@/hooks/sessions/workflows/session-creation-runtime";
-import { materializeSessionCreation } from "@/hooks/sessions/workflows/session-creation-materialization";
+} from "#product/hooks/sessions/workflows/session-creation-types";
+import { sessionStreamPruningDeps } from "#product/hooks/sessions/workflows/session-creation-runtime";
+import { materializeSessionCreation } from "#product/hooks/sessions/workflows/session-creation-materialization";
 import { useDismissSessionMutation } from "@anyharness/sdk-react";
 import {
   beginEmptySessionReplacement,
   type EmptySessionReplacementTransaction,
-} from "@/hooks/sessions/workflows/use-empty-session-replacement-cleanup";
-import { registerSessionCreation } from "@/hooks/sessions/workflows/session-creation-supersession";
+} from "#product/hooks/sessions/workflows/use-empty-session-replacement-cleanup";
+import { registerSessionCreation } from "#product/hooks/sessions/workflows/session-creation-supersession";
 import {
   beginReplacementShellPreferences,
   type ReplacementShellPreferencesTransaction,
-} from "@/hooks/sessions/workflows/session-replacement-shell-preferences";
-import { cleanupSessionCreationFailure } from "@/hooks/sessions/workflows/session-creation-failure-cleanup";
-import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
+} from "#product/hooks/sessions/workflows/session-replacement-shell-preferences";
+import { cleanupSessionCreationFailure } from "#product/hooks/sessions/workflows/session-creation-failure-cleanup";
+import { resolveWorkspaceUiKey } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
 
 export function useSessionCreationActions() {
   const host = useProductHost();

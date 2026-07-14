@@ -8,12 +8,12 @@ import {
   useOrgAgentPolicy,
   usePutAuthSelections,
 } from "@proliferate/cloud-sdk-react";
-import { getHarnessEnvVarSuggestions } from "@/config/harness-env-vars";
-import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
-import { useAgentLoginTerminalWorkflow } from "@/hooks/agents/workflows/use-agent-login-terminal-workflow";
-import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
-import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
-import { isReadyAgent } from "@/lib/domain/agents/status";
+import { getHarnessEnvVarSuggestions } from "#product/config/harness-env-vars";
+import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
+import { useAgentLoginTerminalWorkflow } from "#product/hooks/agents/workflows/use-agent-login-terminal-workflow";
+import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
+import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+import { isReadyAgent } from "#product/lib/domain/agents/status";
 import {
   buildDesiredSources,
   deriveEditorState,
@@ -22,9 +22,9 @@ import {
   type AuthMethod,
   type EditableApiKeyRow,
   type HarnessAuthEditorState,
-} from "@/lib/domain/settings/harness-auth-sources";
-import { useToastStore } from "@/stores/toast/toast-store";
-import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
+} from "#product/lib/domain/settings/harness-auth-sources";
+import { useToastStore } from "#product/stores/toast/toast-store";
+import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 
 export interface HarnessAuthEditorApi {
   // Queries

@@ -5,7 +5,7 @@ import type {
 import type {
   PublishIntent,
   PublishWorkflowStep,
-} from "@/lib/domain/workspaces/creation/publish-workflow-model";
+} from "#product/lib/domain/workspaces/creation/publish-workflow-model";
 
 export function publishStatusLabel(input: {
   gitStatus: GitStatusSnapshot | null;

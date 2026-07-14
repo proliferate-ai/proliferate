@@ -1,9 +1,9 @@
-import { resolveTrustedSessionSelectionRelationship } from "@/lib/domain/sessions/selection/trusted-session-selection";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { resolveTrustedSessionSelectionRelationship } from "#product/lib/domain/sessions/selection/trusted-session-selection";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import type {
   SessionChildRelationship,
   SessionRelationship,
-} from "@/lib/domain/sessions/directory/relationship";
+} from "#product/lib/domain/sessions/directory/relationship";
 
 export function classifyTrustedSessionSelection(sessionId: string): SessionRelationship {
   const state = useSessionDirectoryStore.getState();

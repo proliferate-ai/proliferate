@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { WorkspaceActions } from "./WorkspaceActionsMenu";
+import { WorkspaceActions } from "#product/components/workspace/shell/topbar/WorkspaceActionsMenu";
 
 const nativeMenuState = vi.hoisted(() => ({
   show: vi.fn<() => Promise<boolean>>(),

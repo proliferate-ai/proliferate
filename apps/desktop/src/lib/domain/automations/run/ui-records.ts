@@ -1,8 +1,8 @@
-import type { AutomationExecutionTarget } from "@/lib/domain/automations/target/records";
+import type { AutomationExecutionTarget } from "#product/lib/domain/automations/target/records";
 import type {
   AutomationOwnerScope,
   AutomationTargetMode,
-} from "@/lib/domain/automations/run/types";
+} from "#product/lib/domain/automations/run/types";
 
 export type { AutomationExecutionTarget };
 

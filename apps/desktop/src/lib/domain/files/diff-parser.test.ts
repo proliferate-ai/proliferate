@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parsePatch } from "./diff-parser";
+import { parsePatch } from "#product/lib/domain/files/diff-parser";
 
 describe("parsePatch", () => {
   it("tracks old and new line numbers for unified diff lines", () => {

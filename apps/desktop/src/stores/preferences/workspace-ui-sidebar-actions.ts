@@ -1,10 +1,10 @@
-import type { SidebarWorkspaceVariant } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
+import type { SidebarWorkspaceVariant } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
 import {
   toggleSidebarWorkspaceTypeSelection,
-} from "@/lib/domain/workspaces/sidebar/sidebar-workspace-types";
-import { clampWorkspaceSidebarWidth } from "@/lib/domain/preferences/workspace-ui/sidebar";
-import { resolveStateValue } from "@/stores/preferences/workspace-ui-state-value";
-import type { WorkspaceUiGet, WorkspaceUiSet, WorkspaceUiState } from "@/stores/preferences/workspace-ui-store-types";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-workspace-types";
+import { clampWorkspaceSidebarWidth } from "#product/lib/domain/preferences/workspace-ui/sidebar";
+import { resolveStateValue } from "#product/stores/preferences/workspace-ui-state-value";
+import type { WorkspaceUiGet, WorkspaceUiSet, WorkspaceUiState } from "#product/stores/preferences/workspace-ui-store-types";
 
 type WorkspaceUiSidebarActions = Pick<
   WorkspaceUiState,

@@ -9,7 +9,7 @@ import {
   createPromptOutboxEntry,
   type PromptOutboxEntry,
 } from "@proliferate/product-domain/sessions/intents/session-intent-model";
-import { TranscriptPendingPromptRow } from "./TranscriptPendingPromptRow";
+import { TranscriptPendingPromptRow } from "#product/components/workspace/chat/transcript/TranscriptPendingPromptRow";
 
 const NOW = "2026-05-20T17:00:00.000Z";
 

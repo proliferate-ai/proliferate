@@ -1,15 +1,15 @@
 import { useEffect, useRef } from "react";
-import { useOrganizations } from "@/hooks/access/cloud/organizations/use-organizations";
+import { useOrganizations } from "#product/hooks/access/cloud/organizations/use-organizations";
 import {
   clearSelectedOrganizationCookie,
   readSelectedOrganizationCookie,
   writeSelectedOrganizationCookie,
-} from "@/lib/access/browser/organization-selection-cookie";
-import { useOrganizationStore } from "@/stores/organizations/organization-store";
+} from "#product/lib/access/browser/organization-selection-cookie";
+import { useOrganizationStore } from "#product/stores/organizations/organization-store";
 import {
   useProductAuthStatus,
   useProductAuthUserId,
-} from "@/hooks/auth/facade/use-product-auth";
+} from "#product/hooks/auth/facade/use-product-auth";
 
 export function useOrganizationSelectionLifecycle() {
   const authStatus = useProductAuthStatus();

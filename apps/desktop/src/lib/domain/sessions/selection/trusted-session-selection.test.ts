@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveTrustedSessionSelectionRelationship } from "@/lib/domain/sessions/selection/trusted-session-selection";
+import { resolveTrustedSessionSelectionRelationship } from "#product/lib/domain/sessions/selection/trusted-session-selection";
 
 type TestRelationship =
   | { kind: "pending" }

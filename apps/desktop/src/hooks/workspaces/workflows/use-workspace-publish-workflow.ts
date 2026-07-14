@@ -10,21 +10,21 @@ import {
 } from "@anyharness/sdk-react";
 import {
   buildPublishViewState,
-} from "@/lib/domain/workspaces/creation/publish-workflow";
-import { defaultPublishPullRequestDraft } from "@/lib/domain/workspaces/creation/publish-draft";
+} from "#product/lib/domain/workspaces/creation/publish-workflow";
+import { defaultPublishPullRequestDraft } from "#product/lib/domain/workspaces/creation/publish-draft";
 import type {
   PublishCommitDraft,
   PublishIntent,
   PublishPullRequestDraft,
-} from "@/lib/domain/workspaces/creation/publish-workflow-model";
-import { persistedSnapshotFromPullRequestSummary } from "@/lib/domain/workspaces/git-status/workspace-git-status-snapshots";
-import { runWorkspacePublishWorkflow } from "@/lib/workflows/workspaces/run-workspace-publish-workflow";
-import { useRefreshPrStatuses } from "@/hooks/workspaces/cache/use-pr-status-refresh";
-import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
+} from "#product/lib/domain/workspaces/creation/publish-workflow-model";
+import { persistedSnapshotFromPullRequestSummary } from "#product/lib/domain/workspaces/git-status/workspace-git-status-snapshots";
+import { runWorkspacePublishWorkflow } from "#product/lib/workflows/workspaces/run-workspace-publish-workflow";
+import { useRefreshPrStatuses } from "#product/hooks/workspaces/cache/use-pr-status-refresh";
+import { useLogicalWorkspaces } from "#product/hooks/workspaces/derived/use-logical-workspaces";
 import {
   recordWorkspaceGitStatusSnapshot,
   useWorkspaceUiStore,
-} from "@/stores/preferences/workspace-ui-store";
+} from "#product/stores/preferences/workspace-ui-store";
 
 export interface UseWorkspacePublishWorkflowOptions {
   workspaceId: string | null;

@@ -13,7 +13,7 @@ import {
   sessionRelationshipEqual,
   type SessionChildRelationship,
   type SessionRelationship,
-} from "@/lib/domain/sessions/directory/relationship";
+} from "#product/lib/domain/sessions/directory/relationship";
 
 export type ClientSessionId = string;
 export type MaterializedSessionId = string;

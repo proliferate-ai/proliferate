@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { normalizeContentSearchQuery } from "@/lib/domain/content-search/content-search";
+import { normalizeContentSearchQuery } from "#product/lib/domain/content-search/content-search";
 
 export type ContentSearchScope = "chat" | "diffs";
 export type ContentSearchSurface = "chat" | "file";

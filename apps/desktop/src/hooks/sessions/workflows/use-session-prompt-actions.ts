@@ -1,14 +1,14 @@
 import { useCallback } from "react";
-import { useSessionPromptWorkflow } from "@/hooks/sessions/workflows/use-session-prompt-workflow";
-import type { ActiveSessionPromptOptions } from "@/hooks/sessions/workflows/session-control-contract";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
+import { useSessionPromptWorkflow } from "#product/hooks/sessions/workflows/use-session-prompt-workflow";
+import type { ActiveSessionPromptOptions } from "#product/hooks/sessions/workflows/session-control-contract";
+import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
 import {
   getSessionRecord,
   isPendingSessionId,
-} from "@/stores/sessions/session-records";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+} from "#product/stores/sessions/session-records";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
-import { canPromptSessionSlot } from "@/lib/domain/sessions/prompt-readiness";
+import { canPromptSessionSlot } from "#product/lib/domain/sessions/prompt-readiness";
 
 export function useSessionPromptActions() {
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();

@@ -5,7 +5,7 @@ import {
   reviewRunReplacesStartingReview,
   selectBlockingReviewRun,
   selectComposerReviewRun,
-} from "./review-runs";
+} from "#product/lib/domain/reviews/review-runs";
 
 interface StartingReviewFixture {
   parentSessionId: string;

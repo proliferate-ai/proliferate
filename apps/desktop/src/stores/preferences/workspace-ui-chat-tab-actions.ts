@@ -3,14 +3,14 @@ import {
   removeSessionsFromManualChatGroups,
   updateManualChatGroup,
   upsertManualChatGroup,
-} from "@/lib/domain/workspaces/tabs/manual-groups";
+} from "#product/lib/domain/workspaces/tabs/manual-groups";
 import {
   clearHiddenChatSessionIds,
   rememberHiddenChatSessionId,
   uniqueIds,
-} from "@/lib/domain/workspaces/tabs/visibility";
-import { sameStringArray } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
-import type { WorkspaceUiGet, WorkspaceUiSet, WorkspaceUiState } from "@/stores/preferences/workspace-ui-store-types";
+} from "#product/lib/domain/workspaces/tabs/visibility";
+import { sameStringArray } from "#product/lib/domain/workspaces/selection/workspace-keyed-preferences";
+import type { WorkspaceUiGet, WorkspaceUiSet, WorkspaceUiState } from "#product/stores/preferences/workspace-ui-store-types";
 
 type WorkspaceUiChatTabActions = Pick<
   WorkspaceUiState,

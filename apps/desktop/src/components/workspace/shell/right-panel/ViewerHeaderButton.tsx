@@ -1,12 +1,12 @@
 import { Button } from "@proliferate/ui/primitives/Button";
-import { FileTreeEntryIcon } from "@/components/workspace/files/file-icons";
+import { FileTreeEntryIcon } from "#product/components/workspace/files/file-icons";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { AppShellReviewIcon, AppShellTabCloseIcon } from "@proliferate/ui/icons";
 import {
   viewerTargetDisplayPath,
   viewerTargetLabel,
   type ViewerTarget,
-} from "@/lib/domain/workspaces/viewer/viewer-target";
+} from "#product/lib/domain/workspaces/viewer/viewer-target";
 
 const HEADER_VIEWER_TAB_CLASS = "ui-tab-system-tab right-panel-terminal-tab";
 

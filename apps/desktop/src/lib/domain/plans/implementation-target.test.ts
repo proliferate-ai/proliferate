@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import type {
   PlanImplementationHarnessState,
   PlanImplementationSessionRecord,
-} from "./implementation-target";
+} from "#product/lib/domain/plans/implementation-target";
 import {
   resolvePlanImplementationReadiness,
   resolvePlanImplementationTargetCheck,
-} from "./implementation-target";
+} from "#product/lib/domain/plans/implementation-target";
 
 describe("resolvePlanImplementationReadiness", () => {
   it("blocks when the source session is missing", () => {

@@ -1,6 +1,6 @@
 import type { CoworkArtifactDetailResponse } from "@anyharness/sdk";
-import { useControlPlaneHealth } from "@/hooks/access/cloud/use-control-plane-health";
-import { useCoworkArtifactViewer } from "@/hooks/cowork/ui/use-cowork-artifact-viewer";
+import { useControlPlaneHealth } from "#product/hooks/access/cloud/use-control-plane-health";
+import { useCoworkArtifactViewer } from "#product/hooks/cowork/ui/use-cowork-artifact-viewer";
 
 interface CoworkArtifactViewerProps {
   artifactDetail: CoworkArtifactDetailResponse | null;

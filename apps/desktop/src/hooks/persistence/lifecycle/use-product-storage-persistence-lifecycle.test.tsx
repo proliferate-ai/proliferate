@@ -5,33 +5,33 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   createMemoryProductStorage,
   type MemoryProductStorage,
-} from "@/test/product-storage-test-utils";
+} from "#product/test/product-storage-test-utils";
 import {
   makeTestProductHost,
   productHostWrapper,
-} from "@/test/product-host-test-utils";
+} from "#product/test/product-host-test-utils";
 import {
   resetChatDiffPreferencesForTests,
   useChatDiffPreferencesStore,
-} from "@/stores/chat/chat-diff-preferences-store";
+} from "#product/stores/chat/chat-diff-preferences-store";
 import {
   resetFileTreeStoreForTests,
   useFileTreeStore,
-} from "@/stores/editor/file-tree-store";
+} from "#product/stores/editor/file-tree-store";
 import {
   readHomeNextTargetSelectionState,
   resetHomeNextTargetSelectionForTests,
-} from "@/hooks/home/ui/use-home-next-target-selection-state";
+} from "#product/hooks/home/ui/use-home-next-target-selection-state";
 import {
   isCloudDisplayNameBackfillSuppressed,
   resetCloudDisplayNameSuppressionForTests,
-} from "@/hooks/workspaces/lifecycle/cloud-display-name-backfill-suppression";
+} from "#product/hooks/workspaces/lifecycle/cloud-display-name-backfill-suppression";
 import {
   isReplacedSessionTombstoned,
   resetReplacedSessionTombstonesForTests,
-} from "@/hooks/sessions/workflows/session-replacement-tombstones";
-import { resetSessionReplacementTombstonesStorageForTests } from "@/lib/access/persistence/session-replacement-tombstones-storage";
-import { useProductStoragePersistenceLifecycle } from "./use-product-storage-persistence-lifecycle";
+} from "#product/hooks/sessions/workflows/session-replacement-tombstones";
+import { resetSessionReplacementTombstonesStorageForTests } from "#product/lib/access/persistence/session-replacement-tombstones-storage";
+import { useProductStoragePersistenceLifecycle } from "#product/hooks/persistence/lifecycle/use-product-storage-persistence-lifecycle";
 
 let memory: MemoryProductStorage;
 

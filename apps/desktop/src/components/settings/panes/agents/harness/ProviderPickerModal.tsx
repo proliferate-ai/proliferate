@@ -6,7 +6,7 @@ import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import {
   PROVIDER_REGISTRY,
   type ProviderRegistryEntry,
-} from "@/config/harness-env-vars";
+} from "#product/config/harness-env-vars";
 
 interface ProviderPickerModalProps {
   open: boolean;

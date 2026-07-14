@@ -8,7 +8,7 @@ import { deriveActivityChips } from "@proliferate/product-domain/activity/chips"
 import type { LoopCapabilities, LoopWire } from "@proliferate/product-domain/activity/loop";
 import type { ActivityProcessWire } from "@proliferate/product-domain/activity/process";
 import type { ActivitySubagentWire } from "@proliferate/product-domain/activity/subagent";
-import type { ScenarioKey } from "@/config/playground";
+import type { ScenarioKey } from "#product/config/playground";
 import {
   AGENTS_MIXED,
   LOOP_CAPABILITIES_EMULATED,
@@ -20,8 +20,8 @@ import {
   PROCESS_RUNNING,
   PROCESSES_MIXED,
   ACTIVITY_FIXTURE_NOW_MS,
-} from "@/lib/domain/chat/__fixtures__/playground/activity-fixtures";
-import { GOAL_ACTIVE_SHORT, GOAL_CAPABILITIES_PAUSABLE } from "@/lib/domain/chat/__fixtures__/playground/goal-fixtures";
+} from "#product/lib/domain/chat/__fixtures__/playground/activity-fixtures";
+import { GOAL_ACTIVE_SHORT, GOAL_CAPABILITIES_PAUSABLE } from "#product/lib/domain/chat/__fixtures__/playground/goal-fixtures";
 
 const NOOP = () => {};
 

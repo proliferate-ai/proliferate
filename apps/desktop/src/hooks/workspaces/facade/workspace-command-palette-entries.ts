@@ -1,12 +1,12 @@
-import { SHORTCUTS } from "@/config/shortcuts/registry";
-import type { AppCommandActions } from "@/hooks/app/workflows/app-command-action-types";
+import { SHORTCUTS } from "#product/config/shortcuts/registry";
+import type { AppCommandActions } from "#product/hooks/app/workflows/app-command-action-types";
 import {
   commandPaletteCommandValue,
   type CommandPaletteEntry,
-} from "@/lib/domain/command-palette/entries";
-import { focusChatInput } from "@/lib/domain/focus-zone";
-import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
-import { runShortcutHandler } from "@/lib/domain/shortcuts/registry";
+} from "#product/lib/domain/command-palette/entries";
+import { focusChatInput } from "#product/lib/domain/focus-zone";
+import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
+import { runShortcutHandler } from "#product/lib/domain/shortcuts/registry";
 
 export interface RunCommandState {
   onRun: () => void;

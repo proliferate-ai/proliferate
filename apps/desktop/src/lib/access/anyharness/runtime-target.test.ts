@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
 
-import { resolveRuntimeTargetForWorkspace } from "./runtime-target";
+import { resolveRuntimeTargetForWorkspace } from "#product/lib/access/anyharness/runtime-target";
 
 function makeSshBridge(): DesktopSshBridge {
   return {

@@ -1,24 +1,24 @@
-import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-state";
-import { useChatInputStore } from "@/stores/chat/chat-input-store";
-import { useChatPlanAttachmentStore } from "@/stores/chat/chat-plan-attachment-store";
+import { resetWorkspaceEditorState } from "#product/stores/editor/workspace-editor-state";
+import { useChatInputStore } from "#product/stores/chat/chat-input-store";
+import { useChatPlanAttachmentStore } from "#product/stores/chat/chat-plan-attachment-store";
 import {
   detachAndCloseSessionStreams,
   type FlushAwareSessionStreamHandle,
   type SessionStreamDetachDeps,
-} from "@/lib/workflows/sessions/session-runtime";
+} from "#product/lib/workflows/sessions/session-runtime";
 import {
   findClientSessionIdByMaterializedSessionId,
   getMaterializedSessionId,
   getWorkspaceSessionRecords,
   patchSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+} from "#product/stores/sessions/session-records";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import {
   closeSessionStreamHandle,
   getSessionStreamHandle,
-} from "@/lib/access/anyharness/session-stream-handles";
-import { clearWorkspaceBootstrappedInSession } from "@/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
-import type { WorkspaceSelectionDeps } from "./types";
+} from "#product/lib/access/anyharness/session-stream-handles";
+import { clearWorkspaceBootstrappedInSession } from "#product/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
+import type { WorkspaceSelectionDeps } from "#product/hooks/workspaces/workflows/selection/types";
 
 const sessionStreamDetachDeps: SessionStreamDetachDeps = {
   getMaterializedSessionId,

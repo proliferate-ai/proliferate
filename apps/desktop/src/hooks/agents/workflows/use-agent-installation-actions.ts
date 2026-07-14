@@ -8,8 +8,8 @@ import type {
   InstallAgentRequest,
   ReconcileAgentsRequest,
 } from "@anyharness/sdk";
-import { useAgentResourcesCache } from "@/hooks/access/anyharness/agents/use-agent-resources-cache";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useAgentResourcesCache } from "#product/hooks/access/anyharness/agents/use-agent-resources-cache";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
 function assertHealthyRuntime(runtimeUrl: string, isHealthy: boolean): void {
   if (!isHealthy || runtimeUrl.trim().length === 0) {

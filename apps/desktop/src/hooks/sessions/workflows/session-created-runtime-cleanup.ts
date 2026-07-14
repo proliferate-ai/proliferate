@@ -1,15 +1,15 @@
 import { AnyHarnessError } from "@anyharness/sdk";
 import type { ErrorContext } from "@proliferate/product-client/host/product-host";
-import { dismissSession as dismissRuntimeSession } from "@/lib/access/anyharness/sessions";
+import { dismissSession as dismissRuntimeSession } from "#product/lib/access/anyharness/sessions";
 import {
   commitReplacedSessionTombstone,
   releaseReplacedSessionSuppression,
   retireStagedReplacedSessionTombstone,
   stageReplacedSessionTombstone,
-} from "@/hooks/sessions/workflows/session-replacement-tombstones";
+} from "#product/hooks/sessions/workflows/session-replacement-tombstones";
 import {
   runTrackedReplacementDismissal,
-} from "@/hooks/sessions/workflows/session-replacement-dismissals";
+} from "#product/hooks/sessions/workflows/session-replacement-dismissals";
 
 const DISMISS_RETRY_DELAYS_MS = [0, 100, 500] as const;
 

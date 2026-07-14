@@ -3,14 +3,14 @@ import { GoalBar } from "@proliferate/product-ui/activity/GoalBar";
 import { ActivityChips } from "@proliferate/product-ui/activity/ActivityChips";
 import { LoopsPanel } from "@proliferate/product-ui/activity/LoopsPanel";
 import { AgentsRosterPanel } from "@proliferate/product-ui/activity/AgentsRosterPanel";
-import { LiveTerminalsRosterPanel } from "@/components/workspace/activity/LiveTerminalsRosterPanel";
+import { LiveTerminalsRosterPanel } from "#product/components/workspace/activity/LiveTerminalsRosterPanel";
 import { deriveActivityChips } from "@proliferate/product-domain/activity/chips";
 import type { GoalCapabilities } from "@proliferate/product-domain/activity/goal";
-import { useSessionGoalBarModel } from "@/hooks/activity/derived/use-session-goal";
-import { useSessionGoalActions } from "@/hooks/activity/workflows/use-session-goal-actions";
-import { useSessionActivity } from "@/hooks/activity/derived/use-session-activity";
-import { useActivityNowMs } from "@/hooks/activity/derived/use-activity-now-ms";
-import { useSessionLoopActions } from "@/hooks/activity/workflows/use-session-loop-actions";
+import { useSessionGoalBarModel } from "#product/hooks/activity/derived/use-session-goal";
+import { useSessionGoalActions } from "#product/hooks/activity/workflows/use-session-goal-actions";
+import { useSessionActivity } from "#product/hooks/activity/derived/use-session-activity";
+import { useActivityNowMs } from "#product/hooks/activity/derived/use-activity-now-ms";
+import { useSessionLoopActions } from "#product/hooks/activity/workflows/use-session-loop-actions";
 
 const NO_GOAL_CAPABILITIES: GoalCapabilities = {
   supported: false,

@@ -4,20 +4,20 @@ import type { ChildSubagentSummary, ParentSubagentLinkSummary } from "@anyharnes
 import {
   useActiveSessionId,
   useActiveSessionWorkspaceId,
-} from "@/hooks/chat/derived/use-active-session-identity";
-import { recordSubagentChildRelationshipHint } from "@/hooks/sessions/workflows/session-relationship-hints";
-import { useWorkspaceShellActivation } from "@/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
-import { isPendingSessionId } from "@/stores/sessions/session-records";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+} from "#product/hooks/chat/derived/use-active-session-identity";
+import { recordSubagentChildRelationshipHint } from "#product/hooks/sessions/workflows/session-relationship-hints";
+import { useWorkspaceShellActivation } from "#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
+import { isPendingSessionId } from "#product/stores/sessions/session-records";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { formatSubagentLabel } from "@proliferate/product-domain/chats/subagents/provenance";
 import type {
   DelegatedAgentIdentity,
   DelegatedWorkStatusCategory,
-} from "@/lib/domain/delegated-work/model";
+} from "#product/lib/domain/delegated-work/model";
 import {
   delegatedWorkStatusCategoryFromLabel,
-} from "@/lib/domain/delegated-work/presentation";
-import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identity";
+} from "#product/lib/domain/delegated-work/presentation";
+import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
 
 const EMPTY_CHILDREN: ChildSubagentSummary[] = [];
 

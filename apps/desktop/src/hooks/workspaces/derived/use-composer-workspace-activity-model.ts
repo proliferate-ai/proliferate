@@ -1,12 +1,12 @@
 import { useMemo } from "react";
 import { useCurrentPullRequestQuery, useGitStatusQuery } from "@anyharness/sdk-react";
-import { useWorkspaceGitStatuses } from "@/hooks/workspaces/derived/use-workspace-git-statuses";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
+import { useWorkspaceGitStatuses } from "#product/hooks/workspaces/derived/use-workspace-git-statuses";
+import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
 import {
   buildComposerWorkspaceActivityModel,
   type WorkspaceActivityPullRequest,
-} from "@/lib/domain/workspaces/activity/composer-workspace-activity";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+} from "#product/lib/domain/workspaces/activity/composer-workspace-activity";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 export function useComposerWorkspaceActivityModel() {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);

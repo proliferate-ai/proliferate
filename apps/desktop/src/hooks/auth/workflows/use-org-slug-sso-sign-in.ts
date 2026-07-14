@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { useAuditedAuth } from "@/hooks/auth/facade/use-audited-auth";
+import { useAuditedAuth } from "#product/hooks/auth/facade/use-audited-auth";
 import { isAbortError } from "@/lib/integrations/auth/proliferate-auth";
 
 export interface UseOrgSlugSsoSignInResult {

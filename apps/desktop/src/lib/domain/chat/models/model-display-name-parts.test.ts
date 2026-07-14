@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatModelLeafName,
   splitProviderDisplayName,
-} from "@/lib/domain/chat/models/model-display-name-parts";
+} from "#product/lib/domain/chat/models/model-display-name-parts";
 
 describe("splitProviderDisplayName", () => {
   it("splits on the first slash", () => {

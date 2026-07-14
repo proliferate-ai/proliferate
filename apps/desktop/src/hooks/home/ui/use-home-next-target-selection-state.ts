@@ -3,12 +3,12 @@ import type {
   HomeNextDestination,
   HomeNextRepoLaunchKind,
   HomeNextRepositorySelection,
-} from "@/lib/domain/home/home-next-launch";
+} from "#product/lib/domain/home/home-next-launch";
 import {
   readPersistedJson,
   writePersistedJson,
   type ProductStorageContext,
-} from "@/lib/infra/persistence/product-storage";
+} from "#product/lib/infra/persistence/product-storage";
 
 export const HOME_NEXT_TARGET_SELECTION_STORAGE_KEY = "home_next_target_selection.v1";
 

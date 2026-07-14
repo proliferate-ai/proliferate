@@ -1,9 +1,9 @@
 import type { ContentPart, PromptInputBlock } from "@anyharness/sdk";
 import { useCallback } from "react";
-import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
-import { PROMPT_SUBMIT_MEASUREMENT_SURFACES } from "@/lib/domain/telemetry/debug-measurement-catalog";
+import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
+import { PROMPT_SUBMIT_MEASUREMENT_SURFACES } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import type { PromptAttachmentSnapshot } from "@proliferate/product-domain/chats/composer/prompt-attachment-snapshot";
-import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
+import { createPromptId } from "#product/lib/domain/chat/composer/prompt-id";
 import {
   isPromptOutboxPlacementBusy,
   resolvePromptOutboxPlacement,
@@ -18,15 +18,15 @@ import {
   recordMeasurementWorkflowStep,
 } from "@/lib/infra/measurement/debug-measurement";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
-import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
-import { getSessionRecord, patchSessionRecord } from "@/stores/sessions/session-records";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
-import type { SessionConfigOptionUpdateOptions } from "@/hooks/sessions/workflows/session-control-contract";
+import { scheduleAfterNextPaint } from "#product/lib/infra/scheduling/schedule-after-next-paint";
+import { getSessionRecord, patchSessionRecord } from "#product/stores/sessions/session-records";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
+import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
+import type { SessionConfigOptionUpdateOptions } from "#product/hooks/sessions/workflows/session-control-contract";
 import {
   useSessionInteractionResolutionActions,
-} from "@/hooks/sessions/workflows/use-session-interaction-resolution-actions";
+} from "#product/hooks/sessions/workflows/use-session-interaction-resolution-actions";
 
 interface SendPromptInput {
   sessionId: string;

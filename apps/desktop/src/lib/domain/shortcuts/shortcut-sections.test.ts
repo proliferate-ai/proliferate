@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildShortcutSections,
   type ShortcutSectionView,
-} from "@/lib/domain/shortcuts/shortcut-sections";
+} from "#product/lib/domain/shortcuts/shortcut-sections";
 
 function stubMacPlatform() {
   vi.stubGlobal("navigator", {

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { DesktopAgentLaunchAgent } from "@/lib/domain/agents/cloud-launch-catalog";
+import type { DesktopAgentLaunchAgent } from "#product/lib/domain/agents/cloud-launch-catalog";
 import {
   buildModelSelectorGroups,
-} from "./model-selector-options";
+} from "#product/lib/domain/chat/models/model-selector-options";
 
 function launchAgent(
   kind: string,

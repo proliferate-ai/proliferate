@@ -1,16 +1,16 @@
 import type { MutableRefObject } from "react";
 import type {
   SupportReportJob,
-} from "@/lib/domain/support/report-types";
+} from "#product/lib/domain/support/report-types";
 import type {
   SupportReportUploadFailure,
   SupportReportUploadFailureKind,
-} from "@/lib/domain/support/report-upload-failure";
+} from "#product/lib/domain/support/report-upload-failure";
 import {
   readPersistedJson,
   writePersistedJson,
   type ProductStorageContext,
-} from "@/lib/infra/persistence/product-storage";
+} from "#product/lib/infra/persistence/product-storage";
 
 const STORAGE_KEY = "proliferate.supportReportJobs.v1";
 

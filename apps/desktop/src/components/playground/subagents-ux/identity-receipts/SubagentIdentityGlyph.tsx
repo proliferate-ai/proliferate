@@ -1,4 +1,4 @@
-import { delegatedWorkVisualIdentity } from "@/lib/domain/delegated-work/identity";
+import { delegatedWorkVisualIdentity } from "#product/lib/domain/delegated-work/identity";
 
 /**
  * Deterministic compact geometric identity mark for a subagent, keyed by the

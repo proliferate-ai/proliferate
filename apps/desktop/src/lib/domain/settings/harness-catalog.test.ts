@@ -8,7 +8,7 @@ import {
   normalizeCatalogModels,
   normalizeGatewayModels,
   normalizeRuntimeLaunchModels,
-} from "./harness-catalog";
+} from "#product/lib/domain/settings/harness-catalog";
 
 function selection(
   overrides: Partial<AgentAuthSelection> = {},

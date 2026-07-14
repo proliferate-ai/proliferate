@@ -4,8 +4,8 @@ import type { OrganizationInvitationsResponse } from "@/lib/access/cloud/client"
 import {
   useProductAuthStatus,
   useProductAuthUserId,
-} from "@/hooks/auth/facade/use-product-auth";
-import { currentUserOrganizationInvitationsKey } from "./query-keys";
+} from "#product/hooks/auth/facade/use-product-auth";
+import { currentUserOrganizationInvitationsKey } from "#product/hooks/access/cloud/organizations/query-keys";
 
 export function useCurrentUserOrganizationInvitations(enabled = true) {
   const authStatus = useProductAuthStatus();

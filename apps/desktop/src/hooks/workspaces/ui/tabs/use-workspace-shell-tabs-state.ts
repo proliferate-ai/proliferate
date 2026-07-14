@@ -1,31 +1,31 @@
 import { useEffect, useMemo, useRef } from "react";
-import type { HeaderStripRow } from "@/lib/domain/workspaces/tabs/group-rows";
-import type { DisplayManualChatGroup } from "@/lib/domain/workspaces/tabs/manual-groups";
+import type { HeaderStripRow } from "#product/lib/domain/workspaces/tabs/group-rows";
+import type { DisplayManualChatGroup } from "#product/lib/domain/workspaces/tabs/manual-groups";
 import {
   buildHeaderShellRows,
   type HeaderShellStripRow,
   type ShellChatTab,
-} from "@/lib/domain/workspaces/tabs/shell-rows";
+} from "#product/lib/domain/workspaces/tabs/shell-rows";
 import {
   buildWorkspaceShellTabs,
   getWorkspaceShellTabKey,
   parseWorkspaceShellTabKey,
   type WorkspaceShellTab,
   type WorkspaceShellTabKey,
-} from "@/lib/domain/workspaces/tabs/shell-tabs";
-import { viewerTargetKey, type ViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
+} from "#product/lib/domain/workspaces/tabs/shell-tabs";
+import { viewerTargetKey, type ViewerTarget } from "#product/lib/domain/workspaces/viewer/viewer-target";
 import {
   resolveWorkspaceShellActivation,
   type WorkspaceShellActivation,
   type WorkspaceRenderSurface,
-} from "@/lib/domain/workspaces/tabs/shell-activation";
+} from "#product/lib/domain/workspaces/tabs/shell-activation";
 import {
   resolveWithWorkspaceFallback,
   sameStringArray,
-} from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
-import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+} from "#product/lib/domain/workspaces/selection/workspace-keyed-preferences";
+import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 const EMPTY_SHELL_TAB_ORDER_KEYS: readonly WorkspaceShellTabKey[] = [];
 const EMPTY_VIEWER_TARGETS: ViewerTarget[] = [];

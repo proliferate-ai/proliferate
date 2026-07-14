@@ -3,7 +3,7 @@ import {
   terminalIdsFromHeaderOrder,
   type RightPanelHeaderEntryKey,
   type RightPanelWorkspaceState,
-} from "@/lib/domain/workspaces/shell/right-panel-model";
+} from "#product/lib/domain/workspaces/shell/right-panel-model";
 
 export function orderTerminals(
   terminals: readonly TerminalRecord[],

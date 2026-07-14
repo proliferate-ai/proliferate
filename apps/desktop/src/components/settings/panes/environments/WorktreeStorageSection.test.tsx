@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { WorktreePolicyRow } from "./WorktreeStorageSection";
+import { WorktreePolicyRow } from "#product/components/settings/panes/environments/WorktreeStorageSection";
 
 /**
  * Mirrors the useWorktreeCleanupPolicy contract just enough to exercise the

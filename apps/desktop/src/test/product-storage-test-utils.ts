@@ -2,7 +2,7 @@ import type {
   ErrorContext,
   ProductStorage,
 } from "@proliferate/product-client/host/product-host";
-import type { ProductStorageContext } from "@/lib/infra/persistence/product-storage";
+import type { ProductStorageContext } from "#product/lib/infra/persistence/product-storage";
 
 /**
  * An in-memory {@link ProductStorage} for persistence tests. Its `values` map

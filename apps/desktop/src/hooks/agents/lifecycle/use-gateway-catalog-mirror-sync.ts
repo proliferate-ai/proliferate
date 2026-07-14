@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useAgentGatewayModelsQueries } from "@anyharness/sdk-react";
 import { useMirrorAgentCatalog } from "@proliferate/cloud-sdk-react";
-import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
-import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
+import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import {
   planGatewayCatalogMirrorPushes,
   type GatewayModelsSnapshot,
-} from "@/lib/domain/agents/gateway-catalog-mirror";
+} from "#product/lib/domain/agents/gateway-catalog-mirror";
 
 const GATEWAY_MIRROR_POLL_INTERVAL_MS = 60_000;
 

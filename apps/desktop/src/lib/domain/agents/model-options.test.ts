@@ -7,7 +7,7 @@ import {
   type AgentCatalogSummary,
   type AgentModelRegistry,
   type AgentModelRegistryModel,
-} from "./model-options";
+} from "#product/lib/domain/agents/model-options";
 
 function agent(overrides: Partial<AgentCatalogSummary> & { kind: string }): AgentCatalogSummary {
   return {

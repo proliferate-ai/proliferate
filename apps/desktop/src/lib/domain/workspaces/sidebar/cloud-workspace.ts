@@ -6,7 +6,7 @@ import type {
   CloudWorkspaceRuntimeSummary,
   CloudWorkspaceStatus,
   CloudWorkspaceSummary,
-} from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
 
 export type SidebarCloudWorkspaceStatus = CloudWorkspaceStatus;
 export type SidebarCloudRuntimeStatus = CloudRuntimeStatus;

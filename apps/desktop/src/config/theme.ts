@@ -10,7 +10,7 @@ import {
   type ReadableCodeFontSizeId,
   type UiFontSizeId,
   type WindowZoomId,
-} from "@/lib/domain/preferences/appearance";
+} from "#product/lib/domain/preferences/appearance";
 
 // ---------------------------------------------------------------------------
 // Color mode (the app ships a single Mono theme; mode is the only switch)

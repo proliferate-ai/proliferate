@@ -3,8 +3,8 @@ import type { TerminalRecord } from "@anyharness/sdk";
 import { useRerunSetupMutation } from "@anyharness/sdk-react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { RefreshCw } from "@proliferate/ui/icons";
-import { useTerminalActions } from "@/hooks/terminals/workflows/use-terminal-actions";
-import { useToastStore } from "@/stores/toast/toast-store";
+import { useTerminalActions } from "#product/hooks/terminals/workflows/use-terminal-actions";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 export function TerminalCommandFloatingAction({
   terminal,

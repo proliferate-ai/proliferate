@@ -3,8 +3,8 @@ import {
   resolveTurnAssistantFooterMode,
   resolveTranscriptTurnDiffPanelKind,
   shouldRenderStandaloneStoppedNotice,
-} from "./TranscriptTurnRow";
-import { resolveCompletedHistoryDisclosureLabel } from "./TurnItemSequence";
+} from "#product/components/workspace/chat/transcript/TranscriptTurnRow";
+import { resolveCompletedHistoryDisclosureLabel } from "#product/components/workspace/chat/transcript/TurnItemSequence";
 
 describe("resolveTranscriptTurnDiffPanelKind", () => {
   it("uses current git diffs only for the latest completed turn row", () => {

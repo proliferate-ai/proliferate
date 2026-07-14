@@ -5,8 +5,8 @@ import {
   type RuntimePressureTargetState,
   type RuntimePressureTone,
   useRuntimePressureControlState,
-} from "@/hooks/workspaces/facade/use-runtime-pressure-control-state";
-import { RuntimePressureDetailsDialog } from "./RuntimePressureDetailsDialog";
+} from "#product/hooks/workspaces/facade/use-runtime-pressure-control-state";
+import { RuntimePressureDetailsDialog } from "#product/components/workspace/chat/input/RuntimePressureDetailsDialog";
 
 export function RuntimePressureIndicator() {
   const pressure = useRuntimePressureControlState();

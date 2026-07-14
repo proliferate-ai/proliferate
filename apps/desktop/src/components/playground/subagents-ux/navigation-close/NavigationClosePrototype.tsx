@@ -9,14 +9,14 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { Label } from "@proliferate/ui/primitives/Label";
 import { Select } from "@proliferate/ui/primitives/Select";
-import { SubagentIdentityGlyph } from "@/components/playground/subagents-ux/identity-receipts/SubagentIdentityGlyph";
+import { SubagentIdentityGlyph } from "#product/components/playground/subagents-ux/identity-receipts/SubagentIdentityGlyph";
 import {
   buildNavigationCloseScenarios,
   navigationCloseChildStatusLine,
   type NavigationCloseChildAgent,
-} from "@/lib/domain/playground/subagents-ux/navigation-close-model";
-import { NavigationClosePaneRow } from "./NavigationClosePaneRow";
-import { NavigationCloseTabs } from "./NavigationCloseTabs";
+} from "#product/lib/domain/playground/subagents-ux/navigation-close-model";
+import { NavigationClosePaneRow } from "#product/components/playground/subagents-ux/navigation-close/NavigationClosePaneRow";
+import { NavigationCloseTabs } from "#product/components/playground/subagents-ux/navigation-close/NavigationCloseTabs";
 
 /**
  * Interactive prototype for parent↔child navigation plus close/delete

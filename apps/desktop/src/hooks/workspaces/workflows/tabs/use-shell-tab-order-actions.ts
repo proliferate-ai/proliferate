@@ -2,9 +2,9 @@ import { useCallback } from "react";
 import {
   partitionWorkspaceShellTabKeys,
   type WorkspaceShellTabKey,
-} from "@/lib/domain/workspaces/tabs/shell-tabs";
-import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+} from "#product/lib/domain/workspaces/tabs/shell-tabs";
+import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 
 export function useShellTabOrderActions({
   workspaceId,

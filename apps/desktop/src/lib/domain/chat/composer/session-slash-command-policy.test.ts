@@ -3,7 +3,7 @@ import {
   filterDesktopRunnableSessionSlashCommands,
   matchSessionSlashCommandQuery,
   normalizeSlashCommandName,
-} from "./session-slash-command-policy";
+} from "#product/lib/domain/chat/composer/session-slash-command-policy";
 
 describe("session slash command policy", () => {
   it("normalizes command names without the slash prefix", () => {

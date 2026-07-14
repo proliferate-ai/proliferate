@@ -1,11 +1,11 @@
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { splitFilePath } from "@/lib/domain/command-palette/entries";
+import { splitFilePath } from "#product/lib/domain/command-palette/entries";
 import {
   isFileViewerTarget,
   viewerTargetKey,
-} from "@/lib/domain/workspaces/viewer/viewer-target";
-import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
+} from "#product/lib/domain/workspaces/viewer/viewer-target";
+import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
 
 export interface CommandPaletteOpenFileEntry {
   path: string;

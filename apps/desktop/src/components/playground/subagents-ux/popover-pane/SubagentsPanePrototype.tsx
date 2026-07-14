@@ -1,6 +1,6 @@
 import { Button } from "@proliferate/ui/primitives/Button";
-import { AgentGlyph } from "./AgentGlyph";
-import type { PrototypeAgent } from "./PopoverPaneFixtures";
+import { AgentGlyph } from "#product/components/playground/subagents-ux/popover-pane/AgentGlyph";
+import type { PrototypeAgent } from "#product/components/playground/subagents-ux/popover-pane/PopoverPaneFixtures";
 
 /**
  * Parent-scoped Subagents right pane using only roster-observable session

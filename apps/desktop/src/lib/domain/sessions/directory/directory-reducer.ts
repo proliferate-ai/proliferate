@@ -1,19 +1,19 @@
 import {
   directoryEntryEqual,
   type SessionDirectoryEntry,
-} from "@/lib/domain/sessions/directory/directory-entry";
+} from "#product/lib/domain/sessions/directory/directory-entry";
 import {
   removeMaterializedIndexEntry,
   removeSessionFromWorkspaceIndex,
   updateMaterializedIndex,
   updateWorkspaceIndex,
-} from "@/lib/domain/sessions/directory/directory-indexes";
+} from "#product/lib/domain/sessions/directory/directory-indexes";
 import {
   sessionChildRelationshipEqual,
   sessionRelationshipEqual,
   type SessionChildRelationship,
   type SessionRelationship,
-} from "@/lib/domain/sessions/directory/relationship";
+} from "#product/lib/domain/sessions/directory/relationship";
 
 export interface SessionDirectoryReducerState {
   entriesById: Record<string, SessionDirectoryEntry>;

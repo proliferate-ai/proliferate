@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import { getProliferateWebBaseUrl } from "@/lib/infra/proliferate-web";
-import { useAppCapabilities } from "./use-app-capabilities";
+import { getProliferateWebBaseUrl } from "#product/lib/infra/proliferate-web";
+import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
 
 export interface WebAppTarget {
   /** Whether this deployment has a hosted web app to hand off to. */

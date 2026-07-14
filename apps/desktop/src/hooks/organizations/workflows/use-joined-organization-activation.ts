@@ -1,7 +1,7 @@
 import { useCallback } from "react";
-import { useOrganizationSelectionActions } from "@/hooks/organizations/workflows/use-organization-selection-actions";
-import { useOrganizationSwitchAction } from "@/hooks/organizations/workflows/use-organization-switch-action";
-import { useOrganizationStore } from "@/stores/organizations/organization-store";
+import { useOrganizationSelectionActions } from "#product/hooks/organizations/workflows/use-organization-selection-actions";
+import { useOrganizationSwitchAction } from "#product/hooks/organizations/workflows/use-organization-switch-action";
+import { useOrganizationStore } from "#product/stores/organizations/organization-store";
 
 // Activates an organization the user just joined (e.g. by accepting an
 // invitation). Joining while already active in another org is the same

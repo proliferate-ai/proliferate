@@ -1,23 +1,23 @@
 import { useEffect } from "react";
-import { useProductStorageContext } from "@/hooks/persistence/facade/use-product-storage-context";
-import { migrateWorkspaceUiState } from "@/lib/domain/preferences/workspace-ui/migration";
+import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
+import { migrateWorkspaceUiState } from "#product/lib/domain/preferences/workspace-ui/migration";
 import {
   WORKSPACE_UI_DEFAULTS,
   type PersistedWorkspaceUiState,
-} from "@/lib/domain/preferences/workspace-ui/model";
+} from "#product/lib/domain/preferences/workspace-ui/model";
 import {
   getChangedWorkspaceUiStateKeys,
   isNonPersistedWorkspaceUiStateKey,
   selectPersistedWorkspaceUiState,
-} from "@/lib/domain/preferences/workspace-ui/persistence";
+} from "#product/lib/domain/preferences/workspace-ui/persistence";
 import { recordMeasurementDiagnostic } from "@/lib/infra/measurement/debug-measurement";
 import { isDebugMeasurementEnabled } from "@/lib/infra/measurement/debug-measurement-env";
 import {
   readPersistedJsonValue,
   writePersistedJson,
   type ProductStorageContext,
-} from "@/lib/infra/persistence/product-storage";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+} from "#product/lib/infra/persistence/product-storage";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 
 const WORKSPACE_UI_KEY = "workspace_ui";
 

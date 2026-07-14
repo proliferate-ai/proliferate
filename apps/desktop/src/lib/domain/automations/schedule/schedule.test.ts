@@ -4,7 +4,7 @@ import {
   presetForRrule,
   rruleForPresetAtTime,
   timeForRrule,
-} from "./schedule";
+} from "#product/lib/domain/automations/schedule/schedule";
 
 describe("automation schedule helpers", () => {
   it("builds time-specific daily presets", () => {

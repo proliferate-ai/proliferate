@@ -10,8 +10,8 @@ import {
 import {
   useProductAuthStatus,
   useProductAuthUserId,
-} from "@/hooks/auth/facade/use-product-auth";
-import { cloudWorktreeRetentionPolicyKey } from "@/hooks/access/cloud/query-keys";
+} from "#product/hooks/auth/facade/use-product-auth";
+import { cloudWorktreeRetentionPolicyKey } from "#product/hooks/access/cloud/query-keys";
 
 export function useCloudWorktreeRetentionPolicy() {
   const authStatus = useProductAuthStatus();

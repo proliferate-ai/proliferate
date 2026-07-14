@@ -1,14 +1,14 @@
 import { useMemo } from "react";
 import { useAgentLaunchOptionsQuery } from "@anyharness/sdk-react";
 import { useShallow } from "zustand/react/shallow";
-import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
-import { useCloudLaunchModelRegistries } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
+import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
+import { useCloudLaunchModelRegistries } from "#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import {
   mergeRuntimeLaunchOptionsIntoDesktopLaunchModelRegistries,
   type DesktopLaunchModelRegistry as ModelRegistry,
-} from "@/lib/domain/agents/cloud-launch-catalog";
-import type { AgentCatalogSummary } from "@/lib/domain/agents/model-options";
-import { filterVisibleModelRegistries } from "@/lib/domain/chat/models/model-visibility";
+} from "#product/lib/domain/agents/cloud-launch-catalog";
+import type { AgentCatalogSummary } from "#product/lib/domain/agents/model-options";
+import { filterVisibleModelRegistries } from "#product/lib/domain/chat/models/model-visibility";
 import {
   buildHomeNextModelGroups,
   resolveHomeModelAvailabilityState,
@@ -16,8 +16,8 @@ import {
   resolveHomeNextModelInfo,
   type HomeNextModelSelection,
   type HomeNextRepoLaunchKind,
-} from "@/lib/domain/home/home-next-launch";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+} from "#product/lib/domain/home/home-next-launch";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
 const EMPTY_MODEL_REGISTRIES: ModelRegistry[] = [];
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   mergeLiveDefaultLaunchControls,
   pickLiveDefaultLaunchControls,
-} from "@/lib/domain/sessions/creation/launch-controls";
+} from "#product/lib/domain/sessions/creation/launch-controls";
 
 describe("pickLiveDefaultLaunchControls", () => {
   it("keeps only launch controls that should become live defaults", () => {

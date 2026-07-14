@@ -2,8 +2,8 @@ import { useEffect } from "react";
 
 import type { DesktopNativeUiBridge } from "@proliferate/product-client/host/desktop-bridge";
 
-import { resolveWindowZoomScale } from "@/lib/domain/preferences/appearance";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+import { resolveWindowZoomScale } from "#product/lib/domain/preferences/appearance";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
 export function useDesktopZoomPreferenceLifecycle(
   setZoom: DesktopNativeUiBridge["setZoom"],

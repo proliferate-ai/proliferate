@@ -3,15 +3,15 @@ import type {
   ToolCallItem,
   TranscriptState,
 } from "@anyharness/sdk";
-import { ToolCallSummary } from "@/components/workspace/chat/tool-calls/ToolCallSummary";
-import { TranscriptAgentGroupBlock } from "./TranscriptAgentGroupBlock";
-import { TranscriptToolCallItemBlock } from "./TranscriptToolCallItemBlock";
+import { ToolCallSummary } from "#product/components/workspace/chat/tool-calls/ToolCallSummary";
+import { TranscriptAgentGroupBlock } from "#product/components/workspace/chat/transcript/TranscriptAgentGroupBlock";
+import { TranscriptToolCallItemBlock } from "#product/components/workspace/chat/transcript/TranscriptToolCallItemBlock";
 import {
   collectDescendantItems,
   formatCollapsedSummary,
   hasRenderableToolDetails,
   isSubagentItem,
-} from "./TranscriptToolGroupUtils";
+} from "#product/components/workspace/chat/transcript/TranscriptToolGroupUtils";
 
 export function TranscriptToolCallGroupBlock({
   item,

@@ -6,9 +6,9 @@ import {
   useStagePatchMutation,
   useUnstagePatchMutation,
 } from "@anyharness/sdk-react";
-import { DiffViewer } from "@/components/content/ui/DiffViewer";
-import type { UnifiedDiffHunkActions } from "@/components/content/ui/diff/UnifiedDiffViewer";
-import { FileDiffCard } from "@/components/content/ui/FileDiffCard";
+import { DiffViewer } from "#product/components/content/ui/DiffViewer";
+import type { UnifiedDiffHunkActions } from "#product/components/content/ui/diff/UnifiedDiffViewer";
+import { FileDiffCard } from "#product/components/content/ui/FileDiffCard";
 import {
   CircleAlert,
   FileIcon,
@@ -18,21 +18,21 @@ import {
   DiffDisplayPolicyPlaceholder,
   formatEmptyDiffState,
   GitReviewInlineEmptyState,
-} from "@/components/workspace/git/GitReviewInlineState";
-import { GitReviewStageAction } from "@/components/workspace/git/GitReviewStageAction";
-import { GitReviewStatusBadge } from "@/components/workspace/git/GitReviewStatusBadge";
-import { useLazyDiffFileLines } from "@/hooks/ui/diff/use-lazy-diff-file-lines";
-import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
-import { extractHunkPatch, isHunkActionEligible } from "@/lib/domain/files/hunk-patch";
-import { useToastStore } from "@/stores/toast/toast-store";
+} from "#product/components/workspace/git/GitReviewInlineState";
+import { GitReviewStageAction } from "#product/components/workspace/git/GitReviewStageAction";
+import { GitReviewStatusBadge } from "#product/components/workspace/git/GitReviewStatusBadge";
+import { useLazyDiffFileLines } from "#product/hooks/ui/diff/use-lazy-diff-file-lines";
+import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
+import { extractHunkPatch, isHunkActionEligible } from "#product/lib/domain/files/hunk-patch";
+import { useToastStore } from "#product/stores/toast/toast-store";
 import {
   DIFF_ROW_VIRTUALIZATION_LINE_THRESHOLD,
   resolveDiffDisplayPolicy,
-} from "@/lib/domain/workspaces/changes/diff-display-policy";
+} from "#product/lib/domain/workspaces/changes/diff-display-policy";
 import type {
   GitPanelReviewFile,
   GitPanelReviewScope,
-} from "@/lib/domain/workspaces/changes/git-panel-diff";
+} from "#product/lib/domain/workspaces/changes/git-panel-diff";
 
 type StagePath = (path: string) => Promise<unknown>;
 type OpenFile = (path: string) => Promise<void>;

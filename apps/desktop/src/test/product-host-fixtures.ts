@@ -6,7 +6,7 @@ import type {
   ProductHost,
 } from "@proliferate/product-client/host/product-host";
 
-import type { AuthUser } from "@/lib/domain/auth/auth-user";
+import type { AuthUser } from "#product/lib/domain/auth/auth-user";
 import type { AuthMethod } from "@proliferate/product-domain/auth/model";
 
 /**

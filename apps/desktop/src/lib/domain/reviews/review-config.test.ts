@@ -14,11 +14,11 @@ import {
   resolveReviewExecutionModeIdForAgent,
   type ReviewSessionDefaults,
   type ReviewSetupReviewerDraft,
-} from "./review-config";
+} from "#product/lib/domain/reviews/review-config";
 import {
   listReviewPersonaTemplates,
   resolveReviewPersonaTemplates,
-} from "./review-personas";
+} from "#product/lib/domain/reviews/review-personas";
 
 const SESSION_DEFAULTS: ReviewSessionDefaults = {
   agentKind: "codex",

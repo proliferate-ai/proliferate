@@ -5,7 +5,7 @@ import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import type {
   SessionSlashCommandGroup,
   SessionSlashCommandViewModel,
-} from "@/lib/domain/chat/composer/session-slash-command-policy";
+} from "#product/lib/domain/chat/composer/session-slash-command-policy";
 
 interface ComposerSlashCommandSearchProps {
   commands: readonly SessionSlashCommandViewModel[];

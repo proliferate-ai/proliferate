@@ -2,11 +2,11 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AutomationRunLocationSelector } from "./AutomationRunLocationSelector";
+import { AutomationRunLocationSelector } from "#product/components/automations/controls/AutomationRunLocationSelector";
 import type {
   AutomationTargetGroup,
   AutomationTargetSelection,
-} from "@/lib/domain/automations/target/selection";
+} from "#product/lib/domain/automations/target/selection";
 
 const localTarget: AutomationTargetSelection = {
   executionTarget: "local",

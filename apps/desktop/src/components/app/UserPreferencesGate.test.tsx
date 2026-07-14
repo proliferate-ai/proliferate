@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { describe, expect, it } from "vitest"
-import { UserPreferencesGateView } from "@/components/app/UserPreferencesGate"
+import { UserPreferencesGateView } from "#product/components/app/UserPreferencesGate"
 
 function renderGate(preferencesHydrated: boolean) {
   return renderToStaticMarkup(

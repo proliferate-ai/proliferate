@@ -1,7 +1,7 @@
-import type { ManualChatGroupEditorAnchorRect } from "@/components/workspace/shell/tabs/ManualChatGroupEditorPopover";
-import { TabGroupPillWithMenu } from "@/components/workspace/shell/tabs/TabGroupPillWithMenu";
-import type { ManualChatGroupId } from "@/lib/domain/workspaces/tabs/manual-groups";
-import type { PillRow } from "@/lib/domain/workspaces/tabs/group-rows";
+import type { ManualChatGroupEditorAnchorRect } from "#product/components/workspace/shell/tabs/ManualChatGroupEditorPopover";
+import { TabGroupPillWithMenu } from "#product/components/workspace/shell/tabs/TabGroupPillWithMenu";
+import type { ManualChatGroupId } from "#product/lib/domain/workspaces/tabs/manual-groups";
+import type { PillRow } from "#product/lib/domain/workspaces/tabs/group-rows";
 
 interface HeaderGroupPillTabProps {
   row: PillRow;

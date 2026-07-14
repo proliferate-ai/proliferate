@@ -1,10 +1,10 @@
 import {
   useWorkspaceFileContext,
   type WorkspaceFileContext,
-} from "@/hooks/workspaces/derived/files/use-workspace-file-context";
-import { useWorkspaceFileBufferActions } from "@/hooks/workspaces/workflows/files/use-workspace-file-buffer-actions";
-import { useWorkspaceFileInitializationActions } from "@/hooks/workspaces/workflows/files/use-workspace-file-initialization-actions";
-import { useWorkspaceFileTargetActions } from "@/hooks/workspaces/workflows/files/use-workspace-file-target-actions";
+} from "#product/hooks/workspaces/derived/files/use-workspace-file-context";
+import { useWorkspaceFileBufferActions } from "#product/hooks/workspaces/workflows/files/use-workspace-file-buffer-actions";
+import { useWorkspaceFileInitializationActions } from "#product/hooks/workspaces/workflows/files/use-workspace-file-initialization-actions";
+import { useWorkspaceFileTargetActions } from "#product/hooks/workspaces/workflows/files/use-workspace-file-target-actions";
 
 export function useWorkspaceFileActions(inputContext?: WorkspaceFileContext) {
   const derivedContext = useWorkspaceFileContext();

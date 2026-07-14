@@ -12,50 +12,50 @@ import type { PromptInputBlock } from "@anyharness/sdk";
 import {
   CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
   WORKSPACE_CHAT_COMPOSER_INPUT,
-} from "@/config/chat";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+} from "#product/config/chat";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import {
   useActiveSessionId,
   useActiveSessionCanCancelState,
   useActiveSessionRunningState,
-} from "@/hooks/chat/derived/use-active-session-identity";
-import { useChatAvailabilityState } from "@/hooks/chat/derived/use-chat-availability-state";
-import { useChatComposerKeyboard } from "@/hooks/chat/ui/use-chat-composer-keyboard";
-import { useChatDraftControls } from "@/hooks/chat/ui/use-chat-draft-state";
-import { useChatModelSelectorState } from "@/hooks/chat/facade/use-chat-model-selector-state";
-import { useChatPromptActions } from "@/hooks/chat/workflows/use-chat-prompt-actions";
-import type { PromptAttachmentController } from "@/hooks/chat/ui/use-chat-prompt-attachments";
-import { useComposerSubmitGate } from "@/hooks/chat/ui/use-composer-submit-gate";
-import { usePlanDraftAttachments } from "@/hooks/plans/facade/use-plan-draft-attachments";
-import { useChatSessionControls } from "@/hooks/chat/facade/use-chat-session-controls";
+} from "#product/hooks/chat/derived/use-active-session-identity";
+import { useChatAvailabilityState } from "#product/hooks/chat/derived/use-chat-availability-state";
+import { useChatComposerKeyboard } from "#product/hooks/chat/ui/use-chat-composer-keyboard";
+import { useChatDraftControls } from "#product/hooks/chat/ui/use-chat-draft-state";
+import { useChatModelSelectorState } from "#product/hooks/chat/facade/use-chat-model-selector-state";
+import { useChatPromptActions } from "#product/hooks/chat/workflows/use-chat-prompt-actions";
+import type { PromptAttachmentController } from "#product/hooks/chat/ui/use-chat-prompt-attachments";
+import { useComposerSubmitGate } from "#product/hooks/chat/ui/use-composer-submit-gate";
+import { usePlanDraftAttachments } from "#product/hooks/plans/facade/use-plan-draft-attachments";
+import { useChatSessionControls } from "#product/hooks/chat/facade/use-chat-session-controls";
 import {
   useEditLastQueuedPrompt,
   useQueuedPromptEdit,
-} from "@/hooks/chat/ui/use-queued-prompt-edit";
-import { useComposerTextareaAutosize } from "@/hooks/chat/ui/use-composer-textarea-autosize";
-import { focusChatInput } from "@/lib/domain/focus-zone";
-import { serializeChatDraftToPrompt } from "@/lib/domain/chat/composer/file-mention-draft-model";
+} from "#product/hooks/chat/ui/use-queued-prompt-edit";
+import { useComposerTextareaAutosize } from "#product/hooks/chat/ui/use-composer-textarea-autosize";
+import { focusChatInput } from "#product/lib/domain/focus-zone";
+import { serializeChatDraftToPrompt } from "#product/lib/domain/chat/composer/file-mention-draft-model";
 import { promptAttachmentSnapshotsToContentParts } from "@proliferate/product-domain/chats/composer/prompt-attachment-snapshot";
-import { useChatInputStore } from "@/stores/chat/chat-input-store";
-import { mergeSessionConfigControlDescriptors } from "@/lib/domain/chat/session-controls/session-controls";
-import { buildComposerSessionControlGroups } from "@/lib/domain/chat/session-controls/composer-control-groups";
-import { useComposerUltraEmphasis } from "@/hooks/chat/ui/use-composer-ultra-emphasis";
+import { useChatInputStore } from "#product/stores/chat/chat-input-store";
+import { mergeSessionConfigControlDescriptors } from "#product/lib/domain/chat/session-controls/session-controls";
+import { buildComposerSessionControlGroups } from "#product/lib/domain/chat/session-controls/composer-control-groups";
+import { useComposerUltraEmphasis } from "#product/hooks/chat/ui/use-composer-ultra-emphasis";
 import {
   finishOrCancelMeasurementOperation,
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
-import { clearTypingActivity } from "@/lib/infra/interaction/typing-activity-store";
+import { clearTypingActivity } from "#product/lib/infra/interaction/typing-activity-store";
 import {
   PROMPT_SUBMIT_MEASUREMENT_MAX_DURATION_MS,
   PROMPT_SUBMIT_MEASUREMENT_SURFACES,
-} from "@/lib/domain/telemetry/debug-measurement-catalog";
-import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
-import { ChatInputControlRow } from "./ChatInputControlRow";
-import { ChatInputDraftArea } from "./ChatInputDraftArea";
+} from "#product/lib/domain/telemetry/debug-measurement-catalog";
+import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
+import { ChatInputControlRow } from "#product/components/workspace/chat/input/ChatInputControlRow";
+import { ChatInputDraftArea } from "#product/components/workspace/chat/input/ChatInputDraftArea";
 import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
+import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 
 const CHAT_INPUT_ATTACHMENT_ACCEPT =
   "image/*,text/*,.md,.json,.ts,.tsx,.js,.jsx,.py,.rs,.go,.java,.css,.html,.xml,.yaml,.yml,.toml,.sql,.sh";

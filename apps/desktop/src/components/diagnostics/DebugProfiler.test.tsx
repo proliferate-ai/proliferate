@@ -1,7 +1,7 @@
 import { Fragment, Profiler, type ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
+import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 
 describe("DebugProfiler", () => {
   afterEach(() => {

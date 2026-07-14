@@ -3,9 +3,9 @@ import {
   resolveWorkspaceConnectionFromContext,
   useAnyHarnessWorkspaceContext,
 } from "@anyharness/sdk-react";
-import { searchWorkspaceFiles } from "@/lib/access/anyharness/workspace-file-transport";
-import { splitPathLineSuffix } from "@/lib/domain/files/path-detection";
-import { pickFuzzyPathMatch } from "@/lib/domain/files/path-references";
+import { searchWorkspaceFiles } from "#product/lib/access/anyharness/workspace-file-transport";
+import { splitPathLineSuffix } from "#product/lib/domain/files/path-detection";
+import { pickFuzzyPathMatch } from "#product/lib/domain/files/path-references";
 
 /**
  * Backstop for slightly-wrong file references: when a workspace path does not

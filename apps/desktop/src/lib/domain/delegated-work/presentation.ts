@@ -4,8 +4,8 @@ import type {
   DelegatedWorkSource,
   DelegatedWorkStatusCategory,
   DelegatedWorkTabIdentity,
-} from "@/lib/domain/delegated-work/model";
-import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identity";
+} from "#product/lib/domain/delegated-work/model";
+import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
 
 export function delegatedWorkKindLabel(kind: DelegatedWorkKind): string {
   switch (kind) {

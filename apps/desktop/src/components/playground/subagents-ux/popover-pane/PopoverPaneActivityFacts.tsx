@@ -1,4 +1,4 @@
-import type { PrototypeAgent, PrototypeGit } from "./PopoverPaneFixtures";
+import type { PrototypeAgent, PrototypeGit } from "#product/components/playground/subagents-ux/popover-pane/PopoverPaneFixtures";
 
 // Prototype-local projections shared by the aggregate popover and global
 // agents pane. Production workspace activity owns its corresponding rules.

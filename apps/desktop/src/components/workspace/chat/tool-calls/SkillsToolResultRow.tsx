@@ -1,11 +1,11 @@
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import { ProliferateIcon } from "@proliferate/ui/proliferate-icons";
 import { MarkdownBody } from "@proliferate/product-ui/chat/transcript/MarkdownBody";
-import { renderDesktopCodeBlock } from "@/components/content/ui/desktop-markdown-code-block";
+import { renderDesktopCodeBlock } from "#product/components/content/ui/desktop-markdown-code-block";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
 import type { SkillsToolResultPresentation } from "@proliferate/product-domain/chats/tools/skills-tool-result";
-import { ToolActionDetailsPanel } from "./ToolActionDetailsPanel";
-import { ToolActionRow, type ToolActionStatus } from "./ToolActionRow";
+import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
+import { ToolActionRow, type ToolActionStatus } from "#product/components/workspace/chat/tool-calls/ToolActionRow";
 
 interface SkillsToolResultRowProps {
   presentation: SkillsToolResultPresentation;

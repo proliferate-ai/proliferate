@@ -11,20 +11,20 @@ import {
   GitBranchIcon,
 } from "@proliferate/ui/icons";
 import { matchesPickerSearch } from "@proliferate/ui/utils/search";
-import type { ComputeLaunchTargetOption } from "@/lib/domain/compute/target-options";
+import type { ComputeLaunchTargetOption } from "#product/lib/domain/compute/target-options";
 import type {
   HomeNextDestination,
   HomeNextRepoLaunchKind,
-} from "@/lib/domain/home/home-next-launch";
-import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
-import type { CloudRepoActionState } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
+} from "#product/lib/domain/home/home-next-launch";
+import type { SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
+import type { CloudRepoActionState } from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import {
   homeRepoLaunchKindLabel,
   homeTargetProjectAriaLabel,
   homeTargetProjectLabel,
   homeTargetRuntimeAriaLabel,
   homeTargetRuntimeOptionLabel,
-} from "@/lib/domain/home/home-target-picker";
+} from "#product/lib/domain/home/home-target-picker";
 import {
   BranchSearchField,
   homeTargetLaunchKindIcon,
@@ -33,8 +33,8 @@ import {
   TARGET_PICKER_SURFACE_CLASS,
   TargetPickerMenuItem,
   TargetSection,
-} from "@/components/home/screen/HomeTargetPickerParts";
-import { HomeProjectMenu } from "@/components/home/screen/HomeProjectMenu";
+} from "#product/components/home/screen/HomeTargetPickerParts";
+import { HomeProjectMenu } from "#product/components/home/screen/HomeProjectMenu";
 
 interface HomeTargetPickerProps {
   destination: HomeNextDestination;

@@ -6,15 +6,15 @@ import {
   terminalIdsFromHeaderOrder,
   type RightPanelHeaderEntryKey,
   type RightPanelWorkspaceState,
-} from "@/lib/domain/workspaces/shell/right-panel-model";
+} from "#product/lib/domain/workspaces/shell/right-panel-model";
 import {
   orderTerminals,
-} from "@/lib/domain/workspaces/shell/right-panel-view";
-import type { RightPanelHeaderEntry } from "@/lib/domain/workspaces/shell/right-panel-header-entry";
+} from "#product/lib/domain/workspaces/shell/right-panel-view";
+import type { RightPanelHeaderEntry } from "#product/lib/domain/workspaces/shell/right-panel-header-entry";
 import {
   viewerTargetKey,
   type ViewerTarget,
-} from "@/lib/domain/workspaces/viewer/viewer-target";
+} from "#product/lib/domain/workspaces/viewer/viewer-target";
 
 export interface RightPanelHeaderEntriesState {
   activeEntry: ReturnType<typeof parseRightPanelHeaderEntryKey>;

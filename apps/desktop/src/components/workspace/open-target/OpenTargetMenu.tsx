@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, type ReactNode } from "react";
 import { Copy } from "@proliferate/ui/icons";
-import { OpenTargetIcon } from "@/components/workspace/open-target/OpenTargetIcon";
+import { OpenTargetIcon } from "#product/components/workspace/open-target/OpenTargetIcon";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { POPOVER_SURFACE_CLASS } from "@proliferate/ui/primitives/PopoverButton";
 import type { OpenTarget } from "@proliferate/product-client/host/desktop-bridge";

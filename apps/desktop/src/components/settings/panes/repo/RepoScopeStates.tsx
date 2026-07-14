@@ -2,12 +2,12 @@ import { Folder, Laptop } from "lucide-react";
 import { parseGitRepoId } from "@proliferate/product-domain/repos/repo-id";
 import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { type RepoSettingsContext } from "@/lib/domain/settings/repo-scope-selection";
-import { type SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
+import { type RepoSettingsContext } from "#product/lib/domain/settings/repo-scope-selection";
+import { type SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
 import {
   useAddRepoFlowStore,
   type AddRepoFlowCompletion,
-} from "@/stores/ui/add-repo-flow-store";
+} from "#product/stores/ui/add-repo-flow-store";
 
 export interface RepoScopeSelectionCallbacks {
   onSelectRepo: (sourceRoot: string) => void;

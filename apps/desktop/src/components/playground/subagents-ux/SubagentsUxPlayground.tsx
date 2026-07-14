@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { SegmentedControl } from "@proliferate/ui/primitives/SegmentedControl";
-import { FullFlowPrototype } from "./full-flow/FullFlowPrototype";
-import { IdentityReceiptsPrototype } from "./identity-receipts/IdentityReceiptsPrototype";
-import { NavigationClosePrototype } from "./navigation-close/NavigationClosePrototype";
-import { PopoverPanePrototype } from "./popover-pane/PopoverPanePrototype";
+import { FullFlowPrototype } from "#product/components/playground/subagents-ux/full-flow/FullFlowPrototype";
+import { IdentityReceiptsPrototype } from "#product/components/playground/subagents-ux/identity-receipts/IdentityReceiptsPrototype";
+import { NavigationClosePrototype } from "#product/components/playground/subagents-ux/navigation-close/NavigationClosePrototype";
+import { PopoverPanePrototype } from "#product/components/playground/subagents-ux/popover-pane/PopoverPanePrototype";
 
 type PrototypeView = "full-flow" | "identity" | "popover-pane" | "navigation-close";
 

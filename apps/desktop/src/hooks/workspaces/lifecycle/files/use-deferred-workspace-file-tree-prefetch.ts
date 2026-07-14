@@ -1,11 +1,11 @@
 import { useCallback, useRef } from "react";
-import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
+import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import {
   elapsedMs,
   logLatency,
 } from "@/lib/infra/measurement/debug-latency";
 import { recordMeasurementWorkflowStep } from "@/lib/infra/measurement/debug-measurement";
-import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
+import { scheduleAfterNextPaint } from "#product/lib/infra/scheduling/schedule-after-next-paint";
 
 interface PrefetchWorkspaceDirectoriesInput {
   materializedWorkspaceId: string;

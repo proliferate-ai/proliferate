@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { flushSync } from "react-dom";
-import { HOME_CHAT_COMPOSER_INPUT } from "@/config/chat";
-import { useHomeNextLaunch } from "@/hooks/home/workflows/use-home-next-launch";
-import { useHomeDraftHandoffStore } from "@/stores/home/home-draft-handoff-store";
+import { HOME_CHAT_COMPOSER_INPUT } from "#product/config/chat";
+import { useHomeNextLaunch } from "#product/hooks/home/workflows/use-home-next-launch";
+import { useHomeDraftHandoffStore } from "#product/stores/home/home-draft-handoff-store";
 import type {
   HomeLaunchTarget,
   HomeNextModelSelection,
   ModelAvailabilityState,
-} from "@/lib/domain/home/home-next-launch";
+} from "#product/lib/domain/home/home-next-launch";
 
 interface UseHomeNextComposerStateArgs {
   targetDisabledReason: string | null;

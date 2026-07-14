@@ -3,24 +3,24 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MockInstance } from "vitest";
-import { useWorkspaceUiLifecycle } from "@/hooks/preferences/lifecycle/use-workspace-ui-lifecycle";
+import { useWorkspaceUiLifecycle } from "#product/hooks/preferences/lifecycle/use-workspace-ui-lifecycle";
 import {
   WORKSPACE_UI_DEFAULTS,
   WORKSPACE_UI_MIGRATION_VERSION,
   type PersistedWorkspaceUiState,
-} from "@/lib/domain/preferences/workspace-ui/model";
+} from "#product/lib/domain/preferences/workspace-ui/model";
 import {
   useWorkspaceUiStore,
   type WorkspaceUiState,
-} from "@/stores/preferences/workspace-ui-store";
+} from "#product/stores/preferences/workspace-ui-store";
 import {
   createMemoryProductStorage,
   type MemoryProductStorage,
-} from "@/test/product-storage-test-utils";
+} from "#product/test/product-storage-test-utils";
 import {
   makeTestProductHost,
   productHostWrapper,
-} from "@/test/product-host-test-utils";
+} from "#product/test/product-host-test-utils";
 
 let memory: MemoryProductStorage;
 let getItemSpy: MockInstance;

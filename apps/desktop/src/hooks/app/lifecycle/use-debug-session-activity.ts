@@ -5,13 +5,13 @@ import {
   resolveSessionExecutionPhase,
   resolveSessionViewState,
 } from "@proliferate/product-domain/sessions/activity";
-import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
+import { activitySnapshotFromDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-activity";
 import {
   forgetSessionActivityDebugState,
   isSessionActivityDebugLoggingEnabled,
   logSessionActivityTransition,
 } from "@/lib/infra/measurement/debug-session-activity";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 
 type SessionEntries = ReturnType<typeof useSessionDirectoryStore.getState>["entriesById"];
 

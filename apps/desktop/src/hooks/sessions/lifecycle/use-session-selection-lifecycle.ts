@@ -1,15 +1,15 @@
 import { useEffect } from "react";
-import { useProductStorageContext } from "@/hooks/persistence/facade/use-product-storage-context";
+import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
 import {
   isPersistableLogicalWorkspaceSelection,
   normalizePersistedLogicalWorkspaceSelection,
-} from "@/lib/domain/workspaces/selection/persisted-logical-workspace-selection";
+} from "#product/lib/domain/workspaces/selection/persisted-logical-workspace-selection";
 import {
   readPersistedStringValue,
   removePersistedKey,
   writePersistedString,
-} from "@/lib/infra/persistence/product-storage";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+} from "#product/lib/infra/persistence/product-storage";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 const LOGICAL_WORKSPACE_SELECTION_KEY = "selected_logical_workspace_id";
 

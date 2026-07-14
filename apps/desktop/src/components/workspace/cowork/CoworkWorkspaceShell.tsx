@@ -1,26 +1,26 @@
 import { useCallback, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { ChatView } from "@/components/workspace/chat/ChatView";
-import { MainSidebar } from "@/components/workspace/shell/sidebar/MainSidebar";
-import { SidebarUpdatePill } from "@/components/workspace/shell/sidebar/SidebarUpdatePill";
+import { ChatView } from "#product/components/workspace/chat/ChatView";
+import { MainSidebar } from "#product/components/workspace/shell/sidebar/MainSidebar";
+import { SidebarUpdatePill } from "#product/components/workspace/shell/sidebar/SidebarUpdatePill";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { SplitPanelLeft } from "@proliferate/ui/icons";
-import { CoworkArtifactsPanel } from "@/components/workspace/cowork/CoworkArtifactsPanel";
-import { CoworkWorkspaceHeader } from "@/components/workspace/cowork/CoworkWorkspaceHeader";
-import { useResize } from "@/hooks/ui/layout/use-resize";
-import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-handler";
-import { useTransparentChromeEnabled } from "@/hooks/theme/derived/use-transparent-chrome";
+import { CoworkArtifactsPanel } from "#product/components/workspace/cowork/CoworkArtifactsPanel";
+import { CoworkWorkspaceHeader } from "#product/components/workspace/cowork/CoworkWorkspaceHeader";
+import { useResize } from "#product/hooks/ui/layout/use-resize";
+import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
+import { useTransparentChromeEnabled } from "#product/hooks/theme/derived/use-transparent-chrome";
 import { useUpdater } from "@/hooks/access/tauri/use-updater";
-import { resolveCoworkWorkspaceChromeClasses } from "@/lib/domain/preferences/workspace-chrome";
+import { resolveCoworkWorkspaceChromeClasses } from "#product/lib/domain/preferences/workspace-chrome";
 import {
   WORKSPACE_SIDEBAR_MAX_WIDTH,
   WORKSPACE_SIDEBAR_MIN_WIDTH,
-} from "@/lib/domain/preferences/workspace-ui/sidebar";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useCoworkUiStore } from "@/stores/cowork/cowork-ui-store";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { WorkspacePathProvider } from "@/providers/WorkspacePathProvider";
+} from "#product/lib/domain/preferences/workspace-ui/sidebar";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useCoworkUiStore } from "#product/stores/cowork/cowork-ui-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { WorkspacePathProvider } from "#product/providers/WorkspacePathProvider";
 
 interface CoworkWorkspaceShellProps {
   workspaceId: string | null;

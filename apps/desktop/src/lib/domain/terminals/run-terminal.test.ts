@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findReusableRunTerminalId } from "@/lib/domain/terminals/run-terminal";
+import { findReusableRunTerminalId } from "#product/lib/domain/terminals/run-terminal";
 
 describe("run terminal helpers", () => {
   it("reuses a running or starting Run terminal in the same workspace", () => {

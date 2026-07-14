@@ -1,10 +1,10 @@
 import type { CoworkManagedWorkspaceSummary } from "@anyharness/sdk";
 import { useCoworkManagedWorkspacesQuery } from "@anyharness/sdk-react";
-import { isPendingSessionId } from "@/stores/sessions/session-records";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { isPendingSessionId } from "#product/stores/sessions/session-records";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import {
   isReplacedSessionTombstonedInAnyWorkspace,
-} from "@/hooks/sessions/workflows/session-replacement-tombstones";
+} from "#product/hooks/sessions/workflows/session-replacement-tombstones";
 
 const EMPTY_MANAGED_WORKSPACES: CoworkManagedWorkspaceSummary[] = [];
 

@@ -1,4 +1,4 @@
-import type { SessionDirectoryEntry } from "@/lib/domain/sessions/directory/directory-entry";
+import type { SessionDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-entry";
 
 type SessionDirectoryStoreSnapshot = {
   entriesById: Record<string, SessionDirectoryEntry>;

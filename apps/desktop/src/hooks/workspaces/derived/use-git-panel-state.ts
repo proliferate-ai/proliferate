@@ -7,9 +7,9 @@ import {
   useGitStatusQuery,
 } from "@anyharness/sdk-react";
 import { useMemo } from "react";
-import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/derived/use-hot-paint-gate";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
-import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
+import { useIsHotPaintGatePendingForWorkspace } from "#product/hooks/workspaces/derived/use-hot-paint-gate";
+import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 import {
   buildGitPanelFiles,
   buildGitPanelSections,
@@ -19,11 +19,11 @@ import {
   repoRootDefaultBranch,
   resolveGitPanelBaseRef,
   type GitPanelMode,
-} from "@/lib/domain/workspaces/changes/git-panel-diff";
-import { resolveGitPanelWorkspaceContext } from "@/lib/domain/workspaces/changes/git-panel-workspace-context";
-import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
+} from "#product/lib/domain/workspaces/changes/git-panel-diff";
+import { resolveGitPanelWorkspaceContext } from "#product/lib/domain/workspaces/changes/git-panel-workspace-context";
+import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 import { collectLatestCompletedTurnTouchedFiles } from "@proliferate/product-domain/chats/transcript/last-turn-file-changes";
 import { collectTurnFileRevertPatchEntries } from "@proliferate/product-domain/chats/transcript/turn-file-patches";
 

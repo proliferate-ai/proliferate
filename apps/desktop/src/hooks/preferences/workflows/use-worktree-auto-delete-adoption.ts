@@ -1,11 +1,11 @@
 import { useCallback } from "react";
-import { useProductStorageContext } from "@/hooks/persistence/facade/use-product-storage-context";
+import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
 import {
   clearWorktreeAutoDeleteLimitAdoption,
   selectPersistedUserPreferencesSlice,
-} from "@/lib/domain/preferences/persisted-metadata";
-import { persistUserPreferences } from "@/lib/workflows/preferences/user-preferences-persistence";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+} from "#product/lib/domain/preferences/persisted-metadata";
+import { persistUserPreferences } from "#product/lib/workflows/preferences/user-preferences-persistence";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
 export function useWorktreeAutoDeleteAdoption(): () => Promise<void> {
   const storage = useProductStorageContext();

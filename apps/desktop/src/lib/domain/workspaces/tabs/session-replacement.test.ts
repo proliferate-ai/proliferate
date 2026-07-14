@@ -3,8 +3,8 @@ import {
   replaceSessionIdInManualChatGroups,
   replaceSessionIdInOrderedList,
   replaceSessionIdInShellTabOrder,
-} from "./session-replacement";
-import { createManualChatGroupId } from "@/lib/domain/workspaces/tabs/manual-groups";
+} from "#product/lib/domain/workspaces/tabs/session-replacement";
+import { createManualChatGroupId } from "#product/lib/domain/workspaces/tabs/manual-groups";
 
 describe("session replacement tab identity", () => {
   it("keeps the replacement in the old chat's exact order position", () => {

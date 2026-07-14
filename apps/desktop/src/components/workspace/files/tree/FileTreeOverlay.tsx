@@ -10,10 +10,10 @@ import { Search } from "@proliferate/ui/icons";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { WorkspaceFileEntry } from "@anyharness/sdk";
 import { useWorkspaceFilesQuery } from "@anyharness/sdk-react";
-import { FileSearchResultsTree } from "@/components/workspace/files/tree/FileSearchResultsTree";
-import { FileTreeRow } from "@/components/workspace/files/tree/FileTreeRow";
-import { useTreePanelResize } from "@/hooks/ui/layout/use-tree-panel-resize";
-import { useFileTreeStore } from "@/stores/editor/file-tree-store";
+import { FileSearchResultsTree } from "#product/components/workspace/files/tree/FileSearchResultsTree";
+import { FileTreeRow } from "#product/components/workspace/files/tree/FileTreeRow";
+import { useTreePanelResize } from "#product/hooks/ui/layout/use-tree-panel-resize";
+import { useFileTreeStore } from "#product/stores/editor/file-tree-store";
 
 interface FileTreeOverlayProps {
   open: boolean;

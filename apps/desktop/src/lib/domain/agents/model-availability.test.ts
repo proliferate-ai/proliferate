@@ -5,7 +5,7 @@ import {
   unlockHintForContexts,
   type GateableModel,
   type ModelAvailability,
-} from "./model-availability";
+} from "#product/lib/domain/agents/model-availability";
 
 function availability(...anyOf: string[]): ModelAvailability {
   return { anyOf };

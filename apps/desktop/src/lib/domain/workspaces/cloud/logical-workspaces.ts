@@ -2,20 +2,20 @@ import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import type {
   CloudMobilityWorkspaceSummary,
   CloudWorkspaceSummary,
-} from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
-import { isCloudWorkspaceFailedBeforeReady } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
+import { isCloudWorkspaceFailedBeforeReady } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
 import {
   cloudWorkspaceGroupKey,
   localWorkspaceGroupKey,
   repoRootGroupKey,
-} from "@/lib/domain/workspaces/cloud/collections";
+} from "#product/lib/domain/workspaces/cloud/collections";
 import {
   buildLocalSlotLogicalWorkspaceId,
   buildRemoteLogicalWorkspaceId,
   normalizeLogicalWorkspaceBranchKey,
-} from "@/lib/domain/workspaces/cloud/logical-workspace-id";
-import { resolvePreferredLogicalWorkspaceMaterialization } from "@/lib/domain/workspaces/cloud/logical-workspace-materialization";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
+} from "#product/lib/domain/workspaces/cloud/logical-workspace-id";
+import { resolvePreferredLogicalWorkspaceMaterialization } from "#product/lib/domain/workspaces/cloud/logical-workspace-materialization";
+import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
 import {
   buildBaseLogicalWorkspaceIdForLocalWorkspace,
   buildLogicalWorkspaceIdForCloudWorkspace,
@@ -24,7 +24,7 @@ import {
   remoteRepoKey,
   resolveLocalWorkspaceRepoRoot,
   workspaceBranchKey,
-} from "@/lib/domain/workspaces/cloud/logical-workspace-source";
+} from "#product/lib/domain/workspaces/cloud/logical-workspace-source";
 import {
   cloudDefaultDisplayName,
   cloudWorkspaceMatchesSelection,
@@ -34,7 +34,7 @@ import {
   localDefaultDisplayName,
   mobilityDefaultDisplayName,
   preferCloudWorkspaceForLogicalSlot,
-} from "@/lib/domain/workspaces/cloud/logical-workspace-slot";
+} from "#product/lib/domain/workspaces/cloud/logical-workspace-slot";
 
 function timestampValue(timestamp: string | null | undefined): number {
   return timestamp ? new Date(timestamp).getTime() : 0;

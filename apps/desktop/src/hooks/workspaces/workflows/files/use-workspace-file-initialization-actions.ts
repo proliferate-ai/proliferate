@@ -3,15 +3,15 @@ import {
   resolveWorkspaceConnectionFromContext,
   useAnyHarnessWorkspaceContext,
 } from "@anyharness/sdk-react";
-import { useWorkspaceFilesCache } from "@/hooks/access/anyharness/files/use-workspace-files-cache";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
-import type { WorkspaceFileContext } from "@/hooks/workspaces/derived/files/use-workspace-file-context";
-import { deriveWorkspaceFileTabSeed } from "@/lib/domain/workspaces/tabs/shell-file-seed";
-import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
-import { useWorkspaceFileBuffersStore } from "@/stores/editor/workspace-file-buffers-store";
-import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useToastStore } from "@/stores/toast/toast-store";
+import { useWorkspaceFilesCache } from "#product/hooks/access/anyharness/files/use-workspace-files-cache";
+import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
+import type { WorkspaceFileContext } from "#product/hooks/workspaces/derived/files/use-workspace-file-context";
+import { deriveWorkspaceFileTabSeed } from "#product/lib/domain/workspaces/tabs/shell-file-seed";
+import { resolveWithWorkspaceFallback } from "#product/lib/domain/workspaces/selection/workspace-keyed-preferences";
+import { useWorkspaceFileBuffersStore } from "#product/stores/editor/workspace-file-buffers-store";
+import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 interface WorkspaceFileConnectionContext {
   materializedWorkspaceId: string;

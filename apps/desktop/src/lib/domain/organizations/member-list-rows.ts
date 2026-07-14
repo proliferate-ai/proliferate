@@ -2,7 +2,7 @@ import type {
   OrganizationInvitationRecord,
   OrganizationMemberAuthMethodRecord,
   OrganizationMemberRecord,
-} from "@/lib/domain/organizations/organization-records";
+} from "#product/lib/domain/organizations/organization-records";
 
 export interface MemberListRow {
   key: string;

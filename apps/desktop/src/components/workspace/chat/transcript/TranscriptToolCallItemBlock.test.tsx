@@ -11,9 +11,9 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProductHost } from "@proliferate/product-client/host/product-host";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
-import { toolCallItem } from "@/lib/domain/chat/__fixtures__/playground/tool-call-item-fixture";
-import { TranscriptContextProviders } from "./TranscriptContexts";
-import { TranscriptToolCallItemBlock } from "./TranscriptToolCallItemBlock";
+import { toolCallItem } from "#product/lib/domain/chat/__fixtures__/playground/tool-call-item-fixture";
+import { TranscriptContextProviders } from "#product/components/workspace/chat/transcript/TranscriptContexts";
+import { TranscriptToolCallItemBlock } from "#product/components/workspace/chat/transcript/TranscriptToolCallItemBlock";
 
 const webTestHost = { desktop: null } as ProductHost;
 

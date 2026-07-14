@@ -17,18 +17,18 @@ import {
   resolveRuntimeLocation,
   resolveWorkspaceIdForInvestigation,
   type SessionDebugActionState,
-} from "@/lib/domain/support/session-debug/action-state";
+} from "#product/lib/domain/support/session-debug/action-state";
 import {
   buildSessionDebugExport,
   type SessionDebugError,
   type SessionDebugExportedSession,
-} from "@/lib/domain/support/session-debug/export-models";
-import { suggestSessionDebugFileName } from "@/lib/domain/support/session-debug/file-name";
-import type { SessionDebugLocator } from "@/lib/domain/support/session-debug/locator";
+} from "#product/lib/domain/support/session-debug/export-models";
+import { suggestSessionDebugFileName } from "#product/lib/domain/support/session-debug/file-name";
+import type { SessionDebugLocator } from "#product/lib/domain/support/session-debug/locator";
 import {
   sessionLocatorFromSession,
   type SessionDebugLocatorSession,
-} from "@/lib/domain/support/session-debug/session-summary";
+} from "#product/lib/domain/support/session-debug/session-summary";
 
 export interface SessionDebugRuntimeConnection {
   runtimeUrl: string;

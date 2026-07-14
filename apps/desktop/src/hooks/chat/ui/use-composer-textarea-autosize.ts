@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, type RefObject } from "react";
-import { computeComposerTextareaAutosize } from "@/lib/domain/chat/composer/composer-textarea-sizing";
+import { computeComposerTextareaAutosize } from "#product/lib/domain/chat/composer/composer-textarea-sizing";
 
 interface UseComposerTextareaAutosizeArgs {
   textareaRef: RefObject<HTMLTextAreaElement | null>;

@@ -3,18 +3,18 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MockInstance } from "vitest";
-import { useUserPreferencesLifecycle } from "@/hooks/preferences/lifecycle/use-user-preferences-lifecycle";
-import { useWorktreeAutoDeleteAdoption } from "@/hooks/preferences/workflows/use-worktree-auto-delete-adoption";
-import { USER_PREFERENCE_DEFAULTS } from "@/lib/domain/preferences/user/model";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+import { useUserPreferencesLifecycle } from "#product/hooks/preferences/lifecycle/use-user-preferences-lifecycle";
+import { useWorktreeAutoDeleteAdoption } from "#product/hooks/preferences/workflows/use-worktree-auto-delete-adoption";
+import { USER_PREFERENCE_DEFAULTS } from "#product/lib/domain/preferences/user/model";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import {
   createMemoryProductStorage,
   type MemoryProductStorage,
-} from "@/test/product-storage-test-utils";
+} from "#product/test/product-storage-test-utils";
 import {
   makeTestProductHost,
   productHostWrapper,
-} from "@/test/product-host-test-utils";
+} from "#product/test/product-host-test-utils";
 
 let memory: MemoryProductStorage;
 let setItemSpy: MockInstance;

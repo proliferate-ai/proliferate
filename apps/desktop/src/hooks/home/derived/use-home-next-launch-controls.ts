@@ -1,22 +1,22 @@
 import { useMemo } from "react";
 import { useAgentLaunchOptionsQuery } from "@anyharness/sdk-react";
 import { useShallow } from "zustand/react/shallow";
-import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
-import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
+import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
+import { useCloudAgentCatalog } from "#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import {
   mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents,
   type DesktopAgentLaunchAgent,
-} from "@/lib/domain/agents/cloud-launch-catalog";
-import { filterTargetReadyLaunchAgents } from "@/lib/domain/agents/target-ready-launch-agents";
+} from "#product/lib/domain/agents/cloud-launch-catalog";
+import { filterTargetReadyLaunchAgents } from "#product/lib/domain/agents/target-ready-launch-agents";
 import {
   buildLaunchControlDescriptors,
-} from "@/lib/domain/chat/models/launch-control-descriptors";
+} from "#product/lib/domain/chat/models/launch-control-descriptors";
 import type {
   LiveSessionControlDescriptor,
   SupportedLiveControlKey,
-} from "@/lib/domain/chat/session-controls/session-controls";
-import type { HomeNextModelSelection } from "@/lib/domain/home/home-next-launch";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+} from "#product/lib/domain/chat/session-controls/session-controls";
+import type { HomeNextModelSelection } from "#product/lib/domain/home/home-next-launch";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
 const EMPTY_AGENTS: DesktopAgentLaunchAgent[] = [];
 

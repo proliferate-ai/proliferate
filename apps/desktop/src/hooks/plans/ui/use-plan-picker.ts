@@ -4,12 +4,12 @@ import type { ProposedPlanSummary } from "@anyharness/sdk";
 import {
   formatPlanAgentKindLabel,
   formatPlanDecisionStateLabel,
-} from "@/lib/domain/plans/plan-presentation";
+} from "#product/lib/domain/plans/plan-presentation";
 import {
   planAttachmentDescriptorFromDetail,
 } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
-import { useToastStore } from "@/stores/toast/toast-store";
-import { useAddPlanDraftAttachment } from "@/hooks/plans/workflows/use-add-plan-draft-attachment";
+import { useToastStore } from "#product/stores/toast/toast-store";
+import { useAddPlanDraftAttachment } from "#product/hooks/plans/workflows/use-add-plan-draft-attachment";
 
 const EMPTY_PLANS: ProposedPlanSummary[] = [];
 

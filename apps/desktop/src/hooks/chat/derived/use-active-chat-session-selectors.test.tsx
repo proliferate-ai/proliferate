@@ -7,19 +7,19 @@ import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   useActivePendingPrompts,
-} from "@/hooks/chat/derived/use-active-pending-session-interactions";
+} from "#product/hooks/chat/derived/use-active-pending-session-interactions";
 import {
   composePendingConfigChanges,
   useActiveSessionConfigState,
   useActiveSessionLaunchState,
-} from "@/hooks/chat/derived/use-active-session-config-state";
+} from "#product/hooks/chat/derived/use-active-session-config-state";
 import {
   useActiveTranscriptPaneState,
-} from "@/hooks/chat/derived/use-active-session-transcript-state";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
+} from "#product/hooks/chat/derived/use-active-session-transcript-state";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 
 afterEach(() => {
   cleanup();

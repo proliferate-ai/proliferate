@@ -1,5 +1,5 @@
 import type { GitStatusSnapshot } from "@anyharness/sdk";
-import type { PublishPullRequestDraft } from "@/lib/domain/workspaces/creation/publish-workflow-model";
+import type { PublishPullRequestDraft } from "#product/lib/domain/workspaces/creation/publish-workflow-model";
 
 export function defaultPublishPullRequestDraft(input: {
   gitStatus: GitStatusSnapshot | null | undefined;

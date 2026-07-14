@@ -5,14 +5,14 @@ import {
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useMemo, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
-import { resolveRouteScopedWorkspaceProviderId } from "@/lib/domain/workspaces/selection/workspace-provider-scope";
-import { useResolveWorkspaceConnection } from "@/hooks/workspaces/cache/use-resolve-workspace-connection";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import type { AuthClientStatus } from "@/lib/domain/auth/auth-state-mapping";
-import { buildAnyHarnessCacheScopeKey } from "@/lib/domain/auth/anyharness-cache-scope";
-import { useCloudWorkspaceMaterializationCacheBoundary } from "@/hooks/workspaces/cache/use-cloud-workspace-materialization-cache-boundary";
-import { TelemetryProvider } from "./TelemetryProvider";
+import { resolveRouteScopedWorkspaceProviderId } from "#product/lib/domain/workspaces/selection/workspace-provider-scope";
+import { useResolveWorkspaceConnection } from "#product/hooks/workspaces/cache/use-resolve-workspace-connection";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import type { AuthClientStatus } from "#product/lib/domain/auth/auth-state-mapping";
+import { buildAnyHarnessCacheScopeKey } from "#product/lib/domain/auth/anyharness-cache-scope";
+import { useCloudWorkspaceMaterializationCacheBoundary } from "#product/hooks/workspaces/cache/use-cloud-workspace-materialization-cache-boundary";
+import { TelemetryProvider } from "#product/providers/TelemetryProvider";
 
 /**
  * Product-owned provider root. Wraps the AnyHarness/workspace product scope and

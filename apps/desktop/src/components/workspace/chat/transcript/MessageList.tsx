@@ -6,11 +6,11 @@ import {
   useMemo,
   useRef,
 } from "react";
-import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
-import { CHAT_SCROLL_BASE_BOTTOM_PADDING_PX } from "@/config/chat-layout";
-import { useWorkspaceFileActions } from "@/hooks/workspaces/facade/files/use-workspace-file-actions";
-import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
-import { useOpenCoworkArtifact } from "@/hooks/cowork/workflows/use-open-cowork-artifact";
+import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
+import { CHAT_SCROLL_BASE_BOTTOM_PADDING_PX } from "#product/config/chat-layout";
+import { useWorkspaceFileActions } from "#product/hooks/workspaces/facade/files/use-workspace-file-actions";
+import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
+import { useOpenCoworkArtifact } from "#product/hooks/cowork/workflows/use-open-cowork-artifact";
 import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
 import {
   finishOrCancelMeasurementOperation,
@@ -18,10 +18,10 @@ import {
   recordMeasurementMetric,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
-import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
+import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import type { PromptOutboxEntry } from "@proliferate/product-domain/sessions/intents/session-intent-model";
-import { usePromptOutboxActions } from "@/hooks/chat/workflows/use-prompt-outbox-actions";
-import { useTypingActivityStore } from "@/lib/infra/interaction/typing-activity-store";
+import { usePromptOutboxActions } from "#product/hooks/chat/workflows/use-prompt-outbox-actions";
+import { useTypingActivityStore } from "#product/lib/infra/interaction/typing-activity-store";
 import type { TranscriptOpenSessionRole } from "@proliferate/product-domain/chats/transcript/transcript-open-target";
 import type {
   PendingPromptEntry,
@@ -42,13 +42,13 @@ import { collectToolCallIdsWithProposedPlan } from "@proliferate/product-domain/
 import {
   resolvePendingPromptTrailingStatus,
   resolveTurnTrailingStatus,
-} from "@/components/workspace/chat/transcript/TranscriptTurnChrome";
-import { TranscriptContextProviders, type TranscriptOpenSessionHandler } from "./TranscriptContexts";
-import { ProposedPlanToolCallIdsProvider } from "./ProposedPlanToolCallIdsContext";
-import { GoalTranscriptEventRow } from "./GoalTranscriptEventRow";
-import { TranscriptPendingPromptRow } from "./TranscriptPendingPromptRow";
-import { TranscriptTurnRow } from "./TranscriptTurnRow";
-import { TranscriptEntryMotionProvider } from "./TranscriptEntryMotionContext";
+} from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
+import { TranscriptContextProviders, type TranscriptOpenSessionHandler } from "#product/components/workspace/chat/transcript/TranscriptContexts";
+import { ProposedPlanToolCallIdsProvider } from "#product/components/workspace/chat/transcript/ProposedPlanToolCallIdsContext";
+import { GoalTranscriptEventRow } from "#product/components/workspace/chat/transcript/GoalTranscriptEventRow";
+import { TranscriptPendingPromptRow } from "#product/components/workspace/chat/transcript/TranscriptPendingPromptRow";
+import { TranscriptTurnRow } from "#product/components/workspace/chat/transcript/TranscriptTurnRow";
+import { TranscriptEntryMotionProvider } from "#product/components/workspace/chat/transcript/TranscriptEntryMotionContext";
 
 const EMPTY_OUTBOX_ENTRIES: readonly PromptOutboxEntry[] = [];
 const EMPTY_GOAL_EVENTS: readonly GoalTranscriptEvent[] = [];

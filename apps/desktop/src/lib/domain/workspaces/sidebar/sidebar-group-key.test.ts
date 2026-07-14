@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
-import { buildLogicalWorkspaces } from "@/lib/domain/workspaces/cloud/logical-workspaces";
+import { buildLogicalWorkspaces } from "#product/lib/domain/workspaces/cloud/logical-workspaces";
 import {
   buildSidebarGroupStates,
-} from "@/lib/domain/workspaces/sidebar/sidebar-groups";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-groups";
 import {
   DEFAULT_SIDEBAR_WORKSPACE_TYPES,
-} from "@/lib/domain/workspaces/sidebar/sidebar-model";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 import {
   sidebarRepoGroupKeyForCloudTarget,
   sidebarRepoGroupKeyForWorkspace,
-} from "./sidebar-group-key";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-group-key";
 
 function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
   return {

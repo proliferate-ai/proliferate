@@ -4,16 +4,16 @@ import {
   useCallback,
 } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { FileTreeEntryIcon } from "@/components/workspace/files/file-icons";
+import { FileTreeEntryIcon } from "#product/components/workspace/files/file-icons";
 import { InlinePathMentionIcon } from "@proliferate/ui/icons";
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import {
   FILE_REFERENCE_MENU_CLASS,
   FileReferenceMenuContent,
-} from "@/components/workspace/file-references/FileReferenceMenu";
-import { useFileReferenceActions } from "@/hooks/workspaces/workflows/files/use-file-reference-actions";
-import { useFileReferenceNativeContextMenu } from "@/hooks/workspaces/ui/files/use-file-reference-native-context-menu";
-import type { ResolvedFileReference } from "@/lib/domain/files/path-references";
+} from "#product/components/workspace/file-references/FileReferenceMenu";
+import { useFileReferenceActions } from "#product/hooks/workspaces/workflows/files/use-file-reference-actions";
+import { useFileReferenceNativeContextMenu } from "#product/hooks/workspaces/ui/files/use-file-reference-native-context-menu";
+import type { ResolvedFileReference } from "#product/lib/domain/files/path-references";
 
 type FileReferenceBadgeVariant = "inline" | "chip";
 

@@ -3,13 +3,13 @@ import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import { RefreshCw } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { AgentLoginTerminalPanel } from "@/components/agents/AgentLoginTerminalPanel";
-import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
-import { useAgentResourcesCache } from "@/hooks/access/anyharness/agents/use-agent-resources-cache";
-import type { HarnessAuthEditorApi } from "@/hooks/agents/workflows/use-harness-auth-editor";
-import { isReadyAgent } from "@/lib/domain/agents/status";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { HarnessPanelBlock, type HarnessBlockVariant } from "./HarnessPanelBlock";
+import { AgentLoginTerminalPanel } from "#product/components/agents/AgentLoginTerminalPanel";
+import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
+import { useAgentResourcesCache } from "#product/hooks/access/anyharness/agents/use-agent-resources-cache";
+import type { HarnessAuthEditorApi } from "#product/hooks/agents/workflows/use-harness-auth-editor";
+import { isReadyAgent } from "#product/lib/domain/agents/status";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { HarnessPanelBlock, type HarnessBlockVariant } from "#product/components/settings/panes/agents/harness/HarnessPanelBlock";
 
 export function CliDetails({
   surface,

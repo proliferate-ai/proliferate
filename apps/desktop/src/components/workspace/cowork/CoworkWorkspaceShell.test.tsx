@@ -3,7 +3,7 @@
 import { cleanup, render } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CoworkWorkspaceShell } from "@/components/workspace/cowork/CoworkWorkspaceShell";
+import { CoworkWorkspaceShell } from "#product/components/workspace/cowork/CoworkWorkspaceShell";
 
 const chatViewRender = vi.hoisted(() => vi.fn());
 

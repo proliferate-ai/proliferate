@@ -4,7 +4,7 @@ import {
   buildCoworkChildRows,
   buildCoworkRelationshipHintSignature,
   coworkResponseSignature,
-} from "@/lib/domain/workspaces/tabs/workspace-header-cowork-hierarchy";
+} from "#product/lib/domain/workspaces/tabs/workspace-header-cowork-hierarchy";
 
 describe("workspace header cowork hierarchy", () => {
   it("builds child rows from cowork managed workspace summaries", () => {

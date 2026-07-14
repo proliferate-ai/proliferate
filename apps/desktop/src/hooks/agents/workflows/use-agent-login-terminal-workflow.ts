@@ -9,8 +9,8 @@ import {
   useStartAgentLoginTerminalMutation,
 } from "@anyharness/sdk-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useAgentResourcesCache } from "@/hooks/access/anyharness/agents/use-agent-resources-cache";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useAgentResourcesCache } from "#product/hooks/access/anyharness/agents/use-agent-resources-cache";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
 export interface AgentLoginTerminalSession {
   kind: string;

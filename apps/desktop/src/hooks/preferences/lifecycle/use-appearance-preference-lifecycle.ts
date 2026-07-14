@@ -2,8 +2,8 @@ import { useEffect } from "react";
 import {
   applyAppearancePreference,
   initializeTheme,
-} from "@/config/theme";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+} from "#product/config/theme";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
 function applyStoredAppearancePreference(): void {
   const {

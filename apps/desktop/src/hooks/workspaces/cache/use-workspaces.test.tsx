@@ -5,14 +5,14 @@ import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
-import { buildWorkspaceCollections } from "@/lib/domain/workspaces/cloud/collections";
-import { buildLogicalWorkspaces } from "@/lib/domain/workspaces/cloud/logical-workspaces";
-import type { CloudWorkspaceSummary } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { buildWorkspaceCollections } from "#product/lib/domain/workspaces/cloud/collections";
+import { buildLogicalWorkspaces } from "#product/lib/domain/workspaces/cloud/logical-workspaces";
+import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
-import { makeTestProductHost } from "@/test/product-host-test-utils";
-import { workspaceCollectionsKey } from "./query-keys";
-import { useWorkspaces } from "./use-workspaces";
+import { makeTestProductHost } from "#product/test/product-host-test-utils";
+import { workspaceCollectionsKey } from "#product/hooks/workspaces/cache/query-keys";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 
 const mocks = vi.hoisted(() => {
   const workspacesList = vi.fn();

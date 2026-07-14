@@ -1,10 +1,10 @@
 import { useCallback, useState } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { useOrganizationSelectionActions } from "@/hooks/organizations/workflows/use-organization-selection-actions";
-import { useSessionDismissActions } from "@/hooks/sessions/workflows/use-session-dismiss-actions";
-import { collectRunningLocalSessionIds } from "@/lib/domain/sessions/running-local-sessions";
-import { teardownDesktopWorker } from "@/lib/workflows/cloud/ensure-desktop-worker";
-import { getSessionRecords } from "@/stores/sessions/session-records";
+import { useOrganizationSelectionActions } from "#product/hooks/organizations/workflows/use-organization-selection-actions";
+import { useSessionDismissActions } from "#product/hooks/sessions/workflows/use-session-dismiss-actions";
+import { collectRunningLocalSessionIds } from "#product/lib/domain/sessions/running-local-sessions";
+import { teardownDesktopWorker } from "#product/lib/workflows/cloud/ensure-desktop-worker";
+import { getSessionRecords } from "#product/stores/sessions/session-records";
 
 // The semi-destructive org->org switch: close running LOCAL sessions (via the
 // same per-session dismiss action the session UI uses — there is no bulk

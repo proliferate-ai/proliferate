@@ -2,8 +2,8 @@
 
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
+import { useConfiguredLaunchReadiness } from "#product/hooks/chat/derived/use-configured-launch-readiness";
 
 const mocks = vi.hoisted(() => ({
   useChatLaunchCatalog: vi.fn(),

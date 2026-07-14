@@ -6,8 +6,8 @@ import type { ProductTelemetry } from "@proliferate/product-client/host/product-
 import {
   makeTestProductHost,
   productHostWrapper,
-} from "@/test/product-host-test-utils";
-import { useProductTelemetry } from "./use-product-telemetry";
+} from "#product/test/product-host-test-utils";
+import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
 
 function spyTelemetry(): ProductTelemetry {
   return {

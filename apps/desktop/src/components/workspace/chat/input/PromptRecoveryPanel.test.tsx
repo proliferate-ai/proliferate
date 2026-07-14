@@ -2,8 +2,8 @@
 
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { PromptRecoveryPanel } from "@/components/workspace/chat/input/PromptRecoveryPanel";
-import type { ChatPromptRecovery } from "@/stores/chat/chat-prompt-recovery-store";
+import { PromptRecoveryPanel } from "#product/components/workspace/chat/input/PromptRecoveryPanel";
+import type { ChatPromptRecovery } from "#product/stores/chat/chat-prompt-recovery-store";
 import { createPromptOutboxEntry } from "@proliferate/product-domain/sessions/intents/session-intent-model";
 
 describe("PromptRecoveryPanel", () => {

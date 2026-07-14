@@ -1,10 +1,10 @@
 import { useCallback } from "react";
-import { useSessionCreationActions } from "@/hooks/sessions/workflows/use-session-creation-actions";
+import { useSessionCreationActions } from "#product/hooks/sessions/workflows/use-session-creation-actions";
 import {
   useChatPromptRecoveryStore,
   type ChatPromptRecovery,
-} from "@/stores/chat/chat-prompt-recovery-store";
-import { useToastStore } from "@/stores/toast/toast-store";
+} from "#product/stores/chat/chat-prompt-recovery-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 export function useChatPromptRecoveryActions(workspaceUiKey: string | null) {
   const { createSessionWithResolvedConfig } = useSessionCreationActions();

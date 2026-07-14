@@ -2,8 +2,8 @@ import { useState } from "react";
 import {
   CLOUD_SIDEBAR_STATUS_DEFINITIONS,
   type CloudSidebarStatus,
-} from "@/config/cloud-sidebar";
-import { SHORTCUTS } from "@/config/shortcuts/registry";
+} from "#product/config/cloud-sidebar";
+import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import {
   Archive,
   Folder,
@@ -15,27 +15,27 @@ import {
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { ShortcutBadge } from "@proliferate/ui/layout/ShortcutBadge";
-import { useWorkspaceSidebarNativeContextMenu } from "@/hooks/workspaces/ui/use-workspace-sidebar-native-context-menu";
-import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
+import { useWorkspaceSidebarNativeContextMenu } from "#product/hooks/workspaces/ui/use-workspace-sidebar-native-context-menu";
+import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 import type {
   SidebarDetailIndicator,
   SidebarIndicatorAction,
   SidebarStatusIndicator,
   SidebarWorkspaceVariant,
-} from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
 import {
   prStatusViewFromGitStatus,
   sidebarGitGlyphForStatus,
-} from "@/lib/domain/workspaces/git-status/pr-status-presentation";
-import type { WorkspaceGitStatus } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
-import { formatSidebarRelativeTime } from "@/lib/domain/workspaces/display/workspace-display";
+} from "#product/lib/domain/workspaces/git-status/pr-status-presentation";
+import type { WorkspaceGitStatus } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
+import { formatSidebarRelativeTime } from "#product/lib/domain/workspaces/display/workspace-display";
 import {
   SidebarDetailIndicatorsView,
   SidebarStatusIndicatorView,
-} from "./SidebarIndicators";
-import { SidebarWorkspaceGitGlyph } from "./SidebarWorkspaceGitGlyph";
-import { WorkspaceItemMenu } from "./WorkspaceItemMenu";
-import { WorkspaceRenamePopover } from "./WorkspaceRenamePopover";
+} from "#product/components/workspace/shell/sidebar/SidebarIndicators";
+import { SidebarWorkspaceGitGlyph } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceGitGlyph";
+import { WorkspaceItemMenu } from "#product/components/workspace/shell/sidebar/WorkspaceItemMenu";
+import { WorkspaceRenamePopover } from "#product/components/workspace/shell/sidebar/WorkspaceRenamePopover";
 import { ProductSidebarWorkspaceRow } from "@proliferate/product-ui/sidebar/ProductSidebarRepositories";
 
 interface WorkspaceItemProps {

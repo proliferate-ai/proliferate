@@ -1,39 +1,39 @@
 import type { SessionStreamHandle } from "@anyharness/sdk";
 import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
-import type { CloudSandboxGatewayUrlSource } from "@/lib/access/cloud/cloud-sandbox-gateway";
-import { openSessionStream } from "@/lib/access/anyharness/session-runtime";
+import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/cloud-sandbox-gateway";
+import { openSessionStream } from "#product/lib/access/anyharness/session-runtime";
 import {
   clearSessionStreamHandle,
   setSessionStreamHandle,
-} from "@/lib/access/anyharness/session-stream-handles";
-import { resetSessionReconnectBackoff } from "@/lib/workflows/sessions/session-reconnect-state";
+} from "#product/lib/access/anyharness/session-stream-handles";
+import { resetSessionReconnectBackoff } from "#product/lib/workflows/sessions/session-reconnect-state";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import {
   finishOrCancelMeasurementOperation,
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
-import { logDevSessionRuntimeEvent } from "@/lib/infra/debug/dev-session-runtime-log";
+import { logDevSessionRuntimeEvent } from "#product/lib/infra/debug/dev-session-runtime-log";
 import { markLatencyFlowLiveAttached } from "@/lib/infra/measurement/latency-flow";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionIngestStore } from "@/stores/sessions/session-ingest-store";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionIngestStore } from "#product/stores/sessions/session-ingest-store";
 import {
   getMaterializedSessionId,
   getSessionRecord,
-} from "@/stores/sessions/session-records";
+} from "#product/stores/sessions/session-records";
 import {
   isCurrentStreamHandle,
   shouldReconnectStream,
-} from "@/hooks/sessions/lifecycle/session-runtime-helpers";
-import { createFlushAwareSessionStreamHandle } from "@/hooks/sessions/lifecycle/session-stream-handle";
-import { createSessionStreamRefreshController } from "@/hooks/sessions/lifecycle/session-stream-connection-refresh";
-import { scheduleSessionStreamReconnect } from "@/hooks/sessions/lifecycle/session-stream-connection-reconnect";
+} from "#product/hooks/sessions/lifecycle/session-runtime-helpers";
+import { createFlushAwareSessionStreamHandle } from "#product/hooks/sessions/lifecycle/session-stream-handle";
+import { createSessionStreamRefreshController } from "#product/hooks/sessions/lifecycle/session-stream-connection-refresh";
+import { scheduleSessionStreamReconnect } from "#product/hooks/sessions/lifecycle/session-stream-connection-reconnect";
 import type {
   RefreshSessionSlotMeta,
   SessionStreamConnectOptions,
   UseSessionStreamConnectionActionsOptions,
-} from "@/hooks/sessions/lifecycle/session-stream-connection-types";
+} from "#product/hooks/sessions/lifecycle/session-stream-connection-types";
 
 interface OpenSessionStreamConnectionInput {
   sessionId: string;

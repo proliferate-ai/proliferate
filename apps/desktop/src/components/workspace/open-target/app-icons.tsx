@@ -1,5 +1,5 @@
 import { useId } from "react";
-import { OPEN_TARGET_ICON_ASSET_PATHS } from "@/config/open-target-icon-assets";
+import { OPEN_TARGET_ICON_ASSET_PATHS } from "#product/config/open-target-icon-assets";
 import { FileIcon, type IconProps } from "@proliferate/ui/icons";
 
 export function MailAppIcon({ className, ...props }: IconProps) {

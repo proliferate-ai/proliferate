@@ -3,28 +3,28 @@ import { useProductHost } from "@proliferate/product-client/host/ProductHostProv
 import type {
   LocalAutomationRunClaimResponse,
 } from "@/lib/access/cloud/client";
-import { useLocalAutomationRunClaims } from "@/hooks/access/cloud/automations/use-local-automation-run-claims";
-import { useLocalAutomationRuntimeClientFactory } from "@/hooks/access/anyharness/automations/use-local-automation-runtime-client";
-import { useLocalAutomationExecutorCache } from "@/hooks/automations/cache/use-local-automation-executor-cache";
+import { useLocalAutomationRunClaims } from "#product/hooks/access/cloud/automations/use-local-automation-run-claims";
+import { useLocalAutomationRuntimeClientFactory } from "#product/hooks/access/anyharness/automations/use-local-automation-runtime-client";
+import { useLocalAutomationExecutorCache } from "#product/hooks/automations/cache/use-local-automation-executor-cache";
 import {
   buildLocalAutomationRepoCandidates,
   buildLocalAutomationWorktreePlan,
   findCandidateForClaim,
   LOCAL_AUTOMATION_ERROR_CODES,
   type LocalAutomationRepoCandidate,
-} from "@/lib/domain/automations/local-executor/plan";
+} from "#product/lib/domain/automations/local-executor/plan";
 import {
   executeLocalAutomationRun,
   LocalAutomationExecutorError,
-} from "@/lib/workflows/automations/local-automation-executor";
+} from "#product/lib/workflows/automations/local-automation-executor";
 import {
   readPersistedStringValue,
   writePersistedString,
   type ProductStorageContext,
-} from "@/lib/infra/persistence/product-storage";
-import { useProductStorageContext } from "@/hooks/persistence/facade/use-product-storage-context";
-import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
-import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
+} from "#product/lib/infra/persistence/product-storage";
+import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
+import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 
 const AUTOMATION_LOCAL_EXECUTOR_ID_KEY = "automationLocalExecutorId";
 const LOCAL_EXECUTOR_POLL_MS = 10_000;

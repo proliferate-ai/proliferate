@@ -4,18 +4,18 @@ import { Input } from "@proliferate/ui/primitives/Input";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
-import { useActivePendingInteractionState } from "@/hooks/chat/derived/use-active-pending-session-interactions";
-import { useHeldInteractionPayload } from "@/hooks/chat/ui/use-composer-dock-card-presence";
-import { useChatUserInputActions } from "@/hooks/chat/workflows/use-chat-user-input-actions";
+import { useActivePendingInteractionState } from "#product/hooks/chat/derived/use-active-pending-session-interactions";
+import { useHeldInteractionPayload } from "#product/hooks/chat/ui/use-composer-dock-card-presence";
+import { useChatUserInputActions } from "#product/hooks/chat/workflows/use-chat-user-input-actions";
 import {
   ComposerAttachedPanel,
   ComposerCardFooter,
-} from "./ComposerAttachedPanel";
+} from "#product/components/workspace/chat/input/ComposerAttachedPanel";
 import {
   ComposerOptionKeyBadge,
   ComposerOptionRow,
   useComposerOptionNumberKeys,
-} from "./ComposerOptionRow";
+} from "#product/components/workspace/chat/input/ComposerOptionRow";
 
 // Agent question wizard on the shared interaction-card anatomy: header/type
 // grammar from ComposerAttachedPanel (text-ui title + text-ui-sm progress

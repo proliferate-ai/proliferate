@@ -1,28 +1,28 @@
 import { useCallback } from "react";
 import { useRenameGitBranchMutation } from "@anyharness/sdk-react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
+import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
 import { updateCloudWorkspaceDisplayName } from "@proliferate/cloud-sdk/client/workspaces";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useToastStore } from "@/stores/toast/toast-store";
+import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import { useWorkspaceCollectionsInvalidation } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
 import {
   parseRightPanelHeaderEntryKey,
   rightPanelTerminalHeaderKey,
   rightPanelToolHeaderKey,
   type RightPanelTool,
-} from "@/lib/domain/workspaces/shell/right-panel-model";
+} from "#product/lib/domain/workspaces/shell/right-panel-model";
 import type {
   MainScreenDataState,
   MainScreenLayoutState,
-} from "@/hooks/main/facade/use-main-screen-state";
+} from "#product/hooks/main/facade/use-main-screen-state";
 import {
   CLOSED_PUBLISH_DIALOG_STATE,
   openPublishDialogState,
-} from "@/lib/domain/workspaces/creation/publish-dialog-state";
-import type { PublishIntent } from "@/lib/domain/workspaces/creation/publish-workflow-model";
+} from "#product/lib/domain/workspaces/creation/publish-dialog-state";
+import type { PublishIntent } from "#product/lib/domain/workspaces/creation/publish-workflow-model";
 
 interface UseMainScreenActionsArgs {
   layout: MainScreenLayoutState;

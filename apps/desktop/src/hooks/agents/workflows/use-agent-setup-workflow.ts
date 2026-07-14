@@ -5,26 +5,26 @@ import type {
   AgentSummary,
   ReconcileAgentResult,
 } from "@anyharness/sdk";
-import { AGENT_SETUP_COPY } from "@/copy/agents/agents-copy";
+import { AGENT_SETUP_COPY } from "#product/copy/agents/agents-copy";
 import {
   agentNeedsInstall,
   agentSupportsCredentials,
   isReadyAgent,
-} from "@/lib/domain/agents/status";
+} from "#product/lib/domain/agents/status";
 import {
   formatAgentEnvVarLabel,
   getAgentSetupSubtitle,
   type AgentReconcileState,
-} from "@/lib/domain/agents/status-presentation";
-import { restartHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap";
+} from "#product/lib/domain/agents/status-presentation";
+import { restartHarnessRuntime } from "#product/lib/access/anyharness/runtime-bootstrap";
 import {
   agentSetupWorkflowReducer,
   createInitialAgentSetupWorkflowState,
-} from "@/lib/domain/agents/setup-workflow-reducer";
+} from "#product/lib/domain/agents/setup-workflow-reducer";
 import { useLocalAgentCredentials } from "@/hooks/access/tauri/credentials/use-local-agent-credentials";
-import { useAgentInstallationActions } from "@/hooks/agents/workflows/use-agent-installation-actions";
-import { useAgentCredentialsStore } from "@/stores/agents/agent-credentials-store";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useAgentInstallationActions } from "#product/hooks/agents/workflows/use-agent-installation-actions";
+import { useAgentCredentialsStore } from "#product/stores/agents/agent-credentials-store";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
 interface UseAgentSetupWorkflowArgs {
   agent: AgentSummary;

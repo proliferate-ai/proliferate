@@ -1,10 +1,10 @@
 import { useEffect, useRef } from "react";
 import { useAgentAuthState } from "@proliferate/cloud-sdk-react";
-import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
-import { applyAgentAuthState } from "@/lib/access/anyharness/agent-auth";
+import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+import { applyAgentAuthState } from "#product/lib/access/anyharness/agent-auth";
 import { getProliferateApiOrigin } from "@/lib/infra/proliferate-api";
-import { planLocalAuthStatePush, stampIssuingServerOrigin } from "@/lib/domain/agents/local-auth-state";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { planLocalAuthStatePush, stampIssuingServerOrigin } from "#product/lib/domain/agents/local-auth-state";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
 /**
  * Local-surface agent-auth state writer (the desktop twin of the cloud

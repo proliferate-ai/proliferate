@@ -1,18 +1,18 @@
 import type { AnyHarnessQueryTimingOptions } from "@anyharness/sdk-react";
-import { SkeletonBlock, shimmerDelay } from "@/components/feedback/Skeleton";
+import { SkeletonBlock, shimmerDelay } from "#product/components/feedback/Skeleton";
 import {
   GitLastTurnUndoAction,
   GitReviewDiffPolicyNotice,
   GitReviewNoChangesState,
-} from "@/components/workspace/git/GitPanelReviewChrome";
-import { GitPanelReviewSections } from "@/components/workspace/git/GitPanelReviewSections";
-import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
-import type { DiffDisplayPolicySummary } from "@/lib/domain/workspaces/changes/diff-display-policy";
+} from "#product/components/workspace/git/GitPanelReviewChrome";
+import { GitPanelReviewSections } from "#product/components/workspace/git/GitPanelReviewSections";
+import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
+import type { DiffDisplayPolicySummary } from "#product/lib/domain/workspaces/changes/diff-display-policy";
 import type {
   GitPanelMode,
   GitPanelReviewScope,
   GitPanelSection,
-} from "@/lib/domain/workspaces/changes/git-panel-diff";
+} from "#product/lib/domain/workspaces/changes/git-panel-diff";
 
 interface GitPanelReviewBodyProps {
   changesFilter: GitPanelMode;

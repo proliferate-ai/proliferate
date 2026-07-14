@@ -4,15 +4,15 @@ import type {
   McpElicitationSubmittedField,
 } from "@anyharness/sdk";
 import { useState } from "react";
-import { useActivePendingInteractionState } from "@/hooks/chat/derived/use-active-pending-session-interactions";
-import { useHeldInteractionPayload } from "@/hooks/chat/ui/use-composer-dock-card-presence";
-import { useChatMcpElicitationActions } from "@/hooks/chat/workflows/use-chat-mcp-elicitation-actions";
-import { ComposerAttachedPanel } from "./ComposerAttachedPanel";
-import { McpElicitationFormPanel } from "./McpElicitationFormPanel";
+import { useActivePendingInteractionState } from "#product/hooks/chat/derived/use-active-pending-session-interactions";
+import { useHeldInteractionPayload } from "#product/hooks/chat/ui/use-composer-dock-card-presence";
+import { useChatMcpElicitationActions } from "#product/hooks/chat/workflows/use-chat-mcp-elicitation-actions";
+import { ComposerAttachedPanel } from "#product/components/workspace/chat/input/ComposerAttachedPanel";
+import { McpElicitationFormPanel } from "#product/components/workspace/chat/input/McpElicitationFormPanel";
 import {
   type McpDraftValue,
-} from "./McpElicitationFieldControl";
-import { McpElicitationUrlPanel } from "./McpElicitationUrlPanel";
+} from "#product/components/workspace/chat/input/McpElicitationFieldControl";
+import { McpElicitationUrlPanel } from "#product/components/workspace/chat/input/McpElicitationUrlPanel";
 
 type McpDrafts = Partial<Record<string, McpDraftValue>>;
 

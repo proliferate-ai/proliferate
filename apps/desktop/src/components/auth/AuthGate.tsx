@@ -3,7 +3,7 @@ import { Navigate, Outlet } from "react-router-dom"
 import { twMerge } from "@proliferate/ui/utils/tw-merge"
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider"
 import type { AuthState } from "@proliferate/product-client/host/product-host"
-import { AuthShell } from "@/components/auth/AuthShell"
+import { AuthShell } from "#product/components/auth/AuthShell"
 
 // Where the gate resolves to once auth state is known:
 //   loading -> still bootstrapping (mark breathing)

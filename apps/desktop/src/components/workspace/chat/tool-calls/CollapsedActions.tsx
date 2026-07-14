@@ -10,9 +10,9 @@ import {
   resolveCollapsedActionsLeadingKind,
   summarizeCollapsedActions,
 } from "@proliferate/product-domain/chats/transcript/transcript-collapsed-actions";
-import { ThinkingText } from "@/components/feedback/ThinkingText";
-import { CollapsedActionIcon } from "@/components/workspace/chat/tool-calls/CollapsedActionIcon";
-import { CollapsedActionRows } from "@/components/workspace/chat/tool-calls/CollapsedActionRows";
+import { ThinkingText } from "#product/components/feedback/ThinkingText";
+import { CollapsedActionIcon } from "#product/components/workspace/chat/tool-calls/CollapsedActionIcon";
+import { CollapsedActionRows } from "#product/components/workspace/chat/tool-calls/CollapsedActionRows";
 
 interface CollapsedActionsProps {
   itemIds: string[];

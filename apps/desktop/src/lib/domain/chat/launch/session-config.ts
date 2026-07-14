@@ -1,8 +1,8 @@
 import type {
   DesktopAgentCatalogStatus,
   DesktopSessionDefaultControl,
-} from "@/lib/domain/agents/cloud-launch-catalog";
-import { resolveSavedModelId } from "@/lib/domain/agents/saved-model-intent";
+} from "#product/lib/domain/agents/cloud-launch-catalog";
+import { resolveSavedModelId } from "#product/lib/domain/agents/saved-model-intent";
 
 export interface SessionConfigModel {
   id: string;

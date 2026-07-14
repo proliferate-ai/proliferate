@@ -1,12 +1,12 @@
 import {
   resolveSessionControlTooltip,
   resolveSessionToggleControlStateLabel,
-} from "@/lib/domain/chat/session-controls/session-toggle-control";
-import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
+} from "#product/lib/domain/chat/session-controls/session-toggle-control";
+import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 import { Zap } from "@proliferate/ui/icons";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
-import { PendingConfigIndicator } from "./PendingConfigIndicator";
+import { PendingConfigIndicator } from "#product/components/workspace/chat/input/PendingConfigIndicator";
 
 interface ComposerFastModeToggleProps {
   control: LiveSessionControlDescriptor;

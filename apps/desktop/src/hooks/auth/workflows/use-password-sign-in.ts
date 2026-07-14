@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
-import { useAuditedAuth } from "@/hooks/auth/facade/use-audited-auth";
+import { useAuditedAuth } from "#product/hooks/auth/facade/use-audited-auth";
 import { useDesktopAuthMethods } from "@/hooks/access/cloud/auth/use-auth-methods";
-import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
+import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
 import { isAbortError } from "@/lib/integrations/auth/proliferate-auth";
 
 export interface UsePasswordSignInResult {

@@ -3,9 +3,9 @@ import {
   buildCloudRepoSettingsHref,
   buildSettingsHref,
   resolveSettingsSelection,
-} from "@/lib/domain/settings/navigation";
-import { resolveRepoScopeSelection } from "@/lib/domain/settings/repo-scope-selection";
-import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
+} from "#product/lib/domain/settings/navigation";
+import { resolveRepoScopeSelection } from "#product/lib/domain/settings/repo-scope-selection";
+import type { SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
 
 function repo(overrides: Partial<SettingsRepositoryEntry>): SettingsRepositoryEntry {
   return {

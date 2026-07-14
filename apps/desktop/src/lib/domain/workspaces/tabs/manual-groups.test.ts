@@ -11,7 +11,7 @@ import {
   updateManualChatGroup,
   upsertManualChatGroup,
   type ManualChatGroup,
-} from "@/lib/domain/workspaces/tabs/manual-groups";
+} from "#product/lib/domain/workspaces/tabs/manual-groups";
 
 describe("manual chat groups", () => {
   it("sanitizes malformed persisted groups and stores stable color ids", () => {

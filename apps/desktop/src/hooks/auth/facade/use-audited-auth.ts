@@ -5,16 +5,16 @@ import type {
   ProductLoginOutcome,
   ProductLogoutOutcome,
 } from "@proliferate/product-client/host/product-host";
-import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
+import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
 import type {
   AuthSignInSource,
   AuthTelemetryProvider,
-} from "@/lib/domain/telemetry/events";
-import { classifyTelemetryFailure } from "@/lib/domain/telemetry/failures";
+} from "#product/lib/domain/telemetry/events";
+import { classifyTelemetryFailure } from "#product/lib/domain/telemetry/failures";
 import {
   isLoginNotAttempted,
   isTelemetryHandled,
-} from "@/lib/domain/telemetry/errors";
+} from "#product/lib/domain/telemetry/errors";
 import { isAbortError } from "@/lib/integrations/auth/proliferate-auth";
 
 /**

@@ -1,8 +1,8 @@
 import type {
   LiveSessionControlDescriptor,
   SupportedLiveControlKey,
-} from "@/lib/domain/chat/session-controls/session-controls";
-import type { ConfiguredSessionControlKey } from "@/lib/domain/chat/session-controls/presentation";
+} from "#product/lib/domain/chat/session-controls/session-controls";
+import type { ConfiguredSessionControlKey } from "#product/lib/domain/chat/session-controls/presentation";
 import type { WorkspaceSurface } from "@anyharness/sdk";
 
 export type ComposerModeControlDescriptor = LiveSessionControlDescriptor & {

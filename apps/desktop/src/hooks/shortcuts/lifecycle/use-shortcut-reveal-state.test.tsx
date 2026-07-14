@@ -6,11 +6,11 @@ import {
   SHORTCUT_REVEAL_DELAY_MS,
   SHORTCUT_REVEAL_RESET_EVENT,
   useShortcutRevealState,
-} from "@/hooks/shortcuts/lifecycle/use-shortcut-reveal-state";
+} from "#product/hooks/shortcuts/lifecycle/use-shortcut-reveal-state";
 import {
   ShortcutRevealProvider,
   useShortcutRevealVisible,
-} from "@/providers/ShortcutRevealProvider";
+} from "#product/providers/ShortcutRevealProvider";
 
 function ShortcutRevealProbe() {
   const visible = useShortcutRevealVisible();

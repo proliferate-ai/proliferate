@@ -8,8 +8,8 @@ import {
   type TranscriptSelectionClampEdge,
   type TranscriptTargetFacts,
 } from "@proliferate/product-domain/chats/transcript/transcript-selection";
-import { isApplePlatform } from "@/lib/domain/shortcuts/matching";
-import type { TranscriptSelectionListenerHandlers } from "./chat-transcript-selection-listeners";
+import { isApplePlatform } from "#product/lib/domain/shortcuts/matching";
+import type { TranscriptSelectionListenerHandlers } from "#product/hooks/chat/ui/chat-transcript-selection-listeners";
 
 interface MutableBooleanRef {
   current: boolean;

@@ -3,7 +3,7 @@ import type {
   IntegrationAuthKind,
   IntegrationHealthVerdict,
 } from "@proliferate/cloud-sdk/client/integrations";
-import type { CloudIntegrationView } from "@/lib/domain/cloud/integrations";
+import type { CloudIntegrationView } from "#product/lib/domain/cloud/integrations";
 
 /** Human label for how an integration authenticates. */
 export function integrationAuthKindLabel(authKind: IntegrationAuthKind): string {

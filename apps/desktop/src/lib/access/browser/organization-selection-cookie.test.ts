@@ -5,7 +5,7 @@ import {
   clearSelectedOrganizationCookie,
   readSelectedOrganizationCookie,
   writeSelectedOrganizationCookie,
-} from "@/lib/access/browser/organization-selection-cookie";
+} from "#product/lib/access/browser/organization-selection-cookie";
 
 describe("organization selection cookie", () => {
   afterEach(() => {

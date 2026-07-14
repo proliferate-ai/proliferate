@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef } from "react";
 import {
   workspaceCollectionsRootKey,
   workspaceCollectionsScopeKey,
-} from "@/hooks/workspaces/cache/query-keys";
+} from "#product/hooks/workspaces/cache/query-keys";
 
 // Owns invalidation for the product-composed workspace collection cache.
 export function useWorkspaceCollectionsInvalidation(runtimeUrl: string) {

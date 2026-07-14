@@ -9,29 +9,29 @@ import {
 import {
   buildSidebarGroupStates,
   resolveSidebarEmptyState,
-} from "@/lib/domain/workspaces/sidebar/sidebar-groups";
-import { logicalWorkspaceRelatedIds } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-groups";
+import { logicalWorkspaceRelatedIds } from "#product/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import type {
   SidebarEmptyState,
   SidebarGroupState,
-} from "@/lib/domain/workspaces/sidebar/sidebar-model";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 import {
   isDocumentVisibleAndFocused,
   useDocumentFocusVisibilityNonce,
-} from "@/hooks/ui/document/use-document-focus-visibility";
-import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
-import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
-import { useWorkspaceGitStatuses } from "@/hooks/workspaces/derived/use-workspace-git-statuses";
-import { useWorkspaceMetadataSync } from "@/hooks/workspaces/lifecycle/use-workspace-metadata-sync";
-import { useDebouncedWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
-import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
-import { useWorkspaceSidebarActivityStatesWithErrorAttention } from "@/hooks/workspaces/derived/use-workspace-sidebar-activities";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
+} from "#product/hooks/ui/document/use-document-focus-visibility";
+import { useLogicalWorkspaces } from "#product/hooks/workspaces/derived/use-logical-workspaces";
+import { useStandardRepoProjection } from "#product/hooks/workspaces/derived/use-standard-repo-projection";
+import { useWorkspaceGitStatuses } from "#product/hooks/workspaces/derived/use-workspace-git-statuses";
+import { useWorkspaceMetadataSync } from "#product/hooks/workspaces/lifecycle/use-workspace-metadata-sync";
+import { useDebouncedWorkspaceCollectionsInvalidation } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
+import { useWorkspaceSidebarActivityStatesWithErrorAttention } from "#product/hooks/workspaces/derived/use-workspace-sidebar-activities";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useDeferredHomeLaunchStore } from "#product/stores/home/deferred-home-launch-store";
 import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
-import { useComputeTargetOptions } from "@/hooks/compute/derived/use-compute-target-options";
+import { useComputeTargetOptions } from "#product/hooks/compute/derived/use-compute-target-options";
 
 interface UseWorkspaceSidebarStateArgs {
   showArchived: boolean;

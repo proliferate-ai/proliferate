@@ -4,7 +4,7 @@ import { SETTINGS_CONTROL_WIDTH_CLASS, SettingsRow } from "@proliferate/product-
 import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { HighlightedCodeBlock } from "@/components/content/ui/HighlightedCodeBlock";
+import { HighlightedCodeBlock } from "#product/components/content/ui/HighlightedCodeBlock";
 import { Minus, Monitor, Moon, Plus, Sun } from "@proliferate/ui/icons";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import {
@@ -13,14 +13,14 @@ import {
   UI_FONT_SIZE_LABELS,
   UI_FONT_SIZE_OPTIONS,
   WINDOW_ZOOM_LABELS,
-} from "@/lib/domain/preferences/appearance-presentation";
+} from "#product/lib/domain/preferences/appearance-presentation";
 import {
   stepWindowZoomId,
   WINDOW_ZOOM_IDS,
-} from "@/lib/domain/preferences/appearance";
-import { COLOR_MODES, type ColorMode } from "@/config/theme";
-import { useColorMode } from "@/hooks/theme/workflows/use-theme-preferences";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+} from "#product/lib/domain/preferences/appearance";
+import { COLOR_MODES, type ColorMode } from "#product/config/theme";
+import { useColorMode } from "#product/hooks/theme/workflows/use-theme-preferences";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
 const MODE_LABELS: Record<ColorMode, string> = {
   dark: "Dark",

@@ -1,16 +1,16 @@
-import type { ManualChatGroupEditorAnchorRect } from "@/components/workspace/shell/tabs/ManualChatGroupEditorPopover";
-import { HeaderChatTab } from "@/components/workspace/shell/topbar/HeaderChatTab";
-import { HeaderGroupPillTab } from "@/components/workspace/shell/topbar/HeaderGroupPillTab";
+import type { ManualChatGroupEditorAnchorRect } from "#product/components/workspace/shell/tabs/ManualChatGroupEditorPopover";
+import { HeaderChatTab } from "#product/components/workspace/shell/topbar/HeaderChatTab";
+import { HeaderGroupPillTab } from "#product/components/workspace/shell/topbar/HeaderGroupPillTab";
 import type {
   HeaderWorkspaceShellStripRow,
-} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
-import { getShellDragRowId } from "@/hooks/workspaces/ui/tabs/use-header-tabs-layout";
+} from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
+import { getShellDragRowId } from "#product/hooks/workspaces/ui/tabs/use-header-tabs-layout";
 import {
   TAB_GROUP_PILL_WIDTH,
-} from "@/lib/domain/workspaces/tabs/chrome-layout";
-import type { ManualChatGroupId } from "@/lib/domain/workspaces/tabs/manual-groups";
-import { SHORTCUTS } from "@/config/shortcuts/registry";
-import { buildShortcutRangeLabelById } from "@/lib/domain/shortcuts/presentation";
+} from "#product/lib/domain/workspaces/tabs/chrome-layout";
+import type { ManualChatGroupId } from "#product/lib/domain/workspaces/tabs/manual-groups";
+import { SHORTCUTS } from "#product/config/shortcuts/registry";
+import { buildShortcutRangeLabelById } from "#product/lib/domain/shortcuts/presentation";
 
 interface HeaderTabsDragControls {
   getRowDragProps: (rowId: string) => { "data-tab-drag-row-id": string };

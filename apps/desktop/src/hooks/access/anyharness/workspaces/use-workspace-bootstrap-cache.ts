@@ -9,17 +9,17 @@ import { useCallback } from "react";
 import {
   dismissSession,
   listWorkspaceSessions,
-} from "@/lib/access/anyharness/sessions";
-import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
+} from "#product/lib/access/anyharness/sessions";
+import type { WorkspaceSession } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import {
   captureReplacedSessionTombstoneGeneration,
   clearReplacedSessionTombstoneFromAuthoritativeList,
   committedReplacedSessionTombstonesForWorkspace,
   filterReplacedSessionTombstones,
-} from "@/hooks/sessions/workflows/session-replacement-tombstones";
+} from "#product/hooks/sessions/workflows/session-replacement-tombstones";
 import {
   runTrackedReplacementDismissal,
-} from "@/hooks/sessions/workflows/session-replacement-dismissals";
+} from "#product/hooks/sessions/workflows/session-replacement-dismissals";
 
 export type CacheDecision = "hit" | "stale" | "miss";
 

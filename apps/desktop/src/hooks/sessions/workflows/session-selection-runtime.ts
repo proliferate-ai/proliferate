@@ -5,18 +5,18 @@ import type {
   DesktopRuntimeBridge,
   DesktopSshBridge,
 } from "@proliferate/product-client/host/desktop-bridge";
-import { parseTargetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import { parseTargetWorkspaceSyntheticId } from "#product/lib/domain/compute/target-workspace-id";
+import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
-import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
-import { bootstrapHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap";
-import { fetchWorkspaceSessionSummaries } from "@/lib/access/anyharness/session-runtime";
-import type { CloudSandboxGatewayUrlSource } from "@/lib/access/cloud/cloud-sandbox-gateway";
-import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
+import { bootstrapHarnessRuntime } from "#product/lib/access/anyharness/runtime-bootstrap";
+import { fetchWorkspaceSessionSummaries } from "#product/lib/access/anyharness/session-runtime";
+import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/cloud-sandbox-gateway";
+import type { WorkspaceSession } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import {
   filterReplacedSessionTombstones,
-} from "@/hooks/sessions/workflows/session-replacement-tombstones";
+} from "#product/hooks/sessions/workflows/session-replacement-tombstones";
 
 export function buildLatencyRequestOptions(latencyFlowId?: string | null) {
   const headers = getLatencyFlowRequestHeaders(latencyFlowId);

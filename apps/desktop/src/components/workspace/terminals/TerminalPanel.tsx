@@ -1,11 +1,11 @@
 import type { TerminalRecord } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Terminal as TerminalIcon } from "@proliferate/ui/icons";
-import { TerminalCommandFloatingAction } from "@/components/workspace/terminals/TerminalCommandFloatingAction";
-import { TerminalErrorBoundary } from "@/components/workspace/terminals/TerminalErrorBoundary";
-import { TerminalTopBar } from "@/components/workspace/terminals/TerminalTopBar";
-import { TerminalViewport } from "@/components/workspace/terminals/TerminalViewport";
-import { TERMINAL_GRID_PROBE_ATTRIBUTE } from "@/lib/infra/terminals/terminal-grid-probe";
+import { TerminalCommandFloatingAction } from "#product/components/workspace/terminals/TerminalCommandFloatingAction";
+import { TerminalErrorBoundary } from "#product/components/workspace/terminals/TerminalErrorBoundary";
+import { TerminalTopBar } from "#product/components/workspace/terminals/TerminalTopBar";
+import { TerminalViewport } from "#product/components/workspace/terminals/TerminalViewport";
+import { TERMINAL_GRID_PROBE_ATTRIBUTE } from "#product/lib/infra/terminals/terminal-grid-probe";
 
 interface TerminalPanelProps {
   workspaceId: string | null;

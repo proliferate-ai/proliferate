@@ -2,7 +2,7 @@ import { buildProliferateApiUrl } from "@/lib/infra/proliferate-api";
 import {
   parseServerCapabilities,
   type ServerCapabilityContract,
-} from "@/lib/domain/capabilities/server-capability-contract";
+} from "#product/lib/domain/capabilities/server-capability-contract";
 
 const SERVER_CAPABILITIES_TIMEOUT_MS = 2_500;
 

@@ -18,10 +18,10 @@ import type {
 import { sessionIntentsForSession } from "@proliferate/product-domain/sessions/intents/session-intent-state";
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { parsePermissionOptionActions, type PermissionOptionAction } from "@/lib/domain/chat/composer/chat-input-helpers";
-import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
-import { useActiveSessionId } from "./use-active-session-identity";
+import { parsePermissionOptionActions, type PermissionOptionAction } from "#product/lib/domain/chat/composer/chat-input-helpers";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
+import { useActiveSessionId } from "#product/hooks/chat/derived/use-active-session-identity";
 
 const EMPTY_PENDING_PROMPTS: readonly PendingPromptEntry[] = [];
 const EMPTY_PENDING_INTERACTIONS: readonly PendingInteraction[] = [];

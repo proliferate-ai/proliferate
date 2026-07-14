@@ -2,7 +2,7 @@ import { useCallback, useState, type RefObject } from "react";
 import {
   FILE_TREE_MAX_WIDTH_RATIO,
   FILE_TREE_MIN_WIDTH,
-} from "@/stores/editor/file-tree-store";
+} from "#product/stores/editor/file-tree-store";
 
 /**
  * Drag-resize for the right-anchored file tree panel: dragging the left

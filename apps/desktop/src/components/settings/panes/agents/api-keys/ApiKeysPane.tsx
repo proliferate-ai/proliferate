@@ -13,9 +13,9 @@ import { Label } from "@proliferate/ui/primitives/Label";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
-import { AGENT_API_KEYS_COPY } from "@/copy/settings/agent-api-keys-copy";
-import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
-import { useToastStore } from "@/stores/toast/toast-store";
+import { AGENT_API_KEYS_COPY } from "#product/copy/settings/agent-api-keys-copy";
+import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 // A 409 from the revoke endpoint carries the harnesses whose enabled selections
 // still wire the key (contract §5); surface them so the user knows what to

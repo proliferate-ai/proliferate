@@ -1,13 +1,13 @@
 import type { ReadWorkspaceFileResponse } from "@anyharness/sdk";
-import { LoadingState } from "@/components/feedback/LoadingIllustration";
+import { LoadingState } from "#product/components/feedback/LoadingIllustration";
 import { MarkdownBody } from "@proliferate/product-ui/chat/transcript/MarkdownBody";
-import { renderDesktopCodeBlock } from "@/components/content/ui/desktop-markdown-code-block";
-import { CenterMessage } from "@/components/workspace/files/viewer/CenterMessage";
-import { FileDiffPane } from "@/components/workspace/files/viewer/FileDiffPane";
-import { FileSourceView } from "@/components/workspace/files/viewer/FileSourceView";
-import { canPreviewAsSvg } from "@/lib/domain/files/document-preview";
-import type { FileDiffTarget } from "@/lib/domain/workspaces/viewer/file-diff-options";
-import type { FileViewerMode } from "@/lib/domain/workspaces/viewer/viewer-target";
+import { renderDesktopCodeBlock } from "#product/components/content/ui/desktop-markdown-code-block";
+import { CenterMessage } from "#product/components/workspace/files/viewer/CenterMessage";
+import { FileDiffPane } from "#product/components/workspace/files/viewer/FileDiffPane";
+import { FileSourceView } from "#product/components/workspace/files/viewer/FileSourceView";
+import { canPreviewAsSvg } from "#product/lib/domain/files/document-preview";
+import type { FileDiffTarget } from "#product/lib/domain/workspaces/viewer/file-diff-options";
+import type { FileViewerMode } from "#product/lib/domain/workspaces/viewer/viewer-target";
 
 interface FileViewerContentProps {
   filePath: string;

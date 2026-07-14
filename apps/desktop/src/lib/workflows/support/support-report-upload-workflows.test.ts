@@ -6,11 +6,11 @@ import type {
   SessionRawNotificationEnvelope,
 } from "@anyharness/sdk";
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
-import type { SupportReportJob } from "@/lib/domain/support/report-types";
+import type { SupportReportJob } from "#product/lib/domain/support/report-types";
 import {
   buildSupportReportPackage,
   type SupportReportUploadDependencies,
-} from "@/lib/workflows/support/support-report-upload-workflows";
+} from "#product/lib/workflows/support/support-report-upload-workflows";
 
 const now = new Date("2026-05-31T12:00:00.000Z");
 

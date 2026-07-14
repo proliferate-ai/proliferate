@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { HarnessConnectionState } from "@/stores/sessions/session-types";
+import type { HarnessConnectionState } from "#product/stores/sessions/session-types";
 
 interface HarnessConnectionStoreState {
   runtimeUrl: string;

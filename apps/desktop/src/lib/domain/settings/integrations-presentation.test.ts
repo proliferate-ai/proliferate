@@ -9,7 +9,7 @@ import {
   integrationRowActions,
   integrationSearchState,
   integrationToolCountLabel,
-} from "@/lib/domain/settings/integrations-presentation";
+} from "#product/lib/domain/settings/integrations-presentation";
 
 describe("integrationHealthBadge", () => {
   it("maps every health verdict to a labelled badge", () => {

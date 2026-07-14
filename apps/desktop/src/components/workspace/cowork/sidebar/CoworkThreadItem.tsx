@@ -1,15 +1,15 @@
 import { useState } from "react";
 import type { CoworkThread } from "@anyharness/sdk";
 import { POPOVER_FRAME_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { SessionTitleRenamePopover } from "@/components/workspace/shell/tabs/SessionTitleRenamePopover";
-import { useCoworkManagedWorkspaces } from "@/hooks/access/anyharness/cowork/use-cowork-managed-workspaces";
-import { useCoworkSessionNativeContextMenu } from "@/hooks/cowork/ui/use-cowork-session-native-context-menu";
-import { useCoworkSessionActions } from "@/hooks/cowork/workflows/use-cowork-session-actions";
+import { SessionTitleRenamePopover } from "#product/components/workspace/shell/tabs/SessionTitleRenamePopover";
+import { useCoworkManagedWorkspaces } from "#product/hooks/access/anyharness/cowork/use-cowork-managed-workspaces";
+import { useCoworkSessionNativeContextMenu } from "#product/hooks/cowork/ui/use-cowork-session-native-context-menu";
+import { useCoworkSessionActions } from "#product/hooks/cowork/workflows/use-cowork-session-actions";
 import type { SidebarSessionActivityState } from "@proliferate/product-domain/sessions/activity";
-import { coworkThreadTitle } from "@/lib/domain/cowork/threads";
-import { CoworkManagedWorkspaceList } from "./CoworkManagedWorkspaceList";
-import { CoworkSessionActionsMenu } from "./CoworkSessionActionsMenu";
-import { CoworkThreadRow } from "./CoworkThreadRow";
+import { coworkThreadTitle } from "#product/lib/domain/cowork/threads";
+import { CoworkManagedWorkspaceList } from "#product/components/workspace/cowork/sidebar/CoworkManagedWorkspaceList";
+import { CoworkSessionActionsMenu } from "#product/components/workspace/cowork/sidebar/CoworkSessionActionsMenu";
+import { CoworkThreadRow } from "#product/components/workspace/cowork/sidebar/CoworkThreadRow";
 
 interface CoworkThreadItemProps {
   thread: CoworkThread;

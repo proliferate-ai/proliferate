@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveWithWorkspaceFallback } from "./workspace-keyed-preferences";
+import { resolveWithWorkspaceFallback } from "#product/lib/domain/workspaces/selection/workspace-keyed-preferences";
 
 describe("resolveWithWorkspaceFallback", () => {
   it("uses own-property semantics so falsy values block fallback", () => {

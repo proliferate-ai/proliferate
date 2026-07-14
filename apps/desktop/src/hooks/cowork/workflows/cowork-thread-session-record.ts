@@ -4,10 +4,10 @@ import {
   createEmptySessionRecord,
   getSessionRecord,
   putSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
-import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
-import { materializeSessionRecord } from "@/hooks/sessions/workflows/session-creation-local-state";
+} from "#product/stores/sessions/session-records";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
+import type { SessionRuntimeRecord } from "#product/stores/sessions/session-types";
+import { materializeSessionRecord } from "#product/hooks/sessions/workflows/session-creation-local-state";
 
 interface MaterializedCoworkSessionRecordInput {
   clientSessionId: string;

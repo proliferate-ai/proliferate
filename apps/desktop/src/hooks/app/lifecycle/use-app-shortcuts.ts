@@ -1,22 +1,22 @@
-import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-handler";
-import type { AppCommandActions } from "@/hooks/app/workflows/app-command-action-types";
-import { useSidebarShortcutTargets } from "@/hooks/workspaces/derived/use-sidebar-shortcut-targets";
-import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-navigation-workflow";
-import { getFocusZone, isRightPanelFocusZone } from "@/lib/domain/focus-zone";
+import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
+import type { AppCommandActions } from "#product/hooks/app/workflows/app-command-action-types";
+import { useSidebarShortcutTargets } from "#product/hooks/workspaces/derived/use-sidebar-shortcut-targets";
+import { useWorkspaceNavigationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-navigation-workflow";
+import { getFocusZone, isRightPanelFocusZone } from "#product/lib/domain/focus-zone";
 import {
   resolveAdjacentSidebarShortcutTarget,
   resolveSidebarShortcutDigitTarget,
-} from "@/lib/domain/workspaces/sidebar/sidebar-shortcut-targets";
-import { requestRightPanelTabByIndex } from "@/lib/workflows/workspaces/right-panel-shortcut-requests";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { stepWindowZoomId } from "@/lib/domain/preferences/appearance";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-shortcut-targets";
+import { requestRightPanelTabByIndex } from "#product/lib/workflows/workspaces/right-panel-shortcut-requests";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
+import { stepWindowZoomId } from "#product/lib/domain/preferences/appearance";
 import {
   runRedoCommand,
   runSelectAllCommand,
   runUndoCommand,
-} from "@/lib/infra/dom/dom-select-all";
+} from "#product/lib/infra/dom/dom-select-all";
 
 // Owns global app shortcut registration. App command behavior stays in the
 // workflow actions passed by the caller.

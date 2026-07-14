@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import type { CurrentPullRequestResponse, GitChangedFile } from "@anyharness/sdk";
-import type { PublishIntent } from "@/lib/domain/workspaces/creation/publish-workflow-model";
-import { PublishDialog } from "./PublishDialog";
+import type { PublishIntent } from "#product/lib/domain/workspaces/creation/publish-workflow-model";
+import { PublishDialog } from "#product/components/workspace/git/PublishDialog";
 
 const mocks = vi.hoisted(() => ({
   workflow: null as ReturnType<typeof buildWorkflow> | null,

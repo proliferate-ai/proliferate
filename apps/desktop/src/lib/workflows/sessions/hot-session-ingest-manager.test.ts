@@ -3,21 +3,21 @@ import {
   reconcileHotSessions,
   resetHotSessionIngestManagerForTest,
   type HotSessionIngestManagerDeps,
-} from "@/lib/workflows/sessions/hot-session-ingest-manager";
+} from "#product/lib/workflows/sessions/hot-session-ingest-manager";
 import {
   useSessionIngestStore,
-} from "@/stores/sessions/session-ingest-store";
+} from "#product/stores/sessions/session-ingest-store";
 import {
   createEmptySessionRecord,
   getSessionRecord,
   patchSessionRecord,
   putSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { isHotSessionTargetCurrent } from "@/stores/sessions/session-ingest-store";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import type { HotSessionTarget } from "@/lib/domain/sessions/hot-session-policy";
+} from "#product/stores/sessions/session-records";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { isHotSessionTargetCurrent } from "#product/stores/sessions/session-ingest-store";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import type { HotSessionTarget } from "#product/lib/domain/sessions/hot-session-policy";
 
 describe("hot-session-ingest-manager", () => {
   beforeEach(() => {

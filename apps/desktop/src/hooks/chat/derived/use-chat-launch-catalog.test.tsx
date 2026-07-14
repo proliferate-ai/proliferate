@@ -2,13 +2,13 @@
 
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { useChatLaunchCatalog } from "@/hooks/chat/derived/use-chat-launch-catalog";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
+import { useChatLaunchCatalog } from "#product/hooks/chat/derived/use-chat-launch-catalog";
 import type {
   DesktopAgentLaunchAgent,
   DesktopAgentLaunchCatalog,
-} from "@/lib/domain/agents/cloud-launch-catalog";
+} from "#product/lib/domain/agents/cloud-launch-catalog";
 
 const mocks = vi.hoisted(() => ({
   useCloudAgentCatalog: vi.fn(),

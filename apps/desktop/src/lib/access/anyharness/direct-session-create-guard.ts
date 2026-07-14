@@ -1,4 +1,4 @@
-import type { RuntimeTarget } from "@/lib/access/anyharness/runtime-target";
+import type { RuntimeTarget } from "#product/lib/access/anyharness/runtime-target";
 
 export function assertDirectSessionCreateSupported(
   target: RuntimeTarget,

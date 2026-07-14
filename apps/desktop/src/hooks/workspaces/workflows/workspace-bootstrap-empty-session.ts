@@ -1,15 +1,15 @@
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
-import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
-import type { useWorkspaceBootstrapCache } from "@/hooks/access/anyharness/workspaces/use-workspace-bootstrap-cache";
-import type { useCloudAgentCatalogCache } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
-import type { useSessionCreationActions } from "@/hooks/sessions/workflows/use-session-creation-actions";
-import { resolveEffectiveLaunchSelection } from "@/lib/domain/chat/models/launch-selection-defaults";
-import type { ChatLaunchPreferences } from "@/lib/domain/chat/models/model-selector-types";
-import { hasHiddenDismissedWorkspaceSessions } from "@/lib/domain/workspaces/selection/selection";
+import type { WorkspaceSession } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
+import type { useWorkspaceBootstrapCache } from "#product/hooks/access/anyharness/workspaces/use-workspace-bootstrap-cache";
+import type { useCloudAgentCatalogCache } from "#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
+import type { useSessionCreationActions } from "#product/hooks/sessions/workflows/use-session-creation-actions";
+import { resolveEffectiveLaunchSelection } from "#product/lib/domain/chat/models/launch-selection-defaults";
+import type { ChatLaunchPreferences } from "#product/lib/domain/chat/models/model-selector-types";
+import { hasHiddenDismissedWorkspaceSessions } from "#product/lib/domain/workspaces/selection/selection";
 import {
   mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents,
-} from "@/lib/domain/agents/cloud-launch-catalog";
-import { getAgentLaunchOptions } from "@/lib/access/anyharness/agents";
+} from "#product/lib/domain/agents/cloud-launch-catalog";
+import { getAgentLaunchOptions } from "#product/lib/access/anyharness/agents";
 import {
   elapsedMs,
   logLatency,
@@ -18,14 +18,14 @@ import {
 import {
   recordMeasurementWorkflowStep,
 } from "@/lib/infra/measurement/debug-measurement";
-import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
+import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import {
   resolveActiveProjectedSessionForPendingWorkspace,
-} from "@/hooks/workspaces/workflows/pending-workspace-projected-session";
+} from "#product/hooks/workspaces/workflows/pending-workspace-projected-session";
 import {
   orderBootstrapLaunchAgents,
-} from "@/lib/domain/workspaces/selection/workspace-bootstrap-selection";
-import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
+} from "#product/lib/domain/workspaces/selection/workspace-bootstrap-selection";
+import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
 
 export async function handleEmptyWorkspaceBootstrap(
   input: {

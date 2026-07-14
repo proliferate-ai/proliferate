@@ -4,13 +4,13 @@ import { Pencil, Trash } from "@proliferate/ui/icons";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Switch } from "@proliferate/ui/primitives/Switch";
-import { KeyPicker } from "@/components/settings/panes/agent-auth/KeyPicker";
-import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
+import { KeyPicker } from "#product/components/settings/panes/agent-auth/KeyPicker";
+import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import {
   isRowComplete,
   isValidEnvVarName,
   type EditableApiKeyRow,
-} from "@/lib/domain/settings/harness-auth-sources";
+} from "#product/lib/domain/settings/harness-auth-sources";
 
 interface HarnessAuthApiKeyRowProps {
   row: EditableApiKeyRow;

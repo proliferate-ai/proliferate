@@ -10,15 +10,15 @@ import {
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { CodeTokenLine } from "@proliferate/product-ui/code/CodeTokenLine";
 import type { RenderTokenFn } from "@proliferate/product-ui/code/types";
-import { renderContentSearchMarkedToken } from "@/components/content/ui/search/ContentSearchMarks";
-import { useHighlightedLines } from "@/hooks/ui/highlighting/use-highlighted-lines";
+import { renderContentSearchMarkedToken } from "#product/components/content/ui/search/ContentSearchMarks";
+import { useHighlightedLines } from "#product/hooks/ui/highlighting/use-highlighted-lines";
 import {
   buildContentSearchLineMatchIds,
   findContentSearchTokenMatchSegments,
   normalizeContentSearchQuery,
-} from "@/lib/domain/content-search/content-search";
-import type { HighlightedToken } from "@/lib/infra/editor/highlighting";
-import { useContentSearchStore } from "@/stores/search/content-search-store";
+} from "#product/lib/domain/content-search/content-search";
+import type { HighlightedToken } from "#product/lib/infra/editor/highlighting";
+import { useContentSearchStore } from "#product/stores/search/content-search-store";
 
 const FILE_SOURCE_ESTIMATED_LINE_HEIGHT = 20;
 const FILE_SOURCE_VERTICAL_PADDING_PX = 8;

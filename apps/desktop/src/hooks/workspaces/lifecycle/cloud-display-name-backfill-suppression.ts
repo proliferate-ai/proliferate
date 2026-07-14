@@ -3,7 +3,7 @@ import {
   removePersistedKey,
   writePersistedJson,
   type ProductStorageContext,
-} from "@/lib/infra/persistence/product-storage";
+} from "#product/lib/infra/persistence/product-storage";
 
 const CLOUD_DISPLAY_NAME_BACKFILL_SUPPRESSION_KEY =
   "proliferate.cloudDisplayNameBackfillSuppression.v1";

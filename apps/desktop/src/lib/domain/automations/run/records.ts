@@ -1,5 +1,5 @@
-import type { AutomationExecutionTarget } from "@/lib/domain/automations/target/records";
-import type { AutomationTargetMode } from "@/lib/domain/automations/run/types";
+import type { AutomationExecutionTarget } from "#product/lib/domain/automations/target/records";
+import type { AutomationTargetMode } from "#product/lib/domain/automations/run/types";
 
 export interface AutomationScheduleSnapshot {
   rrule?: string;

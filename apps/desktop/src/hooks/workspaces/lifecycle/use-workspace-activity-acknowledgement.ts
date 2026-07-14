@@ -3,14 +3,14 @@ import { useShallow } from "zustand/react/shallow";
 import {
   findLogicalWorkspace,
   latestLogicalWorkspaceTimestamp,
-} from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
+} from "#product/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import {
   isDocumentVisibleAndFocused,
   useDocumentFocusVisibilityNonce,
-} from "@/hooks/ui/document/use-document-focus-visibility";
-import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+} from "#product/hooks/ui/document/use-document-focus-visibility";
+import { useLogicalWorkspaces } from "#product/hooks/workspaces/derived/use-logical-workspaces";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 export function useWorkspaceActivityAcknowledgement({
   enabled = true,

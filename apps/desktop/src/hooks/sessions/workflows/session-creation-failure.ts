@@ -1,5 +1,5 @@
-import { patchSessionRecord } from "@/stores/sessions/session-records";
-import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
+import { patchSessionRecord } from "#product/stores/sessions/session-records";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
 
 export function markProjectedSessionPromptCreateFailed(
   clientSessionId: string,

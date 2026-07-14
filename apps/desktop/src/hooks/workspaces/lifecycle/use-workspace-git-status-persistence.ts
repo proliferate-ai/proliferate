@@ -1,7 +1,7 @@
 import { useEffect } from "react";
-import { useWorkspaceGitStatuses } from "@/hooks/workspaces/derived/use-workspace-git-statuses";
-import { planGitStatusSnapshotWrite } from "@/lib/domain/workspaces/git-status/workspace-git-status-snapshots";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+import { useWorkspaceGitStatuses } from "#product/hooks/workspaces/derived/use-workspace-git-statuses";
+import { planGitStatusSnapshotWrite } from "#product/lib/domain/workspaces/git-status/workspace-git-status-snapshots";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 
 // Owns persisting compact git/PR status snapshots into the workspace-ui
 // preferences store so rows paint instantly on relaunch. Mounted once in the

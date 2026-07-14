@@ -1,6 +1,6 @@
 import { useEffect } from "react";
-import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
-import { useOrganizationStore } from "@/stores/organizations/organization-store";
+import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
+import { useOrganizationStore } from "#product/stores/organizations/organization-store";
 
 // Owns the organization_id telemetry tag. Sets it whenever the active org is
 // known, reporting through the typed telemetry adapter.

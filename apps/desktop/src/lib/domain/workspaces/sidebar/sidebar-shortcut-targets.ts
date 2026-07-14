@@ -1,7 +1,7 @@
-import type { ShortcutDigit } from "@/lib/domain/shortcuts/matching";
-import { resolveShortcutRangeDigitTarget } from "@/lib/domain/shortcuts/range";
-import type { SidebarGroupState } from "@/lib/domain/workspaces/sidebar/sidebar-model";
-import { visibleSidebarGroupItems } from "@/lib/domain/workspaces/sidebar/sidebar-visible-items";
+import type { ShortcutDigit } from "#product/lib/domain/shortcuts/matching";
+import { resolveShortcutRangeDigitTarget } from "#product/lib/domain/shortcuts/range";
+import type { SidebarGroupState } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
+import { visibleSidebarGroupItems } from "#product/lib/domain/workspaces/sidebar/sidebar-visible-items";
 
 export function visibleSidebarShortcutTargetIds(args: {
   groups: readonly SidebarGroupState[];

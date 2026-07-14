@@ -1,10 +1,10 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { ContentPart } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { CarryOutPlanRow } from "./CarryOutPlanRow";
-import { CopyMessageButton } from "./CopyMessageButton";
-import { PromptContentRenderer } from "@/components/workspace/chat/content/PromptContentRenderer";
-import { isPlanImplementationPromptMessage } from "@/lib/domain/plans/implementation-prompt";
+import { CarryOutPlanRow } from "#product/components/workspace/chat/transcript/CarryOutPlanRow";
+import { CopyMessageButton } from "#product/components/workspace/chat/transcript/CopyMessageButton";
+import { PromptContentRenderer } from "#product/components/workspace/chat/content/PromptContentRenderer";
+import { isPlanImplementationPromptMessage } from "#product/lib/domain/plans/implementation-prompt";
 import {
   normalizeContentParts,
   type PromptDisplayPlanPart,

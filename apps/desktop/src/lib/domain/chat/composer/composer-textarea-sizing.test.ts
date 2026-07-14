@@ -3,8 +3,8 @@ import {
   CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
   HOME_CHAT_COMPOSER_INPUT,
   WORKSPACE_CHAT_COMPOSER_INPUT,
-} from "@/config/chat";
-import { computeComposerTextareaAutosize } from "./composer-textarea-sizing";
+} from "#product/config/chat";
+import { computeComposerTextareaAutosize } from "#product/lib/domain/chat/composer/composer-textarea-sizing";
 
 describe("computeComposerTextareaAutosize", () => {
   it("clamps short content to the configured minimum height", () => {

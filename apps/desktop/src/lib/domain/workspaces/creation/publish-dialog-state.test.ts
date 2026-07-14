@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   openPublishDialogState,
-} from "./publish-dialog-state";
+} from "#product/lib/domain/workspaces/creation/publish-dialog-state";
 
 describe("publish dialog state helpers", () => {
   it("opens publish without changing right panel state", () => {

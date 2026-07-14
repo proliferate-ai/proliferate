@@ -1,6 +1,6 @@
 import type { RepoConfigResponse } from "@proliferate/cloud-sdk";
-import { HOME_SCREEN_LABELS } from "@/copy/home/home-screen-copy";
-import { cloudRepositoryKey } from "@/lib/domain/settings/repositories";
+import { HOME_SCREEN_LABELS } from "#product/copy/home/home-screen-copy";
+import { cloudRepositoryKey } from "#product/lib/domain/settings/repositories";
 
 export type HomeActionId =
   | "add-repository"

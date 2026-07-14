@@ -1,7 +1,7 @@
-import { resolveModelDisplayName } from "@/lib/domain/chat/models/model-display";
+import { resolveModelDisplayName } from "#product/lib/domain/chat/models/model-display";
 import {
   modelIdLookupCandidates,
-} from "@/lib/domain/chat/models/model-selection-ids";
+} from "#product/lib/domain/chat/models/model-selection-ids";
 
 export interface ModelSelectorCurrentDisplayNameInput {
   activeLaunchIdentity: { kind: string; modelId: string } | null;

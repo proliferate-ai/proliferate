@@ -2,13 +2,13 @@ import { useEffect } from "react";
 import {
   resolveRelativeRightPanelHeaderEntryKey,
   resolveRightPanelHeaderEntryKeyByShortcutIndex,
-} from "@/lib/domain/workspaces/shell/right-panel-shortcuts";
-import type { RightPanelHeaderEntry } from "@/lib/domain/workspaces/shell/right-panel-header-entry";
-import type { RightPanelHeaderEntryKey } from "@/lib/domain/workspaces/shell/right-panel-model";
+} from "#product/lib/domain/workspaces/shell/right-panel-shortcuts";
+import type { RightPanelHeaderEntry } from "#product/lib/domain/workspaces/shell/right-panel-header-entry";
+import type { RightPanelHeaderEntryKey } from "#product/lib/domain/workspaces/shell/right-panel-model";
 import {
   RIGHT_PANEL_SHORTCUT_EVENT,
   rightPanelShortcutRequestFromEvent,
-} from "@/lib/workflows/workspaces/right-panel-shortcut-requests";
+} from "#product/lib/workflows/workspaces/right-panel-shortcut-requests";
 
 export function useRightPanelShortcutRequests({
   activeEntryKey,

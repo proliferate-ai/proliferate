@@ -3,24 +3,24 @@ import {
   committedReplacedSessionTombstonesForWorkspace,
   isReplacedSessionTombstoned,
   resetReplacedSessionTombstonesForTests,
-} from "@/hooks/sessions/workflows/session-replacement-tombstones";
+} from "#product/hooks/sessions/workflows/session-replacement-tombstones";
 import {
   resetSessionReplacementDismissalsForTests,
-} from "@/hooks/sessions/workflows/session-replacement-dismissals";
-import { scheduleCreatedRuntimeSessionCleanup } from "./session-created-runtime-cleanup";
-import { materializeSessionCreation } from "./session-creation-materialization";
+} from "#product/hooks/sessions/workflows/session-replacement-dismissals";
+import { scheduleCreatedRuntimeSessionCleanup } from "#product/hooks/sessions/workflows/session-created-runtime-cleanup";
+import { materializeSessionCreation } from "#product/hooks/sessions/workflows/session-creation-materialization";
 import {
   createEmptySessionRecord,
   getSessionRecord,
   putSessionRecord,
   removeSessionRecord,
-} from "@/stores/sessions/session-records";
+} from "#product/stores/sessions/session-records";
 import {
   commitSupersededSessionCreation,
   registerSessionCreation,
   resetSessionCreationSupersessionForTests,
   supersedeInFlightSessionCreation,
-} from "./session-creation-supersession";
+} from "#product/hooks/sessions/workflows/session-creation-supersession";
 
 const mocks = vi.hoisted(() => ({
   applySessionLaunchDefaults: vi.fn(),
@@ -31,7 +31,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/access/anyharness/sessions", async (importOriginal) => ({
-  ...await importOriginal<typeof import("@/lib/access/anyharness/sessions")>(),
+  ...await importOriginal<typeof import("#product/lib/access/anyharness/sessions")>(),
   createSession: mocks.createSession,
   dismissSession: mocks.dismissSession,
 }));
@@ -53,7 +53,7 @@ vi.mock("@/lib/access/anyharness/runtime-target", () => ({
 }));
 
 vi.mock("@/hooks/sessions/workflows/session-creation-runtime", async (importOriginal) => ({
-  ...await importOriginal<typeof import("@/hooks/sessions/workflows/session-creation-runtime")>(),
+  ...await importOriginal<typeof import("#product/hooks/sessions/workflows/session-creation-runtime")>(),
   resolveDesktopRuntimeUrlForWorkspace: mocks.resolveDesktopRuntimeUrlForWorkspace,
 }));
 

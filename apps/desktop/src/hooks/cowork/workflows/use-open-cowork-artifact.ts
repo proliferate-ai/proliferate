@@ -1,6 +1,6 @@
 import { useCallback } from "react";
-import { runOpenCoworkArtifact } from "@/lib/domain/cowork/artifacts";
-import { useCoworkUiStore } from "@/stores/cowork/cowork-ui-store";
+import { runOpenCoworkArtifact } from "#product/lib/domain/cowork/artifacts";
+import { useCoworkUiStore } from "#product/stores/cowork/cowork-ui-store";
 
 export function useOpenCoworkArtifact() {
   const setArtifactPanelOpen = useCoworkUiStore((state) => state.setArtifactPanelOpen);

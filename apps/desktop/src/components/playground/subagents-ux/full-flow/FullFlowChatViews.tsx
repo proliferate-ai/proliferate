@@ -1,16 +1,16 @@
 import { Archive } from "@proliferate/ui/icons";
-import { SubagentCreationReceipt } from "../identity-receipts/SubagentCreationReceipt";
-import { SubagentIdentityGlyph } from "../identity-receipts/SubagentIdentityGlyph";
-import { ActivityAggregatePopover } from "../popover-pane/ActivityAggregatePopover";
-import type { PrototypeAgent } from "../popover-pane/PopoverPaneFixtures";
-import { PrototypeComposerSurface } from "../popover-pane/PopoverPanePrototype";
+import { SubagentCreationReceipt } from "#product/components/playground/subagents-ux/identity-receipts/SubagentCreationReceipt";
+import { SubagentIdentityGlyph } from "#product/components/playground/subagents-ux/identity-receipts/SubagentIdentityGlyph";
+import { ActivityAggregatePopover } from "#product/components/playground/subagents-ux/popover-pane/ActivityAggregatePopover";
+import type { PrototypeAgent } from "#product/components/playground/subagents-ux/popover-pane/PopoverPaneFixtures";
+import { PrototypeComposerSurface } from "#product/components/playground/subagents-ux/popover-pane/PopoverPanePrototype";
 import {
   FULL_FLOW_STATUS_LABELS,
   type FullFlowArchivedSession,
   type FullFlowChild,
   type FullFlowMessage,
   type FullFlowParent,
-} from "./FullFlowFixtures";
+} from "#product/components/playground/subagents-ux/full-flow/FullFlowFixtures";
 
 export function childToPaneAgent(child: FullFlowChild): PrototypeAgent {
   return {

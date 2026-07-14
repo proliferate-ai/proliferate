@@ -5,8 +5,8 @@ import type {
 } from "@proliferate/product-client/host/desktop-bridge";
 // Narrow bootstrap wiring: this module is the canonical boot orchestrator for
 // AnyHarness runtime connection state.
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { DEFAULT_RUNTIME_URL } from "@/config/runtime";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { DEFAULT_RUNTIME_URL } from "#product/config/runtime";
 
 export async function bootstrapHarnessRuntime(
   runtime: DesktopRuntimeBridge,

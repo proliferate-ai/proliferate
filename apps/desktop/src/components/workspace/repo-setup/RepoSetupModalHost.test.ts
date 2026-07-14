@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { RepoSetupModalHost } from "./RepoSetupModalHost";
+import { RepoSetupModalHost } from "#product/components/workspace/repo-setup/RepoSetupModalHost";
 
 const repoSetupModalStore = vi.hoisted(() => {
   const state = {

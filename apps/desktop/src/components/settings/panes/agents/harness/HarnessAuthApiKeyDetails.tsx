@@ -2,14 +2,14 @@ import { useState } from "react";
 import { useCreateAgentApiKey } from "@proliferate/cloud-sdk-react";
 import { Plus } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ApiKeyCreatorModal } from "@/components/settings/panes/agent-auth/ApiKeyCreatorModal";
-import { getHarnessEnvVarSuggestions } from "@/config/harness-env-vars";
-import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
-import type { HarnessAuthEditorApi } from "@/hooks/agents/workflows/use-harness-auth-editor";
-import { useToastStore } from "@/stores/toast/toast-store";
-import { HarnessPanelBlock, type HarnessBlockVariant } from "./HarnessPanelBlock";
-import { HarnessAuthApiKeyRow } from "./HarnessAuthApiKeyRow";
-import { ProviderPickerModal } from "./ProviderPickerModal";
+import { ApiKeyCreatorModal } from "#product/components/settings/panes/agent-auth/ApiKeyCreatorModal";
+import { getHarnessEnvVarSuggestions } from "#product/config/harness-env-vars";
+import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
+import type { HarnessAuthEditorApi } from "#product/hooks/agents/workflows/use-harness-auth-editor";
+import { useToastStore } from "#product/stores/toast/toast-store";
+import { HarnessPanelBlock, type HarnessBlockVariant } from "#product/components/settings/panes/agents/harness/HarnessPanelBlock";
+import { HarnessAuthApiKeyRow } from "#product/components/settings/panes/agents/harness/HarnessAuthApiKeyRow";
+import { ProviderPickerModal } from "#product/components/settings/panes/agents/harness/ProviderPickerModal";
 
 export function ApiKeyDetails({
   harnessKind,

@@ -1,7 +1,7 @@
 import type { NormalizedSessionControl } from "@anyharness/sdk";
-import { PLAN_HANDOFF_DEFAULT_MODE_ID_BY_AGENT_KIND } from "@/config/plan-handoff-session-mode-defaults";
-import type { ConfiguredSessionControlValue } from "@/lib/domain/chat/session-controls/presentation";
-import { listConfiguredSessionControlValues } from "@/lib/domain/chat/session-controls/session-mode-control";
+import { PLAN_HANDOFF_DEFAULT_MODE_ID_BY_AGENT_KIND } from "#product/config/plan-handoff-session-mode-defaults";
+import type { ConfiguredSessionControlValue } from "#product/lib/domain/chat/session-controls/presentation";
+import { listConfiguredSessionControlValues } from "#product/lib/domain/chat/session-controls/session-mode-control";
 
 export interface PlanHandoffPrePromptConfigChange {
   rawConfigId: string;

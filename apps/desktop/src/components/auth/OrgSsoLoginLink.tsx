@@ -5,8 +5,8 @@ import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIco
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 
-import { useOrgSlugSsoSignIn } from "@/hooks/auth/workflows/use-org-slug-sso-sign-in";
-import { getRedirectTarget } from "@/lib/domain/auth/login-redirect";
+import { useOrgSlugSsoSignIn } from "#product/hooks/auth/workflows/use-org-slug-sso-sign-in";
+import { getRedirectTarget } from "#product/lib/domain/auth/login-redirect";
 
 // Org-scoped SSO entry point on cold login: a quiet "Sign in with SSO" link that
 // reveals a workspace-slug field and drives the native SSO flow. Kept below the

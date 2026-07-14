@@ -3,7 +3,7 @@ import {
   resolveMatchingModelControlLabel,
   resolveModelDisplayName,
   shouldHideModel,
-} from "@/lib/domain/chat/models/model-display";
+} from "#product/lib/domain/chat/models/model-display";
 
 const MODEL_CONTROL = {
   currentValue: "opus[1m]",

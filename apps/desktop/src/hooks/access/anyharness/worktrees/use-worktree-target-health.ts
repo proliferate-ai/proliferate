@@ -1,12 +1,12 @@
 import type { HealthResponse } from "@anyharness/sdk";
 import { useQueries } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { getRuntimeHealth } from "@/lib/access/anyharness/runtime-health";
+import { getRuntimeHealth } from "#product/lib/access/anyharness/runtime-health";
 import {
   type WorktreeSettingsTarget,
   worktreeSettingsTargetRuntimeConnection,
-} from "@/lib/domain/workspaces/worktrees/worktree-settings-target";
-import { worktreeSettingsTargetHealthKey } from "./query-keys";
+} from "#product/lib/domain/workspaces/worktrees/worktree-settings-target";
+import { worktreeSettingsTargetHealthKey } from "#product/hooks/access/anyharness/worktrees/query-keys";
 
 export interface WorktreeTargetHealthState {
   target: WorktreeSettingsTarget;

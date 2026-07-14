@@ -1,11 +1,11 @@
 import { useCallback } from "react";
-import type { SessionActivationOutcome } from "@/hooks/sessions/workflows/session-activation-guard";
+import type { SessionActivationOutcome } from "#product/hooks/sessions/workflows/session-activation-guard";
 import {
   type SelectSessionOptionsWithoutGuard,
   useWorkspaceShellActivation,
-} from "@/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
-import { useWorkspaceSelection } from "@/hooks/workspaces/workflows/selection/use-workspace-selection";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+} from "#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
+import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 export type OpenWorkspaceSessionResult =
   | SessionActivationOutcome

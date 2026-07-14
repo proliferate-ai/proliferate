@@ -5,8 +5,8 @@ import type {
 import type {
   AgentCatalogSummary,
   AgentModelRegistry as ModelRegistry,
-} from "@/lib/domain/agents/model-options";
-import { compareChatLaunchKinds } from "@/config/chat-launch";
+} from "#product/lib/domain/agents/model-options";
+import { compareChatLaunchKinds } from "#product/config/chat-launch";
 import {
   buildAgentModelGroups,
   resolveAgentModelInfo,
@@ -15,10 +15,10 @@ import {
   type AgentModelInfo,
   type AgentModelOption,
   type AgentModelSelection,
-} from "@/lib/domain/agents/model-options";
-import { resolveModelForRegistry } from "@/lib/domain/chat/launch/session-config";
-import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
-import { buildLocalSlotLogicalWorkspaceId } from "@/lib/domain/workspaces/cloud/logical-workspace-id";
+} from "#product/lib/domain/agents/model-options";
+import { resolveModelForRegistry } from "#product/lib/domain/chat/launch/session-config";
+import type { SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
+import { buildLocalSlotLogicalWorkspaceId } from "#product/lib/domain/workspaces/cloud/logical-workspace-id";
 
 export type HomeNextRepositorySelection =
   | { kind: "auto" }

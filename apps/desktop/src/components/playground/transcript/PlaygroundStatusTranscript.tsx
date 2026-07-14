@@ -1,17 +1,17 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { CircleAlert } from "@proliferate/ui/icons";
 import type { GoalTranscriptEvent } from "@proliferate/product-domain/activity/goal-transcript-events";
-import { AssistantMessage } from "@/components/workspace/chat/transcript/AssistantMessage";
-import { GoalTranscriptEventRow } from "@/components/workspace/chat/transcript/GoalTranscriptEventRow";
-import { StreamingIndicator } from "@/components/workspace/chat/transcript/StreamingIndicator";
-import { UserMessage } from "@/components/workspace/chat/transcript/UserMessage";
-import { PendingInteractionMarkerView } from "@/components/workspace/chat/transcript/TranscriptTurnChrome";
-import type { ScenarioKey } from "@/config/playground";
+import { AssistantMessage } from "#product/components/workspace/chat/transcript/AssistantMessage";
+import { GoalTranscriptEventRow } from "#product/components/workspace/chat/transcript/GoalTranscriptEventRow";
+import { StreamingIndicator } from "#product/components/workspace/chat/transcript/StreamingIndicator";
+import { UserMessage } from "#product/components/workspace/chat/transcript/UserMessage";
+import { PendingInteractionMarkerView } from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
+import type { ScenarioKey } from "#product/config/playground";
 import {
   HookPreview,
   TranscriptPreviewShell,
   TransientStatusRow,
-} from "@/components/playground/transcript/PlaygroundTranscriptShell";
+} from "#product/components/playground/transcript/PlaygroundTranscriptShell";
 
 export function renderPlaygroundStatusTranscript(scenario: ScenarioKey): ReactNode | null {
   switch (scenario) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isServerMetaShape, normalizeServerUrl } from "./connect-server";
+import { isServerMetaShape, normalizeServerUrl } from "#product/lib/domain/auth/connect-server";
 
 describe("normalizeServerUrl", () => {
   it("rejects a blank address", () => {

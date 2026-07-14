@@ -3,7 +3,7 @@
 import type { WorktreeGitStatusSummary, WorktreeInventoryRow } from "@anyharness/sdk";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { RuntimeWorktreeRow, formatByteEstimate } from "./RuntimePressureWorktreeTable";
+import { RuntimeWorktreeRow, formatByteEstimate } from "#product/components/workspace/chat/input/RuntimePressureWorktreeTable";
 
 function gitStatus(
   overrides: Partial<WorktreeGitStatusSummary> = {},

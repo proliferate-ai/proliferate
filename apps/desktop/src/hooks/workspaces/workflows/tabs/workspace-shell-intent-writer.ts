@@ -1,16 +1,16 @@
-import { invalidateSessionActivationIntent } from "@/hooks/sessions/workflows/session-activation-guard";
+import { invalidateSessionActivationIntent } from "#product/hooks/sessions/workflows/session-activation-guard";
 import {
   chatShellWorkspaceIntentKey,
   chatWorkspaceShellTabKey,
   type ChatWorkspaceShellTabKey,
   type WorkspaceShellIntentKey,
-} from "@/lib/domain/workspaces/tabs/shell-tabs";
-import { resolveWorkspaceShellStateKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
+} from "#product/lib/domain/workspaces/tabs/shell-tabs";
+import { resolveWorkspaceShellStateKey } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
 import {
   type ShellIntentResult,
   useWorkspaceUiStore,
-} from "@/stores/preferences/workspace-ui-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+} from "#product/stores/preferences/workspace-ui-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 export type ChatShellIntentWrite<TIntent extends WorkspaceShellIntentKey = WorkspaceShellIntentKey> = ShellIntentResult & {
   shellWorkspaceId: string;

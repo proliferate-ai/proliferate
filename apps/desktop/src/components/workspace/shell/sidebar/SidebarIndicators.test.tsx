@@ -7,11 +7,11 @@ import {
   Spinner,
   Tree,
 } from "@proliferate/ui/icons";
-import type { SidebarStatusIndicator } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
+import type { SidebarStatusIndicator } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
 import {
   SidebarStatusGlyph,
-} from "./SidebarIndicators";
-import { SidebarWorkspaceVariantIcon } from "./SidebarWorkspaceVariantIcon";
+} from "#product/components/workspace/shell/sidebar/SidebarIndicators";
+import { SidebarWorkspaceVariantIcon } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceVariantIcon";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
   .IS_REACT_ACT_ENVIRONMENT = true;

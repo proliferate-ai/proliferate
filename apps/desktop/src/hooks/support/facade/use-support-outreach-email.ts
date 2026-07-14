@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ProliferateClientError } from "@proliferate/cloud-sdk";
 import { getCurrentUser, updateCurrentUser } from "@proliferate/cloud-sdk/client/users";
-import { useProductAuthUser } from "@/hooks/auth/facade/use-product-auth";
+import { useProductAuthUser } from "#product/hooks/auth/facade/use-product-auth";
 
 /**
  * Footer state for the support modals: which address support follow-up goes to,

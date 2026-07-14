@@ -5,19 +5,19 @@ import { Label } from "@proliferate/ui/primitives/Label";
 import { Minus, Plus } from "@proliferate/ui/icons";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { SETTINGS_CONTROL_WIDTH_CLASS, SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
-import { RuntimePressureDetailsDialog } from "@/components/workspace/chat/input/RuntimePressureDetailsDialog";
-import { RuntimePressureRing } from "@/components/workspace/chat/input/RuntimePressureIndicator";
-import { useWorktreeCleanupPolicy } from "@/hooks/workspaces/facade/use-worktree-cleanup-policy";
+import { RuntimePressureDetailsDialog } from "#product/components/workspace/chat/input/RuntimePressureDetailsDialog";
+import { RuntimePressureRing } from "#product/components/workspace/chat/input/RuntimePressureIndicator";
+import { useWorktreeCleanupPolicy } from "#product/hooks/workspaces/facade/use-worktree-cleanup-policy";
 import {
   WORKTREE_AUTO_DELETE_LIMIT_MAX,
   WORKTREE_AUTO_DELETE_LIMIT_MIN,
-} from "@/lib/domain/preferences/user/worktree-auto-delete";
+} from "#product/lib/domain/preferences/user/worktree-auto-delete";
 import {
   type RuntimePressureTargetState,
   useRuntimePressureControlStateFromSettings,
-} from "@/hooks/workspaces/facade/use-runtime-pressure-control-state";
-import { useWorktreeSettingsTargets } from "@/hooks/workspaces/facade/use-worktree-settings-targets";
-import { useToastStore } from "@/stores/toast/toast-store";
+} from "#product/hooks/workspaces/facade/use-runtime-pressure-control-state";
+import { useWorktreeSettingsTargets } from "#product/hooks/workspaces/facade/use-worktree-settings-targets";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 export function WorktreeStorageSection() {
   const settings = useWorktreeSettingsTargets();

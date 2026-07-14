@@ -4,21 +4,21 @@ import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialo
 import { Input } from "@proliferate/ui/primitives/Input";
 import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
-import { AutomationRunLocationSelector } from "@/components/automations/controls/AutomationRunLocationSelector";
-import { AutomationAgentHarnessControls } from "@/components/automations/editor/AutomationAgentHarnessControls";
+import { AutomationRunLocationSelector } from "#product/components/automations/controls/AutomationRunLocationSelector";
+import { AutomationAgentHarnessControls } from "#product/components/automations/editor/AutomationAgentHarnessControls";
 import {
   AutomationSchedulePopover,
   AutomationTemplatePopover,
-} from "@/components/automations/editor/AutomationEditorControls";
-import type { AutomationTargetGroup, AutomationTargetSelection } from "@/lib/domain/automations/target/selection";
-import type { AutomationRecord } from "@/lib/domain/automations/run/ui-records";
-import type { AutomationOwnerScope } from "@/lib/domain/automations/run/types";
+} from "#product/components/automations/editor/AutomationEditorControls";
+import type { AutomationTargetGroup, AutomationTargetSelection } from "#product/lib/domain/automations/target/selection";
+import type { AutomationRecord } from "#product/lib/domain/automations/run/ui-records";
+import type { AutomationOwnerScope } from "#product/lib/domain/automations/run/types";
 import type {
   DesktopAgentLaunchAgent,
   DesktopAgentLaunchModel,
-} from "@/lib/domain/agents/cloud-launch-catalog";
-import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
-import type { AutomationSchedulePresetOrCustom } from "@/lib/domain/automations/schedule/schedule";
+} from "#product/lib/domain/agents/cloud-launch-catalog";
+import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
+import type { AutomationSchedulePresetOrCustom } from "#product/lib/domain/automations/schedule/schedule";
 
 interface AutomationOwnerOption {
   value: AutomationOwnerScope;

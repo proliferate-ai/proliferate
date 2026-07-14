@@ -5,7 +5,7 @@ import {
 } from "react";
 import type { TerminalRecord } from "@anyharness/sdk";
 import { useNavigate } from "react-router-dom";
-import { useTerminalActions } from "@/hooks/terminals/workflows/use-terminal-actions";
+import { useTerminalActions } from "#product/hooks/terminals/workflows/use-terminal-actions";
 import {
   parseRightPanelHeaderEntryKey,
   rightPanelTerminalHeaderKey,
@@ -15,21 +15,21 @@ import {
   type RightPanelHeaderEntryKey,
   type RightPanelTool,
   type RightPanelWorkspaceState,
-} from "@/lib/domain/workspaces/shell/right-panel-model";
+} from "#product/lib/domain/workspaces/shell/right-panel-model";
 import {
   removeTerminalFromRightPanelState,
   reorderHeaderEntryInRightPanelState,
-} from "@/lib/domain/workspaces/shell/right-panel-state";
+} from "#product/lib/domain/workspaces/shell/right-panel-state";
 import {
   reconcileRightPanelWorkspaceState,
-} from "@/lib/domain/workspaces/shell/right-panel-state-normalization";
+} from "#product/lib/domain/workspaces/shell/right-panel-state-normalization";
 import {
   type ViewerTarget,
   type ViewerTargetKey,
-} from "@/lib/domain/workspaces/viewer/viewer-target";
-import { useToastStore } from "@/stores/toast/toast-store";
-import type { WorkspaceFileBuffer } from "@/stores/editor/workspace-file-buffers-store";
-import { useRightPanelViewerActions } from "@/hooks/workspaces/workflows/right-panel/use-right-panel-viewer-actions";
+} from "#product/lib/domain/workspaces/viewer/viewer-target";
+import { useToastStore } from "#product/stores/toast/toast-store";
+import type { WorkspaceFileBuffer } from "#product/stores/editor/workspace-file-buffers-store";
+import { useRightPanelViewerActions } from "#product/hooks/workspaces/workflows/right-panel/use-right-panel-viewer-actions";
 
 type RightPanelStateUpdater = (value: SetStateAction<RightPanelWorkspaceState>) => void;
 

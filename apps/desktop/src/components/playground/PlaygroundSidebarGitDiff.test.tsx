@@ -3,7 +3,7 @@ import { renderToStaticMarkup as renderReactToStaticMarkup } from "react-dom/ser
 import { describe, expect, it } from "vitest";
 import type { ProductHost } from "@proliferate/product-client/host/product-host";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
-import { PlaygroundSidebarGitDiff } from "./PlaygroundSidebarGitDiff";
+import { PlaygroundSidebarGitDiff } from "#product/components/playground/PlaygroundSidebarGitDiff";
 
 const webTestHost = { desktop: null } as ProductHost;
 

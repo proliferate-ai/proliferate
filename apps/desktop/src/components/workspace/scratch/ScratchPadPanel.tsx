@@ -15,12 +15,12 @@ import { PaneOptionsMenuItem } from "@proliferate/ui/layout/PaneOptionsMenuItem"
 import {
   ScratchCodeMirrorEditor,
   type ScratchCodeMirrorEditorHandle,
-} from "@/components/workspace/scratch/ScratchCodeMirrorEditor";
-import { PaneHeader } from "@/components/workspace/pane/PaneHeader";
+} from "#product/components/workspace/scratch/ScratchCodeMirrorEditor";
+import { PaneHeader } from "#product/components/workspace/pane/PaneHeader";
 import {
   PaneOptionsMenu,
   PaneOptionsMenuSeparator,
-} from "@/components/workspace/pane/PaneOptionsMenu";
+} from "#product/components/workspace/pane/PaneOptionsMenu";
 import { useWorkspaceScratchPad } from "@/hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad";
 import { useWorkspaceScratchPadMutations } from "@/hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad-mutations";
 

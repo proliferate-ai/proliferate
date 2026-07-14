@@ -1,26 +1,26 @@
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-state";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/creation/arrival";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { resolveCloudWorkspaceStatus } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
+import { resetWorkspaceEditorState } from "#product/stores/editor/workspace-editor-state";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { buildWorkspaceArrivalEvent } from "#product/lib/domain/workspaces/creation/arrival";
+import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import { resolveCloudWorkspaceStatus } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
 import {
   type PendingWorkspaceEntry,
   resolvePendingWorktreeRetryInput,
-} from "@/lib/domain/workspaces/creation/pending-entry";
-import { useCreateCloudWorkspace } from "@/hooks/cloud/workflows/use-create-cloud-workspace";
-import { useWorkspaceEntryActions } from "@/hooks/workspaces/workflows/use-workspace-entry-actions";
-import { useWorkspaceSelection } from "@/hooks/workspaces/workflows/selection/use-workspace-selection";
-import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
+} from "#product/lib/domain/workspaces/creation/pending-entry";
+import { useCreateCloudWorkspace } from "#product/hooks/cloud/workflows/use-create-cloud-workspace";
+import { useWorkspaceEntryActions } from "#product/hooks/workspaces/workflows/use-workspace-entry-actions";
+import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 import {
   usePendingWorkspaceSessionMaterialization,
-} from "@/hooks/workspaces/workflows/use-pending-workspace-session-materialization";
+} from "#product/hooks/workspaces/workflows/use-pending-workspace-session-materialization";
 import {
   resolveActiveProjectedSessionForPendingWorkspace,
-} from "@/hooks/workspaces/workflows/pending-workspace-projected-session";
-import { useToastStore } from "@/stores/toast/toast-store";
-import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
+} from "#product/hooks/workspaces/workflows/pending-workspace-projected-session";
+import { useToastStore } from "#product/stores/toast/toast-store";
+import { useDeferredHomeLaunchStore } from "#product/stores/home/deferred-home-launch-store";
 import {
   failLatencyFlow,
   startLatencyFlow,

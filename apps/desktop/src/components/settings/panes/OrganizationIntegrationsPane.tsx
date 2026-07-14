@@ -8,25 +8,25 @@ import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPag
 import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import type { AdminIntegrationDefinition } from "@proliferate/cloud-sdk/client/integrations";
-import { AddCustomIntegrationDialog } from "@/components/settings/panes/integrations/AddCustomIntegrationDialog";
-import { IntegrationIcon } from "@/components/settings/panes/integrations/IntegrationIcon";
+import { AddCustomIntegrationDialog } from "#product/components/settings/panes/integrations/AddCustomIntegrationDialog";
+import { IntegrationIcon } from "#product/components/settings/panes/integrations/IntegrationIcon";
 import {
   useAdminIntegrationDefinitionActions,
   useAdminIntegrationDefinitions,
-} from "@/hooks/access/cloud/integrations/use-admin-integration-definitions";
-import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
+} from "#product/hooks/access/cloud/integrations/use-admin-integration-definitions";
+import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
 import {
   filterIntegrationsByQuery,
   integrationSearchState,
-} from "@/lib/domain/settings/integrations-presentation";
+} from "#product/lib/domain/settings/integrations-presentation";
 import {
   adminIntegrationAuthKindLabel,
   adminIntegrationEnabledView,
   adminIntegrationSourceLabel,
   customIntegrationCreatedMessage,
   type CustomIntegrationFormInput,
-} from "@/lib/domain/settings/org-integrations-presentation";
-import { useToastStore } from "@/stores/toast/toast-store";
+} from "#product/lib/domain/settings/org-integrations-presentation";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 /**
  * Org-admin integrations pane: every visible definition (seed + org-custom)

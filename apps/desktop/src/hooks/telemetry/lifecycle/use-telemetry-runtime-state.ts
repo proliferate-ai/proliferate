@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
-import type { RuntimeConnectionTelemetryState } from "@/lib/domain/telemetry/events";
-import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import type { RuntimeConnectionTelemetryState } from "#product/lib/domain/telemetry/events";
+import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
 // Owns runtime connection telemetry tags and events. Reports through the typed
 // telemetry adapter. Does not own runtime connection state.

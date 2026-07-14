@@ -1,15 +1,15 @@
-import { CHAT_MODE_CONTROL_LABELS } from "@/copy/chat/chat-copy";
+import { CHAT_MODE_CONTROL_LABELS } from "#product/copy/chat/chat-copy";
 import {
   resolveSessionControlPresentation,
-} from "@/lib/domain/chat/session-controls/session-mode-control";
-import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
-import type { ConfiguredSessionControlKey } from "@/lib/domain/chat/session-controls/presentation";
-import { SessionControlIcon } from "@/components/session-controls/SessionControlIcon";
+} from "#product/lib/domain/chat/session-controls/session-mode-control";
+import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
+import type { ConfiguredSessionControlKey } from "#product/lib/domain/chat/session-controls/presentation";
+import { SessionControlIcon } from "#product/components/session-controls/SessionControlIcon";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { Check, ChevronDown } from "@proliferate/ui/icons";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
-import { PendingConfigIndicator } from "./PendingConfigIndicator";
+import { PendingConfigIndicator } from "#product/components/workspace/chat/input/PendingConfigIndicator";
 
 type ModeControlDescriptor = LiveSessionControlDescriptor & {
   key: ConfiguredSessionControlKey;

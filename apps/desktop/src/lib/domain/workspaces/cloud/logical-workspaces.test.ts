@@ -1,31 +1,31 @@
 import { describe, expect, it } from "vitest";
-import { targetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
-import type { CloudMobilityWorkspaceSummary } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
-import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import { targetWorkspaceSyntheticId } from "#product/lib/domain/compute/target-workspace-id";
+import type { CloudMobilityWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
+import { cloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import {
   buildLogicalWorkspaces,
-} from "@/lib/domain/workspaces/cloud/logical-workspaces";
+} from "#product/lib/domain/workspaces/cloud/logical-workspaces";
 import {
   expandLogicalWorkspaceRelatedIdSet,
   latestLogicalWorkspaceTimestamp,
   logicalWorkspaceRelatedIds,
-} from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
+} from "#product/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import {
   buildLocalSlotLogicalWorkspaceId,
   buildRemoteLogicalWorkspaceId,
   parseLogicalWorkspaceId,
   replaceLogicalWorkspaceBranch,
-} from "@/lib/domain/workspaces/cloud/logical-workspace-id";
+} from "#product/lib/domain/workspaces/cloud/logical-workspace-id";
 import {
   logicalWorkspaceCloudRuntimeMaterializationId,
   resolveLogicalWorkspaceMaterializationId,
-} from "@/lib/domain/workspaces/cloud/logical-workspace-materialization";
+} from "#product/lib/domain/workspaces/cloud/logical-workspace-materialization";
 import {
   buildGroups,
   makeCloudWorkspace,
   makeRepoRoot,
   makeWorkspace,
-} from "@/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
 
 function makeMobilityWorkspace(args: {
   id?: string;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { NormalizedSessionControl } from "@anyharness/sdk";
-import { resolvePlanImplementationModeSwitch } from "./implementation-mode";
+import { resolvePlanImplementationModeSwitch } from "#product/lib/domain/plans/implementation-mode";
 
 describe("resolvePlanImplementationModeSwitch", () => {
   it("switches collaboration plan mode to default before implementation", () => {

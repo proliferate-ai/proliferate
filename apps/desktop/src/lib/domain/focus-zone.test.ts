@@ -4,7 +4,7 @@ import {
   focusTerminal,
   getFocusZone,
   isRightPanelFocusZone,
-} from "@/lib/domain/focus-zone";
+} from "#product/lib/domain/focus-zone";
 
 describe("focus-zone helpers", () => {
   afterEach(() => {

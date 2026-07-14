@@ -4,7 +4,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
-import { makeTestProductHost } from "@/test/product-host-fixtures";
+import { makeTestProductHost } from "#product/test/product-host-fixtures";
 
 // Every shared lifecycle hook is a no-op stub; this test exercises the root's
 // composition (children pass-through, Desktop lifecycle mount, auth restore,
@@ -66,8 +66,8 @@ vi.mock("@/providers/DesktopProductLifecycleRoot", () => ({
   },
 }));
 
-import { ProductLifecycleRoot } from "./ProductLifecycleRoot";
-import { useAppCommandActionsContext } from "@/providers/AppCommandActionsProvider";
+import { ProductLifecycleRoot } from "#product/providers/ProductLifecycleRoot";
+import { useAppCommandActionsContext } from "#product/providers/AppCommandActionsProvider";
 
 function CommandContextProbe() {
   const actions = useAppCommandActionsContext();

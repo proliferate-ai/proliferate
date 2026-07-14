@@ -2,22 +2,22 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   createEmptySessionRecord,
   putSessionRecord,
-} from "@/stores/sessions/session-records";
+} from "#product/stores/sessions/session-records";
 import {
   WORKSPACE_UI_DEFAULTS,
-} from "@/lib/domain/preferences/workspace-ui/model";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
-import { writeChatShellIntentForSession } from "@/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
-import { selectSessionWithShellIntentRollback } from "@/hooks/sessions/workflows/session-shell-selection";
+} from "#product/lib/domain/preferences/workspace-ui/model";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
+import { writeChatShellIntentForSession } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
+import { selectSessionWithShellIntentRollback } from "#product/hooks/sessions/workflows/session-shell-selection";
 import {
   beginSessionActivationIntent,
   commitActiveSession,
   invalidateSessionActivationIntent,
   isSessionActivationCurrent,
-} from "@/hooks/sessions/workflows/session-activation-guard";
+} from "#product/hooks/sessions/workflows/session-activation-guard";
 
 describe("session activation guard", () => {
   beforeEach(() => {

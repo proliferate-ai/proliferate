@@ -1,5 +1,5 @@
-import type { ComposerShortcutKey } from "./composer-shortcuts";
-import type { ShortcutKey } from "./registry";
+import type { ComposerShortcutKey } from "#product/config/shortcuts/composer-shortcuts";
+import type { ShortcutKey } from "#product/config/shortcuts/registry";
 
 export interface ShortcutGroup {
   title: string;

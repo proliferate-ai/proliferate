@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { isSessionSlotBusy } from "@proliferate/product-domain/sessions/activity";
-import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
-import { createDirectoryEntry } from "@/lib/domain/sessions/directory/directory-entry";
+import { activitySnapshotFromDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-activity";
+import { createDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-entry";
 
 describe("activity snapshot from directory entry", () => {
   it("presents a never-prompted starting entry as not busy", () => {

@@ -2,12 +2,12 @@ import {
   normalizeRepoConfigs,
   type PersistedRepoConfigInput,
   type RepoConfig,
-} from "@/lib/domain/preferences/repo-preferences";
+} from "#product/lib/domain/preferences/repo-preferences";
 import {
   readPersistedJsonValue,
   writePersistedJson,
   type ProductStorageContext,
-} from "@/lib/infra/persistence/product-storage";
+} from "#product/lib/infra/persistence/product-storage";
 
 const REPO_PREFERENCES_KEY = "repo_preferences";
 const LEGACY_REPO_CONFIGS_KEY = "repoConfigs";

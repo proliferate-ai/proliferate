@@ -1,5 +1,5 @@
-import { sanitizeManualChatGroupsByWorkspace, type ManualChatGroup } from "@/lib/domain/workspaces/tabs/manual-groups";
-import { uniqueIds } from "@/lib/domain/workspaces/tabs/visibility";
+import { sanitizeManualChatGroupsByWorkspace, type ManualChatGroup } from "#product/lib/domain/workspaces/tabs/manual-groups";
+import { uniqueIds } from "#product/lib/domain/workspaces/tabs/visibility";
 
 export function isStringArrayRecord(value: unknown): value is Record<string, string[]> {
   return typeof value === "object"

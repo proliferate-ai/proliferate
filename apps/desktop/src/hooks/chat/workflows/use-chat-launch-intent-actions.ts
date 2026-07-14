@@ -1,10 +1,10 @@
 import { useCallback } from "react";
-import { useHomeNextLaunch } from "@/hooks/home/workflows/use-home-next-launch";
-import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-activation-workflow";
-import { useWorkspaceSelection } from "@/hooks/workspaces/workflows/selection/use-workspace-selection";
-import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
-import { useHomeDraftHandoffStore } from "@/stores/home/home-draft-handoff-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useHomeNextLaunch } from "#product/hooks/home/workflows/use-home-next-launch";
+import { useWorkspaceActivationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-activation-workflow";
+import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
+import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
+import { useHomeDraftHandoffStore } from "#product/stores/home/home-draft-handoff-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 export function useChatLaunchIntentActions() {
   const activeIntent = useChatLaunchIntentStore((state) => state.activeIntent);

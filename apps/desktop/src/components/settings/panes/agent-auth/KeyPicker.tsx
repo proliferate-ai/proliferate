@@ -2,9 +2,9 @@ import { useState } from "react";
 import type { AgentApiKey } from "@proliferate/cloud-sdk";
 import { useCreateAgentApiKey } from "@proliferate/cloud-sdk-react";
 import { EnvironmentSearchSelect } from "@proliferate/ui/primitives/EnvironmentSearchSelect";
-import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
-import { useToastStore } from "@/stores/toast/toast-store";
-import { ApiKeyCreatorModal } from "./ApiKeyCreatorModal";
+import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
+import { useToastStore } from "#product/stores/toast/toast-store";
+import { ApiKeyCreatorModal } from "#product/components/settings/panes/agent-auth/ApiKeyCreatorModal";
 
 const ADD_NEW_KEY_OPTION_ID = "__add-new-key__";
 

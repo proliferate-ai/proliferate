@@ -3,7 +3,7 @@
 import { cleanup, render, renderHook, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { useComposerDockSlots } from "./use-composer-dock-slots";
+import { useComposerDockSlots } from "#product/hooks/chat/ui/use-composer-dock-slots";
 
 const workspaceStatusPanelState = vi.hoisted(() => ({
   value: { kind: "pending" } as unknown,

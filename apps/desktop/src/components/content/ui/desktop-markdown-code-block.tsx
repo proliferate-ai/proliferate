@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { CodeBlock } from "@proliferate/product-ui/code/CodeBlock";
 import type { MarkdownCodeBlockRenderInput } from "@proliferate/product-ui/chat/transcript/MarkdownBody";
-import { useHighlightedTokens } from "@/hooks/ui/highlighting/use-highlighted-tokens";
+import { useHighlightedTokens } from "#product/hooks/ui/highlighting/use-highlighted-tokens";
 
 /**
  * Desktop code-block renderer injected into MarkdownBody's renderCodeBlock

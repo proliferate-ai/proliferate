@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createMemoryProductStorage } from "@/test/product-storage-test-utils";
+import { createMemoryProductStorage } from "#product/test/product-storage-test-utils";
 import {
   clearPendingOrganizationJoinTarget,
   readPendingOrganizationJoinTarget,
   writePendingOrganizationJoinTarget,
-} from "./organization-join-target";
+} from "#product/lib/access/persistence/organization-join-target";
 
 const KEY = "proliferate.organizationJoinTarget";
 

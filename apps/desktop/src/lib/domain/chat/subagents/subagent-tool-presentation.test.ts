@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { toolCallItem } from "@/lib/domain/chat/__fixtures__/playground/tool-call-item-fixture";
+import { toolCallItem } from "#product/lib/domain/chat/__fixtures__/playground/tool-call-item-fixture";
 import {
   deriveSubagentMcpReceiptPresentation,
   formatSubagentHeaderVerb,

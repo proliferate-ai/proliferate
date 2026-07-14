@@ -4,9 +4,9 @@ import {
   useAuthSelections,
   usePutAuthSelections,
 } from "@proliferate/cloud-sdk-react";
-import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
-import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
-import { planFirstRunAuthAdoption } from "@/lib/domain/agents/auth-onboarding";
+import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
+import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+import { planFirstRunAuthAdoption } from "#product/lib/domain/agents/auth-onboarding";
 
 /**
  * First-run adoption of the managed gateway into auth selections (spec §9).

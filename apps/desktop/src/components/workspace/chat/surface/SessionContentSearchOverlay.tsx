@@ -15,7 +15,7 @@ import {
   selectVisibleContentSearchMatchIds,
   type ContentSearchSurface,
   useContentSearchStore,
-} from "@/stores/search/content-search-store";
+} from "#product/stores/search/content-search-store";
 
 interface SessionContentSearchOverlayProps {
   enabled: boolean;

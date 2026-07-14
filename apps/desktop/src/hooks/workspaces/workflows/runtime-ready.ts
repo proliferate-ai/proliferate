@@ -1,6 +1,6 @@
 import type { DesktopRuntimeBridge } from "@proliferate/product-client/host/desktop-bridge";
-import { bootstrapHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { bootstrapHarnessRuntime } from "#product/lib/access/anyharness/runtime-bootstrap";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
 export async function ensureRuntimeReady(
   runtime: DesktopRuntimeBridge | null,

@@ -1,9 +1,9 @@
 import { sessionSlotBelongsToWorkspace } from "@proliferate/product-domain/sessions/activity";
-import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
-import { rememberLastViewedSession } from "@/stores/preferences/workspace-ui-store";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import type { HotPaintGate } from "@/stores/sessions/session-types";
+import { resolveWorkspaceUiKey } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
+import { rememberLastViewedSession } from "#product/stores/preferences/workspace-ui-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import type { HotPaintGate } from "#product/stores/sessions/session-types";
 
 export type SessionActivationStaleReason =
   | "workspace-changed"

@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ComposerAttachedPanel } from "@/components/workspace/chat/input/ComposerAttachedPanel";
-import { CloudStatusCompactHeader } from "@/components/workspace/chat/surface/CloudStatusCompactHeader";
+import { ComposerAttachedPanel } from "#product/components/workspace/chat/input/ComposerAttachedPanel";
+import { CloudStatusCompactHeader } from "#product/components/workspace/chat/surface/CloudStatusCompactHeader";
 import {
   buildCloudWorkspaceCompactStatusView,
   type CloudWorkspaceStatusScreenMode,
   type CloudWorkspaceStatusScreenModel,
-} from "@/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
 import { CircleAlert, Spinner } from "@proliferate/ui/icons";
 
 function SectionRow({

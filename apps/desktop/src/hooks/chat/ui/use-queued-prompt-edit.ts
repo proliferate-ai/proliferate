@@ -8,12 +8,12 @@ import {
   derivePendingPromptQueueRow,
   findNewestEditablePendingPrompt,
 } from "@proliferate/product-domain/chats/pending-prompts/pending-prompt-queue";
-import { useActivePendingPrompts } from "@/hooks/chat/derived/use-active-pending-session-interactions";
-import { useActiveSessionId } from "@/hooks/chat/derived/use-active-session-identity";
-import { useEditPendingPrompt } from "@/hooks/sessions/workflows/use-edit-pending-prompt";
-import { useChatInputStore } from "@/stores/chat/chat-input-store";
-import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
-import { useToastStore } from "@/stores/toast/toast-store";
+import { useActivePendingPrompts } from "#product/hooks/chat/derived/use-active-pending-session-interactions";
+import { useActiveSessionId } from "#product/hooks/chat/derived/use-active-session-identity";
+import { useEditPendingPrompt } from "#product/hooks/sessions/workflows/use-edit-pending-prompt";
+import { useChatInputStore } from "#product/stores/chat/chat-input-store";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 export interface VisiblePendingPromptEntry extends PendingPromptEntry {
   isBeingEdited: boolean;

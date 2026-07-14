@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildFileTreeNativeContextMenuItems } from "./use-file-tree-native-context-menu";
+import { buildFileTreeNativeContextMenuItems } from "#product/hooks/editor/ui/use-file-tree-native-context-menu";
 
 describe("buildFileTreeNativeContextMenuItems", () => {
   it("models Proliferate open plus configured open targets", () => {

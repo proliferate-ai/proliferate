@@ -3,7 +3,7 @@ import {
   removePersistedKey,
   writePersistedJson,
   type ProductStorageContext,
-} from "@/lib/infra/persistence/product-storage";
+} from "#product/lib/infra/persistence/product-storage";
 
 const SESSION_REPLACEMENT_TOMBSTONES_STORAGE_KEY =
   "proliferate.session-replacement-tombstones.v1";

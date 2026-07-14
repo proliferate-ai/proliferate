@@ -3,8 +3,8 @@
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
-import type { ComposerWorkspaceActivityModel } from "@/lib/domain/workspaces/activity/composer-workspace-activity";
-import { WorkspaceActivityComposerCard } from "./WorkspaceActivityComposerCard";
+import type { ComposerWorkspaceActivityModel } from "#product/lib/domain/workspaces/activity/composer-workspace-activity";
+import { WorkspaceActivityComposerCard } from "#product/components/workspace/chat/input/workspace-activity/WorkspaceActivityComposerCard";
 
 vi.mock("@proliferate/ui/primitives/PopoverButton", () => ({
   PopoverButton: ({

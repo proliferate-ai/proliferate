@@ -2,7 +2,7 @@ import { Fragment, type ReactNode } from "react";
 import {
   findContentSearchMatches,
   type ContentSearchTokenMatchSegment,
-} from "@/lib/domain/content-search/content-search";
+} from "#product/lib/domain/content-search/content-search";
 
 export function renderContentSearchMarkedText({
   text,

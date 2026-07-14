@@ -4,7 +4,7 @@ import {
   hasDetectedNativeAuth,
   planFirstRunAuthAdoption,
   resolveAgentAuthDisplay,
-} from "./auth-onboarding";
+} from "#product/lib/domain/agents/auth-onboarding";
 
 function agent(overrides: Partial<AgentSummary> = {}): AgentSummary {
   return {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   assertDirectSessionCreateSupported,
-} from "@/lib/access/anyharness/direct-session-create-guard";
+} from "#product/lib/access/anyharness/direct-session-create-guard";
 
 describe("assertDirectSessionCreateSupported", () => {
   it("allows local direct session creation", () => {

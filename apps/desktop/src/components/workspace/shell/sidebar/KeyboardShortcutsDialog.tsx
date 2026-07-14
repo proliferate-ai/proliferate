@@ -9,8 +9,8 @@ import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchFiel
 import {
   buildShortcutSections,
   type ShortcutSectionView,
-} from "@/lib/domain/shortcuts/shortcut-sections";
-import { useKeyboardShortcutsDialogStore } from "@/stores/shortcuts/keyboard-shortcuts-dialog-store";
+} from "#product/lib/domain/shortcuts/shortcut-sections";
+import { useKeyboardShortcutsDialogStore } from "#product/stores/shortcuts/keyboard-shortcuts-dialog-store";
 
 function ShortcutSection({ section }: { section: ShortcutSectionView }) {
   return (

@@ -2,7 +2,7 @@ import type {
   TranscriptItem,
   TranscriptState,
 } from "@anyharness/sdk";
-import { ReasoningBlock } from "@/components/workspace/chat/tool-calls/ReasoningBlock";
+import { ReasoningBlock } from "#product/components/workspace/chat/tool-calls/ReasoningBlock";
 import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
 import {
   extractClaudePlanBody,
@@ -20,29 +20,29 @@ import {
   resolveUserMessageActionTime,
 } from "@proliferate/product-domain/chats/transcript/transcript-action-time";
 import type { TranscriptOpenSessionRole } from "@proliferate/product-domain/chats/transcript/transcript-open-target";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { AssistantMessage } from "./AssistantMessage";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { AssistantMessage } from "#product/components/workspace/chat/transcript/AssistantMessage";
 import {
   renderTranscriptCodeBlock,
   renderTranscriptInlineCode,
   renderTranscriptLink,
-} from "./transcript-markdown";
-import { ClaudePlanCard } from "./ClaudePlanCard";
-import { ModeTransitionDivider } from "./ModeTransitionDivider";
-import { ConnectedProposedPlanItem } from "./ConnectedProposedPlanItem";
-import { SessionErrorItem } from "./SessionErrorItem";
-import { SubagentWakeBadge } from "./SubagentWakeBadge";
-import { SystemMessage } from "./SystemMessage";
-import { TranscriptActivityBlock } from "./TranscriptActivityBlock";
-import { TranscriptToolCallItemBlock } from "./TranscriptToolCallItemBlock";
-import { UserMessage } from "./UserMessage";
-import { UserMessageProvenanceChrome } from "./UserMessageProvenanceChrome";
-import { useProposedPlanToolCallIds } from "./ProposedPlanToolCallIdsContext";
+} from "#product/components/workspace/chat/transcript/transcript-markdown";
+import { ClaudePlanCard } from "#product/components/workspace/chat/transcript/ClaudePlanCard";
+import { ModeTransitionDivider } from "#product/components/workspace/chat/transcript/ModeTransitionDivider";
+import { ConnectedProposedPlanItem } from "#product/components/workspace/chat/transcript/ConnectedProposedPlanItem";
+import { SessionErrorItem } from "#product/components/workspace/chat/transcript/SessionErrorItem";
+import { SubagentWakeBadge } from "#product/components/workspace/chat/transcript/SubagentWakeBadge";
+import { SystemMessage } from "#product/components/workspace/chat/transcript/SystemMessage";
+import { TranscriptActivityBlock } from "#product/components/workspace/chat/transcript/TranscriptActivityBlock";
+import { TranscriptToolCallItemBlock } from "#product/components/workspace/chat/transcript/TranscriptToolCallItemBlock";
+import { UserMessage } from "#product/components/workspace/chat/transcript/UserMessage";
+import { UserMessageProvenanceChrome } from "#product/components/workspace/chat/transcript/UserMessageProvenanceChrome";
+import { useProposedPlanToolCallIds } from "#product/components/workspace/chat/transcript/ProposedPlanToolCallIdsContext";
 import {
   useTranscriptCanOpenSession,
   useTranscriptOpenSession,
   useTranscriptSessionId,
-} from "./TranscriptContexts";
+} from "#product/components/workspace/chat/transcript/TranscriptContexts";
 
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
 

@@ -1,16 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanupSessionCreationFailure } from "@/hooks/sessions/workflows/session-creation-failure-cleanup";
+import { cleanupSessionCreationFailure } from "#product/hooks/sessions/workflows/session-creation-failure-cleanup";
 import {
   createEmptySessionRecord,
   getSessionRecord,
   putSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useChatInputStore } from "@/stores/chat/chat-input-store";
-import { useChatPromptRecoveryStore } from "@/stores/chat/chat-prompt-recovery-store";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
+} from "#product/stores/sessions/session-records";
+import { useChatInputStore } from "#product/stores/chat/chat-input-store";
+import { useChatPromptRecoveryStore } from "#product/stores/chat/chat-prompt-recovery-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 
 beforeEach(() => {
   useChatInputStore.setState({ draftByWorkspaceId: {} });

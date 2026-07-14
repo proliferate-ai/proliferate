@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
 import { useRuntimeHealthQuery } from "@anyharness/sdk-react";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { useAgentResourcesCache } from "@/hooks/access/anyharness/agents/use-agent-resources-cache";
-import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { useAgentResourcesCache } from "#product/hooks/access/anyharness/agents/use-agent-resources-cache";
+import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
 
 /**
  * Keeps the desktop agent list in sync with the runtime's OWN startup work.

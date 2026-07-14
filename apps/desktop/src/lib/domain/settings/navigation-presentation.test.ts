@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   isSettingsAdminOnlyScope,
   SETTINGS_SCOPE_ORDER,
-} from "@/lib/domain/settings/navigation-presentation";
+} from "#product/lib/domain/settings/navigation-presentation";
 
 describe("isSettingsAdminOnlyScope", () => {
   it("flags the org scope as admin-only, since every one of its sections is", () => {

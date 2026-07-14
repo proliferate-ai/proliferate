@@ -3,17 +3,17 @@ import type {
   FileChangeContentPart,
   ToolCallItem,
 } from "@anyharness/sdk";
-import { DiffViewer } from "@/components/content/ui/DiffViewer";
-import { FileChangeStats } from "@/components/content/ui/FileChangeStats";
-import { FileDiffCard } from "@/components/content/ui/FileDiffCard";
-import { HighlightedCodeBlock } from "@/components/content/ui/HighlightedCodeBlock";
-import { useFileReferenceActions } from "@/hooks/workspaces/workflows/files/use-file-reference-actions";
+import { DiffViewer } from "#product/components/content/ui/DiffViewer";
+import { FileChangeStats } from "#product/components/content/ui/FileChangeStats";
+import { FileDiffCard } from "#product/components/content/ui/FileDiffCard";
+import { HighlightedCodeBlock } from "#product/components/content/ui/HighlightedCodeBlock";
+import { useFileReferenceActions } from "#product/hooks/workspaces/workflows/files/use-file-reference-actions";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
 import { ChevronRight } from "@proliferate/ui/icons";
 import { basename } from "@proliferate/product-domain/chats/tools/collapsed-action-labels";
-import { CollapsedActionIcon } from "./CollapsedActionIcon";
-import { ActionFileLink, ActionRowIcon } from "./CollapsedActionRowPrimitives";
-import { GenericActionRow } from "./CollapsedGenericActionRow";
+import { CollapsedActionIcon } from "#product/components/workspace/chat/tool-calls/CollapsedActionIcon";
+import { ActionFileLink, ActionRowIcon } from "#product/components/workspace/chat/tool-calls/CollapsedActionRowPrimitives";
+import { GenericActionRow } from "#product/components/workspace/chat/tool-calls/CollapsedGenericActionRow";
 
 export function EditRows({ item }: { item: ToolCallItem }) {
   const fileChanges = item.contentParts.filter(

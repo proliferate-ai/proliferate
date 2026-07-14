@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveDesktopTelemetryRoute } from "./routes";
+import { resolveDesktopTelemetryRoute } from "#product/lib/domain/telemetry/routes";
 
 describe("resolveDesktopTelemetryRoute", () => {
   it("classifies known desktop routes", () => {

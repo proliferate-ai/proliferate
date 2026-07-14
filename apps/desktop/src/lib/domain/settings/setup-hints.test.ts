@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSetupHintEnabled, toggleSetupHint } from "./setup-hints";
+import { isSetupHintEnabled, toggleSetupHint } from "#product/lib/domain/settings/setup-hints";
 
 describe("setup hint helpers", () => {
   it("checks commands by trimmed line", () => {

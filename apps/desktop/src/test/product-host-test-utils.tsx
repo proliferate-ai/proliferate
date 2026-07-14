@@ -7,7 +7,7 @@ import { ProductHostProvider } from "@proliferate/product-client/host/ProductHos
 import {
   makeTestProductHost,
   type TestProductHostOptions,
-} from "@/test/product-host-fixtures";
+} from "#product/test/product-host-fixtures";
 
 /**
  * Render helpers that mount a real {@link ProductHostProvider}. The pure host
@@ -21,7 +21,7 @@ export {
   testAuthState,
   type TestProductHostOptions,
   type TestAuthStateOptions,
-} from "@/test/product-host-fixtures";
+} from "#product/test/product-host-fixtures";
 
 /** Wrap `ui` in a ProductHostProvider carrying a test host. */
 export function renderWithProductHost(

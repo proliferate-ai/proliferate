@@ -1,17 +1,17 @@
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
-import { CloudGuard } from "@/components/cloud/CloudGuard";
-import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
-import { getProviderDisplayName } from "@/lib/domain/agents/provider-display";
-import { useAgentSurfaceStore } from "@/stores/ui/agent-surface-store";
-import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
-import { HarnessAllModelsSection } from "./HarnessAllModelsSection";
-import { HarnessAuthDetailsSection } from "./HarnessAuthDetailsSection";
-import { HarnessAuthSection, deriveSelectedMethod } from "./HarnessAuthSection";
-import { HarnessConfigIssueBanner } from "./HarnessConfigIssueBanner";
-import { HarnessSettingsSection } from "./HarnessSettingsSection";
-import { useHarnessAuthEditor } from "@/hooks/agents/workflows/use-harness-auth-editor";
-import { useHarnessInstallAction } from "@/hooks/agents/workflows/use-harness-install-action";
+import { CloudGuard } from "#product/components/cloud/CloudGuard";
+import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
+import { getProviderDisplayName } from "#product/lib/domain/agents/provider-display";
+import { useAgentSurfaceStore } from "#product/stores/ui/agent-surface-store";
+import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
+import { HarnessAllModelsSection } from "#product/components/settings/panes/agents/harness/HarnessAllModelsSection";
+import { HarnessAuthDetailsSection } from "#product/components/settings/panes/agents/harness/HarnessAuthDetailsSection";
+import { HarnessAuthSection, deriveSelectedMethod } from "#product/components/settings/panes/agents/harness/HarnessAuthSection";
+import { HarnessConfigIssueBanner } from "#product/components/settings/panes/agents/harness/HarnessConfigIssueBanner";
+import { HarnessSettingsSection } from "#product/components/settings/panes/agents/harness/HarnessSettingsSection";
+import { useHarnessAuthEditor } from "#product/hooks/agents/workflows/use-harness-auth-editor";
+import { useHarnessInstallAction } from "#product/hooks/agents/workflows/use-harness-install-action";
 
 interface HarnessPaneProps {
   harnessKind: string;

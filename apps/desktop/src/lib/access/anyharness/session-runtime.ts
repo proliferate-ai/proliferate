@@ -12,13 +12,13 @@ import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-meas
 import type {
   MeasurementOperationId,
   MeasurementWorkflowStep,
-} from "@/lib/domain/telemetry/debug-measurement-catalog";
-import { waitForSessionHistoryTimeout } from "@/lib/infra/abort/session-history-timeout";
+} from "#product/lib/domain/telemetry/debug-measurement-catalog";
+import { waitForSessionHistoryTimeout } from "#product/lib/infra/abort/session-history-timeout";
 import {
   resolveRuntimeTargetForWorkspace,
   type RuntimeTarget,
-} from "@/lib/access/anyharness/runtime-target";
-import type { CloudSandboxGatewayUrlSource } from "@/lib/access/cloud/cloud-sandbox-gateway";
+} from "#product/lib/access/anyharness/runtime-target";
+import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 import {
   getSession,
   listSessionEvents,
@@ -26,13 +26,13 @@ import {
   resumeSession as resumeRuntimeSession,
   type AnyHarnessWorkspaceSessionConnection,
   type ListSessionsOptions,
-} from "@/lib/access/anyharness/sessions";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+} from "#product/lib/access/anyharness/sessions";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import {
   requireMaterializedSessionId,
-} from "@/stores/sessions/session-records";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+} from "#product/stores/sessions/session-records";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 interface SessionStreamCallbacks {
   onHandle?: (handle: SessionStreamHandle) => void;

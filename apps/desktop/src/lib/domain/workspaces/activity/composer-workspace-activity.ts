@@ -3,7 +3,7 @@ import type {
   WorkspacePrChecks,
   WorkspacePrReviewDecision,
   WorkspacePrState,
-} from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
+} from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
 
 export type WorkspaceActivityTone = "default" | "attention" | "destructive";
 

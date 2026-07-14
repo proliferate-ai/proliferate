@@ -3,7 +3,7 @@ import {
   computeChatDockLowerBackdropTopPx,
   computeChatStableBottomInsetPx,
   computeChatSurfaceBottomInsetPx,
-} from "@/config/chat-layout";
+} from "#product/config/chat-layout";
 
 
 export function useChatDockInset() {

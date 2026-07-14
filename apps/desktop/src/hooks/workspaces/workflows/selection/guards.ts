@@ -1,4 +1,4 @@
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 export function isWorkspaceSelectionCurrent(
   workspaceId: string,

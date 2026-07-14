@@ -7,7 +7,7 @@ import type {
   SessionEventEnvelope,
   SessionRawNotificationEnvelope,
 } from "@anyharness/sdk";
-import type { SessionDebugActionState } from "@/lib/domain/support/session-debug/action-state";
+import type { SessionDebugActionState } from "#product/lib/domain/support/session-debug/action-state";
 import {
   copyInvestigationJsonAction,
   exportActiveSessionDebugJsonAction,
@@ -16,7 +16,7 @@ import {
   type SessionDebugActionDependencies,
   type SessionDebugClient,
   type SessionDebugRuntimeConnection,
-} from "@/lib/workflows/support/session-debug-export-workflows";
+} from "#product/lib/workflows/support/session-debug-export-workflows";
 
 const now = new Date("2026-04-16T18:30:05.000Z");
 const runtimeUrl = "http://127.0.0.1:7007";

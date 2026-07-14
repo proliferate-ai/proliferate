@@ -1,9 +1,9 @@
 import type {
   DesktopAgentLaunchAgent,
   DesktopAgentLaunchModel,
-} from "@/lib/domain/agents/cloud-launch-catalog";
-import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
-import type { AutomationRecord } from "@/lib/domain/automations/run/ui-records";
+} from "#product/lib/domain/agents/cloud-launch-catalog";
+import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
+import type { AutomationRecord } from "#product/lib/domain/automations/run/ui-records";
 
 export function resolveAutomationAgent(
   agents: DesktopAgentLaunchAgent[],

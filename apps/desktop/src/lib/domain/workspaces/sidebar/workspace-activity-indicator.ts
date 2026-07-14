@@ -3,18 +3,18 @@ import {
   latestLogicalWorkspaceTimestamp,
   logicalWorkspaceMatchesId,
   logicalWorkspaceRelatedIds,
-} from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
+} from "#product/lib/domain/workspaces/cloud/logical-workspace-lookup";
+import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
 import {
   activeWorkspaceActivity,
   sidebarStatusIndicatorFromActivity,
   sidebarWorkspaceVariantForLogicalWorkspace,
   type SidebarStatusIndicator,
   type SidebarWorkspaceVariant,
-} from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
-import { isWorkspaceNeedsReview } from "@/lib/domain/workspaces/sidebar/sidebar-review";
-import { resolveLogicalWorkspaceRecency } from "@/lib/domain/workspaces/sidebar/recency";
-import { resolveSidebarWorkspaceTypes } from "@/lib/domain/workspaces/sidebar/sidebar-workspace-types";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
+import { isWorkspaceNeedsReview } from "#product/lib/domain/workspaces/sidebar/sidebar-review";
+import { resolveLogicalWorkspaceRecency } from "#product/lib/domain/workspaces/sidebar/recency";
+import { resolveSidebarWorkspaceTypes } from "#product/lib/domain/workspaces/sidebar/sidebar-workspace-types";
 
 export type WorkspaceActivityIndicatorState = "idle" | "attention";
 

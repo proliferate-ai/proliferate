@@ -4,8 +4,8 @@ import {
   fileDiffViewerTarget,
   fileViewerTarget,
   viewerTargetKey,
-} from "@/lib/domain/workspaces/viewer/viewer-target";
-import { useWorkspaceViewerTabsStore } from "./workspace-viewer-tabs-store";
+} from "#product/lib/domain/workspaces/viewer/viewer-target";
+import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
 
 describe("workspace viewer tabs store", () => {
   beforeEach(() => {

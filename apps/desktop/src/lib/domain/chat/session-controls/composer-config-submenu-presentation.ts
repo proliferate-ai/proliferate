@@ -1,8 +1,8 @@
 import {
   resolveSessionControlPresentation,
-} from "@/lib/domain/chat/session-controls/session-mode-control";
-import { resolveReasoningEffortPresentation } from "@/lib/domain/chat/session-controls/session-reasoning-effort-control";
-import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
+} from "#product/lib/domain/chat/session-controls/session-mode-control";
+import { resolveReasoningEffortPresentation } from "#product/lib/domain/chat/session-controls/session-reasoning-effort-control";
+import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 
 export function resolveComposerControlOptionLabel(
   agentKind: string | null,

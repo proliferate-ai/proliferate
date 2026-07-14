@@ -1,12 +1,12 @@
 import { useCallback } from "react";
-import { PLAN_ATTACHMENT_LIMIT } from "@/config/plans";
+import { PLAN_ATTACHMENT_LIMIT } from "#product/config/plans";
 import {
   planAttachmentPointerFromDescriptor,
   type PromptPlanAttachmentDescriptor,
   type PromptPlanAttachmentPointer,
 } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
-import { useChatPlanAttachmentStore } from "@/stores/chat/chat-plan-attachment-store";
-import { useToastStore } from "@/stores/toast/toast-store";
+import { useChatPlanAttachmentStore } from "#product/stores/chat/chat-plan-attachment-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 const EMPTY_PLANS: PromptPlanAttachmentPointer[] = [];
 

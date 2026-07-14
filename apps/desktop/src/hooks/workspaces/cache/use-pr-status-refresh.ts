@@ -8,9 +8,9 @@ import { useCallback } from "react";
 import {
   listRepoRootPullRequestStatuses,
   type RepoPullRequestStatusesResult,
-} from "@/lib/access/anyharness/pull-requests";
-import { isTimestampNewer } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+} from "#product/lib/access/anyharness/pull-requests";
+import { isTimestampNewer } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
 // Trailing debounce so bursts (several turns ending at once) coalesce into a
 // single refresh=1 request per repo root.

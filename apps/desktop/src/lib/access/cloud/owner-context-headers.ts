@@ -1,4 +1,4 @@
-import { useOrganizationStore } from "@/stores/organizations/organization-store";
+import { useOrganizationStore } from "#product/stores/organizations/organization-store";
 
 const OWNER_SCOPE_HEADER = "X-Proliferate-Owner-Scope";
 const ORGANIZATION_ID_HEADER = "X-Proliferate-Org-Id";

@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import type {
   DesktopLaunchModelRegistry as SettingsChatModelRegistry,
   DesktopLaunchModelRegistryModel as SettingsChatModel,
-} from "@/lib/domain/agents/cloud-launch-catalog";
-import { withUpdatedDefaultModelIdByAgentKind } from "@/lib/domain/agents/model-options";
+} from "#product/lib/domain/agents/cloud-launch-catalog";
+import { withUpdatedDefaultModelIdByAgentKind } from "#product/lib/domain/agents/model-options";
 import {
   buildPrimaryHarnessPreferenceUpdate,
   buildSettingsChatDefaultRows,
-} from "./chat-defaults";
+} from "#product/lib/domain/settings/chat-defaults";
 
 function model(id: string, displayName: string, isDefault: boolean): SettingsChatModel {
   return {

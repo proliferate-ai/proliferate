@@ -1,4 +1,4 @@
-import { SubagentIdentityGlyph } from "../identity-receipts/SubagentIdentityGlyph";
+import { SubagentIdentityGlyph } from "#product/components/playground/subagents-ux/identity-receipts/SubagentIdentityGlyph";
 
 export function AgentGlyph({
   id,

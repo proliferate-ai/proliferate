@@ -2,18 +2,18 @@ import { useMemo, useState, type ReactNode } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { ComposerAttachedPanel } from "@/components/workspace/chat/input/ComposerAttachedPanel";
-import { WorkspaceArrivalCloudPanel } from "@/components/workspace/chat/surface/WorkspaceArrivalCloudPanel";
-import { useWorkspaceArrivalActions } from "@/hooks/workspaces/workflows/use-workspace-arrival-actions";
-import { useWorkspaceStatusPanelState } from "@/hooks/workspaces/derived/use-workspace-status-panel-state";
-import { usePendingWorkspaceEntryActions } from "@/hooks/workspaces/workflows/use-pending-workspace-entry-actions";
-import { useCloudWorkspaceStatusScreenActions } from "@/hooks/cloud/workflows/use-cloud-workspace-status-screen-actions";
+import { ComposerAttachedPanel } from "#product/components/workspace/chat/input/ComposerAttachedPanel";
+import { WorkspaceArrivalCloudPanel } from "#product/components/workspace/chat/surface/WorkspaceArrivalCloudPanel";
+import { useWorkspaceArrivalActions } from "#product/hooks/workspaces/workflows/use-workspace-arrival-actions";
+import { useWorkspaceStatusPanelState } from "#product/hooks/workspaces/derived/use-workspace-status-panel-state";
+import { usePendingWorkspaceEntryActions } from "#product/hooks/workspaces/workflows/use-pending-workspace-entry-actions";
+import { useCloudWorkspaceStatusScreenActions } from "#product/hooks/cloud/workflows/use-cloud-workspace-status-screen-actions";
 import { useRerunSetupMutation } from "@anyharness/sdk-react";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useDeferredHomeLaunchStore } from "#product/stores/home/deferred-home-launch-store";
 import { ArrowUpRight, Spinner, X } from "@proliferate/ui/icons";
-import type { WorkspaceArrivalViewModel } from "@/lib/domain/workspaces/creation/arrival";
-import { useWorkspaceShellActions } from "@/components/workspace/shell/providers/WorkspaceShellActionsContext";
+import type { WorkspaceArrivalViewModel } from "#product/lib/domain/workspaces/creation/arrival";
+import { useWorkspaceShellActions } from "#product/components/workspace/shell/providers/WorkspaceShellActionsContext";
 
 function SectionRow({
   label,

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   parseTargetWorkspaceSyntheticId,
   targetWorkspaceSyntheticId,
-} from "./target-workspace-id";
+} from "#product/lib/domain/compute/target-workspace-id";
 
 describe("target workspace synthetic ids", () => {
   it("round trips a target workspace id", () => {

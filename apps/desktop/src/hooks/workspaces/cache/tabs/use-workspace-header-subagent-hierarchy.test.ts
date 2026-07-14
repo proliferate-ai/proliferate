@@ -3,10 +3,10 @@ import {
   clearStagedReplacedSessionTombstone,
   resetReplacedSessionTombstonesForTests,
   stageReplacedSessionTombstone,
-} from "@/hooks/sessions/workflows/session-replacement-tombstones";
+} from "#product/hooks/sessions/workflows/session-replacement-tombstones";
 import {
   shouldEnableHeaderSessionScopedQuery,
-} from "./use-workspace-header-subagent-hierarchy";
+} from "#product/hooks/workspaces/cache/tabs/use-workspace-header-subagent-hierarchy";
 
 beforeEach(() => {
   resetReplacedSessionTombstonesForTests();

@@ -5,41 +5,41 @@ import {
   useRef,
   useState,
 } from "react";
-import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
+import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import {
   ManualChatGroupEditorPopover,
   type ManualChatGroupEditorAnchorRect,
-} from "@/components/workspace/shell/tabs/ManualChatGroupEditorPopover";
-import { WorkspaceTabStrip } from "@/components/workspace/shell/tabs/WorkspaceTabStrip";
-import { NewChatButton, ClosedSessionsTrigger } from "@/components/workspace/shell/topbar/HeaderTabsActions";
-import { HeaderTabsStripRows } from "@/components/workspace/shell/topbar/HeaderTabsStripRows";
-import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-handler";
-import { useSessionDismissActions } from "@/hooks/sessions/workflows/use-session-dismiss-actions";
-import { useSessionForkActions } from "@/hooks/sessions/workflows/use-session-fork-actions";
-import { useSessionTitleActions } from "@/hooks/sessions/workflows/use-session-title-actions";
-import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
-import { useResizeObserverWidth } from "@/hooks/ui/layout/use-resize-observer-width";
-import { useHeaderTabsCloseActions } from "@/hooks/workspaces/workflows/tabs/use-header-tabs-close-actions";
-import { useHeaderTabsGroupEditor } from "@/hooks/workspaces/ui/tabs/use-header-tabs-group-editor";
+} from "#product/components/workspace/shell/tabs/ManualChatGroupEditorPopover";
+import { WorkspaceTabStrip } from "#product/components/workspace/shell/tabs/WorkspaceTabStrip";
+import { NewChatButton, ClosedSessionsTrigger } from "#product/components/workspace/shell/topbar/HeaderTabsActions";
+import { HeaderTabsStripRows } from "#product/components/workspace/shell/topbar/HeaderTabsStripRows";
+import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
+import { useSessionDismissActions } from "#product/hooks/sessions/workflows/use-session-dismiss-actions";
+import { useSessionForkActions } from "#product/hooks/sessions/workflows/use-session-fork-actions";
+import { useSessionTitleActions } from "#product/hooks/sessions/workflows/use-session-title-actions";
+import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
+import { useResizeObserverWidth } from "#product/hooks/ui/layout/use-resize-observer-width";
+import { useHeaderTabsCloseActions } from "#product/hooks/workspaces/workflows/tabs/use-header-tabs-close-actions";
+import { useHeaderTabsGroupEditor } from "#product/hooks/workspaces/ui/tabs/use-header-tabs-group-editor";
 import {
   useHeaderTabsLayout,
-} from "@/hooks/workspaces/ui/tabs/use-header-tabs-layout";
-import { useHeaderTabsMultiSelect } from "@/hooks/workspaces/ui/tabs/use-header-tabs-multi-select";
-import { useManualChatGroupActions } from "@/hooks/workspaces/workflows/tabs/use-manual-chat-group-actions";
-import { useChatTabVisibilityActions } from "@/hooks/workspaces/workflows/tabs/use-chat-tab-visibility-actions";
-import { useTabGroupActions } from "@/hooks/workspaces/workflows/tabs/use-tab-group-actions";
-import { useShellTabOrderActions } from "@/hooks/workspaces/workflows/tabs/use-shell-tab-order-actions";
-import { useShellTabDrag } from "@/hooks/workspaces/ui/tabs/use-tab-drag";
+} from "#product/hooks/workspaces/ui/tabs/use-header-tabs-layout";
+import { useHeaderTabsMultiSelect } from "#product/hooks/workspaces/ui/tabs/use-header-tabs-multi-select";
+import { useManualChatGroupActions } from "#product/hooks/workspaces/workflows/tabs/use-manual-chat-group-actions";
+import { useChatTabVisibilityActions } from "#product/hooks/workspaces/workflows/tabs/use-chat-tab-visibility-actions";
+import { useTabGroupActions } from "#product/hooks/workspaces/workflows/tabs/use-tab-group-actions";
+import { useShellTabOrderActions } from "#product/hooks/workspaces/workflows/tabs/use-shell-tab-order-actions";
+import { useShellTabDrag } from "#product/hooks/workspaces/ui/tabs/use-tab-drag";
 import {
   useOptionalWorkspaceHeaderTabsViewModelContext,
-} from "@/components/workspace/shell/providers/WorkspaceHeaderTabsViewModelContext";
-import { useWorkspaceTabActions } from "@/hooks/workspaces/workflows/tabs/use-workspace-tab-actions";
-import { useHeaderTabsUrgentHighlight } from "@/hooks/workspaces/ui/use-header-tabs-urgent-highlight";
-import type { ManualChatGroupId } from "@/lib/domain/workspaces/tabs/manual-groups";
-import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
-import { useToastStore } from "@/stores/toast/toast-store";
+} from "#product/components/workspace/shell/providers/WorkspaceHeaderTabsViewModelContext";
+import { useWorkspaceTabActions } from "#product/hooks/workspaces/workflows/tabs/use-workspace-tab-actions";
+import { useHeaderTabsUrgentHighlight } from "#product/hooks/workspaces/ui/use-header-tabs-urgent-highlight";
+import type { ManualChatGroupId } from "#product/lib/domain/workspaces/tabs/manual-groups";
+import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
 import { startMeasurementOperation } from "@/lib/infra/measurement/debug-measurement";
-import { useShortcutRevealVisible } from "@/providers/ShortcutRevealProvider";
+import { useShortcutRevealVisible } from "#product/providers/ShortcutRevealProvider";
 
 type HeaderTabsViewModel = NonNullable<
   ReturnType<typeof useOptionalWorkspaceHeaderTabsViewModelContext>

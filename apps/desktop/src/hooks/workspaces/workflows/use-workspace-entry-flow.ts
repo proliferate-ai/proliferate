@@ -1,35 +1,35 @@
 import { useCallback } from "react";
-import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-state";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useChatInputStore } from "@/stores/chat/chat-input-store";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/creation/arrival";
+import { resetWorkspaceEditorState } from "#product/stores/editor/workspace-editor-state";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useChatInputStore } from "#product/stores/chat/chat-input-store";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
+import { buildWorkspaceArrivalEvent } from "#product/lib/domain/workspaces/creation/arrival";
 import {
   type PendingWorkspaceEntry,
   type PendingWorkspaceInitialSession,
   buildPendingWorkspaceUiKey,
-} from "@/lib/domain/workspaces/creation/pending-entry";
-import { useWorkspaceSelection } from "@/hooks/workspaces/workflows/selection/use-workspace-selection";
+} from "#product/lib/domain/workspaces/creation/pending-entry";
+import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
 import {
   ensureRepoGroupExpanded,
   useWorkspaceUiStore,
-} from "@/stores/preferences/workspace-ui-store";
+} from "#product/stores/preferences/workspace-ui-store";
 import {
   elapsedSince,
   logLatency,
 } from "@/lib/infra/measurement/debug-latency";
 import {
   usePendingWorkspaceSessionMaterialization,
-} from "@/hooks/workspaces/workflows/use-pending-workspace-session-materialization";
-import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
+} from "#product/hooks/workspaces/workflows/use-pending-workspace-session-materialization";
+import { useConfiguredLaunchReadiness } from "#product/hooks/chat/derived/use-configured-launch-readiness";
 import {
   ensurePendingWorkspaceSessionShell,
-} from "@/hooks/workspaces/workflows/pending-workspace-session-shell";
-import { writeChatShellIntentForSession } from "@/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
-import { getSessionRecord } from "@/stores/sessions/session-records";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { batchSessionStoreWrites } from "@/lib/infra/scheduling/react-batching";
-import { buildPendingInitialSession } from "@/hooks/workspaces/workflows/workspace-entry-action-helpers";
+} from "#product/hooks/workspaces/workflows/pending-workspace-session-shell";
+import { writeChatShellIntentForSession } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
+import { getSessionRecord } from "#product/stores/sessions/session-records";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { batchSessionStoreWrites } from "#product/lib/infra/scheduling/react-batching";
+import { buildPendingInitialSession } from "#product/hooks/workspaces/workflows/workspace-entry-action-helpers";
 
 interface FinalizeSelectionOptions {
   latencyFlowId?: string | null;

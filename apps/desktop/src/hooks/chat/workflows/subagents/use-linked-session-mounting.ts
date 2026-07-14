@@ -5,8 +5,8 @@ import {
   createSessionRecordFromSummary,
   getSessionRecord,
   putSessionRecord,
-} from "@/stores/sessions/session-records";
-import type { SessionRelationship } from "@/lib/domain/sessions/directory/relationship";
+} from "#product/stores/sessions/session-records";
+import type { SessionRelationship } from "#product/lib/domain/sessions/directory/relationship";
 
 interface MountLinkedSessionInput {
   sessionId: string;

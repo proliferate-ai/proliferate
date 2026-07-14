@@ -8,22 +8,22 @@ import type {
   ToolResultTextContentPart,
 } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { BashCommandCall } from "@/components/workspace/chat/tool-calls/BashCommandCall";
-import { CoworkArtifactToolActionRow } from "@/components/workspace/chat/tool-calls/CoworkArtifactToolActionRow";
-import { CoworkCodingToolActionRow } from "@/components/workspace/chat/tool-calls/cowork/CoworkCodingToolActionRow";
-import { FileChangeCall } from "@/components/workspace/chat/tool-calls/FileChangeCall";
-import { FileReadCall } from "@/components/workspace/chat/tool-calls/FileReadCall";
-import { GenericToolResultRow } from "@/components/workspace/chat/tool-calls/GenericToolResultRow";
-import { SkillsToolResultRow } from "@/components/workspace/chat/tool-calls/SkillsToolResultRow";
-import { SubagentToolActionRow } from "@/components/workspace/chat/tool-calls/SubagentToolActionRow";
-import { useOpenCoworkCodingSession } from "@/hooks/cowork/workflows/use-open-cowork-coding-session";
-import { useWorkspaceSelection } from "@/hooks/workspaces/workflows/selection/use-workspace-selection";
+import { BashCommandCall } from "#product/components/workspace/chat/tool-calls/BashCommandCall";
+import { CoworkArtifactToolActionRow } from "#product/components/workspace/chat/tool-calls/CoworkArtifactToolActionRow";
+import { CoworkCodingToolActionRow } from "#product/components/workspace/chat/tool-calls/cowork/CoworkCodingToolActionRow";
+import { FileChangeCall } from "#product/components/workspace/chat/tool-calls/FileChangeCall";
+import { FileReadCall } from "#product/components/workspace/chat/tool-calls/FileReadCall";
+import { GenericToolResultRow } from "#product/components/workspace/chat/tool-calls/GenericToolResultRow";
+import { SkillsToolResultRow } from "#product/components/workspace/chat/tool-calls/SkillsToolResultRow";
+import { SubagentToolActionRow } from "#product/components/workspace/chat/tool-calls/SubagentToolActionRow";
+import { useOpenCoworkCodingSession } from "#product/hooks/cowork/workflows/use-open-cowork-coding-session";
+import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
 import { deriveSubagentMcpReceiptPresentation } from "@proliferate/product-domain/chats/subagents/subagent-tool-presentation";
 import { deriveSkillsToolResultPresentation } from "@proliferate/product-domain/chats/tools/skills-tool-result";
 import { describeToolCallDisplay } from "@proliferate/product-domain/chats/tools/tool-call-display";
 import { normalizeToolResultText } from "@proliferate/product-domain/chats/tools/tool-result-text";
-import { CHAT_VISIBLE_FILE_CHANGE_LIMIT } from "@/lib/domain/workspaces/changes/diff-display-policy";
-import { ToolKindIcon } from "./TranscriptToolKindIcon";
+import { CHAT_VISIBLE_FILE_CHANGE_LIMIT } from "#product/lib/domain/workspaces/changes/diff-display-policy";
+import { ToolKindIcon } from "#product/components/workspace/chat/transcript/TranscriptToolKindIcon";
 
 export function TranscriptToolCallItemBlock({
   item,

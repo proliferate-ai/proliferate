@@ -5,11 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   resetWorkspaceActivityIndicatorExportForTests,
   useWorkspaceActivityIndicator,
-} from "@/hooks/app/lifecycle/use-workspace-activity-indicator";
-import { createDirectoryEntry } from "@/lib/domain/sessions/directory/directory-entry";
+} from "#product/hooks/app/lifecycle/use-workspace-activity-indicator";
+import { createDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-entry";
 import {
   makeLocalLogicalWorkspace,
-} from "@/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
 
 const tauriMocks = vi.hoisted(() => ({
   setWorkspaceActivityIndicator: vi.fn(async () => undefined),

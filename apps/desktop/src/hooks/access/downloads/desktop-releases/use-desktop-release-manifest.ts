@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchDesktopReleaseManifest } from "@/lib/access/downloads/desktop-release-manifest";
+import { fetchDesktopReleaseManifest } from "#product/lib/access/downloads/desktop-release-manifest";
 import {
   normalizeReleaseVersion,
   parseDesktopReleaseManifest,
   type DesktopReleaseManifest,
-} from "@/lib/domain/updates/release-notice";
-import { desktopReleaseManifestKey } from "./query-keys";
+} from "#product/lib/domain/updates/release-notice";
+import { desktopReleaseManifestKey } from "#product/hooks/access/downloads/desktop-releases/query-keys";
 
 export function useDesktopReleaseManifest(version: string | null | undefined) {
   const requestedVersion = normalizeReleaseVersion(version);

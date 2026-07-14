@@ -1,13 +1,13 @@
 import { useMemo } from "react";
 import { useRepositories } from "@proliferate/cloud-sdk-react";
-import { useComputeTargetOptions } from "@/hooks/compute/derived/use-compute-target-options";
-import { useSettingsRepositories } from "@/hooks/settings/derived/use-settings-repositories";
-import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
+import { useComputeTargetOptions } from "#product/hooks/compute/derived/use-compute-target-options";
+import { useSettingsRepositories } from "#product/hooks/settings/derived/use-settings-repositories";
+import { useStandardRepoProjection } from "#product/hooks/workspaces/derived/use-standard-repo-projection";
 import {
   buildAutomationTargetState,
   type AutomationTargetSelection,
-} from "@/lib/domain/automations/target/selection";
-import type { AutomationTargetRepoConfigRecord } from "@/lib/domain/automations/target/records";
+} from "#product/lib/domain/automations/target/selection";
+import type { AutomationTargetRepoConfigRecord } from "#product/lib/domain/automations/target/records";
 
 const EMPTY_REPO_CONFIGS: AutomationTargetRepoConfigRecord[] = [];
 const EMPTY_CLOUD_WORKSPACES: ReturnType<typeof useStandardRepoProjection>["cloudWorkspaces"] = [];

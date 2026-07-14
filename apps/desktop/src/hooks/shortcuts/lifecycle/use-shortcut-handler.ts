@@ -1,9 +1,9 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
-import type { ShortcutId } from "@/config/shortcuts/registry";
+import type { ShortcutId } from "#product/config/shortcuts/registry";
 import {
   registerShortcutHandler,
   type ShortcutHandler,
-} from "@/lib/domain/shortcuts/registry";
+} from "#product/lib/domain/shortcuts/registry";
 
 interface UseShortcutHandlerOptions {
   enabled?: boolean;

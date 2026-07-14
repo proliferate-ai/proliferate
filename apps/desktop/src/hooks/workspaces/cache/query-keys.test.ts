@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
-import type { WorkspaceCollections } from "@/lib/domain/workspaces/cloud/collections";
+import type { WorkspaceCollections } from "#product/lib/domain/workspaces/cloud/collections";
 import {
   getWorkspaceCollectionsFromCache,
   workspaceCollectionsKey,
   workspaceCollectionsScopeKey,
-} from "./query-keys";
+} from "#product/hooks/workspaces/cache/query-keys";
 
 function makeCollections(overrides: Partial<WorkspaceCollections> = {}): WorkspaceCollections {
   return {

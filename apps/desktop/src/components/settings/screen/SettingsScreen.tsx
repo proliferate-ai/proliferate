@@ -5,17 +5,17 @@ import {
   SETTINGS_DEFAULT_SECTION,
   TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION,
   type SettingsSection,
-} from "@/config/settings";
-import { SettingsContentBoundary } from "./SettingsContentBoundary";
-import { renderSettingsSection } from "./render-settings-section";
+} from "#product/config/settings";
+import { SettingsContentBoundary } from "#product/components/settings/screen/SettingsContentBoundary";
+import { renderSettingsSection } from "#product/components/settings/screen/render-settings-section";
 import {
   type SettingsRepositoryEntry,
-} from "@/lib/domain/settings/repositories";
-import { type SettingsFocus } from "@/lib/domain/settings/navigation";
+} from "#product/lib/domain/settings/repositories";
+import { type SettingsFocus } from "#product/lib/domain/settings/navigation";
 import {
   resolveRepoScopeSelection,
   type RepoSettingsContext,
-} from "@/lib/domain/settings/repo-scope-selection";
+} from "#product/lib/domain/settings/repo-scope-selection";
 import {
   SETTINGS_SCOPE_LABELS,
   SETTINGS_SCOPE_ORDER,
@@ -24,17 +24,17 @@ import {
   isSettingsAdminOnlyScope,
   isSettingsAdminOnlySection,
   isSettingsHarnessSection,
-} from "@/lib/domain/settings/navigation-presentation";
-import { RepoScopeHeaderControls } from "@/components/settings/screen/RepoScopeHeaderControls";
-import { AgentScopeHeaderControls } from "@/components/settings/screen/AgentScopeHeaderControls";
-import { SettingsSidebar } from "@/components/settings/sidebar/SettingsSidebar";
+} from "#product/lib/domain/settings/navigation-presentation";
+import { RepoScopeHeaderControls } from "#product/components/settings/screen/RepoScopeHeaderControls";
+import { AgentScopeHeaderControls } from "#product/components/settings/screen/AgentScopeHeaderControls";
+import { SettingsSidebar } from "#product/components/settings/sidebar/SettingsSidebar";
 import { SettingsScopeTabs } from "@proliferate/product-ui/settings/SettingsScopeTabs";
 import { ArrowLeft } from "lucide-react";
-import { SETTINGS_COPY } from "@/copy/settings/settings-copy";
-import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
+import { SETTINGS_COPY } from "#product/copy/settings/settings-copy";
+import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import { useUpdater } from "@/hooks/access/tauri/use-updater";
-import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
-import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
+import { useIsAdmin } from "#product/hooks/access/cloud/organizations/use-is-admin";
+import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
 
 interface SettingsScreenProps {
   activeSection: SettingsSection;

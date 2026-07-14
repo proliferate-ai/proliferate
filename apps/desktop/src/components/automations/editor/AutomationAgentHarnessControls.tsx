@@ -1,10 +1,10 @@
-import { AgentHarnessModelSelector } from "@/components/agents/AgentHarnessModelSelector";
-import { SessionConfigControls } from "@/components/workspace/chat/input/SessionConfigControls";
+import { AgentHarnessModelSelector } from "#product/components/agents/AgentHarnessModelSelector";
+import { SessionConfigControls } from "#product/components/workspace/chat/input/SessionConfigControls";
 import type {
   DesktopAgentLaunchAgent,
   DesktopAgentLaunchModel,
-} from "@/lib/domain/agents/cloud-launch-catalog";
-import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
+} from "#product/lib/domain/agents/cloud-launch-catalog";
+import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 
 export function AutomationAgentHarnessControls({
   agents,

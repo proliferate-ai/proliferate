@@ -3,7 +3,7 @@
 import type { PromptCapabilities } from "@anyharness/sdk";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { usePromptAttachments } from "./use-prompt-attachments";
+import { usePromptAttachments } from "#product/hooks/chat/ui/use-prompt-attachments";
 
 const promptCapabilities: PromptCapabilities = {
   image: true,

@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useProductStorageContext } from "@/hooks/persistence/facade/use-product-storage-context";
-import type { ComputeTargetAppearancePreference } from "@/lib/domain/compute/target-appearance";
+import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
+import type { ComputeTargetAppearancePreference } from "#product/lib/domain/compute/target-appearance";
 import {
   getComputeTargetAppearancePreferences,
   setComputeTargetAppearancePreference,
   type ComputeTargetAppearancePreferencesDependencies,
-} from "@/lib/workflows/preferences/compute-target-appearance-preferences";
+} from "#product/lib/workflows/preferences/compute-target-appearance-preferences";
 import {
   readPersistedJsonValue,
   writePersistedJson,
-} from "@/lib/infra/persistence/product-storage";
+} from "#product/lib/infra/persistence/product-storage";
 
 export function useComputeTargetAppearancePreferences() {
   const storage = useProductStorageContext();

@@ -6,21 +6,21 @@ import {
   type WorkspacesCommandItemView,
 } from "@proliferate/product-ui/workspaces/WorkspacesCommandList";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
-import { MainSidebarPageShell } from "@/components/workspace/shell/screen/MainSidebarPageShell";
-import { SHORTCUTS } from "@/config/shortcuts/registry";
-import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
-import { useWorkspaceGitStatuses } from "@/hooks/workspaces/derived/use-workspace-git-statuses";
-import { useWorkspaceSidebarState } from "@/hooks/workspaces/derived/use-workspace-sidebar-state";
-import { useWorkspaceSidebarActions } from "@/hooks/workspaces/workflows/use-workspace-sidebar-actions";
-import { useAppCommandActionsContext } from "@/providers/AppCommandActionsProvider";
-import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
-import { formatSidebarRelativeTime } from "@/lib/domain/workspaces/display/workspace-display";
+import { MainSidebarPageShell } from "#product/components/workspace/shell/screen/MainSidebarPageShell";
+import { SHORTCUTS } from "#product/config/shortcuts/registry";
+import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+import { useWorkspaceGitStatuses } from "#product/hooks/workspaces/derived/use-workspace-git-statuses";
+import { useWorkspaceSidebarState } from "#product/hooks/workspaces/derived/use-workspace-sidebar-state";
+import { useWorkspaceSidebarActions } from "#product/hooks/workspaces/workflows/use-workspace-sidebar-actions";
+import { useAppCommandActionsContext } from "#product/providers/AppCommandActionsProvider";
+import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
+import { formatSidebarRelativeTime } from "#product/lib/domain/workspaces/display/workspace-display";
 import {
   gitAheadBehindLabel,
   prNumberLabelFromGitStatus,
   prStatusViewFromGitStatus,
-} from "@/lib/domain/workspaces/git-status/pr-status-presentation";
-import type { SidebarGroupState, SidebarWorkspaceItemState } from "@/lib/domain/workspaces/sidebar/sidebar-model";
+} from "#product/lib/domain/workspaces/git-status/pr-status-presentation";
+import type { SidebarGroupState, SidebarWorkspaceItemState } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 
 const PR_STATUS_UNAVAILABLE_LABEL = "PR status unavailable — gh not signed in";
 

@@ -1,6 +1,6 @@
 import { useCallback } from "react";
-import type { ColorMode } from "@/config/theme";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+import type { ColorMode } from "#product/config/theme";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
 export function useColorMode(): [ColorMode, (m: ColorMode) => void] {
   const mode = useUserPreferencesStore((state) => state.colorMode);

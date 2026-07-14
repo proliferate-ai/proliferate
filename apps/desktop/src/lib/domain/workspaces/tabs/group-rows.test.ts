@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { GroupedChatTab } from "./grouping";
-import { buildHeaderStripRows } from "./group-rows";
+import type { GroupedChatTab } from "#product/lib/domain/workspaces/tabs/grouping";
+import { buildHeaderStripRows } from "#product/lib/domain/workspaces/tabs/group-rows";
 import {
   createManualChatGroupId,
   type DisplayManualChatGroup,
-} from "./manual-groups";
+} from "#product/lib/domain/workspaces/tabs/manual-groups";
 
 describe("buildHeaderStripRows", () => {
   it("emits standalone tabs without pill rows", () => {

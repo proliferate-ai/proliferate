@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { deriveActivityChips, type ActivityChipDescriptor } from "@proliferate/product-domain/activity/chips";
-import { useSessionActivity } from "./use-session-activity";
+import { useSessionActivity } from "#product/hooks/activity/derived/use-session-activity";
 
 /**
  * The active session's activity chip descriptors — used by dock-slot

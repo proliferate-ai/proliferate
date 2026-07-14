@@ -11,33 +11,33 @@ import {
   PopoverButton,
 } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { OrganizationAvatar } from "@/components/organizations/OrganizationAvatar";
-import { SHORTCUTS } from "@/config/shortcuts/registry";
-import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
-import { useWebAppTarget } from "@/hooks/capabilities/derived/use-web-app-target";
-import { useAppSidebarSignOutAction } from "@/hooks/app/workflows/use-app-sidebar-sign-out-action";
-import { useCloudBilling } from "@/hooks/cloud/facade/use-cloud-billing";
-import { useCurrentUserOrganizationInvitations } from "@/hooks/access/cloud/organizations/use-current-user-organization-invitations";
-import { useOrganizationActions } from "@/hooks/access/cloud/organizations/use-organization-actions";
-import { useJoinedOrganizationActivation } from "@/hooks/organizations/workflows/use-joined-organization-activation";
-import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
-import { useOpenSupportReportWindow } from "@/hooks/support/workflows/use-open-support-report-window";
-import { useSupportMenuAction } from "@/hooks/support/derived/use-support-menu-action";
-import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
+import { OrganizationAvatar } from "#product/components/organizations/OrganizationAvatar";
+import { SHORTCUTS } from "#product/config/shortcuts/registry";
+import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
+import { useWebAppTarget } from "#product/hooks/capabilities/derived/use-web-app-target";
+import { useAppSidebarSignOutAction } from "#product/hooks/app/workflows/use-app-sidebar-sign-out-action";
+import { useCloudBilling } from "#product/hooks/cloud/facade/use-cloud-billing";
+import { useCurrentUserOrganizationInvitations } from "#product/hooks/access/cloud/organizations/use-current-user-organization-invitations";
+import { useOrganizationActions } from "#product/hooks/access/cloud/organizations/use-organization-actions";
+import { useJoinedOrganizationActivation } from "#product/hooks/organizations/workflows/use-joined-organization-activation";
+import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
+import { useOpenSupportReportWindow } from "#product/hooks/support/workflows/use-open-support-report-window";
+import { useSupportMenuAction } from "#product/hooks/support/derived/use-support-menu-action";
+import { getShortcutDisplayLabel } from "#product/lib/domain/shortcuts/matching";
 import type {
   OrganizationInvitationRecord,
   OrganizationRecord,
-} from "@/lib/domain/organizations/organization-records";
+} from "#product/lib/domain/organizations/organization-records";
 import {
   useProductAuthStatus,
   useProductAuthUser,
-} from "@/hooks/auth/facade/use-product-auth";
-import { useKeyboardShortcutsDialogStore } from "@/stores/shortcuts/keyboard-shortcuts-dialog-store";
-import { useToastStore } from "@/stores/toast/toast-store";
-import { OrganizationSwitchDialog } from "./OrganizationSwitchDialog";
-import { SidebarAppVersionRow } from "./SidebarAppVersionRow";
-import { SidebarHelpSection } from "./SidebarHelpSection";
-import { ConsumptionCard } from "./SidebarConsumptionCard";
+} from "#product/hooks/auth/facade/use-product-auth";
+import { useKeyboardShortcutsDialogStore } from "#product/stores/shortcuts/keyboard-shortcuts-dialog-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
+import { OrganizationSwitchDialog } from "#product/components/app/sidebar/OrganizationSwitchDialog";
+import { SidebarAppVersionRow } from "#product/components/app/sidebar/SidebarAppVersionRow";
+import { SidebarHelpSection } from "#product/components/app/sidebar/SidebarHelpSection";
+import { ConsumptionCard } from "#product/components/app/sidebar/SidebarConsumptionCard";
 
 /**
  * The single sidebar bottom-left account block, shared verbatim by the main

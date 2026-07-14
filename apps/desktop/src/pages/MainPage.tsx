@@ -1,4 +1,4 @@
-import { MainScreen } from "@/components/workspace/shell/screen/MainScreen";
+import { MainScreen } from "#product/components/workspace/shell/screen/MainScreen";
 
 export function MainPage({
   workspaceVisible = true,

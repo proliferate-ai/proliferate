@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { ReadWorkspaceFileResponse } from "@anyharness/sdk";
-import { useWorkspaceFileBuffersStore } from "./workspace-file-buffers-store";
+import { useWorkspaceFileBuffersStore } from "#product/stores/editor/workspace-file-buffers-store";
 
 describe("workspace file buffers store", () => {
   beforeEach(() => {

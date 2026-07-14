@@ -1,4 +1,4 @@
-import type { AuthClientStatus } from "./auth-state-mapping";
+import type { AuthClientStatus } from "#product/lib/domain/auth/auth-state-mapping";
 
 interface AnyHarnessCacheScopeInput {
   apiBaseUrl: string;

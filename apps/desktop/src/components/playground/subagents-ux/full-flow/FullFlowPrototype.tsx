@@ -5,26 +5,26 @@ import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialo
 import {
   GlobalAgentsPanePrototype,
   type GlobalAgentsParentFixture,
-} from "../popover-pane/GlobalAgentsPanePrototype";
+} from "#product/components/playground/subagents-ux/popover-pane/GlobalAgentsPanePrototype";
 import {
   ArchivedChatView,
   ChildChatView,
   ParentChatView,
   childToPaneAgent,
-} from "./FullFlowChatViews";
+} from "#product/components/playground/subagents-ux/full-flow/FullFlowChatViews";
 import {
   buildFullFlowWorkspace,
   type FullFlowArchivedSession,
   type FullFlowChild,
   type FullFlowParent,
-} from "./FullFlowFixtures";
+} from "#product/components/playground/subagents-ux/full-flow/FullFlowFixtures";
 import {
   ArchivedTab,
   ChildTab,
   ParentTab,
   tabKey,
   type TabDescriptor,
-} from "./FullFlowTabs";
+} from "#product/components/playground/subagents-ux/full-flow/FullFlowTabs";
 
 /**
  * The coherent default lane: one app-like surface that walks the whole model

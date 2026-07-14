@@ -3,12 +3,12 @@ import {
   WORKSPACE_UI_DEFAULTS,
   WORKSPACE_UI_MIGRATION_VERSION,
   type WorkspaceUiChangeTrackedState,
-} from "@/lib/domain/preferences/workspace-ui/model";
+} from "#product/lib/domain/preferences/workspace-ui/model";
 import {
   getChangedWorkspaceUiStateKeys,
   isNonPersistedWorkspaceUiStateKey,
   selectPersistedWorkspaceUiState,
-} from "@/lib/domain/preferences/workspace-ui/persistence";
+} from "#product/lib/domain/preferences/workspace-ui/persistence";
 
 describe("workspace UI state persistence", () => {
   it("sanitizes persisted chat slices and excludes non-persisted runtime state", () => {

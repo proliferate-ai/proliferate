@@ -2,9 +2,9 @@
 
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SUPPORT_REPORT_JOB_EVENT } from "@/lib/access/browser/support-report-job-events";
-import type { SupportReportJob } from "@/lib/domain/support/report-types";
-import { useSupportModalState } from "@/hooks/support/facade/use-support-modal-state";
+import { SUPPORT_REPORT_JOB_EVENT } from "#product/lib/access/browser/support-report-job-events";
+import type { SupportReportJob } from "#product/lib/domain/support/report-types";
+import { useSupportModalState } from "#product/hooks/support/facade/use-support-modal-state";
 
 const diagnosticsMocks = vi.hoisted(() => ({
   logEvent: vi.fn(async () => {}),

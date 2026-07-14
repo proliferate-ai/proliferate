@@ -13,7 +13,7 @@ import {
   applyScratchListEnterFormatting,
   applyScratchListOutdentFormatting,
   shouldScratchBackspaceOutdent,
-} from "@/lib/domain/workspaces/scratch/scratch-list-formatting";
+} from "#product/lib/domain/workspaces/scratch/scratch-list-formatting";
 import {
   disabledExtensions,
   scratchEditorTheme,
@@ -21,8 +21,8 @@ import {
   scratchListDecorations,
   scratchMarkdownLanguage,
   wordWrapExtension,
-} from "@/hooks/workspaces/lifecycle/scratch-codemirror-extensions";
-import { scratchLivePreview } from "@/hooks/workspaces/lifecycle/scratch-codemirror-live-preview";
+} from "#product/hooks/workspaces/lifecycle/scratch-codemirror-extensions";
+import { scratchLivePreview } from "#product/hooks/workspaces/lifecycle/scratch-codemirror-live-preview";
 
 interface UseScratchCodeMirrorEditorOptions {
   hostRef: RefObject<HTMLDivElement | null>;

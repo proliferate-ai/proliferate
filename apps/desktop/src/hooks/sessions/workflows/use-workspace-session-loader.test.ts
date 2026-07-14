@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   resetReplacedSessionTombstonesForTests,
   stageReplacedSessionTombstone,
-} from "@/hooks/sessions/workflows/session-replacement-tombstones";
-import { useWorkspaceSessionLoader } from "./use-workspace-session-loader";
+} from "#product/hooks/sessions/workflows/session-replacement-tombstones";
+import { useWorkspaceSessionLoader } from "#product/hooks/sessions/workflows/use-workspace-session-loader";
 
 const mocks = vi.hoisted(() => ({
   localRuntime: {},

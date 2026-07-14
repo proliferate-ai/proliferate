@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { FileReferenceBadge } from "@/components/workspace/file-references/FileReferenceBadge";
+import { FileReferenceBadge } from "#product/components/workspace/file-references/FileReferenceBadge";
 
 interface FilePathLinkProps {
   /**

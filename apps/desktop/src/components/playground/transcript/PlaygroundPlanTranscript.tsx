@@ -1,16 +1,16 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { AssistantMessage } from "@/components/workspace/chat/transcript/AssistantMessage";
-import { CarryOutPlanRow } from "@/components/workspace/chat/transcript/CarryOutPlanRow";
-import { ModeTransitionDivider } from "@/components/workspace/chat/transcript/ModeTransitionDivider";
-import { ProposedPlanCard } from "@/components/workspace/chat/transcript/ProposedPlanCard";
-import type { ScenarioKey } from "@/config/playground";
+import { AssistantMessage } from "#product/components/workspace/chat/transcript/AssistantMessage";
+import { CarryOutPlanRow } from "#product/components/workspace/chat/transcript/CarryOutPlanRow";
+import { ModeTransitionDivider } from "#product/components/workspace/chat/transcript/ModeTransitionDivider";
+import { ProposedPlanCard } from "#product/components/workspace/chat/transcript/ProposedPlanCard";
+import type { ScenarioKey } from "#product/config/playground";
 import {
   CARRY_OUT_PLAN_REFERENCE,
   CLAUDE_PLAN_LONG,
   CLAUDE_PLAN_SHORT,
-} from "@/lib/domain/chat/__fixtures__/playground/plan-transcript-fixtures";
-import { noop } from "@/components/playground/PlaygroundComposerActions";
-import { TranscriptPreviewShell } from "@/components/playground/transcript/PlaygroundTranscriptShell";
+} from "#product/lib/domain/chat/__fixtures__/playground/plan-transcript-fixtures";
+import { noop } from "#product/components/playground/PlaygroundComposerActions";
+import { TranscriptPreviewShell } from "#product/components/playground/transcript/PlaygroundTranscriptShell";
 
 export function renderPlaygroundPlanTranscript(scenario: ScenarioKey): ReactNode | null {
   switch (scenario) {

@@ -5,24 +5,24 @@ import {
 } from "@anyharness/sdk-react";
 import { useCallback, useMemo, useState } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { useSessionDebugReplayCapability } from "@/hooks/support/lifecycle/use-session-debug-replay-capability";
-import { createSessionDebugClient } from "@/lib/access/anyharness/debug-client";
+import { useSessionDebugReplayCapability } from "#product/hooks/support/lifecycle/use-session-debug-replay-capability";
+import { createSessionDebugClient } from "#product/lib/access/anyharness/debug-client";
 import {
   formatSessionDebugErrorMessage,
   planSessionDebugActionAvailability,
   type SessionDebugActionState,
-} from "@/lib/domain/support/session-debug/action-state";
+} from "#product/lib/domain/support/session-debug/action-state";
 import {
   copyInvestigationJsonAction,
   exportActiveSessionDebugJsonAction,
   exportReplayRecordingAction,
   exportWorkspaceDebugJsonAction,
   type SessionDebugActionDependencies,
-} from "@/lib/workflows/support/session-debug-export-workflows";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useToastStore } from "@/stores/toast/toast-store";
+} from "#product/lib/workflows/support/session-debug-export-workflows";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 /**
  * Owns support-facing session and workspace debug export actions.

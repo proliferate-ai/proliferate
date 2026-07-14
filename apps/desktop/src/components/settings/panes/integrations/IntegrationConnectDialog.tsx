@@ -15,7 +15,7 @@ import { Select } from "@proliferate/ui/primitives/Select";
 import type {
   IntegrationCatalogSettingField,
 } from "@proliferate/cloud-sdk/client/integrations";
-import type { CloudIntegrationView } from "@/lib/domain/cloud/integrations";
+import type { CloudIntegrationView } from "#product/lib/domain/cloud/integrations";
 
 export interface IntegrationConnectSubmit {
   apiKey: string;

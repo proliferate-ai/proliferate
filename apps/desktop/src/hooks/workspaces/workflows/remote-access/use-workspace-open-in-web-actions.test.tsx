@@ -2,7 +2,7 @@
 
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useWorkspaceOpenInWebActions } from "@/hooks/workspaces/workflows/remote-access/use-workspace-open-in-web-actions";
+import { useWorkspaceOpenInWebActions } from "#product/hooks/workspaces/workflows/remote-access/use-workspace-open-in-web-actions";
 
 const hookMocks = vi.hoisted(() => ({
   copyText: vi.fn(() => Promise.resolve()),

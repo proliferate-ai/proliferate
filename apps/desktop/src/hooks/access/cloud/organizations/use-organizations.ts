@@ -4,8 +4,8 @@ import { listOrganizations } from "@proliferate/cloud-sdk/client/organizations";
 import {
   useProductAuthStatus,
   useProductAuthUserId,
-} from "@/hooks/auth/facade/use-product-auth";
-import { organizationsListKey } from "./query-keys";
+} from "#product/hooks/auth/facade/use-product-auth";
+import { organizationsListKey } from "#product/hooks/access/cloud/organizations/query-keys";
 
 export function useOrganizations() {
   const authStatus = useProductAuthStatus();

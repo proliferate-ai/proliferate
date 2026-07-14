@@ -1,8 +1,8 @@
 import { type ReactNode } from "react";
-import { CloudAuthUnavailablePane } from "@/components/settings/panes/CloudAuthUnavailablePane";
-import { CloudSignInRequiredPane } from "@/components/settings/panes/CloudSignInRequiredPane";
-import { CloudUnavailablePane } from "@/components/settings/panes/CloudUnavailablePane";
-import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
+import { CloudAuthUnavailablePane } from "#product/components/settings/panes/CloudAuthUnavailablePane";
+import { CloudSignInRequiredPane } from "#product/components/settings/panes/CloudSignInRequiredPane";
+import { CloudUnavailablePane } from "#product/components/settings/panes/CloudUnavailablePane";
+import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 
 export interface CloudGateFlags {
   cloudEnabled: boolean;

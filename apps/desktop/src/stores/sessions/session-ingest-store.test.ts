@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { HotSessionTarget } from "@/lib/domain/sessions/hot-session-policy";
+import type { HotSessionTarget } from "#product/lib/domain/sessions/hot-session-policy";
 import {
   isHotSessionTargetCurrent,
   useSessionIngestStore,
-} from "@/stores/sessions/session-ingest-store";
+} from "#product/stores/sessions/session-ingest-store";
 
 describe("session ingest store invariants", () => {
   beforeEach(() => {

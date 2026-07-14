@@ -6,15 +6,15 @@ import {
   HOT_PAINT_MEASUREMENT_SUMMARY_BUDGET,
   type MeasurementOperationId,
   type MeasurementSurface,
-} from "@/lib/domain/telemetry/debug-measurement-catalog";
-import { isHotReopenEligibleSessionSlot } from "@/lib/domain/workspaces/selection/hot-reopen";
+} from "#product/lib/domain/telemetry/debug-measurement-catalog";
+import { isHotReopenEligibleSessionSlot } from "#product/lib/domain/workspaces/selection/hot-reopen";
 import {
   getSessionRecord,
   isPendingSessionId,
-} from "@/stores/sessions/session-records";
+} from "#product/stores/sessions/session-records";
 import type {
   SelectSessionOptionsWithoutGuard,
-} from "@/hooks/workspaces/workflows/tabs/workspace-shell-activation-types";
+} from "#product/hooks/workspaces/workflows/tabs/workspace-shell-activation-types";
 
 export const HOT_SWITCH_SURFACES = [
   "workspace-shell",

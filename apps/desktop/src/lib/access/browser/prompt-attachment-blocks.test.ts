@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   promptAttachmentSnapshotsToBlocks,
   type BrowserPromptAttachmentSnapshot,
-} from "@/lib/access/browser/prompt-attachment-blocks";
+} from "#product/lib/access/browser/prompt-attachment-blocks";
 
 describe("promptAttachmentSnapshotsToBlocks", () => {
   it("does not send client attachment ids with inline payload blocks", async () => {

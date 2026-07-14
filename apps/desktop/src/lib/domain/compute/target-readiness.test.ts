@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { computeTargetReadiness } from "./target-readiness";
-import type { ComputeTargetSummary } from "./target-types";
+import { computeTargetReadiness } from "#product/lib/domain/compute/target-readiness";
+import type { ComputeTargetSummary } from "#product/lib/domain/compute/target-types";
 
 const BASE_TARGET: ComputeTargetSummary = {
   id: "target-1",

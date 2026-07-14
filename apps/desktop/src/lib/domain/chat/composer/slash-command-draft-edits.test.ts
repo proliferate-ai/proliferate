@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findSlashCommandTrigger } from "./slash-command-draft-edits";
+import { findSlashCommandTrigger } from "#product/lib/domain/chat/composer/slash-command-draft-edits";
 
 describe("slash command draft edits", () => {
   it("detects a leading slash command query", () => {

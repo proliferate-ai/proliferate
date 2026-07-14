@@ -6,7 +6,7 @@ import {
 } from "vitest";
 import {
   createLatestTimestampThrottle,
-} from "@/lib/domain/sessions/stream/latest-timestamp-throttle";
+} from "#product/lib/domain/sessions/stream/latest-timestamp-throttle";
 
 describe("createLatestTimestampThrottle", () => {
   it("writes immediately, then coalesces later writes to the latest timestamp", () => {

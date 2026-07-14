@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   resolveKeyboardShortcut,
   resolveKeyboardShortcuts,
-} from "@/lib/domain/shortcuts/keyboard-resolution";
+} from "#product/lib/domain/shortcuts/keyboard-resolution";
 
 describe("resolveKeyboardShortcut", () => {
   beforeEach(() => {

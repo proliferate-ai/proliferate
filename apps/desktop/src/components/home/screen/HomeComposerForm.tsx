@@ -1,24 +1,24 @@
 import { useCallback, useEffect, useRef, type ReactNode } from "react";
-import { HOME_CHAT_COMPOSER_INPUT } from "@/config/chat";
-import { CHAT_COMPOSER_LABELS } from "@/copy/chat/chat-copy";
-import { ChatComposerActions } from "@/components/workspace/chat/input/ChatComposerActions";
+import { HOME_CHAT_COMPOSER_INPUT } from "#product/config/chat";
+import { CHAT_COMPOSER_LABELS } from "#product/copy/chat/chat-copy";
+import { ChatComposerActions } from "#product/components/workspace/chat/input/ChatComposerActions";
 import { ChatComposerControlRowFrame } from "@proliferate/product-ui/chat/composer/ChatComposerControlRowFrame";
 import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
 import { ComposerTextarea } from "@proliferate/ui/primitives/ComposerTextarea";
-import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
-import { useHomeNextComposerState } from "@/hooks/home/ui/use-home-next-composer-state";
+import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
+import { useHomeNextComposerState } from "#product/hooks/home/ui/use-home-next-composer-state";
 import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
 import { recordTypingKeystrokeLatency } from "@/lib/infra/measurement/typing-latency-probe";
-import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
+import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import type {
   HomeLaunchTarget,
   HomeNextModelSelection,
   ModelAvailabilityState,
-} from "@/lib/domain/home/home-next-launch";
+} from "#product/lib/domain/home/home-next-launch";
 
 // Surfaces whose React commits are attributed to a home `composer_typing`
 // operation. If the render-isolation is working, only "home-composer" should

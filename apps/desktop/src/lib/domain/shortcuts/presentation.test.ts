@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { SHORTCUTS } from "@/config/shortcuts/registry";
-import { buildShortcutRangeLabelById } from "@/lib/domain/shortcuts/presentation";
+import { SHORTCUTS } from "#product/config/shortcuts/registry";
+import { buildShortcutRangeLabelById } from "#product/lib/domain/shortcuts/presentation";
 
 describe("shortcut presentation", () => {
   it("builds labels that match range shortcut digit resolution", () => {

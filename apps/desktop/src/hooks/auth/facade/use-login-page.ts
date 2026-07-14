@@ -1,9 +1,9 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
-import { usePasswordSignIn } from "@/hooks/auth/workflows/use-password-sign-in";
-import { useSsoSignIn } from "@/hooks/auth/workflows/use-sso-sign-in";
-import { getRedirectTarget } from "@/lib/domain/auth/login-redirect";
+import { usePasswordSignIn } from "#product/hooks/auth/workflows/use-password-sign-in";
+import { useSsoSignIn } from "#product/hooks/auth/workflows/use-sso-sign-in";
+import { getRedirectTarget } from "#product/lib/domain/auth/login-redirect";
 
 // Owns the login page view model by composing auth state and sign-in actions.
 export function useLoginPage() {

@@ -4,8 +4,8 @@ import type {
   SessionEventEnvelope,
   SessionRawNotificationEnvelope,
 } from "@anyharness/sdk";
-import type { SessionDebugLocator } from "@/lib/domain/support/session-debug/locator";
-import { sanitizeSessionDebugExportedSession } from "@/lib/domain/support/session-debug/sanitizer";
+import type { SessionDebugLocator } from "#product/lib/domain/support/session-debug/locator";
+import { sanitizeSessionDebugExportedSession } from "#product/lib/domain/support/session-debug/sanitizer";
 
 export type SessionDebugScopeKind = "session" | "workspace";
 

@@ -10,13 +10,13 @@ import {
 } from "@proliferate/product-domain/activity/goal-transcript-events";
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
-import type { SessionStreamConnectionState } from "@/lib/domain/sessions/directory/directory-entry";
-import { goalCapabilitiesForSession } from "@/lib/domain/sessions/goal-mirror";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
-import { useActiveSessionId } from "./use-active-session-identity";
+import { activitySnapshotFromDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-activity";
+import type { SessionStreamConnectionState } from "#product/lib/domain/sessions/directory/directory-entry";
+import { goalCapabilitiesForSession } from "#product/lib/domain/sessions/goal-mirror";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
+import { useActiveSessionId } from "#product/hooks/chat/derived/use-active-session-identity";
 
 const EMPTY_OUTBOX_ENTRIES: readonly PromptOutboxEntry[] = [];
 const EMPTY_EVENTS: readonly SessionEventEnvelope[] = [];

@@ -3,8 +3,8 @@
 import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { HealthResponse } from "@anyharness/sdk";
-import { useSessionDebugActions } from "@/hooks/support/workflows/use-session-debug-actions";
-import type { SessionDebugActionState } from "@/lib/domain/support/session-debug/action-state";
+import { useSessionDebugActions } from "#product/hooks/support/workflows/use-session-debug-actions";
+import type { SessionDebugActionState } from "#product/lib/domain/support/session-debug/action-state";
 
 const runtimeUrl = "http://127.0.0.1:7007";
 const replayHealth = {

@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { type SettingsSection } from "@/config/settings";
-import { type SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
+import { type SettingsSection } from "#product/config/settings";
+import { type SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
 import {
   buildCloudRepoSettingsHref,
   buildSettingsHref,
   isRepoScopeSection,
   resolveSettingsSelection,
-} from "@/lib/domain/settings/navigation";
-import { type RepoSettingsContext } from "@/lib/domain/settings/repo-scope-selection";
+} from "#product/lib/domain/settings/navigation";
+import { type RepoSettingsContext } from "#product/lib/domain/settings/repo-scope-selection";
 
 interface UseSettingsNavigationArgs {
   repositories: SettingsRepositoryEntry[];

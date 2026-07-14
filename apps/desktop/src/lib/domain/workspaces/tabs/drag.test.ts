@@ -5,7 +5,7 @@ import {
   resolveDragOffsetX,
   resolveDropSide,
   resolveDropTarget,
-} from "./drag";
+} from "#product/lib/domain/workspaces/tabs/drag";
 
 describe("drop geometry", () => {
   it("resolves before or after a target midpoint", () => {

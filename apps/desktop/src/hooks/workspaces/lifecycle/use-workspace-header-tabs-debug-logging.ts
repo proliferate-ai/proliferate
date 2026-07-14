@@ -1,8 +1,8 @@
 import { useEffect } from "react";
-import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
-import type { WorkspaceRenderSurface } from "@/lib/domain/workspaces/tabs/shell-activation";
+import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
+import type { WorkspaceRenderSurface } from "#product/lib/domain/workspaces/tabs/shell-activation";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 
 export function useWorkspaceHeaderTabsDebugLogging({
   activationRenderSurface,

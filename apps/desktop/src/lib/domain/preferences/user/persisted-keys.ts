@@ -1,4 +1,4 @@
-import type { UserPreferences } from "@/lib/domain/preferences/user/model";
+import type { UserPreferences } from "#product/lib/domain/preferences/user/model";
 
 const USER_PREFERENCE_KEYS = [
   "themePreset",

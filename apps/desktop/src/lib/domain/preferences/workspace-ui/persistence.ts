@@ -2,19 +2,19 @@ import {
   sanitizeLastViewedSessionByWorkspace,
   sanitizeManualChatGroupsWithoutTransientSessions,
   sanitizeSessionIdArrayRecord,
-} from "@/lib/domain/preferences/workspace-ui/persisted-chat-sessions";
+} from "#product/lib/domain/preferences/workspace-ui/persisted-chat-sessions";
 import {
   sanitizeGitStatusSnapshotsByWorkspace,
-} from "@/lib/domain/preferences/workspace-ui/persisted-git-status";
+} from "#product/lib/domain/preferences/workspace-ui/persisted-git-status";
 import {
   sanitizeActiveShellTabKeysByWorkspace,
   sanitizeShellTabOrderByWorkspace,
-} from "@/lib/domain/preferences/workspace-ui/persisted-shell-tabs";
+} from "#product/lib/domain/preferences/workspace-ui/persisted-shell-tabs";
 import {
   WORKSPACE_UI_MIGRATION_VERSION,
   type PersistedWorkspaceUiState,
   type WorkspaceUiChangeTrackedState,
-} from "@/lib/domain/preferences/workspace-ui/model";
+} from "#product/lib/domain/preferences/workspace-ui/model";
 
 export function selectPersistedWorkspaceUiState(
   state: PersistedWorkspaceUiState,

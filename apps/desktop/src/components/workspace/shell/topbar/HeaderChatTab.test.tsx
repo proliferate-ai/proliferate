@@ -4,8 +4,8 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ProductHost } from "@proliferate/product-client/host/product-host";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
-import { HeaderChatTab } from "@/components/workspace/shell/topbar/HeaderChatTab";
-import type { HeaderChatTabEntry } from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
+import { HeaderChatTab } from "#product/components/workspace/shell/topbar/HeaderChatTab";
+import type { HeaderChatTabEntry } from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 
 vi.mock("@/hooks/cowork/workflows/use-open-cowork-coding-session", () => ({
   useOpenCoworkCodingSession: () => vi.fn(),

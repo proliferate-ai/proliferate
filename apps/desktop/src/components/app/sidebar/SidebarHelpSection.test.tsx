@@ -2,9 +2,9 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { SupportMenuAction } from "@/lib/domain/support/support-menu-action";
-import type { WebAppTarget } from "@/hooks/capabilities/derived/use-web-app-target";
-import { SidebarHelpSection } from "./SidebarHelpSection";
+import type { SupportMenuAction } from "#product/lib/domain/support/support-menu-action";
+import type { WebAppTarget } from "#product/hooks/capabilities/derived/use-web-app-target";
+import { SidebarHelpSection } from "#product/components/app/sidebar/SidebarHelpSection";
 
 const AVAILABLE_WEB_APP: WebAppTarget = {
   available: true,

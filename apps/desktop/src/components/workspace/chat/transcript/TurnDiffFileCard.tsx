@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
-import { DiffViewer } from "@/components/content/ui/DiffViewer";
-import { FileDiffCard } from "@/components/content/ui/FileDiffCard";
-import { useTurnCurrentFilePatch } from "@/hooks/chat/cache/use-turn-current-file-diffs";
-import { useLazyDiffFileLines } from "@/hooks/ui/diff/use-lazy-diff-file-lines";
-import type { GitPanelReviewFile } from "@/lib/domain/workspaces/changes/git-panel-diff";
+import { DiffViewer } from "#product/components/content/ui/DiffViewer";
+import { FileDiffCard } from "#product/components/content/ui/FileDiffCard";
+import { useTurnCurrentFilePatch } from "#product/hooks/chat/cache/use-turn-current-file-diffs";
+import { useLazyDiffFileLines } from "#product/hooks/ui/diff/use-lazy-diff-file-lines";
+import type { GitPanelReviewFile } from "#product/lib/domain/workspaces/changes/git-panel-diff";
 import { CircleAlert, FileCode, FileIcon, RefreshCw } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 

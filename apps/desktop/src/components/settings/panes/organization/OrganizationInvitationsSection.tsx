@@ -2,7 +2,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Copy, Plus } from "@proliferate/ui/icons";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
-import { OrganizationSelectMenu } from "@/components/settings/panes/organization/OrganizationSelectMenu";
+import { OrganizationSelectMenu } from "#product/components/settings/panes/organization/OrganizationSelectMenu";
 
 const INVITE_ROLE_OPTIONS = [
   { value: "member", label: "Member" },

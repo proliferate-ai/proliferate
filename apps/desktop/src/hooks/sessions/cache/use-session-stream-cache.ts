@@ -11,9 +11,9 @@ import { useMemo, useRef } from "react";
 import {
   getWorkspaceCollectionsFromCache,
   workspaceCollectionsScopeKey,
-} from "@/hooks/workspaces/cache/query-keys";
-import { scheduleRepoPrStatusRefresh } from "@/hooks/workspaces/cache/use-pr-status-refresh";
-import { useProductAuthUserId } from "@/hooks/auth/facade/use-product-auth";
+} from "#product/hooks/workspaces/cache/query-keys";
+import { scheduleRepoPrStatusRefresh } from "#product/hooks/workspaces/cache/use-pr-status-refresh";
+import { useProductAuthUserId } from "#product/hooks/auth/facade/use-product-auth";
 
 export interface SessionStreamCache {
   invalidateWorkspaceCollections(runtimeUrl: string): void;

@@ -1,14 +1,14 @@
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
-import type { HarnessAuthEditorApi } from "@/hooks/agents/workflows/use-harness-auth-editor";
+import type { HarnessAuthEditorApi } from "#product/hooks/agents/workflows/use-harness-auth-editor";
 import {
   isMultiSourceHarness,
   type AuthMethod,
-} from "@/lib/domain/settings/harness-auth-sources";
-import { type HarnessBlockVariant } from "./HarnessPanelBlock";
-import { isMultiSourceApiKeyConfigVisible } from "./HarnessAuthSection";
-import { GatewayDetails } from "./HarnessAuthGatewayDetails";
-import { ApiKeyDetails } from "./HarnessAuthApiKeyDetails";
-import { CliDetails } from "./HarnessAuthCliDetails";
+} from "#product/lib/domain/settings/harness-auth-sources";
+import { type HarnessBlockVariant } from "#product/components/settings/panes/agents/harness/HarnessPanelBlock";
+import { isMultiSourceApiKeyConfigVisible } from "#product/components/settings/panes/agents/harness/HarnessAuthSection";
+import { GatewayDetails } from "#product/components/settings/panes/agents/harness/HarnessAuthGatewayDetails";
+import { ApiKeyDetails } from "#product/components/settings/panes/agents/harness/HarnessAuthApiKeyDetails";
+import { CliDetails } from "#product/components/settings/panes/agents/harness/HarnessAuthCliDetails";
 
 interface HarnessAuthDetailsSectionProps {
   harnessKind: string;

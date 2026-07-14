@@ -1,15 +1,15 @@
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CHAT_MODEL_SELECTOR_LABELS } from "@/copy/chat/chat-copy";
-import { buildSettingsHref } from "@/lib/domain/settings/navigation";
-import { getSettingsSectionForHarnessKind } from "@/lib/domain/settings/navigation-presentation";
-import { splitProviderDisplayName } from "@/lib/domain/chat/models/model-display-name-parts";
-import { orderModelGroupsActiveFirst } from "@/lib/domain/chat/models/order-model-groups";
+import { CHAT_MODEL_SELECTOR_LABELS } from "#product/copy/chat/chat-copy";
+import { buildSettingsHref } from "#product/lib/domain/settings/navigation";
+import { getSettingsSectionForHarnessKind } from "#product/lib/domain/settings/navigation-presentation";
+import { splitProviderDisplayName } from "#product/lib/domain/chat/models/model-display-name-parts";
+import { orderModelGroupsActiveFirst } from "#product/lib/domain/chat/models/order-model-groups";
 import type {
   ModelSelectorGroup,
   ModelSelectorProps,
   ModelSelectorSelection,
-} from "@/lib/domain/chat/models/model-selector-types";
+} from "#product/lib/domain/chat/models/model-selector-types";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchField";
@@ -17,7 +17,7 @@ import { ArrowUpRight, Check, Plus, Settings } from "@proliferate/ui/icons";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
-import { PendingConfigIndicator } from "./PendingConfigIndicator";
+import { PendingConfigIndicator } from "#product/components/workspace/chat/input/PendingConfigIndicator";
 
 interface ComposerModelSelectorControlProps {
   modelSelectorProps: ModelSelectorProps;

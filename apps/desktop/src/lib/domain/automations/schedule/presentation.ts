@@ -1,7 +1,7 @@
 import {
   AUTOMATION_SCHEDULE_PRESETS,
-} from "@/config/automations";
-import { timeForRrule, type AutomationSchedulePresetOrCustom } from "@/lib/domain/automations/schedule/schedule";
+} from "#product/config/automations";
+import { timeForRrule, type AutomationSchedulePresetOrCustom } from "#product/lib/domain/automations/schedule/schedule";
 
 const AUTOMATION_SCHEDULE_PRESET_LABELS: Record<
   typeof AUTOMATION_SCHEDULE_PRESETS[number]["value"],

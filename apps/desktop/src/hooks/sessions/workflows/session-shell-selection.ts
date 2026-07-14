@@ -1,10 +1,10 @@
 import type {
   SessionActivationGuard,
   SessionActivationOutcome,
-} from "@/hooks/sessions/workflows/session-activation-guard";
-import { beginSessionActivationIntent } from "@/hooks/sessions/workflows/session-activation-guard";
-import { writeChatShellIntentForSession } from "@/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+} from "#product/hooks/sessions/workflows/session-activation-guard";
+import { beginSessionActivationIntent } from "#product/hooks/sessions/workflows/session-activation-guard";
+import { writeChatShellIntentForSession } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 
 export interface SessionShellSelectionOptions {
   latencyFlowId?: string | null;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canPreviewAsMarkdown } from "@/lib/domain/files/document-preview";
+import { canPreviewAsMarkdown } from "#product/lib/domain/files/document-preview";
 
 describe("canPreviewAsMarkdown", () => {
   it("supports markdown extensions", () => {

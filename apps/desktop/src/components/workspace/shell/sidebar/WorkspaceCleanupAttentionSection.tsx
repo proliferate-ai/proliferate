@@ -3,7 +3,7 @@ import {
   CircleAlert,
   RefreshCw,
 } from "@proliferate/ui/icons";
-import { workspaceDisplayName } from "@/lib/domain/workspaces/display/workspace-display";
+import { workspaceDisplayName } from "#product/lib/domain/workspaces/display/workspace-display";
 import { SidebarActionButton } from "@proliferate/ui/layout/SidebarActionButton";
 import { SidebarRowSurface } from "@proliferate/ui/layout/SidebarRowSurface";
 import { ProductSidebarSectionHeader } from "@proliferate/product-ui/sidebar/ProductSidebarLayout";

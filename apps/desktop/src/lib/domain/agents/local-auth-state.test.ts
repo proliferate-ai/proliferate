@@ -4,7 +4,7 @@ import {
   localAuthStateFingerprint,
   planLocalAuthStatePush,
   stampIssuingServerOrigin,
-} from "./local-auth-state";
+} from "#product/lib/domain/agents/local-auth-state";
 
 function state(overrides: Partial<AgentAuthState> = {}): AgentAuthState {
   return {

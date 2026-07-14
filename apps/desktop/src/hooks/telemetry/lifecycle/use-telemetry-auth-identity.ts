@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
+import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
 
 // Owns telemetry user identity and auth-status tags. Reads the shared auth state
 // from the mounted ProductHost (not the Desktop auth store) and reports through

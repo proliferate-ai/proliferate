@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { TurnSeparator } from "@/components/workspace/chat/transcript/TurnSeparator";
+import { TurnSeparator } from "#product/components/workspace/chat/transcript/TurnSeparator";
 
 interface ToolCallSummaryProps {
   label?: string;

@@ -3,19 +3,19 @@
 import type { ReactNode, TextareaHTMLAttributes } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { HomeNextScreen } from "./HomeNextScreen";
+import { HomeNextScreen } from "#product/components/home/screen/HomeNextScreen";
 import {
   HOME_NEXT_TARGET_SELECTION_STORAGE_KEY,
   hydrateHomeNextTargetSelection,
   resetHomeNextTargetSelectionForTests,
   setHomeNextTargetSelectionStorageContext,
-} from "@/hooks/home/ui/use-home-next-target-selection-state";
+} from "#product/hooks/home/ui/use-home-next-target-selection-state";
 import {
   createMemoryProductStorage,
   type MemoryProductStorage,
-} from "@/test/product-storage-test-utils";
+} from "#product/test/product-storage-test-utils";
 import type { ProductStorage } from "@proliferate/product-client/host/product-host";
-import { HOME_CHAT_COMPOSER_INPUT } from "@/config/chat";
+import { HOME_CHAT_COMPOSER_INPUT } from "#product/config/chat";
 
 const screenMocks = vi.hoisted(() => {
   const handleHomeAction = vi.fn();

@@ -5,17 +5,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createEmptySessionRecord,
   putSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
+} from "#product/stores/sessions/session-records";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 import {
   beginEmptySessionReplacement,
   type EmptySessionReplacementTransaction,
-} from "@/hooks/sessions/workflows/use-empty-session-replacement-cleanup";
+} from "#product/hooks/sessions/workflows/use-empty-session-replacement-cleanup";
 import {
   resetReplacedSessionTombstonesForTests,
-} from "@/hooks/sessions/workflows/session-replacement-tombstones";
-import { useCoworkManagedWorkspaces } from "./use-cowork-managed-workspaces";
+} from "#product/hooks/sessions/workflows/session-replacement-tombstones";
+import { useCoworkManagedWorkspaces } from "#product/hooks/access/anyharness/cowork/use-cowork-managed-workspaces";
 
 const mocks = vi.hoisted(() => ({
   useCoworkManagedWorkspacesQuery: vi.fn(() => ({

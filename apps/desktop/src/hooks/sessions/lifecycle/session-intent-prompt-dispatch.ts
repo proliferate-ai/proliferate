@@ -1,10 +1,10 @@
 import type { Session } from "@anyharness/sdk";
 import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
-import type { CloudSandboxGatewayUrlSource } from "@/lib/access/cloud/cloud-sandbox-gateway";
+import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 import type { usePromptSessionMutation } from "@anyharness/sdk-react";
 import {
   promptAttachmentSnapshotsToBlocks,
-} from "@/lib/access/browser/prompt-attachment-blocks";
+} from "#product/lib/access/browser/prompt-attachment-blocks";
 import {
   failLatencyFlow,
   finishLatencyFlow,
@@ -23,18 +23,18 @@ import {
 } from "@proliferate/product-domain/sessions/intents/session-intent-model";
 import {
   getSessionClientAndWorkspace,
-} from "@/lib/access/anyharness/session-runtime";
+} from "#product/lib/access/anyharness/session-runtime";
 import {
   waitForSessionMaterialization,
-} from "@/lib/workflows/sessions/session-materialization";
+} from "#product/lib/workflows/sessions/session-materialization";
 import {
   sessionMaterializationDeps,
-} from "@/hooks/sessions/workflows/session-materialization-deps";
+} from "#product/hooks/sessions/workflows/session-materialization-deps";
 import {
   getSessionRecord,
   patchSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
+} from "#product/stores/sessions/session-records";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
 
 const SESSION_READY_TIMEOUT_MS = 5_000;
 const ACCEPTED_RUNNING_RECONCILE_DELAYS_MS = [250, 1_000, 2_500, 5_000, 10_000] as const;

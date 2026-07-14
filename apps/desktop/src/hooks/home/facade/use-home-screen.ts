@@ -1,28 +1,28 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRepositories } from "@proliferate/cloud-sdk-react";
-import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
-import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
-import { useAddRepo } from "@/hooks/workspaces/workflows/use-add-repo";
-import { useAddRepoFlowStore } from "@/stores/ui/add-repo-flow-store";
-import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
+import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
+import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+import { useAddRepo } from "#product/hooks/workspaces/workflows/use-add-repo";
+import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
+import { useStandardRepoProjection } from "#product/hooks/workspaces/derived/use-standard-repo-projection";
 import {
   type HomeActionId,
   buildHomeOnboardingCards,
   findHomeUnconfiguredGitHubRepository,
-} from "@/lib/domain/home/home-screen";
-import { buildSettingsRepositoryEntries } from "@/lib/domain/settings/repositories";
+} from "#product/lib/domain/home/home-screen";
+import { buildSettingsRepositoryEntries } from "#product/lib/domain/settings/repositories";
 import {
   buildCloudRepoSettingsHref,
   buildSettingsHref,
-} from "@/lib/domain/settings/navigation";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useProductStorageContext } from "@/hooks/persistence/facade/use-product-storage-context";
+} from "#product/lib/domain/settings/navigation";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
 import {
   readPersistedStringValue,
   writePersistedString,
-} from "@/lib/infra/persistence/product-storage";
+} from "#product/lib/infra/persistence/product-storage";
 
 const HOME_MODEL_PROBE_DISMISSED_STORAGE_KEY =
   "proliferate.home.modelProbeCardDismissed";

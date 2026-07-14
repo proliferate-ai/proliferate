@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { TranscriptState } from "@anyharness/sdk";
-import { activityFromTranscript } from "@/lib/domain/sessions/directory/directory-activity";
+import { activityFromTranscript } from "#product/lib/domain/sessions/directory/directory-activity";
 import {
   activitySummaryEqual,
   directoryEntryEqual,
@@ -9,7 +9,7 @@ import {
   type DirectoryEntryInput,
   type DirectoryEntryPatch,
   type SessionDirectoryEntry,
-} from "@/lib/domain/sessions/directory/directory-entry";
+} from "#product/lib/domain/sessions/directory/directory-entry";
 import {
   applyPendingRelationshipHint,
   putDirectoryEntry,
@@ -17,11 +17,11 @@ import {
   removeDirectoryEntry,
   removeWorkspaceDirectoryEntries,
   setDirectoryEntryRelationship,
-} from "@/lib/domain/sessions/directory/directory-reducer";
+} from "#product/lib/domain/sessions/directory/directory-reducer";
 import type {
   SessionChildRelationship,
   SessionRelationship,
-} from "@/lib/domain/sessions/directory/relationship";
+} from "#product/lib/domain/sessions/directory/relationship";
 
 interface SessionDirectoryState {
   entriesById: Record<string, SessionDirectoryEntry>;

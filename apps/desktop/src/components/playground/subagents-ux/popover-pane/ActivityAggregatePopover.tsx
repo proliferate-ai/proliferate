@@ -11,14 +11,14 @@ import {
   StackedFiles,
 } from "@proliferate/ui/icons";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
-import { AgentGlyphStack } from "./AgentGlyph";
+import { AgentGlyphStack } from "#product/components/playground/subagents-ux/popover-pane/AgentGlyph";
 import {
   buildActivityFacts,
   buildSubagentAggregate,
   subagentCountsLine,
   type ActivityFact,
-} from "./PopoverPaneActivityFacts";
-import type { PrototypeAgent, PrototypeGit } from "./PopoverPaneFixtures";
+} from "#product/components/playground/subagents-ux/popover-pane/PopoverPaneActivityFacts";
+import type { PrototypeAgent, PrototypeGit } from "#product/components/playground/subagents-ux/popover-pane/PopoverPaneFixtures";
 
 export type PrototypeSourceControlAction =
   | "review"

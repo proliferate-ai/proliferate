@@ -1,9 +1,9 @@
 import type { TranscriptState } from "@anyharness/sdk";
 import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
-import { isSubagentItem } from "./TranscriptToolGroupUtils";
-import { TranscriptActivityBlock } from "./TranscriptActivityBlock";
-import { TranscriptItemBlock } from "./TranscriptItemBlock";
-import { TranscriptToolCallGroupBlock } from "./TranscriptToolCallGroupBlock";
+import { isSubagentItem } from "#product/components/workspace/chat/transcript/TranscriptToolGroupUtils";
+import { TranscriptActivityBlock } from "#product/components/workspace/chat/transcript/TranscriptActivityBlock";
+import { TranscriptItemBlock } from "#product/components/workspace/chat/transcript/TranscriptItemBlock";
+import { TranscriptToolCallGroupBlock } from "#product/components/workspace/chat/transcript/TranscriptToolCallGroupBlock";
 
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
 

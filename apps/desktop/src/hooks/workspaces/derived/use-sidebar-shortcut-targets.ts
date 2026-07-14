@@ -1,17 +1,17 @@
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
-import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
+import { useLogicalWorkspaces } from "#product/hooks/workspaces/derived/use-logical-workspaces";
+import { useStandardRepoProjection } from "#product/hooks/workspaces/derived/use-standard-repo-projection";
 import {
   buildSidebarGroupStates,
-} from "@/lib/domain/workspaces/sidebar/sidebar-groups";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-groups";
 import {
   SIDEBAR_REPO_GROUP_ITEM_LIMIT,
-} from "@/lib/domain/workspaces/sidebar/sidebar-model";
-import { visibleSidebarShortcutTargetIds } from "@/lib/domain/workspaces/sidebar/sidebar-shortcut-targets";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useWorkspaceSidebarShowMoreStore } from "@/stores/workspaces/workspace-sidebar-show-more-store";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-model";
+import { visibleSidebarShortcutTargetIds } from "#product/lib/domain/workspaces/sidebar/sidebar-shortcut-targets";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useWorkspaceSidebarShowMoreStore } from "#product/stores/workspaces/workspace-sidebar-show-more-store";
 
 const EMPTY_WORKSPACE_ACTIVITIES = {};
 const EMPTY_PENDING_PROMPT_COUNTS = {};

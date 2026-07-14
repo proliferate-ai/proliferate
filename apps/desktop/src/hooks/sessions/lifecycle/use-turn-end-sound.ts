@@ -1,9 +1,9 @@
 import { useEffect, useRef } from "react";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import {
   offUserFacingTurnEnd,
   onUserFacingTurnEnd,
-} from "@/lib/infra/events/turn-end-events";
+} from "#product/lib/infra/events/turn-end-events";
 import dingSrc from "@/assets/sounds/ding.mp3";
 
 export function useTurnEndSound(): void {

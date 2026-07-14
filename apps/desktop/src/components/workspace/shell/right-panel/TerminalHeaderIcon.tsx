@@ -6,7 +6,7 @@ import { Input } from "@proliferate/ui/primitives/Input";
 import { ShortcutBadge } from "@proliferate/ui/layout/ShortcutBadge";
 import { POPOVER_FRAME_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { useTerminalTabNativeContextMenu } from "@/hooks/terminals/ui/use-terminal-tab-native-context-menu";
+import { useTerminalTabNativeContextMenu } from "#product/hooks/terminals/ui/use-terminal-tab-native-context-menu";
 import {
   AppShellTabCloseIcon,
   AppShellTerminalIcon,

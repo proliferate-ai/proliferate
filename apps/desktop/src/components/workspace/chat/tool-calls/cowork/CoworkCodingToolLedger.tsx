@@ -3,8 +3,8 @@ import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import { ExternalLink, MessageSquare } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { MarkdownBody } from "@proliferate/product-ui/chat/transcript/MarkdownBody";
-import { renderDesktopCodeBlock } from "@/components/content/ui/desktop-markdown-code-block";
-import { ToolActionDetailsPanel } from "@/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
+import { renderDesktopCodeBlock } from "#product/components/content/ui/desktop-markdown-code-block";
+import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
 import type { CoworkCodingAction } from "@proliferate/product-domain/chats/tools/cowork-coding-tool-presentation";
 

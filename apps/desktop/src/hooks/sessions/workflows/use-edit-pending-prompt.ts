@@ -1,8 +1,8 @@
 import { useCallback } from "react";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
-import { getSessionRecord } from "@/stores/sessions/session-records";
-import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
+import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
+import { getSessionRecord } from "#product/stores/sessions/session-records";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
 
 export function useEditPendingPrompt() {
   const telemetry = useProductTelemetry();

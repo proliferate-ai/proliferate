@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
-import type { HeaderStripRow } from "./group-rows";
+import type { HeaderStripRow } from "#product/lib/domain/workspaces/tabs/group-rows";
 import {
   buildHeaderShellRows,
   type ShellChatTab,
-} from "./shell-rows";
+} from "#product/lib/domain/workspaces/tabs/shell-rows";
 import {
   chatWorkspaceShellTabKey,
   fileWorkspaceShellTabKey,
-} from "./shell-tabs";
-import { fileViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
+} from "#product/lib/domain/workspaces/tabs/shell-tabs";
+import { fileViewerTarget } from "#product/lib/domain/workspaces/viewer/viewer-target";
 
 describe("buildHeaderShellRows", () => {
   const chatRows: HeaderStripRow<ShellChatTab>[] = [

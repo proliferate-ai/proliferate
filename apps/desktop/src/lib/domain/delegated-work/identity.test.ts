@@ -3,7 +3,7 @@ import {
   buildDelegatedAgentIdentity,
   delegatedWorkVisualIdentity,
   shortDelegatedWorkId,
-} from "@/lib/domain/delegated-work/identity";
+} from "#product/lib/domain/delegated-work/identity";
 
 describe("delegatedWorkVisualIdentity", () => {
   it("generates stable friendly names and semantic color classes", () => {

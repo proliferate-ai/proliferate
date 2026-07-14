@@ -1,21 +1,21 @@
 import {
   groupPublishFiles,
   partialFileWarning,
-} from "@/lib/domain/workspaces/creation/publish-file-groups";
+} from "#product/lib/domain/workspaces/creation/publish-file-groups";
 import {
   publishPrimaryLabel,
   publishStatusLabel,
   publishWorkflowSummary,
-} from "@/lib/domain/workspaces/creation/publish-workflow-labels";
+} from "#product/lib/domain/workspaces/creation/publish-workflow-labels";
 import type {
   BuildPublishViewStateInput,
   PublishViewState,
-} from "@/lib/domain/workspaces/creation/publish-workflow-model";
+} from "#product/lib/domain/workspaces/creation/publish-workflow-model";
 import {
   buildPublishWorkflowSteps,
   resolvePublishDisabledReason,
   shouldPush,
-} from "@/lib/domain/workspaces/creation/publish-workflow-steps";
+} from "#product/lib/domain/workspaces/creation/publish-workflow-steps";
 
 export function buildPublishViewState(input: BuildPublishViewStateInput): PublishViewState {
   const gitStatus = input.gitStatus ?? null;

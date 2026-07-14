@@ -1,16 +1,16 @@
 import type { Ref } from "react";
-import { ChatComposerDock } from "@/components/workspace/chat/input/ChatComposerDock";
+import { ChatComposerDock } from "#product/components/workspace/chat/input/ChatComposerDock";
 import {
   PlaygroundComposerSurface,
   ReplayComposerSurface,
   renderComposerSurfaceForScenario,
-} from "@/components/playground/PlaygroundComposerSurfaces";
-import { renderActiveSlot } from "@/components/playground/composer-slots/PlaygroundActiveSlotFixtures";
-import { renderAttachedSlot } from "@/components/playground/composer-slots/PlaygroundAttachedSlotFixtures";
-import { renderOutboundSlot } from "@/components/playground/composer-slots/PlaygroundOutboundSlotFixtures";
-import type { PlaygroundScenarioSelection } from "@/config/playground";
-import { useComposerDockSlots } from "@/hooks/chat/ui/use-composer-dock-slots";
-import type { PlaygroundReplayState } from "@/hooks/playground/lifecycle/use-replay-session";
+} from "#product/components/playground/PlaygroundComposerSurfaces";
+import { renderActiveSlot } from "#product/components/playground/composer-slots/PlaygroundActiveSlotFixtures";
+import { renderAttachedSlot } from "#product/components/playground/composer-slots/PlaygroundAttachedSlotFixtures";
+import { renderOutboundSlot } from "#product/components/playground/composer-slots/PlaygroundOutboundSlotFixtures";
+import type { PlaygroundScenarioSelection } from "#product/config/playground";
+import { useComposerDockSlots } from "#product/hooks/chat/ui/use-composer-dock-slots";
+import type { PlaygroundReplayState } from "#product/hooks/playground/lifecycle/use-replay-session";
 
 interface PlaygroundComposerProps {
   dockRef: Ref<HTMLDivElement>;

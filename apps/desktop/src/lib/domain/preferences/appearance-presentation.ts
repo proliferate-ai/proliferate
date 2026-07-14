@@ -4,7 +4,7 @@ import {
   type UiFontSizeId,
   type WindowZoomId,
   WINDOW_ZOOM_IDS,
-} from "@/lib/domain/preferences/appearance";
+} from "#product/lib/domain/preferences/appearance";
 
 interface AppearanceSizeOption<T extends string> {
   id: T;

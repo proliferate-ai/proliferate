@@ -1,5 +1,5 @@
-import type { DesktopProductEventMap } from "./events";
-import type { DesktopTelemetryMode } from "./mode";
+import type { DesktopProductEventMap } from "#product/lib/domain/telemetry/events";
+import type { DesktopTelemetryMode } from "#product/lib/domain/telemetry/mode";
 
 export const ANONYMOUS_TELEMETRY_SCHEMA_VERSION = 1;
 

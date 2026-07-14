@@ -1,5 +1,5 @@
 import type { CoworkArtifactSummary } from "@anyharness/sdk";
-import { toolCallItem } from "@/lib/domain/chat/__fixtures__/playground/tool-call-item-fixture";
+import { toolCallItem } from "#product/lib/domain/chat/__fixtures__/playground/tool-call-item-fixture";
 
 const PLAYGROUND_ARTIFACT_SUMMARY: CoworkArtifactSummary = {
   id: "artifact-playground",

@@ -2,8 +2,8 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { ExternalLink, Robot } from "@proliferate/ui/icons";
 import type {
   DelegatedWorkComposerViewModel,
-} from "@/hooks/chat/facade/use-delegated-work-composer";
-import { PopoverSection } from "./PopoverSection";
+} from "#product/hooks/chat/facade/use-delegated-work-composer";
+import { PopoverSection } from "#product/components/workspace/chat/input/delegated-work/PopoverSection";
 
 type SubagentRows = NonNullable<DelegatedWorkComposerViewModel["subagents"]>;
 type SubagentRow = SubagentRows["rows"][number];

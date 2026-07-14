@@ -3,13 +3,13 @@ import type {
   CreateWorktreeWorkspaceInput,
   ResolvedWorktreeCreation,
   WorktreeCreationParams,
-} from "@/lib/domain/workspaces/creation/workspace-creation";
-import { sidebarRepoGroupKeyForWorkspace } from "@/lib/domain/workspaces/sidebar/sidebar-group-key";
+} from "#product/lib/domain/workspaces/creation/workspace-creation";
+import { sidebarRepoGroupKeyForWorkspace } from "#product/lib/domain/workspaces/sidebar/sidebar-group-key";
 import {
   annotateLatencyFlow,
   failLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
-import type { WorkspaceEntryResult } from "@/hooks/workspaces/workflows/workspace-entry-types";
+import type { WorkspaceEntryResult } from "#product/hooks/workspaces/workflows/workspace-entry-types";
 
 export async function runLightweightLocalWorkspaceEntry(
   input: {

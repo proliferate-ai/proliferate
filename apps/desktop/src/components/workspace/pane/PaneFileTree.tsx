@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { FileTreeEntryIcon } from "@/components/workspace/files/file-icons";
+import { FileTreeEntryIcon } from "#product/components/workspace/files/file-icons";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import { ChevronRight, Search } from "@proliferate/ui/icons";

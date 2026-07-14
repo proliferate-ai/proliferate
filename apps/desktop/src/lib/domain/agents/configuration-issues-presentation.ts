@@ -1,5 +1,5 @@
 import type { AgentSummary, ReconcileAgentResult } from "@anyharness/sdk";
-import type { AgentStatusTone } from "@/lib/domain/agents/status-presentation";
+import type { AgentStatusTone } from "#product/lib/domain/agents/status-presentation";
 
 export type AgentConfigurationBadgeTone =
   | "success"

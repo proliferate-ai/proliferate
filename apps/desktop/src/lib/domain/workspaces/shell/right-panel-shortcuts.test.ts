@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { RightPanelHeaderEntry } from "@/lib/domain/workspaces/shell/right-panel-header-entry";
-import type { RightPanelHeaderEntryKey } from "@/lib/domain/workspaces/shell/right-panel-model";
+import type { RightPanelHeaderEntry } from "#product/lib/domain/workspaces/shell/right-panel-header-entry";
+import type { RightPanelHeaderEntryKey } from "#product/lib/domain/workspaces/shell/right-panel-model";
 import {
   resolveRelativeRightPanelHeaderEntryKey,
   resolveRightPanelHeaderEntryKeyByShortcutIndex,
-} from "@/lib/domain/workspaces/shell/right-panel-shortcuts";
+} from "#product/lib/domain/workspaces/shell/right-panel-shortcuts";
 
 describe("right panel shortcut resolution", () => {
   const entries = [

@@ -9,11 +9,11 @@ import {
   anyHarnessPlansKey,
   useAnyHarnessCacheScopeKey,
 } from "@anyharness/sdk-react";
-import { patchProposedPlanDecisionInTranscript } from "@/lib/domain/plans/proposed-plan-transcript";
+import { patchProposedPlanDecisionInTranscript } from "#product/lib/domain/plans/proposed-plan-transcript";
 import {
   getSessionRecord,
   patchSessionRecord,
-} from "@/stores/sessions/session-records";
+} from "#product/stores/sessions/session-records";
 
 interface ProposedPlanCacheOptions {
   selectedWorkspaceId: string | null;

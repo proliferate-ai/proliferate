@@ -3,7 +3,7 @@
 import type { AdminIntegrationDefinition } from "@proliferate/cloud-sdk/client/integrations";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { OrganizationIntegrationsPane } from "./OrganizationIntegrationsPane";
+import { OrganizationIntegrationsPane } from "#product/components/settings/panes/OrganizationIntegrationsPane";
 
 const showToast = vi.hoisted(() => vi.fn());
 const setEnabled = vi.hoisted(() => vi.fn(() => Promise.resolve()));

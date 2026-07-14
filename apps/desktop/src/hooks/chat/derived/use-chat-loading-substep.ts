@@ -1,14 +1,14 @@
 import { useMemo } from "react";
-import { CHAT_PRE_MESSAGE_LABELS } from "@/copy/chat/chat-copy";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
-import { hasWorkspaceBootstrappedInSession } from "@/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
-import { workspaceDisplayName } from "@/lib/domain/workspaces/display/workspace-display";
+import { CHAT_PRE_MESSAGE_LABELS } from "#product/copy/chat/chat-copy";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
+import { hasWorkspaceBootstrappedInSession } from "#product/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
+import { workspaceDisplayName } from "#product/lib/domain/workspaces/display/workspace-display";
 import {
   resolveChatLoadingSubstep,
   type ChatLoadingSubstep,
-} from "@/lib/domain/chat/surface/chat-loading-substep";
-import { useActiveSessionSurfaceSnapshot } from "@/hooks/chat/derived/use-active-session-transcript-state";
+} from "#product/lib/domain/chat/surface/chat-loading-substep";
+import { useActiveSessionSurfaceSnapshot } from "#product/hooks/chat/derived/use-active-session-transcript-state";
 
 /**
  * Disambiguates the loading sub-states that feed ChatLoadingHero. The loading

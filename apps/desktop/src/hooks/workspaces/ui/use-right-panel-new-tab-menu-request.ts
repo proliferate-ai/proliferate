@@ -3,7 +3,7 @@ import {
   RIGHT_PANEL_NEW_TAB_MENU_EVENT,
   rightPanelNewTabMenuDefaultFromEvent,
   type RightPanelNewTabMenuDefault,
-} from "@/lib/infra/right-panel-new-tab-menu";
+} from "#product/lib/infra/right-panel-new-tab-menu";
 
 interface RightPanelNewTabMenuRequest {
   token: number;

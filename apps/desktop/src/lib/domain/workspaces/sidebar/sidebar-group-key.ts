@@ -1,6 +1,6 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
-import type { CloudWorkspaceRepoTarget } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
-import { localWorkspaceGroupKey } from "@/lib/domain/workspaces/cloud/collections";
+import type { CloudWorkspaceRepoTarget } from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
+import { localWorkspaceGroupKey } from "#product/lib/domain/workspaces/cloud/collections";
 
 function nonEmpty(value: string | null | undefined): string | null {
   const trimmed = value?.trim();

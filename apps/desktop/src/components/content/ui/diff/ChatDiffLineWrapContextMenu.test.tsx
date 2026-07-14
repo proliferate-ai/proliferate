@@ -5,21 +5,21 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ProductHost } from "@proliferate/product-client/host/product-host";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
-import { DiffViewer } from "@/components/content/ui/DiffViewer";
-import { FileDiffCard } from "@/components/content/ui/FileDiffCard";
+import { DiffViewer } from "#product/components/content/ui/DiffViewer";
+import { FileDiffCard } from "#product/components/content/ui/FileDiffCard";
 import {
   CHAT_DIFF_PREFERENCES_STORAGE_KEY,
   resetChatDiffPreferencesForTests,
   setChatDiffPreferencesStorageContext,
   useChatDiffPreferencesStore,
-} from "@/stores/chat/chat-diff-preferences-store";
+} from "#product/stores/chat/chat-diff-preferences-store";
 import {
   buildChatDiffLineWrapNativeContextMenuItems,
-} from "@/hooks/ui/native/use-chat-diff-line-wrap-native-context-menu";
+} from "#product/hooks/ui/native/use-chat-diff-line-wrap-native-context-menu";
 import {
   createMemoryProductStorage,
   type MemoryProductStorage,
-} from "@/test/product-storage-test-utils";
+} from "#product/test/product-storage-test-utils";
 
 const LONG_LINE_PATCH = `diff --git a/src/long.ts b/src/long.ts
 index 1111111..2222222 100644

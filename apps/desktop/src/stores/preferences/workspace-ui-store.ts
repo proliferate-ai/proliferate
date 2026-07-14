@@ -1,16 +1,16 @@
 import { create } from "zustand";
-import { WORKSPACE_UI_DEFAULTS } from "@/lib/domain/preferences/workspace-ui/model";
-import type { PersistedWorkspaceGitStatusSnapshot } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
-import { createWorkspaceUiActivityActions } from "@/stores/preferences/workspace-ui-activity-actions";
-import { createWorkspaceUiChatTabActions } from "@/stores/preferences/workspace-ui-chat-tab-actions";
-import { createWorkspaceUiDismissalActions } from "@/stores/preferences/workspace-ui-dismissal-actions";
-import { createWorkspaceUiGitStatusActions } from "@/stores/preferences/workspace-ui-git-status-actions";
-import { createWorkspaceUiRightPanelActions } from "@/stores/preferences/workspace-ui-right-panel-actions";
-import { createWorkspaceUiShellActions } from "@/stores/preferences/workspace-ui-shell-actions";
-import { createWorkspaceUiSidebarActions } from "@/stores/preferences/workspace-ui-sidebar-actions";
-import type { WorkspaceUiState } from "@/stores/preferences/workspace-ui-store-types";
+import { WORKSPACE_UI_DEFAULTS } from "#product/lib/domain/preferences/workspace-ui/model";
+import type { PersistedWorkspaceGitStatusSnapshot } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
+import { createWorkspaceUiActivityActions } from "#product/stores/preferences/workspace-ui-activity-actions";
+import { createWorkspaceUiChatTabActions } from "#product/stores/preferences/workspace-ui-chat-tab-actions";
+import { createWorkspaceUiDismissalActions } from "#product/stores/preferences/workspace-ui-dismissal-actions";
+import { createWorkspaceUiGitStatusActions } from "#product/stores/preferences/workspace-ui-git-status-actions";
+import { createWorkspaceUiRightPanelActions } from "#product/stores/preferences/workspace-ui-right-panel-actions";
+import { createWorkspaceUiShellActions } from "#product/stores/preferences/workspace-ui-shell-actions";
+import { createWorkspaceUiSidebarActions } from "#product/stores/preferences/workspace-ui-sidebar-actions";
+import type { WorkspaceUiState } from "#product/stores/preferences/workspace-ui-store-types";
 
-export type { ShellIntentResult, WorkspaceUiState } from "@/stores/preferences/workspace-ui-store-types";
+export type { ShellIntentResult, WorkspaceUiState } from "#product/stores/preferences/workspace-ui-store-types";
 
 export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
   ...WORKSPACE_UI_DEFAULTS,

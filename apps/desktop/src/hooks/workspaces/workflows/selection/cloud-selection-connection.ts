@@ -1,12 +1,12 @@
-import type { isCloudWorkspaceNotReadyError } from "@/hooks/access/cloud/use-cloud-workspace-connection";
+import type { isCloudWorkspaceNotReadyError } from "#product/hooks/access/cloud/use-cloud-workspace-connection";
 import { cancelLatencyFlow } from "@/lib/infra/measurement/latency-flow";
-import { resolveSelectionConnection } from "@/hooks/workspaces/workflows/selection/connection";
+import { resolveSelectionConnection } from "#product/hooks/workspaces/workflows/selection/connection";
 import type {
   ReadyCloudReadinessResult,
   WorkspaceConnectionResult,
   WorkspaceSelectionContext,
   WorkspaceSelectionDeps,
-} from "@/hooks/workspaces/workflows/selection/types";
+} from "#product/hooks/workspaces/workflows/selection/types";
 
 export interface CloudSelectionConnectionDeps {
   isCloudWorkspaceNotReadyError: typeof isCloudWorkspaceNotReadyError;

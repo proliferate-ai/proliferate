@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { AgentSummary } from "@anyharness/sdk";
 import { afterEach, expect, it, vi } from "vitest";
-import { HarnessConfigIssueBanner } from "./HarnessConfigIssueBanner";
+import { HarnessConfigIssueBanner } from "#product/components/settings/panes/agents/harness/HarnessConfigIssueBanner";
 
 const agent = {
   kind: "codex",

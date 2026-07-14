@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   dispatchPromptIntent,
   type PromptIntentDispatchDeps,
-} from "@/hooks/sessions/lifecycle/session-intent-prompt-dispatch";
-import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
+} from "#product/hooks/sessions/lifecycle/session-intent-prompt-dispatch";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
 
 const mocks = vi.hoisted(() => ({
   failLatencyFlow: vi.fn(),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { resolveDesktopTelemetryWorkspaceKind } from "./workspace-kind";
+import { cloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import { resolveDesktopTelemetryWorkspaceKind } from "#product/lib/domain/telemetry/workspace-kind";
 
 describe("resolveDesktopTelemetryWorkspaceKind", () => {
   it("classifies missing workspace selection as none", () => {

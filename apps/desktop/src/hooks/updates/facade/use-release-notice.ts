@@ -1,8 +1,8 @@
 import { useMemo } from "react";
-import { useReleaseNoticeModel } from "@/hooks/updates/cache/use-release-notice-model";
-import { useInstalledReleaseTitleCacheLifecycle } from "@/hooks/updates/lifecycle/use-installed-release-title-cache-lifecycle";
-import { useReleaseNoticeActions } from "@/hooks/updates/workflows/use-release-notice-actions";
-import type { ReleaseNotice } from "@/lib/domain/updates/release-notice";
+import { useReleaseNoticeModel } from "#product/hooks/updates/cache/use-release-notice-model";
+import { useInstalledReleaseTitleCacheLifecycle } from "#product/hooks/updates/lifecycle/use-installed-release-title-cache-lifecycle";
+import { useReleaseNoticeActions } from "#product/hooks/updates/workflows/use-release-notice-actions";
+import type { ReleaseNotice } from "#product/lib/domain/updates/release-notice";
 
 export function useReleaseNotice(): {
   notice: ReleaseNotice | null;

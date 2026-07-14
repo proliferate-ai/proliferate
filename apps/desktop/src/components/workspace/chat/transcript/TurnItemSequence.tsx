@@ -4,11 +4,11 @@ import type {
   TurnRecord,
 } from "@anyharness/sdk";
 import { Fragment, type ReactNode } from "react";
-import { CoworkArtifactTurnCard } from "@/components/workspace/chat/tool-calls/CoworkArtifactTurnCard";
+import { CoworkArtifactTurnCard } from "#product/components/workspace/chat/tool-calls/CoworkArtifactTurnCard";
 import {
   ToolCallSummary,
   ToolCallWorkDivider,
-} from "@/components/workspace/chat/tool-calls/ToolCallSummary";
+} from "#product/components/workspace/chat/tool-calls/ToolCallSummary";
 import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
 import {
   collectTurnCoworkArtifactToolCalls,
@@ -24,12 +24,12 @@ import type {
 import {
   getTurnDisplayBlockKey,
   TurnDisplayBlockNode,
-} from "./ScopedTranscriptBlocks";
-import { TranscriptTreeNode } from "./TranscriptTreeNode";
+} from "#product/components/workspace/chat/transcript/ScopedTranscriptBlocks";
+import { TranscriptTreeNode } from "#product/components/workspace/chat/transcript/TranscriptTreeNode";
 import {
   formatCollapsedSummary,
-} from "./TranscriptToolGroupUtils";
-import { TURN_ITEM_GAP_CLASS } from "./TranscriptTurnChrome";
+} from "#product/components/workspace/chat/transcript/TranscriptToolGroupUtils";
+import { TURN_ITEM_GAP_CLASS } from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
 
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
 

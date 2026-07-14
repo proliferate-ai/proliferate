@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useTranscriptEntryMotion } from "./TranscriptEntryMotionContext";
+import { useTranscriptEntryMotion } from "#product/components/workspace/chat/transcript/TranscriptEntryMotionContext";
 
 /**
  * Marker wrapper for activity content (tool calls, thinking, collapsed

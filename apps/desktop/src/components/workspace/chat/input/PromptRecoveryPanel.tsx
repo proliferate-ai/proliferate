@@ -2,9 +2,9 @@ import { useCallback, useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { X } from "@proliferate/ui/icons";
 import { summarizeContentParts } from "@proliferate/product-domain/chats/composer/prompt-display-parts";
-import { useChatPromptRecoveries } from "@/hooks/chat/derived/use-chat-prompt-recoveries";
-import { useChatPromptRecoveryActions } from "@/hooks/chat/workflows/use-chat-prompt-recovery-actions";
-import type { ChatPromptRecovery } from "@/stores/chat/chat-prompt-recovery-store";
+import { useChatPromptRecoveries } from "#product/hooks/chat/derived/use-chat-prompt-recoveries";
+import { useChatPromptRecoveryActions } from "#product/hooks/chat/workflows/use-chat-prompt-recovery-actions";
+import type { ChatPromptRecovery } from "#product/stores/chat/chat-prompt-recovery-store";
 
 export function PromptRecoveryPanel({
   recoveries,

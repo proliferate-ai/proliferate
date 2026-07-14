@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import type {
   GitPanelFile,
   GitPanelReviewFile,
-} from "@/lib/domain/workspaces/changes/git-panel-diff";
-import { buildChangedFileTree } from "@/lib/domain/workspaces/changes/changed-file-tree";
+} from "#product/lib/domain/workspaces/changes/git-panel-diff";
+import { buildChangedFileTree } from "#product/lib/domain/workspaces/changes/changed-file-tree";
 
 function changedFile(path: string): GitPanelReviewFile {
   const currentDiff: GitPanelFile = {

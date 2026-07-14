@@ -3,23 +3,23 @@ import type {
   PromptInputBlock,
 } from "@anyharness/sdk";
 import { useCallback } from "react";
-import { useSessionPromptWorkflow } from "@/hooks/sessions/workflows/use-session-prompt-workflow";
+import { useSessionPromptWorkflow } from "#product/hooks/sessions/workflows/use-session-prompt-workflow";
 import type {
   LaunchPromptInput,
   SessionControlDeps,
-} from "@/hooks/sessions/workflows/session-control-contract";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
+} from "#product/hooks/sessions/workflows/session-control-contract";
+import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
 import type { PromptAttachmentSnapshot } from "@proliferate/product-domain/chats/composer/prompt-attachment-snapshot";
 import {
   sessionSlotBelongsToWorkspace,
 } from "@proliferate/product-domain/sessions/activity";
-import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
-import { writeChatShellIntentForSession } from "@/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
-import { selectSessionWithShellIntentRollback } from "@/hooks/sessions/workflows/session-shell-selection";
+import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
+import { writeChatShellIntentForSession } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
+import { selectSessionWithShellIntentRollback } from "#product/hooks/sessions/workflows/session-shell-selection";
 import {
   getSessionRecords,
-} from "@/stores/sessions/session-records";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+} from "#product/stores/sessions/session-records";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 export function useSessionFindOrCreateActions({
   activateSession,

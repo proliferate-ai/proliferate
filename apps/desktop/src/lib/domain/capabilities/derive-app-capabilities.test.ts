@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   deriveAppCapabilities,
   resolveEffectiveContract,
-} from "./app-capabilities";
-import type { ServerCapabilityContract } from "./server-capability-contract";
+} from "#product/lib/domain/capabilities/app-capabilities";
+import type { ServerCapabilityContract } from "#product/lib/domain/capabilities/server-capability-contract";
 
 const FALLBACK = {
   supportEmail: "support@proliferate.com",

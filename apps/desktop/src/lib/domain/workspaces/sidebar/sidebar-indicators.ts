@@ -3,10 +3,10 @@ import { recordMeasurementMetric } from "@/lib/infra/measurement/debug-measureme
 import { isMainThreadMeasurementEnabled } from "@/lib/infra/measurement/debug-measurement-env";
 import type { SidebarSessionActivityState } from "@proliferate/product-domain/sessions/activity";
 import { resolveWorkspaceExecutionSidebarActivityState } from "@proliferate/product-domain/sessions/activity";
-import type { ComputeTargetAppearance } from "@/lib/domain/compute/target-appearance";
-import { isCloudWorkspacePending } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
-import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import type { ComputeTargetAppearance } from "#product/lib/domain/compute/target-appearance";
+import { isCloudWorkspacePending } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
+import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
+import { cloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 
 export type SidebarWorkspaceVariant = "local" | "worktree" | "cloud" | "ssh";
 

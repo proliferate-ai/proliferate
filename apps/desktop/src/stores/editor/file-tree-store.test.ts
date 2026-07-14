@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { createMemoryProductStorage } from "@/test/product-storage-test-utils";
+import { createMemoryProductStorage } from "#product/test/product-storage-test-utils";
 import {
   FILE_TREE_MIN_WIDTH,
   FILE_TREE_STORAGE_KEY,
@@ -7,7 +7,7 @@ import {
   resetFileTreeStoreForTests,
   setFileTreeStoreStorageContext,
   useFileTreeStore,
-} from "./file-tree-store";
+} from "#product/stores/editor/file-tree-store";
 
 afterEach(() => {
   resetFileTreeStoreForTests();

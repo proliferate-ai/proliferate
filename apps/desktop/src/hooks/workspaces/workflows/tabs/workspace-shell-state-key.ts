@@ -1,5 +1,5 @@
-import { resolveWorkspaceShellStateKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { resolveWorkspaceShellStateKey } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 export function resolveCurrentShellStateKey(
   workspaceId: string,

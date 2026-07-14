@@ -1,4 +1,4 @@
-import type { SessionStreamConnectionState } from "@/lib/domain/sessions/directory/directory-entry";
+import type { SessionStreamConnectionState } from "#product/lib/domain/sessions/directory/directory-entry";
 
 export interface PromptableSessionSlotSnapshot {
   transcriptHydrated: boolean;

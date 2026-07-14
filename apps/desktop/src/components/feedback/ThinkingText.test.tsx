@@ -3,8 +3,8 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ThinkingText } from "@/components/feedback/ThinkingText";
-import { StreamingIndicator } from "@/components/workspace/chat/transcript/StreamingIndicator";
+import { ThinkingText } from "#product/components/feedback/ThinkingText";
+import { StreamingIndicator } from "#product/components/workspace/chat/transcript/StreamingIndicator";
 
 const testDir = dirname(fileURLToPath(import.meta.url));
 const desktopCss = readFileSync(

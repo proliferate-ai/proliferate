@@ -1,8 +1,8 @@
 import { useCallback, useMemo } from "react";
 import type { AgentSummary } from "@anyharness/sdk";
-import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
-import { useAgentInstallationActions } from "@/hooks/agents/workflows/use-agent-installation-actions";
-import { useToastStore } from "@/stores/toast/toast-store";
+import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
+import { useAgentInstallationActions } from "#product/hooks/agents/workflows/use-agent-installation-actions";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 export interface HarnessInstallAction {
   label: string;

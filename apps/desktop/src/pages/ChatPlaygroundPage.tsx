@@ -1,15 +1,15 @@
 import { useSearchParams } from "react-router-dom";
-import { PlaygroundComposer } from "@/components/playground/PlaygroundComposer";
-import { PlaygroundScenarioBar } from "@/components/playground/PlaygroundScenarioBar";
-import { PlaygroundSidebarGitDiff } from "@/components/playground/PlaygroundSidebarGitDiff";
-import { PlaygroundTranscript } from "@/components/playground/transcript/PlaygroundTranscript";
+import { PlaygroundComposer } from "#product/components/playground/PlaygroundComposer";
+import { PlaygroundScenarioBar } from "#product/components/playground/PlaygroundScenarioBar";
+import { PlaygroundSidebarGitDiff } from "#product/components/playground/PlaygroundSidebarGitDiff";
+import { PlaygroundTranscript } from "#product/components/playground/transcript/PlaygroundTranscript";
 import {
   resolvePlaygroundScenarioSelection,
   type ScenarioKey,
-} from "@/config/playground";
-import { CHAT_COLUMN_CLASSNAME, CHAT_SURFACE_GUTTER_CLASSNAME } from "@/config/chat-layout";
-import { useChatDockInset } from "@/hooks/chat/ui/use-chat-dock-inset";
-import { useReplaySession } from "@/hooks/playground/lifecycle/use-replay-session";
+} from "#product/config/playground";
+import { CHAT_COLUMN_CLASSNAME, CHAT_SURFACE_GUTTER_CLASSNAME } from "#product/config/chat-layout";
+import { useChatDockInset } from "#product/hooks/chat/ui/use-chat-dock-inset";
+import { useReplaySession } from "#product/hooks/playground/lifecycle/use-replay-session";
 
 export function ChatPlaygroundPage() {
   const [params, setParams] = useSearchParams();

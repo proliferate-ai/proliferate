@@ -1,17 +1,17 @@
 import type { RepoRoot } from "@anyharness/sdk";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { repoRootGroupKey } from "@/lib/domain/workspaces/cloud/collections";
+import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import { repoRootGroupKey } from "#product/lib/domain/workspaces/cloud/collections";
 import {
   buildPendingWorkspaceUiKey,
   isPendingWorkspaceUiKey,
   type PendingWorkspaceEntry,
-} from "@/lib/domain/workspaces/creation/pending-entry";
-import type { LogicalWorkspaceRecency } from "@/lib/domain/workspaces/sidebar/recency";
+} from "#product/lib/domain/workspaces/creation/pending-entry";
+import type { LogicalWorkspaceRecency } from "#product/lib/domain/workspaces/sidebar/recency";
 import type {
   SidebarDetailIndicator,
   SidebarWorkspaceVariant,
-} from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
-import type { SidebarGroupState } from "@/lib/domain/workspaces/sidebar/sidebar-model";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
+import type { SidebarGroupState } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 
 export interface PendingSidebarProjection {
   repoKey: string;

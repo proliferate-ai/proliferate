@@ -2,8 +2,8 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { CloudIntegrationView } from "@/lib/domain/cloud/integrations";
-import { UserIntegrationsPane } from "./UserIntegrationsPane";
+import type { CloudIntegrationView } from "#product/lib/domain/cloud/integrations";
+import { UserIntegrationsPane } from "#product/components/settings/panes/UserIntegrationsPane";
 
 const showToast = vi.hoisted(() => vi.fn());
 const authenticate = vi.hoisted(() => vi.fn(() => Promise.resolve({})));

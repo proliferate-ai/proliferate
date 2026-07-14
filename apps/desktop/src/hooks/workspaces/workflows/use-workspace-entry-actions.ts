@@ -1,21 +1,21 @@
 import { useCallback } from "react";
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useChatInputStore } from "@/stores/chat/chat-input-store";
-import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
-import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useChatInputStore } from "#product/stores/chat/chat-input-store";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
+import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
 import {
   buildSubmittingPendingWorkspaceEntry as buildSubmittingPendingEntry,
   createPendingWorkspaceAttemptId as createAttemptId,
-} from "@/lib/domain/workspaces/creation/pending-entry";
+} from "#product/lib/domain/workspaces/creation/pending-entry";
 import {
   type CreateWorktreeWorkspaceInput,
-} from "@/lib/domain/workspaces/creation/workspace-creation";
-import { sidebarRepoGroupKeyForWorkspace } from "@/lib/domain/workspaces/sidebar/sidebar-group-key";
-import { ensureRepoGroupExpanded } from "@/stores/preferences/workspace-ui-store";
-import { useWorkspaceActions } from "./use-workspace-actions";
-import { useWorkspaceEntryFlow } from "./use-workspace-entry-flow";
-import { useWorkspaceEntrySelectionDeps } from "./use-workspace-entry-selection-deps";
+} from "#product/lib/domain/workspaces/creation/workspace-creation";
+import { sidebarRepoGroupKeyForWorkspace } from "#product/lib/domain/workspaces/sidebar/sidebar-group-key";
+import { ensureRepoGroupExpanded } from "#product/stores/preferences/workspace-ui-store";
+import { useWorkspaceActions } from "#product/hooks/workspaces/workflows/use-workspace-actions";
+import { useWorkspaceEntryFlow } from "#product/hooks/workspaces/workflows/use-workspace-entry-flow";
+import { useWorkspaceEntrySelectionDeps } from "#product/hooks/workspaces/workflows/use-workspace-entry-selection-deps";
 import {
   elapsedMs,
   elapsedSince,
@@ -31,20 +31,20 @@ import {
   normalizeWorktreeInput,
   resolveDisplayNameFromPath,
   resolveErrorMessage,
-} from "@/hooks/workspaces/workflows/workspace-entry-action-helpers";
+} from "#product/hooks/workspaces/workflows/workspace-entry-action-helpers";
 import {
   failPendingWorkspaceEntry,
   finalizePendingWorkspaceSelection,
-} from "@/hooks/workspaces/workflows/workspace-entry-finalization";
+} from "#product/hooks/workspaces/workflows/workspace-entry-finalization";
 import {
   runLightweightLocalWorkspaceEntry,
   runLightweightWorktreeWorkspaceEntry,
-} from "@/hooks/workspaces/workflows/workspace-entry-lightweight";
+} from "#product/hooks/workspaces/workflows/workspace-entry-lightweight";
 import type {
   WorkspaceEntryInternalOptions,
   WorkspaceEntryOptions,
   WorkspaceEntryResult,
-} from "@/hooks/workspaces/workflows/workspace-entry-types";
+} from "#product/hooks/workspaces/workflows/workspace-entry-types";
 
 const EMPTY_REPO_ROOTS: RepoRoot[] = [], EMPTY_WORKSPACES: Workspace[] = [];
 

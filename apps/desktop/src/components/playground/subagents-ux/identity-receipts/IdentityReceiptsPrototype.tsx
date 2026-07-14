@@ -3,13 +3,13 @@ import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
 import { SegmentedControl } from "@proliferate/ui/primitives/SegmentedControl";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
-import { shortDelegatedWorkId } from "@/lib/domain/delegated-work/identity";
-import { SubagentIdentityGlyph } from "./SubagentIdentityGlyph";
+import { shortDelegatedWorkId } from "#product/lib/domain/delegated-work/identity";
+import { SubagentIdentityGlyph } from "#product/components/playground/subagents-ux/identity-receipts/SubagentIdentityGlyph";
 import {
   SubagentCreationReceipt,
   type ReceiptDensity,
   type SubagentReceiptModel,
-} from "./SubagentCreationReceipt";
+} from "#product/components/playground/subagents-ux/identity-receipts/SubagentCreationReceipt";
 
 type GroupingMode = "single" | "grouped";
 type WakeMode = "scheduled" | "none";

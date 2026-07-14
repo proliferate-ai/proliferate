@@ -3,7 +3,7 @@ import {
   readPersistedJson,
   writePersistedJson,
   type ProductStorageContext,
-} from "@/lib/infra/persistence/product-storage";
+} from "#product/lib/infra/persistence/product-storage";
 
 export const FILE_TREE_STORAGE_KEY = "proliferate.fileTreeOverlay.v1";
 

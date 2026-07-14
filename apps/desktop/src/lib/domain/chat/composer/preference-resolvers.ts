@@ -1,8 +1,8 @@
-import type { UserPreferences } from "@/lib/domain/preferences/user/model";
+import type { UserPreferences } from "#product/lib/domain/preferences/user/model";
 import {
   DEFAULT_OPEN_IN_TARGET_ID,
   FALLBACK_OPEN_IN_TARGET_ID,
-} from "@/config/open-target-defaults";
+} from "#product/config/open-target-defaults";
 import {
   buildAgentModelGroups,
   defaultAgentModelForGroup,
@@ -13,11 +13,11 @@ import {
   type AgentModelGroup,
   type AgentModelRegistry,
   type AgentModelOption,
-} from "@/lib/domain/agents/model-options";
+} from "#product/lib/domain/agents/model-options";
 import {
   resolveConfiguredLaunchAgentSelection,
-} from "@/lib/domain/chat/models/launch-selection-defaults";
-import type { DesktopAgentLaunchAgent } from "@/lib/domain/agents/cloud-launch-catalog";
+} from "#product/lib/domain/chat/models/launch-selection-defaults";
+import type { DesktopAgentLaunchAgent } from "#product/lib/domain/agents/cloud-launch-catalog";
 
 export interface ChatDefaultPreferences {
   defaultChatAgentKind: string;

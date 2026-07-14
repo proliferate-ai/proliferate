@@ -1,16 +1,16 @@
 import type { Workspace } from "@anyharness/sdk";
-import type { ComputeTargetAppearance } from "@/lib/domain/compute/target-appearance";
+import type { ComputeTargetAppearance } from "#product/lib/domain/compute/target-appearance";
 import type {
   CloudWorkspaceExposureState,
   CloudWorkspaceVisibility,
-} from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
-import { automationWorkspaceDefaultDisplayNameFromBranch } from "@/lib/domain/workspaces/display/workspace-display";
-import type { SidebarCloudWorkspaceSummary } from "@/lib/domain/workspaces/sidebar/cloud-workspace";
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
+import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
+import { automationWorkspaceDefaultDisplayNameFromBranch } from "#product/lib/domain/workspaces/display/workspace-display";
+import type { SidebarCloudWorkspaceSummary } from "#product/lib/domain/workspaces/sidebar/cloud-workspace";
 import type {
   SidebarDetailIndicator,
   SidebarWorkspaceVariant,
-} from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
 
 type SidebarCreatorContext =
   | {

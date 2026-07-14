@@ -1,10 +1,10 @@
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { resolveConfiguredLaunchSelection } from "@/lib/domain/chat/composer/preference-resolvers";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import type { ModelSelectorSelection } from "@/lib/domain/chat/models/model-selector-types";
-import { useChatLaunchCatalog } from "@/hooks/chat/derived/use-chat-launch-catalog";
-import { resolveModelDisplayName } from "@/lib/domain/chat/models/model-display";
+import { resolveConfiguredLaunchSelection } from "#product/lib/domain/chat/composer/preference-resolvers";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
+import type { ModelSelectorSelection } from "#product/lib/domain/chat/models/model-selector-types";
+import { useChatLaunchCatalog } from "#product/hooks/chat/derived/use-chat-launch-catalog";
+import { resolveModelDisplayName } from "#product/lib/domain/chat/models/model-display";
 
 export function useConfiguredLaunchReadiness(
   activeSelection: ModelSelectorSelection | null = null,

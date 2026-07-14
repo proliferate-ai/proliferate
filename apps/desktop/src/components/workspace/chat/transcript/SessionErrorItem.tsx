@@ -2,12 +2,12 @@ import { useState } from "react";
 import type { ErrorItem } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { CircleAlert, CircleQuestion, RefreshCw } from "@proliferate/ui/icons";
-import { useSessionModelFallbackAction } from "@/hooks/sessions/workflows/use-session-model-fallback-action";
+import { useSessionModelFallbackAction } from "#product/hooks/sessions/workflows/use-session-model-fallback-action";
 import { presentSessionError } from "@proliferate/product-domain/chats/transcript/session-error-presentation";
-import { useToastStore } from "@/stores/toast/toast-store";
-import { useChatInputStore } from "@/stores/chat/chat-input-store";
-import { getSessionRecord } from "@/stores/sessions/session-records";
-import { useConnectivityStore } from "@/stores/infra/connectivity-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
+import { useChatInputStore } from "#product/stores/chat/chat-input-store";
+import { getSessionRecord } from "#product/stores/sessions/session-records";
+import { useConnectivityStore } from "#product/stores/infra/connectivity-store";
 
 export function SessionErrorItem({
   item,

@@ -1,8 +1,8 @@
 import { useId, useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ChevronDown, ChevronRight } from "@proliferate/ui/icons";
-import { shortDelegatedWorkId } from "@/lib/domain/delegated-work/identity";
-import { SubagentIdentityGlyph } from "./SubagentIdentityGlyph";
+import { shortDelegatedWorkId } from "#product/lib/domain/delegated-work/identity";
+import { SubagentIdentityGlyph } from "#product/components/playground/subagents-ux/identity-receipts/SubagentIdentityGlyph";
 
 export type ReceiptDensity = "compact" | "comfortable";
 

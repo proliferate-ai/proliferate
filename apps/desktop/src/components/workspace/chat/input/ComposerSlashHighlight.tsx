@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
-import type { RecognizedSlashCommand } from "@/lib/domain/chat/composer/slash-command-recognition";
+import type { RecognizedSlashCommand } from "#product/lib/domain/chat/composer/slash-command-recognition";
 
 interface ComposerSlashHighlightProps {
   recognition: RecognizedSlashCommand;

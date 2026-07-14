@@ -1,28 +1,28 @@
 import { useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { OrganizationInvitationsSection } from "@/components/settings/panes/organization/OrganizationInvitationsSection";
-import { OrganizationMembersSection } from "@/components/settings/panes/organization/OrganizationMembersSection";
+import { OrganizationInvitationsSection } from "#product/components/settings/panes/organization/OrganizationInvitationsSection";
+import { OrganizationMembersSection } from "#product/components/settings/panes/organization/OrganizationMembersSection";
 import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
-import { useOrganizationActions } from "@/hooks/access/cloud/organizations/use-organization-actions";
-import { useOrganizationInvitations } from "@/hooks/access/cloud/organizations/use-organization-invitations";
-import { useOrganizationJoinLink } from "@/hooks/access/cloud/organizations/use-organization-join-link";
-import { useOrganizationMembers } from "@/hooks/access/cloud/organizations/use-organization-members";
-import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
-import { TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION } from "@/config/settings";
+import { useIsAdmin } from "#product/hooks/access/cloud/organizations/use-is-admin";
+import { useOrganizationActions } from "#product/hooks/access/cloud/organizations/use-organization-actions";
+import { useOrganizationInvitations } from "#product/hooks/access/cloud/organizations/use-organization-invitations";
+import { useOrganizationJoinLink } from "#product/hooks/access/cloud/organizations/use-organization-join-link";
+import { useOrganizationMembers } from "#product/hooks/access/cloud/organizations/use-organization-members";
+import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
+import { TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION } from "#product/config/settings";
 import {
   type OrganizationInvitationRecord,
   type OrganizationMemberRecord,
   type OrganizationRole,
-} from "@/lib/domain/organizations/organization-records";
+} from "#product/lib/domain/organizations/organization-records";
 import {
   useProductAuthStatus,
   useProductAuthUserId,
-} from "@/hooks/auth/facade/use-product-auth";
-import { useToastStore } from "@/stores/toast/toast-store";
+} from "#product/hooks/auth/facade/use-product-auth";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 const EMPTY_MEMBERS: OrganizationMemberRecord[] = [];
 const EMPTY_INVITATIONS: OrganizationInvitationRecord[] = [];

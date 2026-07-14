@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ChevronRight } from "@proliferate/ui/icons";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
-import { buildSettingsHref } from "@/lib/domain/settings/navigation";
+import { buildSettingsHref } from "#product/lib/domain/settings/navigation";
 
 export function OrganizationBillingLinkSection() {
   const navigate = useNavigate();

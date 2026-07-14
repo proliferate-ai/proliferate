@@ -6,7 +6,7 @@ import {
   groupCommandPaletteEntries,
   splitFilePath,
   type CommandPaletteEntry,
-} from "@/lib/domain/command-palette/entries";
+} from "#product/lib/domain/command-palette/entries";
 
 const execute = vi.fn();
 

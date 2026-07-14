@@ -3,8 +3,8 @@ import {
   getIntegrationOauthFlow,
   type IntegrationOAuthFlowStatus,
 } from "@proliferate/cloud-sdk/client/integrations";
-import { isTerminalIntegrationOauthFlowStatus } from "@/lib/domain/cloud/integrations";
-import { cloudIntegrationOauthFlowKey } from "./query-keys";
+import { isTerminalIntegrationOauthFlowStatus } from "#product/lib/domain/cloud/integrations";
+import { cloudIntegrationOauthFlowKey } from "#product/hooks/access/cloud/integrations/query-keys";
 
 const OAUTH_FLOW_POLL_INTERVAL_MS = 2_000;
 

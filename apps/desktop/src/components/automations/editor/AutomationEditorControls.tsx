@@ -1,16 +1,16 @@
 import type { ReactNode } from "react";
-import { AUTOMATION_TEMPLATE_OPTIONS } from "@/copy/automations/automation-copy";
+import { AUTOMATION_TEMPLATE_OPTIONS } from "#product/copy/automations/automation-copy";
 import {
   automationTimezoneOptions,
   rruleForPresetAtTime,
   schedulePresetAcceptsTime,
   timeForRrule,
   type AutomationSchedulePresetOrCustom,
-} from "@/lib/domain/automations/schedule/schedule";
+} from "#product/lib/domain/automations/schedule/schedule";
 import {
   AUTOMATION_SCHEDULE_PRESET_OPTIONS,
   formatScheduleControlLabel,
-} from "@/lib/domain/automations/schedule/presentation";
+} from "#product/lib/domain/automations/schedule/presentation";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";

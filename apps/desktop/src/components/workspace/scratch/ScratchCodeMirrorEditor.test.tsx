@@ -2,7 +2,7 @@
 
 import { render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { ScratchCodeMirrorEditor } from "@/components/workspace/scratch/ScratchCodeMirrorEditor";
+import { ScratchCodeMirrorEditor } from "#product/components/workspace/scratch/ScratchCodeMirrorEditor";
 
 function collectStyleText() {
   const rules: string[] = [];

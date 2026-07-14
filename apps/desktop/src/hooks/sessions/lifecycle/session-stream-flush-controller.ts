@@ -2,16 +2,16 @@ import type { SessionEventEnvelope } from "@anyharness/sdk";
 import {
   createFrameStreamBatchScheduler,
 } from "@proliferate/product-domain/chats/transcript/stream-batcher";
-import { logDevSessionRuntimeEvent } from "@/lib/infra/debug/dev-session-runtime-log";
+import { logDevSessionRuntimeEvent } from "#product/lib/infra/debug/dev-session-runtime-log";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
-import { getSessionRecord } from "@/stores/sessions/session-records";
-import { applySessionStreamFlushBatch } from "@/hooks/sessions/lifecycle/session-stream-flush-apply";
+import { getSessionRecord } from "#product/stores/sessions/session-records";
+import { applySessionStreamFlushBatch } from "#product/hooks/sessions/lifecycle/session-stream-flush-apply";
 import type {
   SessionStreamFlushController,
   SessionStreamFlushControllerOptions,
   SessionStreamFlushFactoryDeps,
   SessionStreamFlushScheduler,
-} from "@/hooks/sessions/lifecycle/session-stream-flush-types";
+} from "#product/hooks/sessions/lifecycle/session-stream-flush-types";
 
 const SESSION_STREAM_FLUSH_MAX_PAINT_WAIT_MS = 50;
 const SESSION_STREAM_FLUSH_WATCHDOG_MS = 250;

@@ -1,6 +1,6 @@
-import { SHORTCUTS, type ShortcutId } from "@/config/shortcuts/registry";
-import { matchShortcutDef } from "@/lib/domain/shortcuts/matching";
-import type { ShortcutTrigger } from "@/lib/domain/shortcuts/registry";
+import { SHORTCUTS, type ShortcutId } from "#product/config/shortcuts/registry";
+import { matchShortcutDef } from "#product/lib/domain/shortcuts/matching";
+import type { ShortcutTrigger } from "#product/lib/domain/shortcuts/registry";
 
 const DISPATCH_SHORTCUTS = Object.values(SHORTCUTS);
 const SHORTCUT_IDS = new Set<ShortcutId>(DISPATCH_SHORTCUTS.map((shortcut) => shortcut.id));

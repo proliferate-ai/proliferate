@@ -1,11 +1,11 @@
 import { useMemo } from "react";
-import { useIntegrationHealth } from "@/hooks/access/cloud/integrations/use-integration-health";
-import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
-import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
+import { useIntegrationHealth } from "#product/hooks/access/cloud/integrations/use-integration-health";
+import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
 import {
   deriveComposerIntegrationsModel,
   type ComposerIntegrationsModel,
-} from "@/lib/domain/cloud/composer-integrations";
+} from "#product/lib/domain/cloud/composer-integrations";
 
 export type { ComposerIntegrationsModel };
 

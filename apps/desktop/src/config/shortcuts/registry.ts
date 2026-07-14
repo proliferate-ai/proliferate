@@ -1,6 +1,6 @@
-import { APP_SHORTCUTS } from "./app-shortcuts";
-import { WORKSPACE_SHORTCUTS } from "./workspace-shortcuts";
-import type { ShortcutDef } from "./types";
+import { APP_SHORTCUTS } from "#product/config/shortcuts/app-shortcuts";
+import { WORKSPACE_SHORTCUTS } from "#product/config/shortcuts/workspace-shortcuts";
+import type { ShortcutDef } from "#product/config/shortcuts/types";
 
 export const SHORTCUTS = {
   ...APP_SHORTCUTS,

@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildSubmittingPendingWorkspaceEntry,
   type PendingWorkspaceEntry,
-} from "@/lib/domain/workspaces/creation/pending-entry";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
+} from "#product/lib/domain/workspaces/creation/pending-entry";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 
 const mocks = vi.hoisted(() => ({
   selectWorkspace: vi.fn(),
@@ -112,7 +112,7 @@ describe("useWorkspaceEntryFlow", () => {
   });
 
   it("expands the requested repo folder before selecting with arrival", async () => {
-    const { useWorkspaceEntryFlow } = await import("./use-workspace-entry-flow");
+    const { useWorkspaceEntryFlow } = await import("#product/hooks/workspaces/workflows/use-workspace-entry-flow");
     const repoGroupKey = "/Users/pablo/proliferate";
     useWorkspaceUiStore.setState({
       collapsedRepoGroups: [repoGroupKey, "/tmp/other-repo"],
@@ -141,7 +141,7 @@ describe("useWorkspaceEntryFlow", () => {
   });
 
   it("requests composer focus when opening the pending workspace shell", async () => {
-    const { useWorkspaceEntryFlow } = await import("./use-workspace-entry-flow");
+    const { useWorkspaceEntryFlow } = await import("#product/hooks/workspaces/workflows/use-workspace-entry-flow");
     const entry = buildSubmittingPendingWorkspaceEntry({
       attemptId: "attempt-1",
       selectedWorkspaceId: null,
@@ -161,7 +161,7 @@ describe("useWorkspaceEntryFlow", () => {
   });
 
   it("opens a projected session shell when the pending workspace has an initial session", async () => {
-    const { useWorkspaceEntryFlow } = await import("./use-workspace-entry-flow");
+    const { useWorkspaceEntryFlow } = await import("#product/hooks/workspaces/workflows/use-workspace-entry-flow");
     const entry = buildSubmittingPendingWorkspaceEntry({
       attemptId: "attempt-1",
       selectedWorkspaceId: null,
@@ -188,7 +188,7 @@ describe("useWorkspaceEntryFlow", () => {
   });
 
   it("materializes projected sessions before clearing finalized pending workspace", async () => {
-    const { useWorkspaceEntryFlow } = await import("./use-workspace-entry-flow");
+    const { useWorkspaceEntryFlow } = await import("#product/hooks/workspaces/workflows/use-workspace-entry-flow");
     const entry = buildSubmittingPendingWorkspaceEntry({
       attemptId: "attempt-1",
       selectedWorkspaceId: null,

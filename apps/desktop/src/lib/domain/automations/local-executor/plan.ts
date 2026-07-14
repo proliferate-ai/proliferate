@@ -2,7 +2,7 @@ import type {
   AutomationRepoRootRecord,
   AutomationRunClaimRecord,
   AutomationWorkspaceRecord,
-} from "./records";
+} from "#product/lib/domain/automations/local-executor/records";
 
 export interface LocalAutomationRepositoryIdentity {
   provider: string;

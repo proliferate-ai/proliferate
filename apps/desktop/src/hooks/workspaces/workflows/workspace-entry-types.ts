@@ -1,4 +1,4 @@
-import type { PendingWorkspaceInitialSession } from "@/lib/domain/workspaces/creation/pending-entry";
+import type { PendingWorkspaceInitialSession } from "#product/lib/domain/workspaces/creation/pending-entry";
 
 export interface WorkspaceEntryOptions {
   lightweight?: boolean;

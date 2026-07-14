@@ -1,5 +1,5 @@
 import { Smartphone, Spinner } from "@proliferate/ui/icons";
-import { useWorkspaceShellActions } from "@/components/workspace/shell/providers/WorkspaceShellActionsContext";
+import { useWorkspaceShellActions } from "#product/components/workspace/shell/providers/WorkspaceShellActionsContext";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 
 export function WorkspaceRemoteAccessFooterControl() {

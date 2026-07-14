@@ -6,20 +6,20 @@ import {
 } from "react";
 import type { TerminalRecord } from "@anyharness/sdk";
 import { useTerminalsQuery } from "@anyharness/sdk-react";
-import { useRightPanelHeaderEntries } from "@/hooks/workspaces/derived/use-right-panel-header-entries";
+import { useRightPanelHeaderEntries } from "#product/hooks/workspaces/derived/use-right-panel-header-entries";
 import {
   useRightPanelLifecycle,
   type RightPanelTerminalActivationRequest,
-} from "@/hooks/workspaces/lifecycle/right-panel/use-right-panel-lifecycle";
-import { useRightPanelNewTabMenuRequest } from "@/hooks/workspaces/ui/use-right-panel-new-tab-menu-request";
-import { useRightPanelRootFocus } from "@/hooks/workspaces/ui/use-right-panel-root-focus";
-import { useRightPanelShortcutRequests } from "@/hooks/workspaces/ui/use-right-panel-shortcut-requests";
-import { useRightPanelStateUpdater } from "@/hooks/workspaces/ui/use-right-panel-state-updater";
-import { useRightPanelEntryActions } from "@/hooks/workspaces/workflows/right-panel/use-right-panel-entry-actions";
-import type { RightPanelWorkspaceState } from "@/lib/domain/workspaces/shell/right-panel-model";
-import { useWorkspaceFileBuffersStore } from "@/stores/editor/workspace-file-buffers-store";
-import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
-import { useTerminalStore } from "@/stores/terminal/terminal-store";
+} from "#product/hooks/workspaces/lifecycle/right-panel/use-right-panel-lifecycle";
+import { useRightPanelNewTabMenuRequest } from "#product/hooks/workspaces/ui/use-right-panel-new-tab-menu-request";
+import { useRightPanelRootFocus } from "#product/hooks/workspaces/ui/use-right-panel-root-focus";
+import { useRightPanelShortcutRequests } from "#product/hooks/workspaces/ui/use-right-panel-shortcut-requests";
+import { useRightPanelStateUpdater } from "#product/hooks/workspaces/ui/use-right-panel-state-updater";
+import { useRightPanelEntryActions } from "#product/hooks/workspaces/workflows/right-panel/use-right-panel-entry-actions";
+import type { RightPanelWorkspaceState } from "#product/lib/domain/workspaces/shell/right-panel-model";
+import { useWorkspaceFileBuffersStore } from "#product/stores/editor/workspace-file-buffers-store";
+import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
+import { useTerminalStore } from "#product/stores/terminal/terminal-store";
 
 export type { RightPanelTerminalActivationRequest };
 

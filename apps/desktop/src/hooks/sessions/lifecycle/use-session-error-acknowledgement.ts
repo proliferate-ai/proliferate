@@ -1,14 +1,14 @@
 import { useEffect } from "react";
-import { parseWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/selection/workspace-ui-key";
-import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
+import { parseWorkspaceShellTabKey } from "#product/lib/domain/workspaces/tabs/shell-tabs";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { resolveSelectedWorkspaceIdentity } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
+import { resolveWithWorkspaceFallback } from "#product/lib/domain/workspaces/selection/workspace-keyed-preferences";
 import {
   isDocumentVisibleAndFocused,
   useDocumentFocusVisibilityNonce,
-} from "@/hooks/ui/document/use-document-focus-visibility";
+} from "#product/hooks/ui/document/use-document-focus-visibility";
 
 export function useSessionErrorAcknowledgement(): void {
   const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);

@@ -8,8 +8,8 @@ import { cleanup, render } from "@testing-library/react";
 import { createTranscriptState, type TranscriptState } from "@anyharness/sdk";
 import { thoughtItem } from "@proliferate/product-domain/chats/transcript/transcript-presentation-test-fixtures";
 import { afterEach, describe, expect, it } from "vitest";
-import { TranscriptActivityBlock } from "./TranscriptActivityBlock";
-import { TranscriptEntryMotionProvider } from "./TranscriptEntryMotionContext";
+import { TranscriptActivityBlock } from "#product/components/workspace/chat/transcript/TranscriptActivityBlock";
+import { TranscriptEntryMotionProvider } from "#product/components/workspace/chat/transcript/TranscriptEntryMotionContext";
 
 afterEach(cleanup);
 

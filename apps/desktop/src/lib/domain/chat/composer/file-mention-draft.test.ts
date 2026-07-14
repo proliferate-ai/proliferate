@@ -5,22 +5,22 @@ import {
   deleteForwardAtSelection,
   insertTextAtSelection,
   removeMentionAtIndex,
-} from "./file-mention-draft-edits";
+} from "#product/lib/domain/chat/composer/file-mention-draft-edits";
 import {
   createFileMentionNode,
   createTextDraft,
   isChatDraftEmpty,
   serializeChatDraftToPrompt,
   type ChatComposerDraft,
-} from "./file-mention-draft-model";
+} from "#product/lib/domain/chat/composer/file-mention-draft-model";
 import {
   collapseSelection,
-} from "./file-mention-draft-position";
+} from "#product/lib/domain/chat/composer/file-mention-draft-position";
 import {
   formatMarkdownFileLink,
   isValidWorkspaceRelativePath,
   tokenizeSerializedFileLinks,
-} from "./file-mention-links";
+} from "#product/lib/domain/chat/composer/file-mention-links";
 
 const mention = (id: string, path = "apps/desktop/src/App.tsx") =>
   createFileMentionNode({ id, name: path.split("/").pop() ?? path, path });

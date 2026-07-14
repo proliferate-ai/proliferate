@@ -1,16 +1,16 @@
 import type {
   DesktopAgentLaunchAgent,
   DesktopAgentLaunchModel,
-} from "@/lib/domain/agents/cloud-launch-catalog";
-import { agentsWithVisibleModels, agentWithVisibleModels } from "@/lib/domain/chat/models/launch-visible-agents";
+} from "#product/lib/domain/agents/cloud-launch-catalog";
+import { agentsWithVisibleModels, agentWithVisibleModels } from "#product/lib/domain/chat/models/launch-visible-agents";
 import {
   findLaunchModelByIdOrAlias,
   resolveSavedLaunchModelId,
-} from "@/lib/domain/chat/models/model-selection-ids";
+} from "#product/lib/domain/chat/models/model-selection-ids";
 import type {
   ChatLaunchPreferences,
   ModelSelectorSelection,
-} from "@/lib/domain/chat/models/model-selector-types";
+} from "#product/lib/domain/chat/models/model-selector-types";
 
 export function resolveEffectiveLaunchSelection(
   agents: DesktopAgentLaunchAgent[],

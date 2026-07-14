@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
-import type { CloudWorkspaceSummary } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
-import { buildStandardRepoProjection } from "@/lib/domain/workspaces/cloud/standard-projection";
+import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
+import { buildStandardRepoProjection } from "#product/lib/domain/workspaces/cloud/standard-projection";
 
 function makeRepoRoot(overrides: Partial<RepoRoot> = {}): RepoRoot {
   return {

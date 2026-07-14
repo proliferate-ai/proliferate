@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
-import type { InterHunkGap } from "@/lib/domain/files/diff-parser";
-import type { ExpandDirection } from "@/components/content/ui/diff/DiffContextExpander";
+import type { InterHunkGap } from "#product/lib/domain/files/diff-parser";
+import type { ExpandDirection } from "#product/components/content/ui/diff/DiffContextExpander";
 
 /** Number of lines to reveal per directional expand click */
 const EXPAND_STEP = 20;

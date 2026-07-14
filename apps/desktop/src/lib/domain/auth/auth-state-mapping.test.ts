@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { AuthUser } from "@/lib/domain/auth/auth-user";
-import type { StoredAuthSession } from "@/lib/domain/auth/stored-auth-session";
+import type { AuthUser } from "#product/lib/domain/auth/auth-user";
+import type { StoredAuthSession } from "#product/lib/domain/auth/stored-auth-session";
 import {
   anonymousAuthState,
   authenticatedAuthState,
   authErrorStatePatch,
   bootstrappingAuthStatePatch,
-} from "./auth-state-mapping";
+} from "#product/lib/domain/auth/auth-state-mapping";
 
 const storedSession: StoredAuthSession = {
   access_token: "access-token",

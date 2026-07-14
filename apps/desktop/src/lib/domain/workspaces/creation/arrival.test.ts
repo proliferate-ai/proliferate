@@ -4,8 +4,8 @@ import {
   buildPendingWorkspaceArrivalViewModel,
   buildWorkspaceArrivalEvent,
   buildWorkspaceArrivalViewModel,
-} from "@/lib/domain/workspaces/creation/arrival";
-import { buildSubmittingPendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
+} from "#product/lib/domain/workspaces/creation/arrival";
+import { buildSubmittingPendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
 
 function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
   return {

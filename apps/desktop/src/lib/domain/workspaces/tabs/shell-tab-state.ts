@@ -1,20 +1,20 @@
 import type {
   HeaderStripRow,
-} from "@/lib/domain/workspaces/tabs/group-rows";
-import type { DisplayManualChatGroup } from "@/lib/domain/workspaces/tabs/manual-groups";
+} from "#product/lib/domain/workspaces/tabs/group-rows";
+import type { DisplayManualChatGroup } from "#product/lib/domain/workspaces/tabs/manual-groups";
 import {
   buildHeaderShellRows,
   type HeaderShellStripRow,
   type ShellChatTab,
-} from "@/lib/domain/workspaces/tabs/shell-rows";
+} from "#product/lib/domain/workspaces/tabs/shell-rows";
 import {
   buildWorkspaceShellTabs,
   getWorkspaceShellTabKey,
   resolveWorkspaceShellTabFromKey,
   type WorkspaceShellTab,
   type WorkspaceShellTabKey,
-} from "@/lib/domain/workspaces/tabs/shell-tabs";
-import type { ViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
+} from "#product/lib/domain/workspaces/tabs/shell-tabs";
+import type { ViewerTarget } from "#product/lib/domain/workspaces/viewer/viewer-target";
 
 export interface ResolveWorkspaceShellTabsStateArgs<TTab extends ShellChatTab> {
   selectedWorkspaceId: string | null;

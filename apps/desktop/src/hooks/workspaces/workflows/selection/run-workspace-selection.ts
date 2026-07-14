@@ -1,46 +1,46 @@
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import {
   createEmptySessionRecord,
   getSessionRecord,
   patchSessionRecord,
   putSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { writeChatShellIntentForSession } from "@/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
+} from "#product/stores/sessions/session-records";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { writeChatShellIntentForSession } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
 import {
   findLogicalWorkspace,
   logicalWorkspaceRelatedIds,
-} from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
-import { parseTargetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
-import { resolveLogicalWorkspaceMaterializationId } from "@/lib/domain/workspaces/cloud/logical-workspace-materialization";
+} from "#product/lib/domain/workspaces/cloud/logical-workspace-lookup";
+import { parseTargetWorkspaceSyntheticId } from "#product/lib/domain/compute/target-workspace-id";
+import { resolveLogicalWorkspaceMaterializationId } from "#product/lib/domain/workspaces/cloud/logical-workspace-materialization";
 import {
   markWorkspaceViewed,
   markWorkspaceViewedAt,
   trackWorkspaceInteraction,
   useWorkspaceUiStore,
-} from "@/stores/preferences/workspace-ui-store";
-import { getLatestWorkspaceInteractionTimestamp } from "@/lib/domain/workspaces/selection/selection";
+} from "#product/stores/preferences/workspace-ui-store";
+import { getLatestWorkspaceInteractionTimestamp } from "#product/lib/domain/workspaces/selection/selection";
 import {
   logLatency,
   startLatencyTimer,
 } from "@/lib/infra/measurement/debug-latency";
 import { cancelLatencyFlow } from "@/lib/infra/measurement/latency-flow";
-import { isCloudWorkspaceNotReadyError } from "@/hooks/access/cloud/use-cloud-workspace-connection";
-import { resolveCloudWorkspaceReadiness } from "./cloud-readiness";
-import { resolveSelectionConnection } from "./connection";
-import { isWorkspaceSelectionCurrent } from "./guards";
+import { isCloudWorkspaceNotReadyError } from "#product/hooks/access/cloud/use-cloud-workspace-connection";
+import { resolveCloudWorkspaceReadiness } from "#product/hooks/workspaces/workflows/selection/cloud-readiness";
+import { resolveSelectionConnection } from "#product/hooks/workspaces/workflows/selection/connection";
+import { isWorkspaceSelectionCurrent } from "#product/hooks/workspaces/workflows/selection/guards";
 import {
   prepareOptimisticWorkspaceSessionShell,
   resolveInitialActiveSessionId,
-} from "./initial-session";
+} from "#product/hooks/workspaces/workflows/selection/initial-session";
 import {
   resolveCloudSelectionConnectionWithStatusRefresh,
-} from "./cloud-selection-connection";
+} from "#product/hooks/workspaces/workflows/selection/cloud-selection-connection";
 import type {
   WorkspaceSelectionContext,
   WorkspaceSelectionDeps,
   WorkspaceSelectionRequest,
-} from "./types";
+} from "#product/hooks/workspaces/workflows/selection/types";
 
 const INITIAL_SESSION_DEPS = {
   createEmptySessionRecord,

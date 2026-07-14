@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildComposerSessionControlGroups,
   filterComposerSessionControlsForSurface,
-} from "./composer-control-groups";
-import type { LiveSessionControlDescriptor } from "./session-controls";
+} from "#product/lib/domain/chat/session-controls/composer-control-groups";
+import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 
 describe("buildComposerSessionControlGroups", () => {
   it("pulls the primary planning mode control into the left composer mode slot", () => {

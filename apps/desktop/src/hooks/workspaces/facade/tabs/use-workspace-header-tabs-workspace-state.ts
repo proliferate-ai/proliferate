@@ -1,17 +1,17 @@
-import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/derived/use-hot-paint-gate";
-import { buildPendingWorkspaceUiKey } from "@/lib/domain/workspaces/creation/pending-entry";
-import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/selection/workspace-ui-key";
+import { useIsHotPaintGatePendingForWorkspace } from "#product/hooks/workspaces/derived/use-hot-paint-gate";
+import { buildPendingWorkspaceUiKey } from "#product/lib/domain/workspaces/creation/pending-entry";
+import { resolveSelectedWorkspaceIdentity } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
 import type {
   FileViewerMode,
   ViewerTarget,
-} from "@/lib/domain/workspaces/viewer/viewer-target";
+} from "#product/lib/domain/workspaces/viewer/viewer-target";
 import {
   useWorkspaceFileBuffersStore,
   type WorkspaceFileBuffer,
-} from "@/stores/editor/workspace-file-buffers-store";
-import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+} from "#product/stores/editor/workspace-file-buffers-store";
+import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 const EMPTY_OPEN_TARGETS: ViewerTarget[] = [];
 const EMPTY_BUFFERS_BY_PATH: Record<string, WorkspaceFileBuffer> = {};

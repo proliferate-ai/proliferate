@@ -1,18 +1,18 @@
 import { useCallback } from "react";
-import { useChatTabVisibilityActions } from "@/hooks/workspaces/workflows/tabs/use-chat-tab-visibility-actions";
-import { useWorkspaceShellActivation } from "@/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
+import { useChatTabVisibilityActions } from "#product/hooks/workspaces/workflows/tabs/use-chat-tab-visibility-actions";
+import { useWorkspaceShellActivation } from "#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
 import {
   resolveFallbackWorkspaceShellTab,
-} from "@/lib/domain/workspaces/tabs/shell-tabs";
-import { resolveActiveWorkspaceShellTab } from "@/lib/domain/workspaces/tabs/active-shell-tab";
-import { useWorkspaceFileBuffersStore } from "@/stores/editor/workspace-file-buffers-store";
-import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+} from "#product/lib/domain/workspaces/tabs/shell-tabs";
+import { resolveActiveWorkspaceShellTab } from "#product/lib/domain/workspaces/tabs/active-shell-tab";
+import { useWorkspaceFileBuffersStore } from "#product/stores/editor/workspace-file-buffers-store";
+import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import {
   viewerTargetEditablePath,
   viewerTargetKey,
-} from "@/lib/domain/workspaces/viewer/viewer-target";
-import type { WorkspaceTabActionsContext } from "@/hooks/workspaces/workflows/tabs/use-workspace-tab-actions";
+} from "#product/lib/domain/workspaces/viewer/viewer-target";
+import type { WorkspaceTabActionsContext } from "#product/hooks/workspaces/workflows/tabs/use-workspace-tab-actions";
 
 export type CloseActiveWorkspaceTabResult = "closed" | "blocked" | "noop";
 

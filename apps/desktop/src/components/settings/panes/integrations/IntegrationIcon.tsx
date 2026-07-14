@@ -14,7 +14,7 @@ import renderDarkIcon from "@/assets/connector-icons/render-dark.svg";
 import sentryIcon from "@/assets/connector-icons/sentry.svg";
 import sentryDarkIcon from "@/assets/connector-icons/sentry-dark.svg";
 import supabaseIcon from "@/assets/connector-icons/supabase.png";
-import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";
+import { useResolvedMode } from "#product/hooks/theme/derived/use-resolved-mode";
 
 function LinearGlyph({ className, ...props }: SVGProps<SVGSVGElement>) {
   return (

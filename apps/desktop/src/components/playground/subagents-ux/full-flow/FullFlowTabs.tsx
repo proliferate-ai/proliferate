@@ -1,12 +1,12 @@
 import { X } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { SubagentIdentityGlyph } from "../identity-receipts/SubagentIdentityGlyph";
-import { AgentGlyph } from "../popover-pane/AgentGlyph";
+import { SubagentIdentityGlyph } from "#product/components/playground/subagents-ux/identity-receipts/SubagentIdentityGlyph";
+import { AgentGlyph } from "#product/components/playground/subagents-ux/popover-pane/AgentGlyph";
 import type {
   FullFlowArchivedSession,
   FullFlowChild,
   FullFlowParent,
-} from "./FullFlowFixtures";
+} from "#product/components/playground/subagents-ux/full-flow/FullFlowFixtures";
 
 export type TabDescriptor =
   | { kind: "parent"; parentId: string }

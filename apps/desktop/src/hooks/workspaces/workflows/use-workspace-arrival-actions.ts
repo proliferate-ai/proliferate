@@ -4,9 +4,9 @@ import {
   type OpenTarget,
 } from "@proliferate/product-client/host/desktop-bridge";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useToastStore } from "@/stores/toast/toast-store";
-import { buildSettingsHref } from "@/lib/domain/settings/navigation";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
+import { buildSettingsHref } from "#product/lib/domain/settings/navigation";
 
 interface UseWorkspaceArrivalActionsArgs {
   workspacePath: string | null;

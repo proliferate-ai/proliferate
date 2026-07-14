@@ -7,7 +7,7 @@ import {
   scratchEditorTheme,
   scratchListDecorations,
   scratchMarkdownLanguage,
-} from "@/hooks/workspaces/lifecycle/scratch-codemirror-extensions";
+} from "#product/hooks/workspaces/lifecycle/scratch-codemirror-extensions";
 
 let view: EditorView | null = null;
 

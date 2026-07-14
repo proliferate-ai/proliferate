@@ -1,4 +1,4 @@
-import type { SessionSlashCommandViewModel } from "./session-slash-command-policy";
+import type { SessionSlashCommandViewModel } from "#product/lib/domain/chat/composer/session-slash-command-policy";
 
 export interface RecognizedSlashCommand {
   /** The command view-model that matched. */

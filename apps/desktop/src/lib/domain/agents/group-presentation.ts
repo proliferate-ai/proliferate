@@ -1,5 +1,5 @@
-import type { AgentGroup } from "@/lib/domain/agents/groups";
-import type { AgentStatusTone } from "@/lib/domain/agents/status-presentation";
+import type { AgentGroup } from "#product/lib/domain/agents/groups";
+import type { AgentStatusTone } from "#product/lib/domain/agents/status-presentation";
 
 export type AgentGroupBadgeTone =
   | "neutral"

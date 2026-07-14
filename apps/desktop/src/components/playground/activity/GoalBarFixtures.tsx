@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { GoalBar } from "@proliferate/product-ui/activity/GoalBar";
-import type { ScenarioKey } from "@/config/playground";
+import type { ScenarioKey } from "#product/config/playground";
 import {
   GOAL_ACTIVE_LONG,
   GOAL_ACTIVE_MULTILINE,
@@ -12,7 +12,7 @@ import {
   GOAL_MET,
   GOAL_MET_LONG_OBJECTIVE,
   GOAL_PAUSED,
-} from "@/lib/domain/chat/__fixtures__/playground/goal-fixtures";
+} from "#product/lib/domain/chat/__fixtures__/playground/goal-fixtures";
 
 const NOOP = () => {};
 

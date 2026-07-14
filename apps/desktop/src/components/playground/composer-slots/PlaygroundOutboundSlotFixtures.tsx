@@ -1,19 +1,19 @@
 import type { ReactNode } from "react";
-import { PendingPromptList } from "@/components/workspace/chat/input/PendingPromptList";
-import type { ScenarioKey } from "@/config/playground";
+import { PendingPromptList } from "#product/components/workspace/chat/input/PendingPromptList";
+import type { ScenarioKey } from "#product/config/playground";
 import {
   PENDING_PROMPTS_MULTI,
   PENDING_PROMPTS_SINGLE,
   PENDING_PROMPTS_WITH_EDITING,
-} from "@/lib/domain/chat/__fixtures__/playground/outbound-slot-fixtures";
+} from "#product/lib/domain/chat/__fixtures__/playground/outbound-slot-fixtures";
 import {
   PLAYGROUND_SUBAGENT_WAKE_QUEUE,
-} from "@/lib/domain/chat/__fixtures__/playground/subagent-wake-transcript-fixtures";
+} from "#product/lib/domain/chat/__fixtures__/playground/subagent-wake-transcript-fixtures";
 import {
   derivePendingPromptQueueRow,
   type PendingPromptQueueEntry,
 } from "@proliferate/product-domain/chats/pending-prompts/pending-prompt-queue";
-import { noop } from "@/components/playground/PlaygroundComposerActions";
+import { noop } from "#product/components/playground/PlaygroundComposerActions";
 
 export function renderOutboundSlot(scenario: ScenarioKey): ReactNode | null {
   switch (scenario) {

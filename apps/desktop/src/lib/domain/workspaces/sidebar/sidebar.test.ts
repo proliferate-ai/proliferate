@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SIDEBAR_WORKSPACE_TYPES,
-} from "./sidebar-model";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 import {
   resolveAutoShowMoreRepoKey,
   resolveSidebarEmptyState,
-} from "./sidebar-groups";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-groups";
 import {
   resolveSidebarWorkspaceTypes,
   toggleSidebarWorkspaceTypeSelection,
-} from "./sidebar-workspace-types";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-workspace-types";
 import {
   buildGroups,
   makeCloudWorkspace,
@@ -17,7 +17,7 @@ import {
   makeLocalLogicalWorkspace,
   makeRepoConfig,
   makeRepoRoot,
-} from "./sidebar-test-fixtures";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
 
 describe("repo-root seeded groups", () => {
   it("shows zero-workspace repo roots in the sidebar", () => {

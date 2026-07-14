@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GitStatusSnapshot } from "@anyharness/sdk";
-import { buildComposerWorkspaceActivityModel } from "./composer-workspace-activity";
+import { buildComposerWorkspaceActivityModel } from "#product/lib/domain/workspaces/activity/composer-workspace-activity";
 
 function gitStatus(overrides: Partial<GitStatusSnapshot> = {}): GitStatusSnapshot {
   return {

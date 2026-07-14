@@ -1,4 +1,4 @@
-import type { ModelSelectorGroup } from "@/lib/domain/chat/models/model-selector-types";
+import type { ModelSelectorGroup } from "#product/lib/domain/chat/models/model-selector-types";
 
 /**
  * Orders model-picker groups so the ACTIVE harness's group renders first,

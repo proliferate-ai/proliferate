@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type {
   SessionDebugActionDependencies,
   SessionDebugRuntimeConnection,
-} from "@/lib/workflows/support/session-debug-export-workflows";
+} from "#product/lib/workflows/support/session-debug-export-workflows";
 
 interface UseSessionDebugReplayCapabilityInput<
   Connection extends SessionDebugRuntimeConnection,

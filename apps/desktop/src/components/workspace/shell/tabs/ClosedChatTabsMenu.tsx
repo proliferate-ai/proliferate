@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Trash, RotateCcw } from "@proliferate/ui/icons";
-import { formatRelativeTime } from "@/lib/domain/workspaces/display/workspace-display";
+import { formatRelativeTime } from "#product/lib/domain/workspaces/display/workspace-display";
 import type {
   HeaderChatMenuEntry,
-} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
+} from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 
 export function ClosedChatTabsMenu({
   rows,

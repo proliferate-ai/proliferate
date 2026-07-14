@@ -1,4 +1,4 @@
-import type { WorkspaceUiGet, WorkspaceUiSet, WorkspaceUiState } from "@/stores/preferences/workspace-ui-store-types";
+import type { WorkspaceUiGet, WorkspaceUiSet, WorkspaceUiState } from "#product/stores/preferences/workspace-ui-store-types";
 
 type WorkspaceUiActivityActions = Pick<
   WorkspaceUiState,

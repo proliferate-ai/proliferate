@@ -3,7 +3,7 @@
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentSummary } from "@anyharness/sdk";
-import { useFirstRunAuthAdoption } from "./use-first-run-auth-adoption";
+import { useFirstRunAuthAdoption } from "#product/hooks/agents/lifecycle/use-first-run-auth-adoption";
 
 const state = vi.hoisted(() => ({
   cloudActive: true,

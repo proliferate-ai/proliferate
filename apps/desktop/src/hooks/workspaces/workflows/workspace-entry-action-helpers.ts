@@ -2,16 +2,16 @@ import type { SetupScriptExecution, Workspace } from "@anyharness/sdk";
 import type {
   PendingWorkspaceEntry,
   PendingWorkspaceInitialSession,
-} from "@/lib/domain/workspaces/creation/pending-entry";
+} from "#product/lib/domain/workspaces/creation/pending-entry";
 import {
   collectWorktreeBasenamesForRepo,
   generateWorkspaceSlug,
-} from "@/lib/domain/workspaces/creation/workspace-slug";
-import { workspaceCurrentBranchName } from "@/lib/domain/workspaces/creation/branch-naming";
+} from "#product/lib/domain/workspaces/creation/workspace-slug";
+import { workspaceCurrentBranchName } from "#product/lib/domain/workspaces/creation/branch-naming";
 import type {
   CreateWorktreeWorkspaceInput,
-} from "@/lib/domain/workspaces/creation/workspace-creation";
-import { resolveModelDisplayName } from "@/lib/domain/chat/models/model-display";
+} from "#product/lib/domain/workspaces/creation/workspace-creation";
+import { resolveModelDisplayName } from "#product/lib/domain/chat/models/model-display";
 
 export function resolveDisplayNameFromPath(path: string): string {
   return path.split("/").filter(Boolean).pop() ?? "workspace";

@@ -1,8 +1,8 @@
-import type { DesktopAgentLaunchAgent } from "@/lib/domain/agents/cloud-launch-catalog";
-import { filterVisibleLaunchModels } from "@/lib/domain/chat/models/model-visibility";
-import { selectedModelIdForVisibility } from "@/lib/domain/chat/models/model-selection-ids";
-import type { ModelSelectorSelection } from "@/lib/domain/chat/models/model-selector-types";
-import type { ChatModelVisibilityOverridesByAgentKind } from "@/lib/domain/preferences/user/session-defaults";
+import type { DesktopAgentLaunchAgent } from "#product/lib/domain/agents/cloud-launch-catalog";
+import { filterVisibleLaunchModels } from "#product/lib/domain/chat/models/model-visibility";
+import { selectedModelIdForVisibility } from "#product/lib/domain/chat/models/model-selection-ids";
+import type { ModelSelectorSelection } from "#product/lib/domain/chat/models/model-selector-types";
+import type { ChatModelVisibilityOverridesByAgentKind } from "#product/lib/domain/preferences/user/session-defaults";
 
 export function agentsWithVisibleModels(
   agents: readonly DesktopAgentLaunchAgent[],

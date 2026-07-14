@@ -2,8 +2,8 @@
 
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { VisiblePendingPromptEntry } from "@/hooks/chat/ui/use-queued-prompt-edit";
-import { usePendingPromptQueue } from "./use-pending-prompt-queue";
+import type { VisiblePendingPromptEntry } from "#product/hooks/chat/ui/use-queued-prompt-edit";
+import { usePendingPromptQueue } from "#product/hooks/chat/ui/use-pending-prompt-queue";
 
 const mocks = vi.hoisted(() => ({
   activeSessionId: "session-1" as string | null,

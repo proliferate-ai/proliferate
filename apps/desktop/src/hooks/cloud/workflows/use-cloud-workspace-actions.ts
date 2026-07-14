@@ -8,18 +8,18 @@ import {
   getCloudWorkspace,
   restoreCloudWorkspace,
 } from "@proliferate/cloud-sdk/client/workspaces";
-import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { useCloudWorkspaceLifecycleCache } from "@/hooks/access/cloud/use-cloud-workspace-lifecycle-cache";
-import { useCloudWorkspaceConnectionCache } from "@/hooks/access/cloud/use-cloud-workspace-connection-cache";
-import { useInvalidateCloudBillingState } from "@/hooks/access/cloud/use-cloud-billing";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { getWorkspaceSessionRecords } from "@/stores/sessions/session-records";
-import { useWorkspaceSelection } from "@/hooks/workspaces/workflows/selection/use-workspace-selection";
-import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
-import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
-import { clearViewedSessionErrors } from "@/stores/preferences/workspace-ui-store";
-import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
-import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
+import { cloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import { useCloudWorkspaceLifecycleCache } from "#product/hooks/access/cloud/use-cloud-workspace-lifecycle-cache";
+import { useCloudWorkspaceConnectionCache } from "#product/hooks/access/cloud/use-cloud-workspace-connection-cache";
+import { useInvalidateCloudBillingState } from "#product/hooks/access/cloud/use-cloud-billing";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { getWorkspaceSessionRecords } from "#product/stores/sessions/session-records";
+import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
+import { useWorkspaceCollectionsInvalidation } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
+import { useWorkspaceCollectionsMutationCache } from "#product/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
+import { clearViewedSessionErrors } from "#product/stores/preferences/workspace-ui-store";
+import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
+import { useDeferredHomeLaunchStore } from "#product/stores/home/deferred-home-launch-store";
 
 interface DeleteCloudWorkspaceContext {
   viewedSessionErrorIdsToClear: string[];

@@ -1,15 +1,15 @@
 import { useEffect, useMemo } from "react";
-import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
-import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
-import { useSessionCreationActions } from "@/hooks/sessions/workflows/use-session-creation-actions";
-import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
+import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
+import { useSessionCreationActions } from "#product/hooks/sessions/workflows/use-session-creation-actions";
+import { useDeferredHomeLaunchStore } from "#product/stores/home/deferred-home-launch-store";
 import {
   resolveChatLaunchRetryMode,
   type ChatLaunchRetryMode,
-} from "@/lib/domain/chat/launch/launch-intent";
-import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useToastStore } from "@/stores/toast/toast-store";
+} from "#product/lib/domain/chat/launch/launch-intent";
+import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 const DEFERRED_HOME_LAUNCH_STALE_MS = 60 * 60 * 1000;
 

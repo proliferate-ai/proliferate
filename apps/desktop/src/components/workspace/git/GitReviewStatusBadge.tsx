@@ -1,5 +1,5 @@
-import { getGitFileStatusPresentation } from "@/lib/domain/workspaces/changes/git-file-status-presentation";
-import type { GitPanelFile } from "@/lib/domain/workspaces/changes/git-panel-diff";
+import { getGitFileStatusPresentation } from "#product/lib/domain/workspaces/changes/git-file-status-presentation";
+import type { GitPanelFile } from "#product/lib/domain/workspaces/changes/git-panel-diff";
 
 export function GitReviewStatusBadge({ status }: { status: GitPanelFile["status"] }) {
   const meta = getGitFileStatusPresentation(status);

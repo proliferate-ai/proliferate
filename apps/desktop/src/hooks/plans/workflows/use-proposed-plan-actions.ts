@@ -11,32 +11,32 @@ import {
   useFetchPlanMutation,
   useRejectPlanMutation,
 } from "@anyharness/sdk-react";
-import { useWorkspaceSetupStatusCache } from "@/hooks/access/anyharness/workspaces/use-workspace-setup-status-cache";
-import { useChatAvailabilityState } from "@/hooks/chat/derived/use-chat-availability-state";
-import { useGitPromptSnapshotEffects } from "@/hooks/workspaces/workflows/use-git-prompt-snapshot-effects";
-import { useProposedPlanCache } from "@/hooks/plans/cache/use-proposed-plan-cache";
-import { useSessionConfigActions } from "@/hooks/sessions/workflows/use-session-config-actions";
-import { useSessionPromptActions } from "@/hooks/sessions/workflows/use-session-prompt-actions";
-import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
+import { useWorkspaceSetupStatusCache } from "#product/hooks/access/anyharness/workspaces/use-workspace-setup-status-cache";
+import { useChatAvailabilityState } from "#product/hooks/chat/derived/use-chat-availability-state";
+import { useGitPromptSnapshotEffects } from "#product/hooks/workspaces/workflows/use-git-prompt-snapshot-effects";
+import { useProposedPlanCache } from "#product/hooks/plans/cache/use-proposed-plan-cache";
+import { useSessionConfigActions } from "#product/hooks/sessions/workflows/use-session-config-actions";
+import { useSessionPromptActions } from "#product/hooks/sessions/workflows/use-session-prompt-actions";
+import { createPromptId } from "#product/lib/domain/chat/composer/prompt-id";
 import { type PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
-import { buildPlanImplementationPrompt } from "@/lib/domain/plans/implementation-prompt";
-import { resolvePlanImplementationModeSwitch } from "@/lib/domain/plans/implementation-mode";
+import { buildPlanImplementationPrompt } from "#product/lib/domain/plans/implementation-prompt";
+import { resolvePlanImplementationModeSwitch } from "#product/lib/domain/plans/implementation-mode";
 import {
   resolvePlanImplementationReadiness,
   resolvePlanImplementationTargetCheck,
   type PlanImplementationHarnessState,
-} from "@/lib/domain/plans/implementation-target";
-import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
+} from "#product/lib/domain/plans/implementation-target";
+import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
 import {
   failLatencyFlow as failPromptLatencyFlow,
   startLatencyFlow as startPromptLatencyFlow,
   type StartLatencyFlowInput,
 } from "@/lib/infra/measurement/latency-flow";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
-import { completeChatPromptSubmitSideEffects } from "@/lib/workflows/chat/complete-chat-prompt-submit-side-effects";
-import { getSessionRecords } from "@/stores/sessions/session-records";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useToastStore } from "@/stores/toast/toast-store";
+import { completeChatPromptSubmitSideEffects } from "#product/lib/workflows/chat/complete-chat-prompt-submit-side-effects";
+import { getSessionRecords } from "#product/stores/sessions/session-records";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 interface PromptActiveSessionOptions {
   latencyFlowId?: string | null;

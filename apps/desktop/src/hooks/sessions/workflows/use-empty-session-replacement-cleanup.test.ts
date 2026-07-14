@@ -2,16 +2,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   beginEmptySessionReplacement,
   type EmptySessionReplacementDeps,
-} from "@/hooks/sessions/workflows/use-empty-session-replacement-cleanup";
+} from "#product/hooks/sessions/workflows/use-empty-session-replacement-cleanup";
 import {
   createEmptySessionRecord,
   getSessionRecord,
   putSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
-import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
-import { resetSessionCreationSupersessionForTests } from "@/hooks/sessions/workflows/session-creation-supersession";
+} from "#product/stores/sessions/session-records";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
+import { resetSessionCreationSupersessionForTests } from "#product/hooks/sessions/workflows/session-creation-supersession";
 import {
   committedReplacedSessionTombstonesForWorkspace,
   filterReplacedSessionIds,
@@ -19,10 +19,10 @@ import {
   isReplacedSessionTombstoned,
   resetReplacedSessionTombstonesForTests,
   shouldPreserveStagedReplacementShell,
-} from "@/hooks/sessions/workflows/session-replacement-tombstones";
+} from "#product/hooks/sessions/workflows/session-replacement-tombstones";
 import {
   resetSessionReplacementDismissalsForTests,
-} from "@/hooks/sessions/workflows/session-replacement-dismissals";
+} from "#product/hooks/sessions/workflows/session-replacement-dismissals";
 
 const storageMocks = vi.hoisted(() => ({
   writeTombstones: vi.fn(() => true),

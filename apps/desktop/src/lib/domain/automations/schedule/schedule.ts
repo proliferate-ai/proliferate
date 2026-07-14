@@ -1,4 +1,4 @@
-import { AUTOMATION_SCHEDULE_PRESETS } from "@/config/automations";
+import { AUTOMATION_SCHEDULE_PRESETS } from "#product/config/automations";
 
 export type AutomationSchedulePreset = typeof AUTOMATION_SCHEDULE_PRESETS[number]["value"];
 export type AutomationSchedulePresetOrCustom = AutomationSchedulePreset | "custom";

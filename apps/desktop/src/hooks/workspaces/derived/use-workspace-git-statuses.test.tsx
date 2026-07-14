@@ -2,11 +2,11 @@
 
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
-import type { PersistedWorkspaceGitStatusSnapshot } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import type { RepoPrStatusesState } from "@/hooks/workspaces/cache/use-repo-pr-statuses";
-import { useWorkspaceGitStatuses } from "./use-workspace-git-statuses";
+import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
+import type { PersistedWorkspaceGitStatusSnapshot } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import type { RepoPrStatusesState } from "#product/hooks/workspaces/cache/use-repo-pr-statuses";
+import { useWorkspaceGitStatuses } from "#product/hooks/workspaces/derived/use-workspace-git-statuses";
 
 const mocks = vi.hoisted(() => ({
   logicalWorkspaces: [] as unknown[],

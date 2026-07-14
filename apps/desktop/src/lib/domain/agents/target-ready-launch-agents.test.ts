@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { DesktopAgentLaunchAgent } from "@/lib/domain/agents/cloud-launch-catalog";
-import { filterTargetReadyLaunchAgents } from "@/lib/domain/agents/target-ready-launch-agents";
+import type { DesktopAgentLaunchAgent } from "#product/lib/domain/agents/cloud-launch-catalog";
+import { filterTargetReadyLaunchAgents } from "#product/lib/domain/agents/target-ready-launch-agents";
 
 describe("filterTargetReadyLaunchAgents", () => {
   it("keeps only cloud launch agents that are ready on the target runtime", () => {

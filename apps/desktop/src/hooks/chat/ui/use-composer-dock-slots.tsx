@@ -1,30 +1,30 @@
 import { useMemo, type ReactNode } from "react";
 import { resolveComposerDockSlots } from "@proliferate/product-domain/chats/composer/resolve-dock-slots";
-import { CloudRuntimeAttachedPanel } from "@/components/workspace/chat/surface/CloudRuntimeAttachedPanel";
-import { WorkspaceArrivalAttachedPanel } from "@/components/workspace/chat/surface/WorkspaceArrivalAttachedPanel";
-import { TodoTrackerPanel, TodoTrackerStrip } from "@/components/workspace/chat/input/TodoTrackerPanel";
-import { ConnectedApprovalCard } from "@/components/workspace/chat/input/ApprovalCard";
-import { ConnectedMcpElicitationCard } from "@/components/workspace/chat/input/McpElicitationCard";
-import { ConnectedPendingPromptList } from "@/components/workspace/chat/input/PendingPromptList";
-import { DelegatedWorkComposerPanel } from "@/components/workspace/chat/input/DelegatedWorkComposerPanel";
-import { DelegatedWorkComposerControl } from "@/components/workspace/chat/input/delegated-work/DelegatedWorkComposerControl";
-import { ConnectedWorkspaceActivityComposerCard } from "@/components/workspace/chat/input/workspace-activity/WorkspaceActivityComposerCard";
-import { ConnectedUserInputCard } from "@/components/workspace/chat/input/UserInputCard";
-import { ConnectedPromptRecoveryPanel } from "@/components/workspace/chat/input/PromptRecoveryPanel";
-import { SessionActivityBar } from "@/components/workspace/activity/SessionActivityBar";
-import { useSessionGoalBarModel } from "@/hooks/activity/derived/use-session-goal";
-import { useSessionActivityChips } from "@/hooks/activity/derived/use-session-activity-chips";
+import { CloudRuntimeAttachedPanel } from "#product/components/workspace/chat/surface/CloudRuntimeAttachedPanel";
+import { WorkspaceArrivalAttachedPanel } from "#product/components/workspace/chat/surface/WorkspaceArrivalAttachedPanel";
+import { TodoTrackerPanel, TodoTrackerStrip } from "#product/components/workspace/chat/input/TodoTrackerPanel";
+import { ConnectedApprovalCard } from "#product/components/workspace/chat/input/ApprovalCard";
+import { ConnectedMcpElicitationCard } from "#product/components/workspace/chat/input/McpElicitationCard";
+import { ConnectedPendingPromptList } from "#product/components/workspace/chat/input/PendingPromptList";
+import { DelegatedWorkComposerPanel } from "#product/components/workspace/chat/input/DelegatedWorkComposerPanel";
+import { DelegatedWorkComposerControl } from "#product/components/workspace/chat/input/delegated-work/DelegatedWorkComposerControl";
+import { ConnectedWorkspaceActivityComposerCard } from "#product/components/workspace/chat/input/workspace-activity/WorkspaceActivityComposerCard";
+import { ConnectedUserInputCard } from "#product/components/workspace/chat/input/UserInputCard";
+import { ConnectedPromptRecoveryPanel } from "#product/components/workspace/chat/input/PromptRecoveryPanel";
+import { SessionActivityBar } from "#product/components/workspace/activity/SessionActivityBar";
+import { useSessionGoalBarModel } from "#product/hooks/activity/derived/use-session-goal";
+import { useSessionActivityChips } from "#product/hooks/activity/derived/use-session-activity-chips";
 import {
   useActivePendingInteractionState,
   useActivePendingPrompts,
-} from "@/hooks/chat/derived/use-active-pending-session-interactions";
-import { useDelegatedWorkComposer } from "@/hooks/chat/facade/use-delegated-work-composer";
-import { useActiveTodoTracker } from "@/hooks/chat/derived/use-active-todo-tracker";
-import { useComposerDockCardPresence } from "@/hooks/chat/ui/use-composer-dock-card-presence";
-import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
-import { useWorkspaceStatusPanelState } from "@/hooks/workspaces/derived/use-workspace-status-panel-state";
-import { useChatPromptRecoveries } from "@/hooks/chat/derived/use-chat-prompt-recoveries";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+} from "#product/hooks/chat/derived/use-active-pending-session-interactions";
+import { useDelegatedWorkComposer } from "#product/hooks/chat/facade/use-delegated-work-composer";
+import { useActiveTodoTracker } from "#product/hooks/chat/derived/use-active-todo-tracker";
+import { useComposerDockCardPresence } from "#product/hooks/chat/ui/use-composer-dock-card-presence";
+import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
+import { useWorkspaceStatusPanelState } from "#product/hooks/workspaces/derived/use-workspace-status-panel-state";
+import { useChatPromptRecoveries } from "#product/hooks/chat/derived/use-chat-prompt-recoveries";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 export interface ComposerDockSlots {
   outboundSlot: ReactNode | null;

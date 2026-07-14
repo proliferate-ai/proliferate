@@ -1,13 +1,13 @@
-import type { WorkspaceArrivalViewModel } from "@/lib/domain/workspaces/creation/arrival";
+import type { WorkspaceArrivalViewModel } from "#product/lib/domain/workspaces/creation/arrival";
 import {
   buildCloudWorkspaceStatusScreenModel,
   type CloudWorkspaceStatusScreenModel,
-} from "@/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
-import type { SelectedCloudRuntimeViewModel } from "@/lib/domain/workspaces/cloud/cloud-runtime-state";
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
+import type { SelectedCloudRuntimeViewModel } from "#product/lib/domain/workspaces/cloud/cloud-runtime-state";
 import type {
   CloudWorkspaceStatus,
   CloudWorkspaceSummary,
-} from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
 
 export const WORKSPACE_ARRIVAL_CREATED: WorkspaceArrivalViewModel = {
   workspaceId: "workspace-arrival-created",

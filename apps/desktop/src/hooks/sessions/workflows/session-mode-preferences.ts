@@ -1,6 +1,6 @@
 import type { Workspace } from "@anyharness/sdk";
-import { withUpdatedDefaultSessionModeByAgentKind } from "@/lib/domain/chat/session-controls/session-mode-control";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+import { withUpdatedDefaultSessionModeByAgentKind } from "#product/lib/domain/chat/session-controls/session-mode-control";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
 interface PersistDefaultSessionModePreferenceInput {
   agentKind: string | null | undefined;

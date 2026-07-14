@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { WorkspaceExecutionSummary } from "@anyharness/sdk";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
-import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
+import { cloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import {
   buildGroups,
   makeCloudLogicalWorkspace,
   makeCloudWorkspace,
   makeLocalLogicalWorkspace,
   makeWorkspace,
-} from "./sidebar-test-fixtures";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
 
 function workspaceExecutionSummary(
   phase: WorkspaceExecutionSummary["phase"],

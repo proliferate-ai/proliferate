@@ -1,6 +1,6 @@
 import { Outlet } from "react-router-dom"
-import { LoadingState } from "@/components/feedback/LoadingIllustration"
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store"
+import { LoadingState } from "#product/components/feedback/LoadingIllustration"
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store"
 
 const LOADING_MESSAGE = "Restoring your setup"
 const LOADING_SUBTEXT = "Loading your saved preferences before opening Proliferate."

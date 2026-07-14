@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { orderModelGroupsActiveFirst } from "@/lib/domain/chat/models/order-model-groups";
-import type { ModelSelectorGroup } from "@/lib/domain/chat/models/model-selector-types";
+import { orderModelGroupsActiveFirst } from "#product/lib/domain/chat/models/order-model-groups";
+import type { ModelSelectorGroup } from "#product/lib/domain/chat/models/model-selector-types";
 
 function group(kind: string): ModelSelectorGroup {
   return {

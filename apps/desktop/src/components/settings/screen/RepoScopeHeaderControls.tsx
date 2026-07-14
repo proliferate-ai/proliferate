@@ -2,13 +2,13 @@ import { Cloud, Laptop } from "lucide-react";
 import { parseGitRepoId } from "@proliferate/product-domain/repos/repo-id";
 import { RepoPicker } from "@proliferate/product-ui/settings/RepoPicker";
 import { SegmentedControl } from "@proliferate/ui/primitives/SegmentedControl";
-import { type SettingsFocus } from "@/lib/domain/settings/navigation";
+import { type SettingsFocus } from "#product/lib/domain/settings/navigation";
 import {
   resolveRepoScopeSelection,
   type RepoSettingsContext,
-} from "@/lib/domain/settings/repo-scope-selection";
-import { type SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
-import { useAddRepoFlowStore } from "@/stores/ui/add-repo-flow-store";
+} from "#product/lib/domain/settings/repo-scope-selection";
+import { type SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
+import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
 
 interface RepoScopeHeaderControlsProps {
   repositories: SettingsRepositoryEntry[];

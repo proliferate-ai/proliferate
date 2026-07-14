@@ -1,8 +1,8 @@
 import { useEffect } from "react";
-import { runShortcutHandler } from "@/lib/domain/shortcuts/registry";
-import { resolveKeyboardShortcuts } from "@/lib/domain/shortcuts/keyboard-resolution";
-import { shouldDispatchKeyboardShortcut } from "@/lib/domain/shortcuts/dispatch-policy";
-import { SHORTCUT_REVEAL_RESET_EVENT } from "@/hooks/shortcuts/lifecycle/use-shortcut-reveal-state";
+import { runShortcutHandler } from "#product/lib/domain/shortcuts/registry";
+import { resolveKeyboardShortcuts } from "#product/lib/domain/shortcuts/keyboard-resolution";
+import { shouldDispatchKeyboardShortcut } from "#product/lib/domain/shortcuts/dispatch-policy";
+import { SHORTCUT_REVEAL_RESET_EVENT } from "#product/hooks/shortcuts/lifecycle/use-shortcut-reveal-state";
 
 // Owns global shortcut event listeners and dispatching to registered handlers.
 // Does not own individual shortcut handlers.

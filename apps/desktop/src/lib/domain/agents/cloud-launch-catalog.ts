@@ -9,15 +9,15 @@ import type {
   DesktopLaunchModelRegistry,
   ProjectCloudAgentCatalogOptions,
   RuntimeAgentLaunchOptions,
-} from "./cloud-launch-catalog-types";
+} from "#product/lib/domain/agents/cloud-launch-catalog-types";
 import {
   projectCloudControl,
   projectSessionDefaultControls,
-} from "./cloud-launch-controls";
-import { gateModelList, type ActiveAuthContextIds } from "./model-availability";
+} from "#product/lib/domain/agents/cloud-launch-controls";
+import { gateModelList, type ActiveAuthContextIds } from "#product/lib/domain/agents/model-availability";
 import {
   normalizeDefaultChatModelId,
-} from "@/lib/domain/preferences/user/session-defaults";
+} from "#product/lib/domain/preferences/user/session-defaults";
 
 export type {
   CloudAgentCatalogResponseInput,
@@ -35,7 +35,7 @@ export type {
   DesktopSessionDefaultControl,
   DesktopSessionDefaultControlValue,
   RuntimeAgentLaunchOptions,
-} from "./cloud-launch-catalog-types";
+} from "#product/lib/domain/agents/cloud-launch-catalog-types";
 
 export interface MergeRuntimeLaunchOptionsOptions {
   includeCloudOnlyAgents?: boolean;

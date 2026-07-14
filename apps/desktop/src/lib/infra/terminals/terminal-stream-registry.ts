@@ -5,8 +5,8 @@ import {
   type TerminalStreamHandle,
   type TerminalWebSocketAuthTransport,
 } from "@anyharness/sdk";
-import { terminalStreamKey } from "./terminal-stream-key";
-import { resetTerminalCloseIntentForTests } from "./terminal-close-intent";
+import { terminalStreamKey } from "#product/lib/infra/terminals/terminal-stream-key";
+import { resetTerminalCloseIntentForTests } from "#product/lib/infra/terminals/terminal-close-intent";
 
 const MAX_REPLAY_DATA_BYTES = 256 * 1024;
 const MAX_REPLAY_ENTRIES = 1000;

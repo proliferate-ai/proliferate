@@ -6,7 +6,7 @@ import {
   recordBootDiagnostic,
 } from "@/lib/infra/measurement/boot-stall-diagnostics";
 import { envFlagEnabled, round } from "@/lib/infra/measurement/debug-measurement-utils";
-import type { MeasurementSurface } from "@/lib/domain/telemetry/debug-measurement-catalog";
+import type { MeasurementSurface } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 
 interface DebugProfilerProps {
   id: MeasurementSurface;

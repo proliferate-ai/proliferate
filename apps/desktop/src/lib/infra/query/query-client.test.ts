@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hashAppQueryKey } from "./query-client";
+import { hashAppQueryKey } from "#product/lib/infra/query/query-client";
 
 describe("hashAppQueryKey", () => {
   it("hashes plain query keys with sorted object fields", () => {

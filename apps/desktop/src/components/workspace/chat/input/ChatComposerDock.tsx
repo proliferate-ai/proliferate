@@ -1,12 +1,12 @@
 import { forwardRef, memo, type HTMLAttributes, type ReactNode } from "react";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
-import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
+import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import {
   CHAT_COLUMN_CLASSNAME,
   CHAT_DOCK_LOWER_BACKDROP_FADE_HEIGHT_PX,
   CHAT_SURFACE_GUTTER_CLASSNAME,
-} from "@/config/chat-layout";
-import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
+} from "#product/config/chat-layout";
+import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 
 interface ChatComposerDockProps extends HTMLAttributes<HTMLDivElement> {
   backdrop?: boolean;

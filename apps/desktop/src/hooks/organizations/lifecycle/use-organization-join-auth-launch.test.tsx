@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuthStore } from "@/stores/auth/auth-store";
-import { useOrganizationJoinAuthLaunch } from "./use-organization-join-auth-launch";
+import { useOrganizationJoinAuthLaunch } from "#product/hooks/organizations/lifecycle/use-organization-join-auth-launch";
 
 const hostMocks = vi.hoisted(() => ({
   startLogin: vi.fn<(_request?: unknown) => Promise<{ provider: string; source: string }>>(),
@@ -15,7 +15,7 @@ const hostMocks = vi.hoisted(() => ({
 // the anonymous/authenticated gating still steers via setState.
 vi.mock("@proliferate/product-client/host/ProductHostProvider", async () => {
   const { useAuthStore } = await import("@/stores/auth/auth-store");
-  const { authStoreBridgedHost } = await import("@/test/product-host-fixtures");
+  const { authStoreBridgedHost } = await import("#product/test/product-host-fixtures");
   return {
     useProductHost: () =>
       authStoreBridgedHost(

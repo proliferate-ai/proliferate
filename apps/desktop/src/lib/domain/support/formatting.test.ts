@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildSupportEmailBody,
   formatSupportContextLabel,
-} from "@/lib/domain/support/formatting";
+} from "#product/lib/domain/support/formatting";
 
 describe("formatSupportContextLabel", () => {
   it("combines workspace location and name when available", () => {

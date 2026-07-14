@@ -4,17 +4,17 @@ import {
   clampRightPanelWidth,
   parseRightPanelHeaderEntryKey,
   rightPanelViewerHeaderKey,
-} from "./right-panel-model";
+} from "#product/lib/domain/workspaces/shell/right-panel-model";
 import {
   removeTerminalFromRightPanelState,
   reorderHeaderEntryInRightPanelState,
   reorderTerminalInRightPanelState,
   reorderToolInRightPanelState,
-} from "./right-panel-state";
+} from "#product/lib/domain/workspaces/shell/right-panel-state";
 import {
   reconcileRightPanelWorkspaceState,
-} from "./right-panel-state-normalization";
-import { fileViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
+} from "#product/lib/domain/workspaces/shell/right-panel-state-normalization";
+import { fileViewerTarget } from "#product/lib/domain/workspaces/viewer/viewer-target";
 
 describe("right panel domain", () => {
   it("uses the same built-in tools for local and cloud workspaces", () => {

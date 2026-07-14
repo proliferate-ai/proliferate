@@ -1,11 +1,11 @@
 import type { CSSProperties } from "react";
-import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
-import { ChatDiffViewer } from "@/components/content/ui/diff/ChatDiffViewer";
-import { SplitDiffViewer } from "@/components/content/ui/diff/SplitDiffViewer";
-import { UnifiedDiffViewer, type UnifiedDiffHunkActions } from "@/components/content/ui/diff/UnifiedDiffViewer";
-import { useDiffHighlight } from "@/hooks/ui/highlighting/use-diff-highlight";
-import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
-import { useChatDiffPreferencesStore } from "@/stores/chat/chat-diff-preferences-store";
+import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
+import { ChatDiffViewer } from "#product/components/content/ui/diff/ChatDiffViewer";
+import { SplitDiffViewer } from "#product/components/content/ui/diff/SplitDiffViewer";
+import { UnifiedDiffViewer, type UnifiedDiffHunkActions } from "#product/components/content/ui/diff/UnifiedDiffViewer";
+import { useDiffHighlight } from "#product/hooks/ui/highlighting/use-diff-highlight";
+import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
+import { useChatDiffPreferencesStore } from "#product/stores/chat/chat-diff-preferences-store";
 
 interface DiffViewerProps {
   patch: string;

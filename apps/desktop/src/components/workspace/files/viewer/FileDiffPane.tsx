@@ -1,8 +1,8 @@
 import { useGitDiffQuery } from "@anyharness/sdk-react";
-import { DiffViewer } from "@/components/content/ui/DiffViewer";
-import { resolveDiffDisplayPolicy } from "@/lib/domain/workspaces/changes/diff-display-policy";
-import type { FileDiffTarget } from "@/lib/domain/workspaces/viewer/file-diff-options";
-import { CenterMessage } from "./CenterMessage";
+import { DiffViewer } from "#product/components/content/ui/DiffViewer";
+import { resolveDiffDisplayPolicy } from "#product/lib/domain/workspaces/changes/diff-display-policy";
+import type { FileDiffTarget } from "#product/lib/domain/workspaces/viewer/file-diff-options";
+import { CenterMessage } from "#product/components/workspace/files/viewer/CenterMessage";
 
 export function FileDiffPane({
   workspaceId,

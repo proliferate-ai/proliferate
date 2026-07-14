@@ -13,8 +13,8 @@ import {
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { ArrowUp, GitCommit, GitHub, GitPullRequest } from "@proliferate/ui/icons";
-import { useWorkspacePublishWorkflow } from "@/hooks/workspaces/workflows/use-workspace-publish-workflow";
-import type { PublishIntent } from "@/lib/domain/workspaces/creation/publish-workflow-model";
+import { useWorkspacePublishWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-publish-workflow";
+import type { PublishIntent } from "#product/lib/domain/workspaces/creation/publish-workflow-model";
 
 const PUBLISH_INTENT_ITEMS = [
   { id: "commit", label: "Commit", icon: <GitCommit /> },

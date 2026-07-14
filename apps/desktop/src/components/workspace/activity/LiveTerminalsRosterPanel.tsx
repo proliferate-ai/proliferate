@@ -4,9 +4,9 @@ import {
   type ActivityProcessWire,
 } from "@proliferate/product-domain/activity/process";
 import { TerminalRosterRow } from "@proliferate/product-ui/activity/TerminalRosterRow";
-import { useActiveSessionId } from "@/hooks/chat/derived/use-active-session-identity";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useFeedStream } from "@/hooks/activity/derived/use-feed-stream";
+import { useActiveSessionId } from "#product/hooks/chat/derived/use-active-session-identity";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useFeedStream } from "#product/hooks/activity/derived/use-feed-stream";
 
 export interface LiveTerminalsRosterPanelProps {
   processes: ActivityProcessWire[];

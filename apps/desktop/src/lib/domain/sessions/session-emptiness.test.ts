@@ -3,7 +3,7 @@ import {
   isSessionEmpty,
   isSessionEmptyWithIntents,
   type SessionEmptinessSnapshot,
-} from "@/lib/domain/sessions/session-emptiness";
+} from "#product/lib/domain/sessions/session-emptiness";
 
 function makeSnapshot(overrides?: Partial<SessionEmptinessSnapshot>): SessionEmptinessSnapshot {
   return {

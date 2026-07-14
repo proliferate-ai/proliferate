@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canPromptSessionSlot } from "@/lib/domain/sessions/prompt-readiness";
+import { canPromptSessionSlot } from "#product/lib/domain/sessions/prompt-readiness";
 
 describe("canPromptSessionSlot", () => {
   it("allows hydrated sessions", () => {

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { NewWorkspaceCommandScope } from "@/lib/domain/workspaces/creation/new-workspace-command";
+import type { NewWorkspaceCommandScope } from "#product/lib/domain/workspaces/creation/new-workspace-command";
 
 interface NewWorkspaceCommandScopeState {
   activeScope: NewWorkspaceCommandScope | null;

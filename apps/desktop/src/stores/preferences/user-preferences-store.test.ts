@@ -4,24 +4,24 @@ import {
   hasAppliedModelVisibilityDefaultsReset,
   hasPendingWorktreeAutoDeleteLimitAdoption,
   selectPersistedUserPreferencesSlice,
-} from "@/lib/domain/preferences/persisted-metadata";
+} from "#product/lib/domain/preferences/persisted-metadata";
 import {
   migrateUserPreferences,
-} from "@/lib/domain/preferences/user/migration";
+} from "#product/lib/domain/preferences/user/migration";
 import {
   PERSISTED_RECORD_BACKFILL,
   USER_PREFERENCE_DEFAULTS,
   type UserPreferences,
-} from "@/lib/domain/preferences/user/model";
+} from "#product/lib/domain/preferences/user/model";
 import {
   loadUserPreferences,
   persistUserPreferences,
-} from "@/lib/workflows/preferences/user-preferences-persistence";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+} from "#product/lib/workflows/preferences/user-preferences-persistence";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import {
   createMemoryProductStorage,
   type MemoryProductStorage,
-} from "@/test/product-storage-test-utils";
+} from "#product/test/product-storage-test-utils";
 
 let memory: MemoryProductStorage;
 

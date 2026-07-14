@@ -1,16 +1,16 @@
-import { cloudRepositoryKey } from "@/lib/domain/settings/repositories";
+import { cloudRepositoryKey } from "#product/lib/domain/settings/repositories";
 import {
   type CloudWorkspaceSummary,
   type CreateCloudWorkspaceRequest,
-} from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
 import type { RepoConfigResponse } from "@proliferate/cloud-sdk";
-import type { AuthUser } from "@/lib/domain/auth/auth-user";
-import type { BranchPrefixType } from "@/lib/domain/preferences/user/model";
-import { generateWorkspaceSlug } from "@/lib/domain/workspaces/creation/workspace-slug";
+import type { AuthUser } from "#product/lib/domain/auth/auth-user";
+import type { BranchPrefixType } from "#product/lib/domain/preferences/user/model";
+import { generateWorkspaceSlug } from "#product/lib/domain/workspaces/creation/workspace-slug";
 import {
   buildBranchName,
   resolveBranchPrefix,
-} from "@/lib/domain/workspaces/creation/branch-naming";
+} from "#product/lib/domain/workspaces/creation/branch-naming";
 
 export interface CloudWorkspaceRepoTarget {
   gitOwner: string;

@@ -2,8 +2,8 @@ import type { TerminalRecord } from "@anyharness/sdk";
 import {
   type RightPanelHeaderEntryKey,
   type RightPanelTool,
-} from "@/lib/domain/workspaces/shell/right-panel-model";
-import type { ViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
+} from "#product/lib/domain/workspaces/shell/right-panel-model";
+import type { ViewerTarget } from "#product/lib/domain/workspaces/viewer/viewer-target";
 
 export type RightPanelHeaderEntry =
   | { kind: "tool"; key: RightPanelHeaderEntryKey; tool: RightPanelTool }

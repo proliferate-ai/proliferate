@@ -1,5 +1,5 @@
-import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
-import type { useSessionStreamFlushControllerFactory } from "@/hooks/sessions/lifecycle/use-session-stream-flush";
+import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
+import type { useSessionStreamFlushControllerFactory } from "#product/hooks/sessions/lifecycle/use-session-stream-flush";
 
 export interface SessionStreamConnectOptions {
   awaitOpen?: boolean;

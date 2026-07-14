@@ -1,12 +1,12 @@
 import type { SetupScriptExecution, Workspace, WorkspaceKind } from "@anyharness/sdk";
-import { WORKSPACE_ARRIVAL_LABELS } from "@/copy/workspaces/workspace-arrival-copy";
-import { workspaceCurrentBranchName } from "@/lib/domain/workspaces/creation/branch-naming";
-import { workspaceBranchLabel, workspaceDisplayName } from "@/lib/domain/workspaces/display/workspace-display";
+import { WORKSPACE_ARRIVAL_LABELS } from "#product/copy/workspaces/workspace-arrival-copy";
+import { workspaceCurrentBranchName } from "#product/lib/domain/workspaces/creation/branch-naming";
+import { workspaceBranchLabel, workspaceDisplayName } from "#product/lib/domain/workspaces/display/workspace-display";
 import {
   buildPendingWorkspaceUiKey,
   resolvePendingWorkspacePath,
   type PendingWorkspaceEntry,
-} from "@/lib/domain/workspaces/creation/pending-entry";
+} from "#product/lib/domain/workspaces/creation/pending-entry";
 
 export interface WorkspaceArrivalEvent {
   workspaceId: string;

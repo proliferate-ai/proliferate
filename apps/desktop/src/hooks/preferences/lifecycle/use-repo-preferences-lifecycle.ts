@@ -1,10 +1,10 @@
 import { useEffect } from "react";
-import { useProductStorageContext } from "@/hooks/persistence/facade/use-product-storage-context";
+import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
 import {
   loadRepoPreferences,
   persistRepoPreferences,
-} from "@/lib/workflows/preferences/repo-preferences-persistence";
-import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
+} from "#product/lib/workflows/preferences/repo-preferences-persistence";
+import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
 
 // Owns loading persisted repo preferences and syncing repo config changes.
 // Does not own repository settings UI actions.

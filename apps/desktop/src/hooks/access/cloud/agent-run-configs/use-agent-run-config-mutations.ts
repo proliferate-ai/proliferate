@@ -17,7 +17,7 @@ import type {
 import {
   agentRunConfigKey,
   agentRunConfigsRootKey,
-} from "./query-keys";
+} from "#product/hooks/access/cloud/agent-run-configs/query-keys";
 
 export function useAgentRunConfigMutations() {
   const queryClient = useQueryClient();

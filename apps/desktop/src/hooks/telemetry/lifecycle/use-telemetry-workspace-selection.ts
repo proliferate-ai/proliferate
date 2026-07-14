@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
-import { resolveDesktopTelemetryWorkspaceKind } from "@/lib/domain/telemetry/workspace-kind";
-import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { resolveDesktopTelemetryWorkspaceKind } from "#product/lib/domain/telemetry/workspace-kind";
+import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 // Owns selected-workspace telemetry tags and events. Reports through the typed
 // telemetry adapter. Does not own workspace kind classification.

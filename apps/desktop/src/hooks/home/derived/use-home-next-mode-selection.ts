@@ -1,19 +1,19 @@
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
-import { resolveCoworkDefaultSessionModeId } from "@/lib/domain/cowork/session-mode-defaults";
+import { useCloudAgentCatalog } from "#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
+import { resolveCoworkDefaultSessionModeId } from "#product/lib/domain/cowork/session-mode-defaults";
 import {
   launchControlToConfiguredSessionControlValues,
   listConfiguredSessionControlValues,
-} from "@/lib/domain/chat/session-controls/session-mode-control";
+} from "#product/lib/domain/chat/session-controls/session-mode-control";
 import type {
   ConfiguredSessionControlValue,
-} from "@/lib/domain/chat/session-controls/presentation";
+} from "#product/lib/domain/chat/session-controls/presentation";
 import type {
   HomeNextDestination,
   HomeNextModelSelection,
-} from "@/lib/domain/home/home-next-launch";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+} from "#product/lib/domain/home/home-next-launch";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
 interface UseHomeNextModeSelectionArgs {
   destination: HomeNextDestination;

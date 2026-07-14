@@ -4,14 +4,14 @@ import { useSaveRepoEnvironment } from "@proliferate/cloud-sdk-react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useCallback, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { runAddRepoWorkflow } from "@/lib/domain/workspaces/creation/add-repo-workflow";
+import { runAddRepoWorkflow } from "#product/lib/domain/workspaces/creation/add-repo-workflow";
 import { loadAnonymousTelemetryBootstrap } from "@/lib/integrations/telemetry/anonymous-storage";
-import { useWorkspaceCollectionsInvalidationActions } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
-import { useWorkspaceCollectionsMutationCacheActions } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useRepoSetupModalStore } from "@/stores/ui/repo-setup-modal-store";
-import { useToastStore } from "@/stores/toast/toast-store";
-import { ensureRuntimeReady } from "@/hooks/workspaces/workflows/runtime-ready";
+import { useWorkspaceCollectionsInvalidationActions } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
+import { useWorkspaceCollectionsMutationCacheActions } from "#product/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useRepoSetupModalStore } from "#product/stores/ui/repo-setup-modal-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
+import { ensureRuntimeReady } from "#product/hooks/workspaces/workflows/runtime-ready";
 
 function describeAddRepoFailure(error: unknown): string {
   if (error instanceof AnyHarnessError) {

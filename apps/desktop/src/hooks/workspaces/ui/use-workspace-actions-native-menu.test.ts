@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildWorkspaceActionsNativeMenuItems } from "./use-workspace-actions-native-menu";
+import { buildWorkspaceActionsNativeMenuItems } from "#product/hooks/workspaces/ui/use-workspace-actions-native-menu";
 
 describe("buildWorkspaceActionsNativeMenuItems", () => {
   it("keeps the header overflow menu chat-only", () => {

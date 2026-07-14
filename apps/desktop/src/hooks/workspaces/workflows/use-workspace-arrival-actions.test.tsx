@@ -3,7 +3,7 @@ import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OpenTarget } from "@proliferate/product-client/host/desktop-bridge";
 
-import { useWorkspaceArrivalActions } from "./use-workspace-arrival-actions";
+import { useWorkspaceArrivalActions } from "#product/hooks/workspaces/workflows/use-workspace-arrival-actions";
 
 const mocks = vi.hoisted(() => ({
   clipboardWriteText: vi.fn().mockResolvedValue(undefined),

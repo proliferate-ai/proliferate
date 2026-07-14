@@ -4,8 +4,8 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
-import { makeTestProductHost } from "@/test/product-host-test-utils";
-import { HarnessPane } from "./HarnessPane";
+import { makeTestProductHost } from "#product/test/product-host-test-utils";
+import { HarnessPane } from "#product/components/settings/panes/agents/harness/HarnessPane";
 
 // Anonymous host keeps the organizations query disabled, matching the prior
 // unset-auth-store default these tests ran under.

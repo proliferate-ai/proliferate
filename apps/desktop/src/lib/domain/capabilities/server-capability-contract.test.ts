@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseServerCapabilities } from "./server-capability-contract";
+import { parseServerCapabilities } from "#product/lib/domain/capabilities/server-capability-contract";
 
 function validRaw(): Record<string, unknown> {
   return {

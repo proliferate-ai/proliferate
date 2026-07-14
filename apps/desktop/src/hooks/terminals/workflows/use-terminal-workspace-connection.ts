@@ -1,14 +1,14 @@
 import { useCallback } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { useCloudWorkspaceConnectionCache } from "@/hooks/access/cloud/use-cloud-workspace-connection-cache";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
+import { useCloudWorkspaceConnectionCache } from "#product/hooks/access/cloud/use-cloud-workspace-connection-cache";
+import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
 import {
   resolveWorkspaceConnection,
   type AnyHarnessDesktopResolvedConnection,
-} from "@/lib/access/anyharness/resolve-workspace-connection";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { withFreshCloudSandboxGatewayAccessToken } from "@/lib/access/cloud/cloud-sandbox-gateway";
+} from "#product/lib/access/anyharness/resolve-workspace-connection";
+import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { withFreshCloudSandboxGatewayAccessToken } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 
 export interface TerminalWorkspaceConnectionController {
   getWorkspaceRuntimeBlockReason(workspaceId: string): string | null;

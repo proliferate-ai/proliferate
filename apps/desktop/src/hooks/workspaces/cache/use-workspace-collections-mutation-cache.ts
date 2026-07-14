@@ -5,20 +5,20 @@ import type {
   CloudMobilityWorkspaceSummary,
   CloudWorkspaceDetail,
 } from "@/lib/access/cloud/client";
-import { cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
+import { cloudMobilityWorkspacesKey } from "#product/hooks/access/cloud/query-keys";
 import {
   buildWorkspaceCollections,
   type WorkspaceCollections,
   upsertCloudWorkspaceCollections,
   upsertLocalWorkspaceCollections,
   upsertRepoRootCollections,
-} from "@/lib/domain/workspaces/cloud/collections";
+} from "#product/lib/domain/workspaces/cloud/collections";
 import {
   getWorkspaceCollectionsFromCache,
   workspaceCollectionsKey,
   workspaceCollectionsScopeKey,
-} from "@/hooks/workspaces/cache/query-keys";
-import { useProductAuthUserId } from "@/hooks/auth/facade/use-product-auth";
+} from "#product/hooks/workspaces/cache/query-keys";
+import { useProductAuthUserId } from "#product/hooks/auth/facade/use-product-auth";
 
 export interface WorkspaceCollectionsLocalUpsertSummary {
   previousLocalCount: number;

@@ -3,7 +3,7 @@ import type { GitChangedFile } from "@anyharness/sdk";
 import {
   groupPublishFiles,
   partialFileWarning,
-} from "./publish-file-groups";
+} from "#product/lib/domain/workspaces/creation/publish-file-groups";
 
 function file(path: string, includedState: GitChangedFile["includedState"]): GitChangedFile {
   return {

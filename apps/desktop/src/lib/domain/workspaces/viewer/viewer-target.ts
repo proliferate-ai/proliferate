@@ -1,9 +1,9 @@
 import type { GitDiffScope } from "@anyharness/sdk";
-import { canPreviewAsRichFile } from "@/lib/domain/files/document-preview";
+import { canPreviewAsRichFile } from "#product/lib/domain/files/document-preview";
 import {
   decodeBase64UrlUtf8,
   encodeBase64UrlUtf8,
-} from "@/lib/infra/encoding/base64url";
+} from "#product/lib/infra/encoding/base64url";
 
 export type FileViewerMode = "source" | "rendered" | "diff" | "edit";
 export type DiffViewerLayout = "unified" | "split";

@@ -20,7 +20,7 @@ vi.mock("@/lib/integrations/telemetry/client", () => ({
 import {
   ensureDesktopWorker,
   teardownDesktopWorker,
-} from "./ensure-desktop-worker";
+} from "#product/lib/workflows/cloud/ensure-desktop-worker";
 
 const worker = {
   getInstallId: tauriMocks.getDesktopInstallId,

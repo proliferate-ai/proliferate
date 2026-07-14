@@ -1,4 +1,4 @@
-import type { SupportMessageContext } from "@/lib/domain/support/types";
+import type { SupportMessageContext } from "#product/lib/domain/support/types";
 
 export type SupportReportScopeKind =
   | "most_recent_workspace"

@@ -1,8 +1,8 @@
-import { useChatLoadingSubstep } from "@/hooks/chat/derived/use-chat-loading-substep";
-import { SkeletonBlock } from "@/components/feedback/Skeleton";
-import { ThinkingText } from "@/components/feedback/ThinkingText";
-import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
-import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
+import { useChatLoadingSubstep } from "#product/hooks/chat/derived/use-chat-loading-substep";
+import { SkeletonBlock } from "#product/components/feedback/Skeleton";
+import { ThinkingText } from "#product/components/feedback/ThinkingText";
+import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
+import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 
 export function ChatLoadingHero() {
   useDebugRenderCount("chat-loading-hero");

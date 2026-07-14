@@ -1,11 +1,11 @@
-import type { PlaygroundScenarioSelection } from "@/config/playground";
-import type { PlaygroundReplayState } from "@/hooks/playground/lifecycle/use-replay-session";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { PlaygroundRecordingTranscript } from "@/components/playground/transcript/PlaygroundRecordingTranscript";
-import { renderPlaygroundPlanTranscript } from "@/components/playground/transcript/PlaygroundPlanTranscript";
-import { renderPlaygroundStatusTranscript } from "@/components/playground/transcript/PlaygroundStatusTranscript";
-import { renderPlaygroundToolTranscript } from "@/components/playground/transcript/PlaygroundToolTranscript";
-import { PlaygroundLoadingStates } from "@/components/playground/loading/PlaygroundLoadingStates";
+import type { PlaygroundScenarioSelection } from "#product/config/playground";
+import type { PlaygroundReplayState } from "#product/hooks/playground/lifecycle/use-replay-session";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { PlaygroundRecordingTranscript } from "#product/components/playground/transcript/PlaygroundRecordingTranscript";
+import { renderPlaygroundPlanTranscript } from "#product/components/playground/transcript/PlaygroundPlanTranscript";
+import { renderPlaygroundStatusTranscript } from "#product/components/playground/transcript/PlaygroundStatusTranscript";
+import { renderPlaygroundToolTranscript } from "#product/components/playground/transcript/PlaygroundToolTranscript";
+import { PlaygroundLoadingStates } from "#product/components/playground/loading/PlaygroundLoadingStates";
 
 interface PlaygroundTranscriptProps {
   stickyBottomInsetPx: number;

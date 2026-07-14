@@ -2,13 +2,13 @@ import {
   CloudChatAssistantLoadingRow,
   CloudChatThoughtRow,
 } from "@proliferate/product-ui/chat/transcript/CloudChatTranscriptRowItems";
-import { SessionCheckScreen } from "@/components/auth/SessionCheckScreen";
-import { SkeletonBlock, shimmerDelay } from "@/components/feedback/Skeleton";
-import { ThinkingText } from "@/components/feedback/ThinkingText";
-import { LoadingState } from "@/components/feedback/LoadingIllustration";
-import { PlaygroundThinkingTimingControls } from "@/components/playground/loading/PlaygroundThinkingTimingControls";
-import { StreamingIndicator } from "@/components/workspace/chat/transcript/StreamingIndicator";
-import { renderChatTabIcon } from "@/components/workspace/shell/tabs/tab-rendering";
+import { SessionCheckScreen } from "#product/components/auth/SessionCheckScreen";
+import { SkeletonBlock, shimmerDelay } from "#product/components/feedback/Skeleton";
+import { ThinkingText } from "#product/components/feedback/ThinkingText";
+import { LoadingState } from "#product/components/feedback/LoadingIllustration";
+import { PlaygroundThinkingTimingControls } from "#product/components/playground/loading/PlaygroundThinkingTimingControls";
+import { StreamingIndicator } from "#product/components/workspace/chat/transcript/StreamingIndicator";
+import { renderChatTabIcon } from "#product/components/workspace/shell/tabs/tab-rendering";
 
 export function PlaygroundLoadingStates() {
   return (

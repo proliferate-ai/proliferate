@@ -1,13 +1,13 @@
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { IntegrationIcon } from "@/components/settings/panes/integrations/IntegrationIcon";
-import type { CloudIntegrationView } from "@/lib/domain/cloud/integrations";
+import { IntegrationIcon } from "#product/components/settings/panes/integrations/IntegrationIcon";
+import type { CloudIntegrationView } from "#product/lib/domain/cloud/integrations";
 import {
   integrationAuthKindLabel,
   integrationHealthBadge,
   integrationRowActions,
   integrationToolCountLabel,
-} from "@/lib/domain/settings/integrations-presentation";
+} from "#product/lib/domain/settings/integrations-presentation";
 
 interface IntegrationRowProps {
   integration: CloudIntegrationView;

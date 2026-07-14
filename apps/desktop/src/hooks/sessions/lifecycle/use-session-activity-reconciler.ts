@@ -1,10 +1,10 @@
 import { useEffect } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { resolveSessionSidebarActivityState } from "@proliferate/product-domain/sessions/activity";
-import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useSessionRuntimeActions } from "@/hooks/sessions/workflows/use-session-runtime-actions";
+import { activitySnapshotFromDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-activity";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useSessionRuntimeActions } from "#product/hooks/sessions/workflows/use-session-runtime-actions";
 
 const ACTIVITY_RECONCILE_DELAY_MS = 5_000;
 const ACTIVITY_RECONCILE_MAX_SESSION_COUNT = 8;

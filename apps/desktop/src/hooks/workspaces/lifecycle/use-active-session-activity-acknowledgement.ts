@@ -1,11 +1,11 @@
 import { useEffect } from "react";
 import { useShallow } from "zustand/react/shallow";
-import type { WorkspaceRenderSurface } from "@/lib/domain/workspaces/tabs/shell-activation";
+import type { WorkspaceRenderSurface } from "#product/lib/domain/workspaces/tabs/shell-activation";
 import {
   isDocumentVisibleAndFocused,
   useDocumentFocusVisibilityNonce,
-} from "@/hooks/ui/document/use-document-focus-visibility";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+} from "#product/hooks/ui/document/use-document-focus-visibility";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 
 export function useActiveSessionActivityAcknowledgement(
   renderSurface: WorkspaceRenderSurface,

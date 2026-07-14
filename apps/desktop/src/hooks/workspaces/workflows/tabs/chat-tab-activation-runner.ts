@@ -2,20 +2,20 @@ import {
   type SessionActivationGuard,
   type SessionActivationOutcome,
   isSessionActivationCurrent,
-} from "@/hooks/sessions/workflows/session-activation-guard";
-import { useSessionSelectionActions } from "@/hooks/sessions/facade/use-session-selection-actions";
-import type { PendingChatActivation } from "@/lib/domain/workspaces/tabs/shell-activation";
+} from "#product/hooks/sessions/workflows/session-activation-guard";
+import { useSessionSelectionActions } from "#product/hooks/sessions/facade/use-session-selection-actions";
+import type { PendingChatActivation } from "#product/lib/domain/workspaces/tabs/shell-activation";
 import {
   finishOrCancelMeasurementOperation,
   recordMeasurementWorkflowStep,
 } from "@/lib/infra/measurement/debug-measurement";
-import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
-import { clearPendingHotSwitchMeasurement } from "@/hooks/workspaces/workflows/tabs/workspace-shell-activation-measurement";
+import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
+import { clearPendingHotSwitchMeasurement } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-activation-measurement";
 import type {
   SelectSessionOptionsWithoutGuard,
-} from "@/hooks/workspaces/workflows/tabs/workspace-shell-activation-types";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+} from "#product/hooks/workspaces/workflows/tabs/workspace-shell-activation-types";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 type WorkspaceUiStoreState = ReturnType<typeof useWorkspaceUiStore.getState>;
 

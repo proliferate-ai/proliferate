@@ -12,7 +12,7 @@ import {
 import type {
   ComputeTargetAppearance,
   ComputeTargetIconId,
-} from "@/lib/domain/compute/target-appearance";
+} from "#product/lib/domain/compute/target-appearance";
 
 type SwatchSize = "inherit" | "xs" | "sm" | "md";
 

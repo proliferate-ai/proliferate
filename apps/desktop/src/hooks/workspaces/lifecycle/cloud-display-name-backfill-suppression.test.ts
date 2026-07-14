@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { createMemoryProductStorage } from "@/test/product-storage-test-utils";
+import { createMemoryProductStorage } from "#product/test/product-storage-test-utils";
 import {
   clearCloudDisplayNameBackfillSuppression,
   hydrateCloudDisplayNameSuppression,
@@ -7,7 +7,7 @@ import {
   resetCloudDisplayNameSuppressionForTests,
   setCloudDisplayNameSuppressionStorageContext,
   suppressCloudDisplayNameBackfill,
-} from "./cloud-display-name-backfill-suppression";
+} from "#product/hooks/workspaces/lifecycle/cloud-display-name-backfill-suppression";
 
 const KEY = "proliferate.cloudDisplayNameBackfillSuppression.v1";
 

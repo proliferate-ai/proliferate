@@ -5,11 +5,11 @@ import {
   pruneInactiveSessionStreams,
   type FlushAwareSessionStreamHandle,
   type SessionStreamPruningDeps,
-} from "./session-runtime";
+} from "#product/lib/workflows/sessions/session-runtime";
 import {
   fetchSessionHistory,
   resumeSession,
-} from "@/lib/access/anyharness/session-runtime";
+} from "#product/lib/access/anyharness/session-runtime";
 import type { SessionStreamHandle } from "@anyharness/sdk";
 import {
   createEmptySessionRecord,
@@ -20,18 +20,18 @@ import {
   isPendingSessionId,
   patchSessionRecord,
   putSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
+} from "#product/stores/sessions/session-records";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 import {
   closeSessionStreamHandle,
   flushAllSessionStreamHandles,
   getSessionStreamHandle,
   setSessionStreamHandle,
   resetSessionStreamHandlesForTest,
-} from "@/lib/access/anyharness/session-stream-handles";
+} from "#product/lib/access/anyharness/session-stream-handles";
 
 const sessionStreamPruningDeps: SessionStreamPruningDeps = {
   getSessionRecords,

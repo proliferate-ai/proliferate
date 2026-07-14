@@ -1,6 +1,6 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
-import { ComputeTargetSwatch } from "@/components/compute/ComputeTargetSwatch";
+import { ComputeTargetSwatch } from "#product/components/compute/ComputeTargetSwatch";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchField";
@@ -14,8 +14,8 @@ import {
   Terminal,
   Tree,
 } from "@proliferate/ui/icons";
-import type { ComputeLaunchTargetOption } from "@/lib/domain/compute/target-options";
-import type { HomeNextRepoLaunchKind } from "@/lib/domain/home/home-next-launch";
+import type { ComputeLaunchTargetOption } from "#product/lib/domain/compute/target-options";
+import type { HomeNextRepoLaunchKind } from "#product/lib/domain/home/home-next-launch";
 
 export const TARGET_PICKER_SURFACE_CLASS = `w-60 min-w-[175px] ${POPOVER_SURFACE_CLASS}`;
 export const TARGET_PICKER_DIVIDER_CLASS = "mx-1 my-1.5 h-px scale-y-50 bg-foreground/10";

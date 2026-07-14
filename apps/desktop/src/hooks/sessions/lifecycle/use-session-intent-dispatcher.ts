@@ -13,26 +13,26 @@ import {
 import type {
   SessionIntent,
 } from "@proliferate/product-domain/sessions/intents/session-intent-model";
-import { useSessionHistoryHydration } from "@/hooks/sessions/lifecycle/use-session-history-hydration";
-import { useSessionSummaryActions } from "@/hooks/sessions/workflows/use-session-summary-actions";
-import { useSessionTitleActions } from "@/hooks/sessions/workflows/use-session-title-actions";
-import { useWorkspaceNameActions } from "@/hooks/workspaces/workflows/use-workspace-name-actions";
-import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/derived/use-workspace-surface-lookup";
-import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
-import { getSessionRecord } from "@/stores/sessions/session-records";
-import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
+import { useSessionHistoryHydration } from "#product/hooks/sessions/lifecycle/use-session-history-hydration";
+import { useSessionSummaryActions } from "#product/hooks/sessions/workflows/use-session-summary-actions";
+import { useSessionTitleActions } from "#product/hooks/sessions/workflows/use-session-title-actions";
+import { useWorkspaceNameActions } from "#product/hooks/workspaces/workflows/use-workspace-name-actions";
+import { useWorkspaceSurfaceLookup } from "#product/hooks/workspaces/derived/use-workspace-surface-lookup";
+import { useWorkspaceSessionCache } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
+import { getSessionRecord } from "#product/stores/sessions/session-records";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import {
   dispatchConfigIntent,
-} from "@/hooks/sessions/lifecycle/session-intent-config-dispatch";
+} from "#product/hooks/sessions/lifecycle/session-intent-config-dispatch";
 import {
   dispatchDeletePendingPromptIntent,
   dispatchEditPendingPromptIntent,
   dispatchInteractionIntent,
-} from "@/hooks/sessions/lifecycle/session-intent-interaction-dispatch";
+} from "#product/hooks/sessions/lifecycle/session-intent-interaction-dispatch";
 import {
   dispatchPromptIntent,
-} from "@/hooks/sessions/lifecycle/session-intent-prompt-dispatch";
+} from "#product/hooks/sessions/lifecycle/session-intent-prompt-dispatch";
 
 let activeDispatcherOwner: symbol | null = null;
 

@@ -2,9 +2,9 @@ import type { ContentPart, PromptInputBlock } from "@anyharness/sdk";
 import type {
   HomeLaunchTarget,
   HomeNextModelSelection,
-} from "@/lib/domain/home/home-next-launch";
-import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
-import type { DesktopAgentLaunchAgent } from "@/lib/domain/agents/cloud-launch-catalog";
+} from "#product/lib/domain/home/home-next-launch";
+import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
+import type { DesktopAgentLaunchAgent } from "#product/lib/domain/agents/cloud-launch-catalog";
 
 export type ChatLaunchTargetKind = HomeLaunchTarget["kind"];
 

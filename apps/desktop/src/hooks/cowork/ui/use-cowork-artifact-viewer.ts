@@ -6,7 +6,7 @@ import {
   buildCoworkRuntimeContentMessage,
   isCoworkRuntimeMessage,
   type CoworkRuntimeMessage,
-} from "@/lib/domain/cowork/artifacts";
+} from "#product/lib/domain/cowork/artifacts";
 
 export function useCoworkArtifactViewer(
   detail: CoworkArtifactDetailResponse | null,

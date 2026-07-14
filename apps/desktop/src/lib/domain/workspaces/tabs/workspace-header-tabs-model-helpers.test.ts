@@ -7,8 +7,8 @@ import {
   getKnownSessionId,
   getKnownSessionViewState,
   resolveHierarchyMaterializedSessionId,
-} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-model-helpers";
-import type { SessionDirectoryEntry } from "@/lib/domain/sessions/directory/directory-entry";
+} from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-model-helpers";
+import type { SessionDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-entry";
 
 function idleSlot(canFork: boolean): SessionDirectoryEntry {
   return {

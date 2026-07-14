@@ -3,7 +3,7 @@ import type { StartCodeReviewRequest } from "@anyharness/sdk";
 import {
   materializeReviewParentSession,
   waitForReviewParentSessionMaterialization,
-} from "@/lib/workflows/reviews/review-parent-materialization";
+} from "#product/lib/workflows/reviews/review-parent-materialization";
 
 describe("review parent materialization", () => {
   it("replaces optimistic parent ids in review requests", () => {

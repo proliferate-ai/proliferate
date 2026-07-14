@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   buildWorkspaceActivityIndicatorSnapshot,
-} from "@/lib/domain/workspaces/sidebar/workspace-activity-indicator";
+} from "#product/lib/domain/workspaces/sidebar/workspace-activity-indicator";
 import {
   DEFAULT_SIDEBAR_WORKSPACE_TYPES,
-} from "@/lib/domain/workspaces/sidebar/sidebar-model";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 import {
   makeLocalLogicalWorkspace,
-} from "@/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
 
 function buildSnapshot(
   overrides: Partial<Parameters<typeof buildWorkspaceActivityIndicatorSnapshot>[0]> = {},

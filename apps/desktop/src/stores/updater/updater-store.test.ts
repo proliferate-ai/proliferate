@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { useUpdaterStore } from "./updater-store";
+import { useUpdaterStore } from "#product/stores/updater/updater-store";
 
 const update = (version: string, title: string | null = null) => ({
   version,

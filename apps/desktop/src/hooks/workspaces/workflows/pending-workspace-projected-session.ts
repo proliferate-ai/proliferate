@@ -1,9 +1,9 @@
 import {
   buildPendingWorkspaceUiKey,
   type PendingWorkspaceEntry,
-} from "@/lib/domain/workspaces/creation/pending-entry";
-import { getSessionRecord } from "@/stores/sessions/session-records";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+} from "#product/lib/domain/workspaces/creation/pending-entry";
+import { getSessionRecord } from "#product/stores/sessions/session-records";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 export function resolveActiveProjectedSessionForPendingWorkspace(
   workspaceId: string,

@@ -1,6 +1,6 @@
 import { resolveSessionViewState } from "@proliferate/product-domain/sessions/activity";
-import { parseTargetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
-import { isCloudWorkspaceId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import { parseTargetWorkspaceSyntheticId } from "#product/lib/domain/compute/target-workspace-id";
+import { isCloudWorkspaceId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 
 type SessionActivitySnapshot = NonNullable<Parameters<typeof resolveSessionViewState>[0]>;
 

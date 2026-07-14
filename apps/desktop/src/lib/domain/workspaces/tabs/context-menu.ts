@@ -1,4 +1,4 @@
-import type { ShortcutKey } from "@/config/shortcuts/registry";
+import type { ShortcutKey } from "#product/config/shortcuts/registry";
 
 export type WorkspaceTabContextMenuCommand =
   | "rename"

@@ -1,4 +1,4 @@
-import { isApplePlatform } from "@/lib/domain/shortcuts/matching";
+import { isApplePlatform } from "#product/lib/domain/shortcuts/matching";
 
 export interface ComposerKeyboardEventLike {
   key: string;

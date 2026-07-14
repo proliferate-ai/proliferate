@@ -1,11 +1,11 @@
 import type { HealthResponse } from "@anyharness/sdk";
-import type { SessionDirectoryEntry } from "@/lib/domain/sessions/directory/directory-entry";
+import type { SessionDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-entry";
 import {
   buildSessionDebugLocator,
   type SessionDebugLocator,
   type SessionDebugRuntimeLocation,
-} from "@/lib/domain/support/session-debug/locator";
-import type { SessionDebugLocatorSession } from "@/lib/domain/support/session-debug/session-summary";
+} from "#product/lib/domain/support/session-debug/locator";
+import type { SessionDebugLocatorSession } from "#product/lib/domain/support/session-debug/session-summary";
 
 export type SessionDebugActionSessionRecord = Pick<
   SessionDirectoryEntry,

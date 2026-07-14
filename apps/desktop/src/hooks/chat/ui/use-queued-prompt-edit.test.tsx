@@ -3,11 +3,11 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PendingPromptEntry } from "@anyharness/sdk";
-import { useChatInputStore } from "@/stores/chat/chat-input-store";
+import { useChatInputStore } from "#product/stores/chat/chat-input-store";
 import {
   useEditLastQueuedPrompt,
   useQueuedPromptEdit,
-} from "./use-queued-prompt-edit";
+} from "#product/hooks/chat/ui/use-queued-prompt-edit";
 
 const mocks = vi.hoisted(() => ({
   activeSessionId: "session-1" as string | null,

@@ -4,7 +4,7 @@ import {
   buildHomeOnboardingCards,
   findHomeUnconfiguredGitHubRepository,
   resolveHomeModelProbeCardState,
-} from "./home-screen";
+} from "#product/lib/domain/home/home-screen";
 
 const githubRepository = {
   sourceRoot: "/repo/proliferate",

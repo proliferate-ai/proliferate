@@ -5,12 +5,12 @@ import type {
 import type {
   SessionChildRelationship,
   SessionRelationship,
-} from "@/lib/domain/sessions/directory/relationship";
-import { applyStreamEnvelopeBatch } from "@/lib/domain/sessions/stream/stream-state";
+} from "#product/lib/domain/sessions/directory/relationship";
+import { applyStreamEnvelopeBatch } from "#product/lib/domain/sessions/stream/stream-state";
 import {
   logDevSSEEvent,
-} from "@/lib/infra/debug/dev-sse-event-log";
-import { logDevSessionRuntimeEvent } from "@/lib/infra/debug/dev-session-runtime-log";
+} from "#product/lib/infra/debug/dev-sse-event-log";
+import { logDevSessionRuntimeEvent } from "#product/lib/infra/debug/dev-session-runtime-log";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import {
   finishOrCancelMeasurementOperation,
@@ -21,10 +21,10 @@ import {
 import type {
   MeasurementOperationId,
   MeasurementSurface,
-} from "@/lib/domain/telemetry/debug-measurement-catalog";
+} from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import { uniqueMeasurementOperationIds } from "@/lib/infra/measurement/operation-ids";
-import { markWorkspaceViewedAt } from "@/stores/preferences/workspace-ui-store";
-import { isDocumentVisibleAndFocused } from "@/hooks/ui/document/use-document-focus-visibility";
+import { markWorkspaceViewedAt } from "#product/stores/preferences/workspace-ui-store";
+import { isDocumentVisibleAndFocused } from "#product/hooks/ui/document/use-document-focus-visibility";
 import {
   pendingConfigChangesForSessionIntents,
 } from "@proliferate/product-domain/sessions/intents/session-intent-selectors";
@@ -35,28 +35,28 @@ import {
   reconcilePendingConfigChanges,
   type PendingSessionConfigChanges,
 } from "@proliferate/product-domain/sessions/pending-config";
-import { buildSessionStreamBatchPatch } from "@/lib/domain/sessions/stream-patch";
+import { buildSessionStreamBatchPatch } from "#product/lib/domain/sessions/stream-patch";
 import { shouldClearOptimisticPendingPromptForEnvelope } from "@proliferate/product-domain/chats/pending-prompts/pending-prompts";
 import {
   applyBatchedStreamSideEffects,
-} from "@/hooks/sessions/lifecycle/session-stream-side-effects";
+} from "#product/hooks/sessions/lifecycle/session-stream-side-effects";
 import {
   createLatestTimestampThrottle,
-} from "@/lib/domain/sessions/stream/latest-timestamp-throttle";
-import { batchSessionStoreWrites } from "@/lib/infra/scheduling/react-batching";
-import { activityFromTranscript } from "@/lib/domain/sessions/directory/directory-activity";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { getSessionRecord } from "@/stores/sessions/session-records";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useSessionIngestStore } from "@/stores/sessions/session-ingest-store";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
-import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
+} from "#product/lib/domain/sessions/stream/latest-timestamp-throttle";
+import { batchSessionStoreWrites } from "#product/lib/infra/scheduling/react-batching";
+import { activityFromTranscript } from "#product/lib/domain/sessions/directory/directory-activity";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { getSessionRecord } from "#product/stores/sessions/session-records";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useSessionIngestStore } from "#product/stores/sessions/session-ingest-store";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
 import type {
   BatchConfigReconcileResult,
   SessionStreamFlushControllerOptions,
   SessionStreamFlushFactoryDeps,
-} from "@/hooks/sessions/lifecycle/session-stream-flush-types";
+} from "#product/hooks/sessions/lifecycle/session-stream-flush-types";
 
 const SESSION_STREAM_EVENT_BATCH_IDLE_MS = 350;
 const SESSION_STREAM_EVENT_BATCH_MAX_DURATION_MS = 5_000;

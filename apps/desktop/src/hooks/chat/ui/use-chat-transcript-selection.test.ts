@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { createChatTranscriptSelectionHandlers } from "@/hooks/chat/ui/chat-transcript-selection-handlers";
-import { attachChatTranscriptSelectionListeners } from "@/hooks/chat/ui/chat-transcript-selection-listeners";
+import { createChatTranscriptSelectionHandlers } from "#product/hooks/chat/ui/chat-transcript-selection-handlers";
+import { attachChatTranscriptSelectionListeners } from "#product/hooks/chat/ui/chat-transcript-selection-listeners";
 import {
   EMPTY_TRANSCRIPT_TARGET_FACTS,
   type TranscriptSelectionClampEdge,

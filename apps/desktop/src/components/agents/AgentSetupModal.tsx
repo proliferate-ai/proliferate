@@ -1,8 +1,8 @@
 import type { AgentSummary, ReconcileAgentResult } from "@anyharness/sdk";
 import { useId } from "react";
-import { AGENT_SETUP_COPY } from "@/copy/agents/agents-copy";
-import { type AgentReconcileState } from "@/lib/domain/agents/status-presentation";
-import { useAgentSetupWorkflow } from "@/hooks/agents/workflows/use-agent-setup-workflow";
+import { AGENT_SETUP_COPY } from "#product/copy/agents/agents-copy";
+import { type AgentReconcileState } from "#product/lib/domain/agents/status-presentation";
+import { useAgentSetupWorkflow } from "#product/hooks/agents/workflows/use-agent-setup-workflow";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";

@@ -10,9 +10,9 @@ import {
   X,
 } from "@proliferate/ui/icons";
 import { matchesPickerSearch } from "@proliferate/ui/utils/search";
-import type { HomeNextDestination } from "@/lib/domain/home/home-next-launch";
-import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
-import { ProjectSearchField } from "@/components/home/screen/HomeTargetPickerParts";
+import type { HomeNextDestination } from "#product/lib/domain/home/home-next-launch";
+import type { SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
+import { ProjectSearchField } from "#product/components/home/screen/HomeTargetPickerParts";
 interface HomeProjectMenuProps {
   trigger: ReactElement<{
     onClick?: (...args: unknown[]) => void;

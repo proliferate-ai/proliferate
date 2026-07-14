@@ -3,16 +3,16 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MockInstance } from "vitest";
-import { useRepoPreferencesLifecycle } from "@/hooks/preferences/lifecycle/use-repo-preferences-lifecycle";
-import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
+import { useRepoPreferencesLifecycle } from "#product/hooks/preferences/lifecycle/use-repo-preferences-lifecycle";
+import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
 import {
   createMemoryProductStorage,
   type MemoryProductStorage,
-} from "@/test/product-storage-test-utils";
+} from "#product/test/product-storage-test-utils";
 import {
   makeTestProductHost,
   productHostWrapper,
-} from "@/test/product-host-test-utils";
+} from "#product/test/product-host-test-utils";
 
 let memory: MemoryProductStorage;
 let setItemSpy: MockInstance;

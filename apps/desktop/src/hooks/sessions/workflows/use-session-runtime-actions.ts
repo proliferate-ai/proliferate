@@ -8,28 +8,28 @@ import {
   fetchSessionSummary,
   getSessionClientAndWorkspace,
   resumeSession,
-} from "@/lib/access/anyharness/session-runtime";
-import { logDevSessionRuntimeEvent } from "@/lib/infra/debug/dev-session-runtime-log";
-import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
+} from "#product/lib/access/anyharness/session-runtime";
+import { logDevSessionRuntimeEvent } from "#product/lib/infra/debug/dev-session-runtime-log";
+import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import {
   resolveSessionStatus,
 } from "@proliferate/product-domain/sessions/activity";
-import { rememberLastViewedSession } from "@/stores/preferences/workspace-ui-store";
-import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
-import { useToastStore } from "@/stores/toast/toast-store";
-import { useLinkedSessionMounting } from "@/hooks/chat/workflows/subagents/use-linked-session-mounting";
+import { rememberLastViewedSession } from "#product/stores/preferences/workspace-ui-store";
+import { resolveWorkspaceUiKey } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
+import { useToastStore } from "#product/stores/toast/toast-store";
+import { useLinkedSessionMounting } from "#product/hooks/chat/workflows/subagents/use-linked-session-mounting";
 import {
   useSessionStreamFlushControllerFactory,
-} from "@/hooks/sessions/lifecycle/use-session-stream-flush";
-import { useSessionStreamCache } from "@/hooks/sessions/cache/use-session-stream-cache";
-import { useSessionHistoryHydration } from "@/hooks/sessions/lifecycle/use-session-history-hydration";
-import { useSessionSummaryActions } from "@/hooks/sessions/workflows/use-session-summary-actions";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+} from "#product/hooks/sessions/lifecycle/use-session-stream-flush";
+import { useSessionStreamCache } from "#product/hooks/sessions/cache/use-session-stream-cache";
+import { useSessionHistoryHydration } from "#product/hooks/sessions/lifecycle/use-session-history-hydration";
+import { useSessionSummaryActions } from "#product/hooks/sessions/workflows/use-session-summary-actions";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import {
   getSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useSessionStreamConnectionActions } from "@/hooks/sessions/lifecycle/use-session-stream-connection-actions";
+} from "#product/stores/sessions/session-records";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useSessionStreamConnectionActions } from "#product/hooks/sessions/lifecycle/use-session-stream-connection-actions";
 
 export function useSessionRuntimeActions() {
   const host = useProductHost();

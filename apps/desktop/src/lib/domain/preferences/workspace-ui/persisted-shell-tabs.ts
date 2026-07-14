@@ -1,10 +1,10 @@
-import { sanitizeWorkspaceShellTabKeys } from "@/lib/domain/workspaces/tabs/shell-file-seed";
+import { sanitizeWorkspaceShellTabKeys } from "#product/lib/domain/workspaces/tabs/shell-file-seed";
 import {
   parseWorkspaceShellTabKey,
   type WorkspaceShellIntentKey,
   type WorkspaceShellTabKey,
-} from "@/lib/domain/workspaces/tabs/shell-tabs";
-import { isTransientClientSessionId } from "@/lib/domain/preferences/workspace-ui/persisted-chat-sessions";
+} from "#product/lib/domain/workspaces/tabs/shell-tabs";
+import { isTransientClientSessionId } from "#product/lib/domain/preferences/workspace-ui/persisted-chat-sessions";
 
 export function sanitizeActiveShellTabKeysByWorkspace(
   value: unknown,

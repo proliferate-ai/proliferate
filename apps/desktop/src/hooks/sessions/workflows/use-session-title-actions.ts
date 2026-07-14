@@ -2,16 +2,16 @@ import { useCallback, useRef } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useUpdateSessionTitleMutation } from "@anyharness/sdk-react";
 import { generateSessionTitle } from "@proliferate/cloud-sdk/client/ai-magic";
-import { getSessionClientAndWorkspace } from "@/lib/access/anyharness/session-runtime";
+import { getSessionClientAndWorkspace } from "#product/lib/access/anyharness/session-runtime";
 import {
   finishMeasurementOperation,
   recordMeasurementMetric,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
 import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
-import { useSessionSummaryActions } from "@/hooks/sessions/workflows/use-session-summary-actions";
-import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
-import { useProductAuthStatus } from "@/hooks/auth/facade/use-product-auth";
+import { useSessionSummaryActions } from "#product/hooks/sessions/workflows/use-session-summary-actions";
+import { useWorkspaceSessionCache } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
+import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth";
 
 const requestedAutoSessionTitles = new Map<string, number>();
 const MAX_TRACKED_AUTO_SESSION_TITLES = 500;

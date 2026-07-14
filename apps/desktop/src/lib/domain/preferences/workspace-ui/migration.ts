@@ -1,29 +1,29 @@
-import { resolveSidebarWorkspaceTypes } from "@/lib/domain/workspaces/sidebar/sidebar-workspace-types";
+import { resolveSidebarWorkspaceTypes } from "#product/lib/domain/workspaces/sidebar/sidebar-workspace-types";
 import {
   isStringArrayRecord,
   isStringRecord,
   sanitizeLastViewedSessionByWorkspace,
   sanitizeManualChatGroupsWithoutTransientSessions,
   sanitizeSessionIdArrayRecord,
-} from "@/lib/domain/preferences/workspace-ui/persisted-chat-sessions";
+} from "#product/lib/domain/preferences/workspace-ui/persisted-chat-sessions";
 import {
   sanitizeGitStatusSnapshotsByWorkspace,
-} from "@/lib/domain/preferences/workspace-ui/persisted-git-status";
+} from "#product/lib/domain/preferences/workspace-ui/persisted-git-status";
 import {
   migrateLegacyRightPanelPreferences,
   sanitizeRightPanelDurableByWorkspace,
   sanitizeRightPanelMaterializedByWorkspace,
-} from "@/lib/domain/preferences/workspace-ui/persisted-right-panel";
+} from "#product/lib/domain/preferences/workspace-ui/persisted-right-panel";
 import {
   sanitizeActiveShellTabKeysByWorkspace,
   sanitizeShellTabOrderByWorkspace,
-} from "@/lib/domain/preferences/workspace-ui/persisted-shell-tabs";
+} from "#product/lib/domain/preferences/workspace-ui/persisted-shell-tabs";
 import {
   WORKSPACE_UI_DEFAULTS,
   WORKSPACE_UI_MIGRATION_VERSION,
   type PersistedWorkspaceUiState,
-} from "@/lib/domain/preferences/workspace-ui/model";
-import { clampWorkspaceSidebarWidth } from "@/lib/domain/preferences/workspace-ui/sidebar";
+} from "#product/lib/domain/preferences/workspace-ui/model";
+import { clampWorkspaceSidebarWidth } from "#product/lib/domain/preferences/workspace-ui/sidebar";
 
 export function migrateWorkspaceUiState(
   input: PersistedWorkspaceUiState,

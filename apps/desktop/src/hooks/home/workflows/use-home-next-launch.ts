@@ -1,20 +1,20 @@
 import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useCreateCloudWorkspace } from "@/hooks/cloud/workflows/use-create-cloud-workspace";
-import { useCoworkThreadWorkflow } from "@/hooks/cowork/workflows/use-cowork-thread-workflow";
-import { useHomeNextLaunchPromptActions } from "@/hooks/home/workflows/use-home-next-launch-prompt-actions";
-import { useWorkspaceEntryActions } from "@/hooks/workspaces/workflows/use-workspace-entry-actions";
-import { useWorkspaceSelection } from "@/hooks/workspaces/workflows/selection/use-workspace-selection";
+import { useCreateCloudWorkspace } from "#product/hooks/cloud/workflows/use-create-cloud-workspace";
+import { useCoworkThreadWorkflow } from "#product/hooks/cowork/workflows/use-cowork-thread-workflow";
+import { useHomeNextLaunchPromptActions } from "#product/hooks/home/workflows/use-home-next-launch-prompt-actions";
+import { useWorkspaceEntryActions } from "#product/hooks/workspaces/workflows/use-workspace-entry-actions";
+import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
 import type {
   HomeLaunchTarget,
   HomeNextModelSelection,
-} from "@/lib/domain/home/home-next-launch";
+} from "#product/lib/domain/home/home-next-launch";
 import {
   buildDeferredHomeLaunchId,
   useDeferredHomeLaunchStore,
-} from "@/stores/home/deferred-home-launch-store";
-import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
-import { useToastStore } from "@/stores/toast/toast-store";
+} from "#product/stores/home/deferred-home-launch-store";
+import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
 import {
   failLatencyFlow,
   startLatencyFlow,
@@ -26,7 +26,7 @@ import {
   homeNextLaunchErrorMessage,
   markHomeLaunchIntentMaterializedFromPendingWorkspace,
   newHomeNextLaunchId,
-} from "@/hooks/home/workflows/home-next-launch-intent";
+} from "#product/hooks/home/workflows/home-next-launch-intent";
 
 interface HomeNextLaunchInput {
   text: string;

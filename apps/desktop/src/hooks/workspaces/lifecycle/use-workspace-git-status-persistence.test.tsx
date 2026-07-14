@@ -2,13 +2,13 @@
 
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { WorkspaceGitStatusesState } from "@/hooks/workspaces/derived/use-workspace-git-statuses";
+import type { WorkspaceGitStatusesState } from "#product/hooks/workspaces/derived/use-workspace-git-statuses";
 import type {
   PersistedWorkspaceGitStatusSnapshot,
   WorkspaceGitStatus,
-} from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useWorkspaceGitStatusPersistence } from "./use-workspace-git-status-persistence";
+} from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useWorkspaceGitStatusPersistence } from "#product/hooks/workspaces/lifecycle/use-workspace-git-status-persistence";
 
 const mocks = vi.hoisted(() => ({
   gitStatuses: {

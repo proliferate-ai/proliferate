@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ArrowLeft, ChevronDown, ChevronRight } from "@proliferate/ui/icons";
-import { AgentGlyph, AgentGlyphStack } from "./AgentGlyph";
+import { AgentGlyph, AgentGlyphStack } from "#product/components/playground/subagents-ux/popover-pane/AgentGlyph";
 import {
   buildSubagentAggregate,
   subagentCountsLine,
-} from "./PopoverPaneActivityFacts";
-import type { PrototypeAgent } from "./PopoverPaneFixtures";
-import { SubagentsPanePrototype } from "./SubagentsPanePrototype";
+} from "#product/components/playground/subagents-ux/popover-pane/PopoverPaneActivityFacts";
+import type { PrototypeAgent } from "#product/components/playground/subagents-ux/popover-pane/PopoverPaneFixtures";
+import { SubagentsPanePrototype } from "#product/components/playground/subagents-ux/popover-pane/SubagentsPanePrototype";
 
 export interface GlobalAgentsParentFixture {
   id: string;

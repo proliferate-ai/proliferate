@@ -3,7 +3,7 @@ import {
   isValidWorkspaceRelativePath,
   normalizeWorkspaceRelativePath,
   workspaceFileBasename,
-} from "@/lib/domain/chat/composer/file-mention-links";
+} from "#product/lib/domain/chat/composer/file-mention-links";
 
 export interface ChatComposerDraft {
   nodes: ChatComposerDraftNode[];

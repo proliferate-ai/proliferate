@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { WorkspaceArrivalEvent } from "@/lib/domain/workspaces/creation/arrival";
-import { completeChatPromptSubmitSideEffects } from "./complete-chat-prompt-submit-side-effects";
+import type { WorkspaceArrivalEvent } from "#product/lib/domain/workspaces/creation/arrival";
+import { completeChatPromptSubmitSideEffects } from "#product/lib/workflows/chat/complete-chat-prompt-submit-side-effects";
 
 function arrival(
   overrides: Partial<WorkspaceArrivalEvent> = {},

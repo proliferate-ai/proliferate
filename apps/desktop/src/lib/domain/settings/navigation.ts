@@ -2,14 +2,14 @@ import {
   SETTINGS_CONTENT_SECTIONS,
   SETTINGS_DEFAULT_SECTION,
   type SettingsSection,
-} from "@/config/settings";
-import { getSettingsScopeForSection } from "@/lib/domain/settings/navigation-presentation";
+} from "#product/config/settings";
+import { getSettingsScopeForSection } from "#product/lib/domain/settings/navigation-presentation";
 import {
   cloudRepositoryKey,
   isCloudRepository,
   type SettingsRepositoryEntry,
-} from "@/lib/domain/settings/repositories";
-import { isRepoSettingsContext } from "@/lib/domain/settings/repo-scope-selection";
+} from "#product/lib/domain/settings/repositories";
+import { isRepoSettingsContext } from "#product/lib/domain/settings/repo-scope-selection";
 
 const FOCUS_PARAM_NAMES = [
   "focus",

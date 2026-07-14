@@ -1,9 +1,9 @@
 import { ReadBook } from "@proliferate/ui/icons";
-import { HighlightedCodeBlock } from "@/components/content/ui/HighlightedCodeBlock";
+import { HighlightedCodeBlock } from "#product/components/content/ui/HighlightedCodeBlock";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
-import { ToolActionDetailsPanel } from "./ToolActionDetailsPanel";
-import { ToolActionRow } from "./ToolActionRow";
-import { ToolFileChip } from "./ToolFileChip";
+import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
+import { ToolActionRow } from "#product/components/workspace/chat/tool-calls/ToolActionRow";
+import { ToolFileChip } from "#product/components/workspace/chat/tool-calls/ToolFileChip";
 import type { FileReadScope } from "@anyharness/sdk";
 
 interface FileReadCallProps {

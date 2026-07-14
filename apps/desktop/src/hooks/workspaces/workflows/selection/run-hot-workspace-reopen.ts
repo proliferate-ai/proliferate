@@ -1,21 +1,21 @@
-import { findLogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
-import { resolveLogicalWorkspaceMaterializationId } from "@/lib/domain/workspaces/cloud/logical-workspace-materialization";
+import { findLogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-lookup";
+import { resolveLogicalWorkspaceMaterializationId } from "#product/lib/domain/workspaces/cloud/logical-workspace-materialization";
 import {
   resolveHotReopenCandidate,
-} from "@/lib/domain/workspaces/selection/hot-reopen";
+} from "#product/lib/domain/workspaces/selection/hot-reopen";
 import {
   markWorkspaceViewed,
   rememberLastViewedSession,
   useWorkspaceUiStore,
-} from "@/stores/preferences/workspace-ui-store";
+} from "#product/stores/preferences/workspace-ui-store";
 import {
   getMaterializedSessionId,
   getSessionRecords,
   isPendingSessionId,
   removeSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+} from "#product/stores/sessions/session-records";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import {
   finishMeasurementOperation,
   finishOrCancelMeasurementOperation,
@@ -23,18 +23,18 @@ import {
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
-import { HOT_PAINT_MEASUREMENT_SUMMARY_BUDGET } from "@/lib/domain/telemetry/debug-measurement-catalog";
-import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
-import { resolveCloudWorkspaceReadiness } from "./cloud-readiness";
-import { resolveSelectionConnection } from "./connection";
-import { isWorkspaceSelectionCurrent } from "./guards";
-import { runWorkspaceSelection } from "./run-workspace-selection";
+import { HOT_PAINT_MEASUREMENT_SUMMARY_BUDGET } from "#product/lib/domain/telemetry/debug-measurement-catalog";
+import { scheduleAfterNextPaint } from "#product/lib/infra/scheduling/schedule-after-next-paint";
+import { resolveCloudWorkspaceReadiness } from "#product/hooks/workspaces/workflows/selection/cloud-readiness";
+import { resolveSelectionConnection } from "#product/hooks/workspaces/workflows/selection/connection";
+import { isWorkspaceSelectionCurrent } from "#product/hooks/workspaces/workflows/selection/guards";
+import { runWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/run-workspace-selection";
 import type {
   ReadyCloudReadinessResult,
   WorkspaceSelectionContext,
   WorkspaceSelectionDeps,
   WorkspaceSelectionRequest,
-} from "./types";
+} from "#product/hooks/workspaces/workflows/selection/types";
 
 const HOT_REOPEN_RECOVERY_SUPPRESSION_MS = 15_000;
 const recentHotReopenRecoveries = new Map<string, number>();

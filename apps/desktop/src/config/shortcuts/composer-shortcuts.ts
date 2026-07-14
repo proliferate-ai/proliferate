@@ -1,4 +1,4 @@
-import type { ComposerShortcutDef } from "./types";
+import type { ComposerShortcutDef } from "#product/config/shortcuts/types";
 
 export const COMPOSER_SHORTCUTS = {
   submitMessage: {

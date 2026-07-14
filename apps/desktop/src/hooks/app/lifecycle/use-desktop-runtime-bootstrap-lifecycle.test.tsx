@@ -6,7 +6,7 @@ import type {
   DesktopRuntimeBridge,
 } from "@proliferate/product-client/host/desktop-bridge";
 import type { AuthState } from "@proliferate/product-client/host/product-host";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
 const mocks = vi.hoisted(() => ({
   bootstrapHarnessRuntime: vi.fn(),
@@ -27,7 +27,7 @@ vi.mock("@/lib/infra/measurement/debug-startup", () => ({
   startStartupTimer: () => 1,
 }));
 
-import { useDesktopRuntimeBootstrapLifecycle } from "./use-desktop-runtime-bootstrap-lifecycle";
+import { useDesktopRuntimeBootstrapLifecycle } from "#product/hooks/app/lifecycle/use-desktop-runtime-bootstrap-lifecycle";
 
 function makeRuntime(): DesktopRuntimeBridge {
   return {

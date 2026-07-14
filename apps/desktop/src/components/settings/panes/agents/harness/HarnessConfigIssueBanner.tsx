@@ -3,8 +3,8 @@ import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import {
   configurationDetailForAgent,
-} from "@/lib/domain/agents/configuration-issues-presentation";
-import { getAgentStatusDisplay } from "@/lib/domain/agents/status-presentation";
+} from "#product/lib/domain/agents/configuration-issues-presentation";
+import { getAgentStatusDisplay } from "#product/lib/domain/agents/status-presentation";
 
 interface HarnessConfigIssueBannerProps {
   agent: AgentSummary;

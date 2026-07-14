@@ -1,18 +1,18 @@
 import {
   automationTargetId,
   isSameAutomationRepo,
-} from "@/lib/domain/automations/target/selection-identity";
-import { buildTargetRepoDrafts } from "@/lib/domain/automations/target/selection-drafts";
+} from "#product/lib/domain/automations/target/selection-identity";
+import { buildTargetRepoDrafts } from "#product/lib/domain/automations/target/selection-drafts";
 import {
   buildTargetGroups,
   constrainTargetToRows,
   findSelectedTargetRow,
   firstDefaultTarget,
-} from "@/lib/domain/automations/target/selection-rows";
+} from "#product/lib/domain/automations/target/selection-rows";
 import type {
   AutomationTargetState,
   BuildAutomationTargetStateInput,
-} from "@/lib/domain/automations/target/selection-types";
+} from "#product/lib/domain/automations/target/selection-types";
 
 export type {
   AutomationExecutionTarget,
@@ -22,7 +22,7 @@ export type {
   AutomationTargetSelection,
   AutomationTargetState,
   BuildAutomationTargetStateInput,
-} from "@/lib/domain/automations/target/selection-types";
+} from "#product/lib/domain/automations/target/selection-types";
 
 export {
   automationTargetId,

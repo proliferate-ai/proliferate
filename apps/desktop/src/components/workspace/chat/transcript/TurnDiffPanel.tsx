@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ChatDiffLineWrapContextMenu } from "@/components/content/ui/diff/ChatDiffLineWrapContextMenu";
-import { useTurnCurrentFileDiffs } from "@/hooks/chat/cache/use-turn-current-file-diffs";
-import { CHAT_VISIBLE_FILE_CHANGE_LIMIT } from "@/lib/domain/workspaces/changes/diff-display-policy";
+import { ChatDiffLineWrapContextMenu } from "#product/components/content/ui/diff/ChatDiffLineWrapContextMenu";
+import { useTurnCurrentFileDiffs } from "#product/hooks/chat/cache/use-turn-current-file-diffs";
+import { CHAT_VISIBLE_FILE_CHANGE_LIMIT } from "#product/lib/domain/workspaces/changes/diff-display-policy";
 import type { TranscriptState, TurnRecord } from "@anyharness/sdk";
-import { TurnDiffFileCard } from "./TurnDiffFileCard";
-import { TurnDiffPanelHeader } from "./TurnDiffPanelHeader";
+import { TurnDiffFileCard } from "#product/components/workspace/chat/transcript/TurnDiffFileCard";
+import { TurnDiffPanelHeader } from "#product/components/workspace/chat/transcript/TurnDiffPanelHeader";
 
 interface TurnDiffPanelProps {
   turn: TurnRecord;

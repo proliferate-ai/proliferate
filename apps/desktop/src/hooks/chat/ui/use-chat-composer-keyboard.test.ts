@@ -2,7 +2,7 @@
 
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { useChatComposerKeyboard } from "./use-chat-composer-keyboard";
+import { useChatComposerKeyboard } from "#product/hooks/chat/ui/use-chat-composer-keyboard";
 
 function keyboardEvent(overrides: Partial<{
   key: string;

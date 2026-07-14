@@ -1,15 +1,15 @@
 import type { Workspace } from "@anyharness/sdk";
-import type { CloudWorkspaceRepoTarget } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
+import type { CloudWorkspaceRepoTarget } from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import type {
   SidebarCloudWorkspaceStatus,
   SidebarCloudWorkspaceSummary,
-} from "@/lib/domain/workspaces/sidebar/cloud-workspace";
+} from "#product/lib/domain/workspaces/sidebar/cloud-workspace";
 import type {
   SidebarDetailIndicator,
   SidebarStatusIndicator,
   SidebarWorkspaceVariant,
-} from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
-import type { WorkspaceGitStatus } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
+import type { WorkspaceGitStatus } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
 
 export interface LocalSidebarWorkspaceEntry {
   source: "local";

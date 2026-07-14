@@ -3,26 +3,26 @@ import {
   beginSessionActivationIntent,
   type SessionActivationGuard,
   type SessionActivationOutcome,
-} from "@/hooks/sessions/workflows/session-activation-guard";
-import { useSessionSelectionActions } from "@/hooks/sessions/facade/use-session-selection-actions";
-import { chatWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
+} from "#product/hooks/sessions/workflows/session-activation-guard";
+import { useSessionSelectionActions } from "#product/hooks/sessions/facade/use-session-selection-actions";
+import { chatWorkspaceShellTabKey } from "#product/lib/domain/workspaces/tabs/shell-tabs";
 import {
   markOperationForNextCommit,
   recordMeasurementWorkflowStep,
 } from "@/lib/infra/measurement/debug-measurement";
-import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+import { scheduleAfterNextPaint } from "#product/lib/infra/scheduling/schedule-after-next-paint";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import {
   clearPendingHotSwitchMeasurement,
   HOT_SWITCH_SURFACES,
   replacePendingHotSwitchMeasurement,
   resolveHotSwitchMeasurement,
-} from "@/hooks/workspaces/workflows/tabs/workspace-shell-activation-measurement";
-import { resolveCurrentShellStateKey } from "@/hooks/workspaces/workflows/tabs/workspace-shell-state-key";
+} from "#product/hooks/workspaces/workflows/tabs/workspace-shell-activation-measurement";
+import { resolveCurrentShellStateKey } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-state-key";
 import type {
   SelectSessionOptionsWithoutGuard,
-} from "@/hooks/workspaces/workflows/tabs/workspace-shell-activation-types";
-import { runDeferredChatTabActivation } from "@/hooks/workspaces/workflows/tabs/chat-tab-activation-runner";
+} from "#product/hooks/workspaces/workflows/tabs/workspace-shell-activation-types";
+import { runDeferredChatTabActivation } from "#product/hooks/workspaces/workflows/tabs/chat-tab-activation-runner";
 
 export type { SelectSessionOptionsWithoutGuard };
 

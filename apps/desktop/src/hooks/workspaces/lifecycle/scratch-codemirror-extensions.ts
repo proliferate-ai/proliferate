@@ -12,7 +12,7 @@ import {
 import { tags } from "@lezer/highlight";
 import {
   parseScratchMarkdownListPrefix,
-} from "@/lib/domain/workspaces/scratch/scratch-list-formatting";
+} from "#product/lib/domain/workspaces/scratch/scratch-list-formatting";
 
 export function scratchMarkdownLanguage() {
   return markdown({

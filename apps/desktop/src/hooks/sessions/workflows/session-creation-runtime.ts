@@ -1,24 +1,24 @@
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import type { DesktopRuntimeBridge } from "@proliferate/product-client/host/desktop-bridge";
-import { parseTargetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { parseTargetWorkspaceSyntheticId } from "#product/lib/domain/compute/target-workspace-id";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import {
   findClientSessionIdByMaterializedSessionId,
   getMaterializedSessionId,
   getSessionRecords,
   isPendingSessionId,
   patchSessionRecord,
-} from "@/stores/sessions/session-records";
+} from "#product/stores/sessions/session-records";
 import {
   closeSessionStreamHandle,
   flushAllSessionStreamHandles,
   getSessionStreamHandle,
-} from "@/lib/access/anyharness/session-stream-handles";
-import { bootstrapHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap";
+} from "#product/lib/access/anyharness/session-stream-handles";
+import { bootstrapHarnessRuntime } from "#product/lib/access/anyharness/runtime-bootstrap";
 import type {
   FlushAwareSessionStreamHandle,
   SessionStreamPruningDeps,
-} from "@/lib/workflows/sessions/session-runtime";
+} from "#product/lib/workflows/sessions/session-runtime";
 
 export const sessionStreamPruningDeps: SessionStreamPruningDeps = {
   getSessionRecords,

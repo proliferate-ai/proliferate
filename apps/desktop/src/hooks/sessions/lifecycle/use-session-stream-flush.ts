@@ -2,13 +2,13 @@ import { useCallback } from "react";
 import {
   animationFrameSessionStreamFlushScheduler,
   createSessionStreamFlushController,
-} from "@/hooks/sessions/lifecycle/session-stream-flush-controller";
+} from "#product/hooks/sessions/lifecycle/session-stream-flush-controller";
 import type {
   SessionStreamFlushController,
   SessionStreamFlushControllerOptions,
   SessionStreamFlushFactoryDeps,
   SessionStreamFlushScheduler,
-} from "@/hooks/sessions/lifecycle/session-stream-flush-types";
+} from "#product/hooks/sessions/lifecycle/session-stream-flush-types";
 
 export function useSessionStreamFlushControllerFactory({
   sessionStreamCache,

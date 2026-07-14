@@ -1,14 +1,14 @@
 import type { AnyHarnessRequestOptions } from "@anyharness/sdk";
 import { useQuery } from "@tanstack/react-query";
-import type { WorkspaceCollections } from "@/lib/domain/workspaces/cloud/collections";
+import type { WorkspaceCollections } from "#product/lib/domain/workspaces/cloud/collections";
 import {
   buildWorkspaceCollections,
   workspaceCollectionsNeedActivityRefresh,
-} from "@/lib/domain/workspaces/cloud/collections";
-import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
-import { useWorkspaceCollectionsCache } from "@/hooks/workspaces/cache/use-workspace-collections-cache";
-import { useProductAuthUserId } from "@/hooks/auth/facade/use-product-auth";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+} from "#product/lib/domain/workspaces/cloud/collections";
+import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+import { useWorkspaceCollectionsCache } from "#product/hooks/workspaces/cache/use-workspace-collections-cache";
+import { useProductAuthUserId } from "#product/hooks/auth/facade/use-product-auth";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import {
   elapsedMs,
   logLatency,
@@ -17,7 +17,7 @@ import {
 import {
   listRepoRoots,
   listRuntimeWorkspaces,
-} from "@/lib/access/anyharness/workspaces";
+} from "#product/lib/access/anyharness/workspaces";
 import {
   bindMeasurementCategories,
   finishOrCancelMeasurementOperation,

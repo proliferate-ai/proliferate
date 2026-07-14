@@ -7,7 +7,7 @@ import {
   requestRightPanelRelativeTab,
   requestRightPanelTabByIndex,
   rightPanelShortcutRequestFromEvent,
-} from "@/lib/workflows/workspaces/right-panel-shortcut-requests";
+} from "#product/lib/workflows/workspaces/right-panel-shortcut-requests";
 
 describe("right panel shortcut requests", () => {
   afterEach(() => {

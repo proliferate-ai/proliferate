@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { AuthScreenLayout } from "@/components/auth/AuthScreenLayout";
-import { LoginScreen } from "@/components/auth/LoginScreen";
-import { SessionCheckScreen } from "@/components/auth/SessionCheckScreen";
+import { AuthScreenLayout } from "#product/components/auth/AuthScreenLayout";
+import { LoginScreen } from "#product/components/auth/LoginScreen";
+import { SessionCheckScreen } from "#product/components/auth/SessionCheckScreen";
 
 // Dev playground for the initial-page (loading + auth) screens.
 //   • "Shared layout" = the fix: ONE persistent <AuthScreenLayout> stays mounted

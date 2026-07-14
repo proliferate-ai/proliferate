@@ -1,15 +1,15 @@
 import { useCallback } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import type { BillingUrlResponse } from "@/lib/access/cloud/client";
-import type { CloudOwnerSelection } from "@/lib/domain/cloud/billing";
+import type { CloudOwnerSelection } from "#product/lib/domain/cloud/billing";
 import {
   useCloudBillingMutations,
   useCloudBillingQuery,
   useInvalidateCloudBillingState,
-} from "@/hooks/access/cloud/use-cloud-billing";
-import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
-import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
-import { useProductAuthStatus } from "@/hooks/auth/facade/use-product-auth";
+} from "#product/hooks/access/cloud/use-cloud-billing";
+import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
+import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth";
 
 function billingOwnerKey(owner?: CloudOwnerSelection) {
   return {

@@ -16,27 +16,27 @@ import type {
 } from "@anyharness/sdk";
 import {
   collectReviewSessionRelationshipHints,
-} from "@/lib/domain/reviews/session-relationship-hints";
-import { getSessionSubagents } from "@/lib/access/anyharness/sessions";
-import { listSessionReviews } from "@/lib/access/anyharness/reviews";
-import { getCoworkManagedWorkspaces } from "@/lib/access/anyharness/cowork";
+} from "#product/lib/domain/reviews/session-relationship-hints";
+import { getSessionSubagents } from "#product/lib/access/anyharness/sessions";
+import { listSessionReviews } from "#product/lib/access/anyharness/reviews";
+import { getCoworkManagedWorkspaces } from "#product/lib/access/anyharness/cowork";
 import {
   collectSubagentSessionRelationshipHints,
 } from "@proliferate/product-domain/chats/subagents/session-relationship-hints";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
 import {
   resolveHierarchyMaterializedSessionId,
-} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-model-helpers";
+} from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-model-helpers";
 import {
   buildCoworkRelationshipHintSignature,
   type HeaderCoworkRelationshipHint,
-} from "@/lib/domain/workspaces/tabs/workspace-header-cowork-hierarchy";
-import { useBatchedHeaderHierarchySessionIds } from "@/hooks/workspaces/ui/tabs/use-batched-header-hierarchy-session-ids";
+} from "#product/lib/domain/workspaces/tabs/workspace-header-cowork-hierarchy";
+import { useBatchedHeaderHierarchySessionIds } from "#product/hooks/workspaces/ui/tabs/use-batched-header-hierarchy-session-ids";
 import {
   isReplacedSessionTombstoned,
-} from "@/hooks/sessions/workflows/session-replacement-tombstones";
+} from "#product/hooks/sessions/workflows/session-replacement-tombstones";
 import {
   buildHierarchyQuerySignature,
   buildReviewRelationshipHintSignature,
@@ -44,7 +44,7 @@ import {
   buildWorkspaceHeaderSubagentHierarchy,
   type HeaderHierarchyQueryRow,
   type WorkspaceHeaderSubagentHierarchy,
-} from "@/lib/domain/workspaces/tabs/workspace-header-subagent-hierarchy";
+} from "#product/lib/domain/workspaces/tabs/workspace-header-subagent-hierarchy";
 
 export function useWorkspaceHeaderSubagentHierarchy(args: {
   prioritySessionIds?: string[];

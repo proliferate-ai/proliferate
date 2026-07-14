@@ -3,7 +3,7 @@ import {
   DEFAULT_REPO_CONFIG,
   normalizeRepoConfig,
   type RepoConfig,
-} from "@/lib/domain/preferences/repo-preferences";
+} from "#product/lib/domain/preferences/repo-preferences";
 
 export interface RepoPreferencesState {
   _hydrated: boolean;

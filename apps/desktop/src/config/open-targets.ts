@@ -7,7 +7,7 @@ import {
   VSCodeIcon,
   WindsurfIcon,
   ZedIcon,
-} from "@/components/workspace/open-target/app-icons";
+} from "#product/components/workspace/open-target/app-icons";
 import type { OpenTargetIconId } from "@proliferate/product-client/host/desktop-bridge";
 
 export interface OpenTargetIconDefinition {

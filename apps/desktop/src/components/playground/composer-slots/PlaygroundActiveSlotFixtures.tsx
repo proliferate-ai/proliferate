@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import type { ScenarioKey } from "@/config/playground";
-import { renderPanelSlotFixture } from "@/components/playground/composer-slots/PlaygroundPanelSlotFixtures";
+import type { ScenarioKey } from "#product/config/playground";
+import { renderPanelSlotFixture } from "#product/components/playground/composer-slots/PlaygroundPanelSlotFixtures";
 
 export function renderActiveSlot(scenario: ScenarioKey): ReactNode | null {
   switch (scenario) {

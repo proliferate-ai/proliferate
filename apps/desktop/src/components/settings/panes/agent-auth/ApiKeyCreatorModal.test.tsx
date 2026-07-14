@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { ApiKeyCreatorModal } from "./ApiKeyCreatorModal";
+import { ApiKeyCreatorModal } from "#product/components/settings/panes/agent-auth/ApiKeyCreatorModal";
 
 // Radix Dialog (ModalShell) touches DOM APIs jsdom doesn't implement.
 beforeEach(() => {

@@ -8,9 +8,9 @@ import {
   useAgentAuthState,
   useAuthSelections,
 } from "@proliferate/cloud-sdk-react";
-import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
-import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
-import { HarnessPanelBlock, type HarnessBlockVariant } from "./HarnessPanelBlock";
+import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
+import { HarnessPanelBlock, type HarnessBlockVariant } from "#product/components/settings/panes/agents/harness/HarnessPanelBlock";
 
 // --------------------------------------------------------------------------- #
 // Catalog-declared settings (mirrors catalogs/agents/catalog.json)

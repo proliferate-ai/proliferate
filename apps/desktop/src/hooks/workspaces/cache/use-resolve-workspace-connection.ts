@@ -6,20 +6,20 @@ import type { QueryClient } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import type { CloudMobilityWorkspaceSummary } from "@/lib/access/cloud/client";
-import { cloudWorkspaceConnectionQueryOptions } from "@/hooks/access/cloud/use-cloud-workspace-connection";
-import { resolveWorkspaceConnection } from "@/lib/access/anyharness/resolve-workspace-connection";
-import { buildLogicalWorkspaces } from "@/lib/domain/workspaces/cloud/logical-workspaces";
-import { findLogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
+import { cloudWorkspaceConnectionQueryOptions } from "#product/hooks/access/cloud/use-cloud-workspace-connection";
+import { resolveWorkspaceConnection } from "#product/lib/access/anyharness/resolve-workspace-connection";
+import { buildLogicalWorkspaces } from "#product/lib/domain/workspaces/cloud/logical-workspaces";
+import { findLogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import {
   logicalWorkspaceCloudRuntimeMaterializationId,
   logicalWorkspaceTargetMaterializationId,
   resolveLogicalWorkspaceMaterializationId,
-} from "@/lib/domain/workspaces/cloud/logical-workspace-materialization";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { buildStandardRepoProjection } from "@/lib/domain/workspaces/cloud/standard-projection";
-import { cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
-import { getWorkspaceCollectionsFromCache } from "@/hooks/workspaces/cache/query-keys";
-import { withFreshCloudSandboxGatewayAccessToken } from "@/lib/access/cloud/cloud-sandbox-gateway";
+} from "#product/lib/domain/workspaces/cloud/logical-workspace-materialization";
+import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import { buildStandardRepoProjection } from "#product/lib/domain/workspaces/cloud/standard-projection";
+import { cloudMobilityWorkspacesKey } from "#product/hooks/access/cloud/query-keys";
+import { getWorkspaceCollectionsFromCache } from "#product/hooks/workspaces/cache/query-keys";
+import { withFreshCloudSandboxGatewayAccessToken } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 
 /**
  * Owns the AnyHarness workspace-connection resolver, including its React Query

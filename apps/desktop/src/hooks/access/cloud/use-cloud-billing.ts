@@ -10,11 +10,11 @@ import {
   getCloudBillingPlan,
   updateOverageSettings,
 } from "@proliferate/cloud-sdk/client/billing";
-import { desktopBillingReturnOptions } from "@/lib/access/cloud/billing-return";
-import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
-import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/cache/query-keys";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { cloudBillingKey, type CloudOwnerSelectionKey } from "@/hooks/access/cloud/query-keys";
+import { desktopBillingReturnOptions } from "#product/lib/access/cloud/billing-return";
+import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
+import { workspaceCollectionsScopeKey } from "#product/hooks/workspaces/cache/query-keys";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { cloudBillingKey, type CloudOwnerSelectionKey } from "#product/hooks/access/cloud/query-keys";
 
 function hasUsableBillingPlan(
   billingPlan: BillingPlanInfo | null | undefined,

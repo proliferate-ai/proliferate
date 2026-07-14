@@ -5,8 +5,8 @@ import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchFiel
 import type {
   RuntimePressureTargetState,
   useRuntimePressureControlState,
-} from "@/hooks/workspaces/facade/use-runtime-pressure-control-state";
-import { worktreeRowSearchText } from "@/lib/domain/workspaces/worktrees/worktree-inventory-presentation";
+} from "#product/hooks/workspaces/facade/use-runtime-pressure-control-state";
+import { worktreeRowSearchText } from "#product/lib/domain/workspaces/worktrees/worktree-inventory-presentation";
 import {
   EmptyWorktreeState,
   RuntimeWorktreeRow,
@@ -20,7 +20,7 @@ import {
   summarizeStorage,
   type WorktreeSortKey,
   type WorktreeStatusFilter,
-} from "./RuntimePressureWorktreeTable";
+} from "#product/components/workspace/chat/input/RuntimePressureWorktreeTable";
 
 export function RuntimePressureDetailsDialog({
   open,

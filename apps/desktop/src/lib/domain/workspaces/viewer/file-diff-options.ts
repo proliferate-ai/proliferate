@@ -6,7 +6,7 @@ import {
   fileDiffViewerTarget,
   type FileDiffViewerScope,
   type ViewerTarget,
-} from "@/lib/domain/workspaces/viewer/viewer-target";
+} from "#product/lib/domain/workspaces/viewer/viewer-target";
 
 export type FileDiffTarget = Extract<ViewerTarget, { kind: "fileDiff" }>;
 

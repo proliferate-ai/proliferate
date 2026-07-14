@@ -1,4 +1,4 @@
-import { isPendingWorkspaceUiKey } from "@/lib/domain/workspaces/creation/pending-entry";
+import { isPendingWorkspaceUiKey } from "#product/lib/domain/workspaces/creation/pending-entry";
 
 export function normalizePersistedLogicalWorkspaceSelection(
   value: string | null | undefined,

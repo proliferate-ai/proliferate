@@ -6,13 +6,13 @@ import {
 } from "@proliferate/product-ui/chat/transcript/MarkdownBody";
 import { CodeBlock } from "@proliferate/product-ui/code/CodeBlock";
 import { isExternalHttpLink } from "@proliferate/product-ui/chat/transcript/ProviderLinkMention";
-import { FilePathLink } from "@/components/content/ui/FilePathLink";
-import { useHighlightedTokens } from "@/hooks/ui/highlighting/use-highlighted-tokens";
+import { FilePathLink } from "#product/components/content/ui/FilePathLink";
+import { useHighlightedTokens } from "#product/hooks/ui/highlighting/use-highlighted-tokens";
 import {
   looksLikeFileReferenceHref,
   looksLikePath,
   splitPathLineSuffix,
-} from "@/lib/domain/files/path-detection";
+} from "#product/lib/domain/files/path-detection";
 
 /**
  * Desktop renderers injected into the product-ui transcript markdown

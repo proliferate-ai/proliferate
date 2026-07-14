@@ -1,8 +1,8 @@
 import { type ReactNode } from "react";
 import { ChevronDown } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { OpenTargetIcon } from "@/components/workspace/open-target/OpenTargetIcon";
-import { OpenTargetMenu, TargetIcon } from "./OpenTargetMenu";
+import { OpenTargetIcon } from "#product/components/workspace/open-target/OpenTargetIcon";
+import { OpenTargetMenu, TargetIcon } from "#product/components/workspace/open-target/OpenTargetMenu";
 import type { OpenTarget } from "@proliferate/product-client/host/desktop-bridge";
 
 interface SplitButtonProps {

@@ -1,11 +1,11 @@
 import type {
   DesktopLaunchModelRegistry as ModelRegistry,
   RuntimeAgentLaunchOptions,
-} from "@/lib/domain/agents/cloud-launch-catalog";
+} from "#product/lib/domain/agents/cloud-launch-catalog";
 import {
   mergeRuntimeLaunchOptionsIntoDesktopLaunchModelRegistries,
-} from "@/lib/domain/agents/cloud-launch-catalog";
-import type { SettingsAgentDefaultRow } from "@/lib/domain/settings/agent-defaults";
+} from "#product/lib/domain/agents/cloud-launch-catalog";
+import type { SettingsAgentDefaultRow } from "#product/lib/domain/settings/agent-defaults";
 
 const AGENT_DEFAULT_SECTION_ORDER: readonly string[] = [
   "claude",

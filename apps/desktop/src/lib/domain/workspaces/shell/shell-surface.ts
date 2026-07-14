@@ -1,5 +1,5 @@
 import type { Workspace } from "@anyharness/sdk";
-import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
+import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
 
 export type WorkspaceShellSurface = "standard" | "cowork";
 

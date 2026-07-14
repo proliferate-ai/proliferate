@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveCurrentModelDisplayName } from "./model-selector-current";
+import { resolveCurrentModelDisplayName } from "#product/lib/domain/chat/models/model-selector-current";
 
 describe("resolveCurrentModelDisplayName", () => {
   it("uses catalog labels for config-shaped live model ids", () => {

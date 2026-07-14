@@ -2,10 +2,10 @@ import { useMemo } from "react";
 import { useRepositories } from "@proliferate/cloud-sdk-react";
 import {
   buildSettingsRepositoryEntries,
-} from "@/lib/domain/settings/repositories";
-import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
-import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+} from "#product/lib/domain/settings/repositories";
+import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+import { useStandardRepoProjection } from "#product/hooks/workspaces/derived/use-standard-repo-projection";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 
 export function useSettingsRepositories() {
   const { localWorkspaces, repoRoots } = useStandardRepoProjection();

@@ -4,11 +4,11 @@ import {
   type StoredReviewDefaultsByKind,
   type StoredReviewKindDefaults,
   type StoredReviewKindReviewers,
-} from "@/lib/domain/reviews/review-config";
+} from "#product/lib/domain/reviews/review-config";
 import type {
   ReviewPersonalityPreference,
   StoredReviewPersonalitiesByKind,
-} from "@/lib/domain/reviews/review-personas";
+} from "#product/lib/domain/reviews/review-personas";
 
 type ReviewDefaultKind = "plan" | "code";
 

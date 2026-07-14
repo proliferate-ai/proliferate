@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractHunkPatch, isHunkActionEligible } from "./hunk-patch";
+import { extractHunkPatch, isHunkActionEligible } from "#product/lib/domain/files/hunk-patch";
 
 describe("isHunkActionEligible", () => {
   it("returns true for a normal edit patch", () => {

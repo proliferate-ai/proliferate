@@ -1,5 +1,5 @@
-import type { DelegatedWorkStatusCategory } from "@/lib/domain/delegated-work/model";
-import { delegatedWorkSummaryPriority } from "@/lib/domain/delegated-work/presentation";
+import type { DelegatedWorkStatusCategory } from "#product/lib/domain/delegated-work/model";
+import { delegatedWorkSummaryPriority } from "#product/lib/domain/delegated-work/presentation";
 
 export function compareDelegatedWorkStatus(
   left: DelegatedWorkStatusCategory,

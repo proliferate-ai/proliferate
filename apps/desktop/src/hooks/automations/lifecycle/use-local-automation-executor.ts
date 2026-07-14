@@ -1,6 +1,6 @@
-import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { useLocalAutomationClaimPoller } from "./use-local-automation-claim-poller";
+import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { useLocalAutomationClaimPoller } from "#product/hooks/automations/lifecycle/use-local-automation-claim-poller";
 
 // Owns mounting the local automation executor when cloud and local runtime are ready.
 // Does not own claim processing details or automation editor actions.

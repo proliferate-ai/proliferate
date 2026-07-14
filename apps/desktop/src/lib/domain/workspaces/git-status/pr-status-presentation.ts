@@ -1,9 +1,9 @@
 import type { PrStatusKind, PrStatusView } from "@proliferate/product-ui/workspaces/PrStatusBadge";
-import { formatRelativeTime } from "@/lib/domain/workspaces/display/workspace-display";
+import { formatRelativeTime } from "#product/lib/domain/workspaces/display/workspace-display";
 import type {
   WorkspaceGitStatus,
   WorkspacePrStatus,
-} from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
+} from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
 
 const PR_STATE_LABEL: Record<Exclude<WorkspacePrStatus["state"], "none">, string> = {
   open: "Open",

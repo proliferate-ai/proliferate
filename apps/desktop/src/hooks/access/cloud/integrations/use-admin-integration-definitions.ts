@@ -6,9 +6,9 @@ import {
   type CreateAdminIntegrationDefinitionRequest,
 } from "@proliferate/cloud-sdk/client/integrations";
 import { ProliferateClientError } from "@/lib/access/cloud/client";
-import { useProductAuthStatus } from "@/hooks/auth/facade/use-product-auth";
-import { cloudIntegrationAdminDefinitionsKey } from "./query-keys";
-import { useInvalidateCloudIntegrations } from "./use-integration-health";
+import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth";
+import { cloudIntegrationAdminDefinitionsKey } from "#product/hooks/access/cloud/integrations/query-keys";
+import { useInvalidateCloudIntegrations } from "#product/hooks/access/cloud/integrations/use-integration-health";
 
 export function useAdminIntegrationDefinitions(
   organizationId: string | null,

@@ -1,27 +1,27 @@
 import type { GitStatusSnapshot, RepoRoot } from "@anyharness/sdk";
 import type { RepoConfigResponse } from "@proliferate/cloud-sdk";
 import type { SidebarSessionActivityState } from "@proliferate/product-domain/sessions/activity";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
-import { repoRootGroupKey } from "@/lib/domain/workspaces/cloud/collections";
-import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
-import { parseLogicalWorkspaceId } from "@/lib/domain/workspaces/cloud/logical-workspace-id";
-import type { ComputeTargetAppearance } from "@/lib/domain/compute/target-appearance";
-import type { WorkspaceGitStatus } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
+import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
+import { repoRootGroupKey } from "#product/lib/domain/workspaces/cloud/collections";
+import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
+import { parseLogicalWorkspaceId } from "#product/lib/domain/workspaces/cloud/logical-workspace-id";
+import type { ComputeTargetAppearance } from "#product/lib/domain/compute/target-appearance";
+import type { WorkspaceGitStatus } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
 import type {
   SidebarGroupState,
-} from "@/lib/domain/workspaces/sidebar/sidebar-model";
-import { buildPendingSidebarProjection } from "@/lib/domain/workspaces/sidebar/pending-sidebar-projection";
-import { resolveSidebarWorkspaceTypes } from "@/lib/domain/workspaces/sidebar/sidebar-workspace-types";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-model";
+import { buildPendingSidebarProjection } from "#product/lib/domain/workspaces/sidebar/pending-sidebar-projection";
+import { resolveSidebarWorkspaceTypes } from "#product/lib/domain/workspaces/sidebar/sidebar-workspace-types";
 import {
   compareLogicalWorkspaceRecency,
   compareResolvedLogicalWorkspaceRecency,
   type LogicalWorkspaceRecency,
   resolveLogicalWorkspaceRecency,
-} from "@/lib/domain/workspaces/sidebar/recency";
+} from "#product/lib/domain/workspaces/sidebar/recency";
 import {
   buildSidebarWorkspaceItems,
   pendingOwnsLogicalWorkspace,
-} from "@/lib/domain/workspaces/sidebar/sidebar-workspace-items";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-workspace-items";
 
 function logicalGroupName(workspace: LogicalWorkspace): string {
   return workspace.repoName

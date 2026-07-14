@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
+import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 import {
   buildHomeModeControlDescriptor,
   buildHomeSessionConfigControls,
-} from "./home-composer-controls";
+} from "#product/lib/domain/home/home-composer-controls";
 
 const CODEX_ACCESS_MODES = [
   {

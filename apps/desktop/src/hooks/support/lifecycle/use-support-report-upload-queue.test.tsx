@@ -6,8 +6,8 @@ import type {
   SupportReportCompleteRequest,
   SupportReportCreateRequest,
 } from "@proliferate/cloud-sdk/types";
-import { useSupportReportUploadQueue } from "@/hooks/support/lifecycle/use-support-report-upload-queue";
-import type { SupportReportJob } from "@/lib/domain/support/report-types";
+import { useSupportReportUploadQueue } from "#product/hooks/support/lifecycle/use-support-report-upload-queue";
+import type { SupportReportJob } from "#product/lib/domain/support/report-types";
 
 const anyHarnessMocks = vi.hoisted(() => ({
   workspaceId: "workspace-1" as string | null,

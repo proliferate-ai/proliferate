@@ -1,9 +1,9 @@
-import type { ShortcutDef } from "@/config/shortcuts/types";
+import type { ShortcutDef } from "#product/config/shortcuts/types";
 import {
   getShortcutDisplayLabel,
   type ShortcutDigit,
-} from "@/lib/domain/shortcuts/matching";
-import { shortcutDigitForRangeIndex } from "@/lib/domain/shortcuts/range";
+} from "#product/lib/domain/shortcuts/matching";
+import { shortcutDigitForRangeIndex } from "#product/lib/domain/shortcuts/range";
 
 export function getShortcutRangeItemDisplayLabel(
   shortcut: Pick<ShortcutDef, "label" | "nonMacLabel">,

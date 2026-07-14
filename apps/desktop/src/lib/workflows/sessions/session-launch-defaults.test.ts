@@ -5,8 +5,8 @@ import type {
   Session,
   SessionLiveConfigSnapshot,
 } from "@anyharness/sdk";
-import type { SessionConfigModelRegistry as ModelRegistry } from "@/lib/domain/chat/launch/session-config";
-import { applySessionLaunchDefaults } from "@/lib/workflows/sessions/session-launch-defaults";
+import type { SessionConfigModelRegistry as ModelRegistry } from "#product/lib/domain/chat/launch/session-config";
+import { applySessionLaunchDefaults } from "#product/lib/workflows/sessions/session-launch-defaults";
 
 function control(
   key: string,

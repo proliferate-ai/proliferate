@@ -5,8 +5,8 @@ import {
   updateManualChatGroup,
   upsertManualChatGroup,
   type ManualChatGroup,
-} from "@/lib/domain/workspaces/tabs/manual-groups";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+} from "#product/lib/domain/workspaces/tabs/manual-groups";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 
 type ManualChatGroupUpdates = Partial<Pick<ManualChatGroup, "label" | "colorId">>;
 

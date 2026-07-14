@@ -2,12 +2,12 @@ import {
   resolveToggleState,
   type LiveSessionControlDescriptor,
   type SupportedLiveControlKey,
-} from "@/lib/domain/chat/session-controls/session-controls";
+} from "#product/lib/domain/chat/session-controls/session-controls";
 import {
   getPendingSessionConfigChange,
   type PendingSessionConfigChanges,
 } from "@proliferate/product-domain/sessions/pending-config";
-import type { DesktopAgentLaunchControl } from "@/lib/domain/agents/cloud-launch-catalog";
+import type { DesktopAgentLaunchControl } from "#product/lib/domain/agents/cloud-launch-catalog";
 
 export interface LaunchControlPreferences {
   defaultSessionModeByAgentKind: Record<string, string>;

@@ -1,14 +1,14 @@
 import { useCallback, useMemo } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { useOpenInDefaultEditor } from "@/hooks/editor/workflows/use-open-in-default-editor";
-import { useFuzzyFileResolver } from "@/hooks/workspaces/workflows/files/use-fuzzy-file-resolver";
-import { useWorkspaceShellActivation } from "@/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
-import { useWorkspacePath } from "@/providers/WorkspacePathProvider";
-import { resolveFileReference } from "@/lib/domain/files/path-references";
-import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/selection/workspace-ui-key";
-import { fileViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
+import { useOpenInDefaultEditor } from "#product/hooks/editor/workflows/use-open-in-default-editor";
+import { useFuzzyFileResolver } from "#product/hooks/workspaces/workflows/files/use-fuzzy-file-resolver";
+import { useWorkspaceShellActivation } from "#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
+import { useWorkspacePath } from "#product/providers/WorkspacePathProvider";
+import { resolveFileReference } from "#product/lib/domain/files/path-references";
+import { resolveSelectedWorkspaceIdentity } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
+import { fileViewerTarget } from "#product/lib/domain/workspaces/viewer/viewer-target";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
 
 interface UseFileReferenceActionsInput {
   rawPath: string;

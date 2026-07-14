@@ -1,7 +1,7 @@
 import {
   TERMINAL_FONT_FAMILY,
   type TerminalGrid,
-} from "@/lib/domain/terminals/terminal-grid";
+} from "#product/lib/domain/terminals/terminal-grid";
 
 // Elements that can host a terminal viewport advertise themselves with this
 // attribute (value = workspaceId) so terminal creation can measure the grid

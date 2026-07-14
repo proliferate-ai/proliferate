@@ -1,11 +1,11 @@
-import { CLOUD_COMPUTE_TEMPORARILY_DISABLED } from "./cloud-compute";
+import { CLOUD_COMPUTE_TEMPORARILY_DISABLED } from "#product/lib/domain/capabilities/cloud-compute";
 import type {
   DeploymentMode,
   PricingCapability,
   ServerCapabilityContract,
   SupportCapability,
   WebAppCapability,
-} from "./server-capability-contract";
+} from "#product/lib/domain/capabilities/server-capability-contract";
 
 /**
  * The app-wide capability state the desktop renders from.

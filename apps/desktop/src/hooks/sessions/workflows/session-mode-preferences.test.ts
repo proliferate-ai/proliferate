@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   persistDefaultSessionModePreference,
   shouldPersistDefaultSessionModePreference,
-} from "@/hooks/sessions/workflows/session-mode-preferences";
-import { USER_PREFERENCE_DEFAULTS } from "@/lib/domain/preferences/user/model";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+} from "#product/hooks/sessions/workflows/session-mode-preferences";
+import { USER_PREFERENCE_DEFAULTS } from "#product/lib/domain/preferences/user/model";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
 describe("session mode preferences", () => {
   beforeEach(() => {

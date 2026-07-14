@@ -4,7 +4,7 @@ import {
   resolveEditorTabChromeClasses,
   resolveStandardWorkspaceChromeClasses,
   resolveTerminalTabChromeClasses,
-} from "./workspace-chrome";
+} from "#product/lib/domain/preferences/workspace-chrome";
 
 describe("workspace chrome classes", () => {
   it("preserves standard shell classes", () => {

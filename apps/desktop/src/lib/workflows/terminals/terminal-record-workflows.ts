@@ -2,8 +2,8 @@ import type { CreateTerminalRequest, TerminalRecord } from "@anyharness/sdk";
 import {
   findReusableRunTerminalId,
   RUN_TERMINAL_TITLE,
-} from "@/lib/domain/terminals/run-terminal";
-import { DEFAULT_TERMINAL_GRID } from "@/lib/domain/terminals/terminal-grid";
+} from "#product/lib/domain/terminals/run-terminal";
+import { DEFAULT_TERMINAL_GRID } from "#product/lib/domain/terminals/terminal-grid";
 
 export type CloseTerminalResult = "closed" | "missing" | "blocked" | "failed";
 

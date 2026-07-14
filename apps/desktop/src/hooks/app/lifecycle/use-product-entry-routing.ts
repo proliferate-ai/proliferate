@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import type { ProductEntry } from "@proliferate/product-client/host/product-host";
-import { productEntryRoute } from "@/lib/domain/auth/desktop-navigation";
+import { productEntryRoute } from "#product/lib/domain/auth/desktop-navigation";
 
 /**
  * The single inbound-navigation seam. Subscribes ONCE to the host's inbound

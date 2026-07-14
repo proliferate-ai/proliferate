@@ -1,14 +1,14 @@
 import type {
   HeaderStripRow,
-} from "@/lib/domain/workspaces/tabs/group-rows";
+} from "#product/lib/domain/workspaces/tabs/group-rows";
 import {
   chatWorkspaceShellTabKey,
   type WorkspaceShellTab,
   type WorkspaceShellTabKey,
   viewerWorkspaceShellTabKey,
-} from "@/lib/domain/workspaces/tabs/shell-tabs";
-import type { GroupedChatTab } from "@/lib/domain/workspaces/tabs/grouping";
-import { viewerTargetKey, type ViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
+} from "#product/lib/domain/workspaces/tabs/shell-tabs";
+import type { GroupedChatTab } from "#product/lib/domain/workspaces/tabs/grouping";
+import { viewerTargetKey, type ViewerTarget } from "#product/lib/domain/workspaces/viewer/viewer-target";
 
 export interface ShellChatTab extends GroupedChatTab {
   id: string;

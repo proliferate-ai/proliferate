@@ -2,8 +2,8 @@
 
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { USER_PREFERENCE_DEFAULTS } from "@/lib/domain/preferences/user/model";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+import { USER_PREFERENCE_DEFAULTS } from "#product/lib/domain/preferences/user/model";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
 const accessMocks = vi.hoisted(() => ({
   updater: {
@@ -39,7 +39,7 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   useProductHost: () => ({ links: { openExternal: accessMocks.openExternal } }),
 }));
 
-import { useReleaseNotice } from "./use-release-notice";
+import { useReleaseNotice } from "#product/hooks/updates/facade/use-release-notice";
 
 describe("useReleaseNotice", () => {
   beforeEach(() => {

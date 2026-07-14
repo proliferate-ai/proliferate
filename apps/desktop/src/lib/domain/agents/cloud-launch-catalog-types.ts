@@ -1,4 +1,4 @@
-import type { ModelAvailability } from "./model-availability";
+import type { ModelAvailability } from "#product/lib/domain/agents/model-availability";
 
 export type DesktopAgentCatalogStatus = "candidate" | "active" | "deprecated" | "hidden";
 

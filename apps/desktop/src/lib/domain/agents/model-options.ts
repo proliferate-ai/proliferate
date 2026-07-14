@@ -1,5 +1,5 @@
-import { compareChatLaunchKinds } from "@/config/chat-launch";
-import type { DesktopAgentCatalogStatus } from "@/lib/domain/agents/cloud-launch-catalog";
+import { compareChatLaunchKinds } from "#product/config/chat-launch";
+import type { DesktopAgentCatalogStatus } from "#product/lib/domain/agents/cloud-launch-catalog";
 
 export interface AgentModelSelection {
   kind: string;

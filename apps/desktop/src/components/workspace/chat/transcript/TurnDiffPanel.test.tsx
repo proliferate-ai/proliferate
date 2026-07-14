@@ -6,9 +6,9 @@ import { ProductHostProvider } from "@proliferate/product-client/host/ProductHos
 import {
   PLAYGROUND_END_TURN_DIFF_TRANSCRIPT,
   PLAYGROUND_PATCH_README,
-} from "@/lib/domain/chat/__fixtures__/playground/git-diff-fixtures";
-import { toolCallItem } from "@/lib/domain/chat/__fixtures__/playground/tool-call-item-fixture";
-import { TurnDiffPanel } from "./TurnDiffPanel";
+} from "#product/lib/domain/chat/__fixtures__/playground/git-diff-fixtures";
+import { toolCallItem } from "#product/lib/domain/chat/__fixtures__/playground/tool-call-item-fixture";
+import { TurnDiffPanel } from "#product/components/workspace/chat/transcript/TurnDiffPanel";
 
 const webTestHost = { desktop: null } as ProductHost;
 

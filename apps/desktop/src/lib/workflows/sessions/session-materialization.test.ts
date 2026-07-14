@@ -2,7 +2,7 @@ import { describe, expect, it, vi, afterEach } from "vitest";
 import {
   waitForSessionMaterialization,
   type SessionMaterializationDeps,
-} from "./session-materialization";
+} from "#product/lib/workflows/sessions/session-materialization";
 
 describe("waitForSessionMaterialization", () => {
   afterEach(() => {

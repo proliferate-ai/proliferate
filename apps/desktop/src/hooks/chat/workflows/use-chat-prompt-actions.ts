@@ -1,46 +1,46 @@
 import { useCallback } from "react";
 import type { ContentPart, PromptInputBlock } from "@anyharness/sdk";
-import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
-import { useWorkspaceSetupStatusCache } from "@/hooks/access/anyharness/workspaces/use-workspace-setup-status-cache";
-import { useSessionCreationActions } from "@/hooks/sessions/workflows/use-session-creation-actions";
-import { useSessionRuntimeActions } from "@/hooks/sessions/workflows/use-session-runtime-actions";
-import { useSessionPromptWorkflow } from "@/hooks/sessions/workflows/use-session-prompt-workflow";
-import { useSessionCancelActions } from "@/hooks/sessions/workflows/use-session-cancel-actions";
-import { useSessionFindOrCreateActions } from "@/hooks/sessions/workflows/use-session-find-or-create-actions";
-import { useSessionPromptActions } from "@/hooks/sessions/workflows/use-session-prompt-actions";
-import { useSessionSelectionActions } from "@/hooks/sessions/facade/use-session-selection-actions";
-import { useChatInputStore } from "@/stores/chat/chat-input-store";
-import { useToastStore } from "@/stores/toast/toast-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useActiveSessionLaunchState } from "@/hooks/chat/derived/use-active-session-config-state";
-import { useActiveSessionSurfaceSnapshot } from "@/hooks/chat/derived/use-active-session-transcript-state";
-import { useChatAvailabilityState } from "@/hooks/chat/derived/use-chat-availability-state";
-import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
-import { resolveAvailableLaunchSelection } from "@/lib/domain/chat/models/launch-selection-defaults";
+import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
+import { useWorkspaceSetupStatusCache } from "#product/hooks/access/anyharness/workspaces/use-workspace-setup-status-cache";
+import { useSessionCreationActions } from "#product/hooks/sessions/workflows/use-session-creation-actions";
+import { useSessionRuntimeActions } from "#product/hooks/sessions/workflows/use-session-runtime-actions";
+import { useSessionPromptWorkflow } from "#product/hooks/sessions/workflows/use-session-prompt-workflow";
+import { useSessionCancelActions } from "#product/hooks/sessions/workflows/use-session-cancel-actions";
+import { useSessionFindOrCreateActions } from "#product/hooks/sessions/workflows/use-session-find-or-create-actions";
+import { useSessionPromptActions } from "#product/hooks/sessions/workflows/use-session-prompt-actions";
+import { useSessionSelectionActions } from "#product/hooks/sessions/facade/use-session-selection-actions";
+import { useChatInputStore } from "#product/stores/chat/chat-input-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useActiveSessionLaunchState } from "#product/hooks/chat/derived/use-active-session-config-state";
+import { useActiveSessionSurfaceSnapshot } from "#product/hooks/chat/derived/use-active-session-transcript-state";
+import { useChatAvailabilityState } from "#product/hooks/chat/derived/use-chat-availability-state";
+import { useConfiguredLaunchReadiness } from "#product/hooks/chat/derived/use-configured-launch-readiness";
+import { resolveAvailableLaunchSelection } from "#product/lib/domain/chat/models/launch-selection-defaults";
 import {
   EMPTY_CHAT_DRAFT,
   serializeChatDraftToPrompt,
-} from "@/lib/domain/chat/composer/file-mention-draft-model";
+} from "#product/lib/domain/chat/composer/file-mention-draft-model";
 import {
   createEmptySessionRecord,
   putSessionRecord,
-} from "@/stores/sessions/session-records";
-import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
-import { buildPendingWorkspaceUiKey } from "@/lib/domain/workspaces/creation/pending-entry";
-import { createPendingSessionId } from "@/lib/workflows/sessions/session-runtime";
-import { writeChatShellIntentForSession } from "@/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
-import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
-import { hasPromptContent } from "@/lib/domain/chat/composer/prompt-input";
+} from "#product/stores/sessions/session-records";
+import { resolveWorkspaceUiKey } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
+import { buildPendingWorkspaceUiKey } from "#product/lib/domain/workspaces/creation/pending-entry";
+import { createPendingSessionId } from "#product/lib/workflows/sessions/session-runtime";
+import { writeChatShellIntentForSession } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
+import { createPromptId } from "#product/lib/domain/chat/composer/prompt-id";
+import { hasPromptContent } from "#product/lib/domain/chat/composer/prompt-input";
 import type { PromptAttachmentSnapshot } from "@proliferate/product-domain/chats/composer/prompt-attachment-snapshot";
 import { finishOrCancelMeasurementOperation } from "@/lib/infra/measurement/debug-measurement";
-import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
+import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import {
   failLatencyFlow,
   startLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
-import { useGitPromptSnapshotEffects } from "@/hooks/workspaces/workflows/use-git-prompt-snapshot-effects";
-import { completeChatPromptSubmitSideEffects } from "@/lib/workflows/chat/complete-chat-prompt-submit-side-effects";
+import { useGitPromptSnapshotEffects } from "#product/hooks/workspaces/workflows/use-git-prompt-snapshot-effects";
+import { completeChatPromptSubmitSideEffects } from "#product/lib/workflows/chat/complete-chat-prompt-submit-side-effects";
 
 export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
   const forceNewSession = options?.forceNewSession ?? false;

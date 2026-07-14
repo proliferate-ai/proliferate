@@ -7,15 +7,15 @@ import {
   SESSION_CONTROL_ACCESSORS,
   SESSION_CONTROL_ORDER,
   type SupportedLiveControlKey,
-} from "@/config/session-controls";
-import { SESSION_CONTROL_LABELS } from "@/lib/domain/chat/session-controls/presentation";
+} from "#product/config/session-controls";
+import { SESSION_CONTROL_LABELS } from "#product/lib/domain/chat/session-controls/presentation";
 import {
   resolveDisplayedSessionControlState,
   type PendingSessionConfigChangeStatus,
   type PendingSessionConfigChanges,
 } from "@proliferate/product-domain/sessions/pending-config";
 
-export type { SupportedLiveControlKey } from "@/config/session-controls";
+export type { SupportedLiveControlKey } from "#product/config/session-controls";
 
 export interface LiveSessionControlOption {
   value: string;

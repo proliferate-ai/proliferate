@@ -5,7 +5,7 @@ import {
   directoryEntryEqual,
   normalizeDirectoryEntryInput,
   normalizePatchedDirectoryEntry,
-} from "@/lib/domain/sessions/directory/directory-entry";
+} from "#product/lib/domain/sessions/directory/directory-entry";
 
 describe("session directory entry model", () => {
   it("normalizes defaults, existing values, activity overlays, and relationship hints", () => {

@@ -1,25 +1,25 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { MainSidebarPageShell } from "@/components/workspace/shell/screen/MainSidebarPageShell";
-import { AutomationEditorModal } from "@/components/automations/editor/AutomationEditorModal";
-import { useAutomationActions } from "@/hooks/automations/workflows/use-automation-actions";
-import { useAutomationRunOpenActions } from "@/hooks/automations/workflows/use-automation-run-open-actions";
+import { MainSidebarPageShell } from "#product/components/workspace/shell/screen/MainSidebarPageShell";
+import { AutomationEditorModal } from "#product/components/automations/editor/AutomationEditorModal";
+import { useAutomationActions } from "#product/hooks/automations/workflows/use-automation-actions";
+import { useAutomationRunOpenActions } from "#product/hooks/automations/workflows/use-automation-run-open-actions";
 import {
   useAutomationDetail,
   useAutomationRuns,
   useAutomations,
 } from "@/hooks/access/cloud/automations/use-automations";
 import { useAgentRunConfig } from "@/hooks/access/cloud/agent-run-configs/use-agent-run-configs";
-import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
-import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
+import { useIsAdmin } from "#product/hooks/access/cloud/organizations/use-is-admin";
+import { buildCloudRepoSettingsHref } from "#product/lib/domain/settings/navigation";
 import type {
   AutomationRecord,
   AutomationRunRecord,
   CreateAutomationInput,
   UpdateAutomationInput,
-} from "@/lib/domain/automations/run/ui-records";
-import type { AutomationOwnerScope } from "@/lib/domain/automations/run/types";
-import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
+} from "#product/lib/domain/automations/run/ui-records";
+import type { AutomationOwnerScope } from "#product/lib/domain/automations/run/types";
+import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
 import {
   buildAutomationCalendarWeek,
   buildAutomationInventoryItems,

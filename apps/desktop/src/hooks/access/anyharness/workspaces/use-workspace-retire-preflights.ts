@@ -5,8 +5,8 @@ import {
 } from "@anyharness/sdk-react";
 import { useQueries, type UseQueryResult } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { getWorkspaceRetirePreflight } from "@/lib/access/anyharness/workspaces";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { getWorkspaceRetirePreflight } from "#product/lib/access/anyharness/workspaces";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
 export type WorkspaceRetirePreflightQuery =
   UseQueryResult<WorkspaceRetirePreflightResponse, Error>;

@@ -1,20 +1,20 @@
 import { useMemo } from "react";
 import { selectPrimaryPendingInteraction } from "@anyharness/sdk";
-import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
-import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { resolveCloudWorkspaceStatus } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
+import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
+import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import { resolveCloudWorkspaceStatus } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
 import {
   resolveChatInputAvailability,
   type ChatInputAvailabilityState,
-} from "@/lib/domain/chat/composer/chat-input";
-import { launchSelectionIsAvailable } from "@/lib/domain/chat/models/launch-selection-defaults";
-import { getProviderDisplayName } from "@/lib/domain/agents/provider-display";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
-import { useActiveSessionLaunchState } from "@/hooks/chat/derived/use-active-session-config-state";
+} from "#product/lib/domain/chat/composer/chat-input";
+import { launchSelectionIsAvailable } from "#product/lib/domain/chat/models/launch-selection-defaults";
+import { getProviderDisplayName } from "#product/lib/domain/agents/provider-display";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useConfiguredLaunchReadiness } from "#product/hooks/chat/derived/use-configured-launch-readiness";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
+import { useActiveSessionLaunchState } from "#product/hooks/chat/derived/use-active-session-config-state";
 
 export type ChatAvailabilityState = ChatInputAvailabilityState;
 

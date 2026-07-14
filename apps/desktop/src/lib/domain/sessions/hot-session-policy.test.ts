@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   type ResolveHotSessionTargetsInput,
   resolveHotSessionTargets,
-} from "@/lib/domain/sessions/hot-session-policy";
+} from "#product/lib/domain/sessions/hot-session-policy";
 
 type HotSessionDirectoryEntry = NonNullable<
   ResolveHotSessionTargetsInput["directoryEntriesById"][string]

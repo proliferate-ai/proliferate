@@ -6,10 +6,10 @@ import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   scratchMarkdownLanguage,
-} from "@/hooks/workspaces/lifecycle/scratch-codemirror-extensions";
+} from "#product/hooks/workspaces/lifecycle/scratch-codemirror-extensions";
 import {
   scratchLivePreview,
-} from "@/hooks/workspaces/lifecycle/scratch-codemirror-live-preview";
+} from "#product/hooks/workspaces/lifecycle/scratch-codemirror-live-preview";
 
 let view: EditorView | null = null;
 let hasFocusSpy: ReturnType<typeof vi.spyOn> | null = null;

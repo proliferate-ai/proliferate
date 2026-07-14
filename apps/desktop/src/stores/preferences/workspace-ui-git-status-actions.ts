@@ -1,6 +1,6 @@
-import type { PersistedWorkspaceGitStatusSnapshot } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
-import { gitStatusSnapshotsMateriallyEqual } from "@/lib/domain/workspaces/git-status/workspace-git-status-snapshots";
-import type { WorkspaceUiGet, WorkspaceUiSet, WorkspaceUiState } from "@/stores/preferences/workspace-ui-store-types";
+import type { PersistedWorkspaceGitStatusSnapshot } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
+import { gitStatusSnapshotsMateriallyEqual } from "#product/lib/domain/workspaces/git-status/workspace-git-status-snapshots";
+import type { WorkspaceUiGet, WorkspaceUiSet, WorkspaceUiState } from "#product/stores/preferences/workspace-ui-store-types";
 
 type WorkspaceUiGitStatusActions = Pick<
   WorkspaceUiState,

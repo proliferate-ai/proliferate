@@ -1,8 +1,8 @@
 import { type CSSProperties, type ReactNode } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ArrowUpRight, ChevronDown } from "@proliferate/ui/icons";
-import { FileChangeStats } from "@/components/content/ui/FileChangeStats";
-import { ChatDiffLineWrapContextMenu } from "@/components/content/ui/diff/ChatDiffLineWrapContextMenu";
+import { FileChangeStats } from "#product/components/content/ui/FileChangeStats";
+import { ChatDiffLineWrapContextMenu } from "#product/components/content/ui/diff/ChatDiffLineWrapContextMenu";
 
 interface FileDiffCardProps {
   filePath: string;

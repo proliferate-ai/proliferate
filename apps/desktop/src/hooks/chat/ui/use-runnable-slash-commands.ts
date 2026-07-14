@@ -1,9 +1,9 @@
 import { useMemo } from "react";
-import { useActiveSessionTranscript } from "@/hooks/chat/derived/use-active-session-transcript-state";
+import { useActiveSessionTranscript } from "#product/hooks/chat/derived/use-active-session-transcript-state";
 import {
   filterDesktopRunnableSessionSlashCommands,
   type SessionSlashCommandViewModel,
-} from "@/lib/domain/chat/composer/session-slash-command-policy";
+} from "#product/lib/domain/chat/composer/session-slash-command-policy";
 
 const EMPTY: readonly SessionSlashCommandViewModel[] = [];
 

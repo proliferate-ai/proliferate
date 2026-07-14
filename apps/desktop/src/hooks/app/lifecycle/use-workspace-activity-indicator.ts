@@ -2,16 +2,16 @@ import { useEffect, useMemo } from "react";
 import { resolveSessionSidebarActivityState } from "@proliferate/product-domain/sessions/activity";
 import type { DesktopNativeUiBridge } from "@proliferate/product-client/host/desktop-bridge";
 import { useShallow } from "zustand/react/shallow";
-import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
-import { useWorkspaceSidebarActivityStatesWithErrorAttention } from "@/hooks/workspaces/derived/use-workspace-sidebar-activities";
-import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
+import { useLogicalWorkspaces } from "#product/hooks/workspaces/derived/use-logical-workspaces";
+import { useWorkspaceSidebarActivityStatesWithErrorAttention } from "#product/hooks/workspaces/derived/use-workspace-sidebar-activities";
+import { activitySnapshotFromDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-activity";
 import {
   buildWorkspaceActivityIndicatorSnapshot,
-} from "@/lib/domain/workspaces/sidebar/workspace-activity-indicator";
-import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+} from "#product/lib/domain/workspaces/sidebar/workspace-activity-indicator";
+import { useDeferredHomeLaunchStore } from "#product/stores/home/deferred-home-launch-store";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 const EMPTY_LAST_VIEWED_SESSION_ERROR_AT_BY_SESSION: Record<string, string> = {};
 let lastWorkspaceActivityIndicatorPayloadSignature: string | null = null;

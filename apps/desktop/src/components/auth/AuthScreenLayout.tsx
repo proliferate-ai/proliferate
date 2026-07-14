@@ -1,14 +1,14 @@
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { ProliferateLivingMark } from "@proliferate/product-ui/brand/ProliferateLivingMark";
 import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
-import { AuthAppearanceBoundary } from "@/components/auth/AuthAppearanceBoundary";
-import { ConnectServerDialog } from "@/components/auth/ConnectServerDialog";
-import { PasswordSignInForm } from "@/components/auth/PasswordSignInForm";
-import { ThinkingText } from "@/components/feedback/ThinkingText";
+import { AuthAppearanceBoundary } from "#product/components/auth/AuthAppearanceBoundary";
+import { ConnectServerDialog } from "#product/components/auth/ConnectServerDialog";
+import { PasswordSignInForm } from "#product/components/auth/PasswordSignInForm";
+import { ThinkingText } from "#product/components/feedback/ThinkingText";
 import { useConnectServer } from "@/hooks/auth/workflows/use-connect-server";
 import { ArrowRight, GitHub } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { AUTH_LOGIN_LABELS, AUTH_SCREEN_LABELS, CONNECT_SERVER_LABELS } from "@/copy/auth/auth-copy";
+import { AUTH_LOGIN_LABELS, AUTH_SCREEN_LABELS, CONNECT_SERVER_LABELS } from "#product/copy/auth/auth-copy";
 
 // Shared shell for the initial page (loading -> auth). The SAME element tree is
 // rendered in both modes so React never re-mounts the living mark — its

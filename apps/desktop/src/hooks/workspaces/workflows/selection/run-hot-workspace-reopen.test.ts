@@ -1,16 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import {
   createEmptySessionRecord,
   putSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
-import { runHotWorkspaceReopen } from "./run-hot-workspace-reopen";
-import { resolveCloudWorkspaceReadiness } from "./cloud-readiness";
-import { resolveSelectionConnection } from "./connection";
-import type { WorkspaceSelectionDeps } from "./types";
+} from "#product/stores/sessions/session-records";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
+import { runHotWorkspaceReopen } from "#product/hooks/workspaces/workflows/selection/run-hot-workspace-reopen";
+import { resolveCloudWorkspaceReadiness } from "#product/hooks/workspaces/workflows/selection/cloud-readiness";
+import { resolveSelectionConnection } from "#product/hooks/workspaces/workflows/selection/connection";
+import type { WorkspaceSelectionDeps } from "#product/hooks/workspaces/workflows/selection/types";
 
 vi.mock("./cloud-readiness", () => ({
   resolveCloudWorkspaceReadiness: vi.fn(),

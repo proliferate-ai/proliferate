@@ -1,5 +1,5 @@
 import { forwardRef, useImperativeHandle, useRef } from "react";
-import { useScratchCodeMirrorEditor } from "@/hooks/workspaces/lifecycle/use-scratch-codemirror-editor";
+import { useScratchCodeMirrorEditor } from "#product/hooks/workspaces/lifecycle/use-scratch-codemirror-editor";
 
 export interface ScratchCodeMirrorEditorHandle {
   insertChecklistItem: () => boolean;

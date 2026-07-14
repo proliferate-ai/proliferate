@@ -2,11 +2,11 @@
 
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useShortcutDispatcher } from "@/hooks/shortcuts/lifecycle/use-shortcut-dispatcher";
+import { useShortcutDispatcher } from "#product/hooks/shortcuts/lifecycle/use-shortcut-dispatcher";
 import {
   clearShortcutHandlerRegistryForTests,
   registerShortcutHandler,
-} from "@/lib/domain/shortcuts/registry";
+} from "#product/lib/domain/shortcuts/registry";
 
 describe("useShortcutDispatcher", () => {
   beforeEach(() => {

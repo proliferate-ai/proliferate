@@ -1,23 +1,23 @@
 import { useCallback } from "react";
-import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-handler";
+import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
 import {
   getWorkspaceShellTabKey,
   isSameWorkspaceShellTab,
   parseWorkspaceShellTabKey,
   type WorkspaceShellTab,
-} from "@/lib/domain/workspaces/tabs/shell-tabs";
-import { resolveNextShellTabAfterClose } from "@/lib/domain/workspaces/tabs/shell-activation";
+} from "#product/lib/domain/workspaces/tabs/shell-tabs";
+import { resolveNextShellTabAfterClose } from "#product/lib/domain/workspaces/tabs/shell-activation";
 import type {
   WorkspaceFileBuffer,
-} from "@/stores/editor/workspace-file-buffers-store";
-import { useWorkspaceShellActivation } from "@/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
+} from "#product/stores/editor/workspace-file-buffers-store";
+import { useWorkspaceShellActivation } from "#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
 import {
   fileViewerTarget,
   viewerTargetEditablePath,
   viewerTargetKey,
   type ViewerTargetKey,
-} from "@/lib/domain/workspaces/viewer/viewer-target";
-import { useWorkspaceFileBuffersStore } from "@/stores/editor/workspace-file-buffers-store";
+} from "#product/lib/domain/workspaces/viewer/viewer-target";
+import { useWorkspaceFileBuffersStore } from "#product/stores/editor/workspace-file-buffers-store";
 
 function isStringPath(path: string | null): path is string {
   return path !== null;

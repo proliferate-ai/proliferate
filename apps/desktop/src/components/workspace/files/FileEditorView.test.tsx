@@ -7,11 +7,11 @@ import {
   fileDiffViewerTarget,
   viewerTargetKey,
   type ViewerTarget,
-} from "@/lib/domain/workspaces/viewer/viewer-target";
-import { useContentSearchStore } from "@/stores/search/content-search-store";
-import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
-import { useFileTreeStore } from "@/stores/editor/file-tree-store";
-import { FileEditorView } from "./FileEditorView";
+} from "#product/lib/domain/workspaces/viewer/viewer-target";
+import { useContentSearchStore } from "#product/stores/search/content-search-store";
+import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
+import { useFileTreeStore } from "#product/stores/editor/file-tree-store";
+import { FileEditorView } from "#product/components/workspace/files/FileEditorView";
 
 const readWorkspaceFileQuery = vi.fn();
 const gitDiffQuery = vi.fn();

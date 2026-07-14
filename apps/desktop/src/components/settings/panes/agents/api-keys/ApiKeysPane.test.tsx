@@ -3,8 +3,8 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ProliferateClientError } from "@proliferate/cloud-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiKeysPane } from "./ApiKeysPane";
-import { AGENT_API_KEYS_COPY } from "@/copy/settings/agent-api-keys-copy";
+import { ApiKeysPane } from "#product/components/settings/panes/agents/api-keys/ApiKeysPane";
+import { AGENT_API_KEYS_COPY } from "#product/copy/settings/agent-api-keys-copy";
 
 const state = vi.hoisted(() => ({
   cloudActive: true,

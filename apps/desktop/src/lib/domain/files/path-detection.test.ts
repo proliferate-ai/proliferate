@@ -3,7 +3,7 @@ import {
   looksLikeFileReferenceHref,
   looksLikePath,
   splitPathLineSuffix,
-} from "./path-detection";
+} from "#product/lib/domain/files/path-detection";
 
 describe("looksLikePath", () => {
   it("accepts relative paths with extensions", () => {

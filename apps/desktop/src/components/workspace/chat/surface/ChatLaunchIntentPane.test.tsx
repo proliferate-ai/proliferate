@@ -2,9 +2,9 @@
 
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ChatLaunchIntentPane } from "./ChatLaunchIntentPane";
-import type { ChatLaunchIntent } from "@/lib/domain/chat/launch/launch-intent";
-import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
+import { ChatLaunchIntentPane } from "#product/components/workspace/chat/surface/ChatLaunchIntentPane";
+import type { ChatLaunchIntent } from "#product/lib/domain/chat/launch/launch-intent";
+import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 
 vi.mock("@/hooks/chat/workflows/use-chat-launch-intent-actions", () => ({
   useChatLaunchIntentActions: () => ({

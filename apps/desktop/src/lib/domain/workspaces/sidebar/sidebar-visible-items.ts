@@ -1,4 +1,4 @@
-import type { SidebarGroupState } from "@/lib/domain/workspaces/sidebar/sidebar-model";
+import type { SidebarGroupState } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 
 export function visibleSidebarGroupItems(args: {
   group: SidebarGroupState;

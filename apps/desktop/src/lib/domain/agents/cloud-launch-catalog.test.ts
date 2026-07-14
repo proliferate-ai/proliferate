@@ -3,7 +3,7 @@ import {
   buildDesktopLaunchModelRegistries,
   mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents,
   projectCloudAgentCatalogToDesktopLaunchCatalog,
-} from "@/lib/domain/agents/cloud-launch-catalog";
+} from "#product/lib/domain/agents/cloud-launch-catalog";
 
 function cloudCatalog(): Parameters<typeof projectCloudAgentCatalogToDesktopLaunchCatalog>[0] {
   return {

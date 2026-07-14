@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { connectFeed, type FeedStreamHandle } from "@anyharness/sdk";
 import type { FeedRefWire } from "@proliferate/product-domain/activity/process";
-import { useTerminalWorkspaceConnection } from "@/hooks/terminals/workflows/use-terminal-workspace-connection";
-import { appendCappedFeedContent } from "@/hooks/activity/derived/feed-content-buffer";
+import { useTerminalWorkspaceConnection } from "#product/hooks/terminals/workflows/use-terminal-workspace-connection";
+import { appendCappedFeedContent } from "#product/hooks/activity/derived/feed-content-buffer";
 
 export interface FeedStreamState {
   /** Accumulated feed content (terminal bytes decoded as UTF-8, or text lines). */

@@ -8,7 +8,7 @@ import {
   isRowComplete,
   isValidEnvVarName,
   type EditableApiKeyRow,
-} from "./harness-auth-sources";
+} from "#product/lib/domain/settings/harness-auth-sources";
 
 function selection(
   overrides: Partial<AgentAuthSelection> = {},

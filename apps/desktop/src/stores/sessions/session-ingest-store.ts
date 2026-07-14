@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { HotSessionTarget } from "@/lib/domain/sessions/hot-session-policy";
+import type { HotSessionTarget } from "#product/lib/domain/sessions/hot-session-policy";
 
 export type SessionIngestFreshness = "current" | "warming" | "stale" | "cold";
 

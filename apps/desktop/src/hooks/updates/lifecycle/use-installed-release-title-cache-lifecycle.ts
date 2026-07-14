@@ -3,8 +3,8 @@ import {
   normalizeReleaseTitlePair,
   type DesktopReleaseManifest,
   type InstalledReleaseManifestStatus,
-} from "@/lib/domain/updates/release-notice";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+} from "#product/lib/domain/updates/release-notice";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
 // Keeps exactly one valid current installed version/title pair as the quiet
 // offline fallback. A successful no-title manifest clears any stale pair.

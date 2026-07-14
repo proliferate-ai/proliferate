@@ -1,4 +1,4 @@
-import type { WorktreeSettingsTarget } from "@/lib/domain/workspaces/worktrees/worktree-settings-target";
+import type { WorktreeSettingsTarget } from "#product/lib/domain/workspaces/worktrees/worktree-settings-target";
 
 export function worktreeSettingsTargetInventoryKey(target: WorktreeSettingsTarget) {
   return [

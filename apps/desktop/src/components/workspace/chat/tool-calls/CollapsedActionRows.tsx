@@ -15,11 +15,11 @@ import {
   formatParsedCommandLabel,
   formatSearchLabel,
 } from "@proliferate/product-domain/chats/tools/collapsed-action-labels";
-import { CommandActionRow } from "./CollapsedCommandActionRow";
-import { CollapsedActionIcon } from "./CollapsedActionIcon";
-import { EditRows } from "./CollapsedEditActionRows";
-import { GenericActionRow } from "./CollapsedGenericActionRow";
-import { PlainActionRow } from "./CollapsedActionRowPrimitives";
+import { CommandActionRow } from "#product/components/workspace/chat/tool-calls/CollapsedCommandActionRow";
+import { CollapsedActionIcon } from "#product/components/workspace/chat/tool-calls/CollapsedActionIcon";
+import { EditRows } from "#product/components/workspace/chat/tool-calls/CollapsedEditActionRows";
+import { GenericActionRow } from "#product/components/workspace/chat/tool-calls/CollapsedGenericActionRow";
+import { PlainActionRow } from "#product/components/workspace/chat/tool-calls/CollapsedActionRowPrimitives";
 
 export function CollapsedActionRows({ item }: { item: ToolCallItem }) {
   const parsedCommands = getToolCallParsedCommands(item);

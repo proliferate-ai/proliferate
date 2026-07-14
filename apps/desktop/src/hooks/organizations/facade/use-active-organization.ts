@@ -1,6 +1,6 @@
-import { useOrganizations } from "@/hooks/access/cloud/organizations/use-organizations";
-import { useOrganizationSelectionActions } from "@/hooks/organizations/workflows/use-organization-selection-actions";
-import { useOrganizationStore } from "@/stores/organizations/organization-store";
+import { useOrganizations } from "#product/hooks/access/cloud/organizations/use-organizations";
+import { useOrganizationSelectionActions } from "#product/hooks/organizations/workflows/use-organization-selection-actions";
+import { useOrganizationStore } from "#product/stores/organizations/organization-store";
 
 const EMPTY_ORGANIZATIONS: never[] = [];
 

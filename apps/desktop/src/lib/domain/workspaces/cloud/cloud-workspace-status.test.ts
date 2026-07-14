@@ -4,16 +4,16 @@ import {
   buildCloudWorkspaceStatusScreenModel,
   descriptionForStartBlockReason,
   type CloudWorkspaceStatusScreenModel,
-} from "@/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
 import {
   isCloudWorkspaceFailedBeforeReady,
   shouldShowCloudWorkspaceStatusScreen,
-} from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
-import { CLOUD_STATUS_COMPACT_COPY } from "@/copy/cloud/cloud-status-copy";
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
+import { CLOUD_STATUS_COMPACT_COPY } from "#product/copy/cloud/cloud-status-copy";
 import type {
   CloudWorkspaceStatus,
   CloudWorkspaceSummary,
-} from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
 
 function makeCloudWorkspace(
   overrides: Partial<CloudWorkspaceSummary> = {},

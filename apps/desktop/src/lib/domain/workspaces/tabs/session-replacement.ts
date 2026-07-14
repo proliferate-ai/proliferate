@@ -1,8 +1,8 @@
 import {
   chatWorkspaceShellTabKey,
   type WorkspaceShellTabKey,
-} from "@/lib/domain/workspaces/tabs/shell-tabs";
-import type { ManualChatGroup } from "@/lib/domain/workspaces/tabs/manual-groups";
+} from "#product/lib/domain/workspaces/tabs/shell-tabs";
+import type { ManualChatGroup } from "#product/lib/domain/workspaces/tabs/manual-groups";
 
 export function replaceSessionIdInOrderedList(
   values: readonly string[],

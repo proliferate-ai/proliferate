@@ -1,5 +1,5 @@
 import type { SetupScriptExecution } from "@anyharness/sdk";
-import type { CreateWorktreeWorkspaceInput } from "@/lib/domain/workspaces/creation/workspace-creation";
+import type { CreateWorktreeWorkspaceInput } from "#product/lib/domain/workspaces/creation/workspace-creation";
 
 export type PendingWorkspaceSource =
   | "local-created"

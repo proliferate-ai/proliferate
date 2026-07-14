@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { runOpenCoworkArtifact } from "@/lib/domain/cowork/artifacts";
+import { runOpenCoworkArtifact } from "#product/lib/domain/cowork/artifacts";
 
 describe("runOpenCoworkArtifact", () => {
   it("opens the artifact panel and selects the artifact for the workspace", () => {

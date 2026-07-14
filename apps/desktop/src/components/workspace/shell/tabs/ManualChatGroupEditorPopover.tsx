@@ -9,7 +9,7 @@ import {
   MANUAL_CHAT_GROUP_COLOR_IDS,
   resolveManualChatGroupColor,
   type ManualChatGroupColorId,
-} from "@/lib/domain/workspaces/tabs/manual-groups";
+} from "#product/lib/domain/workspaces/tabs/manual-groups";
 
 const POPOVER_WIDTH = 304;
 const ESTIMATED_POPOVER_HEIGHT = 230;

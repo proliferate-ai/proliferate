@@ -1,7 +1,7 @@
 import {
   DEFAULT_SIDEBAR_WORKSPACE_TYPES,
-} from "@/lib/domain/workspaces/sidebar/sidebar-model";
-import type { SidebarWorkspaceVariant } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-model";
+import type { SidebarWorkspaceVariant } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
 
 export function normalizeSidebarWorkspaceTypes(
   workspaceTypes: readonly SidebarWorkspaceVariant[],

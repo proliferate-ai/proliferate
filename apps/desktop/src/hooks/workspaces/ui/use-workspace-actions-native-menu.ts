@@ -1,7 +1,7 @@
-import { SHORTCUTS } from "@/config/shortcuts/registry";
-import { useNativeMenu } from "@/hooks/ui/native/use-native-context-menu";
+import { SHORTCUTS } from "#product/config/shortcuts/registry";
+import { useNativeMenu } from "#product/hooks/ui/native/use-native-context-menu";
 import type { NativeMenuItem } from "@proliferate/product-client/host/desktop-bridge";
-import { getShortcutNativeAccelerator } from "@/lib/domain/shortcuts/native-accelerators";
+import { getShortcutNativeAccelerator } from "#product/lib/domain/shortcuts/native-accelerators";
 
 export interface WorkspaceActionsNativeMenuInput {
   canRename: boolean;

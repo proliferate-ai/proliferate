@@ -7,8 +7,8 @@ import {
   type MouseEvent,
   type PointerEvent,
 } from "react";
-import { isApplePlatform } from "@/lib/domain/shortcuts/matching";
-import type { HeaderChatTabEntry } from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
+import { isApplePlatform } from "#product/lib/domain/shortcuts/matching";
+import type { HeaderChatTabEntry } from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 
 export function useHeaderTabsMultiSelect({
   workspaceId,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { organizationLogoImageValidationError } from "./logo-image";
+import { organizationLogoImageValidationError } from "#product/lib/domain/organizations/logo-image";
 
 describe("organizationLogoImageValidationError", () => {
   it("accepts supported image types within the size limit", () => {

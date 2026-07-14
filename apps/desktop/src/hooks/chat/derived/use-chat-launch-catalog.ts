@@ -1,30 +1,30 @@
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { compareChatLaunchKinds } from "@/config/chat-launch";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
+import { compareChatLaunchKinds } from "#product/config/chat-launch";
 import {
   buildModelSelectorGroups,
-} from "@/lib/domain/chat/models/model-selector-options";
+} from "#product/lib/domain/chat/models/model-selector-options";
 import type {
   ActiveModelSelectorControl,
   ModelSelectorGroup,
   ModelSelectorSelection,
-} from "@/lib/domain/chat/models/model-selector-types";
+} from "#product/lib/domain/chat/models/model-selector-types";
 import {
   resolveAvailableLaunchSelection,
   resolveEffectiveLaunchSelection,
-} from "@/lib/domain/chat/models/launch-selection-defaults";
-import type { LaunchCatalogSnapshot } from "@/lib/domain/chat/launch/launch-intent";
-import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
+} from "#product/lib/domain/chat/models/launch-selection-defaults";
+import type { LaunchCatalogSnapshot } from "#product/lib/domain/chat/launch/launch-intent";
+import { useCloudAgentCatalog } from "#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import {
   mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents,
   type DesktopAgentLaunchAgent,
-} from "@/lib/domain/agents/cloud-launch-catalog";
-import { filterTargetReadyLaunchAgents } from "@/lib/domain/agents/target-ready-launch-agents";
-import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
-import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
-import { useWorkspaceAgentLaunchOptionsQuery } from "@/hooks/access/anyharness/agents/use-workspace-agent-launch-options";
+} from "#product/lib/domain/agents/cloud-launch-catalog";
+import { filterTargetReadyLaunchAgents } from "#product/lib/domain/agents/target-ready-launch-agents";
+import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
+import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
+import { useWorkspaceAgentLaunchOptionsQuery } from "#product/hooks/access/anyharness/agents/use-workspace-agent-launch-options";
 
 const EMPTY_AGENTS: DesktopAgentLaunchAgent[] = [];
 

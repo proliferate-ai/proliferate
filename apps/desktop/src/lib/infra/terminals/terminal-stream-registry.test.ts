@@ -14,13 +14,13 @@ import {
   subscribeWithReplay,
   type TerminalReplayEntry,
   type TerminalStreamIdentity,
-} from "./terminal-stream-registry";
+} from "#product/lib/infra/terminals/terminal-stream-registry";
 import {
   clearTerminalIntentionalClose,
   isTerminalIntentionalClose,
   markTerminalIntentionalClose,
-} from "./terminal-close-intent";
-import { createTerminalRuntimeIdentity } from "./terminal-stream-key";
+} from "#product/lib/infra/terminals/terminal-close-intent";
+import { createTerminalRuntimeIdentity } from "#product/lib/infra/terminals/terminal-stream-key";
 
 const mockState = vi.hoisted(() => ({
   connections: [] as Array<{

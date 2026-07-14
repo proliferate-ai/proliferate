@@ -10,8 +10,8 @@ import type {
   SupportReportJob,
   SupportReportServerCorrelation,
   SupportReportWorkspaceOption,
-} from "@/lib/domain/support/report-types";
-import type { DesktopProductEventMap } from "@/lib/domain/telemetry/events";
+} from "#product/lib/domain/support/report-types";
+import type { DesktopProductEventMap } from "#product/lib/domain/telemetry/events";
 
 /**
  * Narrow typed telemetry dependency injected from the calling hook (which reads

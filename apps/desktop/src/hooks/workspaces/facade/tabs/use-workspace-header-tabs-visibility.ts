@@ -2,23 +2,23 @@ import { useMemo } from "react";
 import {
   buildHeaderLiveVisibilityCandidates,
   collectHierarchyChildren,
-} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-model-helpers";
-import { buildGroupedChatTabs } from "@/lib/domain/workspaces/tabs/grouping";
+} from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-model-helpers";
+import { buildGroupedChatTabs } from "#product/lib/domain/workspaces/tabs/grouping";
 import {
   buildManualGroupByTopLevelSessionId,
-} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-derivation";
+} from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-derivation";
 import {
   deriveManualChatGroupsForDisplay,
   type DisplayManualChatGroup,
-} from "@/lib/domain/workspaces/tabs/manual-groups";
+} from "#product/lib/domain/workspaces/tabs/manual-groups";
 import {
   includeVisibleLinkedChildSessionIds,
   resolveVisibleChatSessionIds,
   type ChatVisibilityCandidate,
-} from "@/lib/domain/workspaces/tabs/visibility";
-import type { WorkspaceHeaderSubagentHierarchy } from "@/lib/domain/workspaces/tabs/workspace-header-subagent-hierarchy";
+} from "#product/lib/domain/workspaces/tabs/visibility";
+import type { WorkspaceHeaderSubagentHierarchy } from "#product/lib/domain/workspaces/tabs/workspace-header-subagent-hierarchy";
 import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
-import { useStableStringArray } from "@/hooks/workspaces/facade/tabs/use-stable-string-array";
+import { useStableStringArray } from "#product/hooks/workspaces/facade/tabs/use-stable-string-array";
 
 export function useWorkspaceHeaderTabsVisibility({
   activeSessionId,

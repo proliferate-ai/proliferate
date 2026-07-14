@@ -6,7 +6,7 @@ import {
   UpdateToastPresenter,
   UPDATE_TOAST_ID,
   UP_TO_DATE_TOAST_ID,
-} from "./UpdateToastPresenter";
+} from "#product/components/feedback/UpdateToastPresenter";
 
 const updaterMocks = vi.hoisted(() => ({
   phase: "available",

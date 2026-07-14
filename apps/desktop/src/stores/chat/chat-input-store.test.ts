@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   createFileMentionNode,
   serializeChatDraftToPrompt,
-} from "@/lib/domain/chat/composer/file-mention-draft-model";
-import { useChatInputStore } from "./chat-input-store";
+} from "#product/lib/domain/chat/composer/file-mention-draft-model";
+import { useChatInputStore } from "#product/stores/chat/chat-input-store";
 
 describe("chat input store", () => {
   beforeEach(() => {

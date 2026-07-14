@@ -10,20 +10,20 @@ import {
   useGitStatusQuery,
 } from "@anyharness/sdk-react";
 import { useMemo } from "react";
-import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/derived/use-hot-paint-gate";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
-import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
+import { useIsHotPaintGatePendingForWorkspace } from "#product/hooks/workspaces/derived/use-hot-paint-gate";
+import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 import {
   buildGitPanelSections,
   type GitPanelReviewFile,
   gitPanelRuntimeBlockWorkspaceId,
   repoRootDefaultBranch,
   resolveGitPanelBaseRef,
-} from "@/lib/domain/workspaces/changes/git-panel-diff";
-import { resolveDiffDisplayPolicy } from "@/lib/domain/workspaces/changes/diff-display-policy";
-import { resolveGitPanelWorkspaceContext } from "@/lib/domain/workspaces/changes/git-panel-workspace-context";
-import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+} from "#product/lib/domain/workspaces/changes/git-panel-diff";
+import { resolveDiffDisplayPolicy } from "#product/lib/domain/workspaces/changes/diff-display-policy";
+import { resolveGitPanelWorkspaceContext } from "#product/lib/domain/workspaces/changes/git-panel-workspace-context";
+import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { collectTurnTouchedFiles } from "@proliferate/product-domain/chats/transcript/last-turn-file-changes";
 
 const EMPTY_STATUS_FILES: GitChangedFile[] = [];

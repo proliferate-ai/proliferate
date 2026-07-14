@@ -1,13 +1,13 @@
 import {
   resolveComposerControlOptionLabel,
-} from "@/lib/domain/chat/session-controls/composer-config-submenu-presentation";
-import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
+} from "#product/lib/domain/chat/session-controls/composer-config-submenu-presentation";
+import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { Check, MoreHorizontal } from "@proliferate/ui/icons";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
-import { PendingConfigIndicator } from "./PendingConfigIndicator";
+import { PendingConfigIndicator } from "#product/components/workspace/chat/input/PendingConfigIndicator";
 
 interface ComposerOverflowControlProps {
   agentKind: string | null;

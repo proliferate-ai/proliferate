@@ -1,22 +1,22 @@
-import { ChatComposerActions } from "./ChatComposerActions";
-import { ComposerModelSelectorControl } from "./ComposerModelSelectorControl";
-import { ComposerReasoningEffortBars } from "./ComposerReasoningEffortBars";
-import { ComposerFastModeToggle } from "./ComposerFastModeToggle";
-import { ComposerOverflowControl } from "./ComposerOverflowControl";
-import type { ModelSelectorProps } from "@/lib/domain/chat/models/model-selector-types";
-import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
-import { ComposerIntegrationsControl } from "./ComposerIntegrationsControl";
-import { RuntimePressureIndicator } from "./RuntimePressureIndicator";
-import { SessionModeControl } from "./SessionModeControl";
+import { ChatComposerActions } from "#product/components/workspace/chat/input/ChatComposerActions";
+import { ComposerModelSelectorControl } from "#product/components/workspace/chat/input/ComposerModelSelectorControl";
+import { ComposerReasoningEffortBars } from "#product/components/workspace/chat/input/ComposerReasoningEffortBars";
+import { ComposerFastModeToggle } from "#product/components/workspace/chat/input/ComposerFastModeToggle";
+import { ComposerOverflowControl } from "#product/components/workspace/chat/input/ComposerOverflowControl";
+import type { ModelSelectorProps } from "#product/lib/domain/chat/models/model-selector-types";
+import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
+import { ComposerIntegrationsControl } from "#product/components/workspace/chat/input/ComposerIntegrationsControl";
+import { RuntimePressureIndicator } from "#product/components/workspace/chat/input/RuntimePressureIndicator";
+import { SessionModeControl } from "#product/components/workspace/chat/input/SessionModeControl";
 import {
   buildComposerSessionControlGroups,
-} from "@/lib/domain/chat/session-controls/composer-control-groups";
+} from "#product/lib/domain/chat/session-controls/composer-control-groups";
 import { ChatComposerControlRowFrame } from "@proliferate/product-ui/chat/composer/ChatComposerControlRowFrame";
 import { Plus, Target } from "@proliferate/ui/icons";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { deriveGoalBarState } from "@proliferate/product-domain/activity/goal";
-import { useSessionGoal } from "@/hooks/activity/derived/use-session-goal";
-import { useGoalBarStore } from "@/stores/activity/goal-bar-store";
+import { useSessionGoal } from "#product/hooks/activity/derived/use-session-goal";
+import { useGoalBarStore } from "#product/stores/activity/goal-bar-store";
 
 export interface ChatInputControlRowProps {
   runtimeControlsDisabled: boolean;

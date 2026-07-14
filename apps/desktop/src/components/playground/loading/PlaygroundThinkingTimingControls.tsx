@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ThinkingText } from "@/components/feedback/ThinkingText";
+import { ThinkingText } from "#product/components/feedback/ThinkingText";
 import { Label } from "@proliferate/ui/primitives/Label";
 import { RangeSlider } from "@proliferate/ui/primitives/RangeSlider";
 

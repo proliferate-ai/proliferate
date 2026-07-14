@@ -6,8 +6,8 @@ import {
   renderTranscriptCodeBlock,
   renderTranscriptInlineCode,
   renderTranscriptLink,
-} from "@/components/workspace/chat/transcript/transcript-markdown";
-import { PlanReferencePreviewDialog } from "@/components/workspace/chat/plans/PlanReferencePreviewDialog";
+} from "#product/components/workspace/chat/transcript/transcript-markdown";
+import { PlanReferencePreviewDialog } from "#product/components/workspace/chat/plans/PlanReferencePreviewDialog";
 import type { PromptDisplayPlanPart } from "@proliferate/product-domain/chats/composer/prompt-display-parts";
 
 type PlanReferenceAttachmentCardVariant = "draft" | "compact" | "transcript";

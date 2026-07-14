@@ -6,7 +6,7 @@ import {
 import {
   buildSessionStreamBatchPatch,
   type SessionStreamPatchInput,
-} from "@/lib/domain/sessions/stream-patch";
+} from "#product/lib/domain/sessions/stream-patch";
 
 describe("buildSessionStreamBatchPatch", () => {
   it("preserves null session titles while folding later events", () => {

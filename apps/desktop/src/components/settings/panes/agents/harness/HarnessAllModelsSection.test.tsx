@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { HarnessAllModelsSection } from "./HarnessAllModelsSection";
+import { HarnessAllModelsSection } from "#product/components/settings/panes/agents/harness/HarnessAllModelsSection";
 
 const state = vi.hoisted(() => ({
   cloudActive: false,

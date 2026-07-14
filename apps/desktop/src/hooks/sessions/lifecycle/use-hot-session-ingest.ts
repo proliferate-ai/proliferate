@@ -2,20 +2,20 @@ import { useEffect, useMemo, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
   resolveHotSessionTargets,
-} from "@/lib/domain/sessions/hot-session-policy";
+} from "#product/lib/domain/sessions/hot-session-policy";
 import {
   reconcileHotSessions,
   type HotSessionIngestManagerDeps,
-} from "@/lib/workflows/sessions/hot-session-ingest-manager";
-import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/selection/workspace-ui-key";
-import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { isHotSessionTargetCurrent, useSessionIngestStore } from "@/stores/sessions/session-ingest-store";
-import { getSessionRecord } from "@/stores/sessions/session-records";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
-import { useSessionRuntimeActions } from "@/hooks/sessions/workflows/use-session-runtime-actions";
+} from "#product/lib/workflows/sessions/hot-session-ingest-manager";
+import { resolveSelectedWorkspaceIdentity } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
+import { resolveWithWorkspaceFallback } from "#product/lib/domain/workspaces/selection/workspace-keyed-preferences";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { isHotSessionTargetCurrent, useSessionIngestStore } from "#product/stores/sessions/session-ingest-store";
+import { getSessionRecord } from "#product/stores/sessions/session-records";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
+import { useSessionRuntimeActions } from "#product/hooks/sessions/workflows/use-session-runtime-actions";
 
 const EMPTY_SESSION_IDS: readonly string[] = [];
 

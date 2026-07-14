@@ -6,7 +6,7 @@ import type {
   PublishFileGroups,
   PublishPullRequestDraft,
   PublishWorkflowStep,
-} from "@/lib/domain/workspaces/creation/publish-workflow-model";
+} from "#product/lib/domain/workspaces/creation/publish-workflow-model";
 
 export function resolvePublishDisabledReason(input: {
   gitStatus: GitStatusSnapshot | null;

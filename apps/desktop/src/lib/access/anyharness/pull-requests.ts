@@ -4,7 +4,7 @@ import {
   type BranchPullRequestStatus,
 } from "@anyharness/sdk";
 import { getAnyHarnessClient, type AnyHarnessClientConnection } from "@anyharness/sdk-react";
-import type { WorkspacePrStatusAvailability } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
+import type { WorkspacePrStatusAvailability } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
 
 export interface RepoPullRequestStatusesResult {
   availability: WorkspacePrStatusAvailability;

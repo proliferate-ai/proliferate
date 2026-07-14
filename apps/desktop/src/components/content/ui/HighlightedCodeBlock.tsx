@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { CodeBlockTokenContent } from "@proliferate/product-ui/code/CodeBlockTokenContent";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { useHighlightedTokens } from "@/hooks/ui/highlighting/use-highlighted-tokens";
+import { useHighlightedTokens } from "#product/hooks/ui/highlighting/use-highlighted-tokens";
 
 interface HighlightedCodeBlockProps {
   code: string;

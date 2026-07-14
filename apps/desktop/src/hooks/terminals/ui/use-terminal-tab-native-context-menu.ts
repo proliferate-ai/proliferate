@@ -1,4 +1,4 @@
-import { useNativeContextMenu } from "@/hooks/ui/native/use-native-context-menu";
+import { useNativeContextMenu } from "#product/hooks/ui/native/use-native-context-menu";
 import type { NativeMenuItem } from "@proliferate/product-client/host/desktop-bridge";
 
 export function useTerminalTabNativeContextMenu({

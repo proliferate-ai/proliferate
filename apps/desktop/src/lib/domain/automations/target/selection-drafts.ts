@@ -3,11 +3,11 @@ import type {
   AutomationTargetSelection,
   BuildAutomationTargetStateInput,
   TargetRepoDraft,
-} from "@/lib/domain/automations/target/selection-types";
+} from "#product/lib/domain/automations/target/selection-types";
 import {
   isSameAutomationRepo,
   repoKey,
-} from "@/lib/domain/automations/target/selection-identity";
+} from "#product/lib/domain/automations/target/selection-identity";
 
 export function buildTargetRepoDrafts(input: {
   repoConfigs: BuildAutomationTargetStateInput["repoConfigs"];

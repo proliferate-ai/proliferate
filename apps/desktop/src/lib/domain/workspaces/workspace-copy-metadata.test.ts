@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
-import { workspaceCopyMetadataForLogicalWorkspace } from "@/lib/domain/workspaces/workspace-copy-metadata";
+import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
+import { workspaceCopyMetadataForLogicalWorkspace } from "#product/lib/domain/workspaces/workspace-copy-metadata";
 
 function makeLogicalWorkspace(overrides: Partial<LogicalWorkspace> = {}): LogicalWorkspace {
   return {

@@ -1,7 +1,7 @@
 import type {
   CloudWorkspaceStatus,
   CloudWorkspaceSummary,
-} from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
 
 export type CloudWorkspaceStatusFields = {
   status?: CloudWorkspaceStatus | null;

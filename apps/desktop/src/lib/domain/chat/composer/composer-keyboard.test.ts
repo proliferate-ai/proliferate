@@ -5,7 +5,7 @@ import {
   isComposerSubmitKey,
   isRawComposerSubmitKey,
   type ComposerKeyboardEventLike,
-} from "@/lib/domain/chat/composer/composer-keyboard";
+} from "#product/lib/domain/chat/composer/composer-keyboard";
 
 function event(overrides: Partial<ComposerKeyboardEventLike> = {}): ComposerKeyboardEventLike {
   return {

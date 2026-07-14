@@ -12,14 +12,14 @@ import {
 import {
   createTabDragController,
   type TabDragController,
-} from "@/lib/domain/workspaces/tabs/drag-controller";
+} from "#product/lib/domain/workspaces/tabs/drag-controller";
 import {
   reorderShellTabsByDrag,
   resolveDragOffsetX,
   resolveDropTarget,
   type DragLayoutRow,
   type TabDragUnit,
-} from "@/lib/domain/workspaces/tabs/drag";
+} from "#product/lib/domain/workspaces/tabs/drag";
 
 export interface TabDragRow extends DragLayoutRow {
   sourceId: string;

@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { useToastStore } from "@/stores/toast/toast-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 const DISABLED_REASON = "Cloud workspaces now open through the managed sandbox gateway.";
 

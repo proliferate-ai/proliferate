@@ -5,13 +5,13 @@ import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { Blocks, Settings } from "@proliferate/ui/icons";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
-import { IntegrationIcon } from "@/components/settings/panes/integrations/IntegrationIcon";
-import { useComposerIntegrationsState } from "@/hooks/cloud/derived/use-composer-integrations-state";
+import { IntegrationIcon } from "#product/components/settings/panes/integrations/IntegrationIcon";
+import { useComposerIntegrationsState } from "#product/hooks/cloud/derived/use-composer-integrations-state";
 import {
   composerIntegrationHealthDot,
   type ComposerIntegrationProvider,
-} from "@/lib/domain/cloud/composer-integrations";
-import { buildSettingsHref } from "@/lib/domain/settings/navigation";
+} from "#product/lib/domain/cloud/composer-integrations";
+import { buildSettingsHref } from "#product/lib/domain/settings/navigation";
 
 /**
  * The single composer integrations control. Hidden when nothing is connected;

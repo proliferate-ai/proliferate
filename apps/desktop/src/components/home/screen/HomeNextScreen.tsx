@@ -1,25 +1,25 @@
 import { useState } from "react";
-import { HomeComposerForm } from "@/components/home/screen/HomeComposerForm";
-import { HomeOnboardingCards } from "@/components/home/screen/HomeOnboardingCards";
-import { HomeProjectMenu } from "@/components/home/screen/HomeProjectMenu";
-import { HomeTargetPicker } from "@/components/home/screen/HomeTargetPicker";
+import { HomeComposerForm } from "#product/components/home/screen/HomeComposerForm";
+import { HomeOnboardingCards } from "#product/components/home/screen/HomeOnboardingCards";
+import { HomeProjectMenu } from "#product/components/home/screen/HomeProjectMenu";
+import { HomeTargetPicker } from "#product/components/home/screen/HomeTargetPicker";
 import {
   ComposerLeadingControls,
   ComposerTrailingControls,
-} from "@/components/workspace/chat/input/ChatInputControlRow";
+} from "#product/components/workspace/chat/input/ChatInputControlRow";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { useHomeNextLaunchControls } from "@/hooks/home/derived/use-home-next-launch-controls";
-import { useHomeCloudRepoSettingsNavigation } from "@/hooks/home/workflows/use-home-cloud-repo-settings-navigation";
-import { useHomeNextTargetSelectionState } from "@/hooks/home/ui/use-home-next-target-selection-state";
-import { useHomeNextState } from "@/hooks/home/derived/use-home-next-state";
-import { useHomeScreen } from "@/hooks/home/facade/use-home-screen";
+import { useHomeNextLaunchControls } from "#product/hooks/home/derived/use-home-next-launch-controls";
+import { useHomeCloudRepoSettingsNavigation } from "#product/hooks/home/workflows/use-home-cloud-repo-settings-navigation";
+import { useHomeNextTargetSelectionState } from "#product/hooks/home/ui/use-home-next-target-selection-state";
+import { useHomeNextState } from "#product/hooks/home/derived/use-home-next-state";
+import { useHomeScreen } from "#product/hooks/home/facade/use-home-screen";
 import {
   buildHomeModelSelectorProps,
   buildHomeSessionConfigControls,
-} from "@/lib/domain/home/home-composer-controls";
-import { type HomeNextModelSelection } from "@/lib/domain/home/home-next-launch";
-import { resolveHomeModelProbeCardState } from "@/lib/domain/home/home-screen";
-import { resolveHomeTargetLaunchKindForRepository } from "@/lib/domain/home/home-target-picker";
+} from "#product/lib/domain/home/home-composer-controls";
+import { type HomeNextModelSelection } from "#product/lib/domain/home/home-next-launch";
+import { resolveHomeModelProbeCardState } from "#product/lib/domain/home/home-screen";
+import { resolveHomeTargetLaunchKindForRepository } from "#product/lib/domain/home/home-target-picker";
 
 export function HomeNextScreen() {
   const {

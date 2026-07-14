@@ -1,21 +1,21 @@
 import {
   resolveModelDisplayName,
   shouldHideModel,
-} from "@/lib/domain/chat/models/model-display";
-import type { DesktopAgentLaunchAgent } from "@/lib/domain/agents/cloud-launch-catalog";
-import { agentsWithVisibleModels } from "@/lib/domain/chat/models/launch-visible-agents";
+} from "#product/lib/domain/chat/models/model-display";
+import type { DesktopAgentLaunchAgent } from "#product/lib/domain/agents/cloud-launch-catalog";
+import { agentsWithVisibleModels } from "#product/lib/domain/chat/models/launch-visible-agents";
 import {
   findLaunchModelByIdOrAlias,
   modelSelectionMatchesModel,
   resolveModelSelectionMatchKind,
-} from "@/lib/domain/chat/models/model-selection-ids";
+} from "#product/lib/domain/chat/models/model-selection-ids";
 import type {
   ActiveModelSelectorControl,
   ModelSelectionActionKind,
   ModelSelectorGroup,
   ModelSelectorSelection,
-} from "@/lib/domain/chat/models/model-selector-types";
-import type { ChatModelVisibilityOverridesByAgentKind } from "@/lib/domain/preferences/user/session-defaults";
+} from "#product/lib/domain/chat/models/model-selector-types";
+import type { ChatModelVisibilityOverridesByAgentKind } from "#product/lib/domain/preferences/user/session-defaults";
 
 interface SelectorModel {
   id: string;

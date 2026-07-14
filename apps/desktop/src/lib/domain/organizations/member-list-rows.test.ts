@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { invitationDeliveryHint } from "./member-list-rows";
+import { invitationDeliveryHint } from "#product/lib/domain/organizations/member-list-rows";
 
 describe("invitationDeliveryHint", () => {
   it("prompts the copy-link fallback when email was not delivered", () => {

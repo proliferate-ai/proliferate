@@ -1,8 +1,8 @@
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ChevronRight } from "@proliferate/ui/icons";
-import { FileTreeEntryIcon } from "@/components/workspace/files/file-icons";
-import { fileTreeIconToneClass } from "@/lib/domain/files/file-tree-icon-colors";
+import { FileTreeEntryIcon } from "#product/components/workspace/files/file-icons";
+import { fileTreeIconToneClass } from "#product/lib/domain/files/file-tree-icon-colors";
 
 interface FileTreeRowProps {
   name: string;

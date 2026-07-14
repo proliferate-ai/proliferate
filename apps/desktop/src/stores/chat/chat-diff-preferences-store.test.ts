@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { createMemoryProductStorage } from "@/test/product-storage-test-utils";
+import { createMemoryProductStorage } from "#product/test/product-storage-test-utils";
 import {
   CHAT_DIFF_PREFERENCES_STORAGE_KEY,
   hydrateChatDiffPreferences,
   resetChatDiffPreferencesForTests,
   setChatDiffPreferencesStorageContext,
   useChatDiffPreferencesStore,
-} from "./chat-diff-preferences-store";
+} from "#product/stores/chat/chat-diff-preferences-store";
 
 afterEach(() => {
   resetChatDiffPreferencesForTests();

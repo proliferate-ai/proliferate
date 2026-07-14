@@ -12,14 +12,14 @@ import type {
   MeasurementOperationId,
   MeasurementOperationKind,
   MeasurementSurface,
-} from "@/lib/domain/telemetry/debug-measurement-catalog";
-import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
-import { batchSessionStoreWrites } from "@/lib/infra/scheduling/react-batching";
-import { activityFromTranscript } from "@/lib/domain/sessions/directory/directory-activity";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
-import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
+} from "#product/lib/domain/telemetry/debug-measurement-catalog";
+import { scheduleAfterNextPaint } from "#product/lib/infra/scheduling/schedule-after-next-paint";
+import { batchSessionStoreWrites } from "#product/lib/infra/scheduling/react-batching";
+import { activityFromTranscript } from "#product/lib/domain/sessions/directory/directory-activity";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
+import type { SessionRuntimeRecord } from "#product/stores/sessions/session-types";
 
 export const SESSION_APPLY_MEASUREMENT_SURFACES: readonly MeasurementSurface[] = [
   "session-transcript-pane",

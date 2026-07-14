@@ -1,4 +1,4 @@
-import type { TerminalStreamIdentity } from "./terminal-stream-registry";
+import type { TerminalStreamIdentity } from "#product/lib/infra/terminals/terminal-stream-registry";
 
 export function createTerminalRuntimeIdentity(input: {
   runtimeUrl: string;

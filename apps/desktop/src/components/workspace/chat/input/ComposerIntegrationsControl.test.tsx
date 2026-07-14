@@ -2,8 +2,8 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ComposerIntegrationsModel } from "@/hooks/cloud/derived/use-composer-integrations-state";
-import { ComposerIntegrationsControl } from "./ComposerIntegrationsControl";
+import type { ComposerIntegrationsModel } from "#product/hooks/cloud/derived/use-composer-integrations-state";
+import { ComposerIntegrationsControl } from "#product/components/workspace/chat/input/ComposerIntegrationsControl";
 
 const mocks = vi.hoisted(() => ({
   state: {

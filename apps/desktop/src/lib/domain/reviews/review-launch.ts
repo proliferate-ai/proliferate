@@ -9,11 +9,11 @@ import {
   DEFAULT_REVIEW_MAX_ROUNDS,
   resolveReviewExecutionModeIdForAgent,
   type StoredReviewDefaultsByKind,
-} from "@/lib/domain/reviews/review-config";
+} from "#product/lib/domain/reviews/review-config";
 import {
   resolveReviewPersonaTemplates,
   type StoredReviewPersonalitiesByKind,
-} from "@/lib/domain/reviews/review-personas";
+} from "#product/lib/domain/reviews/review-personas";
 
 export interface ReviewLaunchSessionSlot {
   agentKind: string;

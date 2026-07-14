@@ -1,6 +1,6 @@
 import type { SessionStreamHandle } from "@anyharness/sdk";
-import type { FlushAwareSessionStreamHandle } from "@/lib/workflows/sessions/session-runtime";
-import type { SessionStreamFlushController } from "@/hooks/sessions/lifecycle/use-session-stream-flush";
+import type { FlushAwareSessionStreamHandle } from "#product/lib/workflows/sessions/session-runtime";
+import type { SessionStreamFlushController } from "#product/hooks/sessions/lifecycle/use-session-stream-flush";
 
 export function createFlushAwareSessionStreamHandle(
   handle: SessionStreamHandle,

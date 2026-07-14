@@ -8,9 +8,9 @@ import { AnyHarnessError, type RepoRoot, type Workspace } from "@anyharness/sdk"
 import {
   buildWorkspaceCollections,
   type WorkspaceCollections,
-} from "@/lib/domain/workspaces/cloud/collections";
-import { workspaceCollectionsKey } from "@/hooks/workspaces/cache/query-keys";
-import { useWorkspaceActions } from "./use-workspace-actions";
+} from "#product/lib/domain/workspaces/cloud/collections";
+import { workspaceCollectionsKey } from "#product/hooks/workspaces/cache/query-keys";
+import { useWorkspaceActions } from "#product/hooks/workspaces/workflows/use-workspace-actions";
 
 const mocks = vi.hoisted(() => {
   const create = vi.fn();

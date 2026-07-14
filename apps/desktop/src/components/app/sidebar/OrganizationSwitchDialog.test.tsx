@@ -2,9 +2,9 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { OrganizationRecord } from "@/lib/domain/organizations/organization-records";
-import { OrganizationSwitchDialog } from "./OrganizationSwitchDialog";
-import { useToastStore } from "@/stores/toast/toast-store";
+import type { OrganizationRecord } from "#product/lib/domain/organizations/organization-records";
+import { OrganizationSwitchDialog } from "#product/components/app/sidebar/OrganizationSwitchDialog";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 const switchMock = vi.fn<(organizationId: string) => Promise<void>>();
 

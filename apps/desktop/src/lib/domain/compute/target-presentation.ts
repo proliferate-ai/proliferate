@@ -2,7 +2,7 @@ import type {
   ComputeTargetKind,
   ComputeTargetStatus,
   ComputeTargetSummary,
-} from "@/lib/domain/compute/target-types";
+} from "#product/lib/domain/compute/target-types";
 
 export interface ComputeTargetOwnerGroup {
   id: "personal" | "organization";

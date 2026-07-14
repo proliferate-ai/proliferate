@@ -1,5 +1,5 @@
 import type { TranscriptState } from "@anyharness/sdk";
-import { toolCallItem } from "@/lib/domain/chat/__fixtures__/playground/tool-call-item-fixture";
+import { toolCallItem } from "#product/lib/domain/chat/__fixtures__/playground/tool-call-item-fixture";
 
 const creationGroupItems = [
   subagentCreationFixture("tool-agent-api", "API Surface Check", "Check API surface consistency.", 1),

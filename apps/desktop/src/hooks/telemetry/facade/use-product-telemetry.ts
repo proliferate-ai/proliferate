@@ -6,7 +6,7 @@ import type {
   ProductRouteChange,
   ProductSupportTelemetryContext,
 } from "@proliferate/product-client/host/product-host";
-import type { DesktopProductEventMap } from "@/lib/domain/telemetry/events";
+import type { DesktopProductEventMap } from "#product/lib/domain/telemetry/events";
 
 /**
  * Emit a product telemetry event whose name and payload are compile-time

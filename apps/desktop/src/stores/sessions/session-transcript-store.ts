@@ -2,7 +2,7 @@ import { createTranscriptState, type TranscriptState } from "@anyharness/sdk";
 import { create } from "zustand";
 import type {
   SessionTranscriptEntry,
-} from "@/stores/sessions/session-types";
+} from "#product/stores/sessions/session-types";
 
 type TranscriptEntryPatch = Partial<Omit<SessionTranscriptEntry, "sessionId">>;
 

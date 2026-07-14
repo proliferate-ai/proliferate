@@ -1,9 +1,9 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import { useMemo } from "react";
-import type { CloudWorkspaceSummary } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
-import { useCoworkStatus } from "@/hooks/access/anyharness/cowork/use-cowork-status";
-import { buildStandardRepoProjection } from "@/lib/domain/workspaces/cloud/standard-projection";
-import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
+import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
+import { useCoworkStatus } from "#product/hooks/access/anyharness/cowork/use-cowork-status";
+import { buildStandardRepoProjection } from "#product/lib/domain/workspaces/cloud/standard-projection";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 
 const EMPTY_REPO_ROOTS: RepoRoot[] = [];
 const EMPTY_WORKSPACES: Workspace[] = [];

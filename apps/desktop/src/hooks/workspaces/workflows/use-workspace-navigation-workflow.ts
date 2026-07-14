@@ -2,18 +2,18 @@ import { useCallback } from "react";
 import { webWorkspaceDeepLink } from "@proliferate/cloud-sdk";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { useWebAppTarget } from "@/hooks/capabilities/derived/use-web-app-target";
-import { useWorkspaceSelection } from "@/hooks/workspaces/workflows/selection/use-workspace-selection";
-import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
-import { logicalWorkspaceMatchesId } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
+import { useWebAppTarget } from "#product/hooks/capabilities/derived/use-web-app-target";
+import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
+import { useLogicalWorkspaces } from "#product/hooks/workspaces/derived/use-logical-workspaces";
+import { logicalWorkspaceMatchesId } from "#product/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import {
   failLatencyFlow,
   startLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
-import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-state";
-import { markWorkspaceViewed } from "@/stores/preferences/workspace-ui-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useToastStore } from "@/stores/toast/toast-store";
+import { resetWorkspaceEditorState } from "#product/stores/editor/workspace-editor-state";
+import { markWorkspaceViewed } from "#product/stores/preferences/workspace-ui-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 export function useWorkspaceNavigationWorkflow() {
   const location = useLocation();

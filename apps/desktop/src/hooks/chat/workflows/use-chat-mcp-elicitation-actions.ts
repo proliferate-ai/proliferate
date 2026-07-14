@@ -1,6 +1,6 @@
 import type { McpElicitationSubmittedField } from "@anyharness/sdk";
 import { useCallback } from "react";
-import { useSessionInteractionActions } from "@/hooks/sessions/workflows/use-session-interaction-actions";
+import { useSessionInteractionActions } from "#product/hooks/sessions/workflows/use-session-interaction-actions";
 
 export function useChatMcpElicitationActions() {
   const { resolveMcpElicitation, revealMcpElicitationUrl } = useSessionInteractionActions();

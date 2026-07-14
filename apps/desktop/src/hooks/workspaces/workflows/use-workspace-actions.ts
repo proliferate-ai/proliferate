@@ -7,32 +7,32 @@ import {
   type ResolveWorkspaceResponse,
   type Workspace,
 } from "@anyharness/sdk";
-import { useWorkspaceCollectionsInvalidationActions } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
-import { useWorkspaceCollectionsMutationCacheActions } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
-import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+import { useWorkspaceCollectionsInvalidationActions } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
+import { useWorkspaceCollectionsMutationCacheActions } from "#product/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
+import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import {
   createWorkspace,
   createWorktreeWorkspace,
-} from "@/lib/access/anyharness/workspaces";
+} from "#product/lib/access/anyharness/workspaces";
 import {
   collectWorktreeBasenamesForRepo,
   generateWorkspaceSlug,
-} from "@/lib/domain/workspaces/creation/workspace-slug";
-import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
-import { isCloudWorkspaceId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
-import type { SetupScriptTelemetryStatus } from "@/lib/domain/telemetry/events";
-import type { AuthUser } from "@/lib/domain/auth/auth-user";
-import { useProductAuthUser } from "@/hooks/auth/facade/use-product-auth";
+} from "#product/lib/domain/workspaces/creation/workspace-slug";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
+import { isCloudWorkspaceId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
+import type { SetupScriptTelemetryStatus } from "#product/lib/domain/telemetry/events";
+import type { AuthUser } from "#product/lib/domain/auth/auth-user";
+import { useProductAuthUser } from "#product/hooks/auth/facade/use-product-auth";
 import {
   type CreateWorktreeWorkspaceInput,
   type ResolvedWorktreeCreation,
   type WorktreeCreationParams,
   resolveWorktreeCreationParams,
-} from "@/lib/domain/workspaces/creation/workspace-creation";
-import { ensureRuntimeReady } from "./runtime-ready";
-import { DESKTOP_ORIGIN } from "@/lib/domain/sessions/desktop-origin";
+} from "#product/lib/domain/workspaces/creation/workspace-creation";
+import { ensureRuntimeReady } from "#product/hooks/workspaces/workflows/runtime-ready";
+import { DESKTOP_ORIGIN } from "#product/lib/domain/sessions/desktop-origin";
 import {
   elapsedMs,
   logLatency,

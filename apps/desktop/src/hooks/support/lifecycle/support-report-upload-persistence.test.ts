@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { createMemoryProductStorage } from "@/test/product-storage-test-utils";
-import type { SupportReportJob } from "@/lib/domain/support/report-types";
+import { createMemoryProductStorage } from "#product/test/product-storage-test-utils";
+import type { SupportReportJob } from "#product/lib/domain/support/report-types";
 import {
   persistSupportReportJob,
   readPersistedJobs,
   removePersistedJob,
-} from "./support-report-upload-persistence";
+} from "#product/hooks/support/lifecycle/support-report-upload-persistence";
 
 const STORAGE_KEY = "proliferate.supportReportJobs.v1";
 

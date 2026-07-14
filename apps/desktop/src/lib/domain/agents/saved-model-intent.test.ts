@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveSavedModelId } from "./saved-model-intent";
+import { resolveSavedModelId } from "#product/lib/domain/agents/saved-model-intent";
 
 const KNOWN_IDS = ["opus-4-8", "sonnet-4-5", "gpt-5.2-codex", "openai/gpt-5.2"];
 

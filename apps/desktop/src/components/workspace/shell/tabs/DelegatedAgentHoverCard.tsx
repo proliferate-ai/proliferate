@@ -16,7 +16,7 @@ import { createPortal } from "react-dom";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { POPOVER_FRAME_CLASS } from "@proliferate/ui/primitives/PopoverButton";
 import { Robot } from "@proliferate/ui/icons";
-import type { DelegatedWorkTabIdentity } from "@/lib/domain/delegated-work/model";
+import type { DelegatedWorkTabIdentity } from "#product/lib/domain/delegated-work/model";
 
 const VIEWPORT_MARGIN = 12;
 const HOVER_CARD_OFFSET = 6;

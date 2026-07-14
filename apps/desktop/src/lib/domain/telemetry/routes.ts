@@ -1,4 +1,4 @@
-import type { DesktopTelemetryRoute } from "@/lib/domain/telemetry/events";
+import type { DesktopTelemetryRoute } from "#product/lib/domain/telemetry/events";
 
 export function resolveDesktopTelemetryRoute(pathname: string): DesktopTelemetryRoute {
   if (pathname === "/") return "main";

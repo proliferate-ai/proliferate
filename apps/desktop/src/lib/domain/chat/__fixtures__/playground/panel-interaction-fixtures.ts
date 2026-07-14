@@ -1,5 +1,5 @@
 import type { McpElicitationInteractionPayload, UserInputQuestion } from "@anyharness/sdk";
-import type { PermissionOptionAction } from "@/lib/domain/chat/composer/chat-input-helpers";
+import type { PermissionOptionAction } from "#product/lib/domain/chat/composer/chat-input-helpers";
 
 export const EXECUTE_OPTIONS: PermissionOptionAction[] = [
   { optionId: "allow_always", label: "Always Allow", kind: "allow_always" },

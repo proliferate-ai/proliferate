@@ -1,14 +1,14 @@
 import { useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { APP_ROUTES } from "@/config/app-routes";
-import { useWebAppTarget } from "@/hooks/capabilities/derived/use-web-app-target";
-import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-navigation-workflow";
-import { useOpenSupportReportWindow } from "@/hooks/support/workflows/use-open-support-report-window";
-import { useSupportMenuAction } from "@/hooks/support/derived/use-support-menu-action";
-import { useKeyboardShortcutsDialogStore } from "@/stores/shortcuts/keyboard-shortcuts-dialog-store";
-import { useToastStore } from "@/stores/toast/toast-store";
-import type { AppCommandAction, AppCommandActions } from "./app-command-action-types";
+import { APP_ROUTES } from "#product/config/app-routes";
+import { useWebAppTarget } from "#product/hooks/capabilities/derived/use-web-app-target";
+import { useWorkspaceNavigationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-navigation-workflow";
+import { useOpenSupportReportWindow } from "#product/hooks/support/workflows/use-open-support-report-window";
+import { useSupportMenuAction } from "#product/hooks/support/derived/use-support-menu-action";
+import { useKeyboardShortcutsDialogStore } from "#product/stores/shortcuts/keyboard-shortcuts-dialog-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
+import type { AppCommandAction, AppCommandActions } from "#product/hooks/app/workflows/app-command-action-types";
 
 export type AppNavigationCommandActions = Pick<
   AppCommandActions,

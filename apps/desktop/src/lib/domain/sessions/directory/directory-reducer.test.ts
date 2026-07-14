@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { createDirectoryEntry } from "@/lib/domain/sessions/directory/directory-entry";
+import { createDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-entry";
 import {
   applyPendingRelationshipHint,
   putDirectoryEntry,
   removeWorkspaceDirectoryEntries,
   type SessionDirectoryReducerState,
-} from "@/lib/domain/sessions/directory/directory-reducer";
+} from "#product/lib/domain/sessions/directory/directory-reducer";
 
 function emptyState(): SessionDirectoryReducerState {
   return {

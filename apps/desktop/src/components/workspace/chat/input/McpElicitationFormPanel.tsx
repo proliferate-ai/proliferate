@@ -1,10 +1,10 @@
 import type { McpElicitationField } from "@anyharness/sdk";
-import { ComposerCardFooter } from "./ComposerAttachedPanel";
+import { ComposerCardFooter } from "#product/components/workspace/chat/input/ComposerAttachedPanel";
 import {
   McpElicitationFieldControl,
   type McpDraftValue,
-} from "./McpElicitationFieldControl";
-import { McpElicitationInlineError } from "./McpElicitationInlineError";
+} from "#product/components/workspace/chat/input/McpElicitationFieldControl";
+import { McpElicitationInlineError } from "#product/components/workspace/chat/input/McpElicitationInlineError";
 
 interface McpElicitationFormPanelProps {
   message: string;

@@ -1,10 +1,10 @@
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import type { ManualChatGroup } from "@/lib/domain/workspaces/tabs/manual-groups";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import type { ManualChatGroup } from "#product/lib/domain/workspaces/tabs/manual-groups";
 import {
   replaceSessionIdInManualChatGroups,
   replaceSessionIdInOrderedList,
   replaceSessionIdInShellTabOrder,
-} from "@/lib/domain/workspaces/tabs/session-replacement";
+} from "#product/lib/domain/workspaces/tabs/session-replacement";
 
 export interface ReplacementShellPreferencesTransaction {
   rollback: () => void;

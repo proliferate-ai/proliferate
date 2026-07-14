@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { PLAN_IMPLEMENT_HERE_PROMPT } from "@/copy/plans/plan-prompts";
+import { PLAN_IMPLEMENT_HERE_PROMPT } from "#product/copy/plans/plan-prompts";
 import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
 import {
   buildPlanImplementationPrompt,
   isPlanImplementationPromptMessage,
-} from "./implementation-prompt";
+} from "#product/lib/domain/plans/implementation-prompt";
 
 describe("buildPlanImplementationPrompt", () => {
   it("builds text and trusted plan reference prompt blocks", () => {

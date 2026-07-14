@@ -9,7 +9,7 @@ import { Switch } from "@proliferate/ui/primitives/Switch";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { SettingsEyebrow } from "@proliferate/product-ui/settings/SettingsEyebrow";
-import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
+import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
 
 const ROUTE_OPTIONS: readonly { value: string; label: string; description: string }[] = [
   { value: "native", label: "Native", description: "Sign in through the harness directly" },

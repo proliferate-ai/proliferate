@@ -5,7 +5,7 @@ import {
   type CSSProperties,
   type WheelEvent as ReactWheelEvent,
 } from "react";
-import { DiffLineContent } from "@/components/content/ui/diff/DiffLineContent";
+import { DiffLineContent } from "#product/components/content/ui/diff/DiffLineContent";
 import {
   DiffCollapsedContentLabel,
   DiffCollapsedGutterIcon,
@@ -13,11 +13,11 @@ import {
   DiffGapGutterControls,
   type ExpandDirection,
   formatUnmodifiedLinesLabel,
-} from "@/components/content/ui/diff/DiffContextExpander";
-import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";
+} from "#product/components/content/ui/diff/DiffContextExpander";
+import { useResolvedMode } from "#product/hooks/theme/derived/use-resolved-mode";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { chainVerticalWheelScroll } from "@proliferate/ui/utils/scroll-chain";
-import type { CollapsedContext, DiffLine, InterHunkGap, ParsedPatch } from "@/lib/domain/files/diff-parser";
+import type { CollapsedContext, DiffLine, InterHunkGap, ParsedPatch } from "#product/lib/domain/files/diff-parser";
 import {
   getDiffLineIndex,
   getDiffLineNumberColumnWidth,
@@ -28,14 +28,14 @@ import {
   getSplitLineType,
   type SplitDiffRow,
   type SplitSide,
-} from "@/lib/domain/files/diff-view-rows";
+} from "#product/lib/domain/files/diff-view-rows";
 import {
   clampGapReveal,
   resolveGapLineCount,
   useGapExpansion,
   type GapExpansionState,
-} from "@/hooks/ui/diff/use-gap-expansion";
-import type { HighlightedToken } from "@/lib/infra/editor/highlighting";
+} from "#product/hooks/ui/diff/use-gap-expansion";
+import type { HighlightedToken } from "#product/lib/infra/editor/highlighting";
 
 /** Flattened render row for split view */
 type SplitRenderRow =

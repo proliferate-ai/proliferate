@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchDesktopReleaseManifest } from "@/lib/access/downloads/desktop-release-manifest";
+import { fetchDesktopReleaseManifest } from "#product/lib/access/downloads/desktop-release-manifest";
 
 describe("desktop release manifest access", () => {
   afterEach(() => {

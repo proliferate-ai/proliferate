@@ -1,13 +1,13 @@
 import { useCallback } from "react";
-import { resolveChatDraftWorkspaceId } from "@/lib/domain/chat/composer/chat-input";
-import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/selection/workspace-ui-key";
+import { resolveChatDraftWorkspaceId } from "#product/lib/domain/chat/composer/chat-input";
+import { resolveSelectedWorkspaceIdentity } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
 import {
   EMPTY_CHAT_DRAFT,
   isChatDraftEmpty,
   type ChatComposerDraft,
-} from "@/lib/domain/chat/composer/file-mention-draft-model";
-import { useChatInputStore } from "@/stores/chat/chat-input-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+} from "#product/lib/domain/chat/composer/file-mention-draft-model";
+import { useChatInputStore } from "#product/stores/chat/chat-input-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 /**
  * Live draft value for the composer editor.

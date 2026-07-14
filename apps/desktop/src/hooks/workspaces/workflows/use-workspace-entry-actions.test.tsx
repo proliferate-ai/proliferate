@@ -3,14 +3,14 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Workspace } from "@anyharness/sdk";
-import { useWorkspaceEntryActions } from "./use-workspace-entry-actions";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { chatWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
-import { buildPendingWorkspaceUiKey } from "@/lib/domain/workspaces/creation/pending-entry";
+import { useWorkspaceEntryActions } from "#product/hooks/workspaces/workflows/use-workspace-entry-actions";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
+import { chatWorkspaceShellTabKey } from "#product/lib/domain/workspaces/tabs/shell-tabs";
+import { buildPendingWorkspaceUiKey } from "#product/lib/domain/workspaces/creation/pending-entry";
 
 const mocks = vi.hoisted(() => ({
   resolveWorktreeCreationInput: vi.fn(),
@@ -60,7 +60,7 @@ vi.mock("./use-workspace-actions", () => ({
 }));
 
 vi.mock("./use-workspace-entry-flow", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./use-workspace-entry-flow")>();
+  const actual = await importOriginal<typeof import("#product/hooks/workspaces/workflows/use-workspace-entry-flow")>();
   return {
     useWorkspaceEntryFlow: () => ({
       ...actual.useWorkspaceEntryFlow(),

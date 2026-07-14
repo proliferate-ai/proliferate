@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveSessionCreationModeId } from "@/lib/domain/sessions/creation/mode";
+import { resolveSessionCreationModeId } from "#product/lib/domain/sessions/creation/mode";
 
 describe("resolveSessionCreationModeId", () => {
   it("lets an explicit mode override the stored user default", () => {

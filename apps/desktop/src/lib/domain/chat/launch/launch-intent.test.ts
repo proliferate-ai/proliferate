@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { ChatLaunchIntent } from "@/lib/domain/chat/launch/launch-intent";
-import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
+import type { ChatLaunchIntent } from "#product/lib/domain/chat/launch/launch-intent";
+import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
 import {
   resolveChatLaunchIntentView,
   resolveChatLaunchRetryMode,
   resolveLaunchIntentPendingWorkspaceId,
-} from "@/lib/domain/chat/launch/launch-intent";
+} from "#product/lib/domain/chat/launch/launch-intent";
 
 function intent(overrides: Partial<ChatLaunchIntent> = {}): ChatLaunchIntent {
   return {

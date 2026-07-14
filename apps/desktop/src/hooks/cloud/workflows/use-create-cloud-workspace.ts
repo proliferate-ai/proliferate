@@ -5,8 +5,8 @@ import type {
   CreateCloudWorkspaceRequest,
 } from "@/lib/access/cloud/client";
 import { createCloudWorkspace } from "@proliferate/cloud-sdk/client/workspaces";
-import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { resolveCloudWorkspaceStatus } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
+import { cloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import { resolveCloudWorkspaceStatus } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
 import {
   buildNextCloudWorkspaceAttempt,
   collectKnownCloudBranchNames,
@@ -14,26 +14,26 @@ import {
   type CloudWorkspaceRepoTarget,
   isCloudWorkspaceBranchConflictError,
   resolveCloudWorkspaceCreateFailureMessage,
-} from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import {
   buildSubmittingPendingWorkspaceEntry,
   createPendingWorkspaceAttemptId,
   type PendingWorkspaceEntry,
   type PendingWorkspaceInitialSession,
-} from "@/lib/domain/workspaces/creation/pending-entry";
-import { useCloudWorkspaceConnectionCache } from "@/hooks/access/cloud/use-cloud-workspace-connection-cache";
-import { useInvalidateCloudBillingState } from "@/hooks/access/cloud/use-cloud-billing";
-import { useWorkspaceSelection } from "@/hooks/workspaces/workflows/selection/use-workspace-selection";
-import { useWorkspaceEntryFlow } from "@/hooks/workspaces/workflows/use-workspace-entry-flow";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { ensureRepoGroupExpanded } from "@/stores/preferences/workspace-ui-store";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import type { AuthUser } from "@/lib/domain/auth/auth-user";
-import { useProductAuthUser } from "@/hooks/auth/facade/use-product-auth";
-import { useWorkspaceCollectionsCache } from "@/hooks/workspaces/cache/use-workspace-collections-cache";
-import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
-import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
+} from "#product/lib/domain/workspaces/creation/pending-entry";
+import { useCloudWorkspaceConnectionCache } from "#product/hooks/access/cloud/use-cloud-workspace-connection-cache";
+import { useInvalidateCloudBillingState } from "#product/hooks/access/cloud/use-cloud-billing";
+import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
+import { useWorkspaceEntryFlow } from "#product/hooks/workspaces/workflows/use-workspace-entry-flow";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { ensureRepoGroupExpanded } from "#product/stores/preferences/workspace-ui-store";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
+import type { AuthUser } from "#product/lib/domain/auth/auth-user";
+import { useProductAuthUser } from "#product/hooks/auth/facade/use-product-auth";
+import { useWorkspaceCollectionsCache } from "#product/hooks/workspaces/cache/use-workspace-collections-cache";
+import { useWorkspaceCollectionsMutationCache } from "#product/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
+import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
 import {
   elapsedMs,
   logLatency,

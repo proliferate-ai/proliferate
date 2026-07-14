@@ -1,5 +1,5 @@
 import type { AdminIntegrationDefinition } from "@proliferate/cloud-sdk/client/integrations";
-import { integrationAuthKindLabel } from "@/lib/domain/settings/integrations-presentation";
+import { integrationAuthKindLabel } from "#product/lib/domain/settings/integrations-presentation";
 
 /**
  * Presentation logic for the org-admin integrations pane: definition

@@ -1,33 +1,33 @@
 import { useMutation } from "@tanstack/react-query";
 import {
   updateWorkspaceDisplayName as updateAnyHarnessWorkspaceDisplayName,
-} from "@/lib/access/anyharness/workspaces";
-import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
-import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
-import { findLogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
+} from "#product/lib/access/anyharness/workspaces";
+import { useWorkspaceCollectionsInvalidation } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
+import { useWorkspaceCollectionsMutationCache } from "#product/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
+import { findLogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import {
   updateCloudWorkspaceDisplayName,
 } from "@proliferate/cloud-sdk/client/workspaces";
-import { getCloudWorkspaceConnectionWithRetry } from "@/lib/access/cloud/workspace-connection-retry";
-import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
-import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
+import { getCloudWorkspaceConnectionWithRetry } from "#product/lib/access/cloud/workspace-connection-retry";
+import { useLogicalWorkspaces } from "#product/hooks/workspaces/derived/use-logical-workspaces";
+import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
 import {
   clearCloudDisplayNameBackfillSuppression,
   suppressCloudDisplayNameBackfill,
-} from "@/hooks/workspaces/lifecycle/cloud-display-name-backfill-suppression";
+} from "#product/hooks/workspaces/lifecycle/cloud-display-name-backfill-suppression";
 import {
   finishMeasurementOperation,
   recordMeasurementMetric,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
 import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
-import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
+import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import {
   type CloudSandboxGatewayUrlSource,
   withFreshCloudSandboxGatewayAccessToken,
-} from "@/lib/access/cloud/cloud-sandbox-gateway";
+} from "#product/lib/access/cloud/cloud-sandbox-gateway";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 
 interface UpdateWorkspaceDisplayNameInput {

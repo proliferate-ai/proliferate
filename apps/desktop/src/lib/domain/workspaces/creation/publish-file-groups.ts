@@ -1,5 +1,5 @@
 import type { GitChangedFile } from "@anyharness/sdk";
-import type { PublishFileGroups } from "@/lib/domain/workspaces/creation/publish-workflow-model";
+import type { PublishFileGroups } from "#product/lib/domain/workspaces/creation/publish-workflow-model";
 
 const PARTIAL_WARNING =
   "Including unstaged changes will also include all unstaged hunks in partially staged files.";

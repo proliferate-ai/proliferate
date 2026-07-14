@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildLocalSlotLogicalWorkspaceId } from "@/lib/domain/workspaces/cloud/logical-workspace-id";
-import { resolveAutoShowMoreRepoKey } from "./sidebar-groups";
+import { buildLocalSlotLogicalWorkspaceId } from "#product/lib/domain/workspaces/cloud/logical-workspace-id";
+import { resolveAutoShowMoreRepoKey } from "#product/lib/domain/workspaces/sidebar/sidebar-groups";
 import {
   buildGroups,
   makeLocalLogicalWorkspace,
-} from "./sidebar-test-fixtures";
+} from "#product/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
 
 describe("local-slot sidebar aliases", () => {
   it("uses local-slot aliases for active, archived, and queued sidebar state", () => {

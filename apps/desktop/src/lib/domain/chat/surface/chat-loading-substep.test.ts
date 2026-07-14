@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveChatLoadingSubstep } from "./chat-loading-substep";
+import { resolveChatLoadingSubstep } from "#product/lib/domain/chat/surface/chat-loading-substep";
 
 const BASE_INPUT = {
   activeSessionId: "session-1",

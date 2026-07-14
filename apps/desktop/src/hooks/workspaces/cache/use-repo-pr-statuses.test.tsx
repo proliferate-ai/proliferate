@@ -9,8 +9,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import type { PropsWithChildren } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { useRepoPrStatuses } from "./use-repo-pr-statuses";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { useRepoPrStatuses } from "#product/hooks/workspaces/cache/use-repo-pr-statuses";
 
 const mocks = vi.hoisted(() => ({
   listForRepoRoot: vi.fn(),

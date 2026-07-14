@@ -1,17 +1,17 @@
 import { useMemo, useState, useEffect } from "react";
-import { parsePatch, type ParsedPatch } from "@/lib/domain/files/diff-parser";
+import { parsePatch, type ParsedPatch } from "#product/lib/domain/files/diff-parser";
 import {
   measureDebugComputation,
   recordMeasurementDiagnostic,
 } from "@/lib/infra/measurement/debug-measurement";
 import { isDebugMeasurementEnabled } from "@/lib/infra/measurement/debug-measurement-env";
-import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
+import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import {
   highlightLines,
   type HighlightedToken,
   type HighlightTheme,
-} from "@/lib/infra/editor/highlighting";
-import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";
+} from "#product/lib/infra/editor/highlighting";
+import { useResolvedMode } from "#product/hooks/theme/derived/use-resolved-mode";
 
 interface DiffHighlightResult {
   parsed: ParsedPatch;

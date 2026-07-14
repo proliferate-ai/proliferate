@@ -2,27 +2,27 @@ import { useCallback } from "react";
 import {
   clearActiveSession,
   invalidateSessionActivationIntent,
-} from "@/hooks/sessions/workflows/session-activation-guard";
+} from "#product/hooks/sessions/workflows/session-activation-guard";
 import {
   chatShellWorkspaceIntentKey,
   viewerWorkspaceShellTabKey,
-} from "@/lib/domain/workspaces/tabs/shell-tabs";
-import { fileViewerTarget, type ViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
+} from "#product/lib/domain/workspaces/tabs/shell-tabs";
+import { fileViewerTarget, type ViewerTarget } from "#product/lib/domain/workspaces/viewer/viewer-target";
 import {
   rightPanelToolHeaderKey,
   rightPanelViewerHeaderKey,
-} from "@/lib/domain/workspaces/shell/right-panel-model";
-import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+} from "#product/lib/domain/workspaces/shell/right-panel-model";
+import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import {
   cancelPendingDeferredChatActivation,
   clearCurrentPendingForWorkspace,
   useChatTabActivation,
-} from "@/hooks/workspaces/workflows/tabs/use-chat-tab-activation";
-import { resolveCurrentShellStateKey } from "@/hooks/workspaces/workflows/tabs/workspace-shell-state-key";
+} from "#product/hooks/workspaces/workflows/tabs/use-chat-tab-activation";
+import { resolveCurrentShellStateKey } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-state-key";
 import type {
   SelectSessionOptionsWithoutGuard,
-} from "@/hooks/workspaces/workflows/tabs/workspace-shell-activation-types";
+} from "#product/hooks/workspaces/workflows/tabs/workspace-shell-activation-types";
 
 export type { SelectSessionOptionsWithoutGuard };
 

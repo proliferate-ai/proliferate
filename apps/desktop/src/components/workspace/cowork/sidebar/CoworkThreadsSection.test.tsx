@@ -4,12 +4,12 @@ import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CoworkThread } from "@anyharness/sdk";
-import { CoworkThreadsSection } from "./CoworkThreadsSection";
+import { CoworkThreadsSection } from "#product/components/workspace/cowork/sidebar/CoworkThreadsSection";
 import {
   buildPendingWorkspaceUiKey,
   buildSubmittingPendingWorkspaceEntry,
-} from "@/lib/domain/workspaces/creation/pending-entry";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+} from "#product/lib/domain/workspaces/creation/pending-entry";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 const coworkState = vi.hoisted(() => ({
   statusLoading: false,

@@ -16,7 +16,7 @@ import {
   terminalItem,
   toolItem,
 } from "@proliferate/product-domain/chats/transcript/transcript-presentation-test-fixtures";
-import { CollapsedActions } from "./CollapsedActions";
+import { CollapsedActions } from "#product/components/workspace/chat/tool-calls/CollapsedActions";
 
 const webTestHost = { desktop: null } as ProductHost;
 

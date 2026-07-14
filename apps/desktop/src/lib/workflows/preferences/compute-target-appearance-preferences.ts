@@ -1,7 +1,7 @@
 import {
   normalizeComputeTargetAppearancePreference,
   type ComputeTargetAppearancePreference,
-} from "@/lib/domain/compute/target-appearance";
+} from "#product/lib/domain/compute/target-appearance";
 
 const COMPUTE_TARGET_APPEARANCE_KEY = "compute_target_appearance_preferences";
 

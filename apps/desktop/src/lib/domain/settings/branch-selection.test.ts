@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GitBranchRef } from "@anyharness/sdk";
-import { resolveAutoDetectedBranch } from "./branch-selection";
+import { resolveAutoDetectedBranch } from "#product/lib/domain/settings/branch-selection";
 
 function branch(overrides: Partial<GitBranchRef> & { name: string }): GitBranchRef {
   return {

@@ -1,28 +1,28 @@
 import { useCallback } from "react";
-import type { ModelSelectorSelection } from "@/lib/domain/chat/models/model-selector-types";
+import type { ModelSelectorSelection } from "#product/lib/domain/chat/models/model-selector-types";
 import type { Workspace } from "@anyharness/sdk";
-import { useSessionCreationActions } from "@/hooks/sessions/workflows/use-session-creation-actions";
-import { formatSessionCreateToastMessage } from "@/lib/domain/sessions/creation/create-session-error";
-import { useSessionConfigActions } from "@/hooks/sessions/workflows/use-session-config-actions";
-import { useCoworkThreadWorkflow } from "@/hooks/cowork/workflows/use-cowork-thread-workflow";
-import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
-import { useChatInputStore } from "@/stores/chat/chat-input-store";
-import { useToastStore } from "@/stores/toast/toast-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { useActiveSessionLaunchState } from "@/hooks/chat/derived/use-active-session-config-state";
-import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
-import { resolveAvailableLaunchSelection } from "@/lib/domain/chat/models/launch-selection-defaults";
+import { useSessionCreationActions } from "#product/hooks/sessions/workflows/use-session-creation-actions";
+import { formatSessionCreateToastMessage } from "#product/lib/domain/sessions/creation/create-session-error";
+import { useSessionConfigActions } from "#product/hooks/sessions/workflows/use-session-config-actions";
+import { useCoworkThreadWorkflow } from "#product/hooks/cowork/workflows/use-cowork-thread-workflow";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
+import { useChatInputStore } from "#product/stores/chat/chat-input-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
+import { useActiveSessionLaunchState } from "#product/hooks/chat/derived/use-active-session-config-state";
+import { useConfiguredLaunchReadiness } from "#product/hooks/chat/derived/use-configured-launch-readiness";
+import { resolveAvailableLaunchSelection } from "#product/lib/domain/chat/models/launch-selection-defaults";
 import {
   EMPTY_CHAT_DRAFT,
   serializeChatDraftToPrompt,
-} from "@/lib/domain/chat/composer/file-mention-draft-model";
-import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
+} from "#product/lib/domain/chat/composer/file-mention-draft-model";
+import { resolveWorkspaceUiKey } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
 import {
   failLatencyFlow,
   startLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
-import { withUpdatedDefaultModelIdByAgentKind } from "@/lib/domain/agents/model-options";
+import { withUpdatedDefaultModelIdByAgentKind } from "#product/lib/domain/agents/model-options";
 
 const EMPTY_WORKSPACES: Workspace[] = [];
 

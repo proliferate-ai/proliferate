@@ -4,7 +4,7 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useAppCommandActions } from "@/hooks/app/workflows/use-app-command-actions";
+import { useAppCommandActions } from "#product/hooks/app/workflows/use-app-command-actions";
 
 const hookMocks = vi.hoisted(() => ({
   copyBranchName: vi.fn(),

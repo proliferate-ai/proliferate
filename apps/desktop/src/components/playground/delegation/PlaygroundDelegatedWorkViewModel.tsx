@@ -1,12 +1,12 @@
-import type { DelegatedWorkComposerViewModel } from "@/hooks/chat/facade/use-delegated-work-composer";
+import type { DelegatedWorkComposerViewModel } from "#product/hooks/chat/facade/use-delegated-work-composer";
 import {
   selectSingleDelegatedAgentTriggerIdentity,
   type DelegatedAgentTriggerCandidate,
-} from "@/lib/domain/delegated-work/presentation";
+} from "#product/lib/domain/delegated-work/presentation";
 import {
   PLAYGROUND_SUBAGENT_STRIP_ROWS,
-} from "@/lib/domain/chat/__fixtures__/playground/delegation-fixtures";
-import { noop } from "@/components/playground/PlaygroundComposerActions";
+} from "#product/lib/domain/chat/__fixtures__/playground/delegation-fixtures";
+import { noop } from "#product/components/playground/PlaygroundComposerActions";
 
 export function buildPlaygroundDelegatedWorkViewModel(args: {
   subagentRows?: typeof PLAYGROUND_SUBAGENT_STRIP_ROWS;

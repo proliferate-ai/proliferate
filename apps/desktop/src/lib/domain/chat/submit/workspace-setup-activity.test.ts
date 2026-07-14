@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { WorkspaceArrivalEvent } from "@/lib/domain/workspaces/creation/arrival";
-import { isWorkspaceSetupActive } from "./workspace-setup-activity";
+import type { WorkspaceArrivalEvent } from "#product/lib/domain/workspaces/creation/arrival";
+import { isWorkspaceSetupActive } from "#product/lib/domain/chat/submit/workspace-setup-activity";
 
 function arrival(
   overrides: Partial<WorkspaceArrivalEvent> = {},

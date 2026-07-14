@@ -1,4 +1,4 @@
-import type { StoredAuthSession } from "@/lib/domain/auth/stored-auth-session";
+import type { StoredAuthSession } from "#product/lib/domain/auth/stored-auth-session";
 
 export interface ActiveGitHubSignIn {
   state: string;

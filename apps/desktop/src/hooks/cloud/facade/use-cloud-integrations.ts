@@ -2,15 +2,15 @@ import { useMemo } from "react";
 import {
   mergeCloudIntegrations,
   type CloudIntegrationView,
-} from "@/lib/domain/cloud/integrations";
-import { useIntegrationActions } from "@/hooks/access/cloud/integrations/use-integration-actions";
-import { useIntegrationCatalog } from "@/hooks/access/cloud/integrations/use-integration-catalog";
+} from "#product/lib/domain/cloud/integrations";
+import { useIntegrationActions } from "#product/hooks/access/cloud/integrations/use-integration-actions";
+import { useIntegrationCatalog } from "#product/hooks/access/cloud/integrations/use-integration-catalog";
 import {
   useIntegrationHealth,
   useInvalidateCloudIntegrations,
-} from "@/hooks/access/cloud/integrations/use-integration-health";
-import { useIntegrationOauthFlow } from "@/hooks/access/cloud/integrations/use-integration-oauth-flow";
-import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
+} from "#product/hooks/access/cloud/integrations/use-integration-health";
+import { useIntegrationOauthFlow } from "#product/hooks/access/cloud/integrations/use-integration-oauth-flow";
+import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 
 export type { CloudIntegrationView };
 

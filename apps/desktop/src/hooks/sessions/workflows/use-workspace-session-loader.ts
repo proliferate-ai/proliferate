@@ -1,21 +1,21 @@
 import { useCallback } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
-import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
-import type { SessionLatencyFlowOptions } from "@/hooks/sessions/workflows/session-selection-options";
+import { useWorkspaceSessionCache } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
+import type { WorkspaceSession } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
+import type { SessionLatencyFlowOptions } from "#product/hooks/sessions/workflows/session-selection-options";
 import {
   ensureRuntimeReadyForSessions,
   fetchWorkspaceSessions,
-} from "@/hooks/sessions/workflows/session-selection-runtime";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
+} from "#product/hooks/sessions/workflows/session-selection-runtime";
+import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
 import { getLatencyFlowRequestHeaders } from "@/lib/infra/measurement/latency-flow";
 import { recordMeasurementMetric } from "@/lib/infra/measurement/debug-measurement";
-import { parseTargetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { parseTargetWorkspaceSyntheticId } from "#product/lib/domain/compute/target-workspace-id";
+import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import {
   filterReplacedSessionTombstones,
-} from "@/hooks/sessions/workflows/session-replacement-tombstones";
+} from "#product/hooks/sessions/workflows/session-replacement-tombstones";
 
 export function useWorkspaceSessionLoader() {
   const host = useProductHost();
