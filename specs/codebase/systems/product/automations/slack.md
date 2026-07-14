@@ -1,14 +1,14 @@
 # 07 — Slack Bot
 
-Status: parked/disabled. The implementation is preserved, but the desktop
-settings entry point, cloud Slack router, and session-event outbound hook are
-intentionally commented out until the Slack bot flow is revived.
+Status: target
+
+Current gap: this feature remains parked, and its command, exposure, and
+projection substrate is not deployed.
 
 Date: 2026-05-20.
 
 Depends on: [`sandbox-provisioning.md`](../../../platforms/product/sandbox-provisioning.md),
 [`agent-auth.md`](../../../platforms/product/agent-auth.md),
-[`cloud-commands.md`](../../../platforms/product/cloud-commands.md),
 [`claiming.md`](../../../platforms/product/claiming.md),
 [`automations.md`](target.md).
 

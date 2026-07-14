@@ -1,11 +1,13 @@
 # 05 — Claiming
 
-Status: implementation-ready spec.
+Status: target
+
+Current gap: the claiming and workspace-exposure substrate described here is
+not deployed.
 
 Date: 2026-05-20.
 
-Depends on: [`sandbox-provisioning.md`](sandbox-provisioning.md),
-[`cloud-commands.md`](cloud-commands.md).
+Depends on: [`sandbox-provisioning.md`](sandbox-provisioning.md).
 
 Claiming is a one-way ownership transition. When work is created
 shared and unclaimed (by Slack, automations, or another team path),

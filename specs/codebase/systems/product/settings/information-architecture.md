@@ -1,6 +1,8 @@
 # 03 — Settings / Admin Information Architecture
 
-Status: implementation-ready spec.
+Status: target
+
+Current gap: the managed-Target UI described here is not implemented.
 
 Date: 2026-05-20.
 

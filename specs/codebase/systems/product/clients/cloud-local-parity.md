@@ -1,6 +1,9 @@
 # Web Cloud/Local Parity Spec
 
-Status: product and implementation spec.
+Status: target
+
+Current gap: the command, exposure, and session-projection portions described
+here are not deployed.
 
 Date: 2026-05-25
 

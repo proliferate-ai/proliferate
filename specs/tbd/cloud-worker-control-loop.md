@@ -1,6 +1,9 @@
 # Cloud Worker Control Loop Load Reduction
 
-Status: draft implementation spec.
+Status: draft
+
+Current gap: this proposal assumes a removed Cloud Target, command-downlink,
+event-uplink, and exposure architecture; none of that control loop is deployed.
 
 Date: 2026-05-31.
 
@@ -11,10 +14,9 @@ Owners touched by this design:
 - Desktop native dispatch worker launch guard.
 - Cloud observability for API load and DB pool pressure.
 
-This document is in `specs/tbd/` while the design is being reviewed. When the
-implementation lands, the durable contract should move to
-`specs/codebase/platforms/product/cloud-worker-control-loop.md` or be folded into
-`specs/codebase/platforms/product/cloud-commands.md` plus the worker focused guides.
+This document remains in `specs/tbd/` while the design is unapproved. Any
+implemented successor must establish a new canonical owner rather than assume
+the removed architecture is current.
 
 Redis/wake ownership is ratified in
 `specs/tbd/shared-redis-wake-ownership.md`. In short: the worker control-loop

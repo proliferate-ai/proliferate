@@ -1,11 +1,13 @@
 # 10 — Migration / Move Runnable State
 
-Status: implementation-ready spec.
+Status: target
+
+Current gap: the command/exposure migration path described here is not
+deployed.
 
 Date: 2026-05-20.
 
 Depends on: [`sandbox-provisioning.md`](../../../platforms/product/sandbox-provisioning.md),
-[`cloud-commands.md`](../../../platforms/product/cloud-commands.md),
 [`claiming.md`](../../../platforms/product/claiming.md),
 [`cloud-dispatch.md`](cloud-dispatch.md).
 

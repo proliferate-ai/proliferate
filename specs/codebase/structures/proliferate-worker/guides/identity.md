@@ -1,107 +1,79 @@
 # Worker Identity
 
-Status: authoritative for `anyharness/crates/proliferate-worker/src/identity/**`.
+Status: authoritative for `anyharness/crates/proliferate-worker/src/identity/**`
+and `integration_gateway.rs`.
 
-`identity/` owns the worker's Cloud identity lifecycle. It turns a one-time
-enrollment token into a durable worker token, persists it locally through store
-APIs, and exposes the enrolled identity to the rest of the process.
-
-Identity is **collapsed and ephemeral**: one worker = one sandbox = one Target
-(1:1). There is no slot, no `slot_generation`, and no fence. A sandbox death is
-a brand-new Target with a fresh enrollment — never a re-enrollment into an
-existing slot.
-
-## Target Shape
+The Worker has a one-time bootstrap credential and one durable Cloud identity:
 
 ```text
-identity/
-  mod.rs
-  enrollment.rs
-  credentials.rs
-  fingerprint.rs
+enrollment_token
+  -> POST /v1/cloud/worker/enroll
+  -> worker_id + worker_token + integration-gateway coordinates
 ```
 
-## What Goes Where
+The persisted identity contains only `worker_id` and `worker_token`. Sandbox,
+user, runtime kind, revocation, and liveness are Cloud-owned associations; the
+Worker does not persist a Target, profile, slot, generation, or fence.
 
-| File | Owns | Must Not Own |
-| --- | --- | --- |
-| `mod.rs` | Identity facade and `ensure_enrolled` workflow. | Command, reconcile, event, heartbeat, or materialization logic. |
-| `enrollment.rs` | One-time bootstrap exchange and enroll request construction. | Durable row CRUD; slot validation. |
-| `credentials.rs` | Enrolled-identity shape, load/save coordination, auth helpers. | Enrollment HTTP request mechanics. |
-| `fingerprint.rs` | Machine fingerprint and hostname hints used during enrollment. | Authentication decisions. |
+## Source Ownership
 
-Persistence for the identity row belongs in `store/identity.rs`.
+| File | Owns |
+| --- | --- |
+| `identity/mod.rs` | Durable-identity-first `ensure_enrolled` workflow |
+| `identity/enrollment.rs` | Enrollment request construction and response split |
+| `identity/credentials.rs` | `WorkerIdentity` and narrow store delegation |
+| `identity/fingerprint.rs` | Diagnostic machine fingerprint and hostname hint |
+| `integration_gateway.rs` | Private runtime credential file written from a fresh enrollment response |
+| `store/identity.rs` | Single persisted identity row |
 
-## Enrollment Workflow
-
-`identity::ensure_enrolled` is the only high-level identity workflow:
+## Enrollment Precedence
 
 ```text
-if identity exists in store:
-  clear enrollment_token from config if present
-  return identity
+if SQLite contains an identity:
+  use it
+  clear any enrollment token from config best-effort
+  do not call enroll
 
 otherwise:
-  require enrollment_token from config
-  build enrollment request (fingerprint, hostname, versions, inventory)
-  call Cloud enroll endpoint
-  convert response into WorkerIdentity
-  save identity
-  clear enrollment_token from config
-  return identity
+  require enrollment_token
+  send fingerprint, hostname, Worker version, and optional AnyHarness version
+  persist worker_id + worker_token
+  clear enrollment token from config best-effort
+  write integration-gateway credentials
 ```
 
-There is **no slot validation** on enroll: on a dead sandbox the worker comes up
-as a new Target, not a re-enroll. Other modules should not hand-roll enrollment
-checks.
+A durable identity always wins over an enrollment token still present in the
+configuration. An invalid or revoked durable token does not trigger automatic
+re-enrollment.
 
-## Credential Shape
+## Credentials
 
-```rust
-pub struct WorkerIdentity {
-    pub target_id: String,
-    pub worker_id: String,
-    pub worker_token: String,
-}
-```
+- `enrollment_token` is a single-use bootstrap value and is removed from the
+  private TOML configuration after enrollment when possible.
+- `worker_token` is the durable opaque bearer token for authenticated Worker
+  heartbeats. The Worker client also attaches it to catalog fetches, but the
+  current catalog route does not enforce Worker authentication.
+- The integration-gateway authorization value is distinct. On fresh
+  enrollment it is written atomically to `integration-gateway.json` with
+  private directory/file permissions.
+- `runtime_bearer_token` authenticates narrow calls to the co-located
+  AnyHarness runtime. It is not Cloud auth.
 
-Interpretation:
-
-- `target_id`: the Cloud Target this worker is — one Target per sandbox.
-- `worker_id`: the Cloud worker row created during enrollment.
-- `worker_token`: the durable Worker → Cloud bearer credential.
-
-There are deliberately no `sandbox_profile_id`, `cloud_sandbox_id`, or
-`slot_generation` fields. In the collapsed model the Target *is* the sandbox, so
-there is nothing to fence and no slot identity to carry.
-
-## Auth Lanes
-
-Keep these distinct:
-
-- `enrollment_token`: one-time bootstrap credential.
-- `worker_token`: durable Worker → Cloud bearer credential.
-- `anyharness_bearer_token`: local Worker → AnyHarness credential.
-
-Never treat AnyHarness auth as Cloud auth. Never treat the fingerprint as auth.
+The enrollment response's integration-gateway coordinates are not stored in
+Worker SQLite. A restart that loads an existing identity does not recreate a
+missing gateway file. Escalate that state; do not silently re-enroll or mint a
+replacement locally.
 
 ## Fingerprint
 
-```text
-machine_fingerprint = sha256(os + ":" + arch + ":" + hostname)
-hostname            = HOSTNAME or COMPUTERNAME, if present
-```
-
-The fingerprint is a stable display/debug hint for Cloud enrollment records. It
-is not an auth credential, not a secure hardware identity, and not a replacement
-for `worker_token`.
+The fingerprint is SHA-256 over OS, architecture, and hostname. It is a
+diagnostic hint, not authentication or hardware attestation.
 
 ## Hard Rules
 
-- All enrollment flows through `identity::ensure_enrolled`.
-- Bootstrap token use is limited to enrollment.
-- Durable Worker auth is represented by `WorkerIdentity` — `target_id` +
-  `worker_id` + `worker_token`, nothing slot-shaped.
-- Credential storage remains local and private.
-- Identity code avoids command, reconcile, event, heartbeat, and materialization
-  logic.
+- Route enrollment through `identity::ensure_enrolled`.
+- Never log, expose, or duplicate token values.
+- Keep Worker identity limited to `worker_id` and `worker_token`.
+- Keep private config and gateway writes atomic and permission-restricted.
+- Do not implement routine token rotation, local identity deletion, or
+  re-enrollment without an explicit product recovery design.

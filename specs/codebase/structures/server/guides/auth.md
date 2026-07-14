@@ -12,7 +12,7 @@ checks** — they are never a hidden permission layer.
 
 | Boundary | Question | Lives in | Returns |
 |---|---|---|---|
-| **Authentication** | Who is the caller? | `auth/dependencies.py` | the actor (`User` / `WorkerAuthContext`) |
+| **Authentication** | Who is the caller? | `auth/dependencies.py` for users; `server/cloud/runtime_workers/auth.py` for Workers | the actor (`User` / `WorkerAuthContext`) |
 | **Org authorization** | Does the caller have the right org standing? | `permissions.py` (factory deps) | `OwnerContext` |
 | **Resource access** | Can this caller touch *this* resource? | `server/<domain>/access.py` | the resource snapshot, or raises 403/404 |
 | **Product rule** | Given this state, is the action permitted now? | `server/<domain>/domain/policy.py` | `PolicyVerdict` |
@@ -39,7 +39,7 @@ anonymous
         ├── require_org_membership(org_id)  org member  -> OwnerContext
         └── require_org_role(org_id, roles) org standing -> OwnerContext
 
-current_worker                             worker JWT  -> WorkerAuthContext
+authenticate_worker                       opaque worker bearer token -> WorkerAuthContext
 optional_current_active_user               maybe authenticated (public-with-extras)
 ```
 
@@ -58,8 +58,8 @@ server/proliferate/
 
   auth/
     __init__.py
-    dependencies.py          # all actor deps: current_active_user, current_product_user,
-                             #   optional_current_active_user, current_worker
+    dependencies.py          # user actor deps: current_active_user, current_product_user,
+                             #   optional_current_active_user
     users.py                 # UserManager (fastapi-users lifecycle plumbing)
     viewer_api/              # /auth/viewer + /users/me surface: api.py, profile_api.py, service.py, models.py
     desktop_api/             # desktop OAuth flow (authorize, callback, PKCE, pages)
@@ -70,6 +70,9 @@ server/proliferate/
     access.py                # resource-access route deps (per domain)
     domain/
       policy.py              # pure product-rule verdicts (per domain)
+
+  server/cloud/runtime_workers/
+    auth.py                  # WorkerAuthContext + opaque bearer-token dependency
 ```
 
 `auth/utils/` holds only the closed set of auth crypto primitives
@@ -187,22 +190,23 @@ def can_archive_workspace(
 
 ## Authentication
 
-`auth/dependencies.py` owns every actor dependency — the single home for "who is
-the caller." Each is a thin `Depends()` that composes the one above it.
+`auth/dependencies.py` owns user actor dependencies. The Cloud runtime-worker
+domain owns its separate machine-actor dependency because the opaque Worker
+token is part of that domain's enrollment lifecycle.
 
 | Dep | Gates |
 |---|---|
 | `current_active_user` | active user, no GitHub requirement |
 | `current_product_user` | active user **+ GitHub connected** — the default for product/cloud surfaces. Single-org (self-hosted) instances bypass the GitHub check for password-only accounts; hosted keeps it unconditionally. |
 | `optional_current_active_user` | maybe authenticated (public route with extra behavior when signed in) |
-| `current_worker` | worker JWT, resolved to a `WorkerAuthContext` (see Worker actor) |
 
 There is no `current_limited_user`: it was a no-op wrapper over
 `current_active_user` and does not exist in this model.
 
 ### Allowed
 
-- `Depends(...)` functions returning an actor (`User` or `WorkerAuthContext`).
+- `Depends(...)` functions returning a user actor (`User`). The separate
+  Worker actor dependency remains in `server/cloud/runtime_workers/auth.py`.
 - JWT parsing (via `auth/utils/jwt`), session/user lookup.
 - Platform-level admin checks that scope to identity, not a resource.
 
@@ -250,43 +254,53 @@ compatibility routes and must not be configured as the current callback.
 
 ## Worker actor
 
-`current_worker` authenticates a remote runtime worker. A worker is not a user:
-it presents a worker JWT that resolves to a single `target_id`, and that resolved
-`WorkerAuthContext` is what worker-facing endpoints depend on. It lives in
-`auth/dependencies.py` alongside the other actors — there is no inline
-`authenticate_worker(...)` call in any endpoint body.
+`server/cloud/runtime_workers/auth.py::authenticate_worker` authenticates an
+enrolled runtime Worker. A Worker is not a user and does not present a JWT or a
+Target id. It presents an opaque bearer token; the dependency hashes that token,
+loads the active `cloud_runtime_worker`, and returns a frozen
+`WorkerAuthContext` containing `worker_id`, `owner_user_id`, optional
+`organization_id`, and `runtime_kind`.
 
 ### Allowed
 
-- A `Depends()` that verifies the worker JWT (via `auth/utils/jwt`) and returns
-  the `WorkerAuthContext` (the resolved `target_id` and its context).
-- Rejecting an unknown, archived, or revoked token with 401.
+- A domain-owned `Depends()` that parses one bearer header, hashes the opaque
+  token, and returns `WorkerAuthContext`.
+- Rejecting a missing, malformed, unknown, or revoked token with 401.
 
 ### Banned
 
-- Command- or revision-scoped authorization. The dep authenticates the worker;
-  whether a target may act on a specific command or revision is decided in the
-  owning domain.
-- Inline `worker_token` parsing in `api.py` handlers or in services. The token is
-  authenticated once, in the dep; ~15 copy-pasted call sites collapse into it.
+- Product-command, Target, lease, or revision authorization. Those endpoints do
+  not exist in the current Worker surface.
+- Re-parsing `worker_token` in handlers or services. The domain dependency owns
+  bearer parsing and token lookup once.
 
 ### Standard shape
 
 ```python
-# auth/dependencies.py
-async def current_worker(
-    authorization: str = Header(...),
+# server/cloud/runtime_workers/auth.py
+async def authenticate_worker(
+    request: Request,
     db: AsyncSession = Depends(get_async_session),
 ) -> WorkerAuthContext:
-    context = await resolve_worker_token(db, authorization)
-    if context is None:
-        raise HTTPException(status_code=401, detail="Invalid worker token")
-    return context
+    token = bearer_token_from_request(request)
+    worker = await runtime_workers_store.get_worker_by_token_hash(
+        db,
+        token_hash=runtime_workers_store.hash_worker_token(token),
+    )
+    if worker is None:
+        raise CloudApiError(..., status_code=401)
+    return WorkerAuthContext(
+        worker_id=worker.id,
+        owner_user_id=worker.owner_user_id,
+        organization_id=worker.organization_id,
+        runtime_kind=worker.runtime_kind,
+    )
 ```
 
-Worker-facing endpoints — the control long-poll, command lease/result, and
-applied-revision report — depend on `current_worker` and receive a pre-authorized
-`target_id`. Services on those paths never re-authenticate the worker.
+`POST /v1/cloud/worker/heartbeat` depends on `authenticate_worker` and receives
+the resolved Worker identity. Enrollment consumes its separate one-time token;
+the public artifact redirect routes are intentionally unauthenticated. There is
+no mounted Worker control, command lease/result, or applied-revision endpoint.
 
 ## Org Authorization
 
@@ -470,8 +484,8 @@ The handler is three lines and the service has no inline auth.
   endpoint via the `permissions.py` factory and pass it in.
 - Product rules buried as `if not condition: raise HTTPException(403)` in
   `service.py`. Extract to pure verdicts in `domain/policy.py`.
-- Inline `authenticate_worker(...)` or `worker_token` parsing in handlers or
-  services. Authenticate once via `current_worker`.
+- Inline Worker bearer parsing in handlers or services. Authenticate once via
+  the domain-owned `authenticate_worker` dependency.
 - Importing authorization helpers from a domain service
   (`from organizations.service import require_org_role`) or from `auth/`. Always
   import `OwnerContext`, `PolicyVerdict`, and the factories from

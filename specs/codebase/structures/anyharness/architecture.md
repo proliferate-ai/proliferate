@@ -13,7 +13,8 @@ practices. The authoritative folder standards live in
 ## 1. Purpose / Ownership
 
 AnyHarness is **the runtime that runs coding-agent sessions over the ACP protocol,
-inside the sandbox**. It is the thing the `proliferate-worker` drives locally.
+inside the sandbox or on Desktop**. Product clients call it directly; managed
+Cloud traffic reaches the same API through the cloud-sandbox gateway.
 
 It owns:
 - **Running agent sessions** — spawning the agent subprocess, driving prompt turns
@@ -21,15 +22,15 @@ It owns:
   event log.
 - **The durable record** of those sessions (config, history, identity) in local
   SQLite.
-- **The synced config** the cloud pushes in — external MCP servers, skills, and
-  agent/provider auth — and its materialization into a session.
+- **Applied runtime config** — external MCP servers, skills, and agent/provider
+  auth — and its materialization into a session.
 - **The product MCP tools** we expose back to the agent (subagents, reviews,
   cowork, skills, …).
 
-It does **not** own: product orchestration or multi-sandbox truth (the cloud's
-job), process lifecycle / binary updates (supervisor's job), or cloud transport
-(worker's job). AnyHarness is a local, single-sandbox engine that applies what
-it's told and reports what happened.
+It does **not** own product orchestration or account/billing truth (Cloud's
+job), nor the external launch/update machinery used by Desktop, Worker, or an
+installed Supervisor. AnyHarness is a local runtime engine whose own APIs and
+SQLite database own workspace/session execution truth.
 
 **The defining axis — Durable vs Live.** Almost every placement question in
 AnyHarness reduces to one split: *is this the durable meaning of a session, or the
@@ -113,9 +114,9 @@ live/.../rendezvous/mcp_elicitation     live: a pending elicitation rendezvous
 api/http/product_mcp.rs          edge: the one HTTP route product MCPs are served on
 ```
 
-### The two synced bundles (what the cloud pushes in)
+### The two applied bundles
 
-Both are **revision + scope versioned**, applied per sandbox-profile scope, and
+Both are **revision + scope versioned**, applied to a runtime scope, and
 **snapshotted per session at create** (config never mutates inside a live session):
 
 ```text
@@ -127,17 +128,18 @@ agent-auth       PUT /v1/agents/auth-config    per-agent-kind provider creds (en
 
 A session **pins** to a revision at create (`runtime_config_session_context` /
 `agent_auth_scope` + `required_agent_auth_revision`), **materializes** secrets once
-into the session, and launches from that frozen snapshot. "Refresh" = the worker
-re-applies a new revision and the *next* session picks it up — never a live update.
+into the session, and launches from that frozen snapshot. "Refresh" means an
+authorized caller applies a new revision and the *next* session picks it up —
+never a live update.
 
-### The event model (the OUT side)
+### The event model
 
 One `SessionEventSink` per session owns truth: a monotonic `seq`, the `turn_id`,
 and the open-item state. ACP notifications are *normalized* into contract events
 (one notification → 0..n events); `item_completed` is **synthesized** by
 accumulating chunks, not a raw ACP frame. Every event is **persisted before
-broadcast** (`publish_session_event`), which is what makes the worker's up-tail
-replayable by `seq`.
+broadcast** (`publish_session_event`), which makes direct SSE/replay consumers
+recoverable by `seq`.
 
 ---
 
@@ -172,13 +174,17 @@ agent asks permission OR a product MCP tool elicits
   → rendezvous resolves the oneshot → the parked ACP callback returns → sink.interaction_resolved
 ```
 
-**Config sync / reconcile (driven by the worker):**
+**Config application:**
 ```text
-control long-poll delivers per-domain revisions + refresh commands
-  → worker fetches the bundle → PUT /v1/runtime-config or /v1/agents/auth-config
-  → store upserts ONLY if sequence newer → read-back → worker advances applied-revision
+authorized caller → PUT /v1/runtime-config or /v1/agents/auth-config
+  → store upserts only when the sequence is newer
   → next session created snapshots the new revision (running sessions unaffected)
 ```
+
+The current Proliferate Worker does not poll for these bundles or report applied
+revisions. Managed Cloud calls/proxies to AnyHarness directly; the Worker's
+AnyHarness HTTP use is limited to catalog convergence and the post-relaunch
+`GET /health` version gate.
 
 **Skill discovery / activation (advisory, no wiring change):**
 ```text
@@ -273,5 +279,6 @@ the one vertical cutting through all layers; and two revision-pinned synced bund
 (runtime-config = external MCPs + skills; agent-auth = provider creds) are
 snapshotted per session at create and never mutated live. Skills are DB-backed,
 MCP-delivered, advisory know-how with progressive disclosure — not filesystem files
-and not access control. The whole thing applies what the cloud commands and reports
-what happened.
+and not access control. Direct clients and the Cloud gateway use the same
+AnyHarness contracts; the optional Worker only converges catalog/runtime
+versions around the running process.

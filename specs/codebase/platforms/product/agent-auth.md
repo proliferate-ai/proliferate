@@ -1,6 +1,9 @@
 # 02 — Agent Auth
 
-Status: implementation-ready spec.
+Status: target
+
+Current gap: the Target/profile-state portions described here were removed and
+are not deployed.
 
 Date: 2026-06-05 (collapsed-identity revision; applied-revision validity is
 per active target, no slot fence).

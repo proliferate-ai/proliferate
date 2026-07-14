@@ -1,12 +1,14 @@
 # 08 — Web / Mobile / Dispatch UX
 
-Status: implementation-ready spec.
+Status: target
+
+Current gap: the command, exposure, and projection substrate described here is
+not deployed.
 
 Date: 2026-05-20.
 
 Depends on: [`sandbox-provisioning.md`](../../../platforms/product/sandbox-provisioning.md),
 [`settings-admin-ia.md`](../settings/information-architecture.md),
-[`cloud-commands.md`](../../../platforms/product/cloud-commands.md),
 [`claiming.md`](../../../platforms/product/claiming.md).
 
 Web and mobile become first-class Cloud-mediated clients of the

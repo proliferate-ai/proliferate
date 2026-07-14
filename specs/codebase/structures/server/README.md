@@ -169,8 +169,9 @@ Persistence rule:
   `lib/` only at its second domain consumer.
 - Authorization is enforced at the endpoint via `Depends()`; services receive a
   pre-authorized context and run no auth checks. All actor deps
-  (`current_active_user`, `current_product_user`, `current_worker`) live in
-  `auth/dependencies.py`; org-authorization factory deps and verdict types
+  (`current_active_user`, `current_product_user`) live in
+  `auth/dependencies.py`; the runtime-worker bearer dependency lives with the
+  Cloud runtime-worker domain; org-authorization factory deps and verdict types
   (`require_org_role`, `require_org_membership`, `OwnerContext`, `PolicyVerdict`)
   live in `permissions.py` at the server root; resource-access deps live in
   `server/<domain>/access.py`; and product policy verdicts live in
@@ -217,9 +218,9 @@ changing:
 - [guides/background.md](guides/background.md)
 
 Product and surface contracts live outside this structure folder. For
-cross-cutting backend behavior such as billing, runtime provisioning, MCP,
-claiming, cloud commands, workspace lifecycle, or product auth, also read the
-relevant spec under `specs/codebase/platforms/product/**` or
+cross-cutting backend behavior such as billing, sandbox/workspace provisioning,
+runtime-worker enrollment, MCP, claiming, workspace lifecycle, or product auth,
+also read the relevant spec under `specs/codebase/platforms/product/**` or
 `specs/codebase/systems/**`.
 
 ## Dependency Direction
