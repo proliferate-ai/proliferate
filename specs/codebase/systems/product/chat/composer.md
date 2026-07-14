@@ -53,7 +53,7 @@ ChatView
     │   └── ChatComposerSurface
     │       └── form: ComposerCommandEditor + ModelSelector + SessionConfigControls + ChatComposerActions
     └── footerSlot
-        └── WorkspaceMobilityFooterRow
+        └── reserved for product-specific footer context when present
 ```
 
 The home screen reuses the same composer: `HomeComposerForm`
@@ -67,7 +67,7 @@ Non-negotiable:
 
 - **`ChatComposerDock` owns the dock shell.** Background, scrim, padding, max-width column, slot ordering, and the inset region wrappers all live in `ChatComposerDock.tsx`. The production app (`ChatView`) and the dev playground (`ChatPlaygroundPage`) both render `ChatComposerDock` directly. Do not reconstruct this backdrop in a third place — if you need it somewhere new, reuse the dock.
 - **No `backdrop-blur` on the dock's transcript-covering layer.** That layer sits over the scrolling transcript, and backdrop blur forces WKWebView to re-blur everything behind it on every frame. The implementation is a gradient fade into an opaque-ish `bg-background/95` sheet (`ChatComposerDock.tsx`), not a blur.
-- **`ChatInput` is the composer surface only.** It does not own any of the outer wrapping. It takes no `topSlot` prop. Everything above and below the composer surface is the dock's responsibility, and the workspace footer row is rendered via the dock's dedicated footer slot rather than ad hoc workspace logic in `ChatInput.tsx`.
+- **`ChatInput` is the composer surface only.** It does not own any of the outer wrapping. It takes no `topSlot` prop. Everything above and below the composer surface is the dock's responsibility; product-specific footer context must render through the dock rather than ad hoc workspace logic in `ChatInput.tsx`.
 - **Do not add in-composer read-only status badges.** MCP/plugin state belongs in settings, session details, or explicit action surfaces, not as a persistent strip inside `ChatInput`.
 - **The composer surface paints the seam.** There is no `flatTop` prop or alternate composer mode. Ordinary dock-region panels remain narrower attached trays above the composer. When the full-width workspace-activity cap is present, `ChatComposerDock` squares the composer's top corners with a local `:has()` selector so the cap and input read as one card; removing the cap restores the normal composer radius. The composer still paints after the dock regions so its own top outline remains visible at the seam.
 - **Composer command overlays are composer-local, not dock-region inhabitants.** The slash-command tray renders from `ChatInput` in a small host directly above `ChatComposerSurface` while a prompt-leading `/` trigger is active. It is transient editor UI and does not participate in `useComposerDockSlots` precedence.
@@ -225,14 +225,10 @@ next.
 
 ## 2.1 Composer footer semantics
 
-`WorkspaceMobilityFooterRow` is the dedicated mobility row beneath the composer surface.
-
-- It holds persistent workspace identity and mobility entry controls.
-- It is rendered beneath `ChatInput` via `ChatComposerDock.footerSlot`.
-- It uses `ComposerControlButton`, not ad hoc button treatments.
-- The location control is the only footer control that opens UI, via `PopoverButton` + `ComposerPopoverSurface`; the opened card owns preflight, preparation errors, blockers, and the final handoff action.
-- The detail and branch controls are direct utility actions: local workspaces copy a filesystem path, cloud workspaces copy repository identity, and branch copies the branch name.
-- In-flight workspace mobility replaces the normal footer controls with one inline progress status. Completion, cleanup recovery, and MCP reconnect prompts use the dedicated `ChatView` overlay.
+The dock owns footer placement when a product-specific footer exists. This
+document does not define a shipped workspace migration footer or move flow;
+current workspace migration product behavior is absent and owned by
+[Workspace migration](../workspaces/migration.md).
 
 ## 3. The three composer-area components
 
@@ -471,8 +467,6 @@ Scenarios (selectable via `?s=<key>`):
   multiple-agent generic trigger, failed/attention agent visible in the popover,
   completed-success agent hidden by default, and parent composer enabled while
   review/subagent background work is running.
-- `mobility-local-actionable`, `mobility-local-blocked`, `mobility-unpublished-branch`, `mobility-unpushed-commits`, `mobility-out-of-sync-branch`, `mobility-cloud-active`, `mobility-in-flight`, `mobility-failed` — composer footer row + mobility states
-
 The playground is **dev-only**. It is lazy-loaded via `React.lazy()` gated on `import.meta.env.DEV` in `App.tsx`, so neither the page nor its fixtures land in production bundles.
 
 `/playground/subagents` is a separate fixture-only UX lab for Subagents receipts,

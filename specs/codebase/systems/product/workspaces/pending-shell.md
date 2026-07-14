@@ -30,7 +30,6 @@ Use this map to decide whether this spec applies and where to look first.
 | `apps/desktop/src/hooks/workspaces/workflows/use-pending-workspace-session-materialization.ts` | Projected-to-real session remap. |
 | `apps/desktop/src/hooks/home/workflows/use-home-next-launch.ts` | Home launch and first prompt flow. |
 | `apps/desktop/src/lib/domain/workspaces/sidebar/**` | Pending sidebar projection and handoff. |
-| `apps/desktop/src/lib/domain/workspaces/mobility/**` | Pending composer footer projection. |
 | `apps/desktop/src/lib/domain/workspaces/tabs/**` | Projected tab projection and ordering. |
 | `apps/desktop/src/lib/domain/chat/surface/**` | Chat surface arbitration. |
 | `apps/desktop/src/components/workspace/chat/input/PendingPromptList.tsx` | Queued prompt action rendering. |
@@ -55,7 +54,7 @@ Use these entry points when debugging or extending the system:
 | A queued prompt appears in the wrong place | `resolvePromptOutboxPlacement`, `renderableOutboxEntriesForTranscript`, and `queuedOutboxEntriesForSession`. |
 | A queued action flickers or appears late | `pending-prompt-queue.ts` and the distinction between `show*Action` and `can*`. |
 | A second session/tab appears after materialization | `use-home-next-launch.ts` and `use-pending-workspace-session-materialization.ts`. |
-| A sidebar/header/footer row disappears during handoff | The matching pure projection helper under `lib/domain/workspaces/**`. |
+| A sidebar/header row disappears during handoff | The matching pure projection helper under `lib/domain/workspaces/**`. |
 | Opening an existing workspace briefly shows no tabs or an empty chat | `run-workspace-selection.ts`, then `optimistic-session-shell.ts`, then `use-workspace-bootstrap-actions.ts`. |
 
 ## 1. Purpose
@@ -69,7 +68,7 @@ Workspace and session creation has hard latency:
 
 The UI must not wait for those steps before showing the target shell. The first
 workspace render should look like the eventual materialized shell, with the same
-header actions, chat tab, model/config controls, composer footer, sidebar row,
+header actions, chat tab, model/config controls, sidebar row,
 and queued user work.
 
 The system has one job:
@@ -79,7 +78,7 @@ The system has one job:
 > when they materialize.
 
 The user should never see the implementation timeline. A new workspace should
-not look like "empty shell, then path, then tab, then model, then footer." A
+not look like "empty shell, then path, then tab, then model." A
 queued prompt should not look like "text only, then controls." Config changes
 should not appear applied, then roll back, then apply again. Those are all
 projection bugs.
@@ -419,7 +418,6 @@ projection path.
 | Header tabs | Projected session record plus shell tab intent | Materialized session directory rows |
 | Chat body | Projected session plus session-intent transcript projection | Streamed transcript and reconciled intents |
 | Composer model/config controls | Projected session launch/config state plus pending config intents | Live session config |
-| Composer footer | Pending workspace footer projection | Mobility/logical workspace state |
 | Sidebar | Pending sidebar projection | Logical workspace collections |
 | Header actions | Pending/final workspace identity and known git capability shape | Real workspace git/status state |
 | Arrival panel | Pending entry stage plus arrival event | Real setup/workspace status |
@@ -456,13 +454,6 @@ projection path.
   session load.
 - A normal queued config update must not show a rollback toast. Rollback toasts
   are for real failures, not for "runtime has not caught up yet."
-
-### Workspace Footer
-
-- Use `buildPendingMobilityFooterContext(entry)` for pending workspaces.
-- Do not inject fake rows into `logicalWorkspaces`.
-- The footer should show the final path/repo/branch immediately for local and
-  worktree flows when those values are known.
 
 ### Sidebar
 
@@ -679,8 +670,6 @@ Minimum coverage by concern:
 - chat surface: pending projected session beats launch intent
 - header tabs: projected pending session appears before materialization
 - model selector: projected session labels match final labels
-- mobility footer: pending worktree/local/cloud contexts render without fake
-  logical workspace rows
 - sidebar: pending row before materialization, handoff to real logical id, no
   duplicate item, active row visible under item limits
 - finalization: projected sessions materialize before pending state clears
