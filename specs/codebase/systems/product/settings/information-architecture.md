@@ -41,7 +41,8 @@ Out of scope:
 
 - Feature implementation. Plugins UI lands in spec 01. Agent auth UI in
   spec 02. Compute readiness in spec 00. Slack bot in spec 07. Billing
-  in spec 09. Personal/shared cloud config in 00/01/02.
+  content is owned by the Billing platform. Personal/shared cloud config is
+  owned by 00/01/02.
 - New pages outside the Settings shell. The Plugins, Automations,
   Integrations, and Workflows pages and Cloud workspace sidebars are
   owned by their feature specs.
@@ -98,7 +99,7 @@ every other spec owns its page content:
   spec 06  ->  Automations (top-level page, not Settings)
   future   ->  Integrations and Workflows (top-level pages, not Settings)
   spec 07  ->  Slack bot pane
-  spec 09  ->  Billing pane
+  Billing platform -> Billing and Usage & Limits pane content
 ```
 
 ## 3. Dependencies
@@ -148,8 +149,7 @@ getSettingsScopeForSection(section)            keeps the right tab
                                                highlighted per section
 getFirstSectionForScope(scope)                 landing section per tab
 PARKED_SECTION_SCOPES                          unregistered sections
-                                               (organization-limits,
-                                               slack-bot) still map to a
+                                               (slack-bot) still map to a
                                                scope for deep links
 isSettingsAdminOnlySection(section)            derived from adminOnly flags
 ```
@@ -160,7 +160,7 @@ isSettingsAdminOnlySection(section)            derived from adminOnly flags
 User      general, appearance, keyboard, account, personal-secrets,
           worktrees ("Pruning"), archived-chats (tbr)
 Org       organization, organization-members, billing,
-          organization-secrets                      (all adminOnly)
+          organization-limits, organization-secrets (all adminOnly)
           Policies:        organization-integrations,
                            organization-model-policy
           Authentication:  organization-sso
@@ -177,11 +177,11 @@ from the section. Sections are defined in
 SETTINGS_CONTENT_SECTIONS = [
   "general", "appearance", "keyboard", "account", "personal-secrets",
   "organization", "organization-secrets", "organization-members",
-  "billing", "organization-sso", "organization-integrations",
+  "billing", "organization-limits", "organization-sso", "organization-integrations",
   "organization-model-policy", "environments", "compute",
   "worktrees", "archived-chats", "agent-authentication",
   "agent-defaults",
-  // parked (kept in code, unregistered): "organization-limits", "slack-bot"
+  // parked (kept in code, unregistered): "slack-bot"
 ]
 ```
 
@@ -200,7 +200,7 @@ CloudAuthUnavailablePane.tsx CloudSignInRequiredPane.tsx
 CloudUnavailablePane.tsx     ComputePane.tsx
 EnvironmentsPane.tsx         GeneralPane.tsx
 KeyboardShortcutsPane.tsx    ModelRegistryPane.tsx
-OrganizationBudgetsPane.tsx  (parked)
+OrganizationBudgetsPane.tsx
 OrganizationIntegrationsPane.tsx
 OrganizationMembersPane.tsx  OrganizationPane.tsx
 OrganizationSecretsPane.tsx  OrganizationSsoPane.tsx
@@ -273,14 +273,22 @@ content ownership boundary without adding a fake model-policy backend.
 (`OrganizationIntegrationsPane`).
 
 Parked (pane kept in code, section not registered in navigation or
-routing; `PARKED_SECTION_SCOPES` keeps their deep links on the right
-scope tab):
+routing; `PARKED_SECTION_SCOPES` keeps its deep links on the right scope
+tab):
 
 ```text
-organization-limits    OrganizationBudgetsPane — until real budget
-                       data/enforcement replaces the mocked UI
 slack-bot              SlackBotPane — entry points commented out
 ```
+
+Desktop registers the admin-only `organization-limits` section as **Usage &
+Limits** and renders `OrganizationBudgetsPane` with real billing, usage,
+member, timeseries, and limit hooks. Billing is also connected: Desktop and
+Web both reuse `BillingSettingsSurface`, while their navigation remains
+surface-specific.
+
+When usage metering is enabled and a usage summary exists,
+`SidebarConsumptionCard` renders directly above the app sidebar's account
+footer. It is always outside the account popover.
 
 Personal Integrations and Workflows are top-level app pages rather than
 Settings sections. Rows outside the target list are marked with a small
@@ -303,8 +311,8 @@ rest of the packaged updater and release-notice experience.
 The organization settings surfaces form an organization control center. The
 shell is still the Desktop Settings shell, but the Admin group is product
 oriented: organization identity, members, billing, integrations, model policy,
-and capability limits. Budgets are modeled in code but parked until real
-budget data and enforcement replace the mocked UI.
+and capability limits. Usage and limit data is connected to the current
+organization APIs.
 
 Each Admin surface carries an implementation maturity label so UI can ship
 before every backend primitive exists without confusing reviewers about what is
@@ -363,30 +371,24 @@ Billing
     current plan, Manage action, Proliferate Credits summary, add credits,
     auto top-up, and billing portal.
   rule:
-    the Billing page starts with current plan and credits. Plan comparison and
-    upgrade detail live inside the Manage modal. Stripe portal is the only
-    cancellation/payment-method surface.
+    Desktop and Web reuse BillingSettingsSurface. The Billing page starts with
+    current plan and credits. Plan comparison and upgrade detail live inside
+    the Manage modal. Stripe portal is the cancellation/payment-method
+    surface.
   mocked-ui:
-    PCU purchased/available/used cards and illustrative add-credit/top-up rows
-    may use deterministic mock values until PCU backend fields replace compute
-    hour fields.
+    when plan or visible grant data is unavailable, the shared surface uses a
+    labeled plan fallback and deterministic compute-balance values.
 
-Budgets
-  maturity: parked-ui
+Usage & Limits
+  maturity: real-now, admin-only on Desktop
   owns:
-    usage over time, usage by person, and budget controls.
+    separate compute and LLM balances and timeseries, organization-member
+    usage and drill-down, and organization-wide or per-member limit controls.
   rule:
-    OrganizationBudgetsPane remains in code, but organization-limits is not
-    registered in settings navigation or routing while only mocked usage data
-    exists. When revived, use real members when available and deterministic
-    mock usage values only in tests/stories. Budget controls render as
-    disabled unless the owning backend is connected. Per-person budgets are
-    Enterprise-only.
-  per-person budget shape:
-    each member can have a monthly maximum for LLM credits and an alert
-    threshold. Enforcement should pause new LLM-backed work for that member
-    once the monthly maximum is reached. Compute budgets remain organization
-    level unless a later product decision adds per-member compute caps.
+    organization-limits is registered in Desktop navigation and routing and
+    renders OrganizationBudgetsPane. The editor supports organization-wide
+    and per-member compute or LLM limits for day or month UTC windows. Web
+    does not expose this organization-admin pane.
 
 Plans
   maturity: mocked-ui plus real Stripe entrypoints where available
@@ -413,7 +415,7 @@ Plans
       workflows per person: unlimited
       team members: unlimited
       extras: SSO, org-wide secrets, audit trails, custom instance types,
-        programmatic access, budgets per person, productivity insights,
+        programmatic access, productivity insights,
         VPC deployment, account manager, FDE, premium support.
 
 Integrations and skills
@@ -456,17 +458,14 @@ Org (all adminOnly)
                                                            invite link
   billing                  BillingPane                    billing as an org,
                                                            including auto top up option
+  organization-limits     OrganizationBudgetsPane         Usage & Limits; connected
+                                                           usage and limit controls
   organization-secrets     OrganizationSecretsPane        org-wide secrets
   Policies
     organization-integrations OrganizationIntegrationsPane org-owned integrations
     organization-model-policy SettingsScaffoldPane         allowed/default models
   Authentication
     organization-sso       OrganizationSsoPane            single sign-on
-  # PARKED until budget backend exists:
-  # organization-limits    OrganizationBudgetsPane         usage over time,
-  #                                                        usage by person,
-  #                                                        budget controls
-
 Repo
   environments             EnvironmentsPane               environments
   compute                  ComputePane                    personal compute / SSH targets
@@ -498,7 +497,7 @@ does not mean visible.
 SETTINGS_CONTENT_SECTIONS = [
   "general", "appearance", "keyboard", "account", "personal-secrets",
   "organization", "organization-secrets", "organization-members",
-  "billing", "organization-sso", "organization-integrations",
+  "billing", "organization-limits", "organization-sso", "organization-integrations",
   "organization-model-policy", "environments", "compute",
   "worktrees", "archived-chats", "agent-authentication",
   "agent-defaults",
@@ -557,16 +556,15 @@ Org
   organization              spec 03 + 05  org profile, billing cross-link
   organization-members      spec 03 + 05  members, invitation emails,
                                        invite link
-  billing                   spec 09   current plan, PCUs, add credits,
+  billing                   Billing platform   current plan, PCUs, add credits,
                                        auto top up, Stripe portal, plan changes
+  organization-limits      Billing platform   Usage & Limits: connected usage by meter
+                                       and person, plus organization and member
+                                       limit controls
   organization-secrets      spec 03 (shell) + secrets story (content)
   organization-integrations org integrations spec
   organization-model-policy future model policy spec
   organization-sso          spec 03 (shell) + enterprise SSO story (content)
-  # PARKED until budget backend exists:
-  # organization-limits     spec 09   usage over time, usage by person,
-  #                                    and budget controls
-
 Repo
   environments              spec 03 (shell) + per-repo content owned by
                             the broader env config story; existing
