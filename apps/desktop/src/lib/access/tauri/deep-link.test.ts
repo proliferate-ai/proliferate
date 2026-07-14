@@ -193,5 +193,36 @@ describe("deep-link raw source", () => {
       const { ensureDeepLinkBridge } = await loadDeepLink()
       await expect(ensureDeepLinkBridge(vi.fn())).resolves.toBeUndefined()
     })
+
+    it("contains handler rejections for both initial and live urls", async () => {
+      deepLinkMocks.getCurrent.mockResolvedValue(["proliferate://initial"])
+      let openUrlCallback: ((urls: string[]) => void) | undefined
+      deepLinkMocks.onOpenUrl.mockImplementation(async (cb: (urls: string[]) => void) => {
+        openUrlCallback = cb
+        return () => {}
+      })
+
+      const unhandled: unknown[] = []
+      const onUnhandled = (reason: unknown) => {
+        unhandled.push(reason)
+      }
+      process.on("unhandledRejection", onUnhandled)
+      try {
+        const { ensureDeepLinkBridge } = await loadDeepLink()
+        const handler = vi.fn().mockRejectedValue(new Error("callback failed"))
+        await expect(ensureDeepLinkBridge(handler)).resolves.toBeUndefined()
+        expect(handler).toHaveBeenCalledWith("proliferate://initial")
+
+        openUrlCallback?.(["proliferate://live"])
+        expect(handler).toHaveBeenLastCalledWith("proliferate://live")
+
+        // Give any escaped rejection two macrotask turns to reach the hook.
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(unhandled).toEqual([])
+      } finally {
+        process.off("unhandledRejection", onUnhandled)
+      }
+    })
   })
 })
