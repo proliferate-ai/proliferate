@@ -1,24 +1,25 @@
 import { useEffect } from "react";
-import {
-  clearTelemetryUser,
-  setTelemetryTag,
-  setTelemetryUser,
-} from "@/lib/integrations/telemetry/client";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
 
-// Owns telemetry user identity and auth-status tags. Does not own auth state.
+// Owns telemetry user identity and auth-status tags. Reads the shared auth state
+// from the mounted ProductHost (not the Desktop auth store) and reports through
+// the typed telemetry adapter. Does not own auth state.
 export function useTelemetryAuthIdentity() {
-  const authStatus = useAuthStore((state) => state.status);
-  const user = useAuthStore((state) => state.user);
+  const authState = useProductHost().auth.state;
+  const telemetry = useProductTelemetry();
+
+  const status = authState.status;
+  const user = authState.status === "authenticated" ? authState.user : null;
 
   useEffect(() => {
-    if (authStatus === "authenticated" && user) {
-      setTelemetryUser(user);
-      setTelemetryTag("auth_status", "authenticated");
+    if (status === "authenticated" && user) {
+      telemetry.setUser(user);
+      telemetry.setTag("auth_status", "authenticated");
       return;
     }
 
-    clearTelemetryUser();
-    setTelemetryTag("auth_status", authStatus);
-  }, [authStatus, user]);
+    telemetry.setUser(null);
+    telemetry.setTag("auth_status", status);
+  }, [status, user, telemetry]);
 }

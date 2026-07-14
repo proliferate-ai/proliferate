@@ -13,7 +13,7 @@ import { CloudClientProvider } from "@proliferate/cloud-sdk-react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { useCallback, useMemo, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
-import { appQueryClient } from "@/lib/infra/query/query-client";
+import { appQueryClient } from "@/providers/app-query-client";
 import { cloudWorkspaceConnectionQueryOptions } from "@/hooks/access/cloud/use-cloud-workspace-connection";
 import { resolveWorkspaceConnection } from "@/lib/access/anyharness/resolve-workspace-connection";
 import {

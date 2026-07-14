@@ -13,7 +13,6 @@ import type {
 } from "@proliferate/product-client/host/product-host";
 
 import type { AuthUser } from "@/lib/domain/auth/auth-user";
-import type { DesktopTelemetryRoute } from "@/lib/domain/telemetry/events";
 import type { AuthOrchestrationDeps } from "@/lib/integrations/auth/orchestration-effects";
 import type { GitHubDesktopSignInOptions } from "@/lib/integrations/auth/proliferate-auth";
 import type { DesktopSsoSignInOptions } from "@/lib/integrations/auth/proliferate-sso-auth";
@@ -29,7 +28,6 @@ import {
   encodeDesktopReturnUrl,
 } from "@/lib/domain/auth/desktop-navigation";
 import { subscribeDeepLinkUrls } from "@/lib/access/tauri/deep-link";
-import { resolveDesktopTelemetryRoute } from "@/lib/domain/telemetry/routes";
 import {
   captureTelemetryException,
   clearTelemetryUser,
@@ -276,11 +274,6 @@ export const desktopProductLinks: ProductLinks = {
 
 // --- Telemetry --------------------------------------------------------------
 
-// The last resolved Desktop telemetry route, held across the process so a
-// repeat pathname resolving to the same route suppresses a duplicate emission
-// (mirroring use-telemetry-route-views).
-let previousTelemetryRoute: DesktopTelemetryRoute | null = null;
-
 export const desktopTelemetry: ProductTelemetry = {
   track({ name, properties }): void {
     // Boundary adaptation: the shared event is open-typed while the Desktop
@@ -311,16 +304,12 @@ export const desktopTelemetry: ProductTelemetry = {
     setTelemetryTag(key, value);
   },
   routeChanged(change: ProductRouteChange): void {
-    // S1: signature updated mechanically to the classified ProductRouteChange.
-    // The route classification / single-screen_viewed rework lands in S4; this
-    // adapter still resolves from the pathname to preserve current behavior.
-    const route = resolveDesktopTelemetryRoute(change.pathname);
-    if (previousTelemetryRoute === route) {
-      return;
-    }
-    previousTelemetryRoute = route;
-    setTelemetryTag("route", route);
-    trackProductEvent("screen_viewed", { route });
+    // Host-owned vendor navigation metadata only. Product code
+    // (use-telemetry-route-views) owns route classification, screen-view
+    // deduplication, and the single `screen_viewed` product event; this adapter
+    // attaches the already-classified route to the vendor and emits no product
+    // event. `routeId` is not re-classified here.
+    setTelemetryTag("route", change.routeId);
   },
   getSupportContext() {
     return {
@@ -329,9 +318,3 @@ export const desktopTelemetry: ProductTelemetry = {
     };
   },
 };
-
-// Test-only: reset the module-held route ref so route-suppression tests start
-// from a clean slate.
-export function __resetDesktopTelemetryRouteForTest(): void {
-  previousTelemetryRoute = null;
-}
