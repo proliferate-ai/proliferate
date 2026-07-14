@@ -3628,6 +3628,19 @@ export interface components {
             workspaceId: string;
         };
         /**
+         * @description Schema-v2 portable invocation. Model, mode, and optional effort are target
+         *     intent until AnyHarness resolves and persists a concrete plan.
+         */
+        PutWorkflowRunRequestV2: {
+            arguments?: {
+                [key: string]: components["schemas"]["WorkflowRunArgumentValue"];
+            };
+            definition: components["schemas"]["WorkflowRunDefinitionV2"];
+            /** Format: int64 */
+            schemaVersion: number;
+            workspaceId: string;
+        };
+        /**
          * @description A raw ACP session configuration option as exposed by the active session.
          *
          *     This is the transport-fidelity layer. It should match the live ACP state as
@@ -4598,6 +4611,12 @@ export interface components {
             selectedOptionLabel?: string | null;
             text?: string | null;
         };
+        /**
+         * @description Operation-level PUT union. API decoding first inspects the required integer
+         *     `schemaVersion`, then strictly decodes the selected member.
+         */
+        VersionedPutWorkflowRunRequest: components["schemas"]["PutWorkflowRunRequest"] | components["schemas"]["PutWorkflowRunRequestV2"];
+        VersionedWorkflowRunResponse: components["schemas"]["WorkflowRunResponse"] | components["schemas"]["WorkflowRunResponseV2"];
         /** @description The durable run view. */
         WorkflowRun: {
             arguments: {
@@ -4622,11 +4641,20 @@ export interface components {
             inputs?: components["schemas"]["WorkflowRunInput"][];
             stages: components["schemas"]["WorkflowRunStage"][];
         };
+        WorkflowRunDefinitionV2: {
+            inputs?: components["schemas"]["WorkflowRunInput"][];
+            stages: components["schemas"]["WorkflowRunStageV2"][];
+        };
         /**
          * @description The stable machine failure result on failed runs and steps (spec §6.1).
          * @enum {string}
          */
         WorkflowRunFailureCode: "workspace_unavailable" | "session_create_failed" | "session_start_failed" | "prompt_dispatch_failed" | "session_turn_failed" | "session_turn_cancelled" | "runtime_restarted";
+        /**
+         * @description V2 extends, but does not widen, the stable V1 failure-code component.
+         * @enum {string}
+         */
+        WorkflowRunFailureCodeV2: "workspace_unavailable" | "session_create_failed" | "session_start_failed" | "prompt_dispatch_failed" | "session_turn_failed" | "session_turn_cancelled" | "runtime_restarted" | "session_config_apply_failed";
         /** @description Harness selection for the stage's session. */
         WorkflowRunHarnessConfig: {
             agentKind: string;
@@ -4640,6 +4668,12 @@ export interface components {
              */
             modelId: string | null;
         };
+        WorkflowRunHarnessConfigV2: {
+            agentKind: string;
+            effort?: string | null;
+            modelSelection: components["schemas"]["WorkflowRunModelSelection"];
+            permissionPolicy: components["schemas"]["WorkflowRunPermissionPolicy"];
+        };
         /** @description A declared scalar input. */
         WorkflowRunInput: {
             name: string;
@@ -4652,19 +4686,44 @@ export interface components {
          * @enum {string}
          */
         WorkflowRunInputType: "string" | "number" | "boolean";
+        WorkflowRunModelSelection: {
+            /** @enum {string} */
+            kind: "targetDefault";
+        } | {
+            /** @enum {string} */
+            kind: "exact";
+            modelId: string;
+        };
+        /** @enum {string} */
+        WorkflowRunPermissionPolicy: "workflowDefault";
         /** @description The single `agent.prompt` step. */
         WorkflowRunPromptStep: {
             kind: string;
             prompt: string;
+        };
+        WorkflowRunResolvedHarnessV2: {
+            agentKind: string;
+            effort: string | null;
+            modeId: string;
+            modelId: string;
         };
         /** @description PUT/GET response envelope. */
         WorkflowRunResponse: {
             run: components["schemas"]["WorkflowRun"];
             steps: components["schemas"]["WorkflowRunStep"][];
         };
+        WorkflowRunResponseV2: {
+            resolvedHarness: components["schemas"]["WorkflowRunResolvedHarnessV2"];
+            run: components["schemas"]["WorkflowRunV2"];
+            steps: components["schemas"]["WorkflowRunStepV2"][];
+        };
         /** @description Exactly one stage: a harness configuration plus exactly one prompt step. */
         WorkflowRunStage: {
             harnessConfig: components["schemas"]["WorkflowRunHarnessConfig"];
+            steps: components["schemas"]["WorkflowRunPromptStep"][];
+        };
+        WorkflowRunStageV2: {
+            harnessConfig: components["schemas"]["WorkflowRunHarnessConfigV2"];
             steps: components["schemas"]["WorkflowRunPromptStep"][];
         };
         /**
@@ -4692,6 +4751,37 @@ export interface components {
          * @enum {string}
          */
         WorkflowRunStepStatus: "pending" | "running" | "completed" | "failed";
+        WorkflowRunStepV2: {
+            createdAt: string;
+            failureCode?: null | components["schemas"]["WorkflowRunFailureCodeV2"];
+            finishedAt?: string | null;
+            promptId: string;
+            /** Format: int64 */
+            stageIndex: number;
+            startedAt?: string | null;
+            status: components["schemas"]["WorkflowRunStepStatus"];
+            /** Format: int64 */
+            stepIndex: number;
+            turnId?: string | null;
+            updatedAt: string;
+        };
+        WorkflowRunV2: {
+            arguments: {
+                [key: string]: components["schemas"]["WorkflowRunArgumentValue"];
+            };
+            createdAt: string;
+            definition: components["schemas"]["WorkflowRunDefinitionV2"];
+            failureCode?: null | components["schemas"]["WorkflowRunFailureCodeV2"];
+            finishedAt?: string | null;
+            id: string;
+            /** Format: int64 */
+            schemaVersion: number;
+            sessionId?: string | null;
+            startedAt?: string | null;
+            status: components["schemas"]["WorkflowRunStatus"];
+            updatedAt: string;
+            workspaceId: string;
+        };
         Workspace: {
             cleanupAttemptedAt?: string | null;
             cleanupErrorMessage?: string | null;
@@ -7744,11 +7834,20 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WorkflowRunResponse"];
+                    "application/json": components["schemas"]["VersionedWorkflowRunResponse"];
                 };
             };
             /** @description Non-canonical run ID */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Direct-attach token is outside its workspace scope */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7779,7 +7878,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["PutWorkflowRunRequest"];
+                "application/json": components["schemas"]["VersionedPutWorkflowRunRequest"];
             };
         };
         responses: {
@@ -7789,7 +7888,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WorkflowRunResponse"];
+                    "application/json": components["schemas"]["VersionedWorkflowRunResponse"];
                 };
             };
             /** @description New durable acceptance */
@@ -7798,7 +7897,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WorkflowRunResponse"];
+                    "application/json": components["schemas"]["VersionedWorkflowRunResponse"];
                 };
             };
             /** @description Invalid ID, definition, arguments, or rendered prompt */
@@ -7810,8 +7909,35 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
-            /** @description Same ID, different invocation */
+            /** @description Direct-attach token is outside its workspace scope */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Same ID with different invocation, or workspace mutation blocked */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Portable target cannot be resolved */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -95,6 +95,7 @@ pub enum WorkflowRunFailureCode {
     SessionTurnFailed,
     SessionTurnCancelled,
     RuntimeRestarted,
+    SessionConfigApplyFailed,
 }
 
 impl WorkflowRunFailureCode {
@@ -107,6 +108,7 @@ impl WorkflowRunFailureCode {
             Self::SessionTurnFailed => "session_turn_failed",
             Self::SessionTurnCancelled => "session_turn_cancelled",
             Self::RuntimeRestarted => "runtime_restarted",
+            Self::SessionConfigApplyFailed => "session_config_apply_failed",
         }
     }
 
@@ -119,6 +121,7 @@ impl WorkflowRunFailureCode {
             "session_turn_failed" => Some(Self::SessionTurnFailed),
             "session_turn_cancelled" => Some(Self::SessionTurnCancelled),
             "runtime_restarted" => Some(Self::RuntimeRestarted),
+            "session_config_apply_failed" => Some(Self::SessionConfigApplyFailed),
             _ => None,
         }
     }
@@ -170,6 +173,7 @@ pub struct WorkflowRunRecord {
     pub id: String,
     pub schema_version: i64,
     pub invocation_json: String,
+    pub resolved_plan_json: Option<String>,
     pub status: WorkflowRunStatus,
     pub workspace_id: String,
     pub session_id: Option<String>,
@@ -280,6 +284,111 @@ pub struct WorkflowRunInvocation {
     pub workspace_id: String,
     pub definition: WorkflowDefinition,
     pub arguments: BTreeMap<String, WorkflowArgumentValue>,
+}
+
+/// Schema-v2 portable model intent. Resolution produces one concrete model
+/// before the durable acceptance transaction.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum WorkflowModelSelection {
+    TargetDefault,
+    Exact {
+        #[serde(rename = "modelId")]
+        model_id: String,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WorkflowPermissionPolicy {
+    WorkflowDefault,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowHarnessConfigV2 {
+    pub agent_kind: String,
+    pub model_selection: WorkflowModelSelection,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effort: Option<String>,
+    pub permission_policy: WorkflowPermissionPolicy,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowStageV2 {
+    pub harness_config: WorkflowHarnessConfigV2,
+    pub steps: Vec<WorkflowPromptStep>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowDefinitionV2 {
+    pub inputs: Vec<WorkflowInput>,
+    pub stages: Vec<WorkflowStageV2>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PutWorkflowRunInputV2 {
+    pub schema_version: i64,
+    pub workspace_id: String,
+    pub definition: WorkflowDefinitionV2,
+    pub arguments: BTreeMap<String, serde_json::Value>,
+}
+
+#[derive(Debug, Clone)]
+pub enum VersionedPutWorkflowRunInput {
+    V1(PutWorkflowRunInput),
+    V2(PutWorkflowRunInputV2),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowRunStoredSourceV2 {
+    pub workspace_id: String,
+    pub definition: WorkflowDefinitionV2,
+    pub arguments: BTreeMap<String, WorkflowArgumentValue>,
+}
+
+impl WorkflowRunStoredSourceV2 {
+    pub fn to_canonical_json(&self) -> serde_json::Result<String> {
+        serde_jcs::to_string(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum VersionedWorkflowRunStoredSource {
+    V1(WorkflowRunInvocation),
+    V2(WorkflowRunStoredSourceV2),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowResolvedEffortConfig {
+    pub config_id: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowResolvedPlanV2 {
+    pub workspace_id: String,
+    pub agent_kind: String,
+    pub model_id: String,
+    pub mode_id: String,
+    pub effort_config: Option<WorkflowResolvedEffortConfig>,
+    pub rendered_prompt: String,
+    pub prompt_id: String,
+}
+
+impl WorkflowResolvedPlanV2 {
+    pub fn to_json(&self) -> serde_json::Result<String> {
+        serde_json::to_string(self)
+    }
 }
 
 impl WorkflowRunInvocation {

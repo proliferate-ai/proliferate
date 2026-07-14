@@ -18,6 +18,11 @@ use crate::domains::workflows::model::{
 };
 use crate::domains::workflows::store::{FinishTurnStoreOutcome, WorkflowRunStore};
 
+pub use super::portable_service::{
+    AcceptV2Outcome, InspectV2Outcome, PreparedWorkflowRunV2, VersionedWorkflowRunView,
+    WorkflowRunViewV2,
+};
+
 /// The maximum rendered-prompt size in UTF-8 bytes.
 const MAX_RENDERED_PROMPT_BYTES: usize = 16_384;
 
@@ -46,12 +51,16 @@ pub enum WorkflowRunValidationError {
     MissingReferencedArgument(String),
     MalformedTemplate,
     UnknownTemplateReference(String),
+    UnknownPortableTemplateReference,
     BlankRenderedPrompt,
     RenderedPromptTooLarge(usize),
     BlankAgentKind,
     AgentKindSurroundingWhitespace,
     BlankModelId,
     BlankModeId,
+    EffortRequiresExactModel,
+    BlankEffort,
+    NonPortableNumber,
 }
 
 impl std::fmt::Display for WorkflowRunValidationError {
@@ -88,6 +97,9 @@ impl std::fmt::Display for WorkflowRunValidationError {
             Self::UnknownTemplateReference(reference) => {
                 write!(f, "the prompt references undeclared placeholder '{reference}'")
             }
+            Self::UnknownPortableTemplateReference => {
+                write!(f, "the prompt contains an unknown input placeholder")
+            }
             Self::BlankRenderedPrompt => write!(f, "the rendered prompt must be nonblank"),
             Self::RenderedPromptTooLarge(bytes) => write!(
                 f,
@@ -99,6 +111,14 @@ impl std::fmt::Display for WorkflowRunValidationError {
             }
             Self::BlankModelId => write!(f, "modelId must be nonblank when present"),
             Self::BlankModeId => write!(f, "modeId must be nonblank when present"),
+            Self::EffortRequiresExactModel => {
+                write!(f, "effort requires an exact model selection")
+            }
+            Self::BlankEffort => write!(f, "effort must be nonblank when present"),
+            Self::NonPortableNumber => write!(
+                f,
+                "numbers must be finite IEEE-754 values and integers must be in the I-JSON safe range"
+            ),
         }
     }
 }
@@ -125,6 +145,7 @@ pub struct WorkflowExecutionPlan {
     pub agent_kind: String,
     pub model_id: Option<String>,
     pub mode_id: Option<String>,
+    pub effort_config: Option<crate::domains::workflows::model::WorkflowResolvedEffortConfig>,
     pub rendered_prompt: String,
     pub prompt_id: String,
 }
@@ -158,7 +179,7 @@ pub enum WorkflowAcceptError {
 }
 
 pub struct WorkflowRunService {
-    store: WorkflowRunStore,
+    pub(super) store: WorkflowRunStore,
 }
 
 impl WorkflowRunService {
@@ -189,6 +210,7 @@ impl WorkflowRunService {
             id: run_id.to_string(),
             schema_version: 1,
             invocation_json,
+            resolved_plan_json: None,
             status: WorkflowRunStatus::Accepted,
             workspace_id: input.workspace_id.clone(),
             session_id: None,
@@ -225,6 +247,7 @@ impl WorkflowRunService {
                     agent_kind: validated.agent_kind,
                     model_id: validated.model_id,
                     mode_id: validated.mode_id,
+                    effort_config: None,
                     rendered_prompt: validated.rendered_prompt,
                     prompt_id,
                 };
@@ -470,7 +493,7 @@ fn validate_invocation(
     })
 }
 
-fn coerce_argument(
+pub(super) fn coerce_argument(
     name: &str,
     value: &serde_json::Value,
     declared: WorkflowInputType,

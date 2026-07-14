@@ -6,10 +6,21 @@ from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictFloat,
+    StrictInt,
+    StrictStr,
+    StringConstraints,
+    field_validator,
+)
 from pydantic.alias_generators import to_camel
 
 from proliferate.db.store.workflow_definitions import WorkflowDefinitionSnapshot
+from proliferate.db.store.workflow_invocations import WorkflowInvocationSnapshot
 
 
 class WorkflowWireModel(BaseModel):
@@ -104,6 +115,120 @@ class WorkflowDefinitionListResponse(WorkflowWireModel):
     workflows: list[WorkflowDefinitionResponse]
 
 
+class WorkflowRunEligibilityBlocker(WorkflowWireModel):
+    code: Literal[
+        "stage_count_not_supported",
+        "step_count_not_supported",
+        "goal_not_supported",
+        "agent_catalog_selection_unavailable",
+        "model_catalog_selection_unavailable",
+        "effort_catalog_selection_unavailable",
+        "default_repository_unavailable",
+    ]
+    path: str
+    message: str
+
+
+class WorkflowRunEligibilityResponse(WorkflowWireModel):
+    eligible: bool
+    blockers: list[WorkflowRunEligibilityBlocker]
+
+
+class WorkflowInvocationWireModel(WorkflowWireModel):
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        extra="forbid",
+    )
+
+
+WorkflowInvocationScalar = StrictBool | StrictInt | StrictFloat | StrictStr
+
+
+class ManagedCloudWorkflowTarget(WorkflowInvocationWireModel):
+    kind: Literal["managedCloud"]
+
+
+class WorkflowInvocationCreateRequest(WorkflowInvocationWireModel):
+    schema_version: Literal[1]
+    workflow_definition_id: UUID
+    expected_revision: StrictInt = Field(ge=1)
+    arguments: dict[str, WorkflowInvocationScalar]
+    target: ManagedCloudWorkflowTarget
+
+    @field_validator("schema_version", mode="before")
+    @classmethod
+    def schema_version_is_an_exact_integer(cls, value: object) -> object:
+        if type(value) is not int:
+            raise ValueError("schemaVersion must be the integer 1.")
+        return value
+
+
+class WorkflowTargetDefaultModelSelection(WorkflowInvocationWireModel):
+    kind: Literal["targetDefault"]
+
+
+class WorkflowExactModelSelection(WorkflowInvocationWireModel):
+    kind: Literal["exact"]
+    model_id: str
+
+
+WorkflowModelSelection = Annotated[
+    WorkflowTargetDefaultModelSelection | WorkflowExactModelSelection,
+    Field(discriminator="kind"),
+]
+
+
+class PortableWorkflowHarnessConfig(WorkflowInvocationWireModel):
+    agent_kind: str
+    model_selection: WorkflowModelSelection
+    effort: str | None = None
+    permission_policy: Literal["workflowDefault"]
+
+
+class PortableWorkflowPromptStep(WorkflowInvocationWireModel):
+    kind: Literal["agent.prompt"]
+    prompt: str
+
+
+class PortableWorkflowStage(WorkflowInvocationWireModel):
+    harness_config: PortableWorkflowHarnessConfig
+    steps: list[PortableWorkflowPromptStep]
+
+
+class PortableWorkflowDefinition(WorkflowInvocationWireModel):
+    inputs: list[WorkflowInputDefinition]
+    stages: list[PortableWorkflowStage]
+
+
+class RepositoryWorktreePlacement(WorkflowInvocationWireModel):
+    kind: Literal["repositoryWorktree"]
+    repo_config_id: UUID
+
+
+class ScratchPlacement(WorkflowInvocationWireModel):
+    kind: Literal["scratch"]
+
+
+WorkflowInvocationPlacement = Annotated[
+    RepositoryWorktreePlacement | ScratchPlacement,
+    Field(discriminator="kind"),
+]
+
+
+class WorkflowInvocationResponse(WorkflowInvocationWireModel):
+    id: UUID
+    schema_version: Literal[1]
+    workflow_definition_id: UUID
+    definition_revision: int
+    title: str
+    description: str
+    definition: PortableWorkflowDefinition
+    arguments: dict[str, WorkflowInvocationScalar]
+    placement: WorkflowInvocationPlacement
+    target: ManagedCloudWorkflowTarget
+    created_at: datetime
+
+
 def workflow_definition_response(
     value: WorkflowDefinitionSnapshot,
 ) -> WorkflowDefinitionResponse:
@@ -124,3 +249,9 @@ def workflow_definition_response(
             "deletedAt": value.deleted_at,
         }
     )
+
+
+def workflow_invocation_response(
+    value: WorkflowInvocationSnapshot,
+) -> WorkflowInvocationResponse:
+    return WorkflowInvocationResponse.model_validate(value.invocation_json)

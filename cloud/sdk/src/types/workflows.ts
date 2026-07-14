@@ -26,3 +26,9 @@ export type WorkflowDefinitionResponse =
 export type WorkflowDefinitionListResponse =
   Omit<GeneratedWorkflowDefinitionListResponse, "workflows">
   & { workflows: WorkflowDefinitionResponse[] };
+
+export type WorkflowRunEligibilityBlocker = Schema<"WorkflowRunEligibilityBlocker">;
+export type WorkflowRunEligibilityResponse = Schema<"WorkflowRunEligibilityResponse">;
+export type WorkflowInvocationCreateRequest = Schema<"WorkflowInvocationCreateRequest">;
+export type WorkflowInvocationResponse = Schema<"WorkflowInvocationResponse">;
+export type PortableWorkflowDefinition = Schema<"PortableWorkflowDefinition">;

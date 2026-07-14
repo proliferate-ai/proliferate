@@ -71,7 +71,10 @@ impl WorkflowRunStore {
                     steps::insert_step(conn, step)?;
                     Ok(StoreAcceptOutcome::Created)
                 }
-                Some(existing) if existing.invocation_json == run.invocation_json => {
+                Some(existing)
+                    if existing.schema_version == run.schema_version
+                        && existing.invocation_json == run.invocation_json =>
+                {
                     let steps = steps::find_steps_for_run(conn, &existing.id)?;
                     Ok(StoreAcceptOutcome::ExactReplay {
                         run: existing,

@@ -394,6 +394,7 @@ impl AppState {
             workflow_wiring,
             session_runtime.clone(),
             workspace_operation_gate.clone(),
+            workspace_access_gate.clone(),
         );
         let retire_preflight_checker = Arc::new(RetirePreflightChecker::new(
             workspace_runtime.clone(),
@@ -620,6 +621,5 @@ pub fn ensure_runtime_home(path: &std::path::Path) -> std::io::Result<()> {
 
 #[cfg(test)]
 pub(crate) mod test_support;
-
 #[cfg(test)]
 mod tests;

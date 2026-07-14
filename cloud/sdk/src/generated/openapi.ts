@@ -1963,6 +1963,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workflows/{workflow_definition_id}/run-eligibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Workflow Run Eligibility Endpoint */
+        get: operations["get_workflow_run_eligibility_endpoint_v1_workflows__workflow_definition_id__run_eligibility_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workflows/{workflow_definition_id}": {
         parameters: {
             query?: never;
@@ -1977,6 +1994,24 @@ export interface paths {
         post?: never;
         /** Delete Workflow Definition Endpoint */
         delete: operations["delete_workflow_definition_endpoint_v1_workflows__workflow_definition_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflow-invocations/{invocation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Workflow Invocation Endpoint */
+        get: operations["get_workflow_invocation_endpoint_v1_workflow_invocations__invocation_id__get"];
+        /** Put Workflow Invocation Endpoint */
+        put: operations["put_workflow_invocation_endpoint_v1_workflow_invocations__invocation_id__put"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -4526,6 +4561,14 @@ export interface components {
             /** Remainingusd */
             remainingUsd: number;
         };
+        /** ManagedCloudWorkflowTarget */
+        ManagedCloudWorkflowTarget: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "managedCloud";
+        };
         /** MetaResponse */
         MetaResponse: {
             /** Serverversion */
@@ -5122,6 +5165,43 @@ export interface components {
             /** Probillingenabled */
             proBillingEnabled: boolean;
         };
+        /** PortableWorkflowDefinition */
+        PortableWorkflowDefinition: {
+            /** Inputs */
+            inputs: components["schemas"]["WorkflowInputDefinition"][];
+            /** Stages */
+            stages: components["schemas"]["PortableWorkflowStage"][];
+        };
+        /** PortableWorkflowHarnessConfig */
+        PortableWorkflowHarnessConfig: {
+            /** Agentkind */
+            agentKind: string;
+            /** Modelselection */
+            modelSelection: components["schemas"]["WorkflowTargetDefaultModelSelection"] | components["schemas"]["WorkflowExactModelSelection"];
+            /** Effort */
+            effort?: string | null;
+            /**
+             * Permissionpolicy
+             * @constant
+             */
+            permissionPolicy: "workflowDefault";
+        };
+        /** PortableWorkflowPromptStep */
+        PortableWorkflowPromptStep: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "agent.prompt";
+            /** Prompt */
+            prompt: string;
+        };
+        /** PortableWorkflowStage */
+        PortableWorkflowStage: {
+            harnessConfig: components["schemas"]["PortableWorkflowHarnessConfig"];
+            /** Steps */
+            steps: components["schemas"]["PortableWorkflowPromptStep"][];
+        };
         /**
          * PricingCapability
          * @description Whether a vendor pricing page is meaningful for this deployment.
@@ -5261,6 +5341,19 @@ export interface components {
             /** Basebranch */
             baseBranch: string;
         };
+        /** RepositoryWorktreePlacement */
+        RepositoryWorktreePlacement: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "repositoryWorktree";
+            /**
+             * Repoconfigid
+             * Format: uuid
+             */
+            repoConfigId: string;
+        };
         /** SaveRepoEnvironmentRequest */
         SaveRepoEnvironmentRequest: {
             kind: components["schemas"]["RepoEnvironmentKind"];
@@ -5282,6 +5375,14 @@ export interface components {
              * @default
              */
             runCommand: string;
+        };
+        /** ScratchPlacement */
+        ScratchPlacement: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "scratch";
         };
         /**
          * ServerCapabilities
@@ -6169,6 +6270,16 @@ export interface components {
             /** Expectedrevision */
             expectedRevision: number;
         };
+        /** WorkflowExactModelSelection */
+        WorkflowExactModelSelection: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "exact";
+            /** Modelid */
+            modelId: string;
+        };
         /** WorkflowGoalDefinition */
         WorkflowGoalDefinition: {
             /** Objective */
@@ -6195,6 +6306,63 @@ export interface components {
             /** Required */
             required: boolean;
         };
+        /** WorkflowInvocationCreateRequest */
+        WorkflowInvocationCreateRequest: {
+            /**
+             * Schemaversion
+             * @constant
+             */
+            schemaVersion: 1;
+            /**
+             * Workflowdefinitionid
+             * Format: uuid
+             */
+            workflowDefinitionId: string;
+            /** Expectedrevision */
+            expectedRevision: number;
+            /** Arguments */
+            arguments: {
+                [key: string]: boolean | number | string;
+            };
+            target: components["schemas"]["ManagedCloudWorkflowTarget"];
+        };
+        /** WorkflowInvocationResponse */
+        WorkflowInvocationResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Schemaversion
+             * @constant
+             */
+            schemaVersion: 1;
+            /**
+             * Workflowdefinitionid
+             * Format: uuid
+             */
+            workflowDefinitionId: string;
+            /** Definitionrevision */
+            definitionRevision: number;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            definition: components["schemas"]["PortableWorkflowDefinition"];
+            /** Arguments */
+            arguments: {
+                [key: string]: boolean | number | string;
+            };
+            /** Placement */
+            placement: components["schemas"]["RepositoryWorktreePlacement"] | components["schemas"]["ScratchPlacement"];
+            target: components["schemas"]["ManagedCloudWorkflowTarget"];
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+        };
         /** WorkflowPromptStep */
         WorkflowPromptStep: {
             /**
@@ -6206,11 +6374,38 @@ export interface components {
             prompt: string;
             goal?: components["schemas"]["WorkflowGoalDefinition"] | null;
         };
+        /** WorkflowRunEligibilityBlocker */
+        WorkflowRunEligibilityBlocker: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "stage_count_not_supported" | "step_count_not_supported" | "goal_not_supported" | "agent_catalog_selection_unavailable" | "model_catalog_selection_unavailable" | "effort_catalog_selection_unavailable" | "default_repository_unavailable";
+            /** Path */
+            path: string;
+            /** Message */
+            message: string;
+        };
+        /** WorkflowRunEligibilityResponse */
+        WorkflowRunEligibilityResponse: {
+            /** Eligible */
+            eligible: boolean;
+            /** Blockers */
+            blockers: components["schemas"]["WorkflowRunEligibilityBlocker"][];
+        };
         /** WorkflowStageDefinition */
         WorkflowStageDefinition: {
             harnessConfig: components["schemas"]["WorkflowHarnessConfig"];
             /** Steps */
             steps: components["schemas"]["WorkflowPromptStep"][];
+        };
+        /** WorkflowTargetDefaultModelSelection */
+        WorkflowTargetDefaultModelSelection: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "targetDefault";
         };
         /** WorkspaceCloudAccessSummary */
         WorkspaceCloudAccessSummary: {
@@ -10558,6 +10753,37 @@ export interface operations {
             };
         };
     };
+    get_workflow_run_eligibility_endpoint_v1_workflows__workflow_definition_id__run_eligibility_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_definition_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunEligibilityResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_workflow_definition_endpoint_v1_workflows__workflow_definition_id__get: {
         parameters: {
             query?: never;
@@ -10643,6 +10869,81 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_workflow_invocation_endpoint_v1_workflow_invocations__invocation_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invocation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowInvocationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_workflow_invocation_endpoint_v1_workflow_invocations__invocation_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invocation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowInvocationCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowInvocationResponse"];
+                };
+            };
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowInvocationResponse"];
+                };
             };
             /** @description Validation Error */
             422: {

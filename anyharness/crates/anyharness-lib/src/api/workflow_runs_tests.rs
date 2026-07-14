@@ -23,7 +23,7 @@ use crate::{
 
 const RUN_ID: &str = "11111111-1111-4111-8111-111111111111";
 
-fn test_state() -> AppState {
+pub(super) fn test_state() -> AppState {
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("unix timestamp")
@@ -57,7 +57,7 @@ fn valid_body() -> Value {
     })
 }
 
-async fn put(state: &AppState, run_id: &str, body: Value) -> (StatusCode, Value) {
+pub(super) async fn put(state: &AppState, run_id: &str, body: Value) -> (StatusCode, Value) {
     let response = build_router(state.clone())
         .oneshot(
             Request::builder()
@@ -81,7 +81,7 @@ async fn put(state: &AppState, run_id: &str, body: Value) -> (StatusCode, Value)
     (status, payload)
 }
 
-async fn get(state: &AppState, run_id: &str) -> (StatusCode, Value) {
+pub(super) async fn get(state: &AppState, run_id: &str) -> (StatusCode, Value) {
     let response = build_router(state.clone())
         .oneshot(
             Request::builder()
@@ -147,32 +147,6 @@ async fn put_replay_conflict_get_and_not_found() {
     assert_eq!(body["code"], "WORKFLOW_RUN_NOT_FOUND");
 }
 
-#[test]
-fn openapi_documents_model_and_mode_ids_as_required_nullable() {
-    // Spec §3.1/§8.1: modelId/modeId are required keys that may be null, and
-    // the generated OpenAPI (thus the generated SDK) must say so.
-    let doc: Value =
-        serde_json::from_str(&super::openapi::openapi_json()).expect("parse openapi document");
-    let schema = &doc["components"]["schemas"]["WorkflowRunHarnessConfig"];
-    let required: Vec<&str> = schema["required"]
-        .as_array()
-        .expect("required array")
-        .iter()
-        .map(|value| value.as_str().expect("required entry"))
-        .collect();
-    assert!(required.contains(&"agentKind"), "required: {required:?}");
-    assert!(required.contains(&"modelId"), "required: {required:?}");
-    assert!(required.contains(&"modeId"), "required: {required:?}");
-    assert_eq!(
-        schema["properties"]["modelId"]["type"],
-        json!(["string", "null"])
-    );
-    assert_eq!(
-        schema["properties"]["modeId"]["type"],
-        json!(["string", "null"])
-    );
-}
-
 #[tokio::test]
 async fn strict_shape_and_invalid_definitions_return_coded_400() {
     let _lock = test_support::ENV_MUTEX
@@ -221,7 +195,6 @@ async fn strict_shape_and_invalid_definitions_return_coded_400() {
 // ---------------------------------------------------------------------------
 
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -233,8 +206,8 @@ use crate::domains::sessions::extensions::{
     SessionExtension, SessionTurnFinishedContext, SessionTurnOutcome,
 };
 use crate::domains::workflows::model::{
-    workflow_prompt_id, PutWorkflowRunInput, WorkflowDefinition, WorkflowHarnessConfig,
-    WorkflowInput, WorkflowInputType, WorkflowPromptStep, WorkflowStage,
+    workflow_prompt_id, PutWorkflowRunInput, VersionedPutWorkflowRunInput, WorkflowDefinition,
+    WorkflowHarnessConfig, WorkflowInput, WorkflowInputType, WorkflowPromptStep, WorkflowStage,
 };
 use crate::domains::workflows::service::WorkflowRunService;
 use crate::domains::workflows::session_extension::WorkflowRunSessionExtension;
@@ -295,7 +268,7 @@ fn domain_input_for_workspace(workspace_id: &str) -> PutWorkflowRunInput {
 
 /// Poll GET until the predicate holds or a hard deadline expires. Polling is
 /// the proof mechanism; sleeps only pace the polls.
-async fn poll_run_until(
+pub(super) async fn poll_run_until(
     state: &AppState,
     run_id: &str,
     what: &str,
@@ -316,7 +289,7 @@ async fn poll_run_until(
     }
 }
 
-fn session_count(state: &AppState) -> i64 {
+pub(super) fn session_count(state: &AppState) -> i64 {
     state
         .db
         .with_conn(|conn| conn.query_row("SELECT COUNT(*) FROM sessions", [], |row| row.get(0)))
@@ -701,7 +674,11 @@ async fn dropped_put_future_never_orphans_an_accepted_run() {
     {
         let runtime = state.workflow_run_runtime.clone();
         let put_run_id = run_id.clone();
-        let mut put_future = Box::pin(async move { runtime.put(put_run_id, input).await });
+        let mut put_future = Box::pin(async move {
+            runtime
+                .put(put_run_id, VersionedPutWorkflowRunInput::V1(input))
+                .await
+        });
         let waker = std::task::Waker::noop();
         let mut context = std::task::Context::from_waker(waker);
         // One poll spawns the detached handoff; the no-op waker guarantees the
