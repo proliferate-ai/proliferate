@@ -1,12 +1,12 @@
-# Canonical environment variable reference for the Proliferate stack.
+# Curated supported application/runtime input catalog for Proliferate.
 #
-# Every env var across every deployment surface lives here. Use the tags
-# to filter by deployment mode:
+# The catalog contains preferred inputs consumed by a product process, product
+# build, runtime, or qualification process. Use the tags to filter by surface:
 #
 #   local-dev     — Mode B (local desktop + local control plane)
 #   self-hosted   — Mode C/D (Docker Compose or CloudFormation)
 #   production    — Mode E (Proliferate Cloud)
-#   ci            — GitHub Actions workflows
+#   ci            — CI-supplied application build/runtime inputs
 #   desktop       — Desktop renderer (VITE_*) or native Tauri
 #   web           — Hosted web app build (VITE_*)
 #   mobile        — Expo mobile app build (EXPO_PUBLIC_*)
@@ -65,7 +65,7 @@
 
 - name: CELERY_WORKER_QUEUES
   secret: false
-  default: "periodic.default,default,notifications,runtime.wake,automations.execution"
+  default: "periodic.default,default,notifications"
   description: Comma-separated selector for the code-owned Celery queues this worker process consumes
   tags: [local-dev, self-hosted, production]
 
@@ -101,14 +101,14 @@
 
 - name: CORS_ALLOW_ORIGINS
   secret: false
-  default: "desktop, web, mobile-web, Metro, and tauri local origins"
+  default: "http://localhost:1420,http://127.0.0.1:1420,http://localhost:5174,http://127.0.0.1:5174,http://localhost:5175,http://127.0.0.1:5175,http://localhost:5176,http://127.0.0.1:5176,http://localhost:8081,http://127.0.0.1:8081,http://localhost:3000,http://127.0.0.1:3000,http://localhost:5174,http://127.0.0.1:5174,http://tauri.localhost,tauri://localhost"
   description: Comma-separated browser/webview origins allowed to call the API
   tags: [local-dev, self-hosted, production]
 
 - name: PROLIFERATE_DEV
   secret: false
   default: ""
-  description: Enables local desktop/runtime dev profile behavior
+  description: Presence enables native desktop and runtime dev behavior; unset by default
   tags: [local-dev, desktop]
 
 - name: PROLIFERATE_DEV_PROFILE
@@ -339,12 +339,6 @@
   description: E2B webhook verification
   tags: [production]
 
-- name: STRIPE_WEBHOOK_SECRET
-  secret: true
-  default: ""
-  description: Stripe webhook signing secret for billing event intake
-  tags: [local-dev, production]
-
 # ═══════════════════════════════════════════════════════════════════════
 # Server: Cloud Workspaces
 # ═══════════════════════════════════════════════════════════════════════
@@ -363,7 +357,7 @@
 
 - name: CLOUD_FREE_REPO_LIMIT
   secret: false
-  default: "1"
+  default: "2"
   description: Free-tier active cloud repo limit
   tags: [self-hosted, production]
 
@@ -821,8 +815,8 @@
 
 - name: SENTRY_RELEASE
   secret: false
-  default: "proliferate-server@0.1.0"
-  description: Server Sentry release tag
+  default: ""
+  description: Optional server Sentry release override; unset derives the canonical server release
   tags: [self-hosted, production]
 
 - name: SENTRY_TRACES_SAMPLE_RATE
@@ -857,24 +851,6 @@
   secret: true
   default: ""
   description: Customer.io API auth
-  tags: [production]
-
-- name: CUSTOMERIO_APP_API_KEY
-  secret: true
-  default: ""
-  description: Customer.io app API auth
-  tags: [production]
-
-- name: CUSTOMERIO_FROM_EMAIL
-  secret: false
-  default: "hello@proliferate.com"
-  description: Customer.io sender email address
-  tags: [production]
-
-- name: CUSTOMERIO_WELCOME_TRANSACTIONAL_MESSAGE_ID
-  secret: false
-  default: ""
-  description: Customer.io transactional message ID used to send the desktop welcome email; leave blank to disable welcome emails
   tags: [production]
 
 - name: RESEND_API_KEY
@@ -973,114 +949,6 @@
   description: When true, the server fails closed (raises at release-ID construction) instead of emitting a degraded `0.0.0-dev`/SHA-less release. Production task definitions set this so a build shipped without a stamped version/SHA cannot emit a non-deterministic release
   tags: [production]
 
-- name: SUPPORT_TRACKER_ENABLED
-  secret: false
-  default: "false"
-  description: Enables server-owned creation/reconciliation of GitHub and Linear issues for completed support reports
-  tags: [local-dev, production]
-
-- name: SUPPORT_TRACKER_RECONCILER_INTERVAL_SECONDS
-  secret: false
-  default: "30.0"
-  description: Background support tracker reconciliation interval in seconds
-  tags: [production]
-
-- name: SUPPORT_TRACKER_RECONCILER_BATCH_SIZE
-  secret: false
-  default: "10"
-  description: Maximum support reports processed per tracker reconciliation pass
-  tags: [production]
-
-- name: SUPPORT_TRACKER_MAX_ATTEMPTS
-  secret: false
-  default: "8"
-  description: Maximum retry attempts before a support tracker job is marked permanently failed
-  tags: [production]
-
-- name: SUPPORT_TRACKER_RETRY_BASE_SECONDS
-  secret: false
-  default: "60.0"
-  description: Base exponential-backoff delay for retryable support tracker failures
-  tags: [production]
-
-- name: SUPPORT_GITHUB_APP_ID
-  secret: false
-  default: ""
-  description: GitHub App ID for the support issue bot
-  tags: [production]
-
-- name: SUPPORT_GITHUB_APP_PRIVATE_KEY
-  secret: true
-  default: ""
-  description: GitHub App private key for the support issue bot
-  tags: [production]
-
-- name: SUPPORT_GITHUB_APP_PRIVATE_KEY_PARAMETER_NAME
-  secret: false
-  default: ""
-  description: SSM SecureString parameter name used as the ECS secret source for SUPPORT_GITHUB_APP_PRIVATE_KEY
-  tags: [production]
-
-- name: SUPPORT_GITHUB_APP_INSTALLATION_ID
-  secret: false
-  default: ""
-  description: Installation ID for the GitHub App on the support issue repository
-  tags: [production]
-
-- name: SUPPORT_GITHUB_OWNER
-  secret: false
-  default: ""
-  description: GitHub owner or organization that receives public support issues
-  tags: [production]
-
-- name: SUPPORT_GITHUB_REPO
-  secret: false
-  default: ""
-  description: GitHub repository that receives public support issues
-  tags: [production]
-
-- name: SUPPORT_GITHUB_LABEL_SUPPORT
-  secret: false
-  default: "support issue"
-  description: Label applied to every GitHub issue created from a support report
-  tags: [production]
-
-- name: SUPPORT_GITHUB_LABEL_PRIVATE
-  secret: false
-  default: "private"
-  description: Label applied when the submitter does not consent to publishing their message in GitHub
-  tags: [production]
-
-- name: SUPPORT_LINEAR_API_KEY
-  secret: true
-  default: ""
-  description: Optional Linear API key used to create private internal support triage issues
-  tags: [production]
-
-- name: SUPPORT_LINEAR_API_KEY_PARAMETER_NAME
-  secret: false
-  default: ""
-  description: SSM SecureString parameter name used as the ECS secret source for SUPPORT_LINEAR_API_KEY
-  tags: [production]
-
-- name: SUPPORT_LINEAR_TEAM_ID
-  secret: false
-  default: ""
-  description: Optional Linear team ID for support report tracker issues
-  tags: [production]
-
-- name: SUPPORT_LINEAR_PROJECT_ID
-  secret: false
-  default: ""
-  description: Optional Linear project ID for support report tracker issues
-  tags: [production]
-
-- name: SUPPORT_LINEAR_LABEL_IDS
-  secret: false
-  default: ""
-  description: Optional comma-separated Linear label IDs applied to support report tracker issues
-  tags: [production]
-
 - name: SIGNUPS_SLACK_WEBHOOK_URL
   secret: true
   default: ""
@@ -1105,20 +973,20 @@
 
 - name: VITE_PROLIFERATE_API_BASE_URL
   secret: false
-  default: "http://127.0.0.1:8000"
-  description: Desktop/web control-plane base URL; desktop may override it at runtime through ~/.proliferate/config.json
+  default: ""
+  description: Desktop/web control-plane base URL; when unset Desktop falls back to http://127.0.0.1:8000 and may use ~/.proliferate/config.json at runtime, while Web falls back to http://localhost:8000
   tags: [local-dev, ci, desktop, web]
 
 - name: VITE_PROLIFERATE_ENVIRONMENT
   secret: false
-  default: "development"
-  description: Desktop/web telemetry environment
+  default: ""
+  description: Desktop/web telemetry environment; when unset both use development in dev builds, Desktop uses trusted-beta otherwise, and Web uses production otherwise
   tags: [local-dev, ci, desktop, web]
 
 - name: VITE_PROLIFERATE_RELEASE
   secret: false
-  default: "proliferate-desktop@dev"
-  description: Desktop/web telemetry release tag
+  default: ""
+  description: Desktop/web telemetry release; when unset Desktop derives proliferate-desktop@<package version>, while local Web derives proliferate-web@<VERSION>-dev and deployed Web builds supply a canonical release
   tags: [local-dev, ci, desktop, web]
 
 - name: VITE_PROLIFERATE_TELEMETRY_DISABLED
@@ -1196,7 +1064,7 @@
 - name: VITE_PROLIFERATE_POSTHOG_SESSION_RECORDING_ENABLED
   secret: false
   default: "false"
-  description: Desktop PostHog session recording toggle; reserved for web because web replay is currently disabled in code
+  description: Desktop and Web PostHog session recording toggle
   tags: [local-dev, ci, desktop, web]
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -1217,8 +1085,8 @@
 
 - name: EXPO_PUBLIC_PROLIFERATE_RELEASE
   secret: false
-  default: "proliferate-mobile@0.1.0"
-  description: Mobile telemetry release tag
+  default: "proliferate-mobile@0.1.1"
+  description: Mobile telemetry release; when unset derives proliferate-mobile@<package version> from apps/mobile/package.json
   tags: [local-dev, production, mobile]
 
 - name: EXPO_PUBLIC_PROLIFERATE_TELEMETRY_DISABLED
@@ -1269,14 +1137,14 @@
 
 - name: PROLIFERATE_DESKTOP_SENTRY_ENVIRONMENT
   secret: false
-  default: "development"
+  default: "trusted-beta"
   description: Native desktop Sentry environment
   tags: [ci]
 
 - name: PROLIFERATE_DESKTOP_SENTRY_RELEASE
   secret: false
-  default: "proliferate-desktop-native@dev"
-  description: Native desktop Sentry release tag
+  default: "proliferate-desktop-native@<package version>"
+  description: Native desktop Sentry release; when unset derives from the native package version
   tags: [ci]
 
 - name: PROLIFERATE_DESKTOP_SENTRY_TRACES_SAMPLE_RATE
@@ -1293,14 +1161,14 @@
 
 - name: ANYHARNESS_SENTRY_ENVIRONMENT
   secret: false
-  default: "development"
+  default: "trusted-beta"
   description: Bundled sidecar Sentry environment
   tags: [ci]
 
 - name: ANYHARNESS_SENTRY_RELEASE
   secret: false
-  default: "anyharness-sidecar@dev"
-  description: Bundled sidecar Sentry release tag
+  default: "anyharness@<version>[+sha]"
+  description: AnyHarness Sentry release; when unset derives from the binary version and appends the stamped SHA when present
   tags: [ci]
 
 - name: ANYHARNESS_SENTRY_TRACES_SAMPLE_RATE
@@ -1348,221 +1216,3 @@
   default: ""
   description: Absolute path override for the AnyHarness-managed worktree root used by inventory, orphan pruning, and automatic checkout retention
   tags: [local-dev, self-hosted]
-
-# ═══════════════════════════════════════════════════════════════════════
-# Deploy: Docker Compose / Bootstrap
-# ═══════════════════════════════════════════════════════════════════════
-
-- name: SITE_ADDRESS
-  secret: false
-  default: ""
-  description: Public hostname for Caddy TLS (DNS must resolve before first boot)
-  tags: [self-hosted]
-
-- name: PROLIFERATE_SERVER_IMAGE
-  secret: false
-  default: "ghcr.io/proliferate-ai/proliferate-server"
-  description: Server container image repository
-  tags: [self-hosted]
-
-- name: PROLIFERATE_SERVER_IMAGE_TAG
-  secret: false
-  default: "stable"
-  description: Server container image tag
-  tags: [self-hosted]
-
-- name: PROLIFERATE_HOST_BIN_DIR
-  secret: false
-  default: "/opt/proliferate/bin"
-  description: Host directory for runtime binaries (mounted into API container)
-  tags: [self-hosted]
-
-- name: PROLIFERATE_PUBLIC_HEALTHCHECK_URL
-  secret: false
-  default: ""
-  description: Public HTTPS endpoint to verify after local health passes
-  tags: [self-hosted]
-
-- name: RUNTIME_BINARY_URL
-  secret: false
-  default: ""
-  description: Tarball URL for runtime bundle download; archives should contain anyharness, proliferate-worker, and proliferate-supervisor
-  tags: [self-hosted]
-
-- name: RUNTIME_BINARY_SHA256_URL
-  secret: false
-  default: ""
-  description: SHA256SUMS file URL for tarball verification
-  tags: [self-hosted]
-
-- name: POSTGRES_DB
-  secret: false
-  default: "proliferate"
-  description: PostgreSQL database name (Docker Compose)
-  tags: [self-hosted]
-
-- name: POSTGRES_USER
-  secret: false
-  default: "proliferate"
-  description: PostgreSQL user (Docker Compose)
-  tags: [self-hosted]
-
-- name: POSTGRES_PASSWORD
-  secret: true
-  default: ""
-  description: PostgreSQL password (auto-generated on first bootstrap if blank)
-  tags: [self-hosted]
-
-- name: AWS_REGION
-  secret: false
-  default: ""
-  description: AWS region (only needed for private ECR pulls)
-  tags: [self-hosted]
-
-# ═══════════════════════════════════════════════════════════════════════
-# CI: Server
-# ═══════════════════════════════════════════════════════════════════════
-
-- name: AWS_ROLE_ARN
-  secret: false
-  description: GitHub OIDC role ARN for ECR push
-  tags: [ci]
-  ci_type: var
-  workflow: server-ci
-
-# ═══════════════════════════════════════════════════════════════════════
-# CI: Desktop Release
-# ═══════════════════════════════════════════════════════════════════════
-
-- name: TAURI_SIGNING_PRIVATE_KEY
-  secret: true
-  description: Desktop updater signing key
-  tags: [ci]
-  ci_type: secret
-  workflow: release-desktop
-
-- name: TAURI_SIGNING_PRIVATE_KEY_PASSWORD
-  secret: true
-  description: Desktop updater signing key password
-  tags: [ci]
-  ci_type: secret
-  workflow: release-desktop
-
-- name: APPLE_CERTIFICATE
-  secret: true
-  description: Apple Developer cert (.p12, base64-encoded)
-  tags: [ci]
-  ci_type: secret
-  workflow: release-desktop
-
-- name: APPLE_CERTIFICATE_PASSWORD
-  secret: true
-  description: Apple cert password
-  tags: [ci]
-  ci_type: secret
-  workflow: release-desktop
-
-- name: APPLE_SIGNING_IDENTITY
-  secret: true
-  description: Apple team ID for code signing
-  tags: [ci]
-  ci_type: secret
-  workflow: release-desktop
-
-- name: APPLE_API_KEY
-  secret: true
-  description: App Store Connect API key ID
-  tags: [ci]
-  ci_type: secret
-  workflow: release-desktop
-
-- name: APPLE_API_KEY_PATH
-  secret: true
-  description: App Store Connect .p8 key content
-  tags: [ci]
-  ci_type: secret
-  workflow: release-desktop
-
-- name: APPLE_API_ISSUER
-  secret: true
-  description: Apple notarization issuer ID
-  tags: [ci]
-  ci_type: secret
-  workflow: release-desktop
-
-- name: KEYCHAIN_PASSWORD
-  secret: true
-  description: macOS keychain password for CI
-  tags: [ci]
-  ci_type: secret
-  workflow: release-desktop
-
-- name: SENTRY_AUTH_TOKEN
-  secret: true
-  description: Sentry source map upload token
-  tags: [ci]
-  ci_type: secret
-  workflow: release-desktop
-
-- name: SENTRY_ORG
-  secret: false
-  description: Sentry organization slug
-  tags: [ci]
-  ci_type: var
-  workflow: release-desktop
-
-- name: SENTRY_PROJECT
-  secret: false
-  description: Default Sentry project slug for upload jobs
-  tags: [ci]
-  ci_type: var
-  workflow: release-desktop
-
-- name: SENTRY_WEB_PROJECT
-  secret: false
-  description: Sentry web project slug; falls back to SENTRY_PROJECT
-  tags: [ci, web]
-  ci_type: var
-  workflow: web/manual builds
-
-- name: SENTRY_MOBILE_PROJECT
-  secret: false
-  description: Sentry mobile project slug; falls back to SENTRY_PROJECT
-  tags: [ci, mobile]
-  ci_type: var
-  workflow: mobile/manual builds
-
-- name: SENTRY_DESKTOP_NATIVE_PROJECT
-  secret: false
-  description: Sentry desktop native project slug; falls back to SENTRY_PROJECT
-  tags: [ci]
-  ci_type: var
-  workflow: release-desktop
-
-- name: SENTRY_ANYHARNESS_PROJECT
-  secret: false
-  description: Sentry AnyHarness/sidecar project slug; falls back to SENTRY_PROJECT
-  tags: [ci]
-  ci_type: var
-  workflow: release-desktop
-
-- name: AWS_DESKTOP_RELEASE_ROLE_ARN
-  secret: false
-  description: GitHub OIDC role ARN for S3 + CloudFront
-  tags: [ci]
-  ci_type: var
-  workflow: release-desktop
-
-- name: DESKTOP_DOWNLOADS_S3_BUCKET
-  secret: false
-  description: S3 bucket for desktop updater assets
-  tags: [ci]
-  ci_type: var
-  workflow: release-desktop
-
-- name: DESKTOP_CLOUDFRONT_DISTRIBUTION_ID
-  secret: false
-  description: CloudFront distribution for desktop updater
-  tags: [ci]
-  ci_type: var
-  workflow: release-desktop

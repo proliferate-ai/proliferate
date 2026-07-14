@@ -67,13 +67,13 @@ aws cloudformation deploy \
 `ReleaseVersion` is the unprefixed image tag, not the GitHub release tag. For a
 GitHub release named `server-v0.1.0`, set `ReleaseVersion=0.1.0`.
 
-This stack intentionally exposes only the common operator-facing subset of the
-full control-plane env surface. Advanced auth-flow and sandbox-template
+This stack intentionally exposes only a common operator-facing subset of the
+supported control-plane settings. Advanced auth-flow and sandbox-template
 overrides remain in the server config layer; customize
 [template.yaml](template.yaml)
-if you need to promote more of them into CloudFormation parameters. The full
-env surface is documented in
-[specs/developing/reference/env-secrets-matrix.md](../../../specs/developing/reference/env-secrets-matrix.md).
+if you need to promote more of them into CloudFormation parameters. The
+curated supported application/runtime input catalog is
+[specs/developing/reference/env-vars.yaml](../../../specs/developing/reference/env-vars.yaml).
 
 ## Versioned Release Assets
 

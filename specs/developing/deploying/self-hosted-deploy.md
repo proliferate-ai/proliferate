@@ -188,7 +188,7 @@ bundle-only download. Working from a monorepo checkout instead?
      `CLOUD_SUPERVISOR_SOURCE_BINARY_PATH` if you want cloud workspaces
    - for advanced auth-flow, sandbox template, timeout, or runtime-path
      overrides, add the extra env vars manually from
-     [env-secrets-matrix.md](../reference/env-secrets-matrix.md)
+     [env-vars.yaml](../reference/env-vars.yaml)
 5. Leave `POSTGRES_PASSWORD`, `JWT_SECRET`, and `CLOUD_SECRET_KEY` blank if you
    want `bootstrap.sh` to generate and persist them in `.env.generated`
    (next to `.env.static`) on first startup.

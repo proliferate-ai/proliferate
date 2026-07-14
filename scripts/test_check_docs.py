@@ -11,6 +11,17 @@ from scripts import check_docs
 
 
 class DocumentationIntegrityTest(unittest.TestCase):
+    def valid_env_var_entry(self, **overrides: object) -> dict[str, object]:
+        entry: dict[str, object] = {
+            "name": "API_BASE_URL",
+            "secret": False,
+            "default": "",
+            "description": "Canonical public API base URL.",
+            "tags": ["local-dev", "self-hosted", "production"],
+        }
+        entry.update(overrides)
+        return entry
+
     def test_platform_and_system_indexes_are_required(self) -> None:
         required_indexes = {
             "specs/codebase/platforms/README.md",
@@ -155,6 +166,61 @@ Setext Heading
         self.assertEqual(len(errors), 1)
         self.assertIn("invalid JSON", errors[0])
 
+    def test_valid_env_var_catalog(self) -> None:
+        self.assertEqual(
+            check_docs.validate_env_var_catalog([self.valid_env_var_entry()]),
+            [],
+        )
+
+    def test_env_var_catalog_requires_top_level_list(self) -> None:
+        self.assertEqual(
+            check_docs.validate_env_var_catalog({"name": "API_BASE_URL"}),
+            ["environment variable catalog must be a top-level list"],
+        )
+
+    def test_env_var_catalog_rejects_duplicate_names(self) -> None:
+        errors = check_docs.validate_env_var_catalog(
+            [self.valid_env_var_entry(), self.valid_env_var_entry()]
+        )
+
+        self.assertTrue(any("duplicate name: API_BASE_URL" in error for error in errors))
+
+    def test_env_var_catalog_rejects_unknown_and_missing_fields(self) -> None:
+        entry = self.valid_env_var_entry(workflow="release-desktop")
+        del entry["default"]
+
+        errors = check_docs.validate_env_var_catalog([entry])
+
+        self.assertTrue(any("missing fields: default" in error for error in errors))
+        self.assertTrue(any("unknown fields: workflow" in error for error in errors))
+
+    def test_env_var_catalog_rejects_invalid_names_and_types(self) -> None:
+        errors = check_docs.validate_env_var_catalog(
+            [
+                self.valid_env_var_entry(
+                    name="lowercase",
+                    secret="false",
+                    default=1,
+                    description=" ",
+                    tags="production",
+                )
+            ]
+        )
+
+        self.assertTrue(any("invalid name" in error for error in errors))
+        self.assertTrue(any("secret must be a Boolean" in error for error in errors))
+        self.assertTrue(any("default must be a string" in error for error in errors))
+        self.assertTrue(any("description must be a nonempty string" in error for error in errors))
+        self.assertTrue(any("tags must be a nonempty list" in error for error in errors))
+
+    def test_env_var_catalog_rejects_duplicate_and_unknown_tags(self) -> None:
+        errors = check_docs.validate_env_var_catalog(
+            [self.valid_env_var_entry(tags=["web", "web", "workflow"])]
+        )
+
+        self.assertTrue(any("duplicate tag: web" in error for error in errors))
+        self.assertTrue(any("unknown tag: 'workflow'" in error for error in errors))
+
     @unittest.skipUnless(shutil.which("ruby"), "Ruby is required for YAML validation")
     def test_invalid_yaml_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -165,6 +231,30 @@ Setext Heading
             def files(*patterns: str) -> list[Path]:
                 if any(pattern.endswith((".yaml", ".yml")) for pattern in patterns):
                     return [invalid_yaml]
+                return []
+
+            with patch.object(check_docs, "ROOT", root), patch.object(
+                check_docs, "tracked_files", side_effect=files
+            ):
+                errors = check_docs.check_structured_data()
+
+        self.assertEqual(len(errors), 1)
+        self.assertIn("invalid YAML", errors[0])
+
+    @unittest.skipUnless(shutil.which("ruby"), "Ruby is required for YAML validation")
+    def test_ruby_object_yaml_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            catalog = root / check_docs.ENV_VAR_CATALOG
+            catalog.parent.mkdir(parents=True)
+            catalog.write_text(
+                "--- !ruby/object:Object {}\n",
+                encoding="utf-8",
+            )
+
+            def files(*patterns: str) -> list[Path]:
+                if any(pattern.endswith((".yaml", ".yml")) for pattern in patterns):
+                    return [catalog]
                 return []
 
             with patch.object(check_docs, "ROOT", root), patch.object(

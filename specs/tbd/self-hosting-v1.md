@@ -607,7 +607,7 @@ screenshot placeholders). What each build item unlocks:
 | Cloud sandboxes → E2B template build | B3 |
 | Updates & versioning (lockstep story) | B4 + B10 |
 | Model gateway (LiteLLM) | B5 (env names already real on the branch) |
-| Reference → env-vars | generate from `specs/developing/reference/env-secrets-matrix.md`; mark `API_BASE_URL` required-in-practice |
+| Reference → env-vars | keep `specs/developing/reference/env-vars.yaml` as the curated boundary for supported, preferred application/runtime inputs |
 
 Also owed once B5 lands: purge Bifrost from
 `specs/developing/deploying/self-hosted-*.md` and `.env.production.example`.
