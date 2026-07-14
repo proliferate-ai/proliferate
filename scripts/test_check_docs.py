@@ -26,7 +26,6 @@ class DocumentationIntegrityTest(unittest.TestCase):
         required_indexes = {
             "specs/codebase/platforms/README.md",
             "specs/codebase/platforms/product/agent-features/README.md",
-            "specs/codebase/platforms/product/agents/README.md",
             "specs/codebase/platforms/engineering/README.md",
             "specs/codebase/platforms/internal/README.md",
             "specs/codebase/systems/README.md",
