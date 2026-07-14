@@ -85,8 +85,8 @@ Environment-boundary note:
   in the launch-stack flow unless you customize
   [template.yaml](../../../server/infra/self-hosted-aws/template.yaml)
   or add host-local overrides in `/opt/proliferate/server/deploy/.env.local`
-- the full control-plane env surface is documented in
-  [env-secrets-matrix.md](../reference/env-secrets-matrix.md)
+- the curated supported application/runtime input catalog is
+  [env-vars.yaml](../reference/env-vars.yaml)
 
 ## Desktop Configuration
 

@@ -49,7 +49,7 @@ workstream. The target request path here is not
 - `specs/codebase/structures/server/guides/integrations.md`
 - `specs/codebase/structures/server/guides/config.md`
 - `specs/developing/local/dev-profiles.md`
-- `specs/developing/reference/env-secrets-matrix.md`
+- `specs/developing/reference/env-vars.yaml`
 - `specs/codebase/platforms/product/sandbox-provisioning.md`
 - `specs/codebase/platforms/product/agent-auth.md`
 - local Bifrost source at `/Users/pablohansen/bifrost`
@@ -950,10 +950,10 @@ Config migration table:
 | `AGENT_GATEWAY_BIFROST_ADMIN_TOKEN` | Yes | None | Hosted or protected local Bifrost | Admin API auth; never sent to sandboxes |
 | `AGENT_GATEWAY_BIFROST_REQUEST_TIMEOUT_SECONDS` | No | product default | Gateway enabled | Admin/control-plane HTTP timeout |
 
-Implementation must update `server/proliferate/config.py`,
-`specs/developing/reference/env-secrets-matrix.md`, and `specs/developing/reference/env-vars.yaml`.
+Implementation must update `server/proliferate/config.py` and
+`specs/developing/reference/env-vars.yaml`.
 Unknown env vars are ignored by settings today, so adding this spec without the
-config/env-matrix changes is not sufficient.
+configuration and catalog changes is not sufficient.
 
 Managed provider credentials should be explicit deployment secrets:
 
