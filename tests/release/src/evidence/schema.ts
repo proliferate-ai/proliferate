@@ -90,13 +90,48 @@ export function redactUrlCredentials(message: string): string {
 }
 
 /**
+ * Withholds external response/provider details after the safe diagnostic
+ * prefix. Release scenarios wrap those payloads in several ways (HTTP
+ * `-> 502:`, `error:`, `failed:`, `returned:`, provider command output, and
+ * similar); retaining the prefix preserves the operation/status while keeping
+ * raw bodies, SSE messages, and provider stdout/stderr out of evidence.
+ */
+export function redactExternalPayloads(message: string): string {
+  return message
+    .replace(
+      /(\bexited\s+(?:-?\d+|null)\s*:\s*)[\s\S]*$/i,
+      "$1(output withheld from evidence)",
+    )
+    .replace(
+      /(\b(?:ssh command|git [^:\n]{0,160})\s+failed(?:\s*\([^\n)]*\))?\s*:\s*)[\s\S]*$/i,
+      "$1(output withheld from evidence)",
+    )
+    .replace(
+      /(\bcould not parse\b[^:\n]{0,160}\bjson\b[^:\n]{0,160}:\s*)[\s\S]*$/i,
+      "$1(output withheld from evidence)",
+    )
+    .replace(
+      /(\bsandbox\b[^:\n]{0,160}\bdid not reach\b[^:\n]{0,160}\blast observed\s*:\s*)[\s\S]*$/i,
+      "$1response body withheld from evidence)",
+    )
+    .replace(
+      /((?:->\s*\d{3}|\b(?:provider|gateway|sandbox|materializer|provisioning|completion|turn|session|claim|e2b[\w.-]*)\b[^:\n]{0,160}\b(?:error|errored|failed|warning|returned|reported|got|exited)\b[^:\n]{0,80}|\b(?:last error|got iserror|did not print valid json)\b[^:\n]{0,80}|\b(?:error|failure)\b[^:\n]{0,160}\(got|\(error)\s*:\s*)[\s\S]*$/i,
+      "$1(response body withheld from evidence)",
+    )
+    .replace(
+      /\(got\s+(?:\{|\[)[\s\S]*$/i,
+      "(provider response withheld from evidence)",
+    );
+}
+
+/**
  * Applies redaction + bounding to every message-bearing field in the report.
  * Runs before validation/serialization so no exact secret value or overlong
  * message can enter the persisted artifact.
  */
 export function sanitizeReport(report: TestRunReportV1, secretValues: readonly string[]): TestRunReportV1 {
   const clean = (message: string): string =>
-    boundMessage(redactUrlCredentials(redactSecrets(message, secretValues)));
+    boundMessage(redactExternalPayloads(redactUrlCredentials(redactSecrets(message, secretValues))));
   return {
     ...report,
     results: report.results.map((result) => ({
@@ -170,13 +205,16 @@ export function validateReport(report: TestRunReportV1): void {
   }
 
   // Execution semantics: strict dry-run is an invalid invocation and can
-  // never be honest persisted evidence, and a dry-run cannot produce a real
-  // result — planning only finalizes not_run.
+  // never be honest persisted evidence. Diagnostic planning normally
+  // finalizes not_run; a post-selection runner defect may instead synthesize
+  // missing, which remains valid only with its integrity error below.
   if (report.run.execution === "dry_run") {
     if (report.run.behavior === "strict") {
       throw new ReportValidationError("A strict dry-run report is not representable evidence.");
     }
-    const executed = report.results.find((result) => result.status !== "not_run");
+    const executed = report.results.find(
+      (result) => result.status !== "not_run" && result.status !== "missing",
+    );
     if (executed) {
       throw new ReportValidationError(
         `Dry-run cannot produce a real result: ${executed.test_id} is "${executed.status}".`,

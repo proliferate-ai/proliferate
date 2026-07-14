@@ -6,6 +6,7 @@ import { test } from "node:test";
 
 import {
   boundMessage,
+  redactExternalPayloads,
   redactSecrets,
   redactUrlCredentials,
   ReportValidationError,
@@ -253,6 +254,47 @@ test("redactUrlCredentials scrubs userinfo tokens from URLs", () => {
     "clone https://[REDACTED]@github.com/o/r.git failed",
   );
   assert.equal(redactUrlCredentials("https://github.com/o/r.git"), "https://github.com/o/r.git");
+});
+
+test("redactExternalPayloads retains safe context and withholds external detail", () => {
+  const marker = "RAW_PROVIDER_PAYLOAD";
+  assert.equal(
+    redactExternalPayloads(`gateway /mcp -> 502: {"token":"${marker}"}`),
+    "gateway /mcp -> 502: (response body withheld from evidence)",
+  );
+  assert.equal(
+    redactExternalPayloads(`T3: provisioning failed: ${marker}`),
+    "T3: provisioning failed: (response body withheld from evidence)",
+  );
+  assert.equal(
+    redactExternalPayloads(`gateway providers mismatch (got [{"token":"${marker}"}])`),
+    "gateway providers mismatch (provider response withheld from evidence)",
+  );
+  assert.equal(
+    redactExternalPayloads(`prov1_fallback.py (provision) exited 1: ${marker}`),
+    "prov1_fallback.py (provision) exited 1: (output withheld from evidence)",
+  );
+  assert.equal(
+    redactExternalPayloads(`T3-SH-3: ssh command failed (1): ${marker}`),
+    "T3-SH-3: ssh command failed (1): (output withheld from evidence)",
+  );
+  assert.equal(
+    redactExternalPayloads(`T4-SH-2: git status failed: ${marker}`),
+    "T4-SH-2: git status failed: (output withheld from evidence)",
+  );
+  assert.equal(
+    redactExternalPayloads(`provisionSelfHostBox: could not parse box JSON from selfhost-box.sh: ${marker}`),
+    "provisionSelfHostBox: could not parse box JSON from selfhost-box.sh: (output withheld from evidence)",
+  );
+  assert.equal(
+    redactExternalPayloads(
+      `warmPersonalCloudSandbox: sandbox did not reach status=ready within 120000ms ` +
+        `(last observed: {"lastError":"${marker}"}).`,
+    ),
+    "warmPersonalCloudSandbox: sandbox did not reach status=ready within 120000ms " +
+      "(last observed: response body withheld from evidence)",
+  );
+  assert.equal(redactExternalPayloads("ordinary assertion failed"), "ordinary assertion failed");
 });
 
 test("validateReport requires exit 2 whenever runner/integrity errors exist", () => {

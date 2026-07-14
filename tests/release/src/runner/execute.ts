@@ -179,12 +179,21 @@ export async function executeSelectedTests(options: ExecuteOptions): Promise<Tes
  * report message in `sanitizeReport`.
  */
 function evidenceSafeMessage(error: unknown): string {
+  if (error instanceof SyntaxError) {
+    return "SyntaxError: invalid JSON response (payload withheld from evidence)";
+  }
   const status = error instanceof Error ? (error as { status?: unknown }).status : undefined;
   if (error instanceof Error && typeof status === "number" && "body" in error) {
     // Message shape is `${method} ${path} -> ${status}: ${body}`; keep the
     // safe prefix, withhold everything after it.
     const prefix = /^(.*?->\s*\d+)/.exec(error.message)?.[1] ?? `request failed with status ${status}`;
     return `${error.name}: ${prefix} (response body withheld from evidence)`;
+  }
+  if (
+    error instanceof Error &&
+    ("stdout" in error || "stderr" in error)
+  ) {
+    return `${error.name}: external command failed (output withheld from evidence)`;
   }
   return error instanceof Error ? error.message : String(error);
 }

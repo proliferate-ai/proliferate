@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { EnvResolution, ResolvedEnvVar } from "../config/env-resolution.js";
+import { validateReport } from "../evidence/schema.js";
+import { gatewayJsonRpc } from "../fixtures/integration-gateway.js";
+import { toFailureReports } from "../report/failure-reporter.js";
 import type { ScenarioDefinition } from "../scenarios/types.js";
 import { ScenarioBlockedError, ScenarioExpectedFailError } from "../scenarios/types.js";
 import { executeSelectedTests, expandSelectedTests, SelectionError, type ExecuteOptions } from "./execute.js";
@@ -249,6 +252,21 @@ test("a post-selection runner defect finalizes every pending test and still prod
   assert.equal(report.summary.intended_exit_code, 2);
 });
 
+test("a diagnostic dry-run runner defect still produces valid persistable evidence", async () => {
+  const report = await executeSelectedTests(
+    baseOptions([fakeScenario({ id: "DRY-A" }), fakeScenario({ id: "DRY-B" })], {
+      execution: "dry_run",
+      resolveNeededEnv: () => { throw new Error("preflight resolver failed"); },
+    }),
+  );
+
+  assert.deepEqual(report.results.map((result) => result.status), ["missing", "missing"]);
+  assert.equal(report.summary.runner_errors.length, 1);
+  assert.equal(report.summary.integrity_errors.length, 2);
+  assert.equal(report.summary.intended_exit_code, 2);
+  assert.doesNotThrow(() => validateReport(report));
+});
+
 test("exact resolved secret values are redacted from the report", async () => {
   const secret = "sk-super-secret-value";
   const scenarios = [
@@ -302,6 +320,64 @@ test("provider response bodies never reach the report or issue payloads", async 
   assert.ok(!serialized.includes("customer_email"));
   assert.match(report.results[0].reason!.message, /POST \/v1\/checkout -> 500/);
   assert.match(report.results[0].reason!.message, /withheld from evidence/);
+});
+
+test("plain integration-gateway response bodies never reach evidence or issue payloads", async () => {
+  const providerPayload = '{"access_token":"RAW_GATEWAY_TOKEN","detail":"provider traceback"}';
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(providerPayload, { status: 502 });
+  try {
+    const scenario = fakeScenario({
+      id: "GATEWAY",
+      run: async () => {
+        await gatewayJsonRpc(
+          {
+            workerId: "worker-1",
+            desktopInstallId: "desktop-1",
+            mcpUrl: "https://gateway.example.test/mcp",
+            authorization: "Bearer worker-token",
+          },
+          { jsonrpc: "2.0", id: 1, method: "initialize", params: {} },
+        );
+      },
+    });
+    const report = await executeSelectedTests(baseOptions([scenario], { resolveSecretValues: () => [] }));
+    const issues = toFailureReports(report.results);
+
+    assert.equal(report.results[0].status, "failed");
+    assert.ok(!JSON.stringify(report).includes("RAW_GATEWAY_TOKEN"));
+    assert.ok(!JSON.stringify(issues).includes("RAW_GATEWAY_TOKEN"));
+    assert.match(report.results[0].reason!.message, /response body withheld from evidence/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("provider payloads stay out of blocked and expected-fail evidence", async () => {
+  const blockedPayload = "RAW_BLOCKED_PROVIDER_BODY";
+  const expectedPayload = "RAW_EXPECTED_PROVIDER_BODY";
+  const report = await executeSelectedTests(
+    baseOptions([
+      fakeScenario({
+        id: "BLOCKED-PAYLOAD",
+        run: async () => {
+          throw new ScenarioBlockedError(`gateway unavailable -> 503: ${blockedPayload}`);
+        },
+      }),
+      fakeScenario({
+        id: "EXPECTED-PAYLOAD",
+        run: async () => {
+          throw new ScenarioExpectedFailError(`provisioning failed: ${expectedPayload}`);
+        },
+      }),
+    ]),
+  );
+  const serialized = JSON.stringify(report);
+
+  assert.ok(!serialized.includes(blockedPayload));
+  assert.ok(!serialized.includes(expectedPayload));
+  assert.equal(report.results[0].status, "blocked");
+  assert.equal(report.results[1].status, "expected_fail");
 });
 
 test("runtime-discovered URL credentials are scrubbed even when unknown to the redactor", async () => {
