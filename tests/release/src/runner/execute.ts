@@ -10,6 +10,7 @@ import {
   type ScenarioDefinition,
 } from "../scenarios/types.js";
 import type { CandidateBuildEvidenceV1, CandidateBuildMapV1 } from "../artifacts/build-map.js";
+import type { LocalWorldPorts } from "../worlds/local-workspace/ports.js";
 import type { CellEvidenceV1, TestRunReportV3 } from "../evidence/schema.js";
 import { expectedVerdict, sanitizeReport } from "../evidence/schema.js";
 import type { RunIdentityV1 } from "./identity.js";
@@ -60,6 +61,18 @@ export interface ExecuteOptions {
    * when no map was supplied. Never serialized (BRIEF §7a).
    */
   candidateBuildMap?: CandidateBuildMapV1 | null;
+  /**
+   * The run/shard-scoped run directory (the candidate map's directory), threaded
+   * into every `ScenarioRunContext` as `runDir` so a world constructor can lay
+   * out its state. Explicit null when no map was supplied.
+   */
+  runDir?: string | null;
+  /**
+   * The pre-allocated local-world ports (from the `local-world-ports.json`
+   * sidecar), threaded into every `ScenarioRunContext` as `ports`. Explicit null
+   * when absent.
+   */
+  ports?: LocalWorldPorts | null;
   /** Names satisfied only by this run's local durable-user seeding. */
   locallySeeded?: ReadonlySet<string>;
   /** Injectable for tests; defaults to resolveEnv over the union of required env. */
@@ -330,6 +343,12 @@ async function runAll(
       // The path-bearing map (or null); a world constructor materializes the
       // exact artifacts it names. In-memory only, never serialized.
       candidateBuildMap: options.candidateBuildMap ?? null,
+      // Run identity, run dir, and pre-allocated ports a world constructor needs
+      // (all in-memory only; runDir/ports are null when no candidate map was
+      // supplied).
+      runIdentity: options.identity,
+      runDir: options.runDir ?? null,
+      ports: options.ports ?? null,
     };
     const startedAt = now().toISOString();
     const startedMs = now().getTime();

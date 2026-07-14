@@ -63,6 +63,12 @@ export interface ServerContainerEnv {
   AGENT_GATEWAY_LITELLM_BASE_URL: string;
   AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL: string;
   AGENT_GATEWAY_LITELLM_MASTER_KEY: string;
+  /**
+   * Container path the Server writes the first-run setup token plaintext to
+   * (`SETUP_TOKEN_FILE`/`PROLIFERATE_SETUP_TOKEN_FILE`). Bound to a
+   * container-writable path so the real token file is produced and copied out.
+   */
+  SETUP_TOKEN_FILE: string;
   /** Additional required Server settings (DB/Redis URLs, gateway enable flag). */
   [key: string]: string;
 }
@@ -72,6 +78,14 @@ export interface DockerStackOptions {
   ports: DockerPorts;
   serverArtifact: MaterializedArtifact;
   serverEnv: ServerContainerEnv;
+  /**
+   * Container path the Server wrote its first-run setup token to (matches
+   * `serverEnv.SETUP_TOKEN_FILE`); the plaintext is copied out via `docker cp`
+   * after the Server is healthy so the actor fixture can claim /setup for real.
+   */
+  setupTokenContainerPath: string;
+  /** Host path the setup token plaintext is copied to (e.g. `<runDir>/setup-token`). */
+  setupTokenHostPath: string;
   /** Registers each container/network releaser as it is created. */
   registerCleanup: (kind: DockerResourceKind, providerId: string, release: () => Promise<void>) => Promise<void>;
   timeoutMs?: number;
@@ -196,7 +210,53 @@ export async function startDockerStack(options: DockerStackOptions): Promise<Run
   });
   const version = await readServerVersion(baseUrl, fetchImpl);
   log(`server healthy: version=${version}`);
+
+  // The Server minted the real first-run setup token during boot (single-org
+  // mode) and wrote its plaintext to SETUP_TOKEN_FILE inside the container.
+  // Copy it out via the real product artifact — no token is fabricated here.
+  await copySetupToken({
+    exec,
+    serverName,
+    containerPath: options.setupTokenContainerPath,
+    hostPath: options.setupTokenHostPath,
+    timeoutMs,
+    log,
+  });
+
   return { baseUrl, imageRef, version };
+}
+
+/**
+ * Copies the container's first-run setup token plaintext to a host path,
+ * retrying briefly because the boot-time mint (application lifespan) can race
+ * the first successful `/health` on a cold start.
+ */
+async function copySetupToken(params: {
+  exec: Exec;
+  serverName: string;
+  containerPath: string;
+  hostPath: string;
+  timeoutMs: number;
+  log: (message: string) => void;
+}): Promise<void> {
+  const deadline = Date.now() + Math.min(params.timeoutMs, 30_000);
+  let lastError = "not attempted";
+  for (;;) {
+    try {
+      await params.exec("docker", ["cp", `${params.serverName}:${params.containerPath}`, params.hostPath]);
+      params.log(`setup token copied to ${params.hostPath}`);
+      return;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+    }
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `Could not copy the Server setup token from ${params.serverName}:${params.containerPath} ` +
+          `to ${params.hostPath}: ${lastError}`,
+      );
+    }
+    await sleep(500);
+  }
 }
 
 /** Runs `alembic upgrade head` as a one-off run of the exact image. */

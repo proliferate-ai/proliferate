@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 
@@ -34,7 +35,22 @@ import {
   type ServerContainerEnv,
 } from "./docker.js";
 import { launchAnyharness, type ReadinessFetch, type SpawnLike } from "./processes.js";
+import type { LocalWorldPorts } from "./ports.js";
 import { extractRenderer, launchChromium, serveRenderer, type ChromiumLauncher } from "./renderer.js";
+
+export type { LocalWorldPorts } from "./ports.js";
+
+/**
+ * Container path the candidate Server writes its plaintext first-run setup
+ * token to (`SETUP_TOKEN_FILE`, see `server/proliferate/config.py`). Set to a
+ * container-writable path (not the packaged default `/var/lib/...`, which the
+ * image's runtime user cannot create) so the world can copy the token out to
+ * `<runDir>/setup-token` for the actor fixture's real `/setup` claim.
+ */
+export const SERVER_SETUP_TOKEN_CONTAINER_PATH = "/tmp/proliferate-setup/setup-token";
+
+/** Host filename the setup token is copied to under the run directory. */
+export const SETUP_TOKEN_FILENAME = "setup-token";
 
 /**
  * The reusable local-world constructor (spec "Local-world contract"). It
@@ -127,14 +143,6 @@ export interface ConstructLocalWorldOptions {
   deps?: LocalWorldDeps;
 }
 
-export interface LocalWorldPorts {
-  server: number;
-  postgres: number;
-  redis: number;
-  anyharness: number;
-  renderer: number;
-}
-
 export interface LocalWorldDeps {
   litellmFetch?: FetchLike;
   dockerExec?: Exec;
@@ -223,12 +231,19 @@ export async function constructLocalWorld(options: ConstructLocalWorldOptions): 
     // Steps 3–6: run-scoped Docker network + Postgres + Redis + migrations +
     // Server (gateway enabled, SINGLE_ORG_MODE, short backfill interval).
     const naming = dockerNaming(options.run.run_id, options.run.shard_id);
-    const serverEnv = buildServerEnv(naming, options.litellm);
+    const serverEnv = buildServerEnv(naming, options.litellm, options.ports.renderer);
+    const setupTokenHostPath = path.join(runDir, SETUP_TOKEN_FILENAME);
     const server = await startDockerStack({
       naming,
       ports: { server: options.ports.server, postgres: options.ports.postgres, redis: options.ports.redis },
       serverArtifact,
       serverEnv,
+      // The real Server mints the first-run token at boot and writes the
+      // plaintext to SETUP_TOKEN_FILE inside the container; the world copies it
+      // out to <runDir>/setup-token so the actor fixture claims through the real
+      // /setup path (no bypass).
+      setupTokenContainerPath: SERVER_SETUP_TOKEN_CONTAINER_PATH,
+      setupTokenHostPath,
       registerCleanup: (kind: DockerResourceKind, providerId, release) => register(kind, providerId, release),
       timeoutMs,
       log,
@@ -351,15 +366,36 @@ function dockerNaming(runId: string, shardId: string): DockerNaming {
   return { project, network: `${project}-net` };
 }
 
-function buildServerEnv(naming: DockerNaming, litellm: QualificationLiteLlmConfig): ServerContainerEnv {
+function buildServerEnv(
+  naming: DockerNaming,
+  litellm: QualificationLiteLlmConfig,
+  rendererPort: number,
+): ServerContainerEnv {
   const { databaseUrl, redisUrl } = dockerInternalUrls(naming);
   return {
     SINGLE_ORG_MODE: "true",
     AGENT_GATEWAY_ENABLED: "true",
+    // The renderer is served over http on its own ephemeral port (in production
+    // the Desktop app is a Tauri custom-scheme origin the default list covers).
+    // Allow that exact origin so the browser's cross-origin calls to the Server
+    // are not blocked by CORS.
+    CORS_ALLOW_ORIGINS: `http://127.0.0.1:${rendererPort},http://localhost:${rendererPort}`,
     AGENT_GATEWAY_BACKFILL_INTERVAL_SECONDS: "5",
     AGENT_GATEWAY_LITELLM_BASE_URL: litellm.adminBaseUrl,
     AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL: litellm.publicBaseUrl,
     AGENT_GATEWAY_LITELLM_MASTER_KEY: litellm.masterKey,
+    // The candidate Server runs in production posture (debug=False), which
+    // requires these instance secrets to be set to non-default values (see
+    // server/proliferate/config.py `validate_secrets_in_production`). Fresh
+    // run-scoped random values keep the exact production posture rather than
+    // flipping DEBUG on. Both the migration one-off and the Server container
+    // build Settings, so both consume this same env.
+    JWT_SECRET: randomBytes(32).toString("hex"),
+    CLOUD_SECRET_KEY: randomBytes(32).toString("hex"),
+    // Container-writable token path so the real first-run token file is
+    // produced somewhere the image's runtime user can create and the world can
+    // copy out (the packaged /var/lib default is not runtime-writable).
+    SETUP_TOKEN_FILE: SERVER_SETUP_TOKEN_CONTAINER_PATH,
     DATABASE_URL: databaseUrl,
     REDBEAT_REDIS_URL: redisUrl,
   };

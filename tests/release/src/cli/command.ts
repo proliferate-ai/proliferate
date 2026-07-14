@@ -1,5 +1,8 @@
+import path from "node:path";
+
 import { HELP_TEXT, parseArgs, type CliArgs } from "./args.js";
 import type { ScenarioDefinition } from "../scenarios/types.js";
+import type { LocalWorldPorts } from "../worlds/local-workspace/ports.js";
 import type { FailureReport } from "../report/types.js";
 import { toFailureReports } from "../report/failure-reporter.js";
 import { IdentityError, type RunIdentityV1 } from "../runner/identity.js";
@@ -31,6 +34,12 @@ export interface CommandDeps {
   }) => Promise<RunIdentityV1>;
   selectScenarios: (selector: readonly string[] | "all") => ScenarioDefinition[];
   loadBuildMap: (path: string, expectedSourceSha: string) => Promise<CandidateBuildMapV1>;
+  /**
+   * Loads the `local-world-ports.json` sidecar the candidate builder wrote into
+   * the run directory (the candidate map's directory). Returns null when the
+   * sidecar is absent; a world scenario then fails closed on the missing ports.
+   */
+  loadLocalWorldPorts: (runDir: string) => Promise<LocalWorldPorts | null>;
   /** Local durable-user seed; fills the locallySeeded set. */
   seedLocalDurableUser: (seeded: Set<string>) => Promise<void>;
   pushLocalGatewayAuth: () => Promise<void>;
@@ -99,11 +108,19 @@ export async function runReleaseCommand(argv: readonly string[], deps: CommandDe
   // evidence projection) so a world constructor can materialize the exact
   // artifacts it names. In-memory only; never serialized into the report.
   let candidateBuildMap: CandidateBuildMapV1 | null = null;
+  // The run/shard-scoped run directory and pre-allocated ports a world
+  // constructor needs. Both derived from the candidate map (its directory is the
+  // run dir; the ports sidecar sits next to it) so an invalid map still yields
+  // no world side effects. Null in a diagnostic run without a map.
+  let runDir: string | null = null;
+  let ports: LocalWorldPorts | null = null;
   if (args.candidateBuildMap !== undefined) {
     try {
       const map = await deps.loadBuildMap(args.candidateBuildMap, identity.source_sha);
       candidateBuild = toCandidateBuildEvidence(map);
       candidateBuildMap = map;
+      runDir = path.dirname(path.resolve(args.candidateBuildMap));
+      ports = await deps.loadLocalWorldPorts(runDir);
     } catch (error) {
       deps.error(error instanceof Error ? error.message : String(error));
       return 2;
@@ -152,6 +169,8 @@ export async function runReleaseCommand(argv: readonly string[], deps: CommandDe
       locallySeeded,
       candidateBuild,
       candidateBuildMap,
+      runDir,
+      ports,
       log: (message: string) => deps.log(`  ${message}`),
     };
     report = await deps.execute(executeOptions);

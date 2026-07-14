@@ -3,6 +3,8 @@ import type { DesktopMode, RuntimeLane, TargetLane } from "../config/types.js";
 import type { CandidateBuildMapV1 } from "../artifacts/build-map.js";
 import type { CellEvidenceV1 } from "../evidence/schema.js";
 import type { PlannedCellV1, ResultReason, ScenarioDeclarableStatus } from "../runner/result.js";
+import type { RunIdentityV1 } from "../runner/identity.js";
+import type { LocalWorldPorts } from "../worlds/local-workspace/ports.js";
 
 export interface ScenarioPlanStep {
   description: string;
@@ -61,6 +63,24 @@ export interface ScenarioRunContext {
    * constructor materializes the exact artifacts it names (BRIEF §7a).
    */
   candidateBuildMap: CandidateBuildMapV1 | null;
+  /**
+   * The resolved run/shard identity for this execution. A world constructor
+   * needs it for run-scoped Docker projects, ledger identity, and evidence.
+   * Always threaded by the runner from the execute options' identity.
+   */
+  runIdentity: RunIdentityV1 | null;
+  /**
+   * The run/shard-scoped run directory (the candidate build map's directory),
+   * or null when no map was supplied. All world state lives under here.
+   */
+  runDir: string | null;
+  /**
+   * The pre-allocated non-conflicting ports the candidate builder baked into
+   * the Desktop renderer's URLs (read from the `local-world-ports.json` sidecar
+   * next to the candidate map), or null when absent. A world constructor MUST
+   * reuse these rather than re-probing.
+   */
+  ports: LocalWorldPorts | null;
 }
 
 export interface ScenarioPlanContext {

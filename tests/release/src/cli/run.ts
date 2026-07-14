@@ -12,6 +12,7 @@ import { fileIssuesForFailures } from "../report/issue-filer.js";
 import { resolveRunIdentity } from "../runner/identity.js";
 import { executeSelectedCells } from "../runner/execute.js";
 import { loadCandidateBuildMap } from "../artifacts/build-map.js";
+import { readLocalWorldPortsFile } from "../worlds/local-workspace/ports.js";
 import { writeReportV4 } from "../evidence/write.js";
 
 /**
@@ -130,6 +131,7 @@ process.exitCode = await runReleaseCommand(process.argv.slice(2), {
   resolveIdentity: (overrides) => resolveRunIdentity({ overrides }),
   selectScenarios,
   loadBuildMap: loadCandidateBuildMap,
+  loadLocalWorldPorts: readLocalWorldPortsFile,
   seedLocalDurableUser,
   pushLocalGatewayAuth,
   printEnvManifestReport,

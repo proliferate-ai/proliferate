@@ -9,8 +9,8 @@ import {
   resolveWorldConstructionInputs,
   runLocalWorldSmokeCell,
   type LocalWorldSmokeDriver,
-  type LocalWorldSmokeRunContext,
 } from "./local-world-smoke-1.js";
+import type { ScenarioRunContext } from "./types.js";
 import type { CandidateBuildMapV1 } from "../artifacts/build-map.js";
 import type { EnvResolution } from "../config/env-resolution.js";
 import type { AuthenticatedActor } from "../fixtures/authenticated-actor.js";
@@ -75,7 +75,7 @@ function fakeEnv(vars: Record<string, string> = {}): EnvResolution {
   };
 }
 
-function fakeCtx(overrides: Partial<LocalWorldSmokeRunContext> = {}): LocalWorldSmokeRunContext {
+function fakeCtx(overrides: Partial<ScenarioRunContext> = {}): ScenarioRunContext {
   return {
     targetLane: "local",
     runtimeLane: "local",

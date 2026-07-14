@@ -48,38 +48,18 @@ import {
  * through the runner's extended matrix outcome — see BRIEF "Runner amendments").
  * Cleanup runs in `finally` and its evidence is folded into that same block.
  *
- * ── Cross-workstream input gap beyond BRIEF §7 (disclosed; see final report) ──
- * BRIEF §7 documents two additive `ScenarioRunContext`/`ScenarioCellOutcome`
- * seams (`candidateBuildMap`, `evidence?`) owned by workstream C. Building a
- * `ReadyLocalWorld` also needs the resolved `RunIdentityV1`, a run/shard-scoped
- * `runDir`, and pre-allocated `LocalWorldPorts` (`ConstructLocalWorldOptions`,
- * `world.ts`) — none of which `ScenarioRunContext` carries today, and none of
- * which this workstream owns to add. This module reads them off a local bridge
- * type (`LocalWorldSmokeRunContext`) rather than inventing its own duplicate
- * identity/port-allocation machinery; when they are absent the cell fails
- * cleanly with a bounded reason instead of throwing (see
- * `resolveWorldConstructionInputs`).
+ * The world-construction inputs — the validated path-bearing `candidateBuildMap`
+ * (BRIEF §7a), the resolved `runIdentity`, the run/shard-scoped `runDir`, and
+ * the pre-allocated `LocalWorldPorts` — are all first-class fields of
+ * `ScenarioRunContext`, threaded by the runner from the execute options and the
+ * `local-world-ports.json` sidecar the candidate builder wrote next to the
+ * candidate map. When any is absent the cell fails cleanly with a bounded reason
+ * instead of throwing (see `resolveWorldConstructionInputs`).
  */
 
 export const LOCAL_WORLD_SMOKE_1_ID = "LOCAL-WORLD-SMOKE-1";
 export const REPRESENTATIVE_HARNESS = "claude";
 export const DETERMINISTIC_PROMPT = "Reply with exactly the word: pong";
-
-/**
- * Bridge type for the world-construction inputs noted above. `candidateBuildMap`
- * (BRIEF §7a) is now a first-class field of `ScenarioRunContext`, threaded by
- * the runner; `runIdentity`/`runDir`/`ports` are NOT yet part of that context
- * (see module doc) and remain optional additions read off this bridge — the
- * cell fails cleanly with a bounded reason when they are absent.
- */
-export interface LocalWorldSmokeRunContext extends ScenarioRunContext {
-  /** Not yet part of `ScenarioRunContext` — see module doc. */
-  runIdentity?: RunIdentityV1;
-  /** Not yet part of `ScenarioRunContext` — see module doc. */
-  runDir?: string;
-  /** Not yet part of `ScenarioRunContext` — see module doc. */
-  ports?: LocalWorldPorts;
-}
 
 type ScenarioCellOutcomeWithEvidence = ScenarioCellOutcome & { evidence?: CellEvidenceV1 };
 
@@ -113,7 +93,7 @@ export const localWorldSmoke1: ScenarioDefinition = {
     const driver = defaultLocalWorldSmokeDriver;
     const outcomes: ScenarioCellOutcomeWithEvidence[] = [];
     for (const cell of cells) {
-      outcomes.push(await runLocalWorldSmokeCell(cell, ctx as LocalWorldSmokeRunContext, driver));
+      outcomes.push(await runLocalWorldSmokeCell(cell, ctx, driver));
     }
     return outcomes;
   },
@@ -282,7 +262,7 @@ export const defaultLocalWorldSmokeDriver: LocalWorldSmokeDriver = {
  */
 export async function runLocalWorldSmokeCell(
   cell: PlannedCellV1,
-  ctx: LocalWorldSmokeRunContext,
+  ctx: ScenarioRunContext,
   driver: LocalWorldSmokeDriver,
 ): Promise<ScenarioCellOutcomeWithEvidence> {
   const inputs = resolveWorldConstructionInputs(ctx);
@@ -305,6 +285,12 @@ export async function runLocalWorldSmokeCell(
   let worldClosed = false;
   try {
     const actor = await driver.createActor(world);
+    // Enrol the actor's server-minted LiteLLM key + user + team into the world's
+    // cleanup stack as soon as the key identity is resolved, so world close()
+    // deletes them (spec "Cleanup": actor virtual key/team/user) and populates
+    // the required `virtual_key_deleted`/`litellm_subjects_deleted` evidence.
+    // Without this the shared staging proxy leaks the run's subjects.
+    await world.trackActorSubjects?.(actor.gatewayKey);
     const repo = await driver.prepareRepo(world, actor, cell.cell_id);
     const page = await driver.openPage(world, actor);
     try {
@@ -456,7 +442,7 @@ type WorldConstructionInputs =
  * doc). Returns a typed failure instead of throwing so the cell can report a
  * clean `failed` outcome.
  */
-export function resolveWorldConstructionInputs(ctx: LocalWorldSmokeRunContext): WorldConstructionInputs {
+export function resolveWorldConstructionInputs(ctx: ScenarioRunContext): WorldConstructionInputs {
   const map = ctx.candidateBuildMap;
   if (!map) {
     return { ok: false, reason: "no candidate build map was supplied to this run; the cell cannot start a world" };

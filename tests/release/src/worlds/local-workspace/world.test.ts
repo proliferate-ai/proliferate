@@ -169,6 +169,11 @@ test("constructLocalWorld runs the ordered startup and returns a ready handle", 
     await access(world.artifacts.anyharness.path);
     // Durable ledger written.
     await access(path.join(runDir, CLEANUP_LEDGER_FILENAME));
+    // The real first-run setup token is copied out of the Server container to
+    // <runDir>/setup-token (consumed by the actor fixture's real /setup claim).
+    const cp = h.argv.find((cmd) => cmd[0] === "docker" && cmd[1] === "cp");
+    assert.ok(cp, "expected a docker cp of the setup token");
+    assert.equal(cp!.at(-1), path.join(runDir, "setup-token"));
 
     // A fresh actor enrolled for cleanup, then a full green teardown.
     await world.trackActorSubjects!({

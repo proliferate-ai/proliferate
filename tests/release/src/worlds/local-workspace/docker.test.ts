@@ -60,7 +60,13 @@ const SERVER_ENV: ServerContainerEnv = {
   AGENT_GATEWAY_LITELLM_BASE_URL: "http://admin",
   AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL: "http://public",
   AGENT_GATEWAY_LITELLM_MASTER_KEY: "sk-master",
+  SETUP_TOKEN_FILE: "/tmp/proliferate-setup/setup-token",
   DATABASE_URL: "postgresql+asyncpg://proliferate:localdev@plq-postgres:5432/proliferate",
+};
+
+const SETUP_TOKEN = {
+  setupTokenContainerPath: "/tmp/proliferate-setup/setup-token",
+  setupTokenHostPath: "/run/setup-token",
 };
 
 test("startDockerStack registers each resource before creating it and verifies readiness", async () => {
@@ -76,6 +82,7 @@ test("startDockerStack registers each resource before creating it and verifies r
     ports: { server: 8100, postgres: 8101, redis: 8102 },
     serverArtifact: SERVER_ARTIFACT,
     serverEnv: SERVER_ENV,
+    ...SETUP_TOKEN,
     registerCleanup: async (kind, providerId) => {
       registered.push({ kind, providerId });
     },
@@ -84,6 +91,13 @@ test("startDockerStack registers each resource before creating it and verifies r
 
   assert.equal(running.version, "1.2.3");
   assert.equal(running.imageRef, "srv:candidate");
+
+  // The real first-run setup token is copied out of the running Server via
+  // `docker cp` — the world/fixture consumes the real product path, not a bypass.
+  const cp = argv.find((cmd) => cmd[0] === "docker" && cmd[1] === "cp");
+  assert.ok(cp, "expected a `docker cp` of the setup token");
+  assert.equal(cp![2], "plq-run-shard-server:/tmp/proliferate-setup/setup-token");
+  assert.equal(cp![3], "/run/setup-token");
 
   // Network registered first (torn down last); server registered after migration.
   assert.deepEqual(
@@ -119,6 +133,7 @@ test("startDockerStack fails when the server never reports version-bearing healt
       ports: { server: 8100, postgres: 8101, redis: 8102 },
       serverArtifact: SERVER_ARTIFACT,
       serverEnv: SERVER_ENV,
+      ...SETUP_TOKEN,
       registerCleanup: async () => undefined,
       timeoutMs: 300,
       deps: { exec, fetch },

@@ -657,6 +657,40 @@ test("ctx.candidateBuildMap defaults to null when no map is supplied (BRIEF §7a
   assert.equal(seen, null);
 });
 
+test("the executor threads runIdentity, runDir, and ports into the scenario context", async () => {
+  const ports = { server: 1, postgres: 2, redis: 3, anyharness: 4, renderer: 5 };
+  let seen: { runIdentity?: unknown; runDir?: unknown; ports?: unknown } = {};
+  const matrix = fakeMatrix({
+    id: "M",
+    cells: [{ child: "a" }],
+    runCells: async (ctx, cells) => {
+      const c = ctx as unknown as { runIdentity?: unknown; runDir?: unknown; ports?: unknown };
+      seen = { runIdentity: c.runIdentity, runDir: c.runDir, ports: c.ports };
+      return cells.map((cell) => ({ cellId: cell.cell_id, status: "green" as const }));
+    },
+  });
+  await executeSelectedCells(await optionsFor([matrix], { runDir: "/run/dir", ports }));
+  assert.equal(seen.runIdentity, IDENTITY);
+  assert.equal(seen.runDir, "/run/dir");
+  assert.deepEqual(seen.ports, ports);
+});
+
+test("runDir and ports default to null when the options omit them", async () => {
+  let seen: { runDir?: unknown; ports?: unknown } = {};
+  const matrix = fakeMatrix({
+    id: "M",
+    cells: [{ child: "a" }],
+    runCells: async (ctx, cells) => {
+      const c = ctx as unknown as { runDir?: unknown; ports?: unknown };
+      seen = { runDir: c.runDir, ports: c.ports };
+      return cells.map((cell) => ({ cellId: cell.cell_id, status: "green" as const }));
+    },
+  });
+  await executeSelectedCells(await optionsFor([matrix]));
+  assert.equal(seen.runDir, null);
+  assert.equal(seen.ports, null);
+});
+
 test("a matrix outcome's evidence rides into the result; a cell without evidence defaults to null (BRIEF §7b)", async () => {
   const attached = { kind: "local_workspace_turn", harness: "claude" } as unknown as CellEvidenceV1;
   const matrix = fakeMatrix({

@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import { runReleaseCommand, type CommandDeps } from "./command.js";
 import { BuildMapError, type CandidateBuildMapV1 } from "../artifacts/build-map.js";
+import type { LocalWorldPorts } from "../worlds/local-workspace/ports.js";
 import type { RunIdentityV1 } from "../runner/identity.js";
 import type { TestRunReportV3, TestRunReportV4 } from "../evidence/schema.js";
 import { ALL_FINAL_STATUSES, type FinalTestStatus } from "../runner/result.js";
@@ -27,6 +28,8 @@ const SCENARIO: ScenarioDefinition = {
   plan: () => [],
   run: async () => undefined,
 };
+
+const PORTS: LocalWorldPorts = { server: 8100, postgres: 8101, redis: 8102, anyharness: 8103, renderer: 8104 };
 
 const VALID_MAP: CandidateBuildMapV1 = {
   schema_version: 1,
@@ -112,6 +115,10 @@ function makeDeps(overrides: Partial<CommandDeps> = {}): { deps: CommandDeps; ca
       calls.push("loadBuildMap");
       return VALID_MAP;
     },
+    loadLocalWorldPorts: async () => {
+      calls.push("loadLocalWorldPorts");
+      return PORTS;
+    },
     seedLocalDurableUser: async () => {
       calls.push("seed");
     },
@@ -147,7 +154,7 @@ test("a valid supplied map is loaded after selection and before any setup side e
     deps,
   );
   assert.equal(exit, 0);
-  assert.deepEqual(calls, ["identity", "select", "loadBuildMap", "seed", "gateway", "envManifest", "execute", "write"]);
+  assert.deepEqual(calls, ["identity", "select", "loadBuildMap", "loadLocalWorldPorts", "seed", "gateway", "envManifest", "execute", "write"]);
 });
 
 test("an invalid supplied map exits 2 with zero setup, execution, or report side effects", async () => {
@@ -306,5 +313,59 @@ test("planning happens after map validation and before setup in the dependency o
     deps,
   );
   assert.equal(exit, 0);
-  assert.deepEqual(calls, ["identity", "select", "loadBuildMap", "seed", "gateway", "envManifest", "execute", "write"]);
+  assert.deepEqual(calls, ["identity", "select", "loadBuildMap", "loadLocalWorldPorts", "seed", "gateway", "envManifest", "execute", "write"]);
+});
+
+test("the run dir (the map's directory) and its ports sidecar reach execute", async () => {
+  let seenRunDir: unknown = "unset";
+  let seenPorts: unknown = "unset";
+  let loaderRunDir: string | undefined;
+  const { deps } = makeDeps();
+  deps.loadLocalWorldPorts = async (runDir) => {
+    loaderRunDir = runDir;
+    return PORTS;
+  };
+  deps.execute = async (options) => {
+    seenRunDir = (options as unknown as { runDir?: unknown }).runDir;
+    seenPorts = (options as unknown as { ports?: unknown }).ports;
+    return fakeReport(options.candidateBuild ?? null);
+  };
+  const exit = await runReleaseCommand(
+    ["--behavior", "diagnostic", "--candidate-build-map", "/run/dir/candidate-build.json"],
+    deps,
+  );
+  assert.equal(exit, 0);
+  assert.equal(loaderRunDir, "/run/dir");
+  assert.equal(seenRunDir, "/run/dir");
+  assert.deepEqual(seenPorts, PORTS);
+});
+
+test("diagnostic omission threads null runDir/ports and never loads the ports sidecar", async () => {
+  let seenRunDir: unknown = "unset";
+  let seenPorts: unknown = "unset";
+  const { deps, calls } = makeDeps();
+  deps.execute = async (options) => {
+    seenRunDir = (options as unknown as { runDir?: unknown }).runDir;
+    seenPorts = (options as unknown as { ports?: unknown }).ports;
+    return fakeReport(options.candidateBuild ?? null);
+  };
+  const exit = await runReleaseCommand(["--behavior", "diagnostic"], deps);
+  assert.equal(exit, 0);
+  assert.equal(seenRunDir, null);
+  assert.equal(seenPorts, null);
+  assert.ok(!calls.includes("loadLocalWorldPorts"));
+});
+
+test("a malformed ports sidecar exits 2 before any setup side effect", async () => {
+  const { deps, calls } = makeDeps();
+  deps.loadLocalWorldPorts = async () => {
+    calls.push("loadLocalWorldPorts");
+    throw new Error("local-world-ports.json: \"server\" must be an integer TCP port");
+  };
+  const exit = await runReleaseCommand(
+    ["--behavior", "diagnostic", "--candidate-build-map", "/tmp/map.json"],
+    deps,
+  );
+  assert.equal(exit, 2);
+  assert.deepEqual(calls, ["identity", "select", "loadBuildMap", "loadLocalWorldPorts"]);
 });
