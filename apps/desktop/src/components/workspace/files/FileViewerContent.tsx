@@ -79,8 +79,15 @@ function RichPreview({
   }
 
   return (
-    <div className="file-source-scroll h-full min-h-0 min-w-0 overflow-auto bg-background px-8 py-6">
-      <MarkdownBody content={content} renderCodeBlock={renderDesktopCodeBlock} />
+    // Codex keeps the rendered-markdown gutter tight — document padding, not
+    // page margins. The first block's own top margin (e.g. h1 mt-5) would
+    // double the top gap, so strip it.
+    <div className="file-source-scroll h-full min-h-0 min-w-0 overflow-auto bg-background px-4 py-4">
+      <MarkdownBody
+        content={content}
+        className="[&>*:first-child]:mt-0"
+        renderCodeBlock={renderDesktopCodeBlock}
+      />
     </div>
   );
 }

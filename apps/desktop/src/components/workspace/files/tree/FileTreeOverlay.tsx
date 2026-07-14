@@ -133,7 +133,7 @@ function FileTreeBody({
             onChange={(event: React.ChangeEvent<HTMLInputElement>) => setFilter(event.target.value)}
             placeholder="Filter files…"
             autoFocus
-            className="h-full border-0 bg-transparent px-0 text-[13px] text-sidebar-foreground placeholder:text-sidebar-muted-foreground focus:ring-0"
+            className="h-full border-0 bg-transparent px-0 text-[length:var(--text-message)] text-sidebar-foreground placeholder:text-sidebar-muted-foreground focus:ring-0"
           />
         </div>
       </div>
@@ -252,15 +252,20 @@ function VirtualizedTree({
   level: number;
 }) {
   // For the root tree, we render entries + their expanded children inline
-  // We only virtualize at the top-level list for now
+  // We only virtualize at the top-level list for now. An expanded directory
+  // renders its (async-loaded) subtree inside its own virtual item, so item
+  // heights are dynamic — every item must be measured, or the fixed estimate
+  // paints the rows below on top of the expanded subtree.
   const virtualizer = useVirtualizer({
     count: entries.length,
     getScrollElement: () => scrollRef.current,
+    getItemKey: (index) => entries[index]?.path ?? index,
     estimateSize: () => 28,
     overscan: 20,
     // jsdom (tests) and pre-layout frames report a zero-height scroll
     // element; seed a viewport so initial rows render.
     initialRect: { width: 400, height: 800 },
+    measureElement: (element) => element.getBoundingClientRect().height || 28,
   });
 
   return (
@@ -271,7 +276,9 @@ function VirtualizedTree({
         const entry = entries[virtualItem.index]!;
         return (
           <div
-            key={entry.path}
+            key={virtualItem.key}
+            ref={virtualizer.measureElement}
+            data-index={virtualItem.index}
             style={{
               position: "absolute",
               top: 0,

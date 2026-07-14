@@ -101,9 +101,10 @@ automatically.
 
 Workspace companion tools should use the shared pane primitives under
 `components/workspace/pane/**` for fixed-height headers, icon buttons, and
-options menus. Editable Scratch text uses the same source-view typography tokens
-as file and diff views. Shiki remains owned by shared Markdown/code renderers;
-the editable Scratch textarea is not syntax-highlighted.
+options menus. Editable Scratch text reads at the transcript message size
+(`--text-message`, via the `--scratch-*` tokens), and the Scratch header title
+and save status read at that same size. Shiki remains owned by shared
+Markdown/code renderers; the editable Scratch editor is not syntax-highlighted.
 
 ## File Viewing
 
@@ -114,6 +115,12 @@ closed.
 The file viewer frame owns the path header, copy path, save/reload actions,
 dirty/conflict states, and binary/too-large placeholders. Cmd/Ctrl+S saves the
 active file target only.
+
+The viewer's action menu (copy content, copy path, word wrap, rich preview) is
+OS-native in Desktop: the toolbar options button and a right-click in the
+content area both open the host context menu via the shared native-menu bridge,
+with the DOM popover kept as the browser/test fallback. Native menus carry no
+checkmark state, so toggles read as "Enable/Disable …" verbs.
 
 The file viewer may open a palette-style file search modal scoped to the
 current viewer tab. It reuses the workspace file search API and command-palette

@@ -40,7 +40,9 @@ export function FileTreeRow({
       aria-level={level + 1}
       title={path}
       className={twMerge(
-        "flex h-7 w-full items-center gap-1.5 rounded-md px-1.5 text-left text-[13px] leading-none transition-colors duration-150",
+        // Codex tree rows read at chat-body size; ours follows --text-message
+        // so the tree tracks transcript prose across appearance presets.
+        "flex h-7 w-full items-center gap-1.5 rounded-md px-1.5 text-left text-[length:var(--text-message)] leading-none transition-colors duration-150",
         "hover:bg-sidebar-accent",
         isDirectory ? "text-sidebar-muted-foreground" : "text-sidebar-foreground",
         selected && "bg-sidebar-accent text-sidebar-foreground",

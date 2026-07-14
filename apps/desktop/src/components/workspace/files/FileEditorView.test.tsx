@@ -202,7 +202,7 @@ describe("FileEditorView", () => {
     expect(screen.queryByLabelText("Find in file")).toBeNull();
   });
 
-  it("renders source files with the read-only source viewer", () => {
+  it("renders source files with the read-only source viewer", async () => {
     const target = fileViewerTarget("package.json");
     const targetKey = viewerTargetKey(target);
     useWorkspaceViewerTabsStore.setState({
@@ -241,7 +241,8 @@ describe("FileEditorView", () => {
     expect(container.querySelector(".file-source-line-number")?.textContent).toBe("1");
     expect(container.querySelector(".file-source-scroll")).toBeTruthy();
     fireEvent.click(screen.getByLabelText("File viewer options"));
-    expect(screen.getByText("Word wrap")).toBeTruthy();
+    // Native menu resolves unavailable async before the DOM fallback opens.
+    expect(await screen.findByText("Word wrap")).toBeTruthy();
     fireEvent.click(screen.getByText("Copy content"));
     expect(writeTextMock).toHaveBeenCalledWith("{\"ok\":true}");
   });

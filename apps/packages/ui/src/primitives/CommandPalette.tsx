@@ -138,7 +138,9 @@ export function CommandPaletteRoot({
           role="dialog"
           aria-modal="true"
           aria-label={label}
-          className="fixed left-1/2 top-[20vh] flex max-h-[calc(100vh-1rem)] w-[min(520px,92vw)] -translate-x-1/2 flex-col overflow-hidden rounded-2xl bg-popover p-1 text-popover-foreground shadow-floating-dark ring-[0.5px] ring-popover-ring"
+          // Canonical modal surface (matches ModalShell / Dialog): bg-background
+          // with a border-token hairline, not the lighter popover tint.
+          className="fixed left-1/2 top-[20vh] flex max-h-[calc(100vh-1rem)] w-[min(520px,92vw)] -translate-x-1/2 flex-col overflow-hidden rounded-2xl bg-background p-1 text-foreground shadow-floating-dark ring-[0.5px] ring-border"
           onKeyDown={onKeyDown}
         >
           <Command

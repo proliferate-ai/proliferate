@@ -10,10 +10,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import type { CloudMobilityWorkspaceSummary } from "@/lib/access/cloud/client";
 import { cloudBillingKey, cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
-import {
-  useProductAuthStatus,
-  useProductAuthUserId,
-} from "@/hooks/auth/facade/use-product-auth";
+import { useProductAuthUserId } from "@/hooks/auth/facade/use-product-auth";
+import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import type { WorkspaceCollections } from "@/lib/domain/workspaces/cloud/collections";
 import {
   getWorkspaceCollectionsFromCache,
@@ -36,16 +34,22 @@ interface CancelPreviousWorkspaceDisplayQueriesInput {
 export function useWorkspaceSelectionCache() {
   const queryClient = useQueryClient();
   const cacheScopeKey = useAnyHarnessCacheScopeKey();
-  const authStatus = useProductAuthStatus();
   const authUserId = useProductAuthUserId();
+  const { cloudActive } = useCloudAvailabilityState();
 
   const getWorkspaceSelectionSnapshot = useCallback((
     runtimeUrl: string,
   ): WorkspaceSelectionCacheSnapshot => ({
+    // Must mirror the collections query's user scope (use-workspaces.ts /
+    // use-workspace-collections-cache.ts): `cloudActive ? authUserId : null`.
+    // Reading under a bare auth check diverges when a session is authenticated
+    // but cloud is inactive (e.g. dev auth bypass) — the snapshot then misses
+    // the populated cache entry and every selection fails "Workspace not
+    // found."
     workspaceCollections: getWorkspaceCollectionsFromCache(
       queryClient,
       runtimeUrl,
-      authStatus === "authenticated" ? authUserId : null,
+      cloudActive ? authUserId : null,
     ),
     cloudMobilityWorkspaces: queryClient.getQueryData<CloudMobilityWorkspaceSummary[]>(
       cloudMobilityWorkspacesKey(),
@@ -53,7 +57,7 @@ export function useWorkspaceSelectionCache() {
     coworkStatus: queryClient.getQueryData<CoworkStatus>(
       anyHarnessCoworkStatusKey(runtimeUrl, cacheScopeKey),
     ),
-  }), [authStatus, authUserId, cacheScopeKey, queryClient]);
+  }), [authUserId, cacheScopeKey, cloudActive, queryClient]);
 
   const cancelPreviousWorkspaceDisplayQueries = useCallback((
     input: CancelPreviousWorkspaceDisplayQueriesInput,

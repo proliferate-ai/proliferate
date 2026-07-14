@@ -23,6 +23,7 @@ import {
 import type { Workspace } from "@anyharness/sdk";
 import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
 import { workspaceHeaderTitle } from "@/lib/domain/workspaces/display/workspace-display";
+import { useToastStore } from "@/stores/toast/toast-store";
 
 const HEADER_ICON_BUTTON_CLASS = "workspace-shell-icon-button";
 const HEADER_RUN_BUTTON_CLASS = "workspace-shell-action-button font-medium";
@@ -67,27 +68,39 @@ export const GlobalHeader = memo(function GlobalHeader({
     void files.listOpenTargets("directory").then(setTargets);
   }, [files]);
 
+  const showToast = useToastStore((s) => s.show);
+
+  const openTarget = useCallback(
+    (targetId: string, label: string) => {
+      if (!workspacePath || !files) return;
+      // The Rust side re-resolves the app at click time, so an editor can
+      // vanish between listing and clicking — don't swallow that.
+      files.openTarget(targetId, workspacePath).catch(() => {
+        showToast(`Couldn't open workspace in ${label}`);
+      });
+    },
+    [files, showToast, workspacePath],
+  );
+
   const handleDefaultOpen = useCallback(() => {
     if (!workspacePath) return;
-    if (!files) return;
     if (preferredTarget?.kind === "copy") {
       void host.clipboard.writeText(workspacePath);
       return;
     }
-    void files.openTarget(preferredTarget?.id ?? "finder", workspacePath);
-  }, [files, host.clipboard, workspacePath, preferredTarget]);
+    openTarget(preferredTarget?.id ?? "finder", preferredTarget?.label ?? "Finder");
+  }, [host.clipboard, openTarget, workspacePath, preferredTarget]);
 
   const handleTargetClick = useCallback(
     (target: OpenTarget) => {
       if (!workspacePath) return;
-      if (!files) return;
       if (target.kind === "copy") {
         void host.clipboard.writeText(workspacePath);
         return;
       }
-      void files.openTarget(target.id, workspacePath);
+      openTarget(target.id, target.label);
     },
-    [files, host.clipboard, workspacePath],
+    [host.clipboard, openTarget, workspacePath],
   );
 
   return (
