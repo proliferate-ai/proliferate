@@ -96,9 +96,10 @@ not become a workspace, session, chat, or repository service.
 4. Initial bootstrap moves from `AppRuntime` into the existing
    `DesktopProductLifecycleRoot`. It waits for normalized auth loading to
    finish and does not repeat when a new host snapshot carries the same stable
-   runtime bridge and auth status. Removing or replacing the Desktop capability
-   cancels any active poll before it can call the removed bridge or publish more
-   connection state.
+   runtime bridge, including when auth changes between anonymous and
+   authenticated. Removing or replacing the Desktop capability cancels any
+   active poll, clears the published local-runtime state, and prevents later
+   calls or connection-state publication from that lifecycle.
 
 5. The local runtime URL starts empty. Until Desktop discovery or the existing
    browser-development fallback succeeds, SDK runtime queries stay disabled.
@@ -148,8 +149,9 @@ succeeds.
 - Exhausted polling retains the existing “did not become healthy in time”
   error.
 - Restart rejection publishes the existing failed connection state.
-- Removing the Desktop lifecycle cancels active polling without later bridge
-  calls, timeout errors, or connection-state publication.
+- Removing the Desktop lifecycle cancels active polling and clears the local
+  runtime URL without later bridge calls, timeout errors, or connection-state
+  publication.
 - Missing Desktop capability fails a local action without probing loopback or
   starting a local query.
 
@@ -177,7 +179,9 @@ Automated proof covers:
 - initial bootstrap mounts only inside the Desktop lifecycle boundary;
 - a host snapshot replacement with the same runtime inputs does not duplicate
   bootstrap;
-- removing the Desktop capability cancels an active runtime poll;
+- auth changes between ready states do not duplicate bootstrap;
+- removing the Desktop capability cancels an active runtime poll and clears
+  the published local runtime;
 - an empty runtime disables local inventory queries;
 - local create updates and invalidates the cache for the post-bootstrap runtime
   URL;

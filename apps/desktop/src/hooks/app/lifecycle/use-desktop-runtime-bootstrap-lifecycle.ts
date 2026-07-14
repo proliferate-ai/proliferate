@@ -16,20 +16,23 @@ import {
   logStartupDebug,
   startStartupTimer,
 } from "@/lib/infra/measurement/debug-startup";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 
 export function useDesktopRuntimeBootstrapLifecycle(
   runtime: DesktopRuntimeBridge,
   authStatus: AuthState["status"],
 ): void {
+  const authReady = authStatus !== "loading";
+
   useEffect(() => {
-    if (authStatus === "loading") {
+    if (!authReady) {
       return;
     }
 
     const runtimeBootstrapStartedAt = startStartupTimer();
     const controller = new AbortController();
     recordAppRendererEvent("app.runtime_bootstrap.start");
-    logStartupDebug("app.runtime_bootstrap.start", { authStatus });
+    logStartupDebug("app.runtime_bootstrap.start", { authStatus: "ready" });
     void bootstrapHarnessRuntime(runtime, controller.signal).finally(() => {
       if (controller.signal.aborted) {
         return;
@@ -40,11 +43,14 @@ export function useDesktopRuntimeBootstrapLifecycle(
       );
       logStartupDebug("app.runtime_bootstrap.completed", {
         elapsedMs: elapsedStartupMs(runtimeBootstrapStartedAt),
-        authStatus,
+        authStatus: "ready",
       });
     });
-    return () => controller.abort();
-  }, [authStatus, runtime]);
+    return () => {
+      controller.abort();
+      useHarnessConnectionStore.getState().resetConnectionState();
+    };
+  }, [authReady, runtime]);
 }
 
 function recordAppRendererEvent(message: string, elapsedMs?: number): void {

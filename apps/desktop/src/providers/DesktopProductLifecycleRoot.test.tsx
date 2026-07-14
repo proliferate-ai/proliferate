@@ -10,6 +10,7 @@ import type {
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 
 const runtimeMocks = vi.hoisted(() => ({
   bootstrapHarnessRuntime: vi.fn().mockResolvedValue(undefined),
@@ -126,6 +127,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   runtimeMocks.bootstrapHarnessRuntime.mockResolvedValue(undefined);
   setEntries({});
+  useHarnessConnectionStore.getState().resetConnectionState();
 });
 
 afterEach(() => {
@@ -161,6 +163,28 @@ describe("DesktopProductLifecycleRoot", () => {
       </ProductHostProvider>,
     );
     expect(signal.aborted).toBe(true);
+  });
+
+  it("clears the published local runtime when the Desktop capability is removed", () => {
+    const bridge = makeBridge(vi.fn().mockResolvedValue(undefined));
+    const { rerender } = renderRoot(makeHost(bridge, "authenticated"));
+    useHarnessConnectionStore.setState({
+      runtimeUrl: "http://127.0.0.1:9999",
+      connectionState: "healthy",
+      error: null,
+    });
+
+    rerender(
+      <ProductHostProvider host={makeHost(null, "authenticated")}>
+        <DesktopProductLifecycleRoot />
+      </ProductHostProvider>,
+    );
+
+    expect(useHarnessConnectionStore.getState()).toMatchObject({
+      runtimeUrl: "",
+      connectionState: "connecting",
+      error: null,
+    });
   });
 
   it("does not export or subscribe when desktop is null", () => {

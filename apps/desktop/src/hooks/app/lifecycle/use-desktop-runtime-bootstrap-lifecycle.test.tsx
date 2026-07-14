@@ -3,6 +3,7 @@ import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DesktopRuntimeBridge } from "@proliferate/product-client/host/desktop-bridge";
 import type { AuthState } from "@proliferate/product-client/host/product-host";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 
 const mocks = vi.hoisted(() => ({
   bootstrapHarnessRuntime: vi.fn(),
@@ -39,6 +40,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.bootstrapHarnessRuntime.mockResolvedValue(undefined);
   mocks.logRendererEvent.mockResolvedValue(undefined);
+  useHarnessConnectionStore.getState().resetConnectionState();
 });
 
 afterEach(cleanup);
@@ -90,5 +92,46 @@ describe("useDesktopRuntimeBootstrapLifecycle", () => {
     });
 
     expect(mocks.bootstrapHarnessRuntime).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps one bootstrap when auth changes between ready states", async () => {
+    const runtime = makeRuntime();
+    const { rerender } = renderHook(
+      ({ status }: { status: AuthState["status"] }) =>
+        useDesktopRuntimeBootstrapLifecycle(runtime, status),
+      { initialProps: { status: "anonymous" as AuthState["status"] } },
+    );
+
+    await waitFor(() => expect(mocks.bootstrapHarnessRuntime).toHaveBeenCalledTimes(1));
+    const signal = mocks.bootstrapHarnessRuntime.mock.calls[0]?.[1] as AbortSignal;
+
+    rerender({ status: "authenticated" });
+    expect(mocks.bootstrapHarnessRuntime).toHaveBeenCalledTimes(1);
+    expect(signal.aborted).toBe(false);
+
+    rerender({ status: "anonymous" });
+    expect(mocks.bootstrapHarnessRuntime).toHaveBeenCalledTimes(1);
+    expect(signal.aborted).toBe(false);
+  });
+
+  it("revokes the published runtime state when its bridge lifecycle ends", async () => {
+    const runtime = makeRuntime();
+    const { unmount } = renderHook(() =>
+      useDesktopRuntimeBootstrapLifecycle(runtime, "authenticated"),
+    );
+    await waitFor(() => expect(mocks.bootstrapHarnessRuntime).toHaveBeenCalledTimes(1));
+    useHarnessConnectionStore.setState({
+      runtimeUrl: "http://127.0.0.1:9999",
+      connectionState: "healthy",
+      error: null,
+    });
+
+    unmount();
+
+    expect(useHarnessConnectionStore.getState()).toMatchObject({
+      runtimeUrl: "",
+      connectionState: "connecting",
+      error: null,
+    });
   });
 });
