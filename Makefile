@@ -888,11 +888,11 @@ qualification-local-workspace:
 		export AGENT_GATEWAY_LITELLM_BASE_URL; \
 	fi; \
 	test -n "$$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL" || { \
-		echo "AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL is required (local: $(QUALIFICATION_INFRA_ENV); Actions: staging environment vars)."; \
+		echo "AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL is required (local: $(QUALIFICATION_INFRA_ENV); Actions: Qualification environment vars)."; \
 		exit 1; \
 	}; \
 	test -n "$$AGENT_GATEWAY_LITELLM_MASTER_KEY" || { \
-		echo "AGENT_GATEWAY_LITELLM_MASTER_KEY is required (local: $(QUALIFICATION_INFRA_ENV); Actions: staging environment secrets)."; \
+		echo "AGENT_GATEWAY_LITELLM_MASTER_KEY is required (local: $(QUALIFICATION_INFRA_ENV); Actions: Qualification environment secrets)."; \
 		exit 1; \
 	}; \
 	run_id="ql-$(PROFILE)"; \

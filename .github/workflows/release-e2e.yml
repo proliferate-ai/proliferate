@@ -360,14 +360,16 @@ jobs:
   # `continue-on-error`: a red command here stays red, with its real exit
   # code. It runs `make qualification-local-workspace`, the exact same
   # entrypoint a laptop uses; only the LiteLLM input source differs (the
-  # protected `staging` GitHub environment's vars/secrets, never the ignored
-  # local secret profile, and never routed to arbitrary pull-request code).
+  # protected `Qualification` GitHub environment's vars/secrets, never the
+  # ignored local secret profile, and never routed to arbitrary pull-request
+  # code — the environment's branch policy allows only main and
+  # codex/local-world-smoke-1).
   release-e2e-local-world-smoke:
     name: local-world-smoke-1 (manual, strict)
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    environment: staging
+    environment: Qualification
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -386,12 +388,13 @@ jobs:
 
       - name: Build the three exact candidates and run LOCAL-WORLD-SMOKE-1 (strict)
         env:
-          # Mapped from the protected `staging` environment. The public
-          # origin also covers AGENT_GATEWAY_LITELLM_BASE_URL when no
-          # separate control-plane URL variable exists yet (Makefile default
-          # mapping) — arbitrary PR code never runs this job or sees these.
+          # Mapped directly from the protected `Qualification` environment. Both
+          # the admin/control-plane and public URLs exist there as distinct
+          # variables, so each maps to its own input (no public-covers-admin
+          # fallback). Arbitrary PR code never runs this job or sees these.
+          AGENT_GATEWAY_LITELLM_BASE_URL: ${{ vars.AGENT_GATEWAY_LITELLM_BASE_URL }}
           AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL: ${{ vars.AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL }}
-          AGENT_GATEWAY_LITELLM_MASTER_KEY: ${{ secrets.LITELLM_MASTER_KEY }}
+          AGENT_GATEWAY_LITELLM_MASTER_KEY: ${{ secrets.AGENT_GATEWAY_LITELLM_MASTER_KEY }}
         run: |
           set -euo pipefail
           make qualification-local-workspace \
