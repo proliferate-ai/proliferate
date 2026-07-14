@@ -31,7 +31,7 @@ const mocks = vi.hoisted(() => ({
 
 const CACHE_SCOPE_KEY = "desktop:test-user";
 
-vi.mock("@/lib/access/browser/session-replacement-tombstones-storage", () => ({
+vi.mock("@/lib/access/persistence/session-replacement-tombstones-storage", () => ({
   readSessionReplacementTombstones: () => ({}),
   writeSessionReplacementTombstones: mocks.writeSessionReplacementTombstones,
 }));
