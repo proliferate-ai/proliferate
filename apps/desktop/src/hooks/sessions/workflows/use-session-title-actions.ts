@@ -34,7 +34,9 @@ function markAutoSessionTitleRequested(sessionId: string): boolean {
 }
 
 export function useSessionTitleActions() {
-  const ssh = useProductHost().desktop?.ssh ?? null;
+  const host = useProductHost();
+  const ssh = host.desktop?.ssh ?? null;
+  const cloudClient = host.cloud.client;
   // Auto-title generation runs outside render; read the latest normalized auth
   // status through a ref so the callback identity stays stable (matching the
   // former non-reactive the Desktop auth store read).
@@ -52,7 +54,7 @@ export function useSessionTitleActions() {
     }
 
     const { workspaceId, materializedSessionId } =
-      await getSessionClientAndWorkspace(sessionId, ssh);
+      await getSessionClientAndWorkspace(sessionId, ssh, cloudClient);
     const operationId = startMeasurementOperation({
       kind: "session_rename",
       surfaces: ["header-tabs", "workspace-sidebar", "chat-surface"],
@@ -82,7 +84,7 @@ export function useSessionTitleActions() {
     }
 
     return session;
-  }, [applySessionSummary, ssh, updateSessionTitleMutation, upsertWorkspaceSessionRecord]);
+  }, [applySessionSummary, ssh, cloudClient, updateSessionTitleMutation, upsertWorkspaceSessionRecord]);
 
   const maybeGenerateSessionTitle = useCallback(async (input: {
     sessionId: string;

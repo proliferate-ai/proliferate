@@ -40,6 +40,7 @@ function deps(
   return {
     localRuntime,
     ssh,
+    cloudClient: null,
     logicalWorkspaces: [],
     rawWorkspaces: [],
     cache: {
@@ -88,6 +89,7 @@ describe("resolveSelectionConnection", () => {
       "http://runtime.test",
       "workspace-runtime",
       null,
+      null,
     );
     expect(result.runtimeUrl).toBe("http://runtime.test");
   });
@@ -115,6 +117,7 @@ describe("resolveSelectionConnection", () => {
       "",
       "target:target-1:workspace-runtime",
       ssh,
+      null,
     );
   });
 

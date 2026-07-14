@@ -39,16 +39,18 @@ vi.mock("@/hooks/auth/workflows/use-auth-orchestration-effects", () => ({
   useAuthOrchestrationEffects: () => h.deps,
 }));
 vi.mock("@/hooks/capabilities/derived/use-app-capabilities", () => ({
-  useAppCapabilities: () => ({ cloudEnabled: h.cloudEnabled }),
+  // The provider consumes the `*For` variant (explicit deployment base URL)
+  // because it builds the host and cannot read it back through useProductHost.
+  useAppCapabilitiesFor: () => ({ cloudEnabled: h.cloudEnabled }),
 }));
 vi.mock("@/hooks/access/cloud/auth/use-auth-methods", () => ({
-  useDesktopAuthMethods: () => ({ data: h.authMethods }),
+  useDesktopAuthMethodsFor: () => ({ data: h.authMethods }),
 }));
 vi.mock("@/hooks/access/cloud/auth/use-github-auth-availability", () => ({
-  useGitHubDesktopAuthAvailability: () => ({ data: h.github }),
+  useGitHubDesktopAuthAvailabilityFor: () => ({ data: h.github }),
 }));
 vi.mock("@/hooks/access/cloud/auth/use-sso-discovery", () => ({
-  useSsoDiscovery: () => ({ data: h.sso }),
+  useSsoDiscoveryFor: () => ({ data: h.sso }),
 }));
 vi.mock("@/lib/domain/auth/auth-mode", () => ({
   isProductAuthRequired: () => true,

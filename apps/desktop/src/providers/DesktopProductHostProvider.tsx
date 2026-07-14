@@ -14,10 +14,10 @@ import { useAuthStore } from "@/stores/auth/auth-store";
 import { useAuthBootstrap } from "@/hooks/auth/lifecycle/use-auth-bootstrap";
 import { useAuthActions } from "@/hooks/auth/workflows/use-auth-actions";
 import { useAuthOrchestrationEffects } from "@/hooks/auth/workflows/use-auth-orchestration-effects";
-import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
-import { useDesktopAuthMethods } from "@/hooks/access/cloud/auth/use-auth-methods";
-import { useGitHubDesktopAuthAvailability } from "@/hooks/access/cloud/auth/use-github-auth-availability";
-import { useSsoDiscovery } from "@/hooks/access/cloud/auth/use-sso-discovery";
+import { useAppCapabilitiesFor } from "@/hooks/capabilities/derived/use-app-capabilities";
+import { useDesktopAuthMethodsFor } from "@/hooks/access/cloud/auth/use-auth-methods";
+import { useGitHubDesktopAuthAvailabilityFor } from "@/hooks/access/cloud/auth/use-github-auth-availability";
+import { useSsoDiscoveryFor } from "@/hooks/access/cloud/auth/use-sso-discovery";
 
 import {
   buildAnonymousMethods,
@@ -62,10 +62,17 @@ export function DesktopProductHostProvider({
   const actions = useAuthActions();
   const orchestrationEffects = useAuthOrchestrationEffects();
 
-  const { cloudEnabled } = useAppCapabilities();
-  const { data: authMethods } = useDesktopAuthMethods();
-  const { data: githubAvailability } = useGitHubDesktopAuthAvailability();
-  const { data: ssoDiscovery } = useSsoDiscovery({ enabled: cloudEnabled });
+  // The provider builds the host, so it cannot read the deployment back through
+  // `useProductHost()`. It owns the Desktop deployment adapter and passes that
+  // base URL into the probe hooks explicitly (the `*For` variants), which is the
+  // exact value product-tree consumers later read from `host.deployment`.
+  const deployment = useMemo(() => createDesktopDeployment(), []);
+  const apiBaseUrl = deployment.apiBaseUrl;
+
+  const { cloudEnabled } = useAppCapabilitiesFor(apiBaseUrl);
+  const { data: authMethods } = useDesktopAuthMethodsFor(apiBaseUrl);
+  const { data: githubAvailability } = useGitHubDesktopAuthAvailabilityFor(apiBaseUrl);
+  const { data: ssoDiscovery } = useSsoDiscoveryFor(apiBaseUrl, { enabled: cloudEnabled });
 
   const passwordAvailable = cloudEnabled && authMethods?.passwordLogin === true;
   const githubAvailable = cloudEnabled && githubAvailability?.enabled === true;
@@ -166,6 +173,7 @@ export function DesktopProductHostProvider({
   );
 
   const authRequired = isProductAuthRequired();
+
   const auth = useMemo<ProductAuthHost>(
     () => ({
       authRequired,
@@ -178,8 +186,6 @@ export function DesktopProductHostProvider({
     }),
     [authRequired, authState, restoreSession, authOps],
   );
-
-  const deployment = useMemo(() => createDesktopDeployment(), []);
 
   const host = useMemo<ProductHost>(
     () => ({

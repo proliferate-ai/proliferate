@@ -213,15 +213,22 @@ host-owned. There remains one auth bootstrap, one Cloud client, one Query
 client, one `ProductHostProvider`, and one router.
 
 Recorded deviations carried into review: the OAuth `source` discriminator is
-not re-emitted into internal routes because no route consumer reads it;
+not re-emitted into internal routes because no route consumer reads it; and
 `desktop-navigation.ts` is split into it plus `desktop-navigation-codec.ts` to
-stay under the frontend size threshold; and six deployment/capability probe
-hooks plus `cloud-sandbox-gateway.ts` still read `getProliferateApiBaseUrl()` /
-`getProliferateClient()` directly (identical value and singleton, unchanged
-behavior) — completing that centralization is carried into the next
-shared-ProductHost slice. The `pnpm --dir apps/desktop test` command keeps the
-prior founder-approved waiver for base-identical `pretest` violations in
-unchanged files.
+stay under the frontend size threshold. The deployment/Cloud rewire is now
+complete: the six deployment/capability probe hooks derive their scope and probe
+target from `host.deployment.apiBaseUrl` (each `queryFn` receives that base URL
+so the hook's inputs are fully host-derived; query keys and enablement
+unchanged), and `cloud-sandbox-gateway.ts` receives the Cloud client's `buildUrl`
+as an explicit parameter threaded from `host.cloud.client` instead of calling
+`getProliferateClient()`. Because the host provider builds the host and cannot
+read it back, each probe hook keeps a `*For(apiBaseUrl)` core that the provider
+calls with its own deployment-adapter URL. `getProliferateApiBaseUrl()` /
+`getProliferateClient()` now remain only in the definitions, the `AppProviders`
+composition root, the `desktop-product-host` deployment adapter, and
+`telemetry/client.ts` (deferred to the telemetry slice). The
+`pnpm --dir apps/desktop test` command keeps the prior founder-approved waiver
+for base-identical `pretest` violations in unchanged files.
 
 The complete living contract is
 [`web-desktop-client-unification-d1e.md`](../../codebase/features/web-desktop-client-unification-d1e.md).

@@ -1,5 +1,6 @@
 import type { useDeletePendingPromptMutation, useEditPendingPromptMutation, useResolveSessionInteractionMutation } from "@anyharness/sdk-react";
 import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
+import type { CloudSandboxGatewayUrlSource } from "@/lib/access/cloud/cloud-sandbox-gateway";
 import type {
   SessionIntent,
 } from "@proliferate/product-domain/sessions/intents/session-intent-model";
@@ -14,6 +15,7 @@ type DeletePendingPromptMutation = ReturnType<typeof useDeletePendingPromptMutat
 
 export interface InteractionIntentDispatchDeps {
   ssh?: DesktopSshBridge | null;
+  cloudClient: CloudSandboxGatewayUrlSource | null;
   deletePendingPromptMutation: DeletePendingPromptMutation;
   editPendingPromptMutation: EditPendingPromptMutation;
   resolveInteractionMutation: ResolveInteractionMutation;
@@ -21,7 +23,7 @@ export interface InteractionIntentDispatchDeps {
 
 export async function dispatchInteractionIntent(
   intent: Extract<SessionIntent, { kind: "resolve_interaction" }>,
-  deps: Pick<InteractionIntentDispatchDeps, "resolveInteractionMutation" | "ssh">,
+  deps: Pick<InteractionIntentDispatchDeps, "resolveInteractionMutation" | "ssh" | "cloudClient">,
 ): Promise<void> {
   const current = useSessionIntentStore.getState().entriesById[intent.intentId];
   if (!current || current.kind !== "resolve_interaction" || current.status !== "queued") {
@@ -36,6 +38,7 @@ export async function dispatchInteractionIntent(
     const { workspaceId, materializedSessionId } = await getSessionClientAndWorkspace(
       intent.clientSessionId,
       deps.ssh ?? null,
+      deps.cloudClient,
     );
     useSessionIntentStore.getState().bindMaterializedSession(
       intent.clientSessionId,
@@ -66,7 +69,7 @@ export async function dispatchInteractionIntent(
 
 export async function dispatchEditPendingPromptIntent(
   intent: Extract<SessionIntent, { kind: "edit_pending_prompt" }>,
-  deps: Pick<InteractionIntentDispatchDeps, "editPendingPromptMutation" | "ssh">,
+  deps: Pick<InteractionIntentDispatchDeps, "editPendingPromptMutation" | "ssh" | "cloudClient">,
 ): Promise<void> {
   useSessionIntentStore.getState().patchIntent(intent.intentId, {
     status: "dispatching",
@@ -77,6 +80,7 @@ export async function dispatchEditPendingPromptIntent(
     const { materializedSessionId } = await getSessionClientAndWorkspace(
       intent.clientSessionId,
       deps.ssh ?? null,
+      deps.cloudClient,
     );
     await deps.editPendingPromptMutation.mutateAsync({
       sessionId: materializedSessionId,
@@ -98,7 +102,7 @@ export async function dispatchEditPendingPromptIntent(
 
 export async function dispatchDeletePendingPromptIntent(
   intent: Extract<SessionIntent, { kind: "delete_pending_prompt" }>,
-  deps: Pick<InteractionIntentDispatchDeps, "deletePendingPromptMutation" | "ssh">,
+  deps: Pick<InteractionIntentDispatchDeps, "deletePendingPromptMutation" | "ssh" | "cloudClient">,
 ): Promise<void> {
   useSessionIntentStore.getState().patchIntent(intent.intentId, {
     status: "dispatching",
@@ -109,6 +113,7 @@ export async function dispatchDeletePendingPromptIntent(
     const { materializedSessionId } = await getSessionClientAndWorkspace(
       intent.clientSessionId,
       deps.ssh ?? null,
+      deps.cloudClient,
     );
     await deps.deletePendingPromptMutation.mutateAsync({
       sessionId: materializedSessionId,

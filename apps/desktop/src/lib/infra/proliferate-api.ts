@@ -36,9 +36,12 @@ export function getProliferateApiBaseUrl(): string {
   return normalizeBaseUrl(raw);
 }
 
-export function buildProliferateApiUrl(path: string): string {
+export function buildProliferateApiUrl(
+  path: string,
+  baseUrl = getProliferateApiBaseUrl(),
+): string {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  return `${getProliferateApiBaseUrl()}${normalizedPath}`;
+  return `${baseUrl}${normalizedPath}`;
 }
 
 export function getProliferateApiOrigin(

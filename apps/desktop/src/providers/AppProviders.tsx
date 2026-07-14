@@ -6,6 +6,7 @@ import {
 import type { CoworkStatus, TerminalWebSocketAuthTransport } from "@anyharness/sdk";
 import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
 import type { CloudMobilityWorkspaceSummary } from "@/lib/access/cloud/client";
 import { getProliferateClient } from "@/lib/access/cloud/client";
 import { CloudClientProvider } from "@proliferate/cloud-sdk-react";
@@ -44,14 +45,15 @@ async function resolveWorkspaceConnectionWithCache(
   runtimeUrl: string,
   workspaceId: string,
   ssh: DesktopSshBridge | null,
+  cloudClient: ProliferateCloudClient | null,
 ) {
   const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(workspaceId);
   if (!cloudWorkspaceId) {
-    return resolveWorkspaceConnection(runtimeUrl, workspaceId, ssh);
+    return resolveWorkspaceConnection(runtimeUrl, workspaceId, ssh, cloudClient);
   }
 
   const cachedConnection = await appQueryClient.fetchQuery(
-    cloudWorkspaceConnectionQueryOptions(cloudWorkspaceId),
+    cloudWorkspaceConnectionQueryOptions(cloudWorkspaceId, cloudClient),
   );
   const connection = await withFreshCloudSandboxGatewayAccessToken(cachedConnection);
   const webSocketAuthTransport = (
@@ -84,6 +86,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
 function WorkspaceProviders({ children }: { children: ReactNode }) {
   const host = useProductHost();
   const ssh = host.desktop?.ssh ?? null;
+  const cloudClient = host.cloud.client;
   const apiBaseUrl = host.deployment.apiBaseUrl;
   const authState = host.auth.state;
   const authStatus = authState.status;
@@ -170,6 +173,7 @@ function WorkspaceProviders({ children }: { children: ReactNode }) {
             runtimeUrl,
             explicitCloudRuntimeMaterializationId,
             ssh,
+            cloudClient,
           );
         }
 
@@ -177,20 +181,20 @@ function WorkspaceProviders({ children }: { children: ReactNode }) {
           explicitTargetMaterializationId
           && materializationId === explicitTargetMaterializationId
         ) {
-          return resolveWorkspaceConnectionWithCache(runtimeUrl, explicitTargetMaterializationId, ssh);
+          return resolveWorkspaceConnectionWithCache(runtimeUrl, explicitTargetMaterializationId, ssh, cloudClient);
         }
 
         if (
           logicalWorkspace.localWorkspace
           && materializationId === logicalWorkspace.localWorkspace.id
         ) {
-          return resolveWorkspaceConnectionWithCache(runtimeUrl, logicalWorkspace.localWorkspace.id, ssh);
+          return resolveWorkspaceConnectionWithCache(runtimeUrl, logicalWorkspace.localWorkspace.id, ssh, cloudClient);
         }
       }
 
-      return resolveWorkspaceConnectionWithCache(runtimeUrl, workspaceId, ssh);
+      return resolveWorkspaceConnectionWithCache(runtimeUrl, workspaceId, ssh, cloudClient);
     },
-    [authStatus, authUserId, cacheScopeKey, runtimeUrl, selectedWorkspaceId, ssh],
+    [authStatus, authUserId, cacheScopeKey, cloudClient, runtimeUrl, selectedWorkspaceId, ssh],
   );
 
   return (

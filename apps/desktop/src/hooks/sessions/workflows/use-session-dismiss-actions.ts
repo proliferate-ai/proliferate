@@ -9,7 +9,9 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import { useToastStore } from "@/stores/toast/toast-store";
 
 export function useSessionDismissActions() {
-  const ssh = useProductHost().desktop?.ssh ?? null;
+  const host = useProductHost();
+  const ssh = host.desktop?.ssh ?? null;
+  const cloudClient = host.cloud.client;
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const showToast = useToastStore((state) => state.show);
   const cleanupDismissedSession = useDismissedSessionCleanup();
@@ -28,7 +30,7 @@ export function useSessionDismissActions() {
 
     try {
       const { materializedSessionId, workspaceId: resolvedWorkspaceId } =
-        await getSessionClientAndWorkspace(sessionId, ssh);
+        await getSessionClientAndWorkspace(sessionId, ssh, cloudClient);
       await dismissSessionMutation.mutateAsync({
         workspaceId: resolvedWorkspaceId,
         sessionId: materializedSessionId,
@@ -44,6 +46,7 @@ export function useSessionDismissActions() {
     getWorkspaceRuntimeBlockReason,
     showToast,
     ssh,
+    cloudClient,
   ]);
 
   return { dismissSession };

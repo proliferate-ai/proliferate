@@ -158,16 +158,22 @@ storage hydration, or add any new login/access/beta/account-linking policy.
   primitives moved to a sibling `desktop-navigation-codec.ts` so both files stay
   under the frontend size threshold. Pure refactor; the public seam and its
   tests are unchanged.
-- **Deployment/Cloud reads not fully centralized (follow-up)**: six probe hooks
+- **Deployment/Cloud reads centralized (resolved)**: the six probe hooks
   (`use-auth-methods`, `use-github-auth-availability`, `use-sso-discovery`,
   `use-server-capabilities`, `use-control-plane-health`,
-  `use-app-capabilities`) still call `getProliferateApiBaseUrl()` directly for
-  their query-key scope, and `cloud-sandbox-gateway.ts` still calls
-  `getProliferateClient()` for gateway-URL building. The value and singleton are
-  identical to the host's, so behavior is unchanged, but the contract's
-  deployment/Cloud rewire table is not fully satisfied. Completing this rewire
-  (reading `host.deployment.apiBaseUrl` / receiving the client as an explicit
-  dependency) is carried into the next shared-ProductHost slice.
+  `use-app-capabilities`) now derive their query-key scope and probe target from
+  `useProductHost().deployment.apiBaseUrl` (the base URL is threaded into each
+  probe's `queryFn` so the hook's inputs are fully host-derived, with query keys
+  and enablement unchanged), and `cloud-sandbox-gateway.ts` receives the Cloud
+  client (its `buildUrl` dependency) as an explicit parameter threaded from
+  `host.cloud.client` — it no longer calls `getProliferateClient()`. Because the
+  provider builds the host and cannot read it back, each probe hook exposes a
+  `*For(apiBaseUrl)` core that the provider calls with its own deployment adapter
+  URL; the public wrapper reads `useProductHost()`. `getProliferateApiBaseUrl()`/
+  `getProliferateClient()` now remain only in the definitions (`proliferate-api`,
+  `client`), the `AppProviders` composition root, the `desktop-product-host`
+  deployment adapter, and `telemetry/client.ts` (deferred to the telemetry
+  slice). The deployment/Cloud rewire table is now satisfied.
 
 ## Acceptance proof
 

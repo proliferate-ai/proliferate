@@ -37,6 +37,7 @@ describe("resolveRuntimeTargetForWorkspace", () => {
       "",
       "target:target-1:workspace-7",
       ssh,
+      null,
     );
 
     expect(ssh.getProfile).toHaveBeenCalledWith("target-1");
@@ -54,6 +55,7 @@ describe("resolveRuntimeTargetForWorkspace", () => {
       "",
       "target:target-1:workspace-7",
       null,
+      null,
     )).rejects.toThrow("SSH direct access is only available in Desktop.");
   });
 
@@ -64,6 +66,7 @@ describe("resolveRuntimeTargetForWorkspace", () => {
       "http://runtime.test",
       "workspace-local",
       ssh,
+      null,
     )).resolves.toMatchObject({
       location: "local",
       baseUrl: "http://runtime.test",

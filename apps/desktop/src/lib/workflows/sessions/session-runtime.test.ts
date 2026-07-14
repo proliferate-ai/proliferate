@@ -101,7 +101,7 @@ describe("fetchSessionHistory", () => {
     try {
       mocks.resolveRuntimeTargetForWorkspace.mockImplementation(() => new Promise(() => {}));
 
-      const history = fetchSessionHistory("session-1", { timeoutMs: 50 });
+      const history = fetchSessionHistory("session-1", { timeoutMs: 50, cloudClient: null });
       const historyExpectation = expect(history).rejects.toMatchObject({ name: "AbortError" });
       await vi.advanceTimersByTimeAsync(50);
 
@@ -130,7 +130,7 @@ describe("fetchSessionHistory", () => {
         return new Promise(() => {});
       });
 
-      const history = fetchSessionHistory("session-1", { timeoutMs: 50 });
+      const history = fetchSessionHistory("session-1", { timeoutMs: 50, cloudClient: null });
       const historyExpectation = expect(history).rejects.toMatchObject({ name: "AbortError" });
       await vi.advanceTimersByTimeAsync(0);
 

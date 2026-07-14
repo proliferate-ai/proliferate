@@ -140,6 +140,7 @@ describe("created runtime cleanup", () => {
       existingProjectedRecord: projectedRecord,
       frozenDefaultLiveSessionControlValuesByAgentKind: {},
       localRuntime,
+      cloudClient: null,
       options: {
         text: "",
         agentKind: "claude",
@@ -190,6 +191,7 @@ describe("created runtime cleanup", () => {
       existingProjectedRecord: projectedRecord,
       frozenDefaultLiveSessionControlValuesByAgentKind: {},
       localRuntime: null,
+      cloudClient: null,
       options: {
         text: "",
         agentKind: "claude",
@@ -252,6 +254,7 @@ describe("created runtime cleanup", () => {
       existingProjectedRecord: projectedRecord,
       frozenDefaultLiveSessionControlValuesByAgentKind: {},
       localRuntime: null,
+      cloudClient: null,
       options: {
         text: "",
         agentKind: "claude",

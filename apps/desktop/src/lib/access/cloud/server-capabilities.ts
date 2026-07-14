@@ -13,7 +13,9 @@ const SERVER_CAPABILITIES_TIMEOUT_MS = 2_500;
  * the server is too old to declare capabilities. Callers treat `null`
  * conservatively; the official-hosted fallback is applied one layer up.
  */
-export async function fetchServerCapabilities(): Promise<ServerCapabilityContract | null> {
+export async function fetchServerCapabilities(
+  apiBaseUrl?: string,
+): Promise<ServerCapabilityContract | null> {
   const abortController =
     typeof AbortController !== "undefined" ? new AbortController() : null;
   const timeoutId = abortController
@@ -24,7 +26,7 @@ export async function fetchServerCapabilities(): Promise<ServerCapabilityContrac
     : null;
 
   try {
-    const response = await fetch(buildProliferateApiUrl("/meta"), {
+    const response = await fetch(buildProliferateApiUrl("/meta", apiBaseUrl), {
       headers: { Accept: "application/json" },
       signal: abortController?.signal,
     });
