@@ -117,20 +117,20 @@ function assertLazySplit(label, manifest) {
 
   // The authenticated canary chunk(s): any chunk whose emitted file references
   // the authenticated canary module by name.
-  const authKeys = Object.keys(manifest).filter(
+  const authenticatedChunkKeys = Object.keys(manifest).filter(
     (key) =>
       key.includes(AUTH_CANARY_NEEDLE) ||
       (manifest[key].file ?? "").includes(AUTH_CANARY_NEEDLE) ||
       (manifest[key].name ?? "").includes(AUTH_CANARY_NEEDLE),
   );
-  if (authKeys.length === 0) {
+  if (authenticatedChunkKeys.length === 0) {
     fail(`${label}: authenticated canary chunk not found in manifest (split not emitted)`);
     return;
   }
 
   // It must be emitted as a dynamic entry (its own on-demand chunk), never
   // folded into a static chunk.
-  for (const key of authKeys) {
+  for (const key of authenticatedChunkKeys) {
     if (manifest[key].isDynamicEntry !== true) {
       fail(`${label}: authenticated canary chunk ${key} is not a dynamic entry`);
     }
@@ -138,7 +138,7 @@ function assertLazySplit(label, manifest) {
 
   // The entry's STATIC closure must not contain the authenticated canary chunk.
   const closure = staticClosure(manifest, entryKey);
-  const leaked = authKeys.filter((key) => closure.has(key));
+  const leaked = authenticatedChunkKeys.filter((key) => closure.has(key));
   if (leaked.length > 0) {
     fail(
       `${label}: public shell entry statically includes the authenticated canary chunk(s): ${leaked.join(", ")}`,
@@ -148,7 +148,7 @@ function assertLazySplit(label, manifest) {
 
   // And it must be reachable as a dynamic import somewhere in the graph.
   const anyDynamic = Object.values(manifest).some((chunk) =>
-    (chunk.dynamicImports ?? []).some((dep) => authKeys.includes(dep)),
+    (chunk.dynamicImports ?? []).some((dep) => authenticatedChunkKeys.includes(dep)),
   );
   if (!anyDynamic) {
     fail(`${label}: authenticated canary chunk is never referenced as a dynamic import`);
@@ -198,8 +198,9 @@ function serveDir(rootDir) {
       res.setHeader("content-type", MIME[extname(filePath)] ?? "application/octet-stream");
       createReadStream(filePath).pipe(res);
     } catch (error) {
+      console.error("serve error:", error);
       res.statusCode = 500;
-      res.end(String(error));
+      res.end("internal error");
     }
   });
   return new Promise((resolve) => {
