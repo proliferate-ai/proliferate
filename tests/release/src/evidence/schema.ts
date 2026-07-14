@@ -171,6 +171,11 @@ export function validateReport(report: TestRunReportV2): void {
     throw new ReportValidationError("Report must be schema_version 2, kind proliferate.test-run.");
   }
   validateCandidateBuildEvidence(report.candidate_build);
+  // Strict evidence must name the exact bytes it qualified: only diagnostic
+  // omission may record null.
+  if (report.run.behavior === "strict" && report.candidate_build === null) {
+    throw new ReportValidationError("Strict reports require non-null candidate_build identity.");
+  }
 
   const selectedIds = report.selected_tests.map((test) => test.test_id);
   const resultIds = report.results.map((result) => result.test_id);
@@ -295,6 +300,15 @@ function validateCandidateBuildEvidence(evidence: CandidateBuildEvidenceV1 | nul
   }
   if (evidence === null) {
     return;
+  }
+  if (typeof evidence !== "object" || Array.isArray(evidence)) {
+    throw new ReportValidationError("candidate_build must be an object or null.");
+  }
+  // No undeclared fields beside `artifacts` — extra keys are how paths or
+  // raw map metadata would smuggle into persisted evidence.
+  const evidenceKeys = Object.keys(evidence);
+  if (evidenceKeys.length !== 1 || evidenceKeys[0] !== "artifacts") {
+    throw new ReportValidationError("candidate_build carries exactly one field: artifacts.");
   }
   if (!Array.isArray(evidence.artifacts) || evidence.artifacts.length === 0) {
     throw new ReportValidationError("candidate_build.artifacts must be a non-empty array.");

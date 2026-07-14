@@ -12,7 +12,11 @@ export async function materializeLocalArtifact(
   artifact: CandidateBuildArtifactV1,
   runStorageDir: string,
 ): Promise<string> {
-  const destination = path.join(runStorageDir, artifact.artifact_id.replace(/\//g, "__"));
+  // encodeURIComponent is injective on the artifact-id charset
+  // ([A-Za-z0-9._-] plus "/", which encodes to %2F), so two distinct valid
+  // ids can never materialize onto the same file — a plain "/"→"_" mangling
+  // would collide (e.g. `a/b_c` vs `a_b/c`).
+  const destination = path.join(runStorageDir, encodeURIComponent(artifact.artifact_id));
   await mkdir(path.dirname(destination), { recursive: true });
   try {
     await copyFile(artifact.locator.path, destination);

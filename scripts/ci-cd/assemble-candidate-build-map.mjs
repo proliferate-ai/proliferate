@@ -41,13 +41,23 @@ export function assembleCandidateBuildMap({ binaryPath, sourceSha, version, targ
     throw new Error(`rust target triple looks unsafe: "${resolvedTarget}"`);
   }
   const sha256 = createHash("sha256").update(readFileSync(binaryPath)).digest("hex");
+  const artifactId = `${artifactPrefix ?? "anyharness"}/${resolvedTarget}`;
+  // Same contract as the runner-side loader
+  // (tests/release/src/artifacts/build-map.ts): the assembler must never be
+  // able to emit a map the runner would reject.
+  if (
+    artifactId.length > 128 ||
+    !/^[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/.test(artifactId)
+  ) {
+    throw new Error(`assembled artifact_id is unsafe: "${artifactId}"`);
+  }
   return {
     schema_version: 1,
     kind: "proliferate.candidate-build",
     source_sha: resolvedSha,
     artifacts: [
       {
-        artifact_id: `${artifactPrefix ?? "anyharness"}/${resolvedTarget}`,
+        artifact_id: artifactId,
         version: resolvedVersion,
         sha256,
         locator: { kind: "local_file", path: path.resolve(binaryPath) },

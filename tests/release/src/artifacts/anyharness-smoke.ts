@@ -48,10 +48,14 @@ export async function runAnyharnessHandoffSmoke(options: HandoffSmokeOptions): P
   const artifact = pickAnyharnessArtifact(options.map, options.artifactId);
   const timeoutMs = options.timeoutMs ?? 60_000;
 
-  const storageDir = await mkdtemp(path.join(os.tmpdir(), "candidate-handoff-artifact-"));
-  const runtimeHome = await mkdtemp(path.join(os.tmpdir(), "candidate-handoff-home-"));
+  // Allocated inside the try so a partial allocation (e.g. the second
+  // mkdtemp failing) still cleans up whatever was created.
+  let storageDir: string | undefined;
+  let runtimeHome: string | undefined;
   let child: ReturnType<typeof spawn> | undefined;
   try {
+    storageDir = await mkdtemp(path.join(os.tmpdir(), "candidate-handoff-artifact-"));
+    runtimeHome = await mkdtemp(path.join(os.tmpdir(), "candidate-handoff-home-"));
     const binary = await materializeLocalArtifact(artifact, storageDir);
     const port = await ephemeralPort();
     log(`launching ${artifact.artifact_id} on 127.0.0.1:${port} (runtime home ${runtimeHome})`);
@@ -104,8 +108,12 @@ export async function runAnyharnessHandoffSmoke(options: HandoffSmokeOptions): P
     if (child) {
       await terminate(child);
     }
-    await rm(storageDir, { recursive: true, force: true }).catch(() => undefined);
-    await rm(runtimeHome, { recursive: true, force: true }).catch(() => undefined);
+    if (storageDir) {
+      await rm(storageDir, { recursive: true, force: true }).catch(() => undefined);
+    }
+    if (runtimeHome) {
+      await rm(runtimeHome, { recursive: true, force: true }).catch(() => undefined);
+    }
   }
 }
 
@@ -131,7 +139,11 @@ async function pollHealth(port: number, timeoutMs: number): Promise<AnyharnessHe
   let lastError = "not attempted";
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(`http://127.0.0.1:${port}/health`);
+      // Each probe is individually bounded so a stalled response (accepted
+      // socket, no body) cannot hang the smoke past its deadline.
+      const response = await fetch(`http://127.0.0.1:${port}/health`, {
+        signal: AbortSignal.timeout(2_000),
+      });
       if (response.ok) {
         // Wire shape is the camelCase HealthResponse contract
         // (anyharness-contract/src/v1/health.rs, rename_all = "camelCase").
@@ -191,10 +203,13 @@ function sleep(ms: number): Promise<void> {
  * artifact identity to equal the launched identity.
  */
 async function mainFromCli(): Promise<void> {
-  const mapPath = argValue("--map");
-  if (!mapPath) {
+  const rawMapPath = argValue("--map");
+  if (!rawMapPath) {
     throw new Error("usage: anyharness-smoke --map <candidate-build-map.json>");
   }
+  // Resolved once: the same path string is later handed to the child runner,
+  // whose working directory differs, so a relative path would change meaning.
+  const mapPath = path.resolve(rawMapPath);
   const sourceSha = (await execCapture("git", ["rev-parse", "HEAD"])).trim();
   const map = await loadCandidateBuildMap(mapPath, sourceSha);
   const proof = await runAnyharnessHandoffSmoke({ map, log: (message) => console.log(`[smoke] ${message}`) });

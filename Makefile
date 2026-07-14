@@ -814,13 +814,19 @@ qualification-candidate-build-map:
 # current HEAD SHA, assembles the map, launches the exact bytes against an
 # isolated runtime home/port, and requires the diagnostic runner's report
 # candidate evidence to equal the launched identity.
+# The build and the assembler must agree on the exact output path: pin the
+# target dir and clear any ambient cross-compile target so an operator's
+# CARGO_TARGET_DIR/CARGO_BUILD_TARGET cannot make this qualify a stale binary
+# at target/release/ while cargo wrote somewhere else.
 qualification-candidate-handoff-smoke:
 	pnpm install --silent
+	env -u CARGO_BUILD_TARGET \
+	CARGO_TARGET_DIR=$(CURDIR)/target \
 	PROLIFERATE_BUILD_VERSION=$$(cat VERSION) \
 	PROLIFERATE_BUILD_SHA=$$(git rev-parse HEAD) \
 		cargo build --release -p anyharness
 	node scripts/ci-cd/assemble-candidate-build-map.mjs \
-		--binary target/release/anyharness \
+		--binary $(CURDIR)/target/release/anyharness \
 		--output tests/release/.output/candidate-build.json
 	cd tests/release && pnpm exec tsx src/artifacts/anyharness-smoke.ts \
 		--map .output/candidate-build.json

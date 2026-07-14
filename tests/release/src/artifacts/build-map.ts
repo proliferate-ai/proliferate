@@ -129,6 +129,9 @@ export function validateCandidateBuildMapShape(parsed: unknown): CandidateBuildM
     throw new BuildMapError("Candidate build map must be a JSON object.");
   }
   const map = parsed as Record<string, unknown>;
+  // Strict means strict: undeclared fields reject rather than being silently
+  // dropped, so nothing can ride along the map into later consumers.
+  rejectUnknownKeys(map, ["schema_version", "kind", "source_sha", "artifacts"], "map");
   if (map.schema_version !== 1) {
     throw new BuildMapError(`Unsupported candidate build map schema_version.`);
   }
@@ -147,6 +150,7 @@ export function validateCandidateBuildMapShape(parsed: unknown): CandidateBuildM
       throw new BuildMapError(`artifacts[${index}] must be an object.`);
     }
     const artifact = entry as Record<string, unknown>;
+    rejectUnknownKeys(artifact, ["artifact_id", "version", "sha256", "locator"], `artifacts[${index}]`);
     const artifactId = artifact.artifact_id;
     if (
       typeof artifactId !== "string" ||
@@ -174,6 +178,7 @@ export function validateCandidateBuildMapShape(parsed: unknown): CandidateBuildM
     if (typeof locator !== "object" || locator === null) {
       throw new BuildMapError(`artifacts[${index}].locator is missing.`);
     }
+    rejectUnknownKeys(locator, ["kind", "path"], `artifacts[${index}].locator`);
     if (locator.kind !== "local_file") {
       throw new BuildMapError(`artifacts[${index}].locator.kind is unsupported (local_file only).`);
     }
@@ -197,6 +202,17 @@ export function validateCandidateBuildMapShape(parsed: unknown): CandidateBuildM
     source_sha: map.source_sha,
     artifacts,
   };
+}
+
+function rejectUnknownKeys(
+  value: Record<string, unknown>,
+  allowed: readonly string[],
+  where: string,
+): void {
+  const unknown = Object.keys(value).filter((key) => !allowed.includes(key));
+  if (unknown.length > 0) {
+    throw new BuildMapError(`Candidate build ${where} has undeclared field(s): ${unknown.join(", ")}.`);
+  }
 }
 
 /**

@@ -60,3 +60,22 @@ test("rejects when the source bytes changed after validation", async () => {
     await rm(storage, { recursive: true, force: true });
   }
 });
+
+test("distinct artifact ids can never materialize onto the same file (CBH-003)", async () => {
+  const first = await tempArtifact("bytes-of-first");
+  const second = await tempArtifact("bytes-of-second");
+  first.artifact.artifact_id = "a/b__c";
+  second.artifact.artifact_id = "a__b/c";
+  const storage = await mkdtemp(path.join(os.tmpdir(), "materialize-storage-"));
+  try {
+    const firstPath = await materializeLocalArtifact(first.artifact, storage);
+    const secondPath = await materializeLocalArtifact(second.artifact, storage);
+    assert.notEqual(firstPath, secondPath);
+    assert.equal(await readFile(firstPath, "utf8"), "bytes-of-first");
+    assert.equal(await readFile(secondPath, "utf8"), "bytes-of-second");
+  } finally {
+    await rm(first.dir, { recursive: true, force: true });
+    await rm(second.dir, { recursive: true, force: true });
+    await rm(storage, { recursive: true, force: true });
+  }
+});

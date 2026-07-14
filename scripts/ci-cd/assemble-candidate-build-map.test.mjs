@@ -89,3 +89,30 @@ test("CLI writes the map file", () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("rejects an artifact prefix that would assemble an invalid artifact id (CBH-006)", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "assemble-map-"));
+  try {
+    const { binaryPath } = tempBinary(dir);
+    assert.throws(() =>
+      assembleCandidateBuildMap({
+        binaryPath,
+        sourceSha: SHA,
+        version: "1",
+        target: "x86_64-unknown-linux-gnu",
+        artifactPrefix: "../escape",
+      }),
+    );
+    assert.throws(() =>
+      assembleCandidateBuildMap({
+        binaryPath,
+        sourceSha: SHA,
+        version: "1",
+        target: "x86_64-unknown-linux-gnu",
+        artifactPrefix: "x".repeat(130),
+      }),
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

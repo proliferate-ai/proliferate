@@ -180,3 +180,30 @@ test("rejects bytes changed after the map was assembled (tamper)", async () => {
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("undeclared fields reject at map, artifact, and locator level (CBH-002)", () => {
+  const valid: CandidateBuildMapV1 = {
+    schema_version: 1,
+    kind: "proliferate.candidate-build",
+    source_sha: SHA,
+    artifacts: [
+      {
+        artifact_id: "anyharness/x",
+        version: "1.0.0",
+        sha256: "b".repeat(64),
+        locator: { kind: "local_file", path: "/tmp/x" },
+      },
+    ],
+  };
+  const reject = (mutate: (map: Record<string, unknown>) => void): void => {
+    const clone = JSON.parse(JSON.stringify(valid)) as Record<string, unknown>;
+    mutate(clone);
+    assert.throws(() => validateCandidateBuildMapShape(clone), /undeclared field/);
+  };
+  reject((map) => { map.provider_token = "sk-live-oops"; });
+  reject((map) => { (map.artifacts as Array<Record<string, unknown>>)[0].notes = "extra"; });
+  reject((map) => {
+    ((map.artifacts as Array<Record<string, unknown>>)[0].locator as Record<string, unknown>).url =
+      "https://cdn.example.com/x";
+  });
+});
