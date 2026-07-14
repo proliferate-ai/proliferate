@@ -118,10 +118,7 @@ export async function executeSelectedTests(options: ExecuteOptions): Promise<Tes
       await runAll(selected, scenariosById, tracker, options, neededEnv, locallySeeded, now, log);
     }
   } catch (error) {
-    tracker.recordRunnerError(
-      "runner_error",
-      `Runner failed after selection: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    tracker.recordRunnerError("runner_error", `Runner failed after selection: ${evidenceSafeMessage(error)}`);
   }
 
   const results = tracker.finalizeRun(options.execution);
@@ -172,6 +169,27 @@ export async function executeSelectedTests(options: ExecuteOptions): Promise<Tes
 }
 
 /**
+ * Normalizes a thrown value into an evidence-safe message. Known
+ * payload-carrying errors (the ApiRequestError/LocalRuntimeError shape: a
+ * numeric `status` plus a captured `body`) are summarized without their
+ * response body — existing clients embed complete provider/HTTP payloads in
+ * `Error.message`, which must never reach the report or issue payloads. The
+ * raw error still exists in process memory for console diagnostics only.
+ * URL-credential scrubbing and exact-secret redaction then apply to every
+ * report message in `sanitizeReport`.
+ */
+function evidenceSafeMessage(error: unknown): string {
+  const status = error instanceof Error ? (error as { status?: unknown }).status : undefined;
+  if (error instanceof Error && typeof status === "number" && "body" in error) {
+    // Message shape is `${method} ${path} -> ${status}: ${body}`; keep the
+    // safe prefix, withhold everything after it.
+    const prefix = /^(.*?->\s*\d+)/.exec(error.message)?.[1] ?? `request failed with status ${status}`;
+    return `${error.name}: ${prefix} (response body withheld from evidence)`;
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
  * Every present secret value in the full env manifest — not only the selected
  * scenarios' requiredEnv — because fixtures may use a secret opportunistically
  * (e.g. an optional GitHub token embedded in a clone URL) without declaring it.
@@ -205,7 +223,7 @@ async function planAll(
         finishedAt: now().toISOString(),
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = evidenceSafeMessage(error);
       tracker.finalize(test.test_id, {
         status: "not_run",
         reason: { code: "plan_error", message: `plan() threw: ${message}` },
@@ -310,7 +328,7 @@ async function runAll(
         // the stack still reaches the console via the runner's own logging.
         finish("failed", {
           code: "scenario_failure",
-          message: error instanceof Error ? error.message : String(error),
+          message: evidenceSafeMessage(error),
         });
         log(
           `failed ${test.test_id}: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`,

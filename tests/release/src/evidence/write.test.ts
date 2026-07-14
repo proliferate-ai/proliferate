@@ -7,6 +7,7 @@ import { test } from "node:test";
 import {
   boundMessage,
   redactSecrets,
+  redactUrlCredentials,
   ReportValidationError,
   validateReport,
   type TestRunReportV1,
@@ -156,7 +157,9 @@ test("validateReport rejects an unknown result status", () => {
 });
 
 // Every verdict-matrix row must survive validation when produced honestly.
-const MATRIX_ROWS: Array<{ statuses: FinalTestStatus[]; behavior: "diagnostic" | "strict"; exit: 0 | 1 | 2; verdict: TestRunReportV1["verdict"]["status"]; execution?: "real" | "dry_run" }> = [
+// A `missing` result is only honest alongside its integrity error, which
+// forces exit 2.
+const MATRIX_ROWS: Array<{ statuses: FinalTestStatus[]; behavior: "diagnostic" | "strict"; exit: 0 | 1 | 2; verdict: TestRunReportV1["verdict"]["status"]; execution?: "real" | "dry_run"; integrity?: boolean }> = [
   { statuses: ["green"], behavior: "diagnostic", exit: 0, verdict: "non_qualifying" },
   { statuses: ["green"], behavior: "strict", exit: 0, verdict: "selected_tests_passed" },
   { statuses: ["blocked"], behavior: "diagnostic", exit: 0, verdict: "non_qualifying" },
@@ -166,7 +169,7 @@ const MATRIX_ROWS: Array<{ statuses: FinalTestStatus[]; behavior: "diagnostic" |
   { statuses: ["green", "failed"], behavior: "diagnostic", exit: 1, verdict: "non_qualifying" },
   { statuses: ["green", "failed"], behavior: "strict", exit: 1, verdict: "selected_tests_failed" },
   { statuses: ["cancelled"], behavior: "strict", exit: 1, verdict: "selected_tests_failed" },
-  { statuses: ["missing"], behavior: "diagnostic", exit: 1, verdict: "non_qualifying" },
+  { statuses: ["missing"], behavior: "diagnostic", exit: 2, verdict: "non_qualifying", integrity: true },
   { statuses: ["not_run"], behavior: "diagnostic", exit: 0, verdict: "non_qualifying", execution: "dry_run" },
 ];
 
@@ -198,11 +201,59 @@ for (const [index, row] of MATRIX_ROWS.entries()) {
       byStatus[status] += 1;
     }
     report.summary.by_status = byStatus;
+    if (row.integrity) {
+      report.summary.integrity_errors = [
+        { code: "selection_result_mismatch", message: "synthesized missing result" },
+      ];
+    }
     report.summary.intended_exit_code = row.exit;
     report.verdict.status = row.verdict;
     validateReport(report);
   });
 }
+
+test("validateReport rejects a strict dry-run report outright", () => {
+  const report = validReport();
+  report.run.behavior = "strict";
+  report.run.execution = "dry_run";
+  report.results[0].status = "not_run";
+  report.summary.by_status.green = 0;
+  report.summary.by_status.not_run = 1;
+  report.verdict.status = "selected_tests_failed";
+  report.summary.intended_exit_code = 1;
+  assert.throws(() => validateReport(report), /strict dry-run/i);
+
+  // Even a "green + qualified + exit 0" strict dry-run must not validate.
+  const disguised = validReport();
+  disguised.run.behavior = "strict";
+  disguised.run.execution = "dry_run";
+  disguised.verdict.status = "selected_tests_passed";
+  assert.throws(() => validateReport(disguised), ReportValidationError);
+});
+
+test("validateReport rejects real-result statuses inside a diagnostic dry-run", () => {
+  const report = validReport();
+  report.run.execution = "dry_run";
+  // results[0] is green — planning can never produce a real result
+  assert.throws(() => validateReport(report), /Dry-run cannot produce a real result/);
+});
+
+test("validateReport rejects a missing result without its integrity error", () => {
+  const report = validReport();
+  report.results[0].status = "missing";
+  report.summary.by_status.green = 0;
+  report.summary.by_status.missing = 1;
+  report.summary.intended_exit_code = 1;
+  assert.throws(() => validateReport(report), /selection_result_mismatch/);
+});
+
+test("redactUrlCredentials scrubs userinfo tokens from URLs", () => {
+  assert.equal(
+    redactUrlCredentials("clone https://x-access-token:ghp_abc123@github.com/o/r.git failed"),
+    "clone https://[REDACTED]@github.com/o/r.git failed",
+  );
+  assert.equal(redactUrlCredentials("https://github.com/o/r.git"), "https://github.com/o/r.git");
+});
 
 test("validateReport requires exit 2 whenever runner/integrity errors exist", () => {
   const report = validReport();

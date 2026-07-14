@@ -283,6 +283,48 @@ test("secrets are redacted even when no selected scenario declares them", async 
   assert.ok(!JSON.stringify(report).includes(secret));
 });
 
+test("provider response bodies never reach the report or issue payloads", async () => {
+  // The ApiRequestError/LocalRuntimeError shape: Error.message embeds the
+  // complete response body. The normalized evidence must withhold it.
+  const providerPayload = '{"api_key":"sk-live-9999","customer_email":"a@b.c","stack":"Traceback..."}';
+  class FakeApiRequestError extends Error {
+    readonly status = 500;
+    readonly body = providerPayload;
+    constructor() {
+      super(`POST /v1/checkout -> 500: ${providerPayload}`);
+      this.name = "ApiRequestError";
+    }
+  }
+  const scenarios = [fakeScenario({ id: "PROV", run: async () => { throw new FakeApiRequestError(); } })];
+  const report = await executeSelectedTests(baseOptions(scenarios));
+  const serialized = JSON.stringify(report);
+  assert.ok(!serialized.includes("sk-live-9999"));
+  assert.ok(!serialized.includes("customer_email"));
+  assert.match(report.results[0].reason!.message, /POST \/v1\/checkout -> 500/);
+  assert.match(report.results[0].reason!.message, /withheld from evidence/);
+});
+
+test("runtime-discovered URL credentials are scrubbed even when unknown to the redactor", async () => {
+  // A `gh auth token` embedded in a clone URL is not in the env manifest, so
+  // exact-value redaction cannot know it; the URL-userinfo scrub must catch it.
+  const token = "ghp_dynamicallyDiscovered123";
+  const scenarios = [
+    fakeScenario({
+      id: "GIT",
+      run: async () => {
+        throw new Error(
+          `git clone https://x-access-token:${token}@github.com/o/r.git failed (128): ` +
+            `fatal: unable to access 'https://x-access-token:${token}@github.com/o/r.git'`,
+        );
+      },
+    }),
+  ];
+  const report = await executeSelectedTests(baseOptions(scenarios, { resolveSecretValues: () => [] }));
+  const serialized = JSON.stringify(report);
+  assert.ok(!serialized.includes(token));
+  assert.match(report.results[0].reason!.message, /\[REDACTED\]@github\.com/);
+});
+
 test("rejects duplicate scenario ids even with disjoint lanes", () => {
   assert.throws(
     () =>

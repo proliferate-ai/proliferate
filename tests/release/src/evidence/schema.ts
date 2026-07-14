@@ -80,12 +80,23 @@ export function redactSecrets(message: string, secretValues: readonly string[]):
 }
 
 /**
+ * Scrubs URL userinfo credentials (`scheme://user:token@host`) regardless of
+ * where they came from. Exact-value redaction only knows environment-manifest
+ * secrets; credentials discovered at runtime (e.g. `gh auth token` embedded
+ * in a clone URL) would otherwise pass through untouched.
+ */
+export function redactUrlCredentials(message: string): string {
+  return message.replace(/(\/\/)[^\s/@]+@/g, "$1[REDACTED]@");
+}
+
+/**
  * Applies redaction + bounding to every message-bearing field in the report.
  * Runs before validation/serialization so no exact secret value or overlong
  * message can enter the persisted artifact.
  */
 export function sanitizeReport(report: TestRunReportV1, secretValues: readonly string[]): TestRunReportV1 {
-  const clean = (message: string): string => boundMessage(redactSecrets(message, secretValues));
+  const clean = (message: string): string =>
+    boundMessage(redactUrlCredentials(redactSecrets(message, secretValues)));
   return {
     ...report,
     results: report.results.map((result) => ({
@@ -155,6 +166,35 @@ export function validateReport(report: TestRunReportV1): void {
   for (const result of report.results) {
     if (!knownStatuses.has(result.status)) {
       throw new ReportValidationError(`Unknown result status "${result.status}" for ${result.test_id}.`);
+    }
+  }
+
+  // Execution semantics: strict dry-run is an invalid invocation and can
+  // never be honest persisted evidence, and a dry-run cannot produce a real
+  // result — planning only finalizes not_run.
+  if (report.run.execution === "dry_run") {
+    if (report.run.behavior === "strict") {
+      throw new ReportValidationError("A strict dry-run report is not representable evidence.");
+    }
+    const executed = report.results.find((result) => result.status !== "not_run");
+    if (executed) {
+      throw new ReportValidationError(
+        `Dry-run cannot produce a real result: ${executed.test_id} is "${executed.status}".`,
+      );
+    }
+  }
+
+  // A missing result exists only as a runner-integrity failure; without its
+  // integrity error the report would present unrecorded work as an ordinary
+  // (exit-1) outcome instead of forcing exit 2.
+  if (report.results.some((result) => result.status === "missing")) {
+    const flagged = report.summary.integrity_errors.some(
+      (error) => error.code === "selection_result_mismatch",
+    );
+    if (!flagged) {
+      throw new ReportValidationError(
+        "A missing result requires its selection_result_mismatch integrity error.",
+      );
     }
   }
 
