@@ -48,16 +48,22 @@ export function PopoverMenuItem({
   // hover transitions on glyphs"). `text-current/*` keeps currentColor
   // inheritance intact so tinted rows (e.g. `text-destructive`) still color
   // their icon.
+  // justify-center: the column is taller than its content (min-h-7), so
+  // without it rows render top-aligned — icon/label sit above the visual
+  // center of the hover pill.
   const outerClassName = density === "compact"
-    ? "group/menu-item flex min-h-7 w-full cursor-pointer select-none flex-col rounded-lg px-2 py-1 text-ui-sm font-normal text-popover-foreground outline-none transition-colors disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent"
-    : "group/menu-item flex min-h-7 w-full cursor-pointer select-none flex-col rounded-lg px-2.5 py-[5px] text-ui-sm font-normal text-popover-foreground outline-none transition-colors disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent";
+    ? "group/menu-item flex min-h-7 w-full cursor-pointer select-none flex-col justify-center rounded-lg px-2 py-1 text-ui-sm font-normal text-popover-foreground outline-none transition-colors disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent"
+    : "group/menu-item flex min-h-7 w-full cursor-pointer select-none flex-col justify-center rounded-lg px-2.5 py-[5px] text-ui-sm font-normal text-popover-foreground outline-none transition-colors disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent";
   const rowClassName = density === "compact"
     ? "flex w-full items-center gap-1.5"
     : "flex w-full items-center gap-1.5";
   const glyphHoverPromotion =
     "text-current/75 transition-colors group-hover/menu-item:text-current group-focus/menu-item:text-current";
+  // translate-y: optical compensation. SF's ink center sits ~0.3px below the
+  // line-box center, so box-centered glyphs read slightly high next to text;
+  // nudging the icon (not the text) keeps text antialiasing crisp.
   const defaultIconClassName =
-    `flex size-4 shrink-0 items-center justify-center ${glyphHoverPromotion}`;
+    `flex size-4 shrink-0 translate-y-[0.5px] items-center justify-center ${glyphHoverPromotion}`;
   const trailingHoverPromotion =
     "text-muted-foreground/75 transition-colors group-hover/menu-item:text-muted-foreground group-focus/menu-item:text-muted-foreground";
   const defaultTrailingClassName = density === "compact"

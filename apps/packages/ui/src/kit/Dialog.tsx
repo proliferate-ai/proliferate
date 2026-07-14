@@ -57,7 +57,9 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "modal-panel-animated fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-popover p-5 text-foreground shadow-md",
+          // Canonical modal surface (matches ModalShell / "Repository added"):
+          // bg-background panel, not the lighter bg-popover tint.
+          "modal-panel-animated fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-5 text-foreground shadow-lg",
           className,
         )}
         {...props}

@@ -317,8 +317,10 @@
   --diffs-line-height: calc(var(--diffs-font-size, 12px) * 1.8);
   --scratch-font-family: var(--font-sans);
   --scratch-code-font-family: var(--font-mono);
-  --scratch-font-size: var(--text-chat, 10px);
-  --scratch-line-height: var(--text-chat--line-height, 18px);
+  /* Scratch prose reads at the same size as transcript message prose
+     (--text-message), not the smaller --text-chat chrome size. */
+  --scratch-font-size: var(--text-message, var(--text-composer, 12px));
+  --scratch-line-height: var(--text-message--line-height, var(--text-composer--line-height, 20px));
   --scratch-list-marker-leading-space: 0.48em;
   --scratch-task-box-size: 0.82em;
   --readable-code-font-size: 0.5625rem;
@@ -1985,6 +1987,10 @@ body {
   background-color: var(--right-panel-tab-surface);
   flex-shrink: 0;
   box-sizing: border-box;
+  /* Tab drag-reorder is pointer-event driven; without this WebKit starts a
+     text selection mid-drag and paints the whole bar (and anything the sweep
+     crosses) blue. */
+  user-select: none;
 }
 
 .right-panel-tab-system .editor-panel-tab-bar-tab-cluster {
