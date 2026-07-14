@@ -63,6 +63,7 @@ export function HomeProjectMenu({
               return (
                 <PopoverMenuItem
                   key={repository.sourceRoot}
+                  data-repo-source-root={repository.sourceRoot}
                   icon={<ProjectNotebook className="size-4" />}
                   label={repository.name}
                   trailing={isSelected ? <Check className="size-4" /> : null}

@@ -159,7 +159,11 @@ export function TranscriptItemBlock({
       if (!item.text) return null;
 
       return (
-        <div className="flex justify-start relative">
+        <div
+          className="flex justify-start relative"
+          data-assistant-prose
+          data-assistant-streaming={item.isStreaming ? "true" : "false"}
+        >
           <div className="flex flex-col w-full min-w-0 max-w-full break-words">
             <AssistantMessage
               content={item.text}
