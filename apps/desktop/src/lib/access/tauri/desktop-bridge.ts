@@ -2,6 +2,7 @@ import type {
   DesktopBridge,
   DesktopUpdate,
   LocalRuntimeConnection,
+  LocalRuntimeSnapshot,
   ProductCommand,
   ScratchRecord,
   ScratchWriteResult,
@@ -73,13 +74,19 @@ import {
  */
 export const desktopBridge: DesktopBridge = {
   runtime: {
-    async getConnection(): Promise<LocalRuntimeConnection> {
+    async getConnection(): Promise<LocalRuntimeSnapshot> {
       const info = await getRuntimeInfo();
-      return { runtimeUrl: info.url };
+      return {
+        connection: { runtimeUrl: info.url },
+        status: info.status,
+      };
     },
-    async restart(): Promise<LocalRuntimeConnection> {
+    async restart(): Promise<LocalRuntimeSnapshot> {
       const info = await restartRuntime();
-      return { runtimeUrl: info.url };
+      return {
+        connection: { runtimeUrl: info.url },
+        status: info.status,
+      };
     },
   },
 

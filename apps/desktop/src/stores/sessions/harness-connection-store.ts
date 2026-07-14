@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { DEFAULT_RUNTIME_URL } from "@/config/runtime";
 import type { HarnessConnectionState } from "@/stores/sessions/session-types";
 
 interface HarnessConnectionStoreState {
@@ -13,14 +12,14 @@ interface HarnessConnectionStoreState {
 }
 
 export const useHarnessConnectionStore = create<HarnessConnectionStoreState>((set) => ({
-  runtimeUrl: DEFAULT_RUNTIME_URL,
+  runtimeUrl: "",
   connectionState: "connecting",
   error: null,
   setRuntimeUrl: (runtimeUrl) => set({ runtimeUrl }),
   setConnectionState: (connectionState) => set({ connectionState }),
   setError: (error) => set({ error }),
   resetConnectionState: () => set({
-    runtimeUrl: DEFAULT_RUNTIME_URL,
+    runtimeUrl: "",
     connectionState: "connecting",
     error: null,
   }),

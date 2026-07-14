@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => {
   }));
 
   return {
+    localRuntime: {},
     create,
     resolveFromPath,
     createWorktree,
@@ -37,6 +38,10 @@ const mocks = vi.hoisted(() => {
 
 vi.mock("@anyharness/sdk-react", () => ({
   getAnyHarnessClient: mocks.getAnyHarnessClient,
+}));
+
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => ({ desktop: { runtime: mocks.localRuntime } }),
 }));
 
 vi.mock("./runtime-ready", () => ({
@@ -105,9 +110,46 @@ describe("useWorkspaceActions local workspace creation", () => {
       origin: { kind: "human", entrypoint: "desktop" },
     });
     expect(mocks.resolveFromPath).not.toHaveBeenCalled();
+    expect(mocks.ensureRuntimeReady).toHaveBeenCalledWith(mocks.localRuntime);
     expect(mocks.trackProductEvent).toHaveBeenCalledWith("workspace_created", {
       workspace_kind: "local",
       creation_kind: "local",
+    });
+  });
+
+  it("updates the cache scoped to the runtime returned by bridge readiness", async () => {
+    const readyRuntimeUrl = "http://localhost:8111";
+    const workspace = localWorkspace("workspace-dynamic-runtime");
+    const repoRoot = localRepoRoot();
+    mocks.ensureRuntimeReady.mockResolvedValueOnce(readyRuntimeUrl);
+    mocks.create.mockResolvedValueOnce({ repoRoot, workspace });
+
+    const { result, queryClient } = renderActions();
+    queryClient.setQueryData(
+      workspaceCollectionsKey(readyRuntimeUrl, false),
+      buildWorkspaceCollections([], [], []),
+    );
+    queryClient.setQueryData(
+      workspaceCollectionsKey("http://localhost:7007", false),
+      buildWorkspaceCollections([], [], []),
+    );
+
+    await act(async () => {
+      await result.current.createLocalWorkspace("/Users/pablo/proliferate");
+    });
+
+    const readyCollections = queryClient.getQueryData<WorkspaceCollections>(
+      workspaceCollectionsKey(readyRuntimeUrl, false),
+    );
+    const staleCollections = queryClient.getQueryData<WorkspaceCollections>(
+      workspaceCollectionsKey("http://localhost:7007", false),
+    );
+    expect(readyCollections?.localWorkspaces.map((entry) => entry.id)).toEqual([
+      "workspace-dynamic-runtime",
+    ]);
+    expect(staleCollections?.localWorkspaces).toEqual([]);
+    expect(mocks.getAnyHarnessClient).toHaveBeenCalledWith({
+      runtimeUrl: readyRuntimeUrl,
     });
   });
 

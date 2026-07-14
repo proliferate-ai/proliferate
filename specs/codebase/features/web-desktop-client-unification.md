@@ -611,16 +611,19 @@ export through one Desktop-only product-lifecycle root. The complete contract
 and acceptance record is
 [`web-desktop-client-unification-d1a.md`](web-desktop-client-unification-d1a.md).
 
-Desktop Native UI Adoption is the current implementation slice. Its revision r1
-contract routes existing native menus, native menu commands, Dock attention,
-and Desktop zoom through the merged `host.desktop.nativeUi` boundary while
-product files stay under `apps/desktop`. The complete contract is
+Desktop Native UI Adoption is complete at PR #1165 merge
+`736d181575e4d81389d19ba7a78afd14566e1fda`. It routes existing native menus,
+native menu commands, Dock attention, and Desktop zoom through the merged
+`host.desktop.nativeUi` boundary while product files stay under
+`apps/desktop`. The complete contract is
 [`web-desktop-client-unification-d1b.md`](web-desktop-client-unification-d1b.md).
 
-Desktop Local Runtime Adoption is the expected next slice. It is queued and
-not yet specified. Its purpose is to
-route product-owned local AnyHarness discovery/restart/connection through the
-Desktop bridge while raw sidecar process ownership remains in Desktop.
+Desktop Local Runtime Adoption is the current implementation slice. It routes
+product-owned local AnyHarness discovery, restart, readiness, and connection
+through `host.desktop.runtime`, moves initial bootstrap under the existing
+Desktop-only product-lifecycle root, and leaves raw sidecar process ownership
+in Desktop. The complete living contract is
+[`web-desktop-client-unification-d1c.md`](web-desktop-client-unification-d1c.md).
 
 Related authoritative docs:
 

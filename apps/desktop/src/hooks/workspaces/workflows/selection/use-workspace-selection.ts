@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useWorkspaceBootstrapActions } from "@/hooks/workspaces/workflows/use-workspace-bootstrap-actions";
 import { useCloudWorkspaceConnectionCache } from "@/hooks/access/cloud/use-cloud-workspace-connection-cache";
 import { useWorkspaceSelectionCache } from "@/hooks/workspaces/cache/use-workspace-selection-cache";
@@ -19,6 +20,7 @@ function removeWorkspaceSessionRecordsForWorkspace(workspaceId: string): void {
 }
 
 export function useWorkspaceSelection() {
+  const localRuntime = useProductHost().desktop?.runtime ?? null;
   const {
     cancelPreviousWorkspaceDisplayQueries,
     getWorkspaceSelectionSnapshot,
@@ -67,6 +69,7 @@ export function useWorkspaceSelection() {
         })
         : [];
       const deps = {
+        localRuntime,
         cache: {
           cancelPreviousWorkspaceDisplayQueries,
           invalidateCloudWorkspaceStartState,
@@ -105,6 +108,7 @@ export function useWorkspaceSelection() {
       clearSelection,
       getWorkspaceSelectionSnapshot,
       invalidateCloudWorkspaceStartState,
+      localRuntime,
       reconcileHotWorkspace,
       refreshCloudWorkspaceConnection,
       setSelectedLogicalWorkspaceId,

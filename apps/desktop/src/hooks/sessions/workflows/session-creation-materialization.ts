@@ -1,4 +1,5 @@
 import type { Session } from "@anyharness/sdk";
+import type { DesktopRuntimeBridge } from "@proliferate/product-client/host/desktop-bridge";
 import { applySessionLaunchDefaults } from "@/lib/workflows/sessions/session-launch-defaults";
 import { createSessionLaunchDefaultsClient } from "@/lib/access/anyharness/session-launch-defaults-client";
 import {
@@ -60,6 +61,7 @@ interface MaterializeSessionCreationInput {
   }>;
   existingProjectedRecord: SessionRuntimeRecord | null;
   frozenDefaultLiveSessionControlValuesByAgentKind: Record<string, Record<string, string>>;
+  localRuntime: DesktopRuntimeBridge | null;
   options: CreateSessionWithResolvedConfigOptions;
   pendingSessionId: string;
   resolvedModeId: string | null;
@@ -99,6 +101,7 @@ async function runSessionCreationMaterialization({
   ensureCloudAgentCatalog,
   existingProjectedRecord,
   frozenDefaultLiveSessionControlValuesByAgentKind,
+  localRuntime,
   options,
   pendingSessionId,
   resolvedModeId,
@@ -114,7 +117,7 @@ async function runSessionCreationMaterialization({
     modelId: options.modelId,
     modeId: resolvedModeId,
   });
-  const runtimeUrl = await resolveDesktopRuntimeUrlForWorkspace(workspaceId);
+  const runtimeUrl = await resolveDesktopRuntimeUrlForWorkspace(workspaceId, localRuntime);
   logLatency("session.create.materialize.runtime_url_resolved", {
     clientSessionId: pendingSessionId,
     workspaceId,

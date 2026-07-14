@@ -1,6 +1,9 @@
 import {
   getLatencyFlowRequestHeaders,
 } from "@/lib/infra/measurement/latency-flow";
+import type { DesktopRuntimeBridge } from "@proliferate/product-client/host/desktop-bridge";
+import { parseTargetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
+import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { bootstrapHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap";
@@ -16,10 +19,16 @@ export function buildLatencyRequestOptions(latencyFlowId?: string | null) {
   return headers ? { headers } : undefined;
 }
 
-export async function ensureRuntimeReadyForSessions(): Promise<string> {
+export async function ensureRuntimeReadyForSessions(
+  runtime: DesktopRuntimeBridge | null,
+): Promise<string> {
+  if (!runtime) {
+    throw new Error("A local AnyHarness runtime is only available in Desktop.");
+  }
+
   const state = useHarnessConnectionStore.getState();
   if (state.connectionState !== "healthy" || state.runtimeUrl.trim().length === 0) {
-    await bootstrapHarnessRuntime();
+    await bootstrapHarnessRuntime(runtime);
   }
 
   const readyState = useHarnessConnectionStore.getState();
@@ -28,6 +37,16 @@ export async function ensureRuntimeReadyForSessions(): Promise<string> {
   }
 
   return readyState.runtimeUrl;
+}
+
+export async function resolveRuntimeUrlForWorkspaceSessions(
+  workspaceId: string,
+  runtime: DesktopRuntimeBridge | null,
+): Promise<string> {
+  if (parseTargetWorkspaceSyntheticId(workspaceId) || parseCloudWorkspaceSyntheticId(workspaceId)) {
+    return useHarnessConnectionStore.getState().runtimeUrl.trim();
+  }
+  return ensureRuntimeReadyForSessions(runtime);
 }
 
 export async function fetchWorkspaceSessions(

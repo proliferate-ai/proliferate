@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { hasPromptContent } from "@/lib/domain/chat/composer/prompt-input";
 import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
 import {
@@ -68,6 +69,7 @@ import { cleanupSessionCreationFailure } from "@/hooks/sessions/workflows/sessio
 import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
 
 export function useSessionCreationActions() {
+  const localRuntime = useProductHost().desktop?.runtime ?? null;
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const { getWorkspaceSurface } = useWorkspaceSurfaceLookup();
   const { promptSession } = useSessionPromptWorkflow();
@@ -292,6 +294,7 @@ export function useSessionCreationActions() {
       ensureCloudAgentCatalog,
       existingProjectedRecord,
       frozenDefaultLiveSessionControlValuesByAgentKind,
+      localRuntime,
       options,
       pendingSessionId,
       resolvedModeId: resolvedModeId ?? null,
@@ -368,6 +371,7 @@ export function useSessionCreationActions() {
     ensureCloudAgentCatalog,
     getWorkspaceRuntimeBlockReason,
     getWorkspaceSurface,
+    localRuntime,
     promptSession,
     removeWorkspaceSessionRecord,
     showToast,
@@ -392,8 +396,5 @@ export function useSessionCreationActions() {
     });
   }, [createSessionWithResolvedConfig]);
 
-  return {
-    createEmptySessionWithResolvedConfig,
-    createSessionWithResolvedConfig,
-  };
+  return { createEmptySessionWithResolvedConfig, createSessionWithResolvedConfig };
 }

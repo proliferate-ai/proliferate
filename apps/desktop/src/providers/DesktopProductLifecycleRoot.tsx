@@ -5,6 +5,7 @@ import type {
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 
 import { useExportRunningAgentCount } from "@/hooks/app/lifecycle/use-export-running-agent-count";
+import { useDesktopRuntimeBootstrapLifecycle } from "@/hooks/app/lifecycle/use-desktop-runtime-bootstrap-lifecycle";
 import { useWorkspaceActivityIndicator } from "@/hooks/app/lifecycle/use-workspace-activity-indicator";
 import { useDesktopZoomPreferenceLifecycle } from "@/hooks/preferences/lifecycle/use-desktop-zoom-preference-lifecycle";
 import { useNativeMenuCommandDispatcher } from "@/hooks/shortcuts/lifecycle/use-native-menu-command-dispatcher";
@@ -13,17 +14,26 @@ import { recordBootDiagnosticOnce } from "@/lib/infra/measurement/boot-stall-dia
 /**
  * The single Desktop product-lifecycle root, mounted outside auth and route
  * gates. It reads the Desktop bridge from the host and, when present, mounts
- * the native UI lifecycles through `desktop.nativeUi`. On a non-Desktop host
- * (`desktop === null`) it renders nothing.
+ * local-runtime and native-UI lifecycles through that bridge. On a non-Desktop
+ * host (`desktop === null`) it renders nothing.
  */
 export function DesktopProductLifecycleRoot() {
-  const { desktop } = useProductHost();
-  return desktop === null ? null : <DesktopNativeUiLifecycles desktop={desktop} />;
+  const { auth, desktop } = useProductHost();
+  return desktop === null
+    ? null
+    : <DesktopProductLifecycles desktop={desktop} authStatus={auth.state.status} />;
 }
 
 // Nested so hook membership stays valid if `desktop` flips between a bridge and
 // null across a host replacement.
-function DesktopNativeUiLifecycles({ desktop }: { desktop: DesktopBridge }) {
+function DesktopProductLifecycles({
+  desktop,
+  authStatus,
+}: {
+  desktop: DesktopBridge;
+  authStatus: "loading" | "anonymous" | "authenticated";
+}) {
+  useDesktopRuntimeBootstrapLifecycle(desktop.runtime, authStatus);
   const nativeUi: DesktopNativeUiBridge = desktop.nativeUi;
   useExportRunningAgentCount(nativeUi.setRunningAgentCount);
   useNativeMenuCommandDispatcher(nativeUi.subscribeMenuCommands);

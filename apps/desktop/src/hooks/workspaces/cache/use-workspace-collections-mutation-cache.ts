@@ -131,6 +131,14 @@ export function useWorkspaceCollectionsMutationCache(runtimeUrl: string) {
 export function useWorkspaceCollectionsMutationCacheActions() {
   const queryClient = useQueryClient();
 
+  const upsertLocalWorkspaceInWorkspaceCollections = useCallback((
+    runtimeUrl: string,
+    workspace: Workspace,
+    repoRoot?: RepoRoot | null,
+  ): WorkspaceCollectionsLocalUpsertSummary =>
+    upsertLocalWorkspaceForRuntime(queryClient, runtimeUrl, workspace, repoRoot),
+  [queryClient]);
+
   const upsertRepoRootInWorkspaceCollections = useCallback((
     runtimeUrl: string,
     repoRoot: RepoRoot,
@@ -139,6 +147,7 @@ export function useWorkspaceCollectionsMutationCacheActions() {
   }, [queryClient]);
 
   return {
+    upsertLocalWorkspaceInWorkspaceCollections,
     upsertRepoRootInWorkspaceCollections,
   };
 }

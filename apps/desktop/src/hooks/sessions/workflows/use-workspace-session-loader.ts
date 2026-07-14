@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import type { SessionLatencyFlowOptions } from "@/hooks/sessions/workflows/session-selection-options";
@@ -17,6 +18,7 @@ import {
 } from "@/hooks/sessions/workflows/session-replacement-tombstones";
 
 export function useWorkspaceSessionLoader() {
+  const localRuntime = useProductHost().desktop?.runtime ?? null;
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const {
     getWorkspaceSessionCacheSnapshot,
@@ -34,7 +36,7 @@ export function useWorkspaceSessionLoader() {
 
     const runtimeUrl = workspaceUsesResolvedRemoteRuntime(workspaceId)
       ? useHarnessConnectionStore.getState().runtimeUrl
-      : await ensureRuntimeReadyForSessions();
+      : await ensureRuntimeReadyForSessions(localRuntime);
     const requestHeaders = getLatencyFlowRequestHeaders(options?.latencyFlowId);
     const cacheSnapshot = getWorkspaceSessionCacheSnapshot(workspaceId);
     if (options?.measurementOperationId) {
@@ -82,6 +84,7 @@ export function useWorkspaceSessionLoader() {
   }, [
     getWorkspaceRuntimeBlockReason,
     getWorkspaceSessionCacheSnapshot,
+    localRuntime,
     setWorkspaceSessions,
   ]);
 

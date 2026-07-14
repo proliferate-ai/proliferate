@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   applySessionLaunchDefaults: vi.fn(),
   createSession: vi.fn(),
   dismissSession: vi.fn(() => new Promise<void>(() => undefined)),
+  resolveDesktopRuntimeUrlForWorkspace: vi.fn(async () => "http://runtime.test"),
   writeTombstones: vi.fn(() => true),
 }));
 
@@ -53,7 +54,7 @@ vi.mock("@/lib/access/anyharness/runtime-target", () => ({
 
 vi.mock("@/hooks/sessions/workflows/session-creation-runtime", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/hooks/sessions/workflows/session-creation-runtime")>(),
-  resolveDesktopRuntimeUrlForWorkspace: vi.fn(async () => "http://runtime.test"),
+  resolveDesktopRuntimeUrlForWorkspace: mocks.resolveDesktopRuntimeUrlForWorkspace,
 }));
 
 vi.mock("@/lib/access/anyharness/direct-session-create-guard", () => ({
@@ -72,6 +73,7 @@ beforeEach(() => {
   mocks.writeTombstones.mockReturnValue(true);
   mocks.applySessionLaunchDefaults.mockReset();
   mocks.createSession.mockReset();
+  mocks.resolveDesktopRuntimeUrlForWorkspace.mockClear();
   resetReplacedSessionTombstonesForTests();
   resetSessionReplacementDismissalsForTests();
   resetSessionCreationSupersessionForTests();
@@ -131,11 +133,13 @@ describe("created runtime cleanup", () => {
     mocks.writeTombstones.mockReturnValue(false);
     mocks.dismissSession.mockRejectedValue(new Error("runtime unavailable"));
     const upsertWorkspaceSessionRecord = vi.fn();
+    const localRuntime = { getConnection: vi.fn(), restart: vi.fn() };
 
     await expect(materializeSessionCreation({
       ensureCloudAgentCatalog: vi.fn(async () => ({ agents: [] })),
       existingProjectedRecord: projectedRecord,
       frozenDefaultLiveSessionControlValuesByAgentKind: {},
+      localRuntime,
       options: {
         text: "",
         agentKind: "claude",
@@ -148,6 +152,10 @@ describe("created runtime cleanup", () => {
       workspaceId: "workspace-1",
     })).resolves.toBe(pendingSessionId);
 
+    expect(mocks.resolveDesktopRuntimeUrlForWorkspace).toHaveBeenCalledWith(
+      "workspace-1",
+      localRuntime,
+    );
     expect(getSessionRecord(pendingSessionId)?.materializedSessionId)
       .toBe("runtime-retained");
     expect(upsertWorkspaceSessionRecord).toHaveBeenCalledWith(
@@ -181,6 +189,7 @@ describe("created runtime cleanup", () => {
       ensureCloudAgentCatalog: vi.fn(async () => ({ agents: [] })),
       existingProjectedRecord: projectedRecord,
       frozenDefaultLiveSessionControlValuesByAgentKind: {},
+      localRuntime: null,
       options: {
         text: "",
         agentKind: "claude",
@@ -242,6 +251,7 @@ describe("created runtime cleanup", () => {
       ensureCloudAgentCatalog: vi.fn(async () => ({ agents: [] })),
       existingProjectedRecord: projectedRecord,
       frozenDefaultLiveSessionControlValuesByAgentKind: {},
+      localRuntime: null,
       options: {
         text: "",
         agentKind: "claude",

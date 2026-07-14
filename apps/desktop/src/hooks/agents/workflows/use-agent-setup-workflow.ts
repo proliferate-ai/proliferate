@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useReducer } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useStartAgentLoginMutation } from "@anyharness/sdk-react";
 import type {
   AgentSummary,
@@ -51,6 +52,7 @@ export function useAgentSetupWorkflow({
   reconcileState = "idle",
   reconcileResult,
 }: UseAgentSetupWorkflowArgs) {
+  const localRuntime = useProductHost().desktop?.runtime ?? null;
   // Owns the agent setup modal workflow and local credential form state. Does
   // not own catalog derivation or automatic reconcile lifecycle.
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
@@ -186,7 +188,10 @@ export function useAgentSetupWorkflow({
     dispatch({ type: "restart_started" });
 
     try {
-      await restartHarnessRuntime();
+      if (!localRuntime) {
+        throw new Error("A local AnyHarness runtime is only available in Desktop.");
+      }
+      await restartHarnessRuntime(localRuntime);
       await refreshAgentResources();
       clearRestartRequired();
       onClose();
@@ -195,7 +200,7 @@ export function useAgentSetupWorkflow({
     } finally {
       dispatch({ type: "restart_finished" });
     }
-  }, [clearRestartRequired, onClose, refreshAgentResources]);
+  }, [clearRestartRequired, localRuntime, onClose, refreshAgentResources]);
 
   return {
     subtitle,
