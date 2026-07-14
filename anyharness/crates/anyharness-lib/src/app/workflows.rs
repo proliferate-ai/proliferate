@@ -1,5 +1,5 @@
 //! Construction-only wiring for the workflow-runs domain (spec
-//! `features/workflow-runs.md` §7.3). Intentionally two-phase: the workflow
+//! `systems/product/workflows/runs.md` §7.3). Intentionally two-phase: the workflow
 //! session extension must exist before `SessionRuntime::new` (it rides the
 //! session extension list), while the completed `SessionRuntime` is injected
 //! into `WorkflowRunRuntime` afterwards. No behavior lives here.

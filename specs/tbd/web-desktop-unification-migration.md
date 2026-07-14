@@ -2,7 +2,7 @@
 
 Status: non-authoritative rollout history and execution detail. The settled
 contract has been promoted to
-[`../codebase/features/web-desktop-client-unification.md`](../codebase/features/web-desktop-client-unification.md)
+[`../codebase/systems/product/clients/web-desktop-unification/README.md`](../codebase/systems/product/clients/web-desktop-unification/README.md)
 (canonical; it wins any conflict with this file), and the binding
 execution/freeze ledger lives at
 [`../developing/deploying/web-desktop-unification-rollout.md`](../developing/deploying/web-desktop-unification-rollout.md).
@@ -1780,7 +1780,7 @@ but preserve this order:
    The PR 1 export map exposes host/provider/scope/package-resolution
    primitives and their types only — no `ProductClient` export until PR 2.
 2. Refine the canonical feature spec
-   (`specs/codebase/features/web-desktop-client-unification.md`, promoted by
+   (`specs/codebase/systems/product/clients/web-desktop-unification/README.md`, promoted by
    the docs preflight before PR 0b) and the frontend structure docs with the
    implementation inventory; do not re-promote the contract.
 3. Generalize both enforcement scripts for product-client immediately.
@@ -2298,7 +2298,7 @@ least:
   query/client/transition ownership changed by PR 0c;
 - the frontend access/state guides explicitly for the scoped Cloud SDK React
   provider and immutable organization request-context contract changed by PR 1;
-- `specs/codebase/features/web-cloud-local-parity.md` (replace/supersede the
+- `specs/codebase/systems/product/clients/cloud-local-parity.md` (replace/supersede the
   separate-controller model);
 - `specs/tbd/frontend-structure-alignment-migration.md` (remove the obsolete
   separate Web chat decomposition and app-owned-page assumptions);
@@ -2315,7 +2315,7 @@ least:
 - the end-to-end flow registry for materially changed paths.
 
 The promoted feature contract lives at
-`specs/codebase/features/web-desktop-client-unification.md`. This TBD plan is
+`specs/codebase/systems/product/clients/web-desktop-unification/README.md`. This TBD plan is
 the reduced rollout-detail record; the binding execution/freeze ledger lives
 at `specs/developing/deploying/web-desktop-unification-rollout.md`.
 

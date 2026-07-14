@@ -13,8 +13,8 @@ Owners touched by this design:
 
 This document is in `specs/tbd/` while the design is being reviewed. When the
 implementation lands, the durable contract should move to
-`specs/codebase/primitives/cloud-worker-control-loop.md` or be folded into
-`specs/codebase/primitives/cloud-commands.md` plus the worker focused guides.
+`specs/codebase/platforms/product/cloud-worker-control-loop.md` or be folded into
+`specs/codebase/platforms/product/cloud-commands.md` plus the worker focused guides.
 
 Redis/wake ownership is ratified in
 `specs/tbd/shared-redis-wake-ownership.md`. In short: the worker control-loop

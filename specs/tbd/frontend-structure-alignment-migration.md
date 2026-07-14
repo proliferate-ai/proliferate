@@ -20,7 +20,7 @@ doc clarification needed to make the code alignment unambiguous.
   - `specs/codebase/structures/frontend/README.md`
   - the focused frontend guide for the layer being changed
   - `specs/codebase/structures/frontend/packages/README.md` when touching shared packages
-  - feature specs under `specs/codebase/features/**` when touching a covered product
+  - system specs under `specs/codebase/systems/product/**` when touching a covered product
     surface
 - Every PR states the specific docs and rules it aligns with.
 - Preserve behavior and UI unless an explicit behavior change is part of the
@@ -293,8 +293,8 @@ doc clarification needed to make the code alignment unambiguous.
   - `specs/codebase/structures/frontend/guides/hooks.md`
   - `specs/codebase/structures/frontend/guides/access.md`
   - `specs/codebase/structures/frontend/guides/lib.md`
-  - `specs/codebase/features/chat-composer.md`
-  - `specs/codebase/features/chat-transcript.md`
+  - `specs/codebase/systems/product/chat/composer.md`
+  - `specs/codebase/systems/product/chat/transcript.md`
 - Goal:
   - Split the Web chat screen into documented frontend owners while preserving
     behavior.
@@ -320,9 +320,9 @@ doc clarification needed to make the code alignment unambiguous.
   - `specs/codebase/structures/frontend/guides/hooks.md`
   - `specs/codebase/structures/frontend/guides/access.md`
   - `specs/codebase/structures/frontend/guides/state.md`
-  - `specs/codebase/features/mobile-cloud-client.md`
-  - `specs/codebase/features/chat-composer.md`
-  - `specs/codebase/features/chat-transcript.md`
+  - `specs/codebase/systems/product/clients/mobile-cloud.md`
+  - `specs/codebase/systems/product/chat/composer.md`
+  - `specs/codebase/systems/product/chat/transcript.md`
 - Goal:
   - Split the Mobile chat screen into native render components, Mobile hooks,
     and shared product-domain rules.
@@ -347,8 +347,8 @@ doc clarification needed to make the code alignment unambiguous.
   - `specs/codebase/structures/frontend/guides/components.md`
   - `specs/codebase/structures/frontend/guides/hooks.md`
   - `specs/codebase/structures/frontend/guides/lib.md`
-  - `specs/codebase/features/workspace-files.md`
-  - `specs/codebase/features/pending-workspace-shell.md`
+  - `specs/codebase/systems/product/workspaces/files.md`
+  - `specs/codebase/systems/product/workspaces/pending-shell.md`
 - Goal:
   - Align large Desktop workspace shell, sidebar, tabs, files, terminals, and
     transcript-adjacent code with component, hook, workflow, and access

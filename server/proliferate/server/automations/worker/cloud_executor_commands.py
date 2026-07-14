@@ -236,8 +236,8 @@ async def _resolve_scope(
 
 
 def _target_requires_cloud_workspace(target: targets_store.CloudTargetSnapshot) -> bool:
-    # Inlined from the removed cloud_profile_target_guard store (Bifrost
-    # gateway teardown, specs/codebase/primitives/agent-auth-litellm.md).
+    # Inlined from the removed cloud_profile_target_guard store during the
+    # Bifrost gateway teardown.
     return (
         target.kind == "managed_cloud"
         and target.sandbox_profile_id is not None

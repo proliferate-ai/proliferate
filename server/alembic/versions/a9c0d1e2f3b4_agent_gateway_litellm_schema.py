@@ -1,9 +1,8 @@
 """agent gateway litellm schema
 
-Creates the LiteLLM-era agent auth tables (PR 3 of the agent-auth migration,
-see specs/codebase/primitives/agent-auth-litellm.md section 3.3): personal
-API key pool, route selections, gateway enrollment, catalog snapshots and
-overrides, flag-only org policy, and the usage ledger + import cursor.
+Creates the LiteLLM-era agent auth tables in PR 3 of the agent-auth migration:
+personal API key pool, route selections, gateway enrollment, catalog snapshots
+and overrides, flag-only org policy, and the usage ledger + import cursor.
 
 Revision ID: a9c0d1e2f3b4
 Revises: f8b9c0d1e2a3

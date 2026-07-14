@@ -119,7 +119,7 @@ Examples:
     `specs/codebase/structures/anyharness/README.md`,
     `specs/codebase/structures/anyharness/guides/**`,
     `specs/codebase/structures/anyharness/specs/**`,
-    relevant `specs/codebase/primitives/**` and `specs/codebase/features/agent-features/**`
+    relevant `specs/codebase/platforms/product/**` and `specs/codebase/platforms/product/agent-features/**`
 
 ## Global Rules
 

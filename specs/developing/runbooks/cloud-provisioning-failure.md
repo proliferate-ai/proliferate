@@ -6,7 +6,7 @@ provisioning failures.
 Use this runbook when managed cloud target creation, sandbox creation, runtime
 bootstrap, or workspace materialization fails before a worker is enrolled. The
 data model is owned by
-[`../../codebase/primitives/sandbox-provisioning.md`](../../codebase/primitives/sandbox-provisioning.md).
+[`../../codebase/platforms/product/sandbox-provisioning.md`](../../codebase/platforms/product/sandbox-provisioning.md).
 Template rollback is covered by
 [`e2b-template-rollback.md`](e2b-template-rollback.md).
 

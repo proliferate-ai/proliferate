@@ -22,7 +22,7 @@ configuration, and self-hosted deployment. Local development belongs under
   binding current/next-slice and phased rollout ledger for Web/Desktop client
   unification, including the future hosted-Web external-configuration gate.
   The architecture and migration sequence are canonical at
-  [`../../codebase/features/web-desktop-client-unification.md`](../../codebase/features/web-desktop-client-unification.md).
+  [`../../codebase/systems/product/clients/web-desktop-unification/README.md`](../../codebase/systems/product/clients/web-desktop-unification/README.md).
 
 ## Process Map
 

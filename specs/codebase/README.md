@@ -3,28 +3,28 @@
 Status: current index
 
 This area explains where code belongs, which reusable contracts it implements,
-and how complete product workflows behave. Contributor procedures live under
-[`../developing/`](../developing/).
+and how complete product and engineering domains behave. Contributor
+procedures live under [`../developing/`](../developing/).
 
 ## Read Order
 
 | Category | Question it answers | Start here |
 | --- | --- | --- |
 | Structures | Where does this code belong, and which dependencies are allowed? | [`structures/README.md`](structures/README.md) |
-| Primitives | Which reusable product or runtime capability owns this shared contract? | [`primitives/README.md`](primitives/README.md) |
-| Features | Which complete user workflow or product surface owns this behavior? | [`features/README.md`](features/README.md) |
+| Platforms | Which reusable product, engineering, or internal capability owns this shared contract? | [`platforms/README.md`](platforms/README.md) |
+| Systems | Which complete product or engineering domain owns this behavior? | [`systems/README.md`](systems/README.md) |
 
-Most product changes require one structure document and either a primitive or
-feature document. Read them in that order.
+Most product changes require one structure document and either a platform or
+system document. Read them in that order.
 
 ## Boundaries
 
 - A structure document owns source layout, dependency direction, generated
   boundaries, and placement rules.
-- A primitive document owns a durable capability reused across multiple
-  workflows or source areas.
-- A feature document owns a complete user-facing workflow, product semantics,
-  and end-to-end acceptance behavior.
+- A platform document owns a durable capability reused across multiple systems
+  or source areas.
+- A system document owns a complete product or engineering domain, its
+  semantics, and end-to-end acceptance behavior.
 - A development document owns the steps for running, testing, debugging,
   deploying, or operating the system.
 

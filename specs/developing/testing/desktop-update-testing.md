@@ -8,7 +8,7 @@ state-continuity, AnyHarness, native CLI, ACP agent-process, and post-update-tur
 contract in [`tier-4-scenario-contract.md`](tier-4-scenario-contract.md).
 
 Read the product and UI acceptance contract in
-[`desktop-updates.md`](../../codebase/features/desktop-updates.md) alongside
+[`desktop-updates.md`](../../codebase/systems/engineering/delivery/desktop-updates.md) alongside
 this mechanism. The current collector proves manifest fetch, semver selection,
 signature verification, and a bundle swap headlessly. It does not launch the
 installed N application, run real bundled sidecars, preserve a real runtime

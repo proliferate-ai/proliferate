@@ -5,7 +5,7 @@ Every emitting process stamps a release ID of the exact shape::
     <component>@<version>+<12-character-git-sha>
 
 The nine component names are fixed by the support-system contract
-(``specs/codebase/features/support-system.md`` -> "Release identity"). A
+(``specs/codebase/systems/engineering/issue-lifecycle/support-loop.md`` -> "Release identity"). A
 control-plane process only ever emits ``proliferate-server`` (and, for the
 LiteLLM proxy image, ``proliferate-litellm``); it must never reuse the server
 release for AnyHarness, worker, or supervisor events. Those target processes
