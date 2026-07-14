@@ -4,7 +4,11 @@ import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
 import type { DesktopBridge } from "./desktop-bridge";
-import type { ProductHost } from "./product-host";
+import type {
+  ProductEntry,
+  ProductHost,
+  ProductQueryParams,
+} from "./product-host";
 import { ProductHostProvider, useProductHost } from "./ProductHostProvider";
 
 function makeHost(overrides: Partial<ProductHost> = {}): ProductHost {
@@ -85,6 +89,7 @@ describe("ProductHostProvider", () => {
         state: {
           status: "authenticated",
           user: { id: "user-1", email: "user@example.test" },
+          readiness: { status: "ready" },
         },
       },
     });
@@ -127,9 +132,88 @@ describe("ProductHostProvider", () => {
     expect(result.current.desktop).toBe(desktop);
   });
 
-  it("throws a useful error when used outside the provider", () => {
-    expect(() => renderHook(() => useProductHost())).toThrow(
-      /must be used within a ProductHostProvider/,
-    );
+  it("carries an anonymous issue and a null-user authenticated readiness", () => {
+    const deniedHost = makeHost({
+      auth: {
+        ...makeHost().auth,
+        state: {
+          status: "anonymous",
+          methods: [],
+          issue: { kind: "access_denied", code: "web_beta_email_not_allowed" },
+        },
+      },
+    });
+    const degradedHost = makeHost({
+      auth: {
+        ...makeHost().auth,
+        state: {
+          status: "authenticated",
+          user: null,
+          readiness: { status: "action_required", action: "connect_github" },
+        },
+      },
+    });
+
+    const { result: denied } = renderHook(() => useProductHost(), {
+      wrapper: wrapperFor(deniedHost),
+    });
+    expect(denied.current.auth.state).toEqual({
+      status: "anonymous",
+      methods: [],
+      issue: { kind: "access_denied", code: "web_beta_email_not_allowed" },
+    });
+
+    const { result: degraded } = renderHook(() => useProductHost(), {
+      wrapper: wrapperFor(degradedHost),
+    });
+    const state = degraded.current.auth.state;
+    expect(state.status).toBe("authenticated");
+    if (state.status === "authenticated") {
+      expect(state.user).toBeNull();
+      expect(state.readiness).toEqual({
+        status: "action_required",
+        action: "connect_github",
+      });
+    }
+  });
+
+  it("preserves ordered, duplicate query pairs and a fragment on an entry", () => {
+    const query: ProductQueryParams = [
+      ["x", "1"],
+      ["x", "2"],
+      ["q", ""],
+    ];
+    const entry: ProductEntry = {
+      kind: "workspace",
+      workspaceId: "ws-1",
+      query,
+      fragment: "section",
+    };
+
+    const observed: ProductEntry[] = [];
+    const host = makeHost({
+      links: {
+        ...makeHost().links,
+        observeInboundEntries: (listener) => {
+          listener(entry);
+          return () => {};
+        },
+      },
+    });
+    const { result } = renderHook(() => useProductHost(), {
+      wrapper: wrapperFor(host),
+    });
+    result.current.links.observeInboundEntries((e) => {
+      observed.push(e);
+    });
+
+    expect(observed).toHaveLength(1);
+    expect(observed[0]).toEqual(entry);
+    expect(observed[0].query).toEqual([
+      ["x", "1"],
+      ["x", "2"],
+      ["q", ""],
+    ]);
+    expect(observed[0].fragment).toBe("section");
   });
 });

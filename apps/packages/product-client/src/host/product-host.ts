@@ -69,13 +69,56 @@ export interface ProductAuthUser {
 }
 
 /**
+ * Why an anonymous state is being shown. Normalizes the existing Desktop and
+ * Web gate failures — an unreachable deployment, a server-declared access
+ * denial (e.g. beta gating), or a normalized auth-callback failure — without
+ * introducing new product policy.
+ */
+export type ProductAuthIssue =
+  | { kind: "deployment_unreachable" }
+  | { kind: "access_denied"; code: string }
+  | {
+      kind: "callback_failed";
+      reason:
+        | "provider_error"
+        | "malformed_callback"
+        | "state_mismatch"
+        | "expired"
+        | "exchange_failed"
+        | "already_consumed";
+      providerCode?: string;
+    };
+
+/**
+ * Whether an authenticated identity can use the product yet. `action_required`
+ * mirrors the existing Web gate that blocks until GitHub is connected.
+ */
+export type ProductAuthReadiness =
+  | { status: "ready" }
+  | { status: "action_required"; action: "connect_github" };
+
+/**
  * Normalized authentication state. The transport differs per host, but the
  * shared login UI reads the same state shape on both.
  */
 export type AuthState =
   | { status: "loading" }
-  | { status: "anonymous"; methods: AuthMethod[] }
-  | { status: "authenticated"; user: ProductAuthUser };
+  | {
+      status: "anonymous";
+      methods: AuthMethod[];
+      /** Present when anonymity is the result of a failure, not a fresh gate. */
+      issue?: ProductAuthIssue;
+    }
+  | {
+      status: "authenticated";
+      /**
+       * The normalized identity, or `null` during the existing Desktop
+       * cached-session degraded path where the session is trusted but the
+       * user record has not been (re)fetched.
+       */
+      user: ProductAuthUser | null;
+      readiness: ProductAuthReadiness;
+    };
 
 /**
  * A shared login intent. Password completes in `startLogin`; provider flows
@@ -114,12 +157,16 @@ export type ProductProviderAuthPurpose =
   | "link"
   | "required_github_link";
 
-/** Host-decoded provider callback. The raw callback URL and OAuth/PKCE state
- * never cross this boundary. */
-export interface AuthCallback {
-  code: string;
-  state?: string;
-}
+/**
+ * Host-decoded provider callback, already normalized to success or failure by
+ * the host before `finishLogin`. The raw callback URL, PKCE verifier, and
+ * OAuth state proof never cross this boundary. This value is ephemeral:
+ * ProductClient never persists it, puts it in route state, or sends its
+ * code/state to telemetry.
+ */
+export type AuthCallback =
+  | { status: "success"; code: string; state?: string }
+  | { status: "failure"; code: string; state?: string };
 
 /**
  * The shared authentication operations. ProductClient owns the auth gate and
@@ -151,10 +198,31 @@ export interface ProductStorage {
 }
 
 /**
- * A normalized inbound destination. Each host decodes its raw URL
- * (`https://...` on Web, `proliferate://...` on Desktop) into this shape.
+ * Ordered query parameters as decoded key/value pairs. This is deliberately not
+ * a `Record`, `Map`, or object: it preserves the exact order of the incoming
+ * query string and keeps every duplicate key (`x=1&x=2` decodes to two pairs).
+ * Decoders build it with `Array.from(url.searchParams.entries())`; encoders
+ * append every pair in order. Implementations must never route these through
+ * `Object.fromEntries`, `URLSearchParams.set`, or any conversion that collapses
+ * repeated keys. Exact percent-encoding bytes need not survive, but decoded
+ * values, their order, and duplicates must.
  */
-export type ProductQueryParams = Readonly<Record<string, string>>;
+export type ProductQueryParams = readonly (readonly [
+  key: string,
+  value: string,
+])[];
+
+/**
+ * Lossless location state carried by every {@link ProductEntry}. Empty fields
+ * are omitted rather than stored as empty values. The fragment is stored
+ * without its leading `#` and encoded with exactly one `#` on output.
+ */
+export interface ProductLocationState {
+  /** Ordered, duplicate-preserving query pairs. Omitted when empty. */
+  query?: ProductQueryParams;
+  /** URL fragment without the leading `#`. Omitted when absent. */
+  fragment?: string;
+}
 
 export type ProductSettingsEntrySection =
   | "account"
@@ -164,12 +232,15 @@ export type ProductSettingsEntrySection =
   | "integrations"
   | "organization";
 
-export type ProductEntry =
+/**
+ * The destination discriminant of a normalized inbound entry, independent of
+ * its query/fragment location state. Compose with {@link ProductLocationState}
+ * to form a {@link ProductEntry}.
+ */
+export type ProductEntryDestination =
   | {
       kind: "workspace";
       workspaceId: string;
-      /** Host-decoded query state, such as a selected session or tab. */
-      query?: ProductQueryParams;
     }
   | { kind: "workflow"; workflowId: string }
   | { kind: "invitation"; token: string }
@@ -193,14 +264,19 @@ export type ProductEntry =
   | {
       kind: "billing-return";
       status: "success" | "cancel" | "done";
-      query?: ProductQueryParams;
     }
   | {
       kind: "settings";
       section: ProductSettingsEntrySection;
       source?: "github_app_callback";
-      query?: ProductQueryParams;
     };
+
+/**
+ * A normalized inbound destination. Each host decodes its raw URL
+ * (`https://...` on Web, `proliferate://...` on Desktop) into this shape, always
+ * carrying lossless query/fragment location state.
+ */
+export type ProductEntry = ProductEntryDestination & ProductLocationState;
 
 /**
  * External-link, Desktop-handoff, and inbound-deep-link transport. Internal
