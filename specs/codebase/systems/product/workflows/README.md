@@ -6,3 +6,5 @@
   AnyHarness workspace.
 - [Portable Invocations](invocations.md) — immutable Cloud invocation and
   AnyHarness target-resolution contract.
+- [Run Control](run-control.md) — truthful cancellation, run-state versioning,
+  and interruption vocabulary for workflow runs.

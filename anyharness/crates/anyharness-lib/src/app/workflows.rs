@@ -9,6 +9,7 @@ use std::sync::Arc;
 use tokio::runtime::Handle;
 
 use crate::domains::sessions::runtime::SessionRuntime;
+use crate::domains::workflows::control::WorkflowRunGates;
 use crate::domains::workflows::runtime::WorkflowRunRuntime;
 use crate::domains::workflows::service::WorkflowRunService;
 use crate::domains::workflows::session_extension::WorkflowRunSessionExtension;
@@ -23,6 +24,7 @@ use super::AppStateInitError;
 pub(super) struct WorkflowWiringPhaseOne {
     pub service: Arc<WorkflowRunService>,
     pub session_extension: Arc<WorkflowRunSessionExtension>,
+    pub gates: Arc<WorkflowRunGates>,
     pub main_handle: Handle,
 }
 
@@ -38,13 +40,18 @@ pub(super) fn wire_workflows_before_sessions(
         .fence_nonterminal_after_restart()
         .map_err(|error| AppStateInitError::WorkflowFencingFailed(anyhow::Error::new(error)))?;
     let main_handle = Handle::current();
+    // One shared per-run gate set (spec workflow-run-control §6.1): injected
+    // into BOTH the workflow runtime and the completion extension.
+    let gates = Arc::new(WorkflowRunGates::new());
     let session_extension = Arc::new(WorkflowRunSessionExtension::new(
         service.clone(),
+        gates.clone(),
         main_handle.clone(),
     ));
     Ok(WorkflowWiringPhaseOne {
         service,
         session_extension,
+        gates,
         main_handle,
     })
 }
@@ -62,6 +69,7 @@ pub(super) fn wire_workflow_runtime(
         session_runtime,
         operation_gate,
         access_gate,
+        phase_one.gates,
         phase_one.main_handle,
     ))
 }

@@ -16,8 +16,11 @@ use crate::domains::workflows::model::{
     WorkflowRunFailureCode, WorkflowRunInvocation, WorkflowRunRecord, WorkflowRunStatus,
     WorkflowRunStepRecord, WorkflowStepStatus, WorkflowTurnOutcome,
 };
-use crate::domains::workflows::store::{FinishTurnStoreOutcome, WorkflowRunStore};
+use crate::domains::workflows::store::{
+    FinishTurnStoreOutcome, StoreCancelIntentOutcome, WorkflowRunStore,
+};
 
+use super::portable_service::compose_versioned_view;
 pub use super::portable_service::{
     AcceptV2Outcome, InspectV2Outcome, PreparedWorkflowRunV2, VersionedWorkflowRunView,
     WorkflowRunViewV2,
@@ -191,6 +194,11 @@ impl WorkflowRunService {
         chrono::Utc::now().to_rfc3339()
     }
 
+    #[cfg(test)]
+    pub(crate) fn store_db_for_tests(&self) -> &crate::persistence::Db {
+        self.store.db_for_tests()
+    }
+
     /// Validate, canonicalize, and accept: create, exactly replay, or conflict.
     #[tracing::instrument(skip_all, fields(run_id = %run_id, workspace_id = %input.workspace_id))]
     pub fn accept(
@@ -215,6 +223,9 @@ impl WorkflowRunService {
             workspace_id: input.workspace_id.clone(),
             session_id: None,
             failure_code: None,
+            state_version: 1,
+            cancel_requested_at: None,
+            interruption_code: None,
             created_at: created_at.clone(),
             updated_at: created_at.clone(),
             started_at: None,
@@ -339,10 +350,76 @@ impl WorkflowRunService {
             .finish_turn(session_id, prompt_id, turn_id, outcome, &Self::now())?)
     }
 
+    /// Whether the run exists and is still nonterminal (execution recheck at
+    /// the spec §6.2 gate boundaries).
+    pub fn run_in_flight(&self, run_id: &str) -> Result<bool, WorkflowServiceError> {
+        Ok(self
+            .store
+            .get(run_id)?
+            .map(|(run, _steps)| !run.status.is_terminal())
+            .unwrap_or(false))
+    }
+
+    /// The opaque run key for a completion callback (exact session+prompt
+    /// store lookup; the deterministic prompt ID is never parsed).
+    pub fn find_run_id_by_session_and_prompt(
+        &self,
+        session_id: &str,
+        prompt_id: &str,
+    ) -> Result<Option<String>, WorkflowServiceError> {
+        Ok(self
+            .store
+            .find_run_id_by_session_and_prompt(session_id, prompt_id)?)
+    }
+
     /// Fence all nonterminal run/step rows after a restart; mints `finished_at`.
     pub fn fence_nonterminal_after_restart(&self) -> Result<(), WorkflowServiceError> {
         Ok(self.store.fence_nonterminal_after_restart(&Self::now())?)
     }
+
+    /// The atomic cancel-intent use case (spec workflow-run-control §5.1):
+    /// mints the intent/finish timestamps and returns the four-outcome domain
+    /// result with truthful versioned snapshots.
+    #[tracing::instrument(skip_all, fields(run_id = %run_id))]
+    pub fn cancel_intent(
+        &self,
+        run_id: &str,
+    ) -> Result<WorkflowCancelOutcome, WorkflowServiceError> {
+        let now = Self::now();
+        match self.store.cancel_intent(run_id, &now, &now)? {
+            StoreCancelIntentOutcome::Missing => Ok(WorkflowCancelOutcome::Missing),
+            StoreCancelIntentOutcome::Terminal { run, steps } => Ok(
+                WorkflowCancelOutcome::Terminal(compose_versioned_view(run, steps)?),
+            ),
+            StoreCancelIntentOutcome::CancelledBeforeDispatch { run, steps } => Ok(
+                WorkflowCancelOutcome::CancelledBeforeDispatch(compose_versioned_view(run, steps)?),
+            ),
+            StoreCancelIntentOutcome::CancellationPending {
+                run,
+                steps,
+                session_id,
+                turn_id,
+            } => Ok(WorkflowCancelOutcome::CancellationPending {
+                view: compose_versioned_view(run, steps)?,
+                session_id,
+                turn_id,
+            }),
+        }
+    }
+}
+
+/// The four-outcome cancel-intent result (spec workflow-run-control §5.1),
+/// carrying truthful versioned snapshots.
+#[derive(Debug)]
+pub enum WorkflowCancelOutcome {
+    Missing,
+    Terminal(VersionedWorkflowRunView),
+    CancelledBeforeDispatch(VersionedWorkflowRunView),
+    CancellationPending {
+        view: VersionedWorkflowRunView,
+        session_id: Option<String>,
+        turn_id: Option<String>,
+    },
 }
 
 /// The validated, ready-to-persist outcome of invocation validation.

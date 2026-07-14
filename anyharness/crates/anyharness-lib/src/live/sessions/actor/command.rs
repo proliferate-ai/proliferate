@@ -16,6 +16,16 @@ pub enum PromptAcceptError {
     EnqueueFailed(String),
 }
 
+/// Result of the crate-private conditional-cancel command (spec
+/// workflow-run-control §5.2). `Requested` proves only that the matching-turn
+/// cancel command was accepted, not provider cancellation; `NotActive` covers
+/// idle or a different active turn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConditionalCancelOutcome {
+    Requested,
+    NotActive,
+}
+
 #[derive(Debug, Clone)]
 pub enum PromptAcceptance {
     Started { turn_id: String },
@@ -195,6 +205,14 @@ pub(in crate::live::sessions) enum SessionCommand {
         respond_to: oneshot::Sender<RuntimeEventInjectionResult>,
     },
     Cancel,
+    /// Forward ACP cancellation ONLY when `expected_turn_id` equals the
+    /// actor's current active turn, compared serially on the actor loop. A
+    /// stale or foreign turn id never cancels newer work. Leaves the public
+    /// `Cancel` behavior untouched.
+    CancelTurnIfActive {
+        expected_turn_id: String,
+        respond_to: oneshot::Sender<ConditionalCancelOutcome>,
+    },
     Dismiss {
         respond_to: oneshot::Sender<anyhow::Result<()>>,
     },

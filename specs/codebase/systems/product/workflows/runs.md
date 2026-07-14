@@ -7,6 +7,12 @@ execution vertical. It consumes the authored definition contract in
   [`definitions.md`](definitions.md) without making Cloud, Desktop, or another
 product surface responsible for workflow execution.
 
+Superseded in part: [`run-control.md`](run-control.md)
+supersedes this spec's cancellation non-goals, the run/step status
+enumerations, the no-cancellation restart clause, and the definition-of-done
+no-cancellation line (see its §9 for the exact list). Everything else here
+remains authoritative.
+
 Read with:
 
 - [`../../../structures/anyharness/README.md`](../../../structures/anyharness/README.md) for

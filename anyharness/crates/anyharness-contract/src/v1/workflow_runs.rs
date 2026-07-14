@@ -143,7 +143,9 @@ pub struct WorkflowRunPromptStep {
     pub prompt: String,
 }
 
-/// Durable run status.
+/// Durable run status. Shared by the v1 and v2 response families; the
+/// `cancelled`/`interrupted` widening is the workflow-run-control §3.4
+/// supersession of the earlier no-widening rule.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkflowRunStatus {
@@ -151,9 +153,12 @@ pub enum WorkflowRunStatus {
     Running,
     Completed,
     Failed,
+    Cancelled,
+    Interrupted,
 }
 
-/// Durable step status.
+/// Durable step status (shared by both response families; see
+/// [`WorkflowRunStatus`] for the widening provenance).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkflowRunStepStatus {
@@ -161,6 +166,16 @@ pub enum WorkflowRunStepStatus {
     Running,
     Completed,
     Failed,
+    Cancelled,
+    Interrupted,
+}
+
+/// The closed run interruption code: present if and only if the run status is
+/// `interrupted`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowRunInterruptionCode {
+    RuntimeRestarted,
 }
 
 /// PUT/GET response envelope.
@@ -185,6 +200,15 @@ pub struct WorkflowRun {
     pub session_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub failure_code: Option<WorkflowRunFailureCode>,
+    /// Monotonic snapshot version: 1 at acceptance, +1 per externally visible
+    /// snapshot transaction.
+    pub state_version: i64,
+    /// First durable cancellation intent; omitted when never requested.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cancel_requested_at: Option<String>,
+    /// Present if and only if `status` is `interrupted`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interruption_code: Option<WorkflowRunInterruptionCode>,
     pub created_at: String,
     pub updated_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -428,6 +452,9 @@ mod tests {
                 workspace_id: "ws".to_string(),
                 session_id: None,
                 failure_code: None,
+                state_version: 1,
+                cancel_requested_at: None,
+                interruption_code: None,
                 created_at: "2026-07-13T00:00:00+00:00".to_string(),
                 updated_at: "2026-07-13T00:00:00+00:00".to_string(),
                 started_at: None,
@@ -450,10 +477,83 @@ mod tests {
         let json = serde_json::to_value(&response).expect("serialize response");
         assert_eq!(json["run"]["schemaVersion"], 1);
         assert_eq!(json["run"]["status"], "accepted");
+        // Run-control fields: stateVersion required; the optional control
+        // fields are omitted when null (spec workflow-run-control §3.2).
+        assert_eq!(json["run"]["stateVersion"], 1);
+        assert!(json["run"].get("cancelRequestedAt").is_none());
+        assert!(json["run"].get("interruptionCode").is_none());
         assert_eq!(json["steps"][0]["status"], "pending");
         assert_eq!(json["steps"][0]["stageIndex"], 0);
         assert!(json["run"].get("sessionId").is_none());
         assert!(json["run"].get("failureCode").is_none());
         assert!(json["steps"][0].get("turnId").is_none());
+    }
+
+    #[test]
+    fn widened_statuses_serialize_on_both_shared_enums() {
+        for (status, wire) in [
+            (WorkflowRunStatus::Cancelled, "cancelled"),
+            (WorkflowRunStatus::Interrupted, "interrupted"),
+        ] {
+            assert_eq!(
+                serde_json::to_value(status).expect("serialize"),
+                serde_json::json!(wire)
+            );
+            let round: WorkflowRunStatus =
+                serde_json::from_value(serde_json::json!(wire)).expect("deserialize");
+            assert_eq!(round, status);
+        }
+        for (status, wire) in [
+            (WorkflowRunStepStatus::Cancelled, "cancelled"),
+            (WorkflowRunStepStatus::Interrupted, "interrupted"),
+        ] {
+            assert_eq!(
+                serde_json::to_value(status).expect("serialize"),
+                serde_json::json!(wire)
+            );
+            let round: WorkflowRunStepStatus =
+                serde_json::from_value(serde_json::json!(wire)).expect("deserialize");
+            assert_eq!(round, status);
+        }
+    }
+
+    #[test]
+    fn interruption_code_is_a_closed_snake_case_enum() {
+        assert_eq!(
+            serde_json::to_value(WorkflowRunInterruptionCode::RuntimeRestarted).expect("serialize"),
+            serde_json::json!("runtime_restarted")
+        );
+        assert!(
+            serde_json::from_value::<WorkflowRunInterruptionCode>(serde_json::json!("other"))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn present_control_fields_serialize_camel_case() {
+        let run = WorkflowRun {
+            id: "11111111-1111-4111-8111-111111111111".to_string(),
+            schema_version: 1,
+            definition: WorkflowRunDefinition {
+                inputs: Vec::new(),
+                stages: Vec::new(),
+            },
+            arguments: BTreeMap::new(),
+            status: WorkflowRunStatus::Interrupted,
+            workspace_id: "ws".to_string(),
+            session_id: None,
+            failure_code: None,
+            state_version: 4,
+            cancel_requested_at: Some("2026-07-14T00:00:00+00:00".to_string()),
+            interruption_code: Some(WorkflowRunInterruptionCode::RuntimeRestarted),
+            created_at: "2026-07-14T00:00:00+00:00".to_string(),
+            updated_at: "2026-07-14T00:00:00+00:00".to_string(),
+            started_at: None,
+            finished_at: None,
+        };
+        let json = serde_json::to_value(&run).expect("serialize run");
+        assert_eq!(json["stateVersion"], 4);
+        assert_eq!(json["cancelRequestedAt"], "2026-07-14T00:00:00+00:00");
+        assert_eq!(json["interruptionCode"], "runtime_restarted");
     }
 }

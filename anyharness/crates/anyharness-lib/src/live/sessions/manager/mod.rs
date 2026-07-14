@@ -106,3 +106,121 @@ impl Clone for LiveSessionManager {
         }
     }
 }
+
+/// Merge-gated seam for run-control tests: a registered live handle whose
+/// command consumer is scripted, so the production seams that traverse the
+/// manager (`request_live_turn_cancel`, effort application, prompt dispatch)
+/// can be driven deterministically without a real agent process. Because the
+/// startup path reuses an already-registered handle, pre-registering one lets
+/// the REAL execution task run end to end against this script.
+#[cfg(test)]
+#[derive(Debug)]
+pub(crate) enum ScriptedSessionEvent {
+    /// A `SetConfigOption` arrived (real effort application).
+    Config { config_id: String, value: String },
+    /// A `Prompt` arrived (real dispatch), with its deterministic prompt id.
+    Prompt { prompt_id: Option<String> },
+    /// A `CancelTurnIfActive` arrived, with its exact expected turn id.
+    CancelIfActive { expected_turn_id: String },
+}
+
+#[cfg(test)]
+pub(crate) struct ScriptedSession {
+    /// One entry per received command, in arrival order.
+    pub(crate) events: tokio::sync::mpsc::UnboundedReceiver<ScriptedSessionEvent>,
+    /// With `hold_config_replies` / `hold_cancel_replies`, the matching reply
+    /// waits for one `notify_one` permit per command.
+    pub(crate) release: Arc<tokio::sync::Notify>,
+}
+
+#[cfg(test)]
+pub(crate) struct ScriptedSessionSpec {
+    /// Turn id returned as `PromptAcceptance::Started` for each prompt.
+    pub(crate) prompt_turn_id: String,
+    /// Hold each `SetConfigOption` reply until released (cancel-during-effort
+    /// windows).
+    pub(crate) hold_config_replies: bool,
+    /// Hold each `CancelTurnIfActive` reply until released (post-commit
+    /// injection windows).
+    pub(crate) hold_cancel_replies: bool,
+}
+
+#[cfg(test)]
+impl LiveSessionManager {
+    /// Register a scripted handle for `session_id`: `SetConfigOption` answers
+    /// `Applied`, `Prompt` answers `Started` with the scripted turn id,
+    /// `CancelTurnIfActive` answers `Requested`; every command is recorded.
+    /// Other commands are dropped.
+    pub(crate) async fn insert_scripted_session_for_test(
+        &self,
+        session_id: &str,
+        spec: ScriptedSessionSpec,
+    ) -> ScriptedSession {
+        use crate::live::sessions::actor::command::{
+            ConditionalCancelOutcome, PromptAcceptance, SessionCommand,
+        };
+        use anyharness_contract::v1::ConfigApplyState;
+
+        let (command_tx, mut command_rx) = tokio::sync::mpsc::channel(8);
+        let (event_tx, _) = tokio::sync::broadcast::channel(16);
+        let handle = Arc::new(LiveSessionHandle::new_for_test(
+            session_id,
+            command_tx,
+            event_tx,
+            Some(format!("native-{session_id}")),
+            anyharness_contract::v1::SessionExecutionPhase::Running,
+        ));
+        self.live_sessions
+            .write()
+            .await
+            .insert(session_id.to_string(), handle);
+
+        let (seen_tx, seen_rx) = tokio::sync::mpsc::unbounded_channel();
+        let release = Arc::new(tokio::sync::Notify::new());
+        let release_for_task = release.clone();
+        tokio::spawn(async move {
+            while let Some(command) = command_rx.recv().await {
+                match command {
+                    SessionCommand::SetConfigOption {
+                        config_id,
+                        value,
+                        respond_to,
+                        ..
+                    } => {
+                        let _ = seen_tx.send(ScriptedSessionEvent::Config { config_id, value });
+                        if spec.hold_config_replies {
+                            release_for_task.notified().await;
+                        }
+                        let _ = respond_to.send(Ok(ConfigApplyState::Applied));
+                    }
+                    SessionCommand::Prompt {
+                        prompt_id,
+                        respond_to,
+                        ..
+                    } => {
+                        let _ = seen_tx.send(ScriptedSessionEvent::Prompt { prompt_id });
+                        let _ = respond_to.send(Ok(PromptAcceptance::Started {
+                            turn_id: spec.prompt_turn_id.clone(),
+                        }));
+                    }
+                    SessionCommand::CancelTurnIfActive {
+                        expected_turn_id,
+                        respond_to,
+                    } => {
+                        let _ =
+                            seen_tx.send(ScriptedSessionEvent::CancelIfActive { expected_turn_id });
+                        if spec.hold_cancel_replies {
+                            release_for_task.notified().await;
+                        }
+                        let _ = respond_to.send(ConditionalCancelOutcome::Requested);
+                    }
+                    _ => {}
+                }
+            }
+        });
+        ScriptedSession {
+            events: seen_rx,
+            release,
+        }
+    }
+}

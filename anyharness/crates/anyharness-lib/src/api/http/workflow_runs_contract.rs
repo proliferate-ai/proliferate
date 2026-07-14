@@ -325,6 +325,9 @@ fn run_to_wire(
         workspace_id: run.workspace_id,
         session_id: run.session_id,
         failure_code: run.failure_code.map(failure_code_to_wire).transpose()?,
+        state_version: run.state_version,
+        cancel_requested_at: run.cancel_requested_at,
+        interruption_code: run.interruption_code.map(interruption_code_to_wire),
         created_at: run.created_at,
         updated_at: run.updated_at,
         started_at: run.started_at,
@@ -364,6 +367,9 @@ fn run_v2_to_wire(
         workspace_id: run.workspace_id,
         session_id: run.session_id,
         failure_code: run.failure_code.map(failure_code_v2_to_wire),
+        state_version: run.state_version,
+        cancel_requested_at: run.cancel_requested_at,
+        interruption_code: run.interruption_code.map(interruption_code_to_wire),
         created_at: run.created_at,
         updated_at: run.updated_at,
         started_at: run.started_at,
@@ -392,6 +398,18 @@ fn run_status_to_wire(status: DomainRunStatus) -> WorkflowRunStatus {
         DomainRunStatus::Running => WorkflowRunStatus::Running,
         DomainRunStatus::Completed => WorkflowRunStatus::Completed,
         DomainRunStatus::Failed => WorkflowRunStatus::Failed,
+        DomainRunStatus::Cancelled => WorkflowRunStatus::Cancelled,
+        DomainRunStatus::Interrupted => WorkflowRunStatus::Interrupted,
+    }
+}
+
+fn interruption_code_to_wire(
+    code: crate::domains::workflows::model::WorkflowInterruptionCode,
+) -> anyharness_contract::v1::WorkflowRunInterruptionCode {
+    match code {
+        crate::domains::workflows::model::WorkflowInterruptionCode::RuntimeRestarted => {
+            anyharness_contract::v1::WorkflowRunInterruptionCode::RuntimeRestarted
+        }
     }
 }
 
@@ -401,6 +419,8 @@ fn step_status_to_wire(status: WorkflowStepStatus) -> WorkflowRunStepStatus {
         WorkflowStepStatus::Running => WorkflowRunStepStatus::Running,
         WorkflowStepStatus::Completed => WorkflowRunStepStatus::Completed,
         WorkflowStepStatus::Failed => WorkflowRunStepStatus::Failed,
+        WorkflowStepStatus::Cancelled => WorkflowRunStepStatus::Cancelled,
+        WorkflowStepStatus::Interrupted => WorkflowRunStepStatus::Interrupted,
     }
 }
 

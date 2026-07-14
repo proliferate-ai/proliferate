@@ -406,6 +406,12 @@ async fn handle_non_replay_command(
             None
         }
         SessionCommand::Cancel => None,
+        SessionCommand::CancelTurnIfActive { respond_to, .. } => {
+            // Replay sessions have no live turn to cancel.
+            let _ = respond_to
+                .send(crate::live::sessions::actor::command::ConditionalCancelOutcome::NotActive);
+            None
+        }
         SessionCommand::Dismiss { respond_to } => {
             let _ = respond_to.send(Ok(()));
             Some(ReplayExitDisposition::Dismiss)

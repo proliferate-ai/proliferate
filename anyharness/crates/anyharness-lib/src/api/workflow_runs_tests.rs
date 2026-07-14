@@ -573,8 +573,11 @@ async fn extension_completion_terminalizes_run_and_step() {
         .expect("bind_session"));
     assert!(service.begin_step(&run_id).expect("begin_step"));
 
-    let extension =
-        WorkflowRunSessionExtension::new(service.clone(), tokio::runtime::Handle::current());
+    let extension = WorkflowRunSessionExtension::new(
+        service.clone(),
+        Arc::new(crate::domains::workflows::control::WorkflowRunGates::new()),
+        tokio::runtime::Handle::current(),
+    );
     let workspace = WorkspaceRecord {
         id: "30000000-0000-4000-8000-000000000035".to_string(),
         kind: WorkspaceKind::Worktree,
@@ -813,4 +816,999 @@ fn direct_attach_user_claims_cannot_reach_workflow_routes() {
         user_route_allowed(&Method::GET, &path, &claim),
         Err(AuthError::UnsupportedRoute)
     ));
+}
+
+// ---------------------------------------------------------------------------
+// Run-control HTTP tests (spec workflow-run-control §3/§5/§6, proof §11):
+// the cancel route matrix, truthful snapshots, wire field pinning,
+// direct-attach exclusion, the dropped-awaiter handoff, and the live
+// cancel/execution race over the real router and real SQLite.
+// ---------------------------------------------------------------------------
+
+use crate::domains::workflows::service::WorkflowRunService as ControlWorkflowRunService;
+use crate::domains::workflows::store::WorkflowRunStore as ControlWorkflowRunStore;
+
+async fn post_cancel(state: &AppState, run_id: &str) -> (StatusCode, Value) {
+    let response = build_router(state.clone())
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/v1/workflow-runs/{run_id}/cancel"))
+                .body(Body::empty())
+                .expect("request"),
+        )
+        .await
+        .expect("response");
+    let status = response.status();
+    let bytes = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("body");
+    let payload = if bytes.is_empty() {
+        Value::Null
+    } else {
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null)
+    };
+    (status, payload)
+}
+
+/// A service handle over the SAME database as the state, for driving durable
+/// rows without scheduling execution.
+fn control_service(state: &AppState) -> Arc<ControlWorkflowRunService> {
+    Arc::new(ControlWorkflowRunService::new(
+        ControlWorkflowRunStore::new(state.db.clone()),
+    ))
+}
+
+#[tokio::test]
+async fn cancel_route_matrix_and_truthful_snapshots() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("env mutex");
+    let _guard = test_support::set_bearer_token_env(None);
+    let state = test_state();
+
+    // Noncanonical UUID -> coded 400.
+    let (status, body) = post_cancel(&state, "not-a-uuid").await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "WORKFLOW_RUN_INVALID");
+
+    // Unknown run -> 404.
+    let (status, body) = post_cancel(&state, "22222222-2222-4222-8222-222222222222").await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body["code"], "WORKFLOW_RUN_NOT_FOUND");
+
+    // Accepted run (no execution scheduled): first cancel terminalizes
+    // pre-dispatch as cancelled and acknowledges durable intent.
+    let service = control_service(&state);
+    let run_id = uuid::Uuid::new_v4().to_string();
+    service
+        .accept(
+            &run_id,
+            domain_input_for_workspace("99999999-9999-4999-8999-999999999997"),
+        )
+        .expect("accept");
+    let (status, body) = post_cancel(&state, &run_id).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["run"]["status"], "cancelled");
+    assert_eq!(body["steps"][0]["status"], "cancelled");
+    assert_eq!(body["run"]["stateVersion"], 2);
+    assert!(body["run"]["cancelRequestedAt"].is_string());
+    assert!(body["run"].get("failureCode").is_none());
+    assert!(body["run"].get("interruptionCode").is_none());
+    assert!(body["steps"][0].get("failureCode").is_none());
+    let first_requested_at = body["run"]["cancelRequestedAt"].clone();
+    let first_updated_at = body["run"]["updatedAt"].clone();
+
+    // Terminal repeat: unchanged 200 with the same version and timestamps.
+    let (status, body) = post_cancel(&state, &run_id).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["run"]["status"], "cancelled");
+    assert_eq!(body["run"]["stateVersion"], 2);
+    assert_eq!(body["run"]["cancelRequestedAt"], first_requested_at);
+    assert_eq!(body["run"]["updatedAt"], first_updated_at);
+
+    // GET mirrors the truthful snapshot.
+    let (status, body) = get(&state, &run_id).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["run"]["status"], "cancelled");
+}
+
+#[tokio::test]
+async fn cancel_of_a_running_null_turn_step_is_intent_only_over_http() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("env mutex");
+    let _guard = test_support::set_bearer_token_env(None);
+    let state = test_state();
+    let service = control_service(&state);
+    let run_id = uuid::Uuid::new_v4().to_string();
+    service
+        .accept(
+            &run_id,
+            domain_input_for_workspace("99999999-9999-4999-8999-999999999996"),
+        )
+        .expect("accept");
+    assert!(service.begin_run(&run_id).expect("begin_run"));
+    assert!(service
+        .bind_session(&run_id, "sess-http-null")
+        .expect("bind"));
+    assert!(service.begin_step(&run_id).expect("begin_step"));
+
+    // The bound session is not live: the live-cancel attempt reports NotLive
+    // internally and the snapshot stays truthfully running + requested.
+    let (status, body) = post_cancel(&state, &run_id).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["run"]["status"], "running");
+    assert_eq!(body["steps"][0]["status"], "running");
+    assert!(body["run"]["cancelRequestedAt"].is_string());
+    let version = body["run"]["stateVersion"].as_i64().expect("version");
+
+    // Repeat re-attempts the live cancel but does not increment.
+    let (status, body) = post_cancel(&state, &run_id).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        body["run"]["stateVersion"].as_i64().expect("version"),
+        version
+    );
+}
+
+#[test]
+fn cancel_route_is_excluded_from_direct_attach() {
+    let claim = UserClaimAuth {
+        user_id: "user-1".to_string(),
+        organization_id: "org-1".to_string(),
+        target_id: "target-1".to_string(),
+        cloud_workspace_id: "cloud-workspace-1".to_string(),
+        anyharness_workspace_id: "20000000-0000-4000-8000-000000000002".to_string(),
+        cloud_session_id: None,
+        anyharness_session_id: None,
+        claim_id: "claim-1".to_string(),
+        permissions: ClaimPermissions {
+            read: true,
+            write: true,
+            control: true,
+        },
+        jti: "jti-1".to_string(),
+        expires_at: i64::MAX,
+    };
+    let path = format!("/v1/workflow-runs/{RUN_ID}/cancel");
+    assert!(matches!(
+        user_route_allowed(&Method::POST, &path, &claim),
+        Err(AuthError::UnsupportedRoute)
+    ));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn dropped_cancel_awaiter_never_orphans_the_handoff() {
+    // Same one-poll-drop proof as PUT: the intent-CAS -> live-request ->
+    // final-snapshot sequence rides a detached task.
+    let state = {
+        let _lock = test_support::ENV_MUTEX
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("env mutex");
+        let _guard = test_support::set_bearer_token_env(None);
+        test_state()
+    };
+    let service = control_service(&state);
+    let run_id = uuid::Uuid::new_v4().to_string();
+    service
+        .accept(
+            &run_id,
+            domain_input_for_workspace("99999999-9999-4999-8999-999999999995"),
+        )
+        .expect("accept");
+
+    {
+        let runtime = state.workflow_run_runtime.clone();
+        let cancel_run_id = run_id.clone();
+        let mut cancel_future = Box::pin(async move { runtime.cancel(cancel_run_id).await });
+        let waker = std::task::Waker::noop();
+        let mut context = std::task::Context::from_waker(waker);
+        let first_poll = std::future::Future::poll(cancel_future.as_mut(), &mut context);
+        assert!(
+            first_poll.is_pending(),
+            "cancel must not complete synchronously on its first poll"
+        );
+    }
+
+    let body = poll_run_until(&state, &run_id, "detached cancel handoff", |body| {
+        body["run"]["status"] == "cancelled"
+    })
+    .await;
+    assert!(body["run"]["cancelRequestedAt"].is_string());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn cancel_races_execution_to_exactly_one_truthful_terminal_state() {
+    // PUT schedules real execution against a nonexistent workspace while
+    // cancel races it through the shared per-run gate: exactly one truthful
+    // terminal outcome wins — cancelled (cancel won a pre-dispatch boundary)
+    // or failed/workspace_unavailable (execution's classification won).
+    let state = {
+        let _lock = test_support::ENV_MUTEX
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("env mutex");
+        let _guard = test_support::set_bearer_token_env(None);
+        test_state()
+    };
+    let run_id = uuid::Uuid::new_v4().to_string();
+    let (status, _) = put(
+        &state,
+        &run_id,
+        body_for_workspace("99999999-9999-4999-8999-999999999994", Value::Null),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (cancel_status, _) = post_cancel(&state, &run_id).await;
+    assert_eq!(cancel_status, StatusCode::OK);
+
+    let body = poll_run_until(&state, &run_id, "raced terminal state", |body| {
+        body["run"]["status"] == "cancelled" || body["run"]["status"] == "failed"
+    })
+    .await;
+    match body["run"]["status"].as_str().expect("status") {
+        "cancelled" => {
+            assert!(body["run"].get("failureCode").is_none());
+            assert_eq!(body["steps"][0]["status"], "cancelled");
+        }
+        "failed" => {
+            assert_eq!(body["run"]["failureCode"], "workspace_unavailable");
+        }
+        other => panic!("unexpected terminal status {other}"),
+    }
+}
+
+#[tokio::test]
+async fn live_turn_cancel_seam_reports_not_live_for_a_dead_session() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("env mutex");
+    let _guard = test_support::set_bearer_token_env(None);
+    let state = test_state();
+    let outcome = state
+        .session_runtime
+        .request_live_turn_cancel("no-such-session", "turn-x")
+        .await;
+    assert_eq!(
+        outcome,
+        crate::domains::sessions::runtime::LiveTurnCancelOutcome::NotLive
+    );
+}
+
+#[test]
+fn openapi_documents_run_control_fields_and_cancel_route() {
+    let doc: Value =
+        serde_json::from_str(&super::openapi::openapi_json()).expect("parse openapi document");
+    // stateVersion required on BOTH families; control fields optional.
+    for schema_name in ["WorkflowRun", "WorkflowRunV2"] {
+        let schema = &doc["components"]["schemas"][schema_name];
+        let required: Vec<&str> = schema["required"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{schema_name} required array"))
+            .iter()
+            .map(|value| value.as_str().expect("required entry"))
+            .collect();
+        assert!(
+            required.contains(&"stateVersion"),
+            "{schema_name}: {required:?}"
+        );
+        assert!(!required.contains(&"cancelRequestedAt"), "{schema_name}");
+        assert!(!required.contains(&"interruptionCode"), "{schema_name}");
+    }
+    // Widened shared status vocabularies.
+    let run_statuses = doc["components"]["schemas"]["WorkflowRunStatus"]["enum"]
+        .as_array()
+        .expect("run status enum")
+        .iter()
+        .map(|value| value.as_str().expect("status"))
+        .collect::<Vec<_>>();
+    for status in [
+        "accepted",
+        "running",
+        "completed",
+        "failed",
+        "cancelled",
+        "interrupted",
+    ] {
+        assert!(run_statuses.contains(&status), "{run_statuses:?}");
+    }
+    let step_statuses = doc["components"]["schemas"]["WorkflowRunStepStatus"]["enum"]
+        .as_array()
+        .expect("step status enum")
+        .iter()
+        .map(|value| value.as_str().expect("status"))
+        .collect::<Vec<_>>();
+    for status in [
+        "pending",
+        "running",
+        "completed",
+        "failed",
+        "cancelled",
+        "interrupted",
+    ] {
+        assert!(step_statuses.contains(&status), "{step_statuses:?}");
+    }
+    assert_eq!(
+        doc["components"]["schemas"]["WorkflowRunInterruptionCode"]["enum"],
+        json!(["runtime_restarted"])
+    );
+    // The cancel route exists with the frozen result matrix.
+    let cancel = &doc["paths"]["/v1/workflow-runs/{run_id}/cancel"]["post"];
+    assert!(cancel.is_object(), "cancel route documented");
+    for code in ["200", "400", "404", "500"] {
+        assert!(cancel["responses"][code].is_object(), "cancel {code}");
+    }
+}
+
+#[tokio::test]
+async fn interrupted_fencing_is_visible_on_the_wire() {
+    // A nonterminal run in the database at AppState construction is fenced to
+    // interrupted/runtime_restarted with one increment, visible via GET.
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("env mutex");
+    let _guard = test_support::set_bearer_token_env(None);
+    let _data_key_guard = test_support::set_data_key_env(None);
+
+    let db = Db::open_in_memory().expect("in-memory db");
+    let seed_service = Arc::new(ControlWorkflowRunService::new(
+        ControlWorkflowRunStore::new(db.clone()),
+    ));
+    let run_id = uuid::Uuid::new_v4().to_string();
+    seed_service
+        .accept(
+            &run_id,
+            domain_input_for_workspace("99999999-9999-4999-8999-999999999993"),
+        )
+        .expect("accept");
+
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("unix timestamp")
+        .as_nanos();
+    let state = AppState::new(
+        PathBuf::from(format!("/tmp/anyharness-workflow-fence-wire-{unique}")),
+        "http://127.0.0.1:8457".to_string(),
+        db,
+        false,
+        AgentSeedStore::not_configured_dev(),
+    )
+    .expect("app state fences at construction");
+
+    let (status, body) = get(&state, &run_id).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["run"]["status"], "interrupted");
+    assert_eq!(body["run"]["interruptionCode"], "runtime_restarted");
+    assert_eq!(body["run"]["stateVersion"], 2);
+    assert_eq!(body["steps"][0]["status"], "interrupted");
+    assert!(body["run"].get("failureCode").is_none());
+    assert!(body["steps"][0].get("failureCode").is_none());
+}
+
+// ── PROOF-01 production-path battery (review PR1196-PROOF-01) ─────────────
+//
+// The first two tests run the REAL execution task (`execute_for_test` is the
+// production `execution::execute`) against a launch-ready grok fixture (the
+// same READY-agent pattern as the startup-failure test: stub ACP program +
+// runtime-home xai credential) and a scripted live session handle — the
+// manager's startup path reuses a pre-registered handle, so session creation,
+// startup, v2 effort application, the gated recheck, and prompt acceptance all
+// traverse their production seams with no agent process. Narrow keyed
+// barriers park the executor at frozen points and observe the exact recheck
+// and cancel-gate traversals. Every wait is bounded and dumps the durable run
+// snapshot on expiry.
+
+use crate::domains::workflows::{execute_for_test, test_barriers};
+use crate::live::sessions::{ScriptedSessionEvent, ScriptedSessionSpec};
+
+const PROOF_WAIT: std::time::Duration = std::time::Duration::from_secs(20);
+
+/// Await with a hard deadline; on expiry, panic with the durable run snapshot
+/// so an early executor abort reports its terminal state instead of wedging.
+async fn within<T>(
+    state: &AppState,
+    run_id: &str,
+    label: &str,
+    fut: impl std::future::Future<Output = T>,
+) -> T {
+    match tokio::time::timeout(PROOF_WAIT, fut).await {
+        Ok(value) => value,
+        Err(_elapsed) => {
+            let (_, body) = get(state, run_id).await;
+            panic!("timed out waiting for {label}; durable run snapshot: {body}");
+        }
+    }
+}
+
+struct GrokProgramEnvGuard {
+    previous: Option<std::ffi::OsString>,
+}
+
+impl Drop for GrokProgramEnvGuard {
+    fn drop(&mut self) {
+        match self.previous.take() {
+            Some(value) => std::env::set_var("ANYHARNESS_GROK_AGENT_PROGRAM", value),
+            None => std::env::remove_var("ANYHARNESS_GROK_AGENT_PROGRAM"),
+        }
+    }
+}
+
+/// Launch-ready fixture: an isolated runtime home carrying the xai credential
+/// and a stub grok ACP program (never actually spawned here — startup reuses
+/// the scripted handle), plus a real workspace directory. Returns the state,
+/// the seeded workspace id, and guards that restore env/cleanup on drop.
+fn grok_launch_fixture(tag: &str) -> (AppState, &'static str, PathBuf, GrokProgramEnvGuard) {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("unix timestamp")
+        .as_nanos();
+    let runtime_home = PathBuf::from(format!("/tmp/anyharness-proof01-{tag}-{unique}"));
+    std::fs::create_dir_all(runtime_home.join("secrets")).expect("create runtime home");
+    std::fs::write(
+        runtime_home.join("secrets/global.env"),
+        "XAI_API_KEY=test-not-a-real-key\n",
+    )
+    .expect("write secret env");
+    let stub_agent = runtime_home.join("grok-acp-stub");
+    std::fs::write(&stub_agent, "#!/bin/sh\nexit 0\n").expect("write stub agent");
+    crate::integrations::agent_cli::executable::make_executable(&stub_agent)
+        .expect("make stub agent executable");
+    let program_guard = GrokProgramEnvGuard {
+        previous: std::env::var_os("ANYHARNESS_GROK_AGENT_PROGRAM"),
+    };
+    std::env::set_var("ANYHARNESS_GROK_AGENT_PROGRAM", &stub_agent);
+
+    let state = AppState::new(
+        runtime_home.clone(),
+        "http://127.0.0.1:8457".to_string(),
+        Db::open_in_memory().expect("in-memory db"),
+        false,
+        AgentSeedStore::not_configured_dev(),
+    )
+    .expect("app state");
+    const WS: &str = "40000000-0000-4000-8000-000000000044";
+    let workspace_dir = runtime_home.join("workspace");
+    std::fs::create_dir_all(&workspace_dir).expect("create workspace dir");
+    test_support::seed_workspace_with_repo_root(
+        &state.db,
+        WS,
+        "worktree",
+        workspace_dir.to_str().expect("utf-8 workspace path"),
+    );
+    (state, WS, runtime_home, program_guard)
+}
+
+/// Accept a grok run over the real service and hand back the production
+/// execution plan for `execute_for_test`, with the caller-chosen effort.
+fn accepted_grok_plan(
+    service: &Arc<ControlWorkflowRunService>,
+    workspace_id: &str,
+    effort: Option<crate::domains::workflows::model::WorkflowResolvedEffortConfig>,
+) -> crate::domains::workflows::service::WorkflowExecutionPlan {
+    let run_id = uuid::Uuid::new_v4().to_string();
+    let mut input = domain_input_for_workspace(workspace_id);
+    input.definition.stages[0].harness_config.agent_kind = "grok".to_string();
+    match service.accept(&run_id, input).expect("accept") {
+        crate::domains::workflows::service::AcceptOutcome::Created { mut plan, .. } => {
+            plan.effort_config = effort;
+            plan
+        }
+        other => panic!("fresh run was not created: {other:?}"),
+    }
+}
+
+/// Drive a run to the post-`bind_session` boundary — the window in which the
+/// execution task is starting the session or applying effort, holding NO run
+/// gate (spec §6.2 releases it across startup/effort).
+fn run_in_effort_window(
+    service: &Arc<ControlWorkflowRunService>,
+    workspace_id: &str,
+    session_id: &str,
+) -> String {
+    let run_id = uuid::Uuid::new_v4().to_string();
+    service
+        .accept(&run_id, domain_input_for_workspace(workspace_id))
+        .expect("accept");
+    assert!(service.begin_run(&run_id).expect("begin_run"));
+    assert!(service
+        .bind_session(&run_id, session_id)
+        .expect("bind_session"));
+    run_id
+}
+
+/// Drain any late scripted events for a bounded window and fail on prompts.
+async fn assert_no_prompt_dispatched(
+    events: &mut tokio::sync::mpsc::UnboundedReceiver<ScriptedSessionEvent>,
+) {
+    loop {
+        match tokio::time::timeout(std::time::Duration::from_millis(200), events.recv()).await {
+            Err(_elapsed) => return,
+            Ok(None) => return,
+            Ok(Some(ScriptedSessionEvent::Prompt { prompt_id })) => {
+                panic!("prompt dispatched after cancellation won: {prompt_id:?}")
+            }
+            Ok(Some(_other)) => continue,
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn cancel_during_real_effort_application_prevents_dispatch() {
+    // The REAL execution task runs to v2 effort application against the
+    // launch-ready fixture; the scripted session holds the SetConfigOption
+    // reply, so the cancel request lands while production effort application
+    // is in flight. The executor's own post-effort recheck must then observe
+    // the cancelled run (pinned via the recheck barrier), and no prompt may
+    // ever be dispatched.
+    //
+    // ENV_MUTEX is held for the WHOLE test (like the startup-failure test):
+    // the grok program override is process-global, and another test dropping
+    // its guard mid-flight would un-ready the agent under this executor.
+    let _env_lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("env mutex");
+    let _bearer_guard = test_support::set_bearer_token_env(None);
+    let (state, ws, runtime_home, _program_guard) = grok_launch_fixture("effort");
+    let service = control_service(&state);
+    let plan = accepted_grok_plan(
+        &service,
+        ws,
+        Some(
+            crate::domains::workflows::model::WorkflowResolvedEffortConfig {
+                config_id: "effort".to_string(),
+                value: "high".to_string(),
+            },
+        ),
+    );
+    let run_id = plan.run_id.clone();
+
+    let (session_bound_tx, session_bound_rx) = tokio::sync::oneshot::channel();
+    let (resume_startup_tx, resume_startup_rx) = tokio::sync::oneshot::channel();
+    let (recheck_tx, recheck_rx) = tokio::sync::oneshot::channel();
+    test_barriers::install(
+        &run_id,
+        test_barriers::ExecutionBarrier {
+            session_bound_tx: Some(session_bound_tx),
+            resume_startup_rx: Some(resume_startup_rx),
+            recheck_tx: Some(recheck_tx),
+            ..Default::default()
+        },
+    );
+
+    let executor = tokio::spawn(execute_for_test(
+        service.clone(),
+        state.session_runtime.clone(),
+        state.workspace_operation_gate.clone(),
+        state.workflow_run_runtime.gates_for_test(),
+        plan,
+    ));
+
+    // The executor bound a real created session; register the scripted live
+    // handle for it BEFORE startup so startup reuses it.
+    let session_id = within(&state, &run_id, "session bound", session_bound_rx)
+        .await
+        .expect("session bound sender retained");
+    let mut scripted = state
+        .session_runtime
+        .acp_manager_for_test()
+        .insert_scripted_session_for_test(
+            &session_id,
+            ScriptedSessionSpec {
+                prompt_turn_id: "turn-effort-should-never-exist".to_string(),
+                hold_config_replies: true,
+                hold_cancel_replies: false,
+            },
+        )
+        .await;
+    resume_startup_tx.send(()).expect("resume startup");
+
+    // Production effort application is now in flight: the scripted session
+    // received the real SetConfigOption and is holding its reply.
+    match within(
+        &state,
+        &run_id,
+        "effort config event",
+        scripted.events.recv(),
+    )
+    .await
+    .expect("config event")
+    {
+        ScriptedSessionEvent::Config { config_id, value } => {
+            assert_eq!(config_id, "effort");
+            assert_eq!(value, "high");
+        }
+        other => panic!("expected effort application first, got {other:?}"),
+    }
+
+    // Cancel lands inside the effort window (gate not held by the executor).
+    let (status, body) = post_cancel(&state, &run_id).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["run"]["status"], "cancelled");
+    assert_eq!(body["steps"][0]["status"], "cancelled");
+    assert!(body["run"]["cancelRequestedAt"].is_string());
+    let cancelled_version = body["run"]["stateVersion"].as_i64().expect("version");
+
+    // Release the held effort reply: the executor proceeds to ITS OWN
+    // post-effort recheck under the reacquired gate. The recheck barrier pins
+    // that the exact production check ran and observed the cancelled run;
+    // deleting or reordering it fails this wait or its value.
+    scripted.release.notify_one();
+    let recheck_observed = within(&state, &run_id, "post-effort recheck", recheck_rx)
+        .await
+        .expect("recheck sender retained");
+    assert!(
+        !recheck_observed,
+        "the post-effort recheck must observe the cancelled run"
+    );
+    within(&state, &run_id, "executor join", executor)
+        .await
+        .expect("executor join");
+    assert_no_prompt_dispatched(&mut scripted.events).await;
+
+    let (status, body) = get(&state, &run_id).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["run"]["status"], "cancelled");
+    assert_eq!(
+        body["run"]["stateVersion"].as_i64(),
+        Some(cancelled_version)
+    );
+    assert_eq!(body["steps"][0]["status"], "cancelled");
+    assert!(body["steps"][0].get("turnId").is_none());
+
+    test_barriers::clear(&run_id);
+    let _ = std::fs::remove_dir_all(&runtime_home);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn cancel_races_real_dispatch_and_loses_to_the_held_gate() {
+    // The REAL execution task is parked under the final dispatch gate, after
+    // its recheck and step CAS, immediately before real prompt acceptance. A
+    // concurrent HTTP cancel signals the cancel-gate barrier (it has reached
+    // the production gate) BEFORE dispatch is released; the executor then
+    // performs the real dispatch (real send_text_prompt_with_id -> scripted
+    // Started -> real record_turn) and releases the gate, and the same cancel
+    // lands as truthful running + intent against the recorded turn. If real
+    // prompt acceptance moved outside the run gate, the parked cancel would
+    // complete first and its snapshot would carry a null turn — failing the
+    // turn assertions deterministically, with no timing sleeps involved.
+    //
+    // ENV_MUTEX is held for the WHOLE test (like the startup-failure test):
+    // the grok program override is process-global, and another test dropping
+    // its guard mid-flight would un-ready the agent under this executor.
+    let _env_lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("env mutex");
+    let _bearer_guard = test_support::set_bearer_token_env(None);
+    let (state, ws, runtime_home, _program_guard) = grok_launch_fixture("dispatch");
+    let service = control_service(&state);
+    let plan = accepted_grok_plan(&service, ws, None);
+    let run_id = plan.run_id.clone();
+    let prompt_id = plan.prompt_id.clone();
+
+    let (session_bound_tx, session_bound_rx) = tokio::sync::oneshot::channel();
+    let (resume_startup_tx, resume_startup_rx) = tokio::sync::oneshot::channel();
+    let (pre_dispatch_tx, pre_dispatch_rx) = tokio::sync::oneshot::channel();
+    let (resume_dispatch_tx, resume_dispatch_rx) = tokio::sync::oneshot::channel();
+    let (cancel_gate_tx, cancel_gate_rx) = tokio::sync::oneshot::channel();
+    test_barriers::install(
+        &run_id,
+        test_barriers::ExecutionBarrier {
+            session_bound_tx: Some(session_bound_tx),
+            resume_startup_rx: Some(resume_startup_rx),
+            recheck_tx: None,
+            pre_dispatch_tx: Some(pre_dispatch_tx),
+            resume_dispatch_rx: Some(resume_dispatch_rx),
+            cancel_gate_tx: Some(cancel_gate_tx),
+        },
+    );
+
+    let executor = tokio::spawn(execute_for_test(
+        service.clone(),
+        state.session_runtime.clone(),
+        state.workspace_operation_gate.clone(),
+        state.workflow_run_runtime.gates_for_test(),
+        plan,
+    ));
+
+    let session_id = within(&state, &run_id, "session bound", session_bound_rx)
+        .await
+        .expect("session bound sender retained");
+    let mut scripted = state
+        .session_runtime
+        .acp_manager_for_test()
+        .insert_scripted_session_for_test(
+            &session_id,
+            ScriptedSessionSpec {
+                prompt_turn_id: "turn-real-dispatch".to_string(),
+                hold_config_replies: false,
+                hold_cancel_replies: false,
+            },
+        )
+        .await;
+    resume_startup_tx.send(()).expect("resume startup");
+
+    // The executor is now parked INSIDE the final gate, past its recheck and
+    // begin_step, before real dispatch.
+    within(&state, &run_id, "pre-dispatch barrier", pre_dispatch_rx)
+        .await
+        .expect("pre-dispatch sender retained");
+
+    let state_for_cancel = state.clone();
+    let run_for_cancel = run_id.clone();
+    let cancel_task =
+        tokio::spawn(async move { post_cancel(&state_for_cancel, &run_for_cancel).await });
+
+    // Deterministic handshake: the cancel request has reached the production
+    // run gate. With the executor parked under that gate, the cancel cannot
+    // have written intent yet — one snapshot proves it.
+    within(
+        &state,
+        &run_id,
+        "cancel at the production gate",
+        cancel_gate_rx,
+    )
+    .await
+    .expect("cancel gate sender retained");
+    let (_, body) = get(&state, &run_id).await;
+    assert_eq!(body["run"]["status"], "running");
+    assert!(
+        body["run"].get("cancelRequestedAt").is_none(),
+        "cancel intent landed while the executor held the dispatch gate"
+    );
+
+    // Release: the executor performs the REAL dispatch and gate release.
+    resume_dispatch_tx.send(()).expect("resume dispatch");
+    match within(
+        &state,
+        &run_id,
+        "real prompt dispatch",
+        scripted.events.recv(),
+    )
+    .await
+    .expect("prompt event")
+    {
+        ScriptedSessionEvent::Prompt { prompt_id: sent } => {
+            assert_eq!(sent.as_deref(), Some(prompt_id.as_str()));
+        }
+        other => panic!("expected the real prompt dispatch, got {other:?}"),
+    }
+    within(&state, &run_id, "executor join", executor)
+        .await
+        .expect("executor join");
+
+    let (status, body) = within(&state, &run_id, "cancel join", cancel_task)
+        .await
+        .expect("cancel join");
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["run"]["status"], "running");
+    assert_eq!(body["steps"][0]["status"], "running");
+    assert_eq!(body["steps"][0]["turnId"], "turn-real-dispatch");
+    assert!(body["run"]["cancelRequestedAt"].is_string());
+    assert!(body["run"].get("failureCode").is_none());
+
+    // The blocked cancel, once through, re-targeted the exact recorded turn.
+    match within(
+        &state,
+        &run_id,
+        "live-cancel request",
+        scripted.events.recv(),
+    )
+    .await
+    .expect("cancel event")
+    {
+        ScriptedSessionEvent::CancelIfActive { expected_turn_id } => {
+            assert_eq!(expected_turn_id, "turn-real-dispatch");
+        }
+        other => panic!("expected the live-cancel request, got {other:?}"),
+    }
+
+    test_barriers::clear(&run_id);
+    let _ = std::fs::remove_dir_all(&runtime_home);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn repeated_cancel_recovers_after_a_missing_actor() {
+    // First cancel: stored turn but no live handle -> intent only (NotLive).
+    // After the actor becomes available, repeating the same cancel re-attempts
+    // the live request and delivers the EXACT stored turn id, without any
+    // further version increment.
+    let state = {
+        let _lock = test_support::ENV_MUTEX
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("env mutex");
+        let _guard = test_support::set_bearer_token_env(None);
+        test_state()
+    };
+    let service = control_service(&state);
+    let run_id = run_in_effort_window(
+        &service,
+        "99999999-9999-4999-8999-999999999987",
+        "sess-recover",
+    );
+    assert!(service.begin_step(&run_id).expect("begin_step"));
+    assert!(service
+        .record_turn(&run_id, "turn-recover-42")
+        .expect("record_turn"));
+
+    let (status, body) = post_cancel(&state, &run_id).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["run"]["status"], "running");
+    assert!(body["run"]["cancelRequestedAt"].is_string());
+    let version = body["run"]["stateVersion"].as_i64().expect("version");
+
+    let mut scripted = state
+        .session_runtime
+        .acp_manager_for_test()
+        .insert_scripted_session_for_test(
+            "sess-recover",
+            ScriptedSessionSpec {
+                prompt_turn_id: "unused".to_string(),
+                hold_config_replies: false,
+                hold_cancel_replies: false,
+            },
+        )
+        .await;
+
+    let (status, body) = post_cancel(&state, &run_id).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["run"]["status"], "running");
+    assert_eq!(body["run"]["stateVersion"].as_i64(), Some(version));
+    match within(
+        &state,
+        &run_id,
+        "recovered live cancel",
+        scripted.events.recv(),
+    )
+    .await
+    .expect("cancel event")
+    {
+        ScriptedSessionEvent::CancelIfActive { expected_turn_id } => {
+            assert_eq!(
+                expected_turn_id, "turn-recover-42",
+                "recovered live cancel must target the exact stored turn"
+            );
+        }
+        other => panic!("expected a live-cancel request, got {other:?}"),
+    }
+
+    // A third repetition re-attempts again (still no increment).
+    let (status, body) = post_cancel(&state, &run_id).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["run"]["stateVersion"].as_i64(), Some(version));
+    match within(
+        &state,
+        &run_id,
+        "repeated live cancel",
+        scripted.events.recv(),
+    )
+    .await
+    .expect("second cancel event")
+    {
+        ScriptedSessionEvent::CancelIfActive { expected_turn_id } => {
+            assert_eq!(expected_turn_id, "turn-recover-42");
+        }
+        other => panic!("expected a live-cancel request, got {other:?}"),
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn post_commit_final_read_failure_preserves_durable_intent() {
+    // The cancel route's final snapshot read fails AFTER the intent CAS
+    // committed: the route surfaces a 500, the durable intent survives, and
+    // exact repetition succeeds once reads recover (spec §5.4).
+    let state = {
+        let _lock = test_support::ENV_MUTEX
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("env mutex");
+        let _guard = test_support::set_bearer_token_env(None);
+        test_state()
+    };
+    let service = control_service(&state);
+    let run_id = run_in_effort_window(
+        &service,
+        "99999999-9999-4999-8999-999999999986",
+        "sess-read-fail",
+    );
+    assert!(service.begin_step(&run_id).expect("begin_step"));
+    assert!(service
+        .record_turn(&run_id, "turn-read-fail")
+        .expect("record_turn"));
+
+    // A held scripted handle suspends the cancel between the committed intent
+    // CAS and the final read, which is the only honest injection window.
+    let mut scripted = state
+        .session_runtime
+        .acp_manager_for_test()
+        .insert_scripted_session_for_test(
+            "sess-read-fail",
+            ScriptedSessionSpec {
+                prompt_turn_id: "unused".to_string(),
+                hold_config_replies: false,
+                hold_cancel_replies: true,
+            },
+        )
+        .await;
+
+    let state_for_cancel = state.clone();
+    let run_for_cancel = run_id.clone();
+    let cancel_task =
+        tokio::spawn(async move { post_cancel(&state_for_cancel, &run_for_cancel).await });
+
+    // The live-cancel request arriving proves the intent CAS has committed.
+    match within(&state, &run_id, "held live cancel", scripted.events.recv())
+        .await
+        .expect("cancel event")
+    {
+        ScriptedSessionEvent::CancelIfActive { expected_turn_id } => {
+            assert_eq!(expected_turn_id, "turn-read-fail");
+        }
+        other => panic!("expected a live-cancel request, got {other:?}"),
+    }
+
+    // Break every subsequent read, then release the held reply.
+    state
+        .db
+        .with_conn(|conn| {
+            conn.execute_batch("ALTER TABLE workflow_runs RENAME TO workflow_runs_broken")?;
+            Ok(())
+        })
+        .expect("hide table");
+    scripted.release.notify_one();
+
+    let (status, _body) = within(&state, &run_id, "cancel join", cancel_task)
+        .await
+        .expect("cancel join");
+    assert_eq!(
+        status,
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "post-commit read failure must surface as a 500, not a fabricated snapshot"
+    );
+
+    // Restore reads: the committed intent is durable and repetition is safe.
+    state
+        .db
+        .with_conn(|conn| {
+            conn.execute_batch("ALTER TABLE workflow_runs_broken RENAME TO workflow_runs")?;
+            Ok(())
+        })
+        .expect("restore table");
+
+    let (status, body) = get(&state, &run_id).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["run"]["status"], "running");
+    assert!(
+        body["run"]["cancelRequestedAt"].is_string(),
+        "durable intent must survive the failed final read"
+    );
+    let version = body["run"]["stateVersion"].as_i64().expect("version");
+
+    scripted.release.notify_one();
+    let (status, body) = post_cancel(&state, &run_id).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["run"]["status"], "running");
+    assert_eq!(body["run"]["stateVersion"].as_i64(), Some(version));
+    match within(
+        &state,
+        &run_id,
+        "repeat cancel event",
+        scripted.events.recv(),
+    )
+    .await
+    .expect("repeat cancel event")
+    {
+        ScriptedSessionEvent::CancelIfActive { expected_turn_id } => {
+            assert_eq!(expected_turn_id, "turn-read-fail");
+        }
+        other => panic!("expected a live-cancel request, got {other:?}"),
+    }
 }

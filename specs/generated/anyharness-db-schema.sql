@@ -571,7 +571,9 @@ CREATE TABLE workflow_run_steps (
             run_id TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,
             stage_index INTEGER NOT NULL,
             step_index INTEGER NOT NULL,
-            status TEXT NOT NULL CHECK (status IN ('pending','running','completed','failed')),
+            status TEXT NOT NULL CHECK (
+                status IN ('pending','running','completed','failed','cancelled','interrupted')
+            ),
             prompt_id TEXT NOT NULL UNIQUE,
             turn_id TEXT,
             failure_code TEXT,
@@ -579,7 +581,8 @@ CREATE TABLE workflow_run_steps (
             updated_at TEXT NOT NULL,
             started_at TEXT,
             finished_at TEXT,
-            PRIMARY KEY (run_id, stage_index, step_index)
+            PRIMARY KEY (run_id, stage_index, step_index),
+            CHECK ((status = 'failed') = (failure_code IS NOT NULL))
         );
 
 -- table: workflow_runs
@@ -590,10 +593,17 @@ CREATE TABLE workflow_runs (
             resolved_plan_json TEXT CHECK (
                 resolved_plan_json IS NULL OR json_valid(resolved_plan_json)
             ),
-            status TEXT NOT NULL CHECK (status IN ('accepted','running','completed','failed')),
+            status TEXT NOT NULL CHECK (
+                status IN ('accepted','running','completed','failed','cancelled','interrupted')
+            ),
             workspace_id TEXT NOT NULL,
             session_id TEXT,
             failure_code TEXT,
+            state_version INTEGER NOT NULL CHECK (state_version >= 1),
+            cancel_requested_at TEXT,
+            interruption_code TEXT CHECK (
+                interruption_code IS NULL OR interruption_code = 'runtime_restarted'
+            ),
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             started_at TEXT,
@@ -601,7 +611,9 @@ CREATE TABLE workflow_runs (
             CHECK (
                 (schema_version = 1 AND resolved_plan_json IS NULL)
                 OR (schema_version = 2 AND resolved_plan_json IS NOT NULL)
-            )
+            ),
+            CHECK ((status = 'failed') = (failure_code IS NOT NULL)),
+            CHECK ((status = 'interrupted') = (interruption_code IS NOT NULL))
         );
 
 -- table: workspace_access_modes

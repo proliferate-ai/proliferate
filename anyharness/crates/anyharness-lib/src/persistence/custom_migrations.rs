@@ -26,6 +26,10 @@ pub(super) const CUSTOM_FOREIGN_KEY_MIGRATIONS: &[(
         "0061_workflow_runs_v2",
         super::workflow_runs_v2_migration::migrate_workflow_runs_v2,
     ),
+    (
+        "0062_workflow_run_control",
+        super::workflow_run_control_migration::migrate_workflow_run_control,
+    ),
 ];
 
 fn migrate_session_background_work_timestamps(tx: &Transaction<'_>) -> rusqlite::Result<()> {

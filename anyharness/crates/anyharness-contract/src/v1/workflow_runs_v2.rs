@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use super::workflow_runs::{
-    PutWorkflowRunRequest, WorkflowRunArgumentValue, WorkflowRunInput, WorkflowRunPromptStep,
-    WorkflowRunResponse, WorkflowRunStatus, WorkflowRunStepStatus,
+    PutWorkflowRunRequest, WorkflowRunArgumentValue, WorkflowRunInput, WorkflowRunInterruptionCode,
+    WorkflowRunPromptStep, WorkflowRunResponse, WorkflowRunStatus, WorkflowRunStepStatus,
 };
 
 /// Operation-level PUT union. API decoding first inspects the required integer
@@ -123,6 +123,15 @@ pub struct WorkflowRunV2 {
     pub session_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub failure_code: Option<WorkflowRunFailureCodeV2>,
+    /// Monotonic snapshot version: 1 at acceptance, +1 per externally visible
+    /// snapshot transaction.
+    pub state_version: i64,
+    /// First durable cancellation intent; omitted when never requested.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cancel_requested_at: Option<String>,
+    /// Present if and only if `status` is `interrupted`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interruption_code: Option<WorkflowRunInterruptionCode>,
     pub created_at: String,
     pub updated_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
