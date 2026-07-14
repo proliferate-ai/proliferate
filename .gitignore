@@ -9,6 +9,8 @@ dist/
 out/
 target/
 apps/desktop/index.js
+# ProductClient qualification build canary output (Desktop host build)
+apps/desktop/dist-product-client-qualification/
 *.db
 *.db-wal
 *.db-shm

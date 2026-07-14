@@ -221,6 +221,7 @@ def check_file(path: Path) -> list[Violation]:
                 violations,
                 contains_tauri_api
                 or "@tauri-apps/" in line
+                or "__TAURI" in line
                 or "apps/desktop/" in line
                 or "apps/web/" in line
                 or "@/" in line,
@@ -229,7 +230,8 @@ def check_file(path: Path) -> list[Violation]:
                 lineno,
                 (
                     "product-client must not import either host (apps/desktop, "
-                    "apps/web), Tauri, or Desktop-relative @/ aliases"
+                    "apps/web), Tauri package or raw Tauri globals (__TAURI*), "
+                    "or Desktop-relative @/ aliases"
                 ),
             )
 
