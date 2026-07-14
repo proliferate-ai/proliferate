@@ -11,20 +11,21 @@ import {
   redactUrlCredentials,
   ReportValidationError,
   validateReport,
-  type TestRunReportV1,
+  type TestRunReportV2,
 } from "./schema.js";
 import { reportPath, ReportWriteError, writeReport } from "./write.js";
 import { ALL_FINAL_STATUSES, type FinalTestStatus } from "../runner/result.js";
 
-function validReport(overrides: Partial<TestRunReportV1> = {}): TestRunReportV1 {
+function validReport(overrides: Partial<TestRunReportV2> = {}): TestRunReportV2 {
   const byStatus = Object.fromEntries(ALL_FINAL_STATUSES.map((status) => [status, 0])) as Record<
     FinalTestStatus,
     number
   >;
   byStatus.green = 1;
   return {
-    schema_version: 1,
+    schema_version: 2,
     kind: "proliferate.test-run",
+    candidate_build: null,
     run: {
       run_id: "run-1",
       shard_id: "shard-1",
@@ -66,6 +67,13 @@ function validReport(overrides: Partial<TestRunReportV1> = {}): TestRunReportV1 
     ...overrides,
   };
 }
+
+
+// Minimal valid candidate evidence for strict-report tests (strict requires
+// non-null candidate_build per CBH-001).
+const STRICT_CB: TestRunReportV2["candidate_build"] = {
+  artifacts: [{ artifact_id: "anyharness/host", version: "1.0.0", sha256: "e".repeat(64) }],
+};
 
 test("validateReport accepts a consistent report", () => {
   validateReport(validReport());
@@ -111,16 +119,19 @@ test("validateReport rejects a diagnostic report that claims qualification", () 
 test("validateReport enforces the strict verdict against results and errors", () => {
   const passing = validReport();
   passing.run.behavior = "strict";
+  passing.candidate_build = STRICT_CB;
   passing.verdict.status = "selected_tests_passed";
   validateReport(passing);
 
   const mislabeled = validReport();
   mislabeled.run.behavior = "strict";
+  mislabeled.candidate_build = STRICT_CB;
   mislabeled.verdict.status = "selected_tests_failed";
   assert.throws(() => validateReport(mislabeled), ReportValidationError);
 
   const errorButPassed = validReport();
   errorButPassed.run.behavior = "strict";
+  errorButPassed.candidate_build = STRICT_CB;
   errorButPassed.verdict.status = "selected_tests_passed";
   errorButPassed.summary.runner_errors = [{ code: "runner_error", message: "x" }];
   assert.throws(() => validateReport(errorButPassed), ReportValidationError);
@@ -136,6 +147,7 @@ test("validateReport rejects false-success evidence: failed result with exit 0",
 
   const strict = validReport();
   strict.run.behavior = "strict";
+  strict.candidate_build = STRICT_CB;
   strict.results[0].status = "failed";
   strict.summary.by_status.green = 0;
   strict.summary.by_status.failed = 1;
@@ -160,7 +172,7 @@ test("validateReport rejects an unknown result status", () => {
 // Every verdict-matrix row must survive validation when produced honestly.
 // A `missing` result is only honest alongside its integrity error, which
 // forces exit 2.
-const MATRIX_ROWS: Array<{ statuses: FinalTestStatus[]; behavior: "diagnostic" | "strict"; exit: 0 | 1 | 2; verdict: TestRunReportV1["verdict"]["status"]; execution?: "real" | "dry_run"; integrity?: boolean }> = [
+const MATRIX_ROWS: Array<{ statuses: FinalTestStatus[]; behavior: "diagnostic" | "strict"; exit: 0 | 1 | 2; verdict: TestRunReportV2["verdict"]["status"]; execution?: "real" | "dry_run"; integrity?: boolean }> = [
   { statuses: ["green"], behavior: "diagnostic", exit: 0, verdict: "non_qualifying" },
   { statuses: ["green"], behavior: "strict", exit: 0, verdict: "selected_tests_passed" },
   { statuses: ["blocked"], behavior: "diagnostic", exit: 0, verdict: "non_qualifying" },
@@ -178,6 +190,9 @@ for (const [index, row] of MATRIX_ROWS.entries()) {
   test(`validateReport accepts honest matrix row ${index}: ${row.behavior} ${row.statuses.join(",")}`, () => {
     const report = validReport();
     report.run.behavior = row.behavior;
+    if (row.behavior === "strict") {
+      report.candidate_build = STRICT_CB;
+    }
     report.run.execution = row.execution ?? "real";
     report.selected_tests = row.statuses.map((_, i) => ({
       test_id: `S${i}/local`,
@@ -216,6 +231,7 @@ for (const [index, row] of MATRIX_ROWS.entries()) {
 test("validateReport rejects a strict dry-run report outright", () => {
   const report = validReport();
   report.run.behavior = "strict";
+  report.candidate_build = STRICT_CB;
   report.run.execution = "dry_run";
   report.results[0].status = "not_run";
   report.summary.by_status.green = 0;
@@ -227,6 +243,7 @@ test("validateReport rejects a strict dry-run report outright", () => {
   // Even a "green + qualified + exit 0" strict dry-run must not validate.
   const disguised = validReport();
   disguised.run.behavior = "strict";
+  disguised.candidate_build = STRICT_CB;
   disguised.run.execution = "dry_run";
   disguised.verdict.status = "selected_tests_passed";
   assert.throws(() => validateReport(disguised), ReportValidationError);
@@ -361,4 +378,94 @@ test("writeReport validates before writing: an invalid report writes nothing", a
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test("validateReport requires candidate_build to be present (null or evidence)", () => {
+  const absent = validReport();
+  delete (absent as Partial<TestRunReportV2>).candidate_build;
+  assert.throws(() => validateReport(absent), /candidate_build must be present/);
+
+  const withNull = validReport();
+  withNull.candidate_build = null;
+  validateReport(withNull);
+
+  const withEvidence = validReport();
+  withEvidence.candidate_build = {
+    artifacts: [{ artifact_id: "anyharness/aarch64-apple-darwin", version: "0.3.27", sha256: "e".repeat(64) }],
+  };
+  validateReport(withEvidence);
+});
+
+test("validateReport rejects unsafe or path-carrying candidate evidence", () => {
+  const reject = (candidate: unknown, pattern: RegExp): void => {
+    const report = validReport();
+    report.candidate_build = candidate as TestRunReportV2["candidate_build"];
+    assert.throws(() => validateReport(report), pattern);
+  };
+  reject({ artifacts: [] }, /non-empty/);
+  reject(
+    {
+      artifacts: [
+        {
+          artifact_id: "anyharness/x",
+          version: "1",
+          sha256: "e".repeat(64),
+          path: "/tmp/leaked-local-path",
+        },
+      ],
+    },
+    /exactly artifact_id\/version\/sha256/,
+  );
+  reject(
+    { artifacts: [{ artifact_id: "../escape", version: "1", sha256: "e".repeat(64) }] },
+    /unsafe/,
+  );
+  reject(
+    { artifacts: [{ artifact_id: "anyharness/x", version: "", sha256: "e".repeat(64) }] },
+    /version/,
+  );
+  reject(
+    { artifacts: [{ artifact_id: "anyharness/x", version: "1", sha256: "not-a-digest" }] },
+    /64-hex/,
+  );
+  reject(
+    {
+      artifacts: [
+        { artifact_id: "anyharness/x", version: "1", sha256: "e".repeat(64) },
+        { artifact_id: "anyharness/x", version: "2", sha256: "f".repeat(64) },
+      ],
+    },
+    /duplicate/,
+  );
+});
+
+test("validateReport rejects a schema_version 1 report", () => {
+  const report = validReport();
+  (report as { schema_version: number }).schema_version = 1;
+  assert.throws(() => validateReport(report), /schema_version 2/);
+});
+
+test("strict reports require non-null candidate_build (CBH-001)", () => {
+  const strictNull = validReport();
+  strictNull.run.behavior = "strict";
+  strictNull.verdict.status = "selected_tests_passed";
+  strictNull.candidate_build = null;
+  assert.throws(() => validateReport(strictNull), /Strict reports require non-null candidate_build/);
+
+  const strictWithEvidence = validReport();
+  strictWithEvidence.run.behavior = "strict";
+  strictWithEvidence.verdict.status = "selected_tests_passed";
+  strictWithEvidence.candidate_build = {
+    artifacts: [{ artifact_id: "anyharness/x", version: "1", sha256: "e".repeat(64) }],
+  };
+  validateReport(strictWithEvidence);
+});
+
+test("candidate_build rejects undeclared fields beside artifacts (CBH-002)", () => {
+  const report = validReport();
+  report.candidate_build = {
+    artifacts: [{ artifact_id: "anyharness/x", version: "1", sha256: "e".repeat(64) }],
+    map_path: "/tmp/leaked-map.json",
+  } as unknown as TestRunReportV2["candidate_build"];
+  assert.throws(() => validateReport(report), /exactly one field: artifacts/);
 });

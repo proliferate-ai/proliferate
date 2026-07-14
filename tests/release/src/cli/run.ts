@@ -1,4 +1,4 @@
-import { HELP_TEXT, parseArgs } from "./args.js";
+import { runReleaseCommand } from "./command.js";
 import { resolveEnv } from "../config/env-resolution.js";
 import { envVarNames, DEFAULT_LOCAL_RUNTIME_URL } from "../config/env-manifest.js";
 import { pushGatewayAuthState } from "../fixtures/agent-auth.js";
@@ -8,158 +8,18 @@ import {
   DEFAULT_LOCAL_DURABLE_USER_PASSWORD,
   ensureLocalDurableUser,
 } from "../fixtures/identity.js";
-import { toFailureReports } from "../report/failure-reporter.js";
 import { fileIssuesForFailures } from "../report/issue-filer.js";
-import { IdentityError, resolveRunIdentity } from "../runner/identity.js";
-import { executeSelectedTests, SelectionError } from "../runner/execute.js";
+import { resolveRunIdentity } from "../runner/identity.js";
+import { executeSelectedTests } from "../runner/execute.js";
+import { loadCandidateBuildMap } from "../artifacts/build-map.js";
 import { writeReport } from "../evidence/write.js";
-import type { TestRunReportV1 } from "../evidence/schema.js";
 
 /**
- * Thin process adapter (specs/developing/testing/qualification-runner-core.md
- * "Ownership and file plan"): parse/validate, resolve identity, run the local
- * setup hooks, delegate orchestration to runner/execute.ts, write the combined
- * report, and convert the persisted intended exit into process.exitCode. No
- * scenario policy lives here.
+ * Thin process adapter: supplies the real side-effect dependencies to
+ * `cli/command.ts` (which owns the orchestration and ordering) and converts
+ * the returned intended exit into process.exitCode. No runner policy lives
+ * here.
  */
-async function main(): Promise<void> {
-  let args;
-  try {
-    args = parseArgs(process.argv.slice(2));
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exitCode = 2;
-    return;
-  }
-
-  if (args.help) {
-    console.log(HELP_TEXT);
-    return;
-  }
-
-  let identity;
-  try {
-    identity = await resolveRunIdentity({
-      overrides: { runId: args.runId, shardId: args.shardId, attempt: args.attempt },
-    });
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exitCode = 2;
-    return;
-  }
-
-  console.log(
-    `release-e2e: behavior=${args.behavior} lane=${args.lane} desktop=${args.desktop} ` +
-      `agents=${formatSelector(args.agents)} scenarios=${formatSelector(args.scenarios)} ` +
-      `dryRun=${args.dryRun} run=${identity.run_id} shard=${identity.shard_id} attempt=${identity.attempt}`,
-  );
-
-  let scenarios;
-  try {
-    scenarios = selectScenarios(args.scenarios);
-    if (scenarios.length === 0) {
-      throw new SelectionError("Selection resolved to zero scenarios.");
-    }
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exitCode = 2;
-    return;
-  }
-
-  // Local lane self-seeds its durable user per run (Part 2 of #1069): the CI
-  // local lane boots a fresh, ephemeral server, so it mints the durable
-  // identity through the real /setup claim instead of depending on a repo
-  // secret. Only local — staging keeps the durable-user env as its mechanism.
-  const locallySeeded = new Set<string>();
-  if (args.lane === "local" && !args.dryRun) {
-    await seedLocalDurableUser(locallySeeded);
-    await pushLocalGatewayAuth();
-  }
-
-  printEnvManifestReport();
-
-  let report: TestRunReportV1;
-  try {
-    report = await executeSelectedTests({
-      behavior: args.behavior,
-      execution: args.dryRun ? "dry_run" : "real",
-      identity,
-      inputs: { targetLane: args.lane, desktop: args.desktop, agents: args.agents, scenarios: args.scenarios },
-      scenarios,
-      locallySeeded,
-      log: (message) => console.log(`  ${message}`),
-    });
-  } catch (error) {
-    if (error instanceof SelectionError || error instanceof IdentityError) {
-      console.error(error.message);
-    } else {
-      console.error(`runner error: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`);
-    }
-    process.exitCode = 2;
-    return;
-  }
-
-  printSummary(report);
-
-  try {
-    const written = await writeReport(args.outputDir, report);
-    console.log(`Combined report written: ${written}`);
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exitCode = 2;
-    return;
-  }
-
-  // Issue filing is auxiliary and runs after the authoritative report is
-  // persisted, from the report's own sanitized failed results. A filing
-  // failure keeps its existing semantics: reported, never rewriting the
-  // already-derived verdict or exit.
-  if (args.fileIssues) {
-    const payloads = toFailureReports(report.results);
-    if (payloads.length > 0) {
-      try {
-        const urls = await fileIssuesForFailures(payloads);
-        for (const url of urls) {
-          console.error(`Filed issue: ${url}`);
-        }
-      } catch (error) {
-        console.error(
-          `Issue filing failed (verdict unchanged): ${error instanceof Error ? error.message : String(error)}`,
-        );
-      }
-    }
-  }
-
-  if (report.summary.intended_exit_code !== 0) {
-    process.exitCode = report.summary.intended_exit_code;
-  }
-}
-
-function printSummary(report: TestRunReportV1): void {
-  const counts = report.summary.by_status;
-  console.log(
-    `\n${counts.green} green, ${counts.failed} failed, ${counts.blocked} blocked, ` +
-      `${counts.expected_fail} expected-fail, ${counts.cancelled} cancelled, ` +
-      `${counts.not_run} not-run, ${counts.missing} missing ` +
-      `(verdict: ${report.verdict.status}, intended exit ${report.summary.intended_exit_code}).`,
-  );
-  for (const result of report.results) {
-    if (result.status !== "green") {
-      const reason = result.reason ? ` — ${firstLine(result.reason.message)}` : "";
-      console.log(`  [${result.status}] ${result.test_id}${reason}`);
-    }
-  }
-  for (const error of report.summary.integrity_errors) {
-    console.error(`  integrity error: ${error.message}`);
-  }
-  for (const error of report.summary.runner_errors) {
-    console.error(`  runner error (${error.code}): ${error.message}`);
-  }
-}
-
-function firstLine(message: string): string {
-  return message.split("\n")[0];
-}
 
 /**
  * Mints (or reuses) the local-lane durable user through the real /setup claim,
@@ -255,8 +115,16 @@ function printEnvManifestReport(): void {
   }
 }
 
-function formatSelector(selector: string[] | "all"): string {
-  return selector === "all" ? "all" : selector.join(",");
-}
-
-await main();
+process.exitCode = await runReleaseCommand(process.argv.slice(2), {
+  resolveIdentity: (overrides) => resolveRunIdentity({ overrides }),
+  selectScenarios,
+  loadBuildMap: loadCandidateBuildMap,
+  seedLocalDurableUser,
+  pushLocalGatewayAuth,
+  printEnvManifestReport,
+  execute: executeSelectedTests,
+  write: writeReport,
+  fileIssues: fileIssuesForFailures,
+  log: (message) => console.log(message),
+  error: (message) => console.error(message),
+});

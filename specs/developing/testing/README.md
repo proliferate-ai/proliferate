@@ -7,6 +7,9 @@ complete target guarantee and qualification semantics;
 [`qualification-runner-core.md`](qualification-runner-core.md) owns the frozen
 test runner and results-reporting contract: selection, run identity, one final
 result per selected test, the combined report, and diagnostic/strict behavior;
+[`candidate-build-handoff.md`](candidate-build-handoff.md) owns the frozen
+candidate build map (`CandidateBuildMapV1`), its runner validation, and the
+report V2 candidate-artifact evidence;
 [`release-worlds-and-fixtures.md`](release-worlds-and-fixtures.md),
 [`tier-3-scenario-contract.md`](tier-3-scenario-contract.md), and
 [`tier-4-scenario-contract.md`](tier-4-scenario-contract.md) own the live world
@@ -352,7 +355,7 @@ implemented, independent qualification jobs may run concurrently.
 
 | Gate | Jobs |
 | --- | --- |
-| Merge (every PR) | `repo-shape`, `cargo test --workspace`, server `pytest tests/unit tests/integration`, shared-package vitest (`product-domain` + `product-ui` full suites plus the focused `product-surfaces` workflow-definition surface file `WorkflowDefinitionsSurface.test.tsx`; desktop vitest is **not** yet gated — see the migration exceptions below), and the focused fail-closed tier-2 job `Workflow definition lifecycle (tier-2)` in `ci.yml` (runs only `workflow-definitions.spec.ts`; a red result fails CI and blocks the Deploy Staging spine, and the check is eligible for a future repository required-status rule — none exists today). The broad tier-2 lanes (`intent-tests` + `intent-billing` in `.github/workflows/intent-tests.yml`) run on every PR but are **provisional/non-blocking** — a named migration exception until they earn a flake-free record. |
+| Merge (every PR) | `repo-shape`, the fail-closed `Candidate build handoff` proof, `cargo test --workspace`, server `pytest tests/unit tests/integration`, shared-package vitest (`product-domain` + `product-ui` full suites plus the focused `product-surfaces` workflow-definition surface file `WorkflowDefinitionsSurface.test.tsx`; desktop vitest is **not** yet gated — see the migration exceptions below), and the focused fail-closed tier-2 job `Workflow definition lifecycle (tier-2)` in `ci.yml` (runs only `workflow-definitions.spec.ts`; a red result fails CI and blocks the Deploy Staging spine, and the check is eligible for a future repository required-status rule — none exists today). The broad tier-2 lanes (`intent-tests` + `intent-billing` in `.github/workflows/intent-tests.yml`) run on every PR but are **provisional/non-blocking** — a named migration exception until they earn a flake-free record. |
 | Staging → production promotion | Existing Tier 3/Tier 4 jobs provide diagnostic signal but promotion does not yet consume strict aggregate release evidence. |
 | Nightly | Existing Tier 3 lanes run against staging and file failures without blocking merges. |
 

@@ -446,3 +446,17 @@ test("strict all-green is the only strict exit-0 result", async () => {
   assert.equal(report.verdict.completeness, "partial");
   assert.equal(report.summary.intended_exit_code, 0);
 });
+
+test("the report carries the supplied candidate evidence, or explicit null when omitted", async () => {
+  const omitted = await executeSelectedTests(baseOptions([fakeScenario({ id: "A" })]));
+  assert.equal(omitted.schema_version, 2);
+  assert.equal(omitted.candidate_build, null);
+
+  const evidence = {
+    artifacts: [{ artifact_id: "anyharness/test-host", version: "9.9.9", sha256: "e".repeat(64) }],
+  };
+  const carried = await executeSelectedTests(
+    baseOptions([fakeScenario({ id: "A" })], { candidateBuild: evidence }),
+  );
+  assert.deepEqual(carried.candidate_build, evidence);
+});

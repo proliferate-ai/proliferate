@@ -13,6 +13,8 @@ export interface CliArgs {
   runId?: string;
   shardId?: string;
   attempt?: number;
+  /** Path to a CandidateBuildMapV1 JSON file. Required for strict real runs. */
+  candidateBuildMap?: string;
   help: boolean;
 }
 
@@ -86,6 +88,10 @@ export function parseArgs(argv: readonly string[]): CliArgs {
         args.attempt = parseAttempt(requireValue(argv, i, arg));
         i += 1;
         break;
+      case "--candidate-build-map":
+        args.candidateBuildMap = requireValue(argv, i, arg);
+        i += 1;
+        break;
       case "--dry-run":
         args.dryRun = true;
         break;
@@ -113,6 +119,11 @@ export function parseArgs(argv: readonly string[]): CliArgs {
   }
   if (args.behavior === "strict" && args.dryRun) {
     throw new CliUsageError("--behavior strict cannot be combined with --dry-run.");
+  }
+  // Strict real runs are fail-closed on artifact identity: without a
+  // candidate build map the run cannot say which bytes it qualified.
+  if (args.behavior === "strict" && args.candidateBuildMap === undefined) {
+    throw new CliUsageError("--candidate-build-map <path> is required for strict runs.");
   }
   return { ...args, behavior: args.behavior };
 }
@@ -186,5 +197,6 @@ Flags:
   --run-id <safe-id>         Optional run identity override
   --shard-id <safe-id>       Optional shard identity override
   --attempt <n>              Optional attempt override (positive integer)
+  --candidate-build-map <path>  CandidateBuildMapV1 JSON (required for strict; optional and recorded when supplied)
   --help                     Show this text
 `;

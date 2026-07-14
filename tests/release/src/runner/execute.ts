@@ -4,7 +4,8 @@ import { envVarNames } from "../config/env-manifest.js";
 import type { DesktopMode, TargetLane } from "../config/types.js";
 import type { ScenarioDefinition } from "../scenarios/types.js";
 import { ScenarioBlockedError, ScenarioExpectedFailError } from "../scenarios/types.js";
-import type { TestRunReportV1 } from "../evidence/schema.js";
+import type { CandidateBuildEvidenceV1 } from "../artifacts/build-map.js";
+import type { TestRunReportV2 } from "../evidence/schema.js";
 import { sanitizeReport } from "../evidence/schema.js";
 import type { RunIdentityV1 } from "./identity.js";
 import {
@@ -74,6 +75,12 @@ export interface ExecuteOptions {
   identity: RunIdentityV1;
   inputs: ExecuteInputs;
   scenarios: readonly ScenarioDefinition[];
+  /**
+   * Bounded artifact identity from the validated candidate build map;
+   * explicit null when a diagnostic run omitted the map. The caller
+   * (cli/command.ts) owns loading and validation before any setup.
+   */
+  candidateBuild?: CandidateBuildEvidenceV1 | null;
   /** Names satisfied only by this run's local durable-user seeding. */
   locallySeeded?: ReadonlySet<string>;
   /** Injectable for tests; defaults to resolveEnv over the union of requiredEnv. */
@@ -94,7 +101,7 @@ export interface ExecuteOptions {
  * normalize every outcome, synthesize missing results, and derive the
  * verdict/intended exit — returning an unwritten, sanitized combined report.
  */
-export async function executeSelectedTests(options: ExecuteOptions): Promise<TestRunReportV1> {
+export async function executeSelectedTests(options: ExecuteOptions): Promise<TestRunReportV2> {
   const now = options.now ?? (() => new Date());
   const log = options.log ?? (() => undefined);
   const startedAt = now().toISOString();
@@ -130,9 +137,10 @@ export async function executeSelectedTests(options: ExecuteOptions): Promise<Tes
     runnerErrors: tracker.runnerErrors,
   });
 
-  const report: TestRunReportV1 = {
-    schema_version: 1,
+  const report: TestRunReportV2 = {
+    schema_version: 2,
     kind: "proliferate.test-run",
+    candidate_build: options.candidateBuild ?? null,
     run: {
       ...options.identity,
       behavior: options.behavior,

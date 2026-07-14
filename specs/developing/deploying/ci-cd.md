@@ -471,8 +471,8 @@ vercel.json                  # web app deploy config (Vercel project proliferate
   should remain updater-free.
 - `ci.yml` is the repo-wide merge gate for repo shape, Rust, SDK, frontend,
   mobile, shared-package, and workflow-config checks, plus the fail-closed
-  Tier-2 `Workflow definition lifecycle (tier-2)` job (see §4 Continuous
-  Integration).
+  candidate-build handoff proof and Tier-2 `Workflow definition lifecycle
+  (tier-2)` job (see §4 Continuous Integration).
 - `server-ci.yml` is the canonical server validation lane. Staging waits for a
   matching `Server CI` run when one exists for the same SHA, so server changes do
   not deploy before server lint/tests finish.
@@ -616,6 +616,10 @@ Flow:
    - shared frontend package typecheck/build/tests, including the focused
      Tier-1 workflow-definition surface run
      (`product-surfaces` `src/workflows/WorkflowDefinitionsSurface.test.tsx`)
+   - the fail-closed `Candidate build handoff` job, which builds a release-mode
+     host AnyHarness, validates and materializes its exact build-map bytes,
+     launches them in isolation, and requires matching aggregate evidence
+     without loading provider credentials
    - the fail-closed Tier-2 job `Workflow definition lifecycle (tier-2)`,
      which boots the real intent stack and runs only
      `tests/intent/specs/workflow-definitions.spec.ts`; a red result fails

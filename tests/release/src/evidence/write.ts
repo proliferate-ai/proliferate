@@ -2,7 +2,7 @@ import { link, mkdir, unlink, writeFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
 
-import { validateReport, type TestRunReportV1 } from "./schema.js";
+import { validateReport, type TestRunReportV2 } from "./schema.js";
 
 export class ReportWriteError extends Error {
   constructor(message: string) {
@@ -11,7 +11,7 @@ export class ReportWriteError extends Error {
   }
 }
 
-export function reportPath(outputDir: string, report: TestRunReportV1): string {
+export function reportPath(outputDir: string, report: TestRunReportV2): string {
   return path.join(
     outputDir,
     report.run.run_id,
@@ -28,7 +28,7 @@ export function reportPath(outputDir: string, report: TestRunReportV1): string {
  * replacing) and refuses to overwrite an existing attempt artifact, so a
  * retry can never destroy earlier evidence.
  */
-export async function writeReport(outputDir: string, report: TestRunReportV1): Promise<string> {
+export async function writeReport(outputDir: string, report: TestRunReportV2): Promise<string> {
   validateReport(report);
   const destination = reportPath(outputDir, report);
   try {
