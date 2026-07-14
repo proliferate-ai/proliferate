@@ -1,3 +1,5 @@
+import { isTauriRuntimeAvailable } from "./connect-server";
+
 type StoreInstance = {
   get: <T>(key: string) => Promise<T | undefined>;
   set: (key: string, value: unknown) => Promise<void>;
@@ -57,6 +59,19 @@ function createBrowserPreferencesStore(): StoreInstance | null {
 
 export async function getPreferencesStore(): Promise<StoreInstance | null> {
   if (_store) return _store;
+
+  // Genuinely non-Tauri (browser-rendered Desktop): use and cache the
+  // localStorage fallback so preferences (incl. the selected workspace) persist
+  // across reloads. There is no Tauri store to retry here.
+  if (!isTauriRuntimeAvailable()) {
+    _store = createBrowserPreferencesStore();
+    return _store;
+  }
+
+  // Inside Tauri: the real plugin-store is the only correct backend. A transient
+  // import/load failure must NOT be cached as the localStorage fallback, or real
+  // Tauri persistence would be permanently disabled for the session. Return a
+  // best-effort uncached fallback so the next call can retry the real store.
   try {
     const mod = await import("@tauri-apps/plugin-store");
     _store = await mod.Store.load("preferences.json", {
@@ -65,10 +80,7 @@ export async function getPreferencesStore(): Promise<StoreInstance | null> {
     });
     return _store;
   } catch {
-    // Outside Tauri (browser-rendered Desktop): fall back to localStorage so
-    // preferences (incl. the selected workspace) still persist across reloads.
-    _store = createBrowserPreferencesStore();
-    return _store;
+    return createBrowserPreferencesStore();
   }
 }
 

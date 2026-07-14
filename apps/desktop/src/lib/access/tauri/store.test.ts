@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 describe("getPreferencesStore browser fallback", () => {
   beforeEach(() => {
@@ -28,5 +28,53 @@ describe("getPreferencesStore browser fallback", () => {
     const { getPreferencesStore } = await import("./store");
     const store = await getPreferencesStore();
     expect(await store!.get("never-set")).toBeUndefined();
+  });
+});
+
+describe("getPreferencesStore inside Tauri", () => {
+  const tauriWindow = () => window as unknown as Record<string, unknown>;
+
+  beforeEach(() => {
+    vi.resetModules();
+    localStorage.clear();
+    tauriWindow().__TAURI_INTERNALS__ = {};
+  });
+
+  afterEach(() => {
+    delete tauriWindow().__TAURI_INTERNALS__;
+    vi.doUnmock("@tauri-apps/plugin-store");
+  });
+
+  it("does not cache the localStorage fallback after a transient plugin-store failure", async () => {
+    const realStore = {
+      get: vi.fn(async () => undefined),
+      set: vi.fn(async () => undefined),
+      save: vi.fn(async () => undefined),
+    };
+    let loadCalls = 0;
+    vi.doMock("@tauri-apps/plugin-store", () => ({
+      Store: {
+        load: vi.fn(async () => {
+          loadCalls += 1;
+          if (loadCalls === 1) {
+            throw new Error("transient module load failure");
+          }
+          return realStore;
+        }),
+      },
+    }));
+
+    const { getPreferencesStore } = await import("./store");
+
+    // First call: the real store import fails transiently. We get a best-effort
+    // fallback but it must NOT be cached, so a later call can recover.
+    const first = await getPreferencesStore();
+    expect(first).not.toBe(realStore);
+
+    // Second call retries the real Tauri store rather than serving a cached
+    // fallback — real persistence recovers once the transient failure clears.
+    const second = await getPreferencesStore();
+    expect(second).toBe(realStore);
+    expect(loadCalls).toBe(2);
   });
 });
