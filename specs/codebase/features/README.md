@@ -31,7 +31,7 @@ low-level runtime contracts.
 | Terminals | Workspace terminal pane UX, terminal record actions, and the creation grid contract for new terminals. | [terminals.md](terminals.md) |
 | Workspace migration | Workspace migration flows, user attestation, durability, queue state, and completion/error semantics. | [workspace-migration.md](workspace-migration.md) |
 | Desktop updates | Packaged updater metadata, version-aware sidebar release notices, acknowledgment, and post-install behavior. | [desktop-updates.md](desktop-updates.md) |
-| Web/Desktop client unification | Shared `@proliferate/product-client` ownership boundary, thin Desktop/Web hosts, the composite host contract, product scope/authority isolation, capability policy, and the cutover's migration governance and definition of done. | [web-desktop-client-unification.md](web-desktop-client-unification.md) |
+| Web/Desktop client unification | Shared `@proliferate/product-client` ownership boundary, thin Desktop/Web hosts, the composite host contract, product scope/authority isolation, capability policy, and the cutover's migration governance and definition of done. Desktop Host Adoption records the accepted first in-place Desktop slice. | [architecture](web-desktop-client-unification.md), [Desktop Host Adoption](web-desktop-client-unification-d1a.md) |
 
 ## Outline Coverage
 

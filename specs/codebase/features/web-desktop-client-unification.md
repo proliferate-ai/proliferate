@@ -271,8 +271,12 @@ link transport stays outside it:
 - Web may provide an `openInDesktop` action for local-only work.
 
 The migration requires reliable initial-plus-live delivery and unsubscribe
-cleanup. Persistent cross-restart delivery is not a migration prerequisite;
-add it only if a focused product flow actually requires it.
+cleanup. “Initial + live” means the host's current location/native snapshot
+when a listener subscribes, followed by entries arriving while that listener
+is active. Hosts do not retain and replay arbitrary earlier live entries.
+Persistent delivery, retry, recovery, and generalized queues are not migration
+prerequisites; add one only if a later focused product flow explicitly
+requires and specifies it.
 
 The thin Web host retains the real callback entrypoints required by its auth
 and billing integrations. Old ordinary Web product URLs and presentation do
@@ -353,9 +357,11 @@ deployment selection, links, storage, clipboard, telemetry, and Cloud behavior
 use their normal ProductHost groups rather than being duplicated in the
 Desktop bridge.
 
-Bridge methods are demand-driven. Add one only when an actual migrated
-consumer needs it, and preserve the concrete Desktop behavior and return shape
-at that boundary. The embedded browser is removed, not bridged.
+The initial DesktopBridge may implement methods for the known inventoried
+consumers before those call sites migrate, as Desktop Host Adoption did. New
+methods beyond that inventory remain demand-driven: add one only when an
+actual consumer needs it, and preserve the concrete Desktop behavior and
+return shape at that boundary. The embedded browser is removed, not bridged.
 
 ## Styling and assets
 
@@ -537,8 +543,24 @@ The migration is complete when:
 The ProductClient foundation currently provides the compiled package, typed
 host/bridge contracts, provider, focused tests, build/CI wiring, and structure
 enforcement. Shared `product.css`, Desktop-only CSS, and ProductClient Tailwind
-scanning are established separately. Desktop adapter adoption and product
-source movement remain later checkpoints.
+scanning are established separately. The embedded workspace browser and its
+native child-WebView capability have been removed.
+
+Desktop Host Adoption is frozen at revision r2 and accepted at PR #1157 head
+`90926523c3662067e02f8511db6c8e0058e119f1`, pending merge. It constructs the
+real Desktop-owned host and complete inventoried bridge, mounts the existing
+Desktop product beneath `ProductHostProvider`, replaces the immutable host
+snapshot when its documented reactive inputs change, and gates running-agent
+export through one Desktop-only product-lifecycle root. The complete accepted
+contract is
+[`web-desktop-client-unification-d1a.md`](web-desktop-client-unification-d1a.md).
+
+Desktop Native UI Adoption is the next provisional slice. It routes existing
+native menus, native menu commands, Dock attention, and Desktop zoom through
+the `host.desktop.nativeUi` boundary supplied by the accepted Desktop Host
+Adoption head once it merges, while product files stay under `apps/desktop`.
+It is not frozen and does not authorize implementation until reconciled
+against the actual Desktop Host Adoption merge.
 
 Related authoritative docs:
 
