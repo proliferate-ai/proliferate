@@ -2,7 +2,7 @@
 
 The invite deep link must carry the issuing server's origin so a self-hosted
 invitee's desktop can trust-confirm a switch instead of resolving the org id
-against Cloud (see landing.py / self-hosting-v1 §3.5)."""
+against Cloud."""
 
 from __future__ import annotations
 

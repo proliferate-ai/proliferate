@@ -36,5 +36,6 @@ boundary exists.
 
 Documents here describe current `main` unless they explicitly say
 `Status: target`. A target document must identify its current gap and must not
-be treated as proof that the target has landed. Draft proposals remain under
-[`../tbd/`](../tbd/) until approved and assigned an owner.
+be treated as proof that the target has landed. Unapproved proposals and
+founder planning stay outside the permanent repository documentation path until
+approved and assigned an owner.

@@ -98,7 +98,6 @@ REQUIRED_READMES = (
     "specs/developing/testing/manual-release-qa.md",
     "specs/developing/reference/README.md",
     "specs/generated/README.md",
-    "specs/tbd/README.md",
 )
 
 

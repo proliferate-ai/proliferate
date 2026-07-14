@@ -1,10 +1,10 @@
-//! Server-switch origin guard (self-hosting-v1 §3.5, D1): a state file
-//! stamped for a different server than the caller's current origin must
-//! never inject that OTHER server's gateway token. Exercised through
-//! `resolve_launch_route_auth_for_server` (not the env-var-reading public
-//! wrapper) so these run safely alongside every other test in this crate
-//! without mutating process-global env state. Split into its own file from
-//! `render_tests.rs` to stay under the repo's max-source-file-length check.
+//! Server-switch origin guard: a state file stamped for a different server
+//! than the caller's current origin must never inject that OTHER server's
+//! gateway token. Exercised through `resolve_launch_route_auth_for_server`
+//! (not the env-var-reading public wrapper) so these run safely alongside every
+//! other test in this crate without mutating process-global env state. Split
+//! into its own file from `render_tests.rs` to stay under the repo's
+//! max-source-file-length check.
 
 use serde_json::json;
 

@@ -34,8 +34,8 @@ export const AUTH_LOGIN_LABELS = {
   passwordWaiting: "Signing in...",
 } as const;
 
-// Connect-to-a-self-hosted-server flow (self-hosting-v1 §3.5, B4-desktop):
-// the sign-in screen's quiet secondary affordance + its dialog copy.
+// Connect-to-a-self-hosted-server flow: the sign-in screen's quiet secondary
+// affordance plus its dialog copy.
 export const CONNECT_SERVER_LABELS = {
   connectAffordance: "Connect to a server",
   connectedPrefix: "Connected to",

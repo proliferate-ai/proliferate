@@ -477,7 +477,7 @@ before launch (the supported runtime override — resolution order in
 `apps/desktop/src/lib/infra/proliferate-api.ts`; read once at boot, relaunch
 to apply). The web-port lane uses `VITE_PROLIFERATE_API_BASE_URL` instead.
 Tests never drive a server-picker UI to configure themselves, even after the
-sign-in-screen server entry (self-hosting-v1 §3.5, B4-desktop) ships.
+sign-in-screen server entry ships.
 
 ### T3-FIXTURE: shared identity + lanes (infrastructure, not a test)
 Two identities the runner mints/uses, so no scenario reimplements auth:

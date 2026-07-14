@@ -671,5 +671,5 @@ Related authoritative docs:
 - Testing:
   [`../../../../../developing/testing/README.md`](../../../../../developing/testing/README.md)
 
-The older documents under `specs/tbd/` are planning history. This spec wins
-when they disagree with the simplified migration above.
+Older planning notes are history. This spec wins when they disagree with the
+simplified migration above.

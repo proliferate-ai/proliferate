@@ -1,6 +1,6 @@
-// Tauri-only IO for the "connect to a self-hosted server" flow
-// (self-hosting-v1 §3.5). The web build has no Tauri bridge and no
-// `set_app_config` command — every entry point here is gated on
+// Tauri-only IO for the "connect to a self-hosted server" flow. The web build
+// has no Tauri bridge and no `set_app_config` command — every entry point here
+// is gated on
 // `isTauriRuntimeAvailable()` (mirrors the `isTauriDockApiAvailable`-style
 // checks elsewhere in lib/access/tauri/) so the plain web build never throws.
 
