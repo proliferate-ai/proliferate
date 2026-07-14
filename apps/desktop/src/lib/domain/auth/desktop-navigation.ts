@@ -1,5 +1,7 @@
 import type {
   ProductEntry,
+  ProductEntryDestination,
+  ProductLocationState,
   ProductQueryParams,
   ProductSettingsEntrySection,
 } from "@proliferate/product-client/host/product-host";
@@ -22,6 +24,13 @@ const NAV_SETTINGS_SECTION_BY_PATH: Record<string, ProductSettingsEntrySection> 
  * codebase emits (github-app callbacks landing on account/organization/
  * environments). Malformed, auth-callback, and unknown inbound URLs decode to
  * `null`; the decoder never invents a destination.
+ *
+ * Query parameters and the fragment are preserved losslessly as
+ * {@link ProductLocationState}: ordered, duplicate-preserving pairs plus the
+ * fragment (stored without its leading `#`). Params that define the destination
+ * (the join `origin`, the settings/integration `source`, and the recognized
+ * integration `status`/`flowId`/`failureCode`) are lifted into typed fields and
+ * removed from the query bag; every other pair survives in order.
  */
 export function decodeDesktopProductEntry(url: string): ProductEntry | null {
   let parsed: URL;
@@ -48,9 +57,10 @@ export function decodeDesktopProductEntry(url: string): ProductEntry | null {
       // untrusted — a dropped origin degrades to today's behavior, never a
       // silent server switch.
       const serverOrigin = parseJoinServerOrigin(parsed.searchParams.get("origin"));
+      const query = collectQuery(parsed.searchParams, (key) => key === "origin");
       return serverOrigin
-        ? { kind: "organization-join", organizationId, serverOrigin }
-        : { kind: "organization-join", organizationId };
+        ? withLocation({ kind: "organization-join", organizationId, serverOrigin }, query, parsed)
+        : withLocation({ kind: "organization-join", organizationId }, query, parsed);
     }
     return null;
   }
@@ -58,21 +68,21 @@ export function decodeDesktopProductEntry(url: string): ProductEntry | null {
   if (host === "workspaces") {
     const segments = pathname.split("/").filter(Boolean);
     if (segments.length === 1) {
-      return {
-        kind: "workspace",
-        workspaceId: decodeRoutePart(segments[0]),
-        query: searchToQuery(parsed.searchParams),
-      };
+      return withLocation(
+        { kind: "workspace", workspaceId: decodeRoutePart(segments[0]) },
+        searchToQuery(parsed.searchParams),
+        parsed,
+      );
     }
     return null;
   }
 
   if (host === "billing" && (pathname === "/success" || pathname === "/cancel")) {
-    return {
-      kind: "billing-return",
-      status: pathname === "/success" ? "success" : "cancel",
-      query: searchToQuery(parsed.searchParams),
-    };
+    return withLocation(
+      { kind: "billing-return", status: pathname === "/success" ? "success" : "cancel" },
+      searchToQuery(parsed.searchParams),
+      parsed,
+    );
   }
 
   if (
@@ -81,15 +91,15 @@ export function decodeDesktopProductEntry(url: string): ProductEntry | null {
   ) {
     const source = parsed.searchParams.get("source");
     if (source === "integration_oauth_callback" || source === "mcp_oauth_callback") {
-      return buildIntegrationCallbackEntry(source, parsed.searchParams);
+      return buildIntegrationCallbackEntry(source, parsed);
     }
-    return buildSettingsEntry("integrations", parsed.searchParams);
+    return buildSettingsEntry("integrations", parsed);
   }
 
   if (host === "settings") {
     const section = settingsSectionForPath(pathname);
     if (section) {
-      return buildSettingsEntry(section, parsed.searchParams);
+      return buildSettingsEntry(section, parsed);
     }
   }
 
@@ -102,19 +112,21 @@ export function decodeDesktopProductEntry(url: string): ProductEntry | null {
  * a current Desktop URL are supported; everything else (workflow, invitation,
  * the parked `general` settings section, and non-round-tripping billing
  * statuses) throws, because D1a does not invent a route for an unsupported
- * entry.
+ * entry. Query pairs are appended in order (duplicates preserved) and the
+ * fragment, when present, is appended with exactly one `#`.
  */
 export function encodeDesktopReturnUrl(entry: ProductEntry): string {
   switch (entry.kind) {
     case "workspace":
-      return `proliferate://workspaces/${encodeURIComponent(entry.workspaceId)}${queryToSearch(entry.query)}`;
+      return `proliferate://workspaces/${encodeURIComponent(entry.workspaceId)}${queryToSearch(entry.query)}${fragmentSuffix(entry)}`;
     case "organization-join": {
-      const base = `proliferate://join/${encodeURIComponent(entry.organizationId)}`;
+      const params = queryToParams(entry.query);
       if (entry.serverOrigin) {
-        const params = new URLSearchParams({ origin: entry.serverOrigin });
-        return `${base}?${params.toString()}`;
+        params.set("origin", entry.serverOrigin);
       }
-      return base;
+      const search = params.toString();
+      const base = `proliferate://join/${encodeURIComponent(entry.organizationId)}`;
+      return `${base}${search ? `?${search}` : ""}${fragmentSuffix(entry)}`;
     }
     case "billing-return": {
       if (entry.status !== "success" && entry.status !== "cancel") {
@@ -122,7 +134,7 @@ export function encodeDesktopReturnUrl(entry: ProductEntry): string {
           `No Desktop return URL for billing-return status: ${entry.status}`,
         );
       }
-      return `proliferate://billing/${entry.status}${queryToSearch(entry.query)}`;
+      return `proliferate://billing/${entry.status}${queryToSearch(entry.query)}${fragmentSuffix(entry)}`;
     }
     case "integration-callback": {
       const params = new URLSearchParams();
@@ -136,7 +148,8 @@ export function encodeDesktopReturnUrl(entry: ProductEntry): string {
       if (entry.failureCode) {
         params.set("failureCode", entry.failureCode);
       }
-      return `proliferate://integrations?${params.toString()}`;
+      appendQuery(params, entry.query);
+      return `proliferate://integrations?${params.toString()}${fragmentSuffix(entry)}`;
     }
     case "settings": {
       const base = settingsReturnUrlForSection(entry.section);
@@ -148,7 +161,7 @@ export function encodeDesktopReturnUrl(entry: ProductEntry): string {
         params.set("source", entry.source);
       }
       const search = params.toString();
-      return search ? `${base}?${search}` : base;
+      return `${base}${search ? `?${search}` : ""}${fragmentSuffix(entry)}`;
     }
     default:
       throw new Error(`No Desktop return URL for entry kind: ${(entry as ProductEntry).kind}`);
@@ -245,45 +258,56 @@ export function desktopNavigationTarget(url: string): string | null {
 
 function buildSettingsEntry(
   section: ProductSettingsEntrySection,
-  params: URLSearchParams,
+  parsed: URL,
 ): ProductEntry {
-  const query: Record<string, string> = {};
-  let source: "github_app_callback" | undefined;
-  for (const [key, value] of params) {
-    // ProductEntry.settings.source is typed only "github_app_callback"; other
-    // source values (e.g. github_app_installation_callback) stay in query.
-    if (key === "source" && value === "github_app_callback" && source === undefined) {
-      source = value;
-      continue;
-    }
-    query[key] = value;
-  }
-  return source
-    ? { kind: "settings", section, source, query }
-    : { kind: "settings", section, query };
+  // ProductEntry.settings.source is typed only "github_app_callback"; other
+  // source values (e.g. github_app_installation_callback) stay in query.
+  const rawSource = parsed.searchParams.get("source");
+  const source: "github_app_callback" | undefined =
+    rawSource === "github_app_callback" ? rawSource : undefined;
+  const query = collectQuery(
+    parsed.searchParams,
+    (key, value) => key === "source" && value === "github_app_callback",
+  );
+  const destination: Extract<ProductEntryDestination, { kind: "settings" }> = source
+    ? { kind: "settings", section, source }
+    : { kind: "settings", section };
+  return withLocation(destination, query, parsed);
 }
 
 function buildIntegrationCallbackEntry(
   source: "integration_oauth_callback" | "mcp_oauth_callback",
-  params: URLSearchParams,
+  parsed: URL,
 ): ProductEntry {
-  const entry: Extract<ProductEntry, { kind: "integration-callback" }> = {
+  const params = parsed.searchParams;
+  const destination: Extract<ProductEntryDestination, { kind: "integration-callback" }> = {
     kind: "integration-callback",
     source,
   };
-  const status = params.get("status");
-  if (status === "completed" || status === "failed") {
-    entry.status = status;
+  const rawStatus = params.get("status");
+  const status: "completed" | "failed" | undefined =
+    rawStatus === "completed" || rawStatus === "failed" ? rawStatus : undefined;
+  if (status) {
+    destination.status = status;
   }
   const flowId = params.get("flowId");
   if (flowId) {
-    entry.flowId = flowId;
+    destination.flowId = flowId;
   }
   const failureCode = params.get("failureCode");
   if (failureCode) {
-    entry.failureCode = failureCode;
+    destination.failureCode = failureCode;
   }
-  return entry;
+  // Lift only the values we recognized into typed fields; everything else
+  // (unknown params, an unrecognized `status`, duplicates) survives in query.
+  const query = collectQuery(params, (key, value) => {
+    if (key === "source" && value === source) return true;
+    if (key === "status" && status !== undefined && value === status) return true;
+    if (key === "flowId" && flowId !== null && value === flowId) return true;
+    if (key === "failureCode" && failureCode !== null && value === failureCode) return true;
+    return false;
+  });
+  return withLocation(destination, query, parsed);
 }
 
 function settingsSectionForPath(pathname: string): ProductSettingsEntrySection | null {
@@ -323,21 +347,76 @@ function settingsReturnUrlForSection(section: ProductSettingsEntrySection): stri
   }
 }
 
-function searchToQuery(params: URLSearchParams): ProductQueryParams {
-  const query: Record<string, string> = {};
-  for (const [key, value] of params) {
-    query[key] = value;
+/**
+ * Compose a destination with lossless {@link ProductLocationState}. Empty query
+ * and absent fragment are omitted rather than stored as empty values.
+ */
+function withLocation<D extends ProductEntryDestination>(
+  destination: D,
+  query: ProductQueryParams,
+  parsed: URL,
+): D & ProductLocationState {
+  const location: ProductLocationState = {};
+  if (query.length > 0) {
+    location.query = query;
   }
-  return query;
+  const fragment = fragmentOf(parsed);
+  if (fragment !== undefined) {
+    location.fragment = fragment;
+  }
+  return { ...destination, ...location };
+}
+
+/** The decoded fragment (without `#`), or undefined when there is none. */
+function fragmentOf(parsed: URL): string | undefined {
+  if (!parsed.hash) {
+    return undefined;
+  }
+  const raw = parsed.hash.startsWith("#") ? parsed.hash.slice(1) : parsed.hash;
+  if (raw.length === 0) {
+    return undefined;
+  }
+  return decodeRoutePart(raw);
+}
+
+/** Append exactly one `#fragment` when the entry carries one. */
+function fragmentSuffix(entry: ProductLocationState): string {
+  return entry.fragment ? `#${entry.fragment}` : "";
+}
+
+/** Every decoded query pair, in order, with duplicates preserved. */
+function searchToQuery(params: URLSearchParams): ProductQueryParams {
+  return Array.from(params.entries());
+}
+
+/** Decoded query pairs, in order, minus the ones lifted into typed fields. */
+function collectQuery(
+  params: URLSearchParams,
+  isConsumed: (key: string, value: string) => boolean,
+): ProductQueryParams {
+  const pairs: Array<readonly [string, string]> = [];
+  for (const [key, value] of params) {
+    if (isConsumed(key, value)) {
+      continue;
+    }
+    pairs.push([key, value] as const);
+  }
+  return pairs;
+}
+
+function appendQuery(params: URLSearchParams, query?: ProductQueryParams): void {
+  if (!query) {
+    return;
+  }
+  for (const [key, value] of query) {
+    // append, never set: duplicate keys (`x=1&x=2`) must survive round-trip.
+    params.append(key, value);
+  }
 }
 
 function queryToParams(query?: ProductQueryParams): URLSearchParams {
   const params = new URLSearchParams();
-  if (query) {
-    for (const [key, value] of Object.entries(query)) {
-      params.set(key, value);
-    }
-  }
+  appendQuery(params, query);
   return params;
 }
 

@@ -171,12 +171,14 @@ describe("desktopNavigationTarget", () => {
 
 describe("decodeDesktopProductEntry / encodeDesktopReturnUrl", () => {
   // Each case is normalized by decode and, where the entry kind has a current
-  // Desktop URL, re-encoded; the entry must survive both directions.
+  // Desktop URL, re-encoded; the entry must survive both directions. Location
+  // state (query/fragment) is omitted when empty, so entries without query
+  // carry no `query` field.
   const roundTrips: Array<{ name: string; url: string; entry: ProductEntry }> = [
     {
       name: "workspace without query",
       url: "proliferate://workspaces/cloud-workspace-1",
-      entry: { kind: "workspace", workspaceId: "cloud-workspace-1", query: {} },
+      entry: { kind: "workspace", workspaceId: "cloud-workspace-1" },
     },
     {
       name: "workspace with query",
@@ -184,7 +186,10 @@ describe("decodeDesktopProductEntry / encodeDesktopReturnUrl", () => {
       entry: {
         kind: "workspace",
         workspaceId: "ws-9",
-        query: { session: "sess-1", tab: "chat" },
+        query: [
+          ["session", "sess-1"],
+          ["tab", "chat"],
+        ],
       },
     },
     {
@@ -204,12 +209,12 @@ describe("decodeDesktopProductEntry / encodeDesktopReturnUrl", () => {
     {
       name: "billing-return success",
       url: "proliferate://billing/success",
-      entry: { kind: "billing-return", status: "success", query: {} },
+      entry: { kind: "billing-return", status: "success" },
     },
     {
       name: "billing-return cancel",
       url: "proliferate://billing/cancel",
-      entry: { kind: "billing-return", status: "cancel", query: {} },
+      entry: { kind: "billing-return", status: "cancel" },
     },
     {
       name: "integration-callback (integration_oauth_callback, full)",
@@ -238,7 +243,6 @@ describe("decodeDesktopProductEntry / encodeDesktopReturnUrl", () => {
         kind: "settings",
         section: "account",
         source: "github_app_callback",
-        query: {},
       },
     },
     {
@@ -248,7 +252,6 @@ describe("decodeDesktopProductEntry / encodeDesktopReturnUrl", () => {
         kind: "settings",
         section: "organization",
         source: "github_app_callback",
-        query: {},
       },
     },
     {
@@ -258,7 +261,6 @@ describe("decodeDesktopProductEntry / encodeDesktopReturnUrl", () => {
         kind: "settings",
         section: "environments",
         source: "github_app_callback",
-        query: {},
       },
     },
     {
@@ -267,7 +269,7 @@ describe("decodeDesktopProductEntry / encodeDesktopReturnUrl", () => {
       entry: {
         kind: "settings",
         section: "environments",
-        query: { source: "github_app_installation_callback" },
+        query: [["source", "github_app_installation_callback"]],
       },
     },
   ];
@@ -289,7 +291,6 @@ describe("decodeDesktopProductEntry / encodeDesktopReturnUrl", () => {
         kind: "settings",
         section: "account",
         source: "github_app_callback",
-        query: {},
       }),
     ).toBe("proliferate://settings/account?source=github_app_callback");
     expect(
@@ -297,28 +298,114 @@ describe("decodeDesktopProductEntry / encodeDesktopReturnUrl", () => {
         kind: "settings",
         section: "environments",
         source: "github_app_callback",
-        query: {},
       }),
     ).toBe("proliferate://settings/environments?source=github_app_callback");
+  });
+
+  it("preserves ordered duplicate query keys and empty values (no collapse)", () => {
+    const entry = decodeDesktopProductEntry(
+      "proliferate://workspaces/ws-1?x=1&x=2&empty=&y=3",
+    );
+    expect(entry).toEqual({
+      kind: "workspace",
+      workspaceId: "ws-1",
+      query: [
+        ["x", "1"],
+        ["x", "2"],
+        ["empty", ""],
+        ["y", "3"],
+      ],
+    });
+    // Duplicates and empties survive decode → encode → decode intact.
+    expect(decodeDesktopProductEntry(encodeDesktopReturnUrl(entry!))).toEqual(entry);
+  });
+
+  it("preserves query ordering exactly as received", () => {
+    const entry = decodeDesktopProductEntry(
+      "proliferate://workspaces/ws-1?b=2&a=1&c=3",
+    );
+    expect(entry).toEqual({
+      kind: "workspace",
+      workspaceId: "ws-1",
+      query: [
+        ["b", "2"],
+        ["a", "1"],
+        ["c", "3"],
+      ],
+    });
+  });
+
+  it("preserves Unicode query values through decode and round-trip", () => {
+    const entry = decodeDesktopProductEntry(
+      "proliferate://workspaces/ws-1?note=caf%C3%A9&emoji=%F0%9F%9A%80",
+    );
+    expect(entry).toEqual({
+      kind: "workspace",
+      workspaceId: "ws-1",
+      query: [
+        ["note", "café"],
+        ["emoji", "🚀"],
+      ],
+    });
+    expect(decodeDesktopProductEntry(encodeDesktopReturnUrl(entry!))).toEqual(entry);
+  });
+
+  it("preserves a fragment through decode, encode, and re-decode", () => {
+    const entry = decodeDesktopProductEntry(
+      "proliferate://workspaces/ws-1?tab=chat#thread-42",
+    );
+    expect(entry).toEqual({
+      kind: "workspace",
+      workspaceId: "ws-1",
+      query: [["tab", "chat"]],
+      fragment: "thread-42",
+    });
+    expect(decodeDesktopProductEntry(encodeDesktopReturnUrl(entry!))).toEqual(entry);
+  });
+
+  it("preserves a Unicode fragment with no query", () => {
+    const entry = decodeDesktopProductEntry("proliferate://settings/account#caf%C3%A9");
+    expect(entry).toEqual({
+      kind: "settings",
+      section: "account",
+      fragment: "café",
+    });
+    expect(decodeDesktopProductEntry(encodeDesktopReturnUrl(entry!))).toEqual(entry);
+  });
+
+  it("keeps an unrecognized integration status and extra params in query", () => {
+    expect(
+      decodeDesktopProductEntry(
+        "proliferate://integrations?source=integration_oauth_callback&status=weird&flowId=f1&extra=keep&extra2=v2",
+      ),
+    ).toEqual({
+      kind: "integration-callback",
+      source: "integration_oauth_callback",
+      flowId: "f1",
+      query: [
+        ["status", "weird"],
+        ["extra", "keep"],
+        ["extra2", "v2"],
+      ],
+    });
   });
 
   it("decodes local-scheme URLs the same as the default scheme", () => {
     expect(
       decodeDesktopProductEntry("proliferate-local://billing/cancel"),
-    ).toEqual({ kind: "billing-return", status: "cancel", query: {} });
+    ).toEqual({ kind: "billing-return", status: "cancel" });
   });
 
   it("decodes settings/cloud legacy links to the billing section", () => {
     expect(
       decodeDesktopProductEntry("proliferate://settings/cloud?checkout=done"),
-    ).toEqual({ kind: "settings", section: "billing", query: { checkout: "done" } });
+    ).toEqual({ kind: "settings", section: "billing", query: [["checkout", "done"]] });
   });
 
   it("decodes bare integrations links to the integrations settings pane", () => {
     expect(decodeDesktopProductEntry("proliferate://integrations/")).toEqual({
       kind: "settings",
       section: "integrations",
-      query: {},
     });
   });
 
