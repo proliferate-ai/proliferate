@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 
-import { createElement } from "react";
+import { createElement, type ReactElement } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { ProductHost } from "@proliferate/product-client/host/product-host";
+import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import { DiffViewer } from "@/components/content/ui/DiffViewer";
 import { FileDiffCard } from "@/components/content/ui/FileDiffCard";
 import {
@@ -21,7 +23,25 @@ index 1111111..2222222 100644
 -const message = "${"old ".repeat(80)}";
 +const message = "${"new ".repeat(80)}";`;
 
+const webTestHost = { desktop: null } as ProductHost;
+
+function renderWithProductHost(ui: ReactElement) {
+  return render(
+    <ProductHostProvider host={webTestHost}>{ui}</ProductHostProvider>,
+  );
+}
+
 beforeEach(() => {
+  const values = new Map<string, string>();
+  Object.defineProperty(window, "localStorage", {
+    configurable: true,
+    value: {
+      clear: () => values.clear(),
+      getItem: (key: string) => values.get(key) ?? null,
+      removeItem: (key: string) => values.delete(key),
+      setItem: (key: string, value: string) => values.set(key, value),
+    },
+  });
   window.localStorage.clear();
   useChatDiffPreferencesStore.getState().setWrapLongLines(false);
 });
@@ -33,7 +53,7 @@ afterEach(() => {
 
 describe("ChatDiffLineWrapContextMenu", () => {
   it("toggles persisted line wrapping for every chat diff body", () => {
-    const { container } = render(
+    const { container } = renderWithProductHost(
       <div>
         <DiffViewer patch={LONG_LINE_PATCH} filePath="src/one.ts" variant="chat" />
         <DiffViewer patch={LONG_LINE_PATCH} filePath="src/two.ts" variant="chat" />
@@ -61,7 +81,7 @@ describe("ChatDiffLineWrapContextMenu", () => {
   });
 
   it("opens the same global wrap toggle from chat file headers", () => {
-    const { container } = render(
+    const { container } = renderWithProductHost(
       createElement(
         FileDiffCard,
         {

@@ -1,9 +1,19 @@
 import { readFileSync } from "node:fs";
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { createElement, type ReactElement } from "react";
+import { renderToStaticMarkup as renderReactToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import type { ProductHost } from "@proliferate/product-client/host/product-host";
+import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import { FileChangesCard } from "./FileChangesCard";
 import { FileDiffCard } from "./FileDiffCard";
+
+const webTestHost = { desktop: null } as ProductHost;
+
+function renderToStaticMarkup(ui: ReactElement) {
+  return renderReactToStaticMarkup(
+    <ProductHostProvider host={webTestHost}>{ui}</ProductHostProvider>,
+  );
+}
 
 describe("FileChangesCard and FileDiffCard", () => {
   it("keeps aggregate headers clean and renders the sidebar-safe shared anatomy", () => {

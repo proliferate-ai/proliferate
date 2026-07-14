@@ -1,6 +1,6 @@
 import { SHORTCUTS } from "@/config/shortcuts/registry";
 import { useNativeContextMenu } from "@/hooks/ui/native/use-native-context-menu";
-import type { NativeContextMenuItem } from "@/lib/access/tauri/context-menu";
+import type { NativeMenuItem } from "@proliferate/product-client/host/desktop-bridge";
 import { getShortcutNativeAccelerator } from "@/lib/domain/shortcuts/native-accelerators";
 
 export function useWorkspaceSidebarNativeContextMenu({
@@ -104,8 +104,8 @@ export function buildWorkspaceSidebarNativeContextMenuItems({
   onArchive: () => void;
   onUnarchive: () => void;
   onMarkDone: () => void;
-}): NativeContextMenuItem[] {
-  const items: NativeContextMenuItem[] = [];
+}): NativeMenuItem[] {
+  const items: NativeMenuItem[] = [];
   if (canRename) {
     items.push({
       id: "rename",

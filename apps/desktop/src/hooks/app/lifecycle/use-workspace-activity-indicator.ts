@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { resolveSessionSidebarActivityState } from "@proliferate/product-domain/sessions/activity";
+import type { DesktopNativeUiBridge } from "@proliferate/product-client/host/desktop-bridge";
 import { useShallow } from "zustand/react/shallow";
-import { useTauriDockActions } from "@/hooks/access/tauri/dock/use-dock-actions";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
 import { useWorkspaceSidebarActivityStatesWithErrorAttention } from "@/hooks/workspaces/derived/use-workspace-sidebar-activities";
 import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
@@ -22,8 +22,9 @@ export function resetWorkspaceActivityIndicatorExportForTests(): void {
   pendingWorkspaceActivityIndicatorPayloadSignature = null;
 }
 
-export function useWorkspaceActivityIndicator(): void {
-  const { setWorkspaceActivityIndicator } = useTauriDockActions();
+export function useWorkspaceActivityIndicator(
+  setWorkspaceActivity: DesktopNativeUiBridge["setWorkspaceActivity"],
+): void {
   const {
     logicalWorkspaces,
     isLoading: logicalWorkspacesLoading,
@@ -145,7 +146,7 @@ export function useWorkspaceActivityIndicator(): void {
       state: snapshot.state,
       attentionCount: snapshot.attentionCount,
     };
-    void setWorkspaceActivityIndicator(payload)
+    void setWorkspaceActivity(payload)
       .then(() => {
         if (pendingWorkspaceActivityIndicatorPayloadSignature === signature) {
           lastWorkspaceActivityIndicatorPayloadSignature = signature;
@@ -158,7 +159,7 @@ export function useWorkspaceActivityIndicator(): void {
         }
       });
   }, [
-    setWorkspaceActivityIndicator,
+    setWorkspaceActivity,
     logicalWorkspacesLoading,
     snapshot.attentionCount,
     snapshot.state,

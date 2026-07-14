@@ -1,10 +1,8 @@
 // @vitest-environment jsdom
-import { act, render } from "@testing-library/react";
+import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type {
-  DesktopBridge,
-} from "@proliferate/product-client/host/desktop-bridge";
+import type { DesktopBridge } from "@proliferate/product-client/host/desktop-bridge";
 import type { ProductHost } from "@proliferate/product-client/host/product-host";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 
@@ -19,7 +17,15 @@ vi.mock("@/lib/domain/sessions/directory/directory-activity", () => ({
   // Also mocked because the session-directory store imports it at module load.
   activityFromTranscript: () => ({}),
 }));
+vi.mock("@/hooks/app/lifecycle/use-workspace-activity-indicator", () => ({
+  useWorkspaceActivityIndicator: vi.fn(),
+}));
+vi.mock("@/hooks/preferences/lifecycle/use-desktop-zoom-preference-lifecycle", () => ({
+  useDesktopZoomPreferenceLifecycle: vi.fn(),
+}));
 
+import { useWorkspaceActivityIndicator } from "@/hooks/app/lifecycle/use-workspace-activity-indicator";
+import { useDesktopZoomPreferenceLifecycle } from "@/hooks/preferences/lifecycle/use-desktop-zoom-preference-lifecycle";
 import { DesktopProductLifecycleRoot } from "./DesktopProductLifecycleRoot";
 
 type Entries = Record<string, { busy: boolean }>;
@@ -28,8 +34,19 @@ function setEntries(entries: Entries) {
   useSessionDirectoryStore.setState({ entriesById: entries as never });
 }
 
-function makeBridge(setRunningAgentCount: (count: number) => Promise<void>) {
-  return { nativeUi: { setRunningAgentCount } } as unknown as DesktopBridge;
+function makeBridge(
+  setRunningAgentCount: (count: number) => Promise<void>,
+  nativeUiOverrides: Partial<DesktopBridge["nativeUi"]> = {},
+) {
+  return {
+    nativeUi: {
+      setRunningAgentCount,
+      subscribeMenuCommands: () => () => {},
+      setWorkspaceActivity: async () => {},
+      setZoom: async () => {},
+      ...nativeUiOverrides,
+    },
+  } as unknown as DesktopBridge;
 }
 
 function makeHost(desktop: DesktopBridge | null): ProductHost {
@@ -78,10 +95,12 @@ function renderRoot(host: ProductHost) {
 }
 
 beforeEach(() => {
+  vi.clearAllMocks();
   setEntries({});
 });
 
 afterEach(() => {
+  cleanup();
   vi.restoreAllMocks();
 });
 
@@ -99,6 +118,28 @@ describe("DesktopProductLifecycleRoot", () => {
 
     expect(setRunningAgentCount).toHaveBeenCalledTimes(1);
     expect(setRunningAgentCount).toHaveBeenCalledWith(1);
+  });
+
+  it("wires Desktop activity and zoom lifecycles only through the mounted bridge", () => {
+    const setWorkspaceActivity = vi.fn().mockResolvedValue(undefined);
+    const setZoom = vi.fn().mockResolvedValue(undefined);
+    const bridge = makeBridge(vi.fn().mockResolvedValue(undefined), {
+      setWorkspaceActivity,
+      setZoom,
+    });
+
+    renderRoot(makeHost(bridge));
+
+    expect(useWorkspaceActivityIndicator).toHaveBeenCalledWith(setWorkspaceActivity);
+    expect(useDesktopZoomPreferenceLifecycle).toHaveBeenCalledWith(setZoom);
+
+    cleanup();
+    vi.mocked(useWorkspaceActivityIndicator).mockClear();
+    vi.mocked(useDesktopZoomPreferenceLifecycle).mockClear();
+    renderRoot(makeHost(null));
+
+    expect(useWorkspaceActivityIndicator).not.toHaveBeenCalled();
+    expect(useDesktopZoomPreferenceLifecycle).not.toHaveBeenCalled();
   });
 
   it("exports only changed counts as sessions go busy and idle", () => {
@@ -120,9 +161,12 @@ describe("DesktopProductLifecycleRoot", () => {
 
   it("does not duplicate work when the host is replaced with the same bridge", () => {
     const setRunningAgentCount = vi.fn().mockResolvedValue(undefined);
-    const bridge = makeBridge(setRunningAgentCount);
+    const unsubscribeMenuCommands = vi.fn();
+    const subscribeMenuCommands = vi.fn(() => unsubscribeMenuCommands);
+    const bridge = makeBridge(setRunningAgentCount, { subscribeMenuCommands });
     const { rerender } = renderRoot(makeHost(bridge));
     expect(setRunningAgentCount).toHaveBeenCalledTimes(1);
+    expect(subscribeMenuCommands).toHaveBeenCalledTimes(1);
 
     // A brand-new host snapshot carrying the same stable bridge.
     rerender(
@@ -131,6 +175,7 @@ describe("DesktopProductLifecycleRoot", () => {
       </ProductHostProvider>,
     );
     expect(setRunningAgentCount).toHaveBeenCalledTimes(1);
+    expect(subscribeMenuCommands).toHaveBeenCalledTimes(1);
 
     // The single subscription is still live.
     act(() => setEntries({ a: { busy: true } }));
@@ -140,7 +185,11 @@ describe("DesktopProductLifecycleRoot", () => {
 
   it("cleans up the subscription when the bridge is removed", () => {
     const setRunningAgentCount = vi.fn().mockResolvedValue(undefined);
-    const { rerender } = renderRoot(makeHost(makeBridge(setRunningAgentCount)));
+    const unsubscribeMenuCommands = vi.fn();
+    const bridge = makeBridge(setRunningAgentCount, {
+      subscribeMenuCommands: () => unsubscribeMenuCommands,
+    });
+    const { rerender } = renderRoot(makeHost(bridge));
     expect(setRunningAgentCount).toHaveBeenCalledTimes(1);
 
     rerender(
@@ -151,6 +200,7 @@ describe("DesktopProductLifecycleRoot", () => {
 
     act(() => setEntries({ a: { busy: true } }));
     expect(setRunningAgentCount).toHaveBeenCalledTimes(1);
+    expect(unsubscribeMenuCommands).toHaveBeenCalledTimes(1);
   });
 
   it("cleans up the subscription on unmount", () => {

@@ -1,6 +1,6 @@
 import { SHORTCUTS } from "@/config/shortcuts/registry";
 import { useNativeMenu } from "@/hooks/ui/native/use-native-context-menu";
-import type { NativeContextMenuItem } from "@/lib/access/tauri/context-menu";
+import type { NativeMenuItem } from "@proliferate/product-client/host/desktop-bridge";
 import { getShortcutNativeAccelerator } from "@/lib/domain/shortcuts/native-accelerators";
 
 export interface WorkspaceActionsNativeMenuInput {
@@ -18,7 +18,7 @@ export function useWorkspaceActionsNativeMenu(input: WorkspaceActionsNativeMenuI
 
 export function buildWorkspaceActionsNativeMenuItems(
   input: WorkspaceActionsNativeMenuInput,
-): NativeContextMenuItem[] {
+): NativeMenuItem[] {
   return [
     {
       id: "rename-chat",

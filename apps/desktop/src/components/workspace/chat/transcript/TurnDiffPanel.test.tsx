@@ -1,12 +1,22 @@
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { createElement, type ReactElement } from "react";
+import { renderToStaticMarkup as renderReactToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ProductHost } from "@proliferate/product-client/host/product-host";
+import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   PLAYGROUND_END_TURN_DIFF_TRANSCRIPT,
   PLAYGROUND_PATCH_README,
 } from "@/lib/domain/chat/__fixtures__/playground/git-diff-fixtures";
 import { toolCallItem } from "@/lib/domain/chat/__fixtures__/playground/tool-call-item-fixture";
 import { TurnDiffPanel } from "./TurnDiffPanel";
+
+const webTestHost = { desktop: null } as ProductHost;
+
+function renderToStaticMarkup(ui: ReactElement) {
+  return renderReactToStaticMarkup(
+    <ProductHostProvider host={webTestHost}>{ui}</ProductHostProvider>,
+  );
+}
 
 const turnCurrentDiffs = vi.hoisted(() => ({
   state: null as unknown,

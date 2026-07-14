@@ -2,12 +2,16 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ProductHost } from "@proliferate/product-client/host/product-host";
+import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import { HeaderChatTab } from "@/components/workspace/shell/topbar/HeaderChatTab";
 import type { HeaderChatTabEntry } from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 
 vi.mock("@/hooks/cowork/workflows/use-open-cowork-coding-session", () => ({
   useOpenCoworkCodingSession: () => vi.fn(),
 }));
+
+const webTestHost = { desktop: null } as ProductHost;
 
 describe("HeaderChatTab", () => {
 
@@ -81,7 +85,11 @@ function renderHeaderChatTab(overrides: Partial<Parameters<typeof HeaderChatTab>
     ...overrides,
   };
 
-  return render(<HeaderChatTab {...props} />);
+  return render(
+    <ProductHostProvider host={webTestHost}>
+      <HeaderChatTab {...props} />
+    </ProductHostProvider>,
+  );
 }
 
 function buildTab(overrides: Partial<HeaderChatTabEntry> = {}): HeaderChatTabEntry {

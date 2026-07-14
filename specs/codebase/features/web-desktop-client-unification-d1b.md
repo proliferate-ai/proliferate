@@ -2,10 +2,10 @@
 
 Status: **current implementation scope**.
 
-- Revision: `D1b-r1`
+- Revision: `D1b-r2`
 - Approved starting scope: 2026-07-13
 - Exact implementation base:
-  `2ec6907391f57a3e449b5b77c43c18600f64fdaa`
+  `28cf310c913ff677b1ed87d01dc1eeda8006bb60`
 - Prior implementation: PR #1157, reviewed head
   `90926523c3662067e02f8511db6c8e0058e119f1`, merge
   `a76ab5911e2af39593b4b31530535f0811a3558b`
@@ -273,8 +273,26 @@ apps/desktop/src/
   components/content/ui/diff/
     ChatDiffLineWrapContextMenu.test.tsx                   [modify]
 
+  components/content/ui/
+    DiffViewer.test.tsx                                   [modify]
+    FileDiffCard.test.tsx                                 [modify]
+
+  components/playground/
+    PlaygroundSidebarGitDiff.test.tsx                     [modify]
+
+  components/workspace/chat/tool-calls/
+    CollapsedActions.test.tsx                              [modify]
+    FileChangeCall.test.tsx                                [modify]
+
+  components/workspace/chat/transcript/
+    TranscriptToolCallItemBlock.test.tsx                   [modify]
+    TurnDiffPanel.test.tsx                                 [modify]
+
   components/workspace/shell/sidebar/
     WorkspaceItem.test.tsx                                 [modify]
+
+  components/workspace/shell/topbar/
+    HeaderChatTab.test.tsx                                 [modify]
 
   hooks/cowork/ui/use-cowork-session-native-context-menu.ts                 [modify]
   hooks/editor/ui/use-file-tree-native-context-menu.ts                      [modify]
@@ -290,10 +308,22 @@ apps/desktop/src/
 `use-window-actions.ts` removes only its now-unused running-agent member and
 keeps Mac window-chrome behavior intact.
 
-The two provider-dependent component tests mount a ProductHost test fixture:
+The provider-dependent component tests mount a ProductHost test fixture:
 
-- `ChatDiffLineWrapContextMenu.test.tsx`; and
-- `WorkspaceItem.test.tsx`, replacing its stale raw context-menu mock.
+- `ChatDiffLineWrapContextMenu.test.tsx`;
+- `WorkspaceItem.test.tsx`, replacing its stale raw context-menu mock;
+- `CollapsedActions.test.tsx`;
+- `FileChangeCall.test.tsx`;
+- `TranscriptToolCallItemBlock.test.tsx`;
+- `HeaderChatTab.test.tsx`;
+- `DiffViewer.test.tsx`;
+- `FileDiffCard.test.tsx`;
+- `PlaygroundSidebarGitDiff.test.tsx`; and
+- `TurnDiffPanel.test.tsx`.
+
+The latter eight are recorded because their nested menu consumers now require
+the real host boundary even though the test's primary subject is broader than
+native UI.
 
 Raw implementations under `lib/access/tauri/{context-menu,menu,dock,window}.ts`
 remain in place. No ProductClient package file changes.
@@ -332,7 +362,8 @@ Tests must prove:
 
 - native context-menu interception with a real bridge;
 - untouched DOM behavior with `desktop === null` or no items;
-- exactly one fallback dispatch when the bridge returns `false`;
+- exactly one fallback dispatch on the original descendant target when the
+  bridge returns `false`;
 - first refusal disables both capture and imperative native attempts for that
   hook instance without rebuilding items or recalling the bridge;
 - native menu commands dispatch once and unsubscribe cleanly;
@@ -369,12 +400,21 @@ pnpm --dir apps/desktop exec vitest run \
   src/hooks/shortcuts/lifecycle/use-native-menu-command-dispatcher.test.tsx \
   src/hooks/ui/native/use-native-context-menu.test.tsx \
   src/components/content/ui/diff/ChatDiffLineWrapContextMenu.test.tsx \
+  src/components/content/ui/DiffViewer.test.tsx \
+  src/components/content/ui/FileDiffCard.test.tsx \
+  src/components/playground/PlaygroundSidebarGitDiff.test.tsx \
+  src/components/workspace/chat/tool-calls/CollapsedActions.test.tsx \
+  src/components/workspace/chat/tool-calls/FileChangeCall.test.tsx \
+  src/components/workspace/chat/transcript/TranscriptToolCallItemBlock.test.tsx \
+  src/components/workspace/chat/transcript/TurnDiffPanel.test.tsx \
   src/components/workspace/shell/sidebar/WorkspaceItem.test.tsx \
+  src/components/workspace/shell/topbar/HeaderChatTab.test.tsx \
   src/hooks/cowork/ui/use-cowork-session-native-context-menu.test.ts \
   src/hooks/editor/ui/use-file-tree-native-context-menu.test.ts \
   src/hooks/terminals/ui/use-terminal-tab-native-context-menu.test.ts \
   src/hooks/workspaces/ui/files/use-file-reference-native-context-menu.test.ts \
   src/hooks/workspaces/ui/use-repo-group-native-context-menu.test.ts \
+  src/hooks/workspaces/ui/use-workspace-actions-native-menu.test.ts \
   src/hooks/workspaces/ui/use-workspace-sidebar-native-context-menu.test.ts \
   src/lib/access/tauri/desktop-bridge.test.ts
 
