@@ -1,5 +1,5 @@
 //! Credential facts: the kind-preserving detection surface for auth-context
-//! classification (migration §5.4 layer 1).
+//! classification.
 //!
 //! Facts, never verdicts — detectors report what exists, the pure classifier
 //! in `anyharness-lib` decides which auth contexts are active. Secrets rule:
@@ -26,7 +26,7 @@
 //! | `codex-auth-json-api-key` | `OPENAI_API_KEY` in `~/.codex/auth.json` |
 //! | `codex-auth-json-oauth` | `tokens.access_token` in `~/.codex/auth.json` |
 //! | `codex-keychain` | macOS keychain `Codex Auth` entry with usable auth |
-//! | `aws-credential-chain` | env pair, shared-credentials profile, or SSO cache (passive sources only — decisions ledger 12) |
+//! | `aws-credential-chain` | env pair, shared-credentials profile, or SSO cache (passive sources only) |
 //! | `opencode-auth-json/<provider>` | usable provider entry in opencode's `auth.json` |
 //! | `cursor-keychain` | macOS keychain `Cursor Safe Storage` entry |
 

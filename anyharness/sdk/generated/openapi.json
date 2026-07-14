@@ -12850,7 +12850,7 @@
             "items": {
               "type": "string"
             },
-            "description": "RFC 7807 extension member: the auth-context ids that would unlock a\ngated selection (the model's `availability.anyOf`). Only set on\n`SESSION_MODEL_GATED` (decisions ledger 16); absent on every other\nerror, so unrelated responses stay byte-identical."
+            "description": "RFC 7807 extension member: the auth-context ids that would unlock a\ngated selection (the model's `availability.anyOf`). Only set on\n`SESSION_MODEL_GATED`; absent on every other error, so unrelated responses\nstay byte-identical."
           },
           "status": {
             "type": "integer",

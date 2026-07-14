@@ -1,9 +1,9 @@
-//! AWS credential-chain detection: passive sources only (decisions ledger
-//! 12) — the env pair, the bedrock bearer token env var, a
-//! shared-credentials profile, or an SSO token cache.
+//! AWS credential-chain detection: passive sources only — the env pair, the
+//! Bedrock bearer-token env var, a shared-credentials profile, or an SSO token
+//! cache.
 //! The exotic tail of the real AWS chain (IMDS, process credentials,
 //! container credentials) is deliberately NOT detected here: it is proven by
-//! launch/trial, never by detection — "menus lie, inference proves."
+//! launch or trial, never by this detector.
 //! No network access, ever.
 
 use std::collections::BTreeSet;

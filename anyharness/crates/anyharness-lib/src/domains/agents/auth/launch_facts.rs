@@ -7,7 +7,7 @@
 //! CLI runs Bedrock; but classifier picks anthropic-oauth because those vars
 //! were absent from the composed env).
 //!
-//! Amended rule (supersedes decisions ledger 8 "never ambient"):
+//! Collection contract:
 //! - Env-key presence set: composed keys UNION ambient keys that are
 //!   REGISTRY-DECLARED for the harness kind. Nothing outside the registry's
 //!   declared vars is ever read from ambient.
@@ -37,9 +37,9 @@ use crate::domains::agents::route_auth::state::load_state_file;
 /// (launch_options and create_session) go through this single entry point.
 ///
 /// `runtime_home` is the AnyHarness home whose `agent-auth/state.json` the
-/// route reader consults — the SAME resolution `route_auth` uses at launch
-/// (decisions ledger 13). A missing/native/non-gateway state yields no route
-/// fact; classification then falls through exactly as before.
+/// route reader consults. It uses the same resolution as `route_auth` at
+/// launch. A missing, native, or non-gateway state yields no route fact;
+/// classification then falls through exactly as before.
 pub fn collect_launch_env_facts(
     agent_kind: &str,
     readiness_env: &BTreeMap<String, String>,
@@ -292,7 +292,7 @@ mod tests {
     }
 
     /// A gateway source in `agent-auth/state.json` emits a `Route` fact for
-    /// that harness (decisions ledger 13), collected beside the env facts.
+    /// that harness, collected beside the env facts.
     #[test]
     fn gateway_source_in_state_emits_route_fact() {
         let home = temp_home();

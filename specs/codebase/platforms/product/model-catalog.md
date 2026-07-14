@@ -635,6 +635,23 @@ most recently synced dynamic model registries available to that user/team.
 Cloud may still store source/snapshot metadata internally for diagnostics,
 staleness warnings, and launch preflight.
 
+### Saved-ID Compatibility
+
+The Desktop compatibility helper resolves a saved model ID in this order:
+
+```text
+trim
+  -> exact known ID
+  -> alias resolving to a known ID
+  -> repeatedly remove the final /segment
+       at each prefix: exact, then alias
+  -> null
+```
+
+This helper has live call sites for restoring saved model intent. Keep the
+resolution order stable so older or provider-qualified saved IDs continue to
+resolve to a current catalog row when a compatible prefix remains.
+
 ## Launch Resolution
 
 Launch resolution happens at the AnyHarness/target boundary.

@@ -50,8 +50,8 @@ def served_agent_catalog_version(path: Path = CATALOG_PATH) -> str | None:
     """`catalogVersion` of the catalog document this server serves.
 
     Generation-agnostic: whatever document sits at the catalog path, its
-    top-level ``catalogVersion`` field is advertised (heartbeat convergence,
-    spec decision 2). Cached in-process against the file's mtime so the
+    top-level ``catalogVersion`` field is advertised for heartbeat
+    convergence. Cached in-process against the file's mtime so the
     worker-heartbeat hot path does not reparse the document.
     """
     try:

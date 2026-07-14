@@ -179,7 +179,7 @@ const AUTH_CONTEXT_SIGNALS = {
     // and do NOT also require aws-credential-chain — that discovery covers only
     // the passive sources (env pair, bearer token, ~/.aws profile, SSO cache)
     // and deliberately misses the exotic tail (IMDS / task-role / container
-    // creds, decisions ledger 12). A production Bedrock deployment on an ECS
+    // credentials). A production Bedrock deployment on an ECS
     // task role sets the flag but has no passively detectable creds, so an
     // allOf would misclassify it as oauth/api and then accept bare ids the
     // account 400s on. The flag is the honest, sufficient signal.

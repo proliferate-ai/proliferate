@@ -57,10 +57,11 @@ impl ApiError {
         )
     }
 
-    /// A model gated behind inactive auth contexts (decisions ledger 16). A
-    /// 400 like the other selection rejections, but with its own machine code
-    /// (`SESSION_MODEL_GATED`) and the unlock condition (`required_contexts`,
-    /// the model's `availability.anyOf`) carried as an RFC 7807 extension.
+    /// A known model gated behind inactive auth contexts. It is an HTTP 400
+    /// like the other selection rejections, but has its own machine code
+    /// (`SESSION_MODEL_GATED`) and carries the unlock condition
+    /// (`required_contexts`, the model's `availability.anyOf`) as an RFC 7807
+    /// extension. An unresolvable model uses `SESSION_MODEL_UNSUPPORTED`.
     pub fn model_gated(detail: impl Into<String>, required_contexts: Vec<String>) -> Self {
         Self(
             StatusCode::BAD_REQUEST,
