@@ -7,12 +7,9 @@ import type { CoworkStatus, TerminalWebSocketAuthTransport } from "@anyharness/s
 import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
-import type { CloudMobilityWorkspaceSummary } from "@/lib/access/cloud/client";
-import { getProliferateClient } from "@/lib/access/cloud/client";
-import { CloudClientProvider } from "@proliferate/cloud-sdk-react";
-import { QueryClientProvider } from "@tanstack/react-query";
 import { useCallback, useMemo, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
+import type { CloudMobilityWorkspaceSummary } from "@/lib/access/cloud/client";
 import { appQueryClient } from "@/providers/app-query-client";
 import { cloudWorkspaceConnectionQueryOptions } from "@/hooks/access/cloud/use-cloud-workspace-connection";
 import { resolveWorkspaceConnection } from "@/lib/access/anyharness/resolve-workspace-connection";
@@ -38,8 +35,21 @@ import type { AuthClientStatus } from "@/lib/domain/auth/auth-state-mapping";
 import { buildAnyHarnessCacheScopeKey } from "@/lib/domain/auth/anyharness-cache-scope";
 import { withFreshCloudSandboxGatewayAccessToken } from "@/lib/access/cloud/cloud-sandbox-gateway";
 import { useCloudWorkspaceMaterializationCacheBoundary } from "@/hooks/workspaces/cache/use-cloud-workspace-materialization-cache-boundary";
-import { DesktopProductHostProvider } from "./DesktopProductHostProvider";
 import { TelemetryProvider } from "./TelemetryProvider";
+
+/**
+ * Product-owned provider root. Wraps the AnyHarness/workspace product scope and
+ * the product telemetry lifecycle composition. It reads the single ProductHost,
+ * Query cache, and Cloud client mounted by `DesktopHostProviders` above it; it
+ * constructs none of them. This is the tree that moves into ProductClient later.
+ */
+export function ProductProviderRoot({ children }: { children: ReactNode }) {
+  return (
+    <WorkspaceProviders>
+      <TelemetryProvider>{children}</TelemetryProvider>
+    </WorkspaceProviders>
+  );
+}
 
 async function resolveWorkspaceConnectionWithCache(
   runtimeUrl: string,
@@ -65,22 +75,6 @@ async function resolveWorkspaceConnectionWithCache(
     anyharnessWorkspaceId: connection.anyharnessWorkspaceId ?? "",
     webSocketAuthTransport,
   };
-}
-
-export function AppProviders({ children }: { children: ReactNode }) {
-  const cloudClient = useMemo(() => getProliferateClient(), []);
-
-  return (
-    <QueryClientProvider client={appQueryClient}>
-      <CloudClientProvider client={cloudClient}>
-        <DesktopProductHostProvider cloudClient={cloudClient}>
-          <WorkspaceProviders>
-            <TelemetryProvider>{children}</TelemetryProvider>
-          </WorkspaceProviders>
-        </DesktopProductHostProvider>
-      </CloudClientProvider>
-    </QueryClientProvider>
-  );
 }
 
 function WorkspaceProviders({ children }: { children: ReactNode }) {

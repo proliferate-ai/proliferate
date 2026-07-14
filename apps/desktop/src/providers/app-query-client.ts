@@ -7,10 +7,8 @@ import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
  * concrete telemetry capture so cache/mutation errors reach the Sentry sink.
  * There is exactly one instance for the whole app.
  *
- * TODO(S5 root split): when `AppProviders` splits into `DesktopHostProviders`
- * and `ProductProviderRoot`, this construction moves into the host provider and
- * the product tree obtains the client from react-query context rather than a
- * module import (WorkspaceProviders' cache reads included).
+ * `DesktopHostProviders` (the host-owned composition) imports this singleton and
+ * feeds it to the react-query provider; there is one instance for the whole app.
  */
 export const appQueryClient = createAppQueryClient({
   captureException: captureTelemetryException,

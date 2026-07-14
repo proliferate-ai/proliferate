@@ -24,7 +24,9 @@ import {
 import { installDebugMeasurement } from "./lib/infra/measurement/debug-measurement-install";
 import { startLayoutShiftObserver } from "./lib/infra/measurement/debug-layout-shift";
 import { logRendererEvent } from "./lib/access/tauri/diagnostics";
-import { AppProviders } from "./providers/AppProviders";
+import { DesktopHostProviders } from "./providers/DesktopHostProviders";
+import { ProductProviderRoot } from "./providers/ProductProviderRoot";
+import { ProductLifecycleRoot } from "./providers/ProductLifecycleRoot";
 import "./index.css";
 
 const IS_TAURI_DESKTOP =
@@ -109,9 +111,13 @@ function renderApp() {
   ).render(
     <React.StrictMode>
       <BrowserRouter>
-        <AppProviders>
-          <App />
-        </AppProviders>
+        <DesktopHostProviders>
+          <ProductProviderRoot>
+            <ProductLifecycleRoot>
+              <App />
+            </ProductLifecycleRoot>
+          </ProductProviderRoot>
+        </DesktopHostProviders>
       </BrowserRouter>
     </React.StrictMode>,
   );
