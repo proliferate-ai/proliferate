@@ -6,24 +6,15 @@ import type {
   ProductSettingsEntrySection,
 } from "@proliferate/product-client/host/product-host";
 
-// Legacy in-app route mapping for `proliferate://settings/<path>` deep links.
-// Excludes `/environments` (no nav route) to stay byte-identical to the branches.
-const NAV_SETTINGS_SECTION_BY_PATH: Record<string, ProductSettingsEntrySection> = {
-  "/cloud": "billing",
-  "/billing": "billing",
-  "/account": "account",
-  "/organization": "organization",
-  "/slack-bot": "general",
-};
-
 /**
  * Decode a raw Desktop deep-link URL into the shared {@link ProductEntry}
  * normalization. This is the inverse of {@link encodeDesktopReturnUrl} for the
- * destinations that round-trip. It recognizes exactly the URLs the legacy
- * `desktopNavigationTarget` table supported plus the literal return URLs the
- * codebase emits (github-app callbacks landing on account/organization/
- * environments). Malformed, auth-callback, and unknown inbound URLs decode to
- * `null`; the decoder never invents a destination.
+ * destinations that round-trip and the single decoder feeding inbound routing
+ * ({@link productEntryRoute}). It recognizes every navigation destination the
+ * app supports plus the literal return URLs the codebase emits (github-app
+ * callbacks landing on account/organization/environments). Malformed,
+ * auth-callback, and unknown inbound URLs decode to `null`; the decoder never
+ * invents a destination.
  *
  * Query parameters and the fragment are preserved losslessly as
  * {@link ProductLocationState}: ordered, duplicate-preserving pairs plus the
@@ -169,91 +160,102 @@ export function encodeDesktopReturnUrl(entry: ProductEntry): string {
 }
 
 /**
- * Existing-consumer adapter: the legacy in-app route string for a raw deep
- * link, byte-identical to the historical route table (including exotic query
- * semantics: percent-encoded spaces, duplicate keys, unrecognized params).
+ * Map a normalized {@link ProductEntry} to the in-app route the shared router
+ * navigates to. This is the single inbound-navigation seam: every deep link is
+ * decoded once by {@link decodeDesktopProductEntry} and mapped here. Auth
+ * callbacks are consumed by the auth transport and never become a ProductEntry,
+ * so they never reach this function.
  *
- * Intentionally does NOT route through {@link decodeDesktopProductEntry}: the
- * normalized {@link ProductEntry} codec collapses queries into a lossy
- * `Record<string, string>` (`x=a%20b`→`x=a+b`, `x=1&x=2`→`x=2`, unknown params
- * drop), so query-carrying routes are rebuilt from the raw `URL.search`.
+ * Each destination reproduces the route the legacy navigation table produced.
+ * Location state is preserved losslessly: the entry's query pairs are appended
+ * in order (duplicates kept) after the destination's own params, and the
+ * fragment is appended with exactly one `#`. Destination params the legacy
+ * table set canonically (`section`, `checkout`, `joinOrganizationId`,
+ * `joinServerOrigin`) win over any same-named leftover pair; every other pair —
+ * including duplicates and an unrecognized integration `status` — survives in
+ * order. Param order among distinct keys is not behaviorally significant: the
+ * settings/billing/integrations panes read by key name. The OAuth `source`
+ * discriminator the decoder lifts (`github_app_callback`, the integration
+ * callback source) is not re-emitted: no route consumer reads `source`, so it
+ * is inert in the internal route.
  */
-export function desktopNavigationTarget(url: string): string | null {
-  let parsed: URL;
-
-  try {
-    parsed = new URL(url);
-  } catch {
-    return null;
-  }
-
-  if (parsed.protocol !== "proliferate:" && parsed.protocol !== "proliferate-local:") {
-    return null;
-  }
-
-  if (parsed.hostname === "join") {
-    const segments = parsed.pathname.split("/").filter(Boolean);
-    if (segments.length === 1) {
-      const organizationId = decodeRoutePart(segments[0]);
-      // Lands on Account (every signed-in user can reach it), not the
-      // admin-gated Members pane — a non-admin invitee must be able to
-      // follow this link and see/accept their invitation.
-      const params = new URLSearchParams({ section: "account" });
-      params.set("joinOrganizationId", organizationId);
-      // The issuing server stamps its own origin so a self-hosted invite points
-      // the desktop at the right server. Any web page can fire this deep link
-      // with an attacker-supplied origin, so validate hard and DROP anything
-      // untrusted — a dropped origin degrades to today's behavior, never a
-      // silent server switch.
-      const joinServerOrigin = parseJoinServerOrigin(parsed.searchParams.get("origin"));
-      if (joinServerOrigin) {
-        params.set("joinServerOrigin", joinServerOrigin);
+export function productEntryRoute(entry: ProductEntry): string {
+  switch (entry.kind) {
+    case "workspace":
+      return buildRoute(`/workspaces/${encodeURIComponent(entry.workspaceId)}`, [], entry);
+    case "workflow":
+      return buildRoute(`/workflows/${encodeURIComponent(entry.workflowId)}`, [], entry);
+    case "invitation":
+      // No Desktop invitation route exists; land on Account settings — the
+      // shared surface where an invitee reviews and accepts an invitation.
+      return buildRoute("/settings", [["section", "account"]], entry);
+    case "organization-join": {
+      // Account (reachable by non-admins), not the admin-gated Members pane.
+      const leading: Array<[string, string]> = [
+        ["section", "account"],
+        ["joinOrganizationId", entry.organizationId],
+      ];
+      if (entry.serverOrigin) {
+        leading.push(["joinServerOrigin", entry.serverOrigin]);
       }
-      return `/settings?${params.toString()}`;
+      return buildRoute("/settings", leading, entry);
     }
-  }
-
-  if (parsed.hostname === "settings") {
-    // Legacy settings deep links map their path to a settings section.
-    // SLACK BOT PARKED: /slack-bot lands on General while disabled.
-    const settingsSection = NAV_SETTINGS_SECTION_BY_PATH[parsed.pathname];
-    if (settingsSection) {
-      const params = new URLSearchParams(parsed.search);
-      params.set("section", settingsSection);
-      return `/settings?${params.toString()}`;
+    case "billing-return":
+      return buildRoute(
+        "/settings",
+        [["checkout", entry.status], ["section", "billing"]],
+        entry,
+      );
+    case "integration-callback": {
+      // Reconstruct the outcome fields the decoder lifted so the Integrations
+      // pane sees the same flowId/status/failureCode it did before decode. Only
+      // `section` is canonical here: a leftover (unrecognized) `status`/`flowId`
+      // duplicate must survive, so it is not filtered.
+      const leading: Array<[string, string]> = [["section", "integrations"]];
+      if (entry.status) {
+        leading.push(["status", entry.status]);
+      }
+      if (entry.flowId) {
+        leading.push(["flowId", entry.flowId]);
+      }
+      if (entry.failureCode) {
+        leading.push(["failureCode", entry.failureCode]);
+      }
+      return buildRoute("/settings", leading, entry, ["section"]);
     }
+    case "settings":
+      return buildRoute("/settings", [["section", entry.section]], entry, ["section"]);
   }
+}
 
-  if (
-    parsed.hostname === "billing"
-    && (parsed.pathname === "/success" || parsed.pathname === "/cancel")
-  ) {
-    const params = new URLSearchParams(parsed.search);
-    params.set("checkout", parsed.pathname === "/success" ? "success" : "cancel");
-    params.set("section", "billing");
-    return `/settings?${params.toString()}`;
+/**
+ * Serialize `pathname` + destination `leading` params + the entry's leftover
+ * location state into a route string. Leftover query pairs whose key is one of
+ * `canonicalKeys` (the params the leading set authoritatively) are dropped so
+ * the canonical value wins; everything else is appended in order with duplicates
+ * intact. `canonicalKeys` defaults to every leading key.
+ */
+function buildRoute(
+  pathname: string,
+  leading: ReadonlyArray<readonly [string, string]>,
+  location: ProductLocationState,
+  canonicalKeys: readonly string[] = leading.map(([key]) => key),
+): string {
+  const canonical = new Set(canonicalKeys);
+  const params = new URLSearchParams();
+  for (const [key, value] of leading) {
+    // append, never set: duplicate leading keys are never produced, but append
+    // keeps the codec uniform with the leftover pass below.
+    params.append(key, value);
   }
-
-  if (
-    (parsed.hostname === "integrations" || parsed.hostname === "plugins" || parsed.hostname === "powers")
-    && (parsed.pathname === "" || parsed.pathname === "/")
-  ) {
-    // Integration OAuth browser returns (and legacy plugins/powers links) land on
-    // the user Integrations pane, carrying flowId/status/failureCode so the pane
-    // can toast the flow outcome on arrival.
-    const params = new URLSearchParams(parsed.search);
-    params.set("section", "integrations");
-    return `/settings?${params.toString()}`;
-  }
-
-  if (parsed.hostname === "workspaces") {
-    const segments = parsed.pathname.split("/").filter(Boolean);
-    if (segments.length === 1) {
-      return `/workspaces/${encodeURIComponent(decodeRoutePart(segments[0]))}${parsed.search}`;
+  for (const [key, value] of location.query ?? []) {
+    if (canonical.has(key)) {
+      continue;
     }
+    params.append(key, value);
   }
-
-  return null;
+  const search = params.toString();
+  return `${pathname}${search ? `?${search}` : ""}${fragmentSuffix(location)}`;
 }
 
 function buildSettingsEntry(

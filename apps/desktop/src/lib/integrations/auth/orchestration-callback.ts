@@ -20,7 +20,6 @@ import {
 import {
   applyAuthenticatedState,
   clearPendingGitHubAuth,
-  handleDesktopNavigationUrl,
   markPendingCallbackUrl,
   markTelemetryHandled,
   publishCallbackIssue,
@@ -55,12 +54,9 @@ export async function handleDesktopCallbackUrl(
   url: string,
   deps: AuthOrchestrationDeps,
 ): Promise<boolean> {
-  // Legacy product-navigation branch (deleted in a later slice); auth callbacks
-  // never match a navigation target, so this returns false for them.
-  if (handleDesktopNavigationUrl(url, deps)) {
-    return true;
-  }
-
+  // Auth transport consumes ONLY auth-callback URLs. Every other inbound deep
+  // link is decoded to a ProductEntry and routed by use-product-entry-routing;
+  // it never reaches here (a non-auth URL fails parseDesktopAuthCallback below).
   if (isDevAuthBypassed()) {
     return false;
   }

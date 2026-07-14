@@ -5,7 +5,6 @@ import {
   setStoredPendingAuthSession,
   type StoredPendingAuthSession,
 } from "@/lib/access/tauri/auth";
-import { desktopNavigationTarget } from "@/lib/domain/auth/desktop-navigation";
 import { markTelemetryHandled } from "@/lib/domain/telemetry/errors";
 import {
   cancelGitHubSignIn,
@@ -45,7 +44,6 @@ export interface AuthOrchestrationDeps {
   clearSessionRuntimeState(): void;
   closeRepoSetupModal(): void;
   showToast(message: string): void;
-  navigateDesktopRoute(target: string): void;
 }
 
 export function applyDevBypassState(deps: AuthOrchestrationDeps): void {
@@ -206,19 +204,6 @@ export function publishCallbackIssue(
       provider: "github",
     },
   });
-}
-
-export function handleDesktopNavigationUrl(
-  url: string,
-  deps: AuthOrchestrationDeps,
-): boolean {
-  const target = desktopNavigationTarget(url);
-  if (!target) {
-    return false;
-  }
-
-  deps.navigateDesktopRoute(target);
-  return true;
 }
 
 export async function clearPendingGitHubAuth(

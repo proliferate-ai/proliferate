@@ -18,7 +18,6 @@ const m = vi.hoisted(() => ({
   isPendingDesktopAuthExpired: vi.fn(() => false),
   parseDesktopAuthCallback: vi.fn(),
   captureTelemetryException: vi.fn(),
-  desktopNavigationTarget: vi.fn(() => null as string | null),
 }));
 
 vi.mock("@/lib/access/tauri/auth", () => ({
@@ -52,9 +51,6 @@ vi.mock("@/lib/integrations/auth/proliferate-auth", () => ({
 vi.mock("@/lib/integrations/telemetry/client", () => ({
   captureTelemetryException: m.captureTelemetryException,
 }));
-vi.mock("@/lib/domain/auth/desktop-navigation", () => ({
-  desktopNavigationTarget: m.desktopNavigationTarget,
-}));
 
 import { handleDesktopCallbackUrl } from "@/lib/integrations/auth/orchestration-callback";
 
@@ -73,7 +69,6 @@ function makeDeps(): AuthOrchestrationDeps {
     clearSessionRuntimeState: vi.fn(),
     closeRepoSetupModal: vi.fn(),
     showToast: vi.fn(),
-    navigateDesktopRoute: vi.fn(),
   };
 }
 
@@ -124,7 +119,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   m.isDevAuthBypassed.mockReturnValue(false);
   m.isPendingDesktopAuthExpired.mockReturnValue(false);
-  m.desktopNavigationTarget.mockReturnValue(null);
   m.getActiveGitHubSignIn.mockReturnValue(null);
   m.parseDesktopAuthCallback.mockReturnValue(callback());
   m.getStoredPendingAuthSession.mockResolvedValue(pending());
@@ -298,15 +292,18 @@ describe("handleDesktopCallbackUrl state machine", () => {
     expect(deps.setAuthState).not.toHaveBeenCalled();
   });
 
-  it("short-circuits a recognized navigation deep link before any callback parsing", async () => {
-    m.desktopNavigationTarget.mockReturnValue("/settings?section=account");
+  it("does not consume a non-auth navigation deep link (auth transport only)", async () => {
+    // A navigation deep link is not an auth callback: the parser rejects it and
+    // the transport returns false without touching auth state. Product routing
+    // (use-product-entry-routing) owns these URLs now.
+    m.parseDesktopAuthCallback.mockReturnValue(null);
     const deps = makeDeps();
 
     const result = await handleDesktopCallbackUrl("proliferate://settings/account", deps);
 
-    expect(result).toBe(true);
-    expect(deps.navigateDesktopRoute).toHaveBeenCalledWith("/settings?section=account");
-    expect(m.parseDesktopAuthCallback).not.toHaveBeenCalled();
+    expect(result).toBe(false);
+    expect(m.exchangeDesktopAuthCode).not.toHaveBeenCalled();
+    expect(deps.setAuthState).not.toHaveBeenCalled();
   });
 
   it("returns false in dev-bypass mode without exchanging", async () => {

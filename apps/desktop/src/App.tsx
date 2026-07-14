@@ -11,6 +11,7 @@ import { MacWindowControlsSafeArea } from "@/components/app/chrome/MacWindowCont
 import { useConnectivityListeners } from "@/hooks/app/lifecycle/use-connectivity-listeners"
 import { useDebugSessionActivity } from "@/hooks/app/lifecycle/use-debug-session-activity"
 import { useDevDesktopHandoff } from "@/hooks/app/lifecycle/use-dev-desktop-handoff"
+import { useProductEntryRouting } from "@/hooks/app/lifecycle/use-product-entry-routing"
 import { useOrganizationJoinAuthLaunch } from "@/hooks/organizations/lifecycle/use-organization-join-auth-launch"
 import { useAppShortcuts } from "@/hooks/app/lifecycle/use-app-shortcuts"
 import { useAppCommandActions } from "@/hooks/app/workflows/use-app-command-actions"
@@ -158,6 +159,9 @@ function AppRuntime() {
   useConnectivityListeners()
   useDebugSessionActivity()
   useDevDesktopHandoff()
+  // Mounted here — above the auth route gate — so invitation/login-dependent
+  // inbound entries reach the shared gate rather than being blocked by it.
+  useProductEntryRouting()
   useOrganizationJoinAuthLaunch()
   recordBootDiagnosticOnce("app_runtime.render.before.use_shortcut_dispatcher")
   useShortcutDispatcher()
