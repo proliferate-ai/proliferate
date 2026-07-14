@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useDesktopAuthMethods } from "@/hooks/access/cloud/auth/use-auth-methods";
 import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
-import { useAuthActions } from "@/hooks/auth/workflows/use-auth-actions";
 import { isAbortError } from "@/lib/integrations/auth/proliferate-auth";
 
 export interface UsePasswordSignInResult {
@@ -17,7 +17,7 @@ export interface UsePasswordSignInResult {
 // comes from the server's public auth-methods probe so the login surface can
 // show the form only when the connected server supports password login.
 export function usePasswordSignIn(): UsePasswordSignInResult {
-  const { signInWithPassword } = useAuthActions();
+  const { startLogin } = useProductHost().auth;
   const { cloudEnabled } = useAppCapabilities();
   const {
     data: authMethods,
@@ -38,7 +38,7 @@ export function usePasswordSignIn(): UsePasswordSignInResult {
     setSubmitting(true);
     setError(null);
     try {
-      await signInWithPassword({ email, password });
+      await startLogin({ kind: "password", email, password });
     } catch (err) {
       if (isAbortError(err)) {
         setError(null);
@@ -49,7 +49,7 @@ export function usePasswordSignIn(): UsePasswordSignInResult {
     } finally {
       setSubmitting(false);
     }
-  }, [signInAvailable, signInWithPassword]);
+  }, [signInAvailable, startLogin]);
 
   const clearError = useCallback(() => {
     setError(null);

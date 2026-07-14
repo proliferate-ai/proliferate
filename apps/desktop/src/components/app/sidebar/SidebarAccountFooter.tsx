@@ -28,7 +28,10 @@ import type {
   OrganizationInvitationRecord,
   OrganizationRecord,
 } from "@/lib/domain/organizations/organization-records";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import {
+  useProductAuthStatus,
+  useProductAuthUser,
+} from "@/hooks/auth/facade/use-product-auth";
 import { useKeyboardShortcutsDialogStore } from "@/stores/shortcuts/keyboard-shortcuts-dialog-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { OrganizationSwitchDialog } from "./OrganizationSwitchDialog";
@@ -44,8 +47,8 @@ import { ConsumptionCard } from "./SidebarConsumptionCard";
  */
 export function SidebarAccountFooter() {
   const navigate = useNavigate();
-  const user = useAuthStore((state) => state.user);
-  const authStatus = useAuthStore((state) => state.status);
+  const user = useProductAuthUser();
+  const authStatus = useProductAuthStatus();
   const { openExternal } = useProductHost().links;
   const handleSignOut = useAppSidebarSignOutAction();
   const openShortcutsDialog = useKeyboardShortcutsDialogStore((state) => state.setOpen);
@@ -77,7 +80,7 @@ export function SidebarAccountFooter() {
   const [acceptTarget, setAcceptTarget] = useState<OrganizationInvitationRecord | null>(null);
   const [switchTarget, setSwitchTarget] = useState<OrganizationRecord | null>(null);
 
-  const displayName = user?.display_name?.trim() || user?.email || "Account";
+  const displayName = user?.displayName?.trim() || user?.email || "Account";
   const initials = displayName.trim().slice(0, 2).toUpperCase() || "PR";
   const organizationName = activeOrganization?.name ?? null;
   // Vendor plan/credits only mean something where the server offers billing.
@@ -131,9 +134,9 @@ export function SidebarAccountFooter() {
               title={displayName}
             >
               <span className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-sidebar-accent text-ui-sm font-medium text-sidebar-foreground">
-                {user?.avatar_url ? (
+                {user?.avatarUrl ? (
                   <img
-                    src={user.avatar_url}
+                    src={user.avatarUrl}
                     alt=""
                     className="size-full object-cover"
                     referrerPolicy="no-referrer"

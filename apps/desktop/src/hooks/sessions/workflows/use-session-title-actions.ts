@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useUpdateSessionTitleMutation } from "@anyharness/sdk-react";
 import { generateSessionTitle } from "@proliferate/cloud-sdk/client/ai-magic";
@@ -11,7 +11,7 @@ import {
 import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
 import { useSessionSummaryActions } from "@/hooks/sessions/workflows/use-session-summary-actions";
 import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import { useProductAuthStatus } from "@/hooks/auth/facade/use-product-auth";
 
 const requestedAutoSessionTitles = new Map<string, number>();
 const MAX_TRACKED_AUTO_SESSION_TITLES = 500;
@@ -35,6 +35,12 @@ function markAutoSessionTitleRequested(sessionId: string): boolean {
 
 export function useSessionTitleActions() {
   const ssh = useProductHost().desktop?.ssh ?? null;
+  // Auto-title generation runs outside render; read the latest normalized auth
+  // status through a ref so the callback identity stays stable (matching the
+  // former non-reactive the Desktop auth store read).
+  const authStatus = useProductAuthStatus();
+  const authStatusRef = useRef(authStatus);
+  authStatusRef.current = authStatus;
   const { applySessionSummary } = useSessionSummaryActions();
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
   const updateSessionTitleMutation = useUpdateSessionTitleMutation();
@@ -90,7 +96,7 @@ export function useSessionTitleActions() {
     if (!trimmedPrompt) {
       return;
     }
-    if (useAuthStore.getState().status !== "authenticated") {
+    if (authStatusRef.current !== "authenticated") {
       return;
     }
 

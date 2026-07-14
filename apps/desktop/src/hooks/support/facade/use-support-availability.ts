@@ -1,4 +1,4 @@
-import { useAuthStore } from "@/stores/auth/auth-store";
+import { useProductAuthStatus } from "@/hooks/auth/facade/use-product-auth";
 
 export interface SupportAvailability {
   /** True only when a real Cloud session exists (uploads will succeed). */
@@ -19,12 +19,12 @@ export interface SupportAvailability {
  * modal unless the report can actually be sent.
  */
 export function useSupportAvailability(): SupportAvailability {
-  const status = useAuthStore((state) => state.status);
+  const status = useProductAuthStatus();
 
   if (status === "authenticated") {
     return { canSubmit: true, disabledReason: null };
   }
-  if (status === "bootstrapping") {
+  if (status === "loading") {
     return { canSubmit: false, disabledReason: null };
   }
   return {

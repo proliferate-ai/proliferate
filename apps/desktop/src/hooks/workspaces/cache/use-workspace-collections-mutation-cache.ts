@@ -18,7 +18,7 @@ import {
   workspaceCollectionsKey,
   workspaceCollectionsScopeKey,
 } from "@/hooks/workspaces/cache/query-keys";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import { useProductAuthUserId } from "@/hooks/auth/facade/use-product-auth";
 
 export interface WorkspaceCollectionsLocalUpsertSummary {
   previousLocalCount: number;
@@ -86,7 +86,7 @@ export function upsertCloudWorkspaceForRuntime(
 
 export function useWorkspaceCollectionsMutationCache(runtimeUrl: string) {
   const queryClient = useQueryClient();
-  const authUserId = useAuthStore((state) => state.user?.id ?? null);
+  const authUserId = useProductAuthUserId();
 
   const upsertLocalWorkspace = useCallback(
     (

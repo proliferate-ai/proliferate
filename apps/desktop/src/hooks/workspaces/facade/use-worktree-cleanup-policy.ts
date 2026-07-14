@@ -10,7 +10,7 @@ import {
   WORKTREE_AUTO_DELETE_LIMIT_MAX,
   WORKTREE_AUTO_DELETE_LIMIT_MIN,
 } from "@/lib/domain/preferences/user/worktree-auto-delete";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import { useProductAuthStatus } from "@/hooks/auth/facade/use-product-auth";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
 export interface WorktreeCleanupPolicyState {
@@ -41,7 +41,7 @@ export function useWorktreeCleanupPolicy(
   targets: WorktreeCleanupPolicySyncTargetState[],
   syncPolicyToTarget: SyncPolicyToTarget,
 ): WorktreeCleanupPolicyState {
-  const authStatus = useAuthStore((state) => state.status);
+  const authStatus = useProductAuthStatus();
   const setPreference = useUserPreferencesStore((state) => state.set);
   const markWorktreeAutoDeleteLimitAdopted = useWorktreeAutoDeleteAdoption();
   const [draftValue, setDraftValue] = useState("");

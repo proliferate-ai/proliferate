@@ -9,18 +9,39 @@ import { AuthScreenLayout } from "@/components/auth/AuthScreenLayout";
 import { LoginScreen } from "@/components/auth/LoginScreen";
 import { SessionCheckScreen } from "@/components/auth/SessionCheckScreen";
 
-vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
-  useProductHost: () => ({
-    deployment: {
-      apiBaseUrl: "https://api.example.test",
-      switchDeployment: vi.fn(async () => {}),
-      resetDeployment: vi.fn(async () => {}),
+// Bridge the mocked host to the auth store so the existing setState-driven
+// tests keep steering the gate: the gate now reads normalized auth state
+// through useProductHost, and reading the store selector here re-subscribes the
+// gate so a setState still re-renders it.
+vi.mock("@proliferate/product-client/host/ProductHostProvider", async () => {
+  const { useAuthStore } = await import("@/stores/auth/auth-store");
+  return {
+    useProductHost: () => {
+      const status = useAuthStore((s) => s.status);
+      const state =
+        status === "bootstrapping"
+          ? { status: "loading" as const }
+          : status === "authenticated"
+            ? {
+                status: "authenticated" as const,
+                user: null,
+                readiness: { status: "ready" as const },
+              }
+            : { status: "anonymous" as const, methods: [] };
+      return {
+        deployment: {
+          apiBaseUrl: "https://api.example.test",
+          switchDeployment: vi.fn(async () => {}),
+          resetDeployment: vi.fn(async () => {}),
+        },
+        desktop: {
+          updater: { getVersion: vi.fn(async () => "0.0.0-test") },
+        },
+        auth: { authRequired: true, state },
+      };
     },
-    desktop: {
-      updater: { getVersion: vi.fn(async () => "0.0.0-test") },
-    },
-  }),
-}));
+  };
+});
 
 // Force the auth-required gate so anonymous resolves to the sign-in shell
 // (exercising the loading -> login -> app reveal path).

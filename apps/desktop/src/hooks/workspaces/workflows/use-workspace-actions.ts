@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
@@ -25,7 +26,8 @@ import {
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
 import type { SetupScriptTelemetryStatus } from "@/lib/domain/telemetry/events";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import type { AuthUser } from "@/lib/domain/auth/auth-user";
+import { useProductAuthUser } from "@/hooks/auth/facade/use-product-auth";
 import {
   type CreateWorktreeWorkspaceInput,
   type ResolvedWorktreeCreation,
@@ -55,6 +57,13 @@ export function useWorkspaceActions() {
   const desktop = useProductHost().desktop;
   const localRuntime = desktop?.runtime ?? null;
   const files = desktop?.files ?? null;
+  // Worktree resolution runs outside render; read the latest signed-in identity
+  // through a ref so the returned action object stays stable. Only the branch
+  // prefix (github login) is consumed downstream, so the normalized host user
+  // maps losslessly onto the AuthUser shape the domain helper expects.
+  const hostAuthUser = useProductAuthUser();
+  const authUserRef = useRef(hostAuthUser);
+  authUserRef.current = hostAuthUser;
   const {
     upsertLocalWorkspaceInWorkspaceCollections,
   } = useWorkspaceCollectionsMutationCacheActions();
@@ -234,7 +243,16 @@ export function useWorkspaceActions() {
       }
       const homeDir = await files.getHomeDirectory();
       const userPreferences = useUserPreferencesStore.getState();
-      const authUser = useAuthStore.getState().user;
+      const hostUser = authUserRef.current;
+      const authUser: AuthUser | null = hostUser
+        ? {
+            id: hostUser.id,
+            email: hostUser.email ?? "",
+            display_name: hostUser.displayName ?? null,
+            github_login: hostUser.githubLogin ?? null,
+            avatar_url: hostUser.avatarUrl ?? null,
+          }
+        : null;
       const repoPreferences = useRepoPreferencesStore.getState();
 
       const existingWorktreeBasenames = sourceWorkspace

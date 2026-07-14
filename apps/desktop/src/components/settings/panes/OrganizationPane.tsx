@@ -29,7 +29,7 @@ import {
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { TEAM_UPGRADE_GATE_COPY } from "@/copy/billing/upgrade-gate-copy";
 import { organizationLogoImageValidationError } from "@/lib/domain/organizations/logo-image";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import { useProductAuthStatus } from "@/hooks/auth/facade/use-product-auth";
 
 function readLogoImage(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -41,7 +41,7 @@ function readLogoImage(file: File): Promise<string> {
 }
 
 export function OrganizationPane() {
-  const authStatus = useAuthStore((state) => state.status);
+  const authStatus = useProductAuthStatus();
   const {
     activeOrganization,
     activeOrganizationId,

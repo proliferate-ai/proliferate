@@ -3,7 +3,14 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
+import { makeTestProductHost } from "@/test/product-host-test-utils";
 import { HarnessPane } from "./HarnessPane";
+
+// The pane's org/identity hooks now read normalized auth through the host. An
+// anonymous host keeps the organizations query disabled, matching the prior
+// default (unset auth store) behavior these tests ran under.
+const harnessTestHost = makeTestProductHost();
 
 type CapabilitiesData = {
   gatewayEnabled: boolean;
@@ -263,7 +270,9 @@ function renderPane(harnessKind = "claude") {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <HarnessPane harnessKind={harnessKind} />
+      <ProductHostProvider host={harnessTestHost}>
+        <HarnessPane harnessKind={harnessKind} />
+      </ProductHostProvider>
     </QueryClientProvider>,
   );
 }

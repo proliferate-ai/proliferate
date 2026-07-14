@@ -21,9 +21,18 @@ import { recordBootDiagnosticOnce } from "@/lib/infra/measurement/boot-stall-dia
  */
 export function DesktopProductLifecycleRoot() {
   const { auth, desktop } = useProductHost();
+  const authState = auth.state;
+  const authUserId =
+    authState.status === "authenticated" ? (authState.user?.id ?? null) : null;
   return desktop === null
     ? null
-    : <DesktopProductLifecycles desktop={desktop} authStatus={auth.state.status} />;
+    : (
+      <DesktopProductLifecycles
+        desktop={desktop}
+        authStatus={authState.status}
+        authUserId={authUserId}
+      />
+    );
 }
 
 // Nested so hook membership stays valid if `desktop` flips between a bridge and
@@ -31,9 +40,11 @@ export function DesktopProductLifecycleRoot() {
 function DesktopProductLifecycles({
   desktop,
   authStatus,
+  authUserId,
 }: {
   desktop: DesktopBridge;
   authStatus: "loading" | "anonymous" | "authenticated";
+  authUserId: string | null;
 }) {
   useDesktopRuntimeBootstrapLifecycle(
     desktop.runtime,
@@ -41,7 +52,7 @@ function DesktopProductLifecycles({
     authStatus,
   );
   useUpdateRestartWatcher(desktop.updater);
-  useDesktopWorkerEnrollment(desktop.worker);
+  useDesktopWorkerEnrollment(desktop.worker, authStatus, authUserId);
   const nativeUi: DesktopNativeUiBridge = desktop.nativeUi;
   useExportRunningAgentCount(nativeUi.setRunningAgentCount);
   useNativeMenuCommandDispatcher(nativeUi.subscribeMenuCommands);

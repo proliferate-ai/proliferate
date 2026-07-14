@@ -232,7 +232,11 @@ describe("DesktopProductLifecycleRoot", () => {
     expect(useWorkspaceActivityIndicator).toHaveBeenCalledWith(setWorkspaceActivity);
     expect(useDesktopZoomPreferenceLifecycle).toHaveBeenCalledWith(setZoom);
     expect(lifecycleMocks.useUpdateRestartWatcher).toHaveBeenCalledWith(bridge.updater);
-    expect(lifecycleMocks.useDesktopWorkerEnrollment).toHaveBeenCalledWith(bridge.worker);
+    expect(lifecycleMocks.useDesktopWorkerEnrollment).toHaveBeenCalledWith(
+      bridge.worker,
+      "loading",
+      null,
+    );
 
     cleanup();
     vi.mocked(useWorkspaceActivityIndicator).mockClear();

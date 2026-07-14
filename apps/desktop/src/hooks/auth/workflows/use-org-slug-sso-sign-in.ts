@@ -1,13 +1,6 @@
 import { useCallback, useState } from "react";
-import { useAuthActions } from "@/hooks/auth/workflows/use-auth-actions";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { isAbortError } from "@/lib/integrations/auth/proliferate-auth";
-import { discoverDesktopSso } from "@/lib/integrations/auth/proliferate-sso-auth";
-
-// A slug that does not resolve to enabled SSO returns the same generic answer
-// whether the org is missing, has no SSO, or has it disabled, so we surface one
-// generic message and never confirm which orgs exist.
-const SLUG_UNAVAILABLE =
-  "We could not find single sign-on for that workspace. Check the sign-in link your admin shared.";
 
 export interface UseOrgSlugSsoSignInResult {
   signIn: (slug: string) => Promise<boolean>;
@@ -20,7 +13,7 @@ export interface UseOrgSlugSsoSignInResult {
 // the org's SSO connection, then hand off to the existing native SSO machinery
 // (system browser + proliferate://auth/callback deep link).
 export function useOrgSlugSsoSignIn(): UseOrgSlugSsoSignInResult {
-  const { signInWithSso } = useAuthActions();
+  const { startLogin } = useProductHost().auth;
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,16 +26,11 @@ export function useOrgSlugSsoSignIn(): UseOrgSlugSsoSignInResult {
     setSubmitting(true);
     setError(null);
     try {
-      const discovery = await discoverDesktopSso({ slug: trimmed });
-      if (!discovery.enabled || !discovery.organizationId) {
-        setError(SLUG_UNAVAILABLE);
-        return false;
-      }
-      await signInWithSso({
-        organizationId: discovery.organizationId,
-        connectionId: discovery.connectionId,
-        prompt: "select_account",
-      });
+      // The host resolves the slug's SSO connection and forces
+      // `prompt: "select_account"`; a slug that does not resolve to enabled SSO
+      // throws the same generic "could not find single sign-on" message,
+      // never confirming which orgs exist.
+      await startLogin({ kind: "sso", slug: trimmed });
       return true;
     } catch (err) {
       if (isAbortError(err)) {
@@ -54,7 +42,7 @@ export function useOrgSlugSsoSignIn(): UseOrgSlugSsoSignInResult {
     } finally {
       setSubmitting(false);
     }
-  }, [signInWithSso]);
+  }, [startLogin]);
 
   const clearError = useCallback(() => setError(null), []);
 

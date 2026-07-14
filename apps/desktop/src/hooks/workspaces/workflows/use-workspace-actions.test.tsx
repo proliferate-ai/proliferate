@@ -41,7 +41,12 @@ vi.mock("@anyharness/sdk-react", () => ({
 }));
 
 vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
-  useProductHost: () => ({ desktop: { runtime: mocks.localRuntime } }),
+  useProductHost: () => ({
+    desktop: { runtime: mocks.localRuntime },
+    // Branch naming reads only the signed-in github login; no user here matches
+    // the prior default (empty auth store) so the branch prefix stays empty.
+    auth: { state: { status: "anonymous", methods: [] } },
+  }),
 }));
 
 vi.mock("./runtime-ready", () => ({

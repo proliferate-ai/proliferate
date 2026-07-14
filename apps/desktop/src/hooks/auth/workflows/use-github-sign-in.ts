@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 import { useGitHubDesktopAuthAvailability } from "@/hooks/access/cloud/auth/use-github-auth-availability";
 import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
-import { useAuthActions } from "@/hooks/auth/workflows/use-auth-actions";
 import {
   isAbortError,
   type GitHubDesktopSignInOptions,
@@ -25,7 +25,7 @@ export interface UseGitHubSignInResult {
 // otherwise the first-load pending window flashes a "checking…" state during the loading -> auth
 // transition. The query self-guards on control-plane reachability.
 export function useGitHubSignIn(): UseGitHubSignInResult {
-  const { cancelAuthFlow, signInWithGitHub } = useAuthActions();
+  const { startLogin, cancelLogin } = useProductHost().auth;
   const { cloudEnabled } = useAppCapabilities();
   const {
     data: githubDesktopAuthAvailable,
@@ -49,7 +49,7 @@ export function useGitHubSignIn(): UseGitHubSignInResult {
     setSubmitting(true);
     setError(null);
     try {
-      await signInWithGitHub(options);
+      await startLogin({ kind: "github", prompt: options?.prompt });
     } catch (err) {
       if (isAbortError(err)) {
         setError(null);
@@ -60,7 +60,7 @@ export function useGitHubSignIn(): UseGitHubSignInResult {
     } finally {
       setSubmitting(false);
     }
-  }, [signInAvailable, signInUnavailableDescription, signInWithGitHub]);
+  }, [signInAvailable, signInUnavailableDescription, startLogin]);
 
   const clearError = useCallback(() => {
     setError(null);
@@ -69,8 +69,8 @@ export function useGitHubSignIn(): UseGitHubSignInResult {
   const cancelSignIn = useCallback(async () => {
     setSubmitting(false);
     setError(null);
-    await cancelAuthFlow("GitHub sign-in cancelled.");
-  }, [cancelAuthFlow]);
+    await cancelLogin();
+  }, [cancelLogin]);
 
   return {
     signIn,

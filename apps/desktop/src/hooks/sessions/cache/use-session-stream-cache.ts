@@ -7,13 +7,13 @@ import {
   useAnyHarnessCacheScopeKey,
 } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import {
   getWorkspaceCollectionsFromCache,
   workspaceCollectionsScopeKey,
 } from "@/hooks/workspaces/cache/query-keys";
 import { scheduleRepoPrStatusRefresh } from "@/hooks/workspaces/cache/use-pr-status-refresh";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import { useProductAuthUserId } from "@/hooks/auth/facade/use-product-auth";
 
 export interface SessionStreamCache {
   invalidateWorkspaceCollections(runtimeUrl: string): void;
@@ -43,6 +43,12 @@ export interface SessionStreamCache {
 export function useSessionStreamCache(): SessionStreamCache {
   const queryClient = useQueryClient();
   const cacheScopeKey = useAnyHarnessCacheScopeKey();
+  // Stream-triggered invalidation runs outside render; read the latest user id
+  // through a ref so the memoized cache object stays stable (matching the former
+  // non-reactive the Desktop auth store read).
+  const authUserId = useProductAuthUserId();
+  const authUserIdRef = useRef(authUserId);
+  authUserIdRef.current = authUserId;
 
   return useMemo<SessionStreamCache>(() => ({
     invalidateWorkspaceCollections(runtimeUrl) {
@@ -92,7 +98,7 @@ export function useSessionStreamCache(): SessionStreamCache {
       const collections = getWorkspaceCollectionsFromCache(
         queryClient,
         runtimeUrl,
-        useAuthStore.getState().user?.id ?? null,
+        authUserIdRef.current,
       );
       const repoRootId = collections?.allWorkspaces
         .find((workspace) => workspace.id === workspaceId)

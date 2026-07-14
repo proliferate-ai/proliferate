@@ -5,14 +5,17 @@ import { MainSidebarPageShell } from "@/components/workspace/shell/screen/MainSi
 import { APP_ROUTES } from "@/config/app-routes";
 import { WORKFLOW_AUTH_COPY } from "@/copy/workflows/workflow-copy";
 import { isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import {
+  useProductAuthStatus,
+  useProductAuthUserId,
+} from "@/hooks/auth/facade/use-product-auth";
 
 export function WorkflowsPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const { workflowId } = useParams<{ workflowId: string }>();
-  const authStatus = useAuthStore((state) => state.status);
-  const authUserId = useAuthStore((state) => state.user?.id ?? null);
+  const authStatus = useProductAuthStatus();
+  const authUserId = useProductAuthUserId();
 
   if (isDevAuthBypassed()) {
     return (

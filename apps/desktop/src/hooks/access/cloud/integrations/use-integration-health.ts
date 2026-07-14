@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { getIntegrationHealth } from "@proliferate/cloud-sdk/client/integrations";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import { useProductAuthStatus } from "@/hooks/auth/facade/use-product-auth";
 import { cloudIntegrationsHealthKey, cloudIntegrationsRootKey } from "./query-keys";
 
 export function useIntegrationHealth(
@@ -12,7 +12,7 @@ export function useIntegrationHealth(
     refetchOnWindowFocus?: boolean;
   },
 ) {
-  const authStatus = useAuthStore((state) => state.status);
+  const authStatus = useProductAuthStatus();
   return useQuery({
     queryKey: cloudIntegrationsHealthKey(organizationId),
     enabled: authStatus === "authenticated" && (options?.enabled ?? true),

@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import type { DesktopWorkerBridge } from "@proliferate/product-client/host/desktop-bridge";
+import type { AuthState } from "@proliferate/product-client/host/product-host";
 import { desktopWorkerStartupFailureCopy } from "@/copy/cloud/desktop-worker-copy";
 import {
   ensureDesktopWorker,
   teardownDesktopWorker,
 } from "@/lib/workflows/cloud/ensure-desktop-worker";
-import { useAuthStore } from "@/stores/auth/auth-store";
 import { useOrganizationStore } from "@/stores/organizations/organization-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
@@ -45,16 +45,18 @@ function identityKey(userId: string, organizationId: string | null): string {
 // and then re-enroll once the organizations query resolves on every cold
 // start. A stale selection 404s server-side and the guard re-enrolls once the
 // selection lifecycle falls back to a real membership.
-export function useDesktopWorkerEnrollment(worker: DesktopWorkerBridge): void {
-  const authStatus = useAuthStore((state) => state.status);
-  const authUserId = useAuthStore((state) => state.user?.id ?? null);
+export function useDesktopWorkerEnrollment(
+  worker: DesktopWorkerBridge,
+  authStatus: AuthState["status"],
+  authUserId: string | null,
+): void {
   const activeOrganizationId = useOrganizationStore(
     (state) => state.activeOrganizationId,
   );
   const showToast = useToastStore((state) => state.show);
   const [retryNonce, setRetryNonce] = useState(0);
   useEffect(() => {
-    if (authStatus === "bootstrapping") {
+    if (authStatus === "loading") {
       return;
     }
     if (authStatus !== "authenticated" || !authUserId) {

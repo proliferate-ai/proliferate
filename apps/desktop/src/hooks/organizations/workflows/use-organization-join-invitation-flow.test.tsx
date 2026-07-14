@@ -7,9 +7,8 @@ import { MemoryRouter } from "react-router-dom";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { useOrganizationJoinInvitationFlow } from "./use-organization-join-invitation-flow";
 
-const authActionMocks = vi.hoisted(() => ({
-  signInWithGitHub: vi.fn<() => Promise<unknown>>(),
-  signInWithSso: vi.fn<(_options?: unknown) => Promise<unknown>>(),
+const hostMocks = vi.hoisted(() => ({
+  startLogin: vi.fn<(_request?: unknown) => Promise<void>>(),
 }));
 
 const connectServerMocks = vi.hoisted(() => ({
@@ -27,12 +26,20 @@ const authMethodsMocks = vi.hoisted(() => ({
   getDesktopAuthMethods: vi.fn<() => Promise<{ passwordLogin: boolean; github: boolean }>>(),
 }));
 
-vi.mock("@/hooks/auth/workflows/use-auth-actions", () => ({
-  useAuthActions: () => ({
-    signInWithGitHub: authActionMocks.signInWithGitHub,
-    signInWithSso: authActionMocks.signInWithSso,
-  }),
-}));
+// The flow launches auth through host.auth.startLogin; bridge the store so the
+// anonymous/authenticated gating still steers via setState.
+vi.mock("@proliferate/product-client/host/ProductHostProvider", async () => {
+  const { useAuthStore } = await import("@/stores/auth/auth-store");
+  const { authStoreBridgedHost } = await import("@/test/product-host-fixtures");
+  return {
+    useProductHost: () =>
+      authStoreBridgedHost(
+        useAuthStore((s) => s.status),
+        useAuthStore((s) => s.user),
+        { auth: { startLogin: hostMocks.startLogin } },
+      ),
+  };
+});
 
 vi.mock("@/hooks/auth/workflows/use-connect-server", () => ({
   useConnectServer: () => ({
@@ -68,10 +75,8 @@ const ORIGIN_LESS = "/settings?section=account&joinOrganizationId=org-1";
 describe("useOrganizationJoinInvitationFlow", () => {
   beforeEach(() => {
     clearTestStorage();
-    authActionMocks.signInWithGitHub.mockReset();
-    authActionMocks.signInWithSso.mockReset();
-    authActionMocks.signInWithGitHub.mockResolvedValue({});
-    authActionMocks.signInWithSso.mockResolvedValue({});
+    hostMocks.startLogin.mockReset();
+    hostMocks.startLogin.mockResolvedValue(undefined);
     connectServerMocks.available = true;
     connectServerMocks.step = "closed";
     connectServerMocks.openForUrl.mockReset();
@@ -97,29 +102,29 @@ describe("useOrganizationJoinInvitationFlow", () => {
     renderJoinInvitationFlow(ORIGIN_LESS);
 
     await waitFor(() => {
-      expect(authActionMocks.signInWithSso).toHaveBeenCalledWith({
+      expect(hostMocks.startLogin).toHaveBeenCalledWith({
+        kind: "sso",
         organizationId: "org-1",
-        prompt: "select_account",
       });
     });
-    expect(authActionMocks.signInWithGitHub).not.toHaveBeenCalled();
+    expect(hostMocks.startLogin).not.toHaveBeenCalledWith({ kind: "github" });
     expect(connectServerMocks.openForUrl).not.toHaveBeenCalled();
   });
 
   it("falls back to standard sign-in when the invited organization has no SSO", async () => {
-    authActionMocks.signInWithSso.mockRejectedValueOnce(
+    hostMocks.startLogin.mockRejectedValueOnce(
       new Error("SSO is not configured for this environment."),
     );
 
     renderJoinInvitationFlow(ORIGIN_LESS);
 
     await waitFor(() => {
-      expect(authActionMocks.signInWithGitHub).toHaveBeenCalledTimes(1);
+      expect(hostMocks.startLogin).toHaveBeenCalledWith({ kind: "github" });
     });
   });
 
   it("does not fall back to GitHub for a configured SSO provider failure", async () => {
-    authActionMocks.signInWithSso.mockRejectedValueOnce(new Error("SSO sign-in failed"));
+    hostMocks.startLogin.mockRejectedValueOnce(new Error("SSO sign-in failed"));
 
     const { result } = renderJoinInvitationFlow(ORIGIN_LESS);
 
@@ -128,7 +133,7 @@ describe("useOrganizationJoinInvitationFlow", () => {
         "Sign in could not start. Use Account settings to sign in, then reopen the invite link.",
       );
     });
-    expect(authActionMocks.signInWithGitHub).not.toHaveBeenCalled();
+    expect(hostMocks.startLogin).not.toHaveBeenCalledWith({ kind: "github" });
   });
 
   it("surfaces the trust-confirm dialog and starts NO auth when the invite origin differs from the current server", async () => {
@@ -140,8 +145,7 @@ describe("useOrganizationJoinInvitationFlow", () => {
     await waitFor(() => {
       expect(connectServerMocks.openForUrl).toHaveBeenCalledWith("https://proliferate.corp.example");
     });
-    expect(authActionMocks.signInWithSso).not.toHaveBeenCalled();
-    expect(authActionMocks.signInWithGitHub).not.toHaveBeenCalled();
+    expect(hostMocks.startLogin).not.toHaveBeenCalled();
   });
 
   it("treats an origin matching the currently-configured server as a normal same-server join", async () => {
@@ -154,9 +158,9 @@ describe("useOrganizationJoinInvitationFlow", () => {
     renderJoinInvitationFlow(entry);
 
     await waitFor(() => {
-      expect(authActionMocks.signInWithSso).toHaveBeenCalledWith({
+      expect(hostMocks.startLogin).toHaveBeenCalledWith({
+        kind: "sso",
         organizationId: "org-1",
-        prompt: "select_account",
       });
     });
     expect(connectServerMocks.openForUrl).not.toHaveBeenCalled();
@@ -172,7 +176,6 @@ describe("useOrganizationJoinInvitationFlow", () => {
         "Sign in to accept this invitation. Use the sign-in form below.",
       );
     });
-    expect(authActionMocks.signInWithSso).not.toHaveBeenCalled();
-    expect(authActionMocks.signInWithGitHub).not.toHaveBeenCalled();
+    expect(hostMocks.startLogin).not.toHaveBeenCalled();
   });
 });
