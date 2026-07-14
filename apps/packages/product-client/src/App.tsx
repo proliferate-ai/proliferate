@@ -1,30 +1,36 @@
 import { Suspense, lazy } from "react"
 import { Navigate, Route } from "react-router-dom"
-import { BootstrappedRoute, PublicOnlyRoute } from "@/components/auth/AuthGate"
-import { UserPreferencesGate } from "@/components/app/UserPreferencesGate"
-import { KeyboardShortcutsDialog } from "@/components/workspace/shell/sidebar/KeyboardShortcutsDialog"
-import { ToastContainer } from "@/components/feedback/Toast"
-import { UpdateRestartDialog } from "@/components/feedback/UpdateRestartDialog"
-import { UpdateToastPresenter } from "@/components/feedback/UpdateToastPresenter"
+import { BootstrappedRoute, PublicOnlyRoute } from "#product/components/auth/AuthGate"
+import { UserPreferencesGate } from "#product/components/app/UserPreferencesGate"
+import { KeyboardShortcutsDialog } from "#product/components/workspace/shell/sidebar/KeyboardShortcutsDialog"
+import { ToastContainer } from "#product/components/feedback/Toast"
+import { UpdateRestartDialog } from "#product/components/feedback/UpdateRestartDialog"
+import { UpdateToastPresenter } from "#product/components/feedback/UpdateToastPresenter"
 import { Toaster } from "@proliferate/ui/kit/Sonner"
-import { MacWindowControlsSafeArea } from "@/components/app/chrome/MacWindowControlsSafeArea"
-import { useLocalWorktreeSettingsTarget } from "@/hooks/workspaces/facade/use-local-worktree-settings-target"
-import { useWorktreeCleanupPolicySync } from "@/hooks/workspaces/lifecycle/use-worktree-cleanup-policy-sync"
-import { RepoSetupModalHost } from "@/components/workspace/repo-setup/RepoSetupModalHost"
-import { SupportModalHost } from "@/components/support/SupportModalHost"
-import { AddRepoFlowHost } from "@/components/workspace/repo-setup/AddRepoFlowHost"
-import { InstrumentedRoutes } from "@/lib/integrations/telemetry/sentry"
-import { AuthenticatedAppHost } from "@/pages/AuthenticatedAppHost"
-import { LoginPage } from "@/pages/LoginPage"
-import { SettingsCloudRedirect } from "@/pages/SettingsCloudRedirect"
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store"
-import { ShortcutRevealProvider } from "@/providers/ShortcutRevealProvider"
+import { MacWindowControlsSafeArea } from "#product/components/app/chrome/MacWindowControlsSafeArea"
+import { useLocalWorktreeSettingsTarget } from "#product/hooks/workspaces/facade/use-local-worktree-settings-target"
+import { useWorktreeCleanupPolicySync } from "#product/hooks/workspaces/lifecycle/use-worktree-cleanup-policy-sync"
+import { RepoSetupModalHost } from "#product/components/workspace/repo-setup/RepoSetupModalHost"
+import { SupportModalHost } from "#product/components/support/SupportModalHost"
+import { AddRepoFlowHost } from "#product/components/workspace/repo-setup/AddRepoFlowHost"
+import { LoginPage } from "#product/pages/LoginPage"
+import { SettingsCloudRedirect } from "#product/pages/SettingsCloudRedirect"
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store"
+import { ShortcutRevealProvider } from "#product/providers/ShortcutRevealProvider"
+import type { ProductRoutesComponent } from "#product/ProductClient"
+
+// The authenticated product root is internal and lazy-loaded through the
+// compiled `#product/*` import, so the public shell (login/public routes) never
+// eagerly pulls the authenticated-only chunks (editor/terminal/etc.).
+const AuthenticatedProductClient = lazy(
+  () => import("#product/app/AuthenticatedProductClient"),
+)
 
 // Dev-only playground. Lazy-loaded with a DEV guard so neither this file
 // nor any of its fixtures / transitive deps land in production bundles.
 const ChatPlaygroundPage = import.meta.env.DEV
   ? lazy(() =>
-      import("@/pages/ChatPlaygroundPage").then((m) => ({
+      import("#product/pages/ChatPlaygroundPage").then((m) => ({
         default: m.ChatPlaygroundPage,
       })),
     )
@@ -32,7 +38,7 @@ const ChatPlaygroundPage = import.meta.env.DEV
 
 const UpdatePlaygroundPage = import.meta.env.DEV
   ? lazy(() =>
-      import("@/pages/UpdatePlaygroundPage").then((m) => ({
+      import("#product/pages/UpdatePlaygroundPage").then((m) => ({
         default: m.UpdatePlaygroundPage,
       })),
     )
@@ -40,7 +46,7 @@ const UpdatePlaygroundPage = import.meta.env.DEV
 
 const WorkspaceStatusPlaygroundPage = import.meta.env.DEV
   ? lazy(() =>
-      import("@/pages/WorkspaceStatusPlaygroundPage").then((m) => ({
+      import("#product/pages/WorkspaceStatusPlaygroundPage").then((m) => ({
         default: m.WorkspaceStatusPlaygroundPage,
       })),
     )
@@ -48,7 +54,7 @@ const WorkspaceStatusPlaygroundPage = import.meta.env.DEV
 
 const AuthPlaygroundPage = import.meta.env.DEV
   ? lazy(() =>
-      import("@/pages/AuthPlaygroundPage").then((m) => ({
+      import("#product/pages/AuthPlaygroundPage").then((m) => ({
         default: m.AuthPlaygroundPage,
       })),
     )
@@ -56,7 +62,7 @@ const AuthPlaygroundPage = import.meta.env.DEV
 
 const AgentsPlaygroundPage = import.meta.env.DEV
   ? lazy(() =>
-      import("@/pages/AgentsPlaygroundPage").then((m) => ({
+      import("#product/pages/AgentsPlaygroundPage").then((m) => ({
         default: m.AgentsPlaygroundPage,
       })),
     )
@@ -64,23 +70,30 @@ const AgentsPlaygroundPage = import.meta.env.DEV
 
 const SubagentsUxPlaygroundPage = import.meta.env.DEV
   ? lazy(() =>
-      import("@/pages/SubagentsUxPlaygroundPage").then((m) => ({
+      import("#product/pages/SubagentsUxPlaygroundPage").then((m) => ({
         default: m.SubagentsUxPlaygroundPage,
       })),
     )
   : null
 
+interface AppProps {
+  // Host-supplied routes component (Desktop/Web pass their Sentry-instrumented
+  // InstrumentedRoutes; the browser fixture passes plain React Router Routes).
+  // ProductClient never imports Sentry.
+  RoutesComponent: ProductRoutesComponent
+}
+
 // Thin product route/UI tree. Shared and Desktop lifecycle wiring lives above
 // this component in `ProductLifecycleRoot`, which also owns the single
 // `AppErrorBoundary` enclosing both the lifecycle hooks and this tree; `App`
 // owns only the route tree, modal hosts, and toasts.
-function App() {
+export function App({ RoutesComponent }: AppProps) {
   return (
       <ShortcutRevealProvider>
         <MacWindowControlsSafeArea />
         <UpdateRestartDialog />
         <WorktreeCleanupPolicySyncGate />
-        <InstrumentedRoutes>
+        <RoutesComponent>
           <Route path="/index.html" element={<Navigate to="/" replace />} />
           <Route path="/settings/cloud" element={<SettingsCloudRedirect />} />
           <Route path="/settings/billing" element={<SettingsCloudRedirect />} />
@@ -93,7 +106,14 @@ function App() {
                 routes once the workspace should be revealed. */}
             <Route path="/setup" element={<Navigate to="/" replace />} />
             <Route element={<UserPreferencesGate />}>
-              <Route path="*" element={<AuthenticatedAppHost />} />
+              <Route
+                path="*"
+                element={
+                  <Suspense fallback={null}>
+                    <AuthenticatedProductClient />
+                  </Suspense>
+                }
+              />
             </Route>
           </Route>
           {import.meta.env.DEV && ChatPlaygroundPage && (
@@ -157,7 +177,7 @@ function App() {
             />
           )}
           <Route path="*" element={<Navigate to="/" replace />} />
-        </InstrumentedRoutes>
+        </RoutesComponent>
         <RepoSetupModalHost />
         <AddRepoFlowHost />
         <SupportModalHost />
@@ -187,5 +207,3 @@ function WorktreeCleanupPolicySyncMount() {
   useWorktreeCleanupPolicySync(settings.targets, settings.syncPolicyToTarget)
   return null
 }
-
-export default App
