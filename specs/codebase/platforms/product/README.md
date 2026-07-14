@@ -25,7 +25,6 @@ expectations, but it is not the owner of a full user workflow.
 | Billing | Credit authorization, Stripe subscription/refill behavior, budget reconciliation, billing state in product responses, and billing QA. | [billing.md](billing.md) |
 | Model catalog | Model catalog source of truth, projection, availability, and selector-facing catalog behavior. | [model-catalog.md](model-catalog.md) |
 | Agent catalog readiness | Agent descriptor catalog, readiness projection, install topology, seed artifacts, and launch resolution. | [agent-catalog-readiness.md](agent-catalog-readiness.md) |
-| Harness-specific agent platforms | Claude and Codex harness-specific behavior that does not belong in the generic runtime guide. | [agents/README.md](agents/README.md) |
 
 ## Naming Notes
 
