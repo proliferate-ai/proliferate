@@ -51,6 +51,7 @@ applicable owner.
 
 | Source area | Start here |
 | --- | --- |
+| `AGENTS.md`, `CONTRIBUTING.md`, `.github/pull_request_template.md` | [`specs/developing/process/README.md`](specs/developing/process/README.md) |
 | `apps/desktop/**`, `apps/web/**`, `apps/mobile/**`, `apps/packages/**` | [`specs/codebase/structures/frontend/README.md`](specs/codebase/structures/frontend/README.md) |
 | `apps/desktop/src-tauri/**`, `apps/desktop/src-tauri-debug/**` | [`specs/codebase/structures/desktop-native/README.md`](specs/codebase/structures/desktop-native/README.md) |
 | `server/**` | [`specs/codebase/structures/server/README.md`](specs/codebase/structures/server/README.md) |
@@ -85,7 +86,5 @@ Use [`specs/developing/README.md`](specs/developing/README.md) for procedures.
 
 Run `python3 scripts/check_docs.py` after changing repository documentation.
 
-PR titles and labels follow
-[`specs/developing/deploying/ci-cd.md`](specs/developing/deploying/ci-cd.md):
-use `<type>(<scope>): <plain-English change>`, exactly one `release:*` label,
-and every affected `area:*` label.
+Prepare and mark pull requests ready according to
+[`specs/developing/process/pull-requests.md`](specs/developing/process/pull-requests.md).

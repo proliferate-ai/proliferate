@@ -10,9 +10,11 @@ configuration, and self-hosted deployment. Local development belongs under
 
 ## Read Order
 
-- [ci-cd.md](ci-cd.md): hosted CI, PR metadata, staging deploys, production
-  promotion, release lanes, desktop updater publishing, mobile/TestFlight,
-  E2B template releases, environment variables, and production inventory.
+- [ci-cd.md](ci-cd.md): hosted CI, mechanical PR-metadata enforcement,
+  staging deploys, production promotion, release lanes, desktop updater
+  publishing, mobile/TestFlight, E2B template releases, environment variables,
+  and production inventory. Contributors preparing a PR follow the canonical
+  [pull-request procedure](../process/pull-requests.md).
 - [self-hosted-deploy.md](self-hosted-deploy.md): canonical self-hosted Docker
   Compose deployment, desktop runtime override, first-time setup, updates, and
   image sources.
