@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
-import App from "./App";
+import { ProductClient } from "@proliferate/product-client/ProductClient";
 import { initializeTheme } from "./config/theme";
 import "./lib/access/cloud/client";
 import { bootstrapProliferateApiConfig } from "./lib/infra/proliferate-api";
@@ -24,10 +24,11 @@ import {
 import { installDebugMeasurement } from "./lib/infra/measurement/debug-measurement-install";
 import { startLayoutShiftObserver } from "./lib/infra/measurement/debug-layout-shift";
 import { logRendererEvent } from "./lib/access/tauri/diagnostics";
+import { InstrumentedRoutes } from "./lib/integrations/telemetry/sentry";
 import { DesktopHostProviders } from "./providers/DesktopHostProviders";
-import { ProductProviderRoot } from "./providers/ProductProviderRoot";
-import { ProductLifecycleRoot } from "./providers/ProductLifecycleRoot";
-import "./index.css";
+// Surface-specific desktop stylesheet stays host-side; the shared product CSS
+// (xterm + product.css) rides with the moved ProductClient package entry.
+import "@proliferate/design/desktop.css";
 
 const IS_TAURI_DESKTOP =
   typeof window !== "undefined"
@@ -112,11 +113,10 @@ function renderApp() {
     <React.StrictMode>
       <BrowserRouter>
         <DesktopHostProviders>
-          <ProductProviderRoot>
-            <ProductLifecycleRoot>
-              <App />
-            </ProductLifecycleRoot>
-          </ProductProviderRoot>
+          {/* The host supplies its Sentry-instrumented routes container; the
+              package ProductClient owns the product provider root, lifecycle
+              root, and route/UI tree. */}
+          <ProductClient RoutesComponent={InstrumentedRoutes} />
         </DesktopHostProviders>
       </BrowserRouter>
     </React.StrictMode>,
