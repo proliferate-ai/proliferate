@@ -61,9 +61,9 @@ reliability. The accepted fixes are now part of the branch:
 
 - `AGENTS.md`
 - `specs/README.md`
-- `specs/codebase/features/workspace-migration.md`
-- `specs/codebase/features/cloud-dispatch.md`
-- `specs/codebase/primitives/cloud-commands.md`
+- `specs/codebase/systems/product/workspaces/migration.md`
+- `specs/codebase/systems/product/workspaces/cloud-dispatch.md`
+- `specs/codebase/platforms/product/cloud-commands.md`
 - `specs/codebase/structures/frontend/README.md`
 - `specs/codebase/structures/frontend/guides/components.md`
 - `specs/codebase/structures/frontend/guides/hooks.md`
@@ -81,14 +81,14 @@ Key constraints from those docs:
 
 - Cloud is the durable ledger for workspace identity and handoff state, but not
   a runtime target. AnyHarness on each side owns export and import
-  (`specs/codebase/features/workspace-migration.md:12`).
+  (`specs/codebase/systems/product/workspaces/migration.md:12`).
 - Snapshot/fork migration is out of scope for the move flow
-  (`specs/codebase/features/workspace-migration.md:69`).
+  (`specs/codebase/systems/product/workspaces/migration.md:69`).
 - Desktop is the V1 executor for move operations
-  (`specs/codebase/features/workspace-migration.md:164`).
+  (`specs/codebase/systems/product/workspaces/migration.md:164`).
 - Passive web/mobile UI must read from Cloud DB and not wake the sandbox; command
-  and mutation paths use Cloud commands (`specs/codebase/primitives/cloud-commands.md:47`,
-  `specs/codebase/primitives/cloud-commands.md:105`).
+  and mutation paths use Cloud commands (`specs/codebase/platforms/product/cloud-commands.md:47`,
+  `specs/codebase/platforms/product/cloud-commands.md:105`).
 - Frontend pure product decisions belong in `lib/domain/**`; multi-step
   sequences belong in `lib/workflows/**`; hooks wire React, stores, and access
   dependencies (`specs/codebase/structures/frontend/guides/lib.md:6`,

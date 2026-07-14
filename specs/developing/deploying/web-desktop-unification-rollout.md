@@ -4,7 +4,7 @@ Status: binding stage and implementation ledger for the Web/Desktop client unifi
 migration.
 
 This document records the current reviewed slice for the migration defined by
-[`../../codebase/features/web-desktop-client-unification.md`](../../codebase/features/web-desktop-client-unification.md)
+[`../../codebase/systems/product/clients/web-desktop-unification/README.md`](../../codebase/systems/product/clients/web-desktop-unification/README.md)
 (the canonical architecture; it wins any conflict). The founder and
 implementation agent control one current slice together, keep its contract
 current as evidence changes, review it, and then select the next slice.
@@ -42,24 +42,24 @@ Current handoff:
 
 - Repository: `proliferate-ai/proliferate`.
 - Canonical contract:
-  `specs/codebase/features/web-desktop-client-unification.md`.
+  `specs/codebase/systems/product/clients/web-desktop-unification/README.md`.
 - Founder working drafts live outside the repository. They are editing
   surfaces only; promoted repository specs and this ledger are sufficient for
   any developer or CI consumer to reproduce the binding handoff.
 - Desktop Host Adoption contract:
-  `specs/codebase/features/web-desktop-client-unification-d1a.md`, revision
+  `specs/codebase/systems/product/clients/web-desktop-unification/migration/d1a.md`, revision
   `D1a-r2`, exact implementation base
   `2ec15eaf8cfc870cbdbb42c225a5f1428e5282b4`.
 - Final implementation: PR #1157, merge
   `a76ab5911e2af39593b4b31530535f0811a3558b`, from accepted head
   `90926523c3662067e02f8511db6c8e0058e119f1`.
 - Desktop Native UI Adoption contract:
-  `specs/codebase/features/web-desktop-client-unification-d1b.md`, revision
+  `specs/codebase/systems/product/clients/web-desktop-unification/migration/d1b.md`, revision
   `D1b-r2`, final PR #1165 reviewed head
   `32632bd487e9be28592579728b87f0c18d73ee9c`, merge
   `736d181575e4d81389d19ba7a78afd14566e1fda`.
 - Desktop Local Runtime Adoption contract:
-  `specs/codebase/features/web-desktop-client-unification-d1c.md`, exact
+  `specs/codebase/systems/product/clients/web-desktop-unification/migration/d1c.md`, exact
   implementation base `736d181575e4d81389d19ba7a78afd14566e1fda`.
 - Current role: implementation. Material scope changes are decided with the
   founder and recorded before the slice broadens.
@@ -70,9 +70,9 @@ Current handoff:
 | Preparation: shared CSS | Establish `product.css`, Desktop-only CSS, and package source scanning. | PR #1151, merge `36d40c2c0` | Complete |
 | Preparation: embedded browser | Delete the embedded workspace browser and its native child-WebView capability. | PR #1154, merge `4f7fe6ee5` | Complete |
 | Preparation: ProductClient foundation | Add the compiled package, `ProductHost`, `DesktopBridge`, `ProductHostProvider`, tests, and enforcement. | PR #1153, merge `0b33e116d` | Complete |
-| Desktop Host Adoption | Construct the concrete Desktop host, mount the provider, replace reactive snapshots, and gate running-agent export through one Desktop-only lifecycle root while product files remain in Desktop. | [`web-desktop-client-unification-d1a.md`](../../codebase/features/web-desktop-client-unification-d1a.md), `D1a-r2`; PR #1157 merge `a76ab5911e2af39593b4b31530535f0811a3558b` | Complete |
-| Desktop Native UI Adoption | Route native menus, native commands, Dock attention, and Desktop zoom through the mounted bridge while product files remain in Desktop. | [`web-desktop-client-unification-d1b.md`](../../codebase/features/web-desktop-client-unification-d1b.md); PR #1165 merge `736d181575e4d81389d19ba7a78afd14566e1fda` | Complete |
-| Desktop Local Runtime Adoption | Route product-owned local AnyHarness discovery, restart, readiness, and connection through the Desktop bridge while raw sidecar/process startup remains Desktop-owned. | [`web-desktop-client-unification-d1c.md`](../../codebase/features/web-desktop-client-unification-d1c.md), base `736d181575e4d81389d19ba7a78afd14566e1fda` | Implementing |
+| Desktop Host Adoption | Construct the concrete Desktop host, mount the provider, replace reactive snapshots, and gate running-agent export through one Desktop-only lifecycle root while product files remain in Desktop. | [`web-desktop-client-unification-d1a.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1a.md), `D1a-r2`; PR #1157 merge `a76ab5911e2af39593b4b31530535f0811a3558b` | Complete |
+| Desktop Native UI Adoption | Route native menus, native commands, Dock attention, and Desktop zoom through the mounted bridge while product files remain in Desktop. | [`web-desktop-client-unification-d1b.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1b.md); PR #1165 merge `736d181575e4d81389d19ba7a78afd14566e1fda` | Complete |
+| Desktop Local Runtime Adoption | Route product-owned local AnyHarness discovery, restart, readiness, and connection through the Desktop bridge while raw sidecar/process startup remains Desktop-owned. | [`web-desktop-client-unification-d1c.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1c.md), base `736d181575e4d81389d19ba7a78afd14566e1fda` | Implementing |
 | Remaining Desktop capability adoption | Route only real remaining product consumers through coherent bridge slices while paths remain stable. | Specify only from current consumers; no bridge-completeness work for its own sake. | Directional |
 | Shared-client extraction readiness | Prove the host mount envelope, compiled assets/builds, move ledger/codemod, minimal browser host, and fail-closed boundaries. | Shape the focused checklist together before the source move. | Directional |
 | Mechanical Desktop extraction | Move the working Desktop product into ProductClient and leave Desktop as a thin native host. | Exact file ledger, landing window, codemod, builds, and behavior proof required. | Directional |
@@ -134,7 +134,7 @@ Desktop host.
 The implementation merged in PR #1165 from reviewed head
 `32632bd487e9be28592579728b87f0c18d73ee9c` at merge
 `736d181575e4d81389d19ba7a78afd14566e1fda`. The complete contract is
-[`web-desktop-client-unification-d1b.md`](../../codebase/features/web-desktop-client-unification-d1b.md).
+[`web-desktop-client-unification-d1b.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1b.md).
 
 ## 4. Desktop Local Runtime Adoption working record
 
@@ -151,7 +151,7 @@ runtime scope empty/fail-closed, and explicitly keeps cloud and SSH-target
 flows independent of local discovery.
 
 The complete living contract is
-[`web-desktop-client-unification-d1c.md`](../../codebase/features/web-desktop-client-unification-d1c.md).
+[`web-desktop-client-unification-d1c.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1c.md).
 
 ## 5. Remaining migration map and gates
 

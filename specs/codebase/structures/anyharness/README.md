@@ -250,16 +250,16 @@ Specs:
 - [specs/session-actor.md](specs/session-actor.md) for the target
   `live/sessions/actor` state-machine split, actor-owned state, command
   handling, turn loop, config, notifications, interactions, and shutdown.
-- [../../primitives/agent-catalog-readiness.md](../../primitives/agent-catalog-readiness.md) for
+- [../../platforms/product/agent-catalog-readiness.md](../../platforms/product/agent-catalog-readiness.md) for
   the agents catalog/readiness model: single catalog input, trusted
   descriptor/model projection, install/readiness topology, seed artifacts, and
   launch resolution.
-- [../../primitives/mcp-runtime.md](../../primitives/mcp-runtime.md) for user MCP bindings, product MCP servers,
+- [../../platforms/product/mcp-runtime.md](../../platforms/product/mcp-runtime.md) for user MCP bindings, product MCP servers,
   session extensions, capability tokens, and MCP elicitation.
-- [../../features/agent-features/servers.md](../../features/agent-features/servers.md) for the repeatable product
+- [../../platforms/product/agent-features/servers.md](../../platforms/product/agent-features/servers.md) for the repeatable product
   MCP server pattern: definition, auth, injection, context, tools, calls, UI
   exposure, and session MCP selection.
-- [../../features/agent-features/definitions/README.md](../../features/agent-features/definitions/README.md) for the concrete product
+- [../../platforms/product/agent-features/definitions/README.md](../../platforms/product/agent-features/definitions/README.md) for the concrete product
   MCP definitions currently being standardized: subagents, artifacts, and
   reviews.
 
@@ -268,7 +268,7 @@ behavior for runtime areas that do not yet have a focused guide or spec:
 
 - [src/agents.md](src/agents.md)
 - [src/acp.md](src/acp.md)
-- [../../features/cowork-artifacts.md](../../features/cowork-artifacts.md)
+- [../../systems/product/agents/cowork-artifacts.md](../../systems/product/agents/cowork-artifacts.md)
 - [src/files.md](src/files.md)
 - [src/git.md](src/git.md)
 - [src/persistence.md](src/persistence.md)
@@ -303,20 +303,20 @@ which guide to read and where the code belongs.
 | Session durable records, event rows, session config, pending prompts | `anyharness-lib/src/domains/sessions/**` | `domains/sessions/**` | [guides/domains.md](guides/domains.md), [specs/session-engine.md](specs/session-engine.md), [src/sessions.md](src/sessions.md) |
 | Live running agent process, session actor loop, ACP client, event sink, interactions | `anyharness-lib/src/live/sessions/**`, with remaining ACP helpers in `anyharness-lib/src/acp/**` | `live/sessions/**` plus earned `integrations/acp/**` | [guides/live-runtime.md](guides/live-runtime.md), [specs/session-engine.md](specs/session-engine.md), [src/acp.md](src/acp.md) |
 | Workspace durable lifecycle, materialization, purge/retire, retention policy | `anyharness-lib/src/domains/workspaces/**` | `domains/workspaces/**` | [guides/domains.md](guides/domains.md), [src/workspaces.md](src/workspaces.md) |
-| Agent catalog, install, credentials, readiness, supported-agent meaning | `anyharness-lib/src/domains/agents/**` | `domains/agents/**` | [guides/domains.md](guides/domains.md), [../../primitives/agent-catalog-readiness.md](../../primitives/agent-catalog-readiness.md), [src/agents.md](src/agents.md) |
+| Agent catalog, install, credentials, readiness, supported-agent meaning | `anyharness-lib/src/domains/agents/**` | `domains/agents/**` | [guides/domains.md](guides/domains.md), [../../platforms/product/agent-catalog-readiness.md](../../platforms/product/agent-catalog-readiness.md), [src/agents.md](src/agents.md) |
 | Provider CLI install/probe/path/version mechanics | `anyharness-lib/src/integrations/agent_cli/**`, provider-specific ACP code | `integrations/agent_cli/**` | [guides/integrations.md](guides/integrations.md), [guides/harnesses.md](guides/harnesses.md) |
 | Provider-specific behavior such as Claude/Codex extension support or live controls | `anyharness-lib/src/live/sessions/**`, `anyharness-lib/src/acp/**`, `specs/codebase/structures/anyharness/harnesses/**` | harness doc plus owning live runtime/integration module | [guides/harnesses.md](guides/harnesses.md), provider doc under `harnesses/**` |
 | File browsing, file reads/writes, workspace file capabilities | `anyharness-lib/src/adapters/files/**` | `adapters/files/**` | [guides/adapters.md](guides/adapters.md), [src/files.md](src/files.md) |
 | Git status/diff/branch operations and git command parsing | `anyharness-lib/src/adapters/git/**` | `adapters/git/**` | [guides/adapters.md](guides/adapters.md), [src/git.md](src/git.md) |
 | Hosting and process helpers around local workspace capabilities | `anyharness-lib/src/adapters/hosting/**`, `anyharness-lib/src/adapters/processes/**` | `adapters/hosting/**`, `adapters/processes/**` | [guides/adapters.md](guides/adapters.md) |
 | Terminal durable records, PTY lifecycle, terminal stream handles, terminal registry | `anyharness-lib/src/domains/terminals/**`, `anyharness-lib/src/live/terminals/**` | durable `domains/terminals/**` plus live `live/terminals/**` | [guides/live-runtime.md](guides/live-runtime.md) |
-| MCP user bindings attached to a session | `anyharness-lib/src/domains/sessions/mcp_bindings/**` | `domains/sessions/mcp_bindings/**` | [../../primitives/mcp-runtime.md](../../primitives/mcp-runtime.md), [guides/domains.md](guides/domains.md) |
-| Product MCP tool servers for artifacts, reviews, subagents | `domains/cowork/**`, `domains/reviews/**`, `domains/sessions/subagents/**` | owning product domain | [../../features/agent-features/servers.md](../../features/agent-features/servers.md), [../../features/agent-features/definitions/README.md](../../features/agent-features/definitions/README.md), [guides/domains.md](guides/domains.md) |
-| Shared MCP JSON-RPC, capability-token, tool-formatting scaffolding | `anyharness-lib/src/integrations/mcp/**` plus any remaining feature-local wrappers | `integrations/mcp/**` | [guides/integrations.md](guides/integrations.md), [../../primitives/mcp-runtime.md](../../primitives/mcp-runtime.md) |
-| Artifact durable model, manifest, protection, or runtime behavior | `anyharness-lib/src/domains/artifacts/**` | `domains/artifacts/**` | [guides/domains.md](guides/domains.md), [../../features/agent-features/definitions/artifacts.md](../../features/agent-features/definitions/artifacts.md) |
-| Cowork artifacts, delegation, or cowork-owned tools | `anyharness-lib/src/domains/cowork/**` | `domains/cowork/**` | [guides/domains.md](guides/domains.md), [../../features/cowork-artifacts.md](../../features/cowork-artifacts.md) |
-| Plugin expansion: MCP plugin auth/definitions/tools or skill rendering for sessions | `anyharness-lib/src/domains/plugins/**` | `domains/plugins/**` | [guides/domains.md](guides/domains.md), [../../primitives/mcp-skills.md](../../primitives/mcp-skills.md) |
-| Applied runtime config for a session: MCP/skill/plugin manifest, credential values, session context | `anyharness-lib/src/domains/runtime_config/**` | `domains/runtime_config/**` | [guides/domains.md](guides/domains.md), [../../primitives/mcp-skills.md](../../primitives/mcp-skills.md) |
+| MCP user bindings attached to a session | `anyharness-lib/src/domains/sessions/mcp_bindings/**` | `domains/sessions/mcp_bindings/**` | [../../platforms/product/mcp-runtime.md](../../platforms/product/mcp-runtime.md), [guides/domains.md](guides/domains.md) |
+| Product MCP tool servers for artifacts, reviews, subagents | `domains/cowork/**`, `domains/reviews/**`, `domains/sessions/subagents/**` | owning product domain | [../../platforms/product/agent-features/servers.md](../../platforms/product/agent-features/servers.md), [../../platforms/product/agent-features/definitions/README.md](../../platforms/product/agent-features/definitions/README.md), [guides/domains.md](guides/domains.md) |
+| Shared MCP JSON-RPC, capability-token, tool-formatting scaffolding | `anyharness-lib/src/integrations/mcp/**` plus any remaining feature-local wrappers | `integrations/mcp/**` | [guides/integrations.md](guides/integrations.md), [../../platforms/product/mcp-runtime.md](../../platforms/product/mcp-runtime.md) |
+| Artifact durable model, manifest, protection, or runtime behavior | `anyharness-lib/src/domains/artifacts/**` | `domains/artifacts/**` | [guides/domains.md](guides/domains.md), [../../platforms/product/agent-features/definitions/artifacts.md](../../platforms/product/agent-features/definitions/artifacts.md) |
+| Cowork artifacts, delegation, or cowork-owned tools | `anyharness-lib/src/domains/cowork/**` | `domains/cowork/**` | [guides/domains.md](guides/domains.md), [../../systems/product/agents/cowork-artifacts.md](../../systems/product/agents/cowork-artifacts.md) |
+| Plugin expansion: MCP plugin auth/definitions/tools or skill rendering for sessions | `anyharness-lib/src/domains/plugins/**` | `domains/plugins/**` | [guides/domains.md](guides/domains.md), [../../platforms/product/mcp-skills.md](../../platforms/product/mcp-skills.md) |
+| Applied runtime config for a session: MCP/skill/plugin manifest, credential values, session context | `anyharness-lib/src/domains/runtime_config/**` | `domains/runtime_config/**` | [guides/domains.md](guides/domains.md), [../../platforms/product/mcp-skills.md](../../platforms/product/mcp-skills.md) |
 | Session link graph: subagent, cowork, review-agent, fork relationships | `anyharness-lib/src/domains/sessions/links/**` | `domains/sessions/links/**` | [guides/domains.md](guides/domains.md), [specs/session-engine.md](specs/session-engine.md) |
 | Reviews, plans, mobility, or repo-root product behavior | `domains/reviews/**`, `domains/plans/**`, `domains/mobility/**`, `domains/repo_roots/**` | owning `domains/<domain>/**` | [guides/domains.md](guides/domains.md) |
 | Latency tracing, request measurement, diagnostic ids | `observability/latency.rs` and scattered measurement helpers | `observability/**` | [guides/observability.md](guides/observability.md) |

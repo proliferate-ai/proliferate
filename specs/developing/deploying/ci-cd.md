@@ -557,7 +557,7 @@ changelog pages remain separate from this release/deploy automation.
 
 Consent-safe support attribution, the machine-readable product release
 manifest, and deterministic landing changelog generation are defined in
-[`../../codebase/features/support-system.md`](../../codebase/features/support-system.md).
+[`../../codebase/systems/engineering/issue-lifecycle/support-loop.md`](../../codebase/systems/engineering/issue-lifecycle/support-loop.md).
 `Publish landing changelog` is deliberately manual until the release finalizer
 publishes manifests. It requires `LANDING_REPOSITORY` (repository variable) and
 `LANDING_REPOSITORY_TOKEN` (secret with write access only to that repository),
@@ -804,7 +804,7 @@ make release-desktop-draft DESKTOP_RELEASE_TAG=desktop-v0.1.28
 
 Source of truth:
 
-- `specs/codebase/features/desktop-updates.md`
+- `specs/codebase/systems/engineering/delivery/desktop-updates.md`
 - `apps/desktop/src-tauri/tauri.conf.json`
 - `apps/desktop/src/lib/access/tauri/updater.ts`
 - `apps/desktop/src/lib/access/downloads/desktop-release-manifest.ts`

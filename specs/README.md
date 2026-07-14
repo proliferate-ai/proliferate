@@ -31,8 +31,8 @@ specs/
 ├── codebase/
 │   ├── README.md
 │   ├── structures/   Source-area organization and dependency rules
-│   ├── primitives/   Reusable product and runtime capabilities
-│   └── features/     Complete product workflows and surfaces
+│   ├── platforms/    Reusable product, engineering, and internal capabilities
+│   └── systems/      Complete product and engineering domains
 ├── developing/       Current development and operating procedures
 ├── generated/        Reproducible checked-in references
 └── tbd/              Non-authoritative proposals awaiting an owner
@@ -54,8 +54,8 @@ indexes rather than guessing a leaf path.
 
 - Describe ownership, behavior, failure handling, and proof directly.
 - Put source organization in `codebase/structures/**`.
-- Put reusable capability contracts in `codebase/primitives/**`.
-- Put complete product workflows in `codebase/features/**`.
+- Put reusable capability contracts in `codebase/platforms/**`.
+- Put complete product and engineering domains in `codebase/systems/**`.
 - Put task procedures in `developing/**`; do not duplicate system
   architecture there.
 - Label target material explicitly and state how it differs from current code.

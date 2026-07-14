@@ -5,8 +5,8 @@ Status: non-authoritative execution handoff.
 Last read-only production audit: 2026-07-13, `us-east-1`.
 
 The accepted contracts are
-[`support-system.md`](../codebase/features/support-system.md),
-[`release-manifest.schema.json`](../codebase/features/release-manifest.schema.json),
+[`support-system.md`](../codebase/systems/engineering/issue-lifecycle/support-loop.md),
+[`release-manifest.schema.json`](../codebase/systems/engineering/delivery/release-manifest.schema.json),
 and the standalone tracker's `SPEC.md`. Those contracts win over this file.
 This file records how to get from the deployed prototype to that accepted end
 state without losing the current dirty work, source events, or rollback path.
@@ -161,8 +161,8 @@ zero-item run advances `last_success_at`.
 Before touching Proliferate code, read:
 
 1. repository `AGENTS.md` and [`specs/README.md`](../README.md);
-2. [`support-system.md`](../codebase/features/support-system.md);
-3. [`support-reporting.md`](../codebase/features/support-reporting.md);
+2. [`support-system.md`](../codebase/systems/engineering/issue-lifecycle/support-loop.md);
+3. [`support-reporting.md`](../codebase/systems/product/support/README.md);
 4. [`server/README.md`](../codebase/structures/server/README.md) and the
    focused server guides for every touched layer;
 5. the frontend README and telemetry guide for web/mobile/desktop telemetry;
@@ -286,10 +286,10 @@ For Proliferate, attach the detached donor to
 
 ```text
 specs/README.md
-specs/codebase/features/README.md
-specs/codebase/features/support-reporting.md
-specs/codebase/features/release-manifest.schema.json
-specs/codebase/features/support-system.md
+specs/codebase/systems/product/README.md
+specs/codebase/systems/product/support/README.md
+specs/codebase/systems/engineering/delivery/release-manifest.schema.json
+specs/codebase/systems/engineering/issue-lifecycle/support-loop.md
 specs/developing/debugging/support-reports.md
 specs/developing/deploying/ci-cd.md
 specs/tbd/README.md
@@ -308,16 +308,16 @@ PROLIFERATE_DONOR=/Users/pablohansen/.codex/worktrees/385e/proliferate
 
 git -C /Users/pablohansen/.codex/worktrees/385e/proliferate switch -c codex/support-system-spec
 git -C "$PROLIFERATE_DONOR" add -N -- \
-  specs/codebase/features/release-manifest.schema.json \
-  specs/codebase/features/support-system.md \
+  specs/codebase/systems/engineering/delivery/release-manifest.schema.json \
+  specs/codebase/systems/engineering/issue-lifecycle/support-loop.md \
   specs/tbd/support-system-alignment.md \
   specs/tbd/support-system-end-to-end-handoff.md
 git -C "$PROLIFERATE_DONOR" add -p -- \
   specs/README.md \
-  specs/codebase/features/README.md \
-  specs/codebase/features/support-reporting.md \
-  specs/codebase/features/release-manifest.schema.json \
-  specs/codebase/features/support-system.md \
+  specs/codebase/systems/product/README.md \
+  specs/codebase/systems/product/support/README.md \
+  specs/codebase/systems/engineering/delivery/release-manifest.schema.json \
+  specs/codebase/systems/engineering/issue-lifecycle/support-loop.md \
   specs/developing/debugging/support-reports.md \
   specs/developing/deploying/ci-cd.md \
   specs/tbd/README.md \

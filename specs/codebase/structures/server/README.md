@@ -219,8 +219,8 @@ changing:
 Product and surface contracts live outside this structure folder. For
 cross-cutting backend behavior such as billing, runtime provisioning, MCP,
 claiming, cloud commands, workspace lifecycle, or product auth, also read the
-relevant spec under `specs/codebase/primitives/**` or
-`specs/codebase/features/**`.
+relevant spec under `specs/codebase/platforms/product/**` or
+`specs/codebase/systems/**`.
 
 ## Dependency Direction
 

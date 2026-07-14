@@ -6,7 +6,7 @@ This ledger is history and sweep input only. Current phase and frozen-slice
 state lives in the rollout ledger at
 [`../developing/deploying/web-desktop-unification-rollout.md`](../developing/deploying/web-desktop-unification-rollout.md)
 and the promoted contract is
-[`../codebase/features/web-desktop-client-unification.md`](../codebase/features/web-desktop-client-unification.md).
+[`../codebase/systems/product/clients/web-desktop-unification/README.md`](../codebase/systems/product/clients/web-desktop-unification/README.md).
 Do not cite this file for code review or release readiness.
 
 Snapshot: 2026-07-13, `main@bdd11aa5a7`. This ledger records the live intake

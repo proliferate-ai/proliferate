@@ -60,7 +60,7 @@ applicable owner.
 | `anyharness/crates/proliferate-supervisor/**`, `install/**` | [`specs/codebase/structures/proliferate-supervisor/README.md`](specs/codebase/structures/proliferate-supervisor/README.md) |
 | `tests/intent/**`, `tests/release/**`, `anyharness/tests/**`, `fixtures/contracts/**` | [`specs/developing/testing/README.md`](specs/developing/testing/README.md) |
 | `scripts/agent-gateway-smoke/**` | [`specs/developing/testing/README.md`](specs/developing/testing/README.md) |
-| `catalogs/**`, `scripts/agent-catalog/**` | [`specs/codebase/primitives/README.md`](specs/codebase/primitives/README.md) |
+| `catalogs/**`, `scripts/agent-catalog/**` | [`specs/codebase/platforms/product/README.md`](specs/codebase/platforms/product/README.md) |
 | `.github/workflows/**`, `scripts/ci-cd/**`, `apps/desktop/infra/**`, `apps/desktop/scripts/**`, `server/infra/**`, `server/deploy/**` | [`specs/developing/deploying/README.md`](specs/developing/deploying/README.md) |
 | `.auth-env/**`, local profiles, local app identity | [`specs/developing/local/README.md`](specs/developing/local/README.md) |
 

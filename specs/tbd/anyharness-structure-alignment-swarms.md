@@ -6,7 +6,7 @@ This document tracks the high-level cleanup lanes for bringing AnyHarness code
 closer to the current structure docs. Each swarm should run in its own
 worktree, read the listed docs first, and keep its PR scoped to the named
 area. The canonical rules remain in `specs/codebase/structures/anyharness/**`,
-`specs/codebase/primitives/**`, and `specs/codebase/features/agent-features/**`.
+`specs/codebase/platforms/product/**`, and `specs/codebase/platforms/product/agent-features/**`.
 
 Use `specs/tbd/structure-alignment-coordinator-model.md` with this document when
 asking Codex to run one AnyHarness swarm, one phase, or the full AnyHarness
@@ -138,8 +138,8 @@ Read:
 - `specs/codebase/structures/anyharness/guides/domains.md`
 - `specs/codebase/structures/anyharness/specs/session-engine.md`
 - `specs/codebase/structures/anyharness/src/sessions.md`
-- `specs/codebase/primitives/mcp-runtime.md`
-- `specs/codebase/features/agent-features/servers.md`
+- `specs/codebase/platforms/product/mcp-runtime.md`
+- `specs/codebase/platforms/product/agent-features/servers.md`
 
 Focus:
 
@@ -167,7 +167,7 @@ Read:
 
 - `specs/codebase/structures/anyharness/guides/domains.md`
 - `specs/codebase/structures/anyharness/src/workspaces.md`
-- `specs/codebase/primitives/workspace-lifecycle.md`
+- `specs/codebase/platforms/product/workspace-lifecycle.md`
 
 Focus:
 
@@ -194,7 +194,7 @@ Read:
 
 - `specs/codebase/structures/anyharness/guides/domains.md`
 - `specs/codebase/structures/anyharness/guides/app.md`
-- `specs/codebase/features/agent-features/servers.md`
+- `specs/codebase/platforms/product/agent-features/servers.md`
 - `scripts/anyharness_boundaries_allowlist.txt`
 
 Focus:
@@ -272,7 +272,7 @@ registry mechanics.
 
 Read:
 
-- `specs/codebase/primitives/agent-catalog-readiness.md`
+- `specs/codebase/platforms/product/agent-catalog-readiness.md`
 - `specs/codebase/structures/anyharness/guides/domains.md`
 - `specs/codebase/structures/anyharness/guides/integrations.md`
 - `specs/codebase/structures/anyharness/src/agents.md`
@@ -301,10 +301,10 @@ with the documented three-part model.
 
 Read:
 
-- `specs/codebase/primitives/mcp-runtime.md`
-- `specs/codebase/primitives/mcp-skills.md`
-- `specs/codebase/features/agent-features/servers.md`
-- `specs/codebase/features/agent-features/definitions/README.md`
+- `specs/codebase/platforms/product/mcp-runtime.md`
+- `specs/codebase/platforms/product/mcp-skills.md`
+- `specs/codebase/platforms/product/agent-features/servers.md`
+- `specs/codebase/platforms/product/agent-features/definitions/README.md`
 - `specs/codebase/structures/anyharness/guides/integrations.md`
 
 Focus:
@@ -328,9 +328,9 @@ artifact product domain when product scope is ready.
 
 Read:
 
-- `specs/codebase/features/cowork-artifacts.md`
-- `specs/codebase/features/agent-features/definitions/artifacts.md`
-- `specs/codebase/features/agent-features/servers.md`
+- `specs/codebase/systems/product/agents/cowork-artifacts.md`
+- `specs/codebase/platforms/product/agent-features/definitions/artifacts.md`
+- `specs/codebase/platforms/product/agent-features/servers.md`
 - `specs/codebase/structures/anyharness/guides/domains.md`
 
 Focus:

@@ -11,6 +11,34 @@ from scripts import check_docs
 
 
 class DocumentationIntegrityTest(unittest.TestCase):
+    def test_platform_and_system_indexes_are_required(self) -> None:
+        required_indexes = {
+            "specs/codebase/platforms/README.md",
+            "specs/codebase/platforms/product/agent-features/README.md",
+            "specs/codebase/platforms/product/agents/README.md",
+            "specs/codebase/platforms/engineering/README.md",
+            "specs/codebase/platforms/internal/README.md",
+            "specs/codebase/systems/README.md",
+            "specs/codebase/systems/product/agents/README.md",
+            "specs/codebase/systems/product/automations/README.md",
+            "specs/codebase/systems/product/chat/README.md",
+            "specs/codebase/systems/product/clients/README.md",
+            "specs/codebase/systems/product/organizations/README.md",
+            "specs/codebase/systems/product/settings/README.md",
+            "specs/codebase/systems/product/workflows/README.md",
+            "specs/codebase/systems/product/workspaces/README.md",
+            "specs/codebase/systems/product/clients/web-desktop-unification/migration/README.md",
+            "specs/codebase/systems/engineering/README.md",
+            "specs/codebase/systems/engineering/delivery/README.md",
+            "specs/codebase/systems/engineering/issue-lifecycle/README.md",
+        }
+
+        self.assertLessEqual(required_indexes, set(check_docs.REQUIRED_READMES))
+        legacy_capability_root = "specs/codebase/" + "primitives/README.md"
+        legacy_workflow_root = "specs/codebase/" + "features/README.md"
+        self.assertNotIn(legacy_capability_root, check_docs.REQUIRED_READMES)
+        self.assertNotIn(legacy_workflow_root, check_docs.REQUIRED_READMES)
+
     def markdown_errors(self, files: dict[str, str]) -> list[str]:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()

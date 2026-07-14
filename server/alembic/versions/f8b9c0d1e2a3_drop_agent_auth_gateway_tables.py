@@ -1,8 +1,8 @@
 """drop agent auth gateway tables
 
 Removes the Bifrost-era agent-auth and agent-gateway schema. The gateway is
-being replaced by LiteLLM (see specs/codebase/primitives/agent-auth-litellm.md);
-PR 1 drops the shipped stack outright. `free_cloud_allocation` is intentionally
+being replaced by LiteLLM; PR 1 drops the shipped stack outright.
+`free_cloud_allocation` is intentionally
 kept so historical free-credit dedup survives.
 
 Revision ID: f8b9c0d1e2a3
