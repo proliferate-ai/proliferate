@@ -162,7 +162,9 @@ export async function launchRendererServer(
   const child = spawnImpl(
     process.execPath,
     ["-e", STATIC_SERVER_SOURCE, options.rootDir, options.host, String(options.port)],
-    { stdio: ["ignore", "ignore", "pipe"], env: candidateChildEnvironment() },
+    // Same hermetic guard as the AnyHarness child (symmetry): the renderer file
+    // server must never inherit a provider/gateway credential either.
+    { stdio: ["ignore", "ignore", "pipe"], env: assertHermeticEnv(candidateChildEnvironment()) },
   );
   const launched = wrapProcess(child);
   const stop = new AbortController();

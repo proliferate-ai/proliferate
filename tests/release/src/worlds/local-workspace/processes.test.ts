@@ -117,9 +117,13 @@ test("launchAnyharness fails if the process exits before health", async () => {
   );
 });
 
-test("launchRendererServer serves and reports readiness", async () => {
+test("launchRendererServer serves and reports readiness with a hermetic child env", async () => {
   const child = fakeChild();
-  const spawn: SpawnLike = () => child as unknown as ChildProcess;
+  let spawnedEnv: NodeJS.ProcessEnv = {};
+  const spawn: SpawnLike = (_command, _args, options: SpawnOptions) => {
+    spawnedEnv = options.env ?? {};
+    return child as unknown as ChildProcess;
+  };
   const fetch: ReadinessFetch = async () => okResponse("<html></html>");
   const served = await launchRendererServer({
     rootDir: "/renderer",
@@ -129,5 +133,15 @@ test("launchRendererServer serves and reports readiness", async () => {
     fetch,
   });
   assert.equal(served.baseUrl, "http://127.0.0.1:6001");
+  // Symmetry with AnyHarness: the renderer child env is hermetic — no provider
+  // or gateway credential passes through the guard.
+  for (const key of Object.keys(spawnedEnv)) {
+    const upper = key.toUpperCase();
+    assert.ok(
+      !upper.endsWith("_API_KEY") && !upper.endsWith("_AUTH_TOKEN") &&
+        !upper.endsWith("_MASTER_KEY") && !upper.endsWith("_SECRET"),
+      `renderer child env leaked "${key}"`,
+    );
+  }
   await served.process.terminate();
 });
