@@ -14,6 +14,15 @@ export interface WorkspaceSelectionOptions {
   preservePending?: boolean;
   initialActiveSessionId?: string | null;
   latencyFlowId?: string | null;
+  /**
+   * A workspace the caller has already resolved but that may not be present in
+   * the selection's internal `logicalWorkspaces`/`rawWorkspaces` snapshot yet —
+   * either just created (the collections query lags creation) or being restored
+   * on reopen (the snapshot read can momentarily miss a workspace the reactive
+   * hooks already have). When set and its id matches `workspaceId`, selection
+   * uses it directly instead of failing with "Workspace not found."
+   */
+  knownWorkspace?: Workspace | null;
 }
 
 export interface WorkspaceSelectionRequest {

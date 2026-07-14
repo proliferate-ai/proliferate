@@ -26,12 +26,21 @@ export function usePersistedLogicalWorkspaceSelection() {
       return;
     }
 
-    if (!findLogicalWorkspace(logicalWorkspaces, selectedLogicalWorkspaceId)) {
+    const resolved = findLogicalWorkspace(logicalWorkspaces, selectedLogicalWorkspaceId);
+    if (!resolved) {
       return;
     }
 
     attemptedLogicalWorkspaceIdRef.current = selectedLogicalWorkspaceId;
-    void selectWorkspace(selectedLogicalWorkspaceId, { force: true }).catch(() => {
+    // Pass the resolved local workspace as `knownWorkspace`: selection re-derives
+    // its own workspace snapshot from the query cache, which can momentarily miss
+    // a workspace this reactive hook already has (e.g. right after a reload while
+    // the collections cache repopulates). Without the hint, restoring the last
+    // workspace on reopen would fail with "Workspace not found."
+    const knownWorkspace = resolved.localWorkspace?.id === selectedLogicalWorkspaceId
+      ? resolved.localWorkspace
+      : null;
+    void selectWorkspace(selectedLogicalWorkspaceId, { force: true, knownWorkspace }).catch(() => {
       attemptedLogicalWorkspaceIdRef.current = null;
     });
   }, [

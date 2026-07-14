@@ -117,6 +117,74 @@ describe("runWorkspaceSelection", () => {
     expect(bootstrapWorkspace).not.toHaveBeenCalled();
   });
 
+  it("selects a freshly created local workspace passed via options.knownWorkspace when it is absent from both the logical and raw snapshots", async () => {
+    // Regression: the pending-composer flow selects a just-created local
+    // workspace the instant AnyHarness returns it, before the workspace-
+    // collections query has projected it. On a fresh actor both derived lists
+    // are empty, so selection must fall back to the threaded workspace instead
+    // of throwing "Workspace not found."
+    vi.mocked(resolveCloudWorkspaceReadiness).mockReset();
+    vi.mocked(resolveSelectionConnection).mockResolvedValueOnce({
+      runtimeUrl: "http://runtime.test",
+      workspaceConnection: {
+        runtimeUrl: "http://runtime.test",
+        anyharnessWorkspaceId: "ah-fresh-local",
+      },
+    });
+    const knownWorkspace = {
+      id: "fresh-local-1",
+      kind: "local",
+      surface: "standard",
+      executionSummary: null,
+    } as never;
+    const bootstrapWorkspace = vi.fn().mockResolvedValue({ sessions: [] });
+    const setSelectedLogicalWorkspaceId = vi.fn();
+
+    await runWorkspaceSelection({
+      localRuntime: null,
+      cache: selectionCache(),
+      logicalWorkspaces: [],
+      rawWorkspaces: [],
+      setSelectedLogicalWorkspaceId,
+      setSelectedWorkspace,
+      removeWorkspaceSlots: vi.fn(),
+      clearSelection: vi.fn(),
+      bootstrapWorkspace,
+      reconcileHotWorkspace: vi.fn(),
+    }, {
+      workspaceId: "fresh-local-1",
+      options: { force: true, preservePending: true, knownWorkspace },
+    });
+
+    expect(resolveSelectionConnection).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ workspaceId: "fresh-local-1" }),
+      { kind: "local" },
+    );
+    expect(bootstrapWorkspace).toHaveBeenCalledTimes(1);
+    expect(useSessionSelectionStore.getState().selectedWorkspaceId).toBe("fresh-local-1");
+    // The local workspace's logical selection must be its id (not null), so a
+    // reload restores it via the persisted logical-workspace selection.
+    expect(setSelectedLogicalWorkspaceId).toHaveBeenCalledWith("fresh-local-1");
+  });
+
+  it("still throws when a workspace is missing everywhere and no knownWorkspace is provided", async () => {
+    await expect(runWorkspaceSelection({
+      localRuntime: null,
+      cache: selectionCache(),
+      logicalWorkspaces: [],
+      rawWorkspaces: [],
+      setSelectedLogicalWorkspaceId: vi.fn(),
+      setSelectedWorkspace,
+      removeWorkspaceSlots: vi.fn(),
+      clearSelection: vi.fn(),
+      bootstrapWorkspace: vi.fn(),
+      reconcileHotWorkspace: vi.fn(),
+    }, {
+      workspaceId: "ghost-workspace",
+    })).rejects.toThrow("Workspace not found.");
+  });
+
   it("rejects placeholder logical workspaces that are not materialized yet", async () => {
     vi.mocked(resolveCloudWorkspaceReadiness).mockReset();
 

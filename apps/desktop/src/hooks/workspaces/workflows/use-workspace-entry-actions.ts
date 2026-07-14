@@ -69,7 +69,11 @@ export function useWorkspaceEntryActions() {
   const finalizeSelection = useCallback(async (
     entry: PendingWorkspaceEntry,
     workspaceId: string,
-    options?: { latencyFlowId?: string | null; repoGroupKeyToExpand?: string | null },
+    options?: {
+      latencyFlowId?: string | null;
+      repoGroupKeyToExpand?: string | null;
+      knownWorkspace?: Workspace | null;
+    },
   ): Promise<boolean> => {
     return finalizePendingWorkspaceSelection({
       entry,
@@ -140,6 +144,7 @@ export function useWorkspaceEntryActions() {
       };
       const selectionFinalized = await finalizeSelection(selectionEntry, workspace.id, {
         repoGroupKeyToExpand: sidebarRepoGroupKeyForWorkspace(workspace, repoRoots),
+        knownWorkspace: workspace,
       });
       return selectionFinalized ? { workspaceId: workspace.id, projectedSessionId } : null;
     } catch (error) {
@@ -329,6 +334,7 @@ export function useWorkspaceEntryActions() {
       const selectionFinalized = await finalizeSelection(selectionEntry, result.workspace.id, {
         latencyFlowId: options?.latencyFlowId,
         repoGroupKeyToExpand: sidebarRepoGroupKeyForWorkspace(result.workspace, repoRoots),
+        knownWorkspace: result.workspace,
       });
       if (!selectionFinalized) {
         return null;

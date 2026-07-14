@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import type { Workspace } from "@anyharness/sdk";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useWorkspaceBootstrapActions } from "@/hooks/workspaces/workflows/use-workspace-bootstrap-actions";
 import { useCloudWorkspaceConnectionCache } from "@/hooks/access/cloud/use-cloud-workspace-connection-cache";
@@ -47,6 +48,7 @@ export function useWorkspaceSelection() {
         preservePending?: boolean;
         initialActiveSessionId?: string | null;
         latencyFlowId?: string | null;
+        knownWorkspace?: Workspace | null;
       },
     ) => {
       const runtimeUrl = useHarnessConnectionStore.getState().runtimeUrl;

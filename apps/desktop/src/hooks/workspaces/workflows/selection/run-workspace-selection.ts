@@ -143,10 +143,31 @@ export async function runWorkspaceSelection(
       return;
     }
 
+    // A just-created workspace can be selected before the workspace-collections
+    // cache has projected it into `logicalWorkspaces`/`rawWorkspaces` — the
+    // pending-composer flow selects it the instant AnyHarness returns it, and on
+    // a fresh actor the collections query may not be populated yet. The creator
+    // threads the resolved workspace through `options.knownWorkspace` so we can
+    // select it directly instead of hard-failing. The same hint restores the
+    // last workspace on reopen. Both local and cowork workspaces resolve through
+    // the local runtime.
     const directWorkspace = deps.rawWorkspaces.find(
       (workspace) => workspace.id === request.workspaceId,
-    ) ?? null;
-    if (directWorkspace?.surface === "cowork") {
+    ) ?? (
+      request.options?.knownWorkspace?.id === request.workspaceId
+        ? request.options.knownWorkspace
+        : null
+    );
+    if (directWorkspace) {
+      // A cowork workspace has no logical-workspace slot, so its logical
+      // selection is null (unchanged). A local workspace does have one; persist
+      // its id as the selected logical workspace so a reload restores it (the
+      // collections cache resolves `findLogicalWorkspace(..., workspace.id)` via
+      // `localWorkspace.id`). Persisting null here would leave the shell empty
+      // after reopen.
+      const directLogicalWorkspaceId = directWorkspace.surface === "cowork"
+        ? null
+        : directWorkspace.id;
       const selectionStartedAt = startLatencyTimer();
       const previousSelection = useSessionSelectionStore.getState();
       const currentId = previousSelection.selectedWorkspaceId;
@@ -157,7 +178,7 @@ export async function runWorkspaceSelection(
 
       logLatency("workspace.select.start", {
         workspaceId: directWorkspace.id,
-        logicalWorkspaceId: null,
+        logicalWorkspaceId: directLogicalWorkspaceId,
         force: !!request.options?.force,
         preservePending: !!request.options?.preservePending,
       });
@@ -178,7 +199,7 @@ export async function runWorkspaceSelection(
         ],
         nextWorkspaceIds: [directWorkspace.id],
       });
-      deps.setSelectedLogicalWorkspaceId(null);
+      deps.setSelectedLogicalWorkspaceId(directLogicalWorkspaceId);
       deps.setSelectedWorkspace(directWorkspace.id, {
         clearPending: !request.options?.preservePending,
         initialActiveSessionId,
