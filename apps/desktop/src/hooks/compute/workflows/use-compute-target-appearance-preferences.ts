@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useProductStorageContext } from "@/hooks/persistence/use-product-storage-context";
 import type { ComputeTargetAppearancePreference } from "@/lib/domain/compute/target-appearance";
 import {
   getComputeTargetAppearancePreferences,
@@ -6,16 +7,20 @@ import {
   type ComputeTargetAppearancePreferencesDependencies,
 } from "@/lib/workflows/preferences/compute-target-appearance-preferences";
 import {
-  persistValue,
-  readPersistedValue,
-} from "@/lib/infra/persistence/preferences-persistence";
-
-const persistence: ComputeTargetAppearancePreferencesDependencies = {
-  readPersistedValue,
-  persistValue,
-};
+  readPersistedJsonValue,
+  writePersistedJson,
+} from "@/lib/infra/persistence/product-storage";
 
 export function useComputeTargetAppearancePreferences() {
+  const storage = useProductStorageContext();
+  const persistence = useMemo<ComputeTargetAppearancePreferencesDependencies>(
+    () => ({
+      readPersistedValue: (key) => readPersistedJsonValue(storage, key),
+      persistValue: (key, value) => writePersistedJson(storage, key, value),
+    }),
+    [storage],
+  );
+
   const [preferences, setPreferences] = useState<
     Record<string, ComputeTargetAppearancePreference>
   >({});
@@ -28,7 +33,7 @@ export function useComputeTargetAppearancePreferences() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [persistence]);
 
   useEffect(() => {
     void reload();
@@ -42,7 +47,7 @@ export function useComputeTargetAppearancePreferences() {
       ...current,
       [preference.targetId]: preference,
     }));
-  }, []);
+  }, [persistence]);
 
   return {
     preferences,

@@ -151,6 +151,108 @@ export async function readPersistedJson<T>(
 }
 
 /**
+ * Convenience wrapper matching the legacy `readPersistedValue<T>` shape:
+ * decode a JSON value and return it, or `undefined` on a missing/malformed key
+ * or a captured read rejection. For load/migration workflows whose enclosing
+ * lifecycle already guards against a late (post-unmount) commit; callers that
+ * need staleness handling use {@link readPersistedJson} directly.
+ */
+export async function readPersistedJsonValue<T>(
+  context: ProductStorageContext,
+  key: string,
+  errorContext?: ErrorContext,
+): Promise<T | undefined> {
+  const result = await readPersistedJson<T | undefined>(context, key, {
+    parse: (raw) => raw as T | undefined,
+    fallback: undefined,
+    errorContext,
+  });
+  return result.status === "settled" ? result.value : undefined;
+}
+
+/**
+ * Convenience wrapper for a bare-string key: return the stored string, or
+ * `undefined` on a missing key or a captured read rejection. Mirrors
+ * {@link readPersistedJsonValue} for {@link readPersistedString}.
+ */
+export async function readPersistedStringValue(
+  context: ProductStorageContext,
+  key: string,
+  errorContext?: ErrorContext,
+): Promise<string | undefined> {
+  const result = await readPersistedString(context, key, { errorContext });
+  return result.status === "settled" ? result.value ?? undefined : undefined;
+}
+
+export interface ReadPersistedStringOptions {
+  /**
+   * Return true once this read's result should be discarded (unmount/host
+   * replacement). Checked after the async read settles, mirroring
+   * {@link readPersistedJson}.
+   */
+  isStale?: () => boolean;
+  /** Extra tags/extras merged onto the captured read exception. */
+  errorContext?: ErrorContext;
+}
+
+/**
+ * Read a raw string product value through the injected ProductStorage — the
+ * counterpart to {@link readPersistedJson} for the small set of keys whose
+ * on-disk representation is a bare string (never JSON-encoded), e.g. the
+ * selected logical workspace id, the local automation executor id, and the
+ * legacy theme/model preference keys. Using the raw string preserves those
+ * existing values with zero migration; JSON-decoding them would lose data.
+ *
+ * Semantics match {@link readPersistedJson}: missing key → `null` (caller
+ * default), read rejection → captured typed exception + `null`, stale →
+ * `ignored`, and hydration always settles even if telemetry throws/rejects.
+ */
+export async function readPersistedString(
+  context: ProductStorageContext,
+  key: string,
+  options: ReadPersistedStringOptions = {},
+): Promise<ProductStorageReadResult<string | null>> {
+  let stored: string | null;
+  try {
+    stored = await context.storage.getItem(key);
+  } catch (error) {
+    if (options.isStale?.()) return { status: "ignored" };
+    guardedCapture(
+      context,
+      error,
+      mergeErrorContext(key, READ_ERROR_TAGS, options.errorContext),
+    );
+    return { status: "settled", value: null };
+  }
+
+  if (options.isStale?.()) return { status: "ignored" };
+
+  return { status: "settled", value: stored };
+}
+
+/**
+ * Write a raw string product value through the injected ProductStorage (no JSON
+ * encoding). Same capture-once/keep-state failure semantics as
+ * {@link writePersistedJson}.
+ */
+export async function writePersistedString(
+  context: ProductStorageContext,
+  key: string,
+  value: string,
+  errorContext?: ErrorContext,
+): Promise<void> {
+  try {
+    await context.storage.setItem(key, value);
+  } catch (error) {
+    guardedCapture(
+      context,
+      error,
+      mergeErrorContext(key, WRITE_ERROR_TAGS, errorContext),
+    );
+  }
+}
+
+/**
  * Write a JSON-serialized product value through the injected ProductStorage. A
  * failed write is captured once for this attempt and swallowed: the caller's
  * in-memory state is kept and a later write can still succeed. There is no

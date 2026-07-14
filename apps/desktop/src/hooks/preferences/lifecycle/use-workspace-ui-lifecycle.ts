@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useProductStorageContext } from "@/hooks/persistence/use-product-storage-context";
 import { migrateWorkspaceUiState } from "@/lib/domain/preferences/workspace-ui/migration";
 import {
   WORKSPACE_UI_DEFAULTS,
@@ -11,18 +12,25 @@ import {
 } from "@/lib/domain/preferences/workspace-ui/persistence";
 import { recordMeasurementDiagnostic } from "@/lib/infra/measurement/debug-measurement";
 import { isDebugMeasurementEnabled } from "@/lib/infra/measurement/debug-measurement-env";
-import { readPersistedValue, persistValue } from "@/lib/infra/persistence/preferences-persistence";
+import {
+  readPersistedJsonValue,
+  writePersistedJson,
+  type ProductStorageContext,
+} from "@/lib/infra/persistence/product-storage";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 
 const WORKSPACE_UI_KEY = "workspace_ui";
 
-async function readWorkspaceUiState(): Promise<{
+async function readWorkspaceUiState(
+  context: ProductStorageContext,
+): Promise<{
   state: PersistedWorkspaceUiState;
   didMigrate: boolean;
 }> {
   let state: PersistedWorkspaceUiState;
 
-  const persisted = await readPersistedValue<PersistedWorkspaceUiState>(WORKSPACE_UI_KEY);
+  const persisted =
+    await readPersistedJsonValue<PersistedWorkspaceUiState>(context, WORKSPACE_UI_KEY);
   if (persisted) {
     state = {
       ...WORKSPACE_UI_DEFAULTS,
@@ -31,7 +39,7 @@ async function readWorkspaceUiState(): Promise<{
   } else {
     state = {
       archivedWorkspaceIds:
-        (await readPersistedValue<string[]>("archivedWorkspaceIds"))
+        (await readPersistedJsonValue<string[]>(context, "archivedWorkspaceIds"))
         ?? WORKSPACE_UI_DEFAULTS.archivedWorkspaceIds,
       hiddenRepoRootIds: WORKSPACE_UI_DEFAULTS.hiddenRepoRootIds,
       sidebarOpen: WORKSPACE_UI_DEFAULTS.sidebarOpen,
@@ -42,15 +50,18 @@ async function readWorkspaceUiState(): Promise<{
       shellTabOrderByWorkspace: WORKSPACE_UI_DEFAULTS.shellTabOrderByWorkspace,
       workspaceTypes: WORKSPACE_UI_DEFAULTS.workspaceTypes,
       lastViewedAt:
-        (await readPersistedValue<Record<string, string>>("lastViewedAt"))
+        (await readPersistedJsonValue<Record<string, string>>(context, "lastViewedAt"))
         ?? WORKSPACE_UI_DEFAULTS.lastViewedAt,
       lastViewedSessionByWorkspace:
-        (await readPersistedValue<Record<string, string>>("lastViewedSessionByWorkspace"))
+        (await readPersistedJsonValue<Record<string, string>>(
+          context,
+          "lastViewedSessionByWorkspace",
+        ))
         ?? WORKSPACE_UI_DEFAULTS.lastViewedSessionByWorkspace,
       lastViewedSessionErrorAtBySession:
         WORKSPACE_UI_DEFAULTS.lastViewedSessionErrorAtBySession,
       workspaceLastInteracted:
-        (await readPersistedValue<Record<string, string>>("workspaceLastInteracted"))
+        (await readPersistedJsonValue<Record<string, string>>(context, "workspaceLastInteracted"))
         ?? WORKSPACE_UI_DEFAULTS.workspaceLastInteracted,
       sessionLastInteracted: WORKSPACE_UI_DEFAULTS.sessionLastInteracted,
       sessionLastViewedAt: WORKSPACE_UI_DEFAULTS.sessionLastViewedAt,
@@ -73,12 +84,14 @@ async function readWorkspaceUiState(): Promise<{
 // Owns loading persisted workspace UI state and syncing store changes to disk.
 // Does not own workspace UI actions or shell/tab transitions.
 export function useWorkspaceUiLifecycle(): void {
+  const storage = useProductStorageContext();
+
   useEffect(() => {
     let cancelled = false;
     let unsubscribe: (() => void) | null = null;
 
     const bootstrap = async () => {
-      const { state, didMigrate } = await readWorkspaceUiState();
+      const { state, didMigrate } = await readWorkspaceUiState(storage);
       if (cancelled) {
         return;
       }
@@ -87,7 +100,8 @@ export function useWorkspaceUiLifecycle(): void {
       if (didMigrate) {
         // Force-persist so migrationVersion is saved even when the migration
         // itself was a no-op (e.g. workspaceLastInteracted was already empty).
-        void persistValue(
+        void writePersistedJson(
+          storage,
           WORKSPACE_UI_KEY,
           selectPersistedWorkspaceUiState(useWorkspaceUiStore.getState()),
         );
@@ -118,7 +132,7 @@ export function useWorkspaceUiLifecycle(): void {
         const currentSlice = selectPersistedWorkspaceUiState(state);
         const previousSlice = selectPersistedWorkspaceUiState(prev);
         if (JSON.stringify(currentSlice) !== JSON.stringify(previousSlice)) {
-          void persistValue(WORKSPACE_UI_KEY, currentSlice);
+          void writePersistedJson(storage, WORKSPACE_UI_KEY, currentSlice);
         }
       });
     };
@@ -129,5 +143,5 @@ export function useWorkspaceUiLifecycle(): void {
       cancelled = true;
       unsubscribe?.();
     };
-  }, []);
+  }, [storage]);
 }

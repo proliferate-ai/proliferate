@@ -5,8 +5,12 @@ import type { ProductStorage } from "@proliferate/product-client/host/product-ho
 import {
   type ProductStorageContext,
   readPersistedJson,
+  readPersistedJsonValue,
+  readPersistedString,
+  readPersistedStringValue,
   removePersistedKey,
   writePersistedJson,
+  writePersistedString,
 } from "./product-storage";
 
 interface Shape {
@@ -259,6 +263,123 @@ describe("writePersistedJson", () => {
 
     await expect(writePersistedJson(context, "k", { value: 1 })).resolves.toBeUndefined();
     expect(captureException).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("readPersistedString", () => {
+  it("returns the raw stored string verbatim (no JSON decode)", async () => {
+    const { context } = makeContext({
+      getItem: vi.fn(async () => "logical-workspace-1"),
+    });
+
+    const result = await readPersistedString(context, "k");
+
+    expect(result).toEqual({ status: "settled", value: "logical-workspace-1" });
+  });
+
+  it("settles null for a missing key without capturing", async () => {
+    const { context, captureException } = makeContext({
+      getItem: vi.fn(async () => null),
+    });
+
+    const result = await readPersistedString(context, "k");
+
+    expect(result).toEqual({ status: "settled", value: null });
+    expect(captureException).not.toHaveBeenCalled();
+  });
+
+  it("captures a read rejection and settles null", async () => {
+    const { context, captureException } = makeContext({
+      getItem: vi.fn(async () => {
+        throw new Error("read boom");
+      }),
+    });
+
+    const result = await readPersistedString(context, "k");
+
+    expect(result).toEqual({ status: "settled", value: null });
+    expect(captureException).toHaveBeenCalledTimes(1);
+    expect(captureException.mock.calls[0][1].tags).toMatchObject({
+      domain: "product_storage",
+      action: "read",
+      key: "k",
+    });
+  });
+
+  it("ignores a stale result without committing", async () => {
+    const { context } = makeContext({
+      getItem: vi.fn(async () => "value"),
+    });
+
+    const result = await readPersistedString(context, "k", { isStale: () => true });
+
+    expect(result).toEqual({ status: "ignored" });
+  });
+});
+
+describe("writePersistedString", () => {
+  it("writes the raw string without JSON encoding", async () => {
+    const setItem = vi.fn(async () => {});
+    const { context } = makeContext({ setItem });
+
+    await writePersistedString(context, "k", "desktop:abc");
+
+    expect(setItem).toHaveBeenCalledWith("k", "desktop:abc");
+  });
+
+  it("captures a write rejection once and resolves", async () => {
+    const { context, captureException } = makeContext({
+      setItem: vi.fn(async () => {
+        throw new Error("write boom");
+      }),
+    });
+
+    await expect(writePersistedString(context, "k", "v")).resolves.toBeUndefined();
+    expect(captureException).toHaveBeenCalledTimes(1);
+    expect(captureException.mock.calls[0][1].tags).toMatchObject({
+      domain: "product_storage",
+      action: "write",
+      key: "k",
+    });
+  });
+});
+
+describe("value-reader convenience wrappers", () => {
+  it("readPersistedJsonValue decodes a stored object", async () => {
+    const { context } = makeContext({
+      getItem: vi.fn(async () => JSON.stringify({ value: 4 })),
+    });
+
+    await expect(readPersistedJsonValue(context, "k")).resolves.toEqual({ value: 4 });
+  });
+
+  it("readPersistedJsonValue returns undefined for a missing key", async () => {
+    const { context } = makeContext({ getItem: vi.fn(async () => null) });
+
+    await expect(readPersistedJsonValue(context, "k")).resolves.toBeUndefined();
+  });
+
+  it("readPersistedJsonValue returns undefined and captures a read rejection", async () => {
+    const { context, captureException } = makeContext({
+      getItem: vi.fn(async () => {
+        throw new Error("boom");
+      }),
+    });
+
+    await expect(readPersistedJsonValue(context, "k")).resolves.toBeUndefined();
+    expect(captureException).toHaveBeenCalledTimes(1);
+  });
+
+  it("readPersistedStringValue maps a missing key to undefined", async () => {
+    const { context } = makeContext({ getItem: vi.fn(async () => null) });
+
+    await expect(readPersistedStringValue(context, "k")).resolves.toBeUndefined();
+  });
+
+  it("readPersistedStringValue returns the stored string", async () => {
+    const { context } = makeContext({ getItem: vi.fn(async () => "claude") });
+
+    await expect(readPersistedStringValue(context, "k")).resolves.toBe("claude");
   });
 });
 

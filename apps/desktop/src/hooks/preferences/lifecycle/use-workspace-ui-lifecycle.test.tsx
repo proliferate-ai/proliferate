@@ -2,6 +2,7 @@
 
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { MockInstance } from "vitest";
 import { useWorkspaceUiLifecycle } from "@/hooks/preferences/lifecycle/use-workspace-ui-lifecycle";
 import {
   WORKSPACE_UI_DEFAULTS,
@@ -12,25 +13,25 @@ import {
   useWorkspaceUiStore,
   type WorkspaceUiState,
 } from "@/stores/preferences/workspace-ui-store";
+import {
+  createMemoryProductStorage,
+  type MemoryProductStorage,
+} from "@/test/product-storage-test-utils";
+import {
+  makeTestProductHost,
+  productHostWrapper,
+} from "@/test/product-host-test-utils";
 
-const persistenceMocks = vi.hoisted(() => {
-  const values = new Map<string, unknown>();
-  const readPersistedValue = vi.fn(async (key: string) => values.get(key));
-  const persistValue = vi.fn(async (key: string, value: unknown) => {
-    values.set(key, value);
+let memory: MemoryProductStorage;
+let getItemSpy: MockInstance;
+let setItemSpy: MockInstance;
+
+function renderLifecycle() {
+  const host = makeTestProductHost({ overrides: { storage: memory.storage } });
+  return renderHook(() => useWorkspaceUiLifecycle(), {
+    wrapper: productHostWrapper(host),
   });
-
-  return {
-    values,
-    readPersistedValue,
-    persistValue,
-  };
-});
-
-vi.mock("@/lib/infra/persistence/preferences-persistence", () => ({
-  readPersistedValue: persistenceMocks.readPersistedValue,
-  persistValue: persistenceMocks.persistValue,
-}));
+}
 
 function currentWorkspaceUiState(): PersistedWorkspaceUiState {
   return {
@@ -60,20 +61,20 @@ function resetWorkspaceUiStore(): void {
 describe("useWorkspaceUiLifecycle", () => {
   beforeEach(() => {
     cleanup();
-    persistenceMocks.values.clear();
-    persistenceMocks.readPersistedValue.mockClear();
-    persistenceMocks.persistValue.mockClear();
+    memory = createMemoryProductStorage();
+    getItemSpy = vi.spyOn(memory.storage, "getItem");
+    setItemSpy = vi.spyOn(memory.storage, "setItem");
     resetWorkspaceUiStore();
   });
 
   it("hydrates current workspace UI state without rewriting clean bootstrap data", async () => {
-    persistenceMocks.values.set("workspace_ui", {
+    memory.values.set("workspace_ui", {
       ...currentWorkspaceUiState(),
       archivedWorkspaceIds: ["workspace-a"],
       sidebarOpen: true,
     });
 
-    renderHook(() => useWorkspaceUiLifecycle());
+    renderLifecycle();
 
     await waitFor(() => {
       expect(useWorkspaceUiStore.getState()._hydrated).toBe(true);
@@ -82,25 +83,24 @@ describe("useWorkspaceUiLifecycle", () => {
     expect(useWorkspaceUiStore.getState().archivedWorkspaceIds)
       .toEqual(["workspace-a"]);
     expect(useWorkspaceUiStore.getState().sidebarOpen).toBe(true);
-    expect(persistenceMocks.persistValue).not.toHaveBeenCalled();
+    expect(setItemSpy).not.toHaveBeenCalled();
   });
 
   it("persists migrated legacy state and later workspace UI updates", async () => {
-    persistenceMocks.values.set("archivedWorkspaceIds", ["legacy-workspace"]);
-    persistenceMocks.values.set("lastViewedAt", {
+    memory.values.set("archivedWorkspaceIds", ["legacy-workspace"]);
+    memory.values.set("lastViewedAt", {
       "legacy-workspace": "2026-01-01T00:00:00.000Z",
     });
 
-    renderHook(() => useWorkspaceUiLifecycle());
+    renderLifecycle();
 
     await waitFor(() => {
-      expect(persistenceMocks.persistValue).toHaveBeenCalledTimes(1);
+      expect(setItemSpy).toHaveBeenCalledTimes(1);
     });
 
-    expect(persistenceMocks.readPersistedValue)
-      .toHaveBeenCalledWith("archivedWorkspaceIds");
-    expect(persistenceMocks.persistValue).toHaveBeenCalledWith(
-      "workspace_ui",
+    expect(getItemSpy).toHaveBeenCalledWith("archivedWorkspaceIds");
+    expect(setItemSpy).toHaveBeenCalledWith("workspace_ui", expect.any(String));
+    expect(memory.readJson("workspace_ui")).toEqual(
       expect.objectContaining({
         migrationVersion: WORKSPACE_UI_MIGRATION_VERSION,
         archivedWorkspaceIds: [],
@@ -108,18 +108,17 @@ describe("useWorkspaceUiLifecycle", () => {
       }),
     );
 
-    persistenceMocks.persistValue.mockClear();
+    setItemSpy.mockClear();
 
     act(() => {
       useWorkspaceUiStore.getState().setShowArchived(true);
     });
 
     await waitFor(() => {
-      expect(persistenceMocks.persistValue).toHaveBeenCalledTimes(1);
+      expect(setItemSpy).toHaveBeenCalledTimes(1);
     });
 
-    expect(persistenceMocks.persistValue).toHaveBeenCalledWith(
-      "workspace_ui",
+    expect(memory.readJson("workspace_ui")).toEqual(
       expect.objectContaining({
         migrationVersion: WORKSPACE_UI_MIGRATION_VERSION,
         showArchived: true,
@@ -128,14 +127,14 @@ describe("useWorkspaceUiLifecycle", () => {
   });
 
   it("does not persist unhydrated-to-hydrated guard transitions", async () => {
-    persistenceMocks.values.set("workspace_ui", currentWorkspaceUiState());
+    memory.values.set("workspace_ui", currentWorkspaceUiState());
 
-    renderHook(() => useWorkspaceUiLifecycle());
+    renderLifecycle();
 
     await waitFor(() => {
       expect(useWorkspaceUiStore.getState()._hydrated).toBe(true);
     });
-    persistenceMocks.persistValue.mockClear();
+    setItemSpy.mockClear();
 
     act(() => {
       useWorkspaceUiStore.setState({ _hydrated: false });
@@ -148,6 +147,6 @@ describe("useWorkspaceUiLifecycle", () => {
     });
 
     expect(useWorkspaceUiStore.getState().sidebarOpen).toBe(true);
-    expect(persistenceMocks.persistValue).not.toHaveBeenCalled();
+    expect(setItemSpy).not.toHaveBeenCalled();
   });
 });

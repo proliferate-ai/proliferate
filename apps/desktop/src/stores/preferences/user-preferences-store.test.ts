@@ -18,31 +18,18 @@ import {
   persistUserPreferences,
 } from "@/lib/workflows/preferences/user-preferences-persistence";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+import {
+  createMemoryProductStorage,
+  type MemoryProductStorage,
+} from "@/test/product-storage-test-utils";
 
-const storeMocks = vi.hoisted(() => {
-  const values = new Map<string, unknown>();
-  const get = vi.fn(async (key: string) => values.get(key));
-  const set = vi.fn(async (key: string, value: unknown) => {
-    values.set(key, value);
-  });
-
-  return {
-    values,
-    get,
-    set,
-    getPreferencesStore: vi.fn(async () => ({ get, set })),
-  };
-});
-
-vi.mock("@/lib/access/tauri/store", () => ({
-  getPreferencesStore: storeMocks.getPreferencesStore,
-}));
+let memory: MemoryProductStorage;
 
 async function bootstrapUserPreferencesForTest(): Promise<void> {
-  const loaded = await loadUserPreferences();
+  const loaded = await loadUserPreferences(memory.context);
   useUserPreferencesStore.getState().hydrate(loaded);
   if (loaded.shouldPersist) {
-    await persistUserPreferences(loaded.preferences, loaded.persistedMetadata);
+    await persistUserPreferences(memory.context, loaded.preferences, loaded.persistedMetadata);
   }
 }
 
@@ -51,6 +38,7 @@ async function markWorktreeAutoDeleteLimitAdoptedForTest(): Promise<void> {
   const nextMetadata = clearWorktreeAutoDeleteLimitAdoption(state._persistedMetadata);
   state.setPersistedMetadata(nextMetadata);
   await persistUserPreferences(
+    memory.context,
     selectPersistedUserPreferencesSlice(useUserPreferencesStore.getState()),
     nextMetadata,
   );
@@ -58,10 +46,7 @@ async function markWorktreeAutoDeleteLimitAdoptedForTest(): Promise<void> {
 
 describe("user preference migration", () => {
   beforeEach(() => {
-    storeMocks.values.clear();
-    storeMocks.get.mockClear();
-    storeMocks.set.mockClear();
-    storeMocks.getPreferencesStore.mockClear();
+    memory = createMemoryProductStorage();
     vi.unstubAllGlobals();
     useUserPreferencesStore.setState({
       ...USER_PREFERENCE_DEFAULTS,
@@ -86,7 +71,7 @@ describe("user preference migration", () => {
   });
 
   it("backfills legacy per-key users with old appearance defaults", async () => {
-    storeMocks.values.set("defaultChatAgentKind", "claude");
+    memory.values.set("defaultChatAgentKind", "claude");
 
     await bootstrapUserPreferencesForTest();
 
@@ -97,8 +82,8 @@ describe("user preference migration", () => {
   });
 
   it("migrates legacy per-key scalar models into the primary harness map", async () => {
-    storeMocks.values.set("defaultChatAgentKind", "claude");
-    storeMocks.values.set("defaultChatModelId", "claude-sonnet-4-5");
+    memory.values.set("defaultChatAgentKind", "claude");
+    memory.values.set("defaultChatModelId", "claude-sonnet-4-5");
 
     await bootstrapUserPreferencesForTest();
     const preferences = useUserPreferencesStore.getState();
@@ -107,13 +92,13 @@ describe("user preference migration", () => {
       claude: "sonnet",
     });
 
-    const persisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
+    const persisted = memory.readJson<Record<string, unknown>>("user_preferences")!;
     expect(persisted.defaultChatModelIdByAgentKind).toEqual({ claude: "sonnet" });
     expect(persisted).not.toHaveProperty("defaultChatModelId");
   });
 
   it("backfills missing fields in existing unified preferences with old defaults", async () => {
-    storeMocks.values.set("user_preferences", {
+    memory.values.set("user_preferences", {
       ...USER_PREFERENCE_DEFAULTS,
       themePreset: "ship",
       transparentChromeEnabled: undefined,
@@ -129,7 +114,7 @@ describe("user preference migration", () => {
   it("marks missing worktree cleanup policy for adoption without persisting immediately", async () => {
     const persisted = { ...USER_PREFERENCE_DEFAULTS } as Record<string, unknown>;
     delete persisted.worktreeAutoDeleteLimit;
-    storeMocks.values.set("user_preferences", persisted);
+    memory.values.set("user_preferences", persisted);
 
     await bootstrapUserPreferencesForTest();
     const preferences = useUserPreferencesStore.getState();
@@ -137,7 +122,7 @@ describe("user preference migration", () => {
     expect(hasPendingWorktreeAutoDeleteLimitAdoption(
       useUserPreferencesStore.getState()._persistedMetadata,
     )).toBe(true);
-    const nextPersisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
+    const nextPersisted = memory.readJson<Record<string, unknown>>("user_preferences")!;
     expect(nextPersisted.worktreeAutoDeleteLimit).toBeUndefined();
     expect(nextPersisted.worktreeAutoDeleteLimitBackfilled).toBe(true);
   });
@@ -145,12 +130,12 @@ describe("user preference migration", () => {
   it("consumes worktree cleanup adoption metadata after adoption", async () => {
     const persisted = { ...USER_PREFERENCE_DEFAULTS } as Record<string, unknown>;
     delete persisted.worktreeAutoDeleteLimit;
-    storeMocks.values.set("user_preferences", persisted);
+    memory.values.set("user_preferences", persisted);
 
     await bootstrapUserPreferencesForTest();
     useUserPreferencesStore.getState().set("worktreeAutoDeleteLimit", 50);
     await markWorktreeAutoDeleteLimitAdoptedForTest();
-    const nextPersisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
+    const nextPersisted = memory.readJson<Record<string, unknown>>("user_preferences")!;
     expect(nextPersisted.worktreeAutoDeleteLimit).toBe(50);
     expect(nextPersisted.worktreeAutoDeleteLimitBackfilled).toBeUndefined();
   });
@@ -166,7 +151,7 @@ describe("user preference migration", () => {
   });
 
   it("normalizes retired theme presets to mono on read", async () => {
-    storeMocks.values.set("user_preferences", {
+    memory.values.set("user_preferences", {
       ...USER_PREFERENCE_DEFAULTS,
       themePreset: "ship",
       transparentChromeEnabled: true,
@@ -178,7 +163,7 @@ describe("user preference migration", () => {
     expect(preferences.themePreset).toBe("mono");
     expect(preferences.transparentChromeEnabled).toBe(true);
 
-    const persisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
+    const persisted = memory.readJson<Record<string, unknown>>("user_preferences")!;
     expect(persisted.themePreset).toBe("mono");
   });
 
@@ -193,7 +178,7 @@ describe("user preference migration", () => {
   });
 
   it("strips deprecated onboarding keys from existing unified preferences", async () => {
-    storeMocks.values.set("user_preferences", {
+    memory.values.set("user_preferences", {
       ...USER_PREFERENCE_DEFAULTS,
       futurePreference: true,
       onboardingCompletedVersion: 1,
@@ -209,7 +194,7 @@ describe("user preference migration", () => {
     expect(state.dismissedAvailableVersion).toBeUndefined();
     expect(state.acknowledgedAvailableVersion).toBeUndefined();
 
-    const persisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
+    const persisted = memory.readJson<Record<string, unknown>>("user_preferences")!;
     expect(persisted.futurePreference).toBe(true);
     expect(persisted.onboardingCompletedVersion).toBeUndefined();
     expect(persisted.onboardingPrimaryGoalId).toBeUndefined();
@@ -218,45 +203,45 @@ describe("user preference migration", () => {
   });
 
   it("preserves unrelated unknown keys while marking model visibility defaults reset", async () => {
-    storeMocks.values.set("user_preferences", {
+    memory.values.set("user_preferences", {
       ...USER_PREFERENCE_DEFAULTS,
       futurePreference: true,
     } as unknown as UserPreferences);
 
     await bootstrapUserPreferencesForTest();
-    const persisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
+    const persisted = memory.readJson<Record<string, unknown>>("user_preferences")!;
     expect(persisted.futurePreference).toBe(true);
     expect(hasAppliedModelVisibilityDefaultsReset(persisted)).toBe(true);
   });
 
   it("preserves unrelated unknown keys when hydration rewrites known preferences", async () => {
-    storeMocks.values.set("user_preferences", {
+    memory.values.set("user_preferences", {
       ...USER_PREFERENCE_DEFAULTS,
       themePreset: "ship",
       futurePreference: true,
     } as unknown as UserPreferences);
 
     await bootstrapUserPreferencesForTest();
-    const persisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
+    const persisted = memory.readJson<Record<string, unknown>>("user_preferences")!;
     expect(persisted.themePreset).toBe("mono");
     expect(persisted.futurePreference).toBe(true);
   });
 
   it("preserves unrelated unknown keys when migrating known preferences", async () => {
-    storeMocks.values.set("user_preferences", {
+    memory.values.set("user_preferences", {
       ...USER_PREFERENCE_DEFAULTS,
       branchPrefixType: "invalid",
       futurePreference: true,
     } as unknown as UserPreferences);
 
     await bootstrapUserPreferencesForTest();
-    const persisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
+    const persisted = memory.readJson<Record<string, unknown>>("user_preferences")!;
     expect(persisted.branchPrefixType).toBe(PERSISTED_RECORD_BACKFILL.branchPrefixType);
     expect(persisted.futurePreference).toBe(true);
   });
 
   it("migrates old unified scalar model preferences into the primary harness map", async () => {
-    storeMocks.values.set("user_preferences", {
+    memory.values.set("user_preferences", {
       ...USER_PREFERENCE_DEFAULTS,
       defaultChatAgentKind: "codex",
       defaultChatModelId: "gpt-5.4-mini",
@@ -268,7 +253,7 @@ describe("user preference migration", () => {
       codex: "gpt-5.4-mini",
     });
 
-    const persisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
+    const persisted = memory.readJson<Record<string, unknown>>("user_preferences")!;
     expect(persisted.defaultChatModelIdByAgentKind).toEqual({ codex: "gpt-5.4-mini" });
     expect(persisted).not.toHaveProperty("defaultChatModelId");
   });
@@ -377,7 +362,7 @@ describe("user preference migration", () => {
   });
 
   it("drops legacy coding-session plugin preference keys during bootstrap", async () => {
-    storeMocks.values.set("user_preferences", {
+    memory.values.set("user_preferences", {
       themePreset: "ship",
       pluginsInCodingSessionsEnabled: true,
       powersInCodingSessionsEnabled: true,
@@ -388,7 +373,7 @@ describe("user preference migration", () => {
     const preferences = useUserPreferencesStore.getState();
     expect(preferences).not.toHaveProperty("pluginsInCodingSessionsEnabled");
     expect(preferences).not.toHaveProperty("powersInCodingSessionsEnabled");
-    const lastPersistedValue = storeMocks.set.mock.calls[storeMocks.set.mock.calls.length - 1]?.[1];
+    const lastPersistedValue = memory.readJson<Record<string, unknown>>("user_preferences")!;
     expect(lastPersistedValue).not.toHaveProperty(
       "pluginsInCodingSessionsEnabled",
     );
