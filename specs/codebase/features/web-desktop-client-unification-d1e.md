@@ -112,7 +112,7 @@ product code
 - `decodeDesktopProductEntry`/`encodeDesktopReturnUrl` use ordered pairs plus
   fragment and preserve every currently recognized callback/query value.
 - `productEntryRoute` is the single `ProductEntry` → in-app-route mapper,
-  reproducing each legacy destination (home, workspace, workflow,
+  reproducing each legacy destination (workspace, workflow,
   organization-join/invitation → Account settings, billing return, integration
   callback, settings section) and appending leftover query pairs and the
   fragment losslessly, with canonical destination keys winning over shadowing
