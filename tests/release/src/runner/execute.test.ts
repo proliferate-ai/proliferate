@@ -534,7 +534,13 @@ test("a throwing reason getter is runner integrity, never an ordinary failed res
 });
 
 test("a malformed reason value preserves the aggregate as integrity exit 2 (ETM-003)", async () => {
-  for (const badReason of ["oops", 42, { code: "not_a_known_code", message: "x" }, { code: "scenario_failure" }]) {
+  for (const badReason of [
+    null,
+    "oops",
+    42,
+    { code: "not_a_known_code", message: "x" },
+    { code: "scenario_failure" },
+  ]) {
     const matrix = fakeMatrix({
       id: "M",
       cells: [{ child: "a" }],
@@ -550,23 +556,56 @@ test("a malformed reason value preserves the aggregate as integrity exit 2 (ETM-
   }
 });
 
+test("nested reason accessors are read exactly once before their values are persisted (ETM-003)", async () => {
+  let codeReads = 0;
+  let messageReads = 0;
+  const reason = {
+    get code(): unknown {
+      codeReads += 1;
+      return codeReads === 1 ? "scenario_failure" : "evil_code";
+    },
+    get message(): unknown {
+      messageReads += 1;
+      return messageReads === 1 ? "captured failure" : 42;
+    },
+  };
+  const matrix = fakeMatrix({
+    id: "M",
+    cells: [{ child: "a" }],
+    runCells: async (_ctx, cells) => [
+      { cellId: cells[0].cell_id, status: "failed", reason } as unknown as ScenarioCellOutcome,
+    ],
+  });
+
+  const report = await executeSelectedCells(await optionsFor([matrix]));
+  assert.equal(codeReads, 1);
+  assert.equal(messageReads, 1);
+  assert.equal(report.results[0].status, "failed");
+  assert.deepEqual(report.results[0].reason, {
+    code: "scenario_failure",
+    message: "captured failure",
+  });
+  assert.equal(report.summary.integrity_errors.length, 0);
+  assert.equal(report.summary.intended_exit_code, 1);
+});
+
 test("a poisoned outcome iterator is runner integrity, not a collector failure (ETM-003)", async () => {
   const matrix = fakeMatrix({
     id: "M",
     cells: [{ child: "a" }],
     runCells: async () => {
-      const hostile: unknown = {
-        [Symbol.iterator]() {
+      const hostile: ScenarioCellOutcome[] = [];
+      Object.defineProperty(hostile, Symbol.iterator, {
+        value() {
           throw new Error("hostile iterator");
         },
-      };
-      Object.setPrototypeOf(hostile, Array.prototype);
-      return hostile as ScenarioCellOutcome[];
+      });
+      return hostile;
     },
   });
   const report = await executeSelectedCells(await optionsFor([matrix]));
-  // Not an ordinary failed result either way; the cell must be missing/2.
-  assert.notEqual(report.results[0].status, "failed");
+  assert.equal(report.results[0].status, "missing");
+  assert.ok(report.summary.integrity_errors.length > 0);
   assert.equal(report.summary.intended_exit_code, 2);
 });
 

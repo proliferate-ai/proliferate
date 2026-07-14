@@ -456,14 +456,21 @@ function readCollectorOutcome(
     if (typeof cellId !== "string" || typeof status !== "string") {
       return null;
     }
-    if (reason === undefined || reason === null) {
+    if (reason === undefined) {
       return { cellId, status };
     }
+    if (typeof reason !== "object" || reason === null) {
+      return null;
+    }
+    // Snapshot nested accessors exactly once before validating. Re-reading a
+    // stateful getter after validation could otherwise persist a different
+    // code/message (or throw later during sanitization).
+    const code = (reason as { code?: unknown }).code;
+    const message = (reason as { message?: unknown }).message;
     if (
-      typeof reason !== "object" ||
-      typeof (reason as { code?: unknown }).code !== "string" ||
-      !(RESULT_REASON_CODES as readonly string[]).includes((reason as { code: string }).code) ||
-      typeof (reason as { message?: unknown }).message !== "string"
+      typeof code !== "string" ||
+      !(RESULT_REASON_CODES as readonly string[]).includes(code) ||
+      typeof message !== "string"
     ) {
       return null;
     }
@@ -471,8 +478,8 @@ function readCollectorOutcome(
       cellId,
       status,
       reason: {
-        code: (reason as { code: ResultReasonCode }).code,
-        message: (reason as { message: string }).message,
+        code: code as ResultReasonCode,
+        message,
       },
     };
   } catch {
