@@ -7,6 +7,9 @@ import {
 } from "@/components/playground/activity/ActivityFixtures";
 import { renderDelegationSlot } from "@/components/playground/delegation/PlaygroundComposerDelegation";
 import { renderPanelSlotFixture } from "@/components/playground/composer-slots/PlaygroundPanelSlotFixtures";
+import { WorkspaceActivityComposerCard } from "@/components/workspace/chat/input/workspace-activity/WorkspaceActivityComposerCard";
+import { createPlaygroundWorkspaceActivityModel } from "@/lib/domain/chat/__fixtures__/playground/composer-surface-fixtures";
+import { noop } from "@/components/playground/PlaygroundComposerActions";
 
 export function renderAttachedSlot(scenario: ScenarioKey): ReactNode | null {
   const contextPanel = (() => {
@@ -27,8 +30,23 @@ export function renderAttachedSlot(scenario: ScenarioKey): ReactNode | null {
   const delegationPanel = renderDelegationSlot(scenario);
   const goalBar = renderGoalBarSlot(scenario);
   const activityChips = renderActivityChipsSlot(scenario) ?? renderActivityWithGoalSlot(scenario);
+  // The Git/PR cap renders last so it docks flush onto the composer,
+  // matching useComposerDockSlots ordering in the product.
+  const workspaceActivityCap = scenario === "workspace-activity-card"
+    ? (
+      <WorkspaceActivityComposerCard
+        model={createPlaygroundWorkspaceActivityModel()}
+        pullRequestActionLabel="Create pull request"
+        onCopyBranch={noop}
+        onOpenChanges={noop}
+        onCommit={noop}
+        onPublish={noop}
+        onPullRequest={noop}
+      />
+    )
+    : null;
 
-  if (!contextPanel && !delegationPanel && !goalBar && !activityChips) {
+  if (!contextPanel && !delegationPanel && !goalBar && !activityChips && !workspaceActivityCap) {
     return null;
   }
 
@@ -38,6 +56,7 @@ export function renderAttachedSlot(scenario: ScenarioKey): ReactNode | null {
       {delegationPanel}
       {goalBar}
       {activityChips}
+      {workspaceActivityCap}
     </>
   );
 }

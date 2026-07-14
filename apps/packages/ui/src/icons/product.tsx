@@ -1,5 +1,47 @@
 import type { IconProps } from "./types";
 
+/* Codex-style pixel agent sprite (reference/codex/status/card.html): a
+   deterministic symmetric grid of 4px cells on the -2 -1 24 24 viewBox with
+   crisp edges. Color comes from currentColor so callers pick the agent tint. */
+export function PixelAgentSprite({ seed, className, ...props }: IconProps & { seed: string }) {
+  let hash = 2166136261;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  const mirror: Record<number, number> = { 0: 16, 4: 12 };
+  const cells: Array<[number, number]> = [];
+  let bit = 0;
+  for (const x of [0, 4, 8]) {
+    for (const y of [0, 4, 8, 12, 16]) {
+      if ((hash >>> (bit % 31)) & 1) {
+        cells.push([x, y]);
+        if (x in mirror) {
+          cells.push([mirror[x], y]);
+        }
+      }
+      bit += 1;
+    }
+  }
+  if (cells.length < 6) {
+    cells.push([8, 8], [4, 4], [12, 4]);
+  }
+  return (
+    <svg
+      className={className}
+      viewBox="-2 -1 24 24"
+      fill="none"
+      shapeRendering="crispEdges"
+      aria-hidden="true"
+      {...props}
+    >
+      {cells.map(([x, y]) => (
+        <rect key={`${x}-${y}`} x={x} y={y} width="4" height="4" fill="currentColor" />
+      ))}
+    </svg>
+  );
+}
+
 export function Robot({ className, ...props }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>

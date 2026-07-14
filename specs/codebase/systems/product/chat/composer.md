@@ -85,6 +85,10 @@ Rules:
   reasoning-effort choices and Fast mode when the harness exposes them. Do not
   render a separate click-to-cycle effort-bars button or a separate Fast icon
   button. Model-only contexts such as plan handoff may omit the tuning section.
+  *Status: this combined pill is a ruled target whose implementation was
+  deferred (#1134); the shipped composer still renders separate effort-bars and
+  Fast controls. Until the redesign lands, the separate effort control follows
+  the reasoning-tier presentation rules in §1.2.*
 - Preserve authored catalog effort labels (`Extra High`, `Max`, `Ultra`, and
   so on); do not rewrite distinct values to internal spellings such as
   `Xhigh`.
@@ -119,6 +123,17 @@ leading mode icon.
 Visible controls use one consistent inter-item rhythm. Compact controls must
 not reserve a trailing pending-state slot when no pending state exists; that
 empty flex child shifts icon-only controls and creates uneven visual gaps.
+
+Reasoning-tier presentation: ladders that top out at the ultra tier (frontier
+models only — `reasoningLadderTopsOutAtUltra`) name the current tier next to
+the bars ("Ultra", "Max", "Extra High"…, authored labels preserved); all other
+models keep the compact icon-only bars. Emphasis states: "max" (top rung of a
+non-ultra ladder) tints the bars with the app accent; "ultra" (top rung is the
+ultra tier) names the tier in foreground-weight text with accent bars plus the
+compositor-only bar wave. The word is the signal — no spectrum gradients, no
+composer-wide ring, no border takeover. The old animated rainbow ring
+(chip gradient + masked surface/cap ring pseudo-elements) was removed
+deliberately; do not reintroduce it.
 
 `collaboration_mode` is the primary working mode whenever it exposes a choice.
 Otherwise a legacy fused `mode` control is primary only when its choices carry
@@ -193,9 +208,34 @@ goal/activity, so it joins directly to the composer. Its collapsed trigger is
 text-only, has no disclosure arrow, and shows at most three ordered Git/PR
 facts: conflicts or failing checks first, then sync and changed-file state,
 then a healthy branch/clean fallback. It never shows filenames, diff stats, or
-PR titles. Its detail popover opens from the composer's left edge and owns
-Review changes plus the existing Commit, Publish/Push, and Open/Create pull
-request entry points.
+PR titles.
+
+*The cap is scheduled for replacement.* The ruled end-state (locked 2026-07-14,
+mock accepted in the playground `workspace-status-card` scenario) is the
+**workspace status card**: the composer carries no ambient-state bar at all.
+A single icon-only bulleted-list trigger sits in the trailing control cluster
+(right of the runtime-pressure ring — never a count, never a warning tint) and
+opens a codex-anatomy popover card
+(`workspace-status/WorkspaceStatusComposerControl.tsx`):
+
+- Surface: 300px, 1.25rem radius, solid popover background, `overflow-hidden`,
+  border painted as a 0.5px stroke in the shadow stack plus two soft shadows —
+  no ring, no translucency on the card itself.
+- Sections in order: **Source control** (Review N changes via the
+  `AppShellReviewIcon` ± glyph → review panel; Commit or push with
+  ahead/behind meta; Compare branch with PR number meta → PR view; a distinct
+  checks row with inline Fix), then **Subagents** (ours) as codex-format
+  grouped rows — pixel-sprite cluster (`PixelAgentSprite`, ≤4) + "N working" /
+  "N done", click opens the subagents surface — then **Native agents &
+  terminals** as count rows (single basic agent icon / terminal / loop icons).
+- Leaf detail is hover-only: checks, native counts, and subagent group rows
+  open a radix-portaled tooltip card (rounded-xl, popover/90, 0.5px ring,
+  backdrop blur) listing the individual items.
+- Diff stats (`+N −N`) never appear anywhere on this surface.
+- Queued prompts, goal, and blocking approvals stay in the composer dock —
+  they are conversation-flow state, not ambient state, and do not move into
+  the card. The activity-chips row and the composer `Agents` chip retire into
+  the card when it ships connected.
 
 `DelegatedWorkComposerControl` uses delegated-work identity from the shared
 domain view model. The trigger stays the generic `Agents` control when there
