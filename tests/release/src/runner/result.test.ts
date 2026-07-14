@@ -155,7 +155,7 @@ for (const row of MATRIX) {
 test("runner or integrity errors force exit 2 in both behaviors", () => {
   const results = [result("A", "green")];
   const integrity = [{ code: "duplicate_result" as const, message: "dup" }];
-  const runner = [{ code: "issue_filing_failed" as const, message: "gh failed" }];
+  const runner = [{ code: "runner_error" as const, message: "post-selection failure" }];
 
   const d1 = deriveVerdict({ behavior: "diagnostic", results, integrityErrors: integrity, runnerErrors: [] });
   assert.equal(d1.intendedExitCode, 2);

@@ -2,6 +2,7 @@ import type { DesktopMode, RuntimeLane, TargetLane } from "../config/types.js";
 import type { RunIdentityV1 } from "../runner/identity.js";
 import {
   ALL_FINAL_STATUSES,
+  deriveVerdict,
   type FinalTestResultV1,
   type FinalTestStatus,
   type IntegrityErrorV1,
@@ -150,25 +151,42 @@ export function validateReport(report: TestRunReportV1): void {
     }
   }
 
-  const hasErrors =
-    report.summary.integrity_errors.length > 0 || report.summary.runner_errors.length > 0;
-  const exit = report.summary.intended_exit_code;
-  if (report.run.behavior === "diagnostic" && report.verdict.status !== "non_qualifying") {
-    throw new ReportValidationError("Diagnostic reports must be non_qualifying.");
-  }
-  if (report.run.behavior === "strict") {
-    const allGreen =
-      report.results.length > 0 && report.results.every((result) => result.status === "green");
-    const expected: VerdictStatus =
-      allGreen && !hasErrors ? "selected_tests_passed" : "selected_tests_failed";
-    if (report.verdict.status !== expected) {
-      throw new ReportValidationError(`Strict verdict must be ${expected}.`);
-    }
-    if (expected === "selected_tests_passed" && exit !== 0) {
-      throw new ReportValidationError("selected_tests_passed requires intended exit 0.");
+  const knownStatuses = new Set<string>(ALL_FINAL_STATUSES);
+  for (const result of report.results) {
+    if (!knownStatuses.has(result.status)) {
+      throw new ReportValidationError(`Unknown result status "${result.status}" for ${result.test_id}.`);
     }
   }
-  if (hasErrors && exit !== 2) {
-    throw new ReportValidationError("Runner/integrity errors require intended exit 2.");
+
+  // A not_run result during real execution is only representable alongside
+  // its integrity error; without it the report would disguise unexecuted
+  // work as a tolerated outcome.
+  if (report.run.execution === "real" && report.results.some((result) => result.status === "not_run")) {
+    const flagged = report.summary.integrity_errors.some((error) => error.code === "real_execution_not_run");
+    if (!flagged) {
+      throw new ReportValidationError(
+        "not_run during real execution requires a real_execution_not_run integrity error.",
+      );
+    }
+  }
+
+  // Recompute the complete verdict/exit policy from the results and errors
+  // and require the persisted fields to match — the validator, not the
+  // producer, is the last line against false-success evidence.
+  const expected = deriveVerdict({
+    behavior: report.run.behavior,
+    results: report.results,
+    integrityErrors: report.summary.integrity_errors,
+    runnerErrors: report.summary.runner_errors,
+  });
+  if (report.verdict.status !== expected.status) {
+    throw new ReportValidationError(
+      `Verdict "${report.verdict.status}" does not match the recomputed "${expected.status}".`,
+    );
+  }
+  if (report.summary.intended_exit_code !== expected.intendedExitCode) {
+    throw new ReportValidationError(
+      `intended_exit_code ${report.summary.intended_exit_code} does not match the recomputed ${expected.intendedExitCode}.`,
+    );
   }
 }

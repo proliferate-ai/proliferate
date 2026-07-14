@@ -1,5 +1,6 @@
 import type { EnvResolution } from "../config/env-resolution.js";
 import { blockedReasonForMissingEnv, missingRequiredForLane, resolveEnv } from "../config/env-resolution.js";
+import { envVarNames } from "../config/env-manifest.js";
 import type { DesktopMode, TargetLane } from "../config/types.js";
 import type { ScenarioDefinition } from "../scenarios/types.js";
 import { ScenarioBlockedError, ScenarioExpectedFailError } from "../scenarios/types.js";
@@ -30,7 +31,16 @@ export class SelectionError extends Error {
 export function expandSelectedTests(scenarios: readonly ScenarioDefinition[]): SelectedTestV1[] {
   const selected: SelectedTestV1[] = [];
   const seen = new Set<string>();
+  const seenScenarioIds = new Set<string>();
   for (const scenario of scenarios) {
+    // Duplicate scenario ids are rejected outright (not only duplicate
+    // expanded test ids): later lookup is by scenario id, so two definitions
+    // sharing an id — even with disjoint lanes — could execute one body
+    // while reporting the other's metadata.
+    if (seenScenarioIds.has(scenario.id)) {
+      throw new SelectionError(`Duplicate scenario id "${scenario.id}" in the selection.`);
+    }
+    seenScenarioIds.add(scenario.id);
     for (const runtimeLane of scenario.lanes) {
       const testId = `${scenario.id}/${runtimeLane}`;
       if (seen.has(testId)) {
@@ -68,8 +78,12 @@ export interface ExecuteOptions {
   locallySeeded?: ReadonlySet<string>;
   /** Injectable for tests; defaults to resolveEnv over the union of requiredEnv. */
   resolveNeededEnv?: (names: readonly string[]) => EnvResolution;
-  /** Called with normalized failed results after execution; a throw becomes issue_filing_failed + exit 2. */
-  fileIssues?: (failed: readonly FinalTestResultV1[]) => Promise<void>;
+  /**
+   * Injectable for tests; defaults to every present secret value in the full
+   * env manifest — not only the selected scenarios' requiredEnv — so a secret
+   * a fixture uses opportunistically is still redacted from evidence.
+   */
+  resolveSecretValues?: () => string[];
   now?: () => Date;
   log?: (message: string) => void;
 }
@@ -89,29 +103,28 @@ export async function executeSelectedTests(options: ExecuteOptions): Promise<Tes
   const scenariosById = new Map(options.scenarios.map((scenario) => [scenario.id, scenario]));
   const locallySeeded = options.locallySeeded ?? new Set<string>();
 
-  const neededEnvNames = [...new Set(options.scenarios.flatMap((scenario) => scenario.requiredEnv))];
-  const resolveNeeded = options.resolveNeededEnv ?? ((names: readonly string[]) => resolveEnv(names));
-  const neededEnv = resolveNeeded(neededEnvNames);
+  // Once a valid selected set exists, a recoverable runner defect (e.g. a
+  // scenario referencing an undeclared env var) must not lose the selected
+  // results: it becomes a runner error, pending tests finalize as missing,
+  // and the report is still produced for persistence.
+  try {
+    const neededEnvNames = [...new Set(options.scenarios.flatMap((scenario) => scenario.requiredEnv))];
+    const resolveNeeded = options.resolveNeededEnv ?? ((names: readonly string[]) => resolveEnv(names));
+    const neededEnv = resolveNeeded(neededEnvNames);
 
-  if (options.execution === "dry_run") {
-    await planAll(selected, scenariosById, tracker, options, now);
-  } else {
-    await runAll(selected, scenariosById, tracker, options, neededEnv, locallySeeded, now, log);
+    if (options.execution === "dry_run") {
+      await planAll(selected, scenariosById, tracker, options, now);
+    } else {
+      await runAll(selected, scenariosById, tracker, options, neededEnv, locallySeeded, now, log);
+    }
+  } catch (error) {
+    tracker.recordRunnerError(
+      "runner_error",
+      `Runner failed after selection: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 
   const results = tracker.finalizeRun(options.execution);
-
-  const failed = results.filter((result) => result.status === "failed");
-  if (options.fileIssues && failed.length > 0) {
-    try {
-      await options.fileIssues(failed);
-    } catch (error) {
-      tracker.recordRunnerError(
-        "issue_filing_failed",
-        `Issue filing failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  }
 
   const verdict = deriveVerdict({
     behavior: options.behavior,
@@ -154,10 +167,19 @@ export async function executeSelectedTests(options: ExecuteOptions): Promise<Tes
     },
   };
 
-  const secretValues = neededEnv.all
-    .filter((entry) => entry.spec.secret && entry.value !== undefined)
+  const resolveSecrets = options.resolveSecretValues ?? defaultResolveSecretValues;
+  return sanitizeReport(report, resolveSecrets());
+}
+
+/**
+ * Every present secret value in the full env manifest — not only the selected
+ * scenarios' requiredEnv — because fixtures may use a secret opportunistically
+ * (e.g. an optional GitHub token embedded in a clone URL) without declaring it.
+ */
+function defaultResolveSecretValues(): string[] {
+  return resolveEnv(envVarNames())
+    .all.filter((entry) => entry.spec.secret && entry.value !== undefined)
     .map((entry) => entry.value as string);
-  return sanitizeReport(report, secretValues);
 }
 
 async function planAll(

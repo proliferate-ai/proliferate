@@ -98,6 +98,30 @@ test("explicit overrides win without changing the recorded origin", async () => 
   assert.equal(identity.source_sha, FULL_SHA);
 });
 
+test("overrides cannot bypass required GitHub provenance", async () => {
+  const env = githubEnv();
+  delete env.GITHUB_RUN_ID;
+  await assert.rejects(
+    resolveRunIdentity({ env, overrides: { runId: "release-42" } }),
+    IdentityError,
+  );
+  const envNoJob = githubEnv();
+  delete envNoJob.GITHUB_JOB;
+  await assert.rejects(
+    resolveRunIdentity({ env: envNoJob, overrides: { shardId: "shard-1" } }),
+    IdentityError,
+  );
+});
+
+test("origin fields are always populated for a GitHub run, even with overrides", async () => {
+  const identity = await resolveRunIdentity({
+    env: githubEnv(),
+    overrides: { runId: "release-42", shardId: "shard-1" },
+  });
+  assert.equal(identity.origin.github_run_id, "123456");
+  assert.equal(identity.origin.github_job, "release-e2e-local");
+});
+
 test("two shards can share one run id, and a retry preserves the logical run", async () => {
   const shardA = await resolveRunIdentity({
     env: {},

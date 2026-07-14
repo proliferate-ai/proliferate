@@ -231,43 +231,22 @@ test("a throwing plan() becomes not_run/plan_error, records a runner error, cont
   assert.equal(report.summary.intended_exit_code, 2);
 });
 
-test("an issue-filing failure records a runner error and exits 2 without changing statuses", async () => {
-  const scenarios = [fakeScenario({ id: "RED", run: async () => { throw new Error("boom"); } })];
+test("a post-selection runner defect finalizes every pending test and still produces a report", async () => {
+  // Simulates e.g. a scenario referencing an env var that resolveEnv rejects
+  // (undeclared in the manifest): the selected set must not be lost.
+  const scenarios = [fakeScenario({ id: "A" }), fakeScenario({ id: "B" })];
   const report = await executeSelectedTests(
     baseOptions(scenarios, {
-      fileIssues: async () => { throw new Error("gh exploded"); },
+      resolveNeededEnv: () => { throw new Error('resolveEnv: "NOT_IN_MANIFEST" is not declared'); },
     }),
   );
-  assert.equal(report.results[0].status, "failed");
-  assert.equal(report.summary.runner_errors[0].code, "issue_filing_failed");
+  assert.equal(report.results.length, 2);
+  for (const result of report.results) {
+    assert.equal(result.status, "missing");
+  }
+  assert.equal(report.summary.runner_errors.length, 1);
+  assert.match(report.summary.runner_errors[0].message, /NOT_IN_MANIFEST/);
   assert.equal(report.summary.intended_exit_code, 2);
-});
-
-test("issue filing receives only normalized failed results", async () => {
-  let received: string[] = [];
-  const scenarios = [
-    fakeScenario({ id: "RED", run: async () => { throw new Error("boom"); } }),
-    fakeScenario({ id: "BLOCKED", run: async () => { throw new ScenarioBlockedError("gate"); } }),
-    fakeScenario({ id: "GREEN" }),
-  ];
-  await executeSelectedTests(
-    baseOptions(scenarios, {
-      fileIssues: async (failed) => {
-        received = failed.map((result) => result.test_id);
-      },
-    }),
-  );
-  assert.deepEqual(received, ["RED/local"]);
-});
-
-test("issue filing is not invoked when nothing failed", async () => {
-  let called = false;
-  await executeSelectedTests(
-    baseOptions([fakeScenario({ id: "GREEN" })], {
-      fileIssues: async () => { called = true; },
-    }),
-  );
-  assert.equal(called, false);
 });
 
 test("exact resolved secret values are redacted from the report", async () => {
@@ -280,11 +259,39 @@ test("exact resolved secret values are redacted from the report", async () => {
     }),
   ];
   const report = await executeSelectedTests(
-    baseOptions(scenarios, { resolveNeededEnv: () => fakeEnv([], { SECRET_VAR: secret }) }),
+    baseOptions(scenarios, {
+      resolveNeededEnv: () => fakeEnv([], { SECRET_VAR: secret }),
+      resolveSecretValues: () => [secret],
+    }),
   );
   const serialized = JSON.stringify(report);
   assert.ok(!serialized.includes(secret));
   assert.match(report.results[0].reason!.message, /\[REDACTED\]/);
+});
+
+test("secrets are redacted even when no selected scenario declares them", async () => {
+  // A fixture can use a secret opportunistically (e.g. an optional GitHub
+  // token in a clone URL) without listing it in requiredEnv; redaction draws
+  // from the full manifest, injected here via resolveSecretValues.
+  const secret = "ghp_undeclared_token";
+  const scenarios = [
+    fakeScenario({ id: "LEAKY", run: async () => { throw new Error(`clone https://x:${secret}@github.com failed`); } }),
+  ];
+  const report = await executeSelectedTests(
+    baseOptions(scenarios, { resolveSecretValues: () => [secret] }),
+  );
+  assert.ok(!JSON.stringify(report).includes(secret));
+});
+
+test("rejects duplicate scenario ids even with disjoint lanes", () => {
+  assert.throws(
+    () =>
+      expandSelectedTests([
+        fakeScenario({ id: "A", lanes: ["local"] }),
+        fakeScenario({ id: "A", lanes: ["sandbox"] }),
+      ]),
+    SelectionError,
+  );
 });
 
 test("overlong messages are bounded to 4096 code points", async () => {

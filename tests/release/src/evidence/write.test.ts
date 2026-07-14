@@ -124,6 +124,86 @@ test("validateReport enforces the strict verdict against results and errors", ()
   assert.throws(() => validateReport(errorButPassed), ReportValidationError);
 });
 
+test("validateReport rejects false-success evidence: failed result with exit 0", () => {
+  const diagnostic = validReport();
+  diagnostic.results[0].status = "failed";
+  diagnostic.summary.by_status.green = 0;
+  diagnostic.summary.by_status.failed = 1;
+  // verdict name is "correct" for diagnostic, but the exit is a lie
+  assert.throws(() => validateReport(diagnostic), ReportValidationError);
+
+  const strict = validReport();
+  strict.run.behavior = "strict";
+  strict.results[0].status = "failed";
+  strict.summary.by_status.green = 0;
+  strict.summary.by_status.failed = 1;
+  strict.verdict.status = "selected_tests_passed";
+  assert.throws(() => validateReport(strict), ReportValidationError);
+});
+
+test("validateReport rejects not_run during real execution without its integrity error", () => {
+  const report = validReport();
+  report.results[0].status = "not_run";
+  report.summary.by_status.green = 0;
+  report.summary.by_status.not_run = 1;
+  assert.throws(() => validateReport(report), ReportValidationError);
+});
+
+test("validateReport rejects an unknown result status", () => {
+  const report = validReport();
+  (report.results[0] as { status: string }).status = "sorta_passed";
+  assert.throws(() => validateReport(report), ReportValidationError);
+});
+
+// Every verdict-matrix row must survive validation when produced honestly.
+const MATRIX_ROWS: Array<{ statuses: FinalTestStatus[]; behavior: "diagnostic" | "strict"; exit: 0 | 1 | 2; verdict: TestRunReportV1["verdict"]["status"]; execution?: "real" | "dry_run" }> = [
+  { statuses: ["green"], behavior: "diagnostic", exit: 0, verdict: "non_qualifying" },
+  { statuses: ["green"], behavior: "strict", exit: 0, verdict: "selected_tests_passed" },
+  { statuses: ["blocked"], behavior: "diagnostic", exit: 0, verdict: "non_qualifying" },
+  { statuses: ["blocked"], behavior: "strict", exit: 1, verdict: "selected_tests_failed" },
+  { statuses: ["expected_fail"], behavior: "diagnostic", exit: 0, verdict: "non_qualifying" },
+  { statuses: ["expected_fail"], behavior: "strict", exit: 1, verdict: "selected_tests_failed" },
+  { statuses: ["green", "failed"], behavior: "diagnostic", exit: 1, verdict: "non_qualifying" },
+  { statuses: ["green", "failed"], behavior: "strict", exit: 1, verdict: "selected_tests_failed" },
+  { statuses: ["cancelled"], behavior: "strict", exit: 1, verdict: "selected_tests_failed" },
+  { statuses: ["missing"], behavior: "diagnostic", exit: 1, verdict: "non_qualifying" },
+  { statuses: ["not_run"], behavior: "diagnostic", exit: 0, verdict: "non_qualifying", execution: "dry_run" },
+];
+
+for (const [index, row] of MATRIX_ROWS.entries()) {
+  test(`validateReport accepts honest matrix row ${index}: ${row.behavior} ${row.statuses.join(",")}`, () => {
+    const report = validReport();
+    report.run.behavior = row.behavior;
+    report.run.execution = row.execution ?? "real";
+    report.selected_tests = row.statuses.map((_, i) => ({
+      test_id: `S${i}/local`,
+      scenario_id: `S${i}`,
+      registry_flow_ref: `specs#S${i}`,
+      runtime_lane: "local" as const,
+    }));
+    report.results = row.statuses.map((status, i) => ({
+      ...report.results[0],
+      test_id: `S${i}/local`,
+      scenario_id: `S${i}`,
+      registry_flow_ref: `specs#S${i}`,
+      status,
+    }));
+    report.summary.selected = row.statuses.length;
+    report.summary.finalized = row.statuses.length;
+    const byStatus = Object.fromEntries(ALL_FINAL_STATUSES.map((status) => [status, 0])) as Record<
+      FinalTestStatus,
+      number
+    >;
+    for (const status of row.statuses) {
+      byStatus[status] += 1;
+    }
+    report.summary.by_status = byStatus;
+    report.summary.intended_exit_code = row.exit;
+    report.verdict.status = row.verdict;
+    validateReport(report);
+  });
+}
+
 test("validateReport requires exit 2 whenever runner/integrity errors exist", () => {
   const report = validReport();
   report.summary.integrity_errors = [{ code: "duplicate_result", message: "dup" }];

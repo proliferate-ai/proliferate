@@ -64,7 +64,7 @@ export interface FinalTestResultV1 {
 }
 
 export interface RunnerErrorV1 {
-  code: "issue_filing_failed" | "runner_error";
+  code: "runner_error";
   message: string;
 }
 

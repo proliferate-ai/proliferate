@@ -87,14 +87,6 @@ async function main(): Promise<void> {
       inputs: { targetLane: args.lane, desktop: args.desktop, agents: args.agents, scenarios: args.scenarios },
       scenarios,
       locallySeeded,
-      fileIssues: args.fileIssues
-        ? async (failed) => {
-            const urls = await fileIssuesForFailures(toFailureReports(failed));
-            for (const url of urls) {
-              console.error(`Filed issue: ${url}`);
-            }
-          }
-        : undefined,
       log: (message) => console.log(`  ${message}`),
     });
   } catch (error) {
@@ -116,6 +108,26 @@ async function main(): Promise<void> {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 2;
     return;
+  }
+
+  // Issue filing is auxiliary and runs after the authoritative report is
+  // persisted, from the report's own sanitized failed results. A filing
+  // failure keeps its existing semantics: reported, never rewriting the
+  // already-derived verdict or exit.
+  if (args.fileIssues) {
+    const payloads = toFailureReports(report.results);
+    if (payloads.length > 0) {
+      try {
+        const urls = await fileIssuesForFailures(payloads);
+        for (const url of urls) {
+          console.error(`Filed issue: ${url}`);
+        }
+      } catch (error) {
+        console.error(
+          `Issue filing failed (verdict unchanged): ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
   }
 
   if (report.summary.intended_exit_code !== 0) {

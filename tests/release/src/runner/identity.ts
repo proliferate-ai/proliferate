@@ -69,9 +69,15 @@ export async function resolveRunIdentity(options: ResolveIdentityOptions = {}): 
   validateOverrides(overrides);
 
   if (isGitHub) {
-    const runId = overrides.runId ?? requireGitHubEnv(env, "GITHUB_RUN_ID", "run id");
-    const shardId = overrides.shardId ?? requireGitHubEnv(env, "GITHUB_JOB", "shard id");
-    const attempt = overrides.attempt ?? parseGitHubAttempt(env);
+    // Provenance is required regardless of overrides: an explicit --run-id /
+    // --shard-id / --attempt changes the logical identity but may not erase
+    // or bypass the real GitHub context recorded in `origin`.
+    const githubRunId = requireGitHubEnv(env, "GITHUB_RUN_ID", "run id");
+    const githubJob = requireGitHubEnv(env, "GITHUB_JOB", "shard id");
+    const githubAttempt = parseGitHubAttempt(env);
+    const runId = overrides.runId ?? githubRunId;
+    const shardId = overrides.shardId ?? githubJob;
+    const attempt = overrides.attempt ?? githubAttempt;
     const sourceSha = requireGitHubEnv(env, "GITHUB_SHA", "source SHA");
     if (!FULL_SHA_PATTERN.test(sourceSha)) {
       throw new IdentityError(
@@ -85,8 +91,8 @@ export async function resolveRunIdentity(options: ResolveIdentityOptions = {}): 
       source_sha: sourceSha,
       origin: {
         kind: "github_actions",
-        github_run_id: nonEmpty(env.GITHUB_RUN_ID) ?? null,
-        github_job: nonEmpty(env.GITHUB_JOB) ?? null,
+        github_run_id: githubRunId,
+        github_job: githubJob,
       },
     });
   }
