@@ -49,10 +49,10 @@ or a report to reach Slack. The system is complete only when:
 | --- | --- |
 | Proliferate support domain | Authenticated report capture, immutable report intent, private message/diagnostics/attachments, completion, user/contact resolution. |
 | `issue-tracker` | Issues, occurrences, reporters, status, claims, audit/poll events, PR relationships, consent-safe attribution projection. |
-| Sentry | Exception bodies, stack traces, grouping, event identity, event user, release tag, source deeplinks. |
-| Grafana/CloudWatch | Alert rules, firing notifications, metric/log evaluation, structured log bodies and source queries. |
+| [Observability](../observability/README.md) / Sentry | Event production, privacy controls, correlation, exception bodies, stack traces, grouping, event identity, event user, release tag, and source deeplinks. |
+| [Observability](../observability/README.md) / Grafana/CloudWatch | Structured-log production and correlation, alert rules, firing notifications, metric/log evaluation, log bodies, and source queries. |
 | GitHub | PR title, labels, checks, author, state, merge SHA, raw product release. |
-| Proliferate release tooling | Tag range, merged-PR set, deterministic category, release manifest. |
+| [Delivery](../delivery/README.md) / Proliferate release tooling | Artifact and deploy identity, tag range, merged-PR set, deterministic category, and release manifest. |
 | `landing` | Editorial copy/media and rendered public changelog MDX. |
 
 The standalone tracker is a durable production component, not a disposable

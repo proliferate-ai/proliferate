@@ -21,7 +21,7 @@ runbook owns how an operator plans, executes, records, and reports a QA pass.
 - [../debugging/README.md](../debugging/README.md)
   - support issue triage, tenant/session correlation, diagnostics, Sentry, and
     production/local investigation workflow
-- [../analytics/README.md](../analytics/README.md)
+- [../operating/analytics/README.md](../operating/analytics/README.md)
   - Customer.io, Metabase, PostHog, Sentry, anonymous telemetry, and freshness
     expectations when QA changes analytics surfaces
 
@@ -177,7 +177,7 @@ the change crosses a shared contract.
 | AnyHarness runtime | Start a real session, stream transcript events, execute the changed tool/session/workspace behavior, and verify contract compatibility with Desktop/Web/Mobile callers. | [../../codebase/structures/anyharness/README.md](../../codebase/structures/anyharness/README.md) |
 | Cloud sandbox and Worker | Through mounted APIs, ensure the personal sandbox row, save/materialize a cloud repo environment, create a Cloud workspace, verify authenticated AnyHarness gateway access, and then verify optional Worker enrollment, heartbeat-derived liveness, and reported versions independently. | [../runbooks/cloud-provisioning-failure.md](../runbooks/cloud-provisioning-failure.md), [../runbooks/worker-enrollment-failure.md](../runbooks/worker-enrollment-failure.md), [../../codebase/structures/proliferate-worker/README.md](../../codebase/structures/proliferate-worker/README.md) |
 | Billing | Use Stripe test mode, verify checkout/portal/refill/webhook behavior, budget/credit reconciliation, and UI state after webhook delivery. | [../local/stripe-local-testing.md](../local/stripe-local-testing.md), [../../codebase/platforms/product/billing.md](../../codebase/platforms/product/billing.md) |
-| Analytics/observability | Verify events, dashboards, replay gates, alerts, release health, and support-correlation ids without leaking sensitive content. | [../analytics/README.md](../analytics/README.md) |
+| Analytics/observability | Verify events, dashboards, replay gates, alerts, release health, and support-correlation ids without leaking sensitive content. | [../operating/analytics/README.md](../operating/analytics/README.md) |
 | Deploy/release | Verify the exact lanes that ran, environment gates, URLs, updater manifests, TestFlight submission, E2B smoke, and release/docs ownership. | [../deploying/ci-cd.md](../deploying/ci-cd.md) |
 
 ## Regression Rules
