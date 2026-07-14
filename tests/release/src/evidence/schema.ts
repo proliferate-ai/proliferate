@@ -4,25 +4,27 @@ import type { RunIdentityV1 } from "../runner/identity.js";
 import {
   ALL_FINAL_STATUSES,
   deriveVerdict,
-  type FinalTestResultV1,
+  type FinalCellResultV1,
   type FinalTestStatus,
   type IntegrityErrorV1,
+  type PlannedCellV1,
   type ResultBehavior,
   type RunnerErrorV1,
-  type SelectedTestV1,
   type VerdictStatus,
 } from "../runner/result.js";
 
 /**
  * The versioned combined-report contract, per
- * specs/developing/testing/qualification-runner-core.md ("Combined report")
- * plus specs/developing/testing/candidate-build-handoff.md ("Report V2"),
- * which adds bounded candidate-artifact identity. One artifact per
- * invocation/shard/attempt; validated before writing. V1 is the prior
- * contract recorded in repository history; current code emits only V2.
+ * specs/developing/testing/qualification-runner-core.md ("Combined report"),
+ * specs/developing/testing/candidate-build-handoff.md (candidate-artifact
+ * evidence), and specs/developing/testing/exact-test-matrix.md ("Combined
+ * report V3"), which changes the semantic result unit to an exact test cell.
+ * One artifact per invocation/shard/attempt; validated before writing. V1 and
+ * V2 are prior contracts recorded in repository history; current code emits
+ * only V3.
  */
-export interface TestRunReportV2 {
-  schema_version: 2;
+export interface TestRunReportV3 {
+  schema_version: 3;
   kind: "proliferate.test-run";
   /**
    * Artifact ID/version/SHA-256 from the validated candidate build map, or
@@ -42,8 +44,8 @@ export interface TestRunReportV2 {
     agents: string[] | "all";
     scenarios: string[] | "all";
   };
-  selected_tests: SelectedTestV1[];
-  results: FinalTestResultV1[];
+  selected_cells: PlannedCellV1[];
+  results: FinalCellResultV1[];
   summary: {
     selected: number;
     finalized: number;
@@ -54,7 +56,7 @@ export interface TestRunReportV2 {
   };
   verdict: {
     status: VerdictStatus;
-    scope: "selected_tests";
+    scope: "selected_cells";
     completeness: "partial";
     reasons: string[];
   };
@@ -139,7 +141,7 @@ export function redactExternalPayloads(message: string): string {
  * Runs before validation/serialization so no exact secret value or overlong
  * message can enter the persisted artifact.
  */
-export function sanitizeReport(report: TestRunReportV2, secretValues: readonly string[]): TestRunReportV2 {
+export function sanitizeReport(report: TestRunReportV3, secretValues: readonly string[]): TestRunReportV3 {
   const clean = (message: string): string =>
     boundMessage(redactExternalPayloads(redactUrlCredentials(redactSecrets(message, secretValues))));
   return {
@@ -166,9 +168,9 @@ export function sanitizeReport(report: TestRunReportV2, secretValues: readonly s
  * selected/result test ids, finalized counts, all seven status keys with
  * exact counts, and verdict/exit consistency.
  */
-export function validateReport(report: TestRunReportV2): void {
-  if (report.schema_version !== 2 || report.kind !== "proliferate.test-run") {
-    throw new ReportValidationError("Report must be schema_version 2, kind proliferate.test-run.");
+export function validateReport(report: TestRunReportV3): void {
+  if (report.schema_version !== 3 || report.kind !== "proliferate.test-run") {
+    throw new ReportValidationError("Report must be schema_version 3, kind proliferate.test-run.");
   }
   validateCandidateBuildEvidence(report.candidate_build);
   // Strict evidence must name the exact bytes it qualified: only diagnostic
@@ -177,17 +179,38 @@ export function validateReport(report: TestRunReportV2): void {
     throw new ReportValidationError("Strict reports require non-null candidate_build identity.");
   }
 
-  const selectedIds = report.selected_tests.map((test) => test.test_id);
-  const resultIds = report.results.map((result) => result.test_id);
+  const selectedIds = report.selected_cells.map((cell) => cell.cell_id);
+  const resultIds = report.results.map((result) => result.cell_id);
   if (new Set(selectedIds).size !== selectedIds.length) {
-    throw new ReportValidationError("Selected test ids are not unique.");
+    throw new ReportValidationError("Selected cell ids are not unique.");
   }
   if (new Set(resultIds).size !== resultIds.length) {
-    throw new ReportValidationError("Result test ids are not unique.");
+    throw new ReportValidationError("Result cell ids are not unique.");
   }
   const selectedSet = new Set(selectedIds);
   if (resultIds.length !== selectedIds.length || !resultIds.every((id) => selectedSet.has(id))) {
-    throw new ReportValidationError("Selected and result test ids are not exactly equal sets.");
+    throw new ReportValidationError("Selected and result cell ids are not exactly equal sets.");
+  }
+
+  // Every result must repeat its planned cell's identity and dimensions
+  // exactly — a result that drifts from its plan is tampered evidence.
+  const cellsById = new Map(report.selected_cells.map((cell) => [cell.cell_id, cell]));
+  for (const result of report.results) {
+    const cell = cellsById.get(result.cell_id)!;
+    if (
+      result.scenario_id !== cell.scenario_id ||
+      result.runtime_lane !== cell.runtime_lane ||
+      result.registry_flow_ref !== cell.registry_flow_ref
+    ) {
+      throw new ReportValidationError(
+        `Result "${result.cell_id}" does not match its planned cell's scenario/lane/reference.`,
+      );
+    }
+    const cellDims = JSON.stringify(Object.entries(cell.dimensions).sort());
+    const resultDims = JSON.stringify(Object.entries(result.dimensions ?? {}).sort());
+    if (cellDims !== resultDims) {
+      throw new ReportValidationError(`Result "${result.cell_id}" dimensions do not match its planned cell.`);
+    }
   }
 
   if (report.summary.selected !== selectedIds.length || report.summary.finalized !== report.results.length) {
@@ -216,7 +239,7 @@ export function validateReport(report: TestRunReportV2): void {
   const knownStatuses = new Set<string>(ALL_FINAL_STATUSES);
   for (const result of report.results) {
     if (!knownStatuses.has(result.status)) {
-      throw new ReportValidationError(`Unknown result status "${result.status}" for ${result.test_id}.`);
+      throw new ReportValidationError(`Unknown result status "${result.status}" for ${result.cell_id}.`);
     }
   }
 
@@ -233,7 +256,7 @@ export function validateReport(report: TestRunReportV2): void {
     );
     if (executed) {
       throw new ReportValidationError(
-        `Dry-run cannot produce a real result: ${executed.test_id} is "${executed.status}".`,
+        `Dry-run cannot produce a real result: ${executed.cell_id} is "${executed.status}".`,
       );
     }
   }

@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { runReleaseCommand, type CommandDeps } from "./command.js";
 import { BuildMapError, type CandidateBuildMapV1 } from "../artifacts/build-map.js";
 import type { RunIdentityV1 } from "../runner/identity.js";
-import type { TestRunReportV2 } from "../evidence/schema.js";
+import type { TestRunReportV3 } from "../evidence/schema.js";
 import { ALL_FINAL_STATUSES, type FinalTestStatus } from "../runner/result.js";
 import type { ScenarioDefinition } from "../scenarios/types.js";
 
@@ -42,14 +42,14 @@ const VALID_MAP: CandidateBuildMapV1 = {
   ],
 };
 
-function fakeReport(candidateBuild: TestRunReportV2["candidate_build"]): TestRunReportV2 {
+function fakeReport(candidateBuild: TestRunReportV3["candidate_build"]): TestRunReportV3 {
   const byStatus = Object.fromEntries(ALL_FINAL_STATUSES.map((status) => [status, 0])) as Record<
     FinalTestStatus,
     number
   >;
   byStatus.green = 1;
   return {
-    schema_version: 2,
+    schema_version: 3,
     kind: "proliferate.test-run",
     candidate_build: candidateBuild,
     run: {
@@ -60,15 +60,23 @@ function fakeReport(candidateBuild: TestRunReportV2["candidate_build"]): TestRun
       finished_at: "2026-07-14T00:00:01Z",
     },
     inputs: { target_lane: "local", desktop: "web", agents: "all", scenarios: "all" },
-    selected_tests: [
-      { test_id: "T3-FAKE/local", scenario_id: "T3-FAKE", registry_flow_ref: "specs#T3-FAKE", runtime_lane: "local" },
-    ],
-    results: [
+    selected_cells: [
       {
-        test_id: "T3-FAKE/local",
+        cell_id: "T3-FAKE/local",
         scenario_id: "T3-FAKE",
         registry_flow_ref: "specs#T3-FAKE",
         runtime_lane: "local",
+        dimensions: {},
+        required_env: [],
+      },
+    ],
+    results: [
+      {
+        cell_id: "T3-FAKE/local",
+        scenario_id: "T3-FAKE",
+        registry_flow_ref: "specs#T3-FAKE",
+        runtime_lane: "local",
+        dimensions: {},
         status: "green",
         started_at: null,
         finished_at: "2026-07-14T00:00:01Z",
@@ -85,7 +93,7 @@ function fakeReport(candidateBuild: TestRunReportV2["candidate_build"]): TestRun
       runner_errors: [],
       intended_exit_code: 0,
     },
-    verdict: { status: "non_qualifying", scope: "selected_tests", completeness: "partial", reasons: [] },
+    verdict: { status: "non_qualifying", scope: "selected_cells", completeness: "partial", reasons: [] },
   };
 }
 
@@ -197,7 +205,7 @@ test("--help exits 0 without identity, map loading, or a report", async () => {
 });
 
 test("the validated map's evidence reaches execute and the written report", async () => {
-  let written: TestRunReportV2 | undefined;
+  let written: TestRunReportV3 | undefined;
   const { deps } = makeDeps();
   deps.write = async (_outputDir, report) => {
     written = report;
@@ -222,4 +230,40 @@ test("a report write failure still exits 2", async () => {
   };
   const exit = await runReleaseCommand(["--behavior", "diagnostic"], deps);
   assert.equal(exit, 2);
+});
+
+test("an invalid cell expansion exits 2 before any setup side effect and writes no report", async () => {
+  const brokenMatrix = {
+    id: "T3-BROKEN",
+    title: "broken matrix",
+    registryFlowRef: "specs#T3-BROKEN",
+    lanes: ["local"],
+    requiredEnv: [],
+    kind: "matrix",
+    expandCells: () => {
+      throw new Error("expansion bug");
+    },
+    planCell: () => [],
+    runCells: async () => [],
+  } as const;
+  const { deps, calls } = makeDeps();
+  deps.selectScenarios = () => {
+    calls.push("select");
+    return [brokenMatrix as unknown as ScenarioDefinition];
+  };
+  const exit = await runReleaseCommand(["--behavior", "diagnostic"], deps);
+  assert.equal(exit, 2);
+  // Identity and selection happen, planning fails; zero user/gateway/
+  // provider/fixture/scenario setup and no report write follow.
+  assert.deepEqual(calls, ["identity", "select"]);
+});
+
+test("planning happens after map validation and before setup in the dependency order", async () => {
+  const { deps, calls } = makeDeps();
+  const exit = await runReleaseCommand(
+    ["--behavior", "diagnostic", "--candidate-build-map", "/tmp/map.json"],
+    deps,
+  );
+  assert.equal(exit, 0);
+  assert.deepEqual(calls, ["identity", "select", "loadBuildMap", "seed", "gateway", "envManifest", "execute", "write"]);
 });

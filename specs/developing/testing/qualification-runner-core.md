@@ -4,6 +4,15 @@ Status: frozen implementation contract for the first qualification-platform
 slice. Revision: `Q1-frozen-2`. Audited base:
 `2ec15eaf8cfc870cbdbb42c225a5f1428e5282b4`.
 
+Successor: [`exact-test-matrix.md`](exact-test-matrix.md) (ETM1) changes the
+selected unit from one broad `scenario/lane` test to an exact test cell
+(matrix children like `T3-CHAT-1/local/harness=codex`), renames the report's
+selected/result arrays and verdict vocabulary accordingly, and advances the
+combined report to `TestRunReportV3`. This document remains the contract of
+record for run identity, normalization, diagnostic/strict behavior,
+missing/duplicate integrity, sanitization, and report-derived exit codes,
+which ETM1 extends rather than replaces.
+
 ## Outcome
 
 The release-test command runs the selected tests and truthfully reports what

@@ -11,19 +11,19 @@ import {
   redactUrlCredentials,
   ReportValidationError,
   validateReport,
-  type TestRunReportV2,
+  type TestRunReportV3,
 } from "./schema.js";
 import { reportPath, ReportWriteError, writeReport } from "./write.js";
 import { ALL_FINAL_STATUSES, type FinalTestStatus } from "../runner/result.js";
 
-function validReport(overrides: Partial<TestRunReportV2> = {}): TestRunReportV2 {
+function validReport(overrides: Partial<TestRunReportV3> = {}): TestRunReportV3 {
   const byStatus = Object.fromEntries(ALL_FINAL_STATUSES.map((status) => [status, 0])) as Record<
     FinalTestStatus,
     number
   >;
   byStatus.green = 1;
   return {
-    schema_version: 2,
+    schema_version: 3,
     kind: "proliferate.test-run",
     candidate_build: null,
     run: {
@@ -38,15 +38,23 @@ function validReport(overrides: Partial<TestRunReportV2> = {}): TestRunReportV2 
       finished_at: "2026-07-13T00:01:00Z",
     },
     inputs: { target_lane: "local", desktop: "web", agents: "all", scenarios: "all" },
-    selected_tests: [
-      { test_id: "A/local", scenario_id: "A", registry_flow_ref: "specs#A", runtime_lane: "local" },
-    ],
-    results: [
+    selected_cells: [
       {
-        test_id: "A/local",
+        cell_id: "A/local",
         scenario_id: "A",
         registry_flow_ref: "specs#A",
         runtime_lane: "local",
+        dimensions: {},
+        required_env: [],
+      },
+    ],
+    results: [
+      {
+        cell_id: "A/local",
+        scenario_id: "A",
+        registry_flow_ref: "specs#A",
+        runtime_lane: "local",
+        dimensions: {},
         status: "green",
         started_at: "2026-07-13T00:00:01Z",
         finished_at: "2026-07-13T00:00:59Z",
@@ -63,7 +71,7 @@ function validReport(overrides: Partial<TestRunReportV2> = {}): TestRunReportV2 
       runner_errors: [],
       intended_exit_code: 0,
     },
-    verdict: { status: "non_qualifying", scope: "selected_tests", completeness: "partial", reasons: [] },
+    verdict: { status: "non_qualifying", scope: "selected_cells", completeness: "partial", reasons: [] },
     ...overrides,
   };
 }
@@ -71,7 +79,7 @@ function validReport(overrides: Partial<TestRunReportV2> = {}): TestRunReportV2 
 
 // Minimal valid candidate evidence for strict-report tests (strict requires
 // non-null candidate_build per CBH-001).
-const STRICT_CB: TestRunReportV2["candidate_build"] = {
+const STRICT_CB: TestRunReportV3["candidate_build"] = {
   artifacts: [{ artifact_id: "anyharness/host", version: "1.0.0", sha256: "e".repeat(64) }],
 };
 
@@ -81,17 +89,19 @@ test("validateReport accepts a consistent report", () => {
 
 test("validateReport rejects selected/result set mismatch and duplicates", () => {
   const extraSelected = validReport();
-  extraSelected.selected_tests.push({
-    test_id: "B/local",
+  extraSelected.selected_cells.push({
+    cell_id: "B/local",
     scenario_id: "B",
     registry_flow_ref: "specs#B",
     runtime_lane: "local",
+    dimensions: {},
+    required_env: [],
   });
   extraSelected.summary.selected = 2;
   assert.throws(() => validateReport(extraSelected), ReportValidationError);
 
   const duplicated = validReport();
-  duplicated.selected_tests.push({ ...duplicated.selected_tests[0] });
+  duplicated.selected_cells.push({ ...duplicated.selected_cells[0] });
   assert.throws(() => validateReport(duplicated), ReportValidationError);
 });
 
@@ -112,7 +122,7 @@ test("validateReport rejects wrong counts, missing status keys, and count drift"
 
 test("validateReport rejects a diagnostic report that claims qualification", () => {
   const report = validReport();
-  report.verdict.status = "selected_tests_passed";
+  report.verdict.status = "selected_cells_passed";
   assert.throws(() => validateReport(report), ReportValidationError);
 });
 
@@ -120,19 +130,19 @@ test("validateReport enforces the strict verdict against results and errors", ()
   const passing = validReport();
   passing.run.behavior = "strict";
   passing.candidate_build = STRICT_CB;
-  passing.verdict.status = "selected_tests_passed";
+  passing.verdict.status = "selected_cells_passed";
   validateReport(passing);
 
   const mislabeled = validReport();
   mislabeled.run.behavior = "strict";
   mislabeled.candidate_build = STRICT_CB;
-  mislabeled.verdict.status = "selected_tests_failed";
+  mislabeled.verdict.status = "selected_cells_failed";
   assert.throws(() => validateReport(mislabeled), ReportValidationError);
 
   const errorButPassed = validReport();
   errorButPassed.run.behavior = "strict";
   errorButPassed.candidate_build = STRICT_CB;
-  errorButPassed.verdict.status = "selected_tests_passed";
+  errorButPassed.verdict.status = "selected_cells_passed";
   errorButPassed.summary.runner_errors = [{ code: "runner_error", message: "x" }];
   assert.throws(() => validateReport(errorButPassed), ReportValidationError);
 });
@@ -151,7 +161,7 @@ test("validateReport rejects false-success evidence: failed result with exit 0",
   strict.results[0].status = "failed";
   strict.summary.by_status.green = 0;
   strict.summary.by_status.failed = 1;
-  strict.verdict.status = "selected_tests_passed";
+  strict.verdict.status = "selected_cells_passed";
   assert.throws(() => validateReport(strict), ReportValidationError);
 });
 
@@ -172,16 +182,16 @@ test("validateReport rejects an unknown result status", () => {
 // Every verdict-matrix row must survive validation when produced honestly.
 // A `missing` result is only honest alongside its integrity error, which
 // forces exit 2.
-const MATRIX_ROWS: Array<{ statuses: FinalTestStatus[]; behavior: "diagnostic" | "strict"; exit: 0 | 1 | 2; verdict: TestRunReportV2["verdict"]["status"]; execution?: "real" | "dry_run"; integrity?: boolean }> = [
+const MATRIX_ROWS: Array<{ statuses: FinalTestStatus[]; behavior: "diagnostic" | "strict"; exit: 0 | 1 | 2; verdict: TestRunReportV3["verdict"]["status"]; execution?: "real" | "dry_run"; integrity?: boolean }> = [
   { statuses: ["green"], behavior: "diagnostic", exit: 0, verdict: "non_qualifying" },
-  { statuses: ["green"], behavior: "strict", exit: 0, verdict: "selected_tests_passed" },
+  { statuses: ["green"], behavior: "strict", exit: 0, verdict: "selected_cells_passed" },
   { statuses: ["blocked"], behavior: "diagnostic", exit: 0, verdict: "non_qualifying" },
-  { statuses: ["blocked"], behavior: "strict", exit: 1, verdict: "selected_tests_failed" },
+  { statuses: ["blocked"], behavior: "strict", exit: 1, verdict: "selected_cells_failed" },
   { statuses: ["expected_fail"], behavior: "diagnostic", exit: 0, verdict: "non_qualifying" },
-  { statuses: ["expected_fail"], behavior: "strict", exit: 1, verdict: "selected_tests_failed" },
+  { statuses: ["expected_fail"], behavior: "strict", exit: 1, verdict: "selected_cells_failed" },
   { statuses: ["green", "failed"], behavior: "diagnostic", exit: 1, verdict: "non_qualifying" },
-  { statuses: ["green", "failed"], behavior: "strict", exit: 1, verdict: "selected_tests_failed" },
-  { statuses: ["cancelled"], behavior: "strict", exit: 1, verdict: "selected_tests_failed" },
+  { statuses: ["green", "failed"], behavior: "strict", exit: 1, verdict: "selected_cells_failed" },
+  { statuses: ["cancelled"], behavior: "strict", exit: 1, verdict: "selected_cells_failed" },
   { statuses: ["missing"], behavior: "diagnostic", exit: 2, verdict: "non_qualifying", integrity: true },
   { statuses: ["not_run"], behavior: "diagnostic", exit: 0, verdict: "non_qualifying", execution: "dry_run" },
 ];
@@ -194,15 +204,17 @@ for (const [index, row] of MATRIX_ROWS.entries()) {
       report.candidate_build = STRICT_CB;
     }
     report.run.execution = row.execution ?? "real";
-    report.selected_tests = row.statuses.map((_, i) => ({
-      test_id: `S${i}/local`,
+    report.selected_cells = row.statuses.map((_, i) => ({
+      cell_id: `S${i}/local`,
       scenario_id: `S${i}`,
       registry_flow_ref: `specs#S${i}`,
       runtime_lane: "local" as const,
+      dimensions: {},
+      required_env: [],
     }));
     report.results = row.statuses.map((status, i) => ({
       ...report.results[0],
-      test_id: `S${i}/local`,
+      cell_id: `S${i}/local`,
       scenario_id: `S${i}`,
       registry_flow_ref: `specs#S${i}`,
       status,
@@ -236,7 +248,7 @@ test("validateReport rejects a strict dry-run report outright", () => {
   report.results[0].status = "not_run";
   report.summary.by_status.green = 0;
   report.summary.by_status.not_run = 1;
-  report.verdict.status = "selected_tests_failed";
+  report.verdict.status = "selected_cells_failed";
   report.summary.intended_exit_code = 1;
   assert.throws(() => validateReport(report), /strict dry-run/i);
 
@@ -245,7 +257,7 @@ test("validateReport rejects a strict dry-run report outright", () => {
   disguised.run.behavior = "strict";
   disguised.candidate_build = STRICT_CB;
   disguised.run.execution = "dry_run";
-  disguised.verdict.status = "selected_tests_passed";
+  disguised.verdict.status = "selected_cells_passed";
   assert.throws(() => validateReport(disguised), ReportValidationError);
 });
 
@@ -382,7 +394,7 @@ test("writeReport validates before writing: an invalid report writes nothing", a
 
 test("validateReport requires candidate_build to be present (null or evidence)", () => {
   const absent = validReport();
-  delete (absent as Partial<TestRunReportV2>).candidate_build;
+  delete (absent as Partial<TestRunReportV3>).candidate_build;
   assert.throws(() => validateReport(absent), /candidate_build must be present/);
 
   const withNull = validReport();
@@ -399,7 +411,7 @@ test("validateReport requires candidate_build to be present (null or evidence)",
 test("validateReport rejects unsafe or path-carrying candidate evidence", () => {
   const reject = (candidate: unknown, pattern: RegExp): void => {
     const report = validReport();
-    report.candidate_build = candidate as TestRunReportV2["candidate_build"];
+    report.candidate_build = candidate as TestRunReportV3["candidate_build"];
     assert.throws(() => validateReport(report), pattern);
   };
   reject({ artifacts: [] }, /non-empty/);
@@ -439,22 +451,38 @@ test("validateReport rejects unsafe or path-carrying candidate evidence", () => 
   );
 });
 
-test("validateReport rejects a schema_version 1 report", () => {
-  const report = validReport();
-  (report as { schema_version: number }).schema_version = 1;
-  assert.throws(() => validateReport(report), /schema_version 2/);
+test("validateReport rejects prior schema versions", () => {
+  for (const version of [1, 2]) {
+    const report = validReport();
+    (report as { schema_version: number }).schema_version = version;
+    assert.throws(() => validateReport(report), /schema_version 3/);
+  }
+});
+
+test("validateReport rejects a result whose identity or dimensions drift from its planned cell", () => {
+  const wrongLane = validReport();
+  (wrongLane.results[0] as { runtime_lane: string }).runtime_lane = "sandbox";
+  assert.throws(() => validateReport(wrongLane), /scenario\/lane\/reference/);
+
+  const wrongScenario = validReport();
+  wrongScenario.results[0].scenario_id = "B";
+  assert.throws(() => validateReport(wrongScenario), /scenario\/lane\/reference/);
+
+  const wrongDims = validReport();
+  wrongDims.results[0].dimensions = { harness: "codex" };
+  assert.throws(() => validateReport(wrongDims), /dimensions do not match/);
 });
 
 test("strict reports require non-null candidate_build (CBH-001)", () => {
   const strictNull = validReport();
   strictNull.run.behavior = "strict";
-  strictNull.verdict.status = "selected_tests_passed";
+  strictNull.verdict.status = "selected_cells_passed";
   strictNull.candidate_build = null;
   assert.throws(() => validateReport(strictNull), /Strict reports require non-null candidate_build/);
 
   const strictWithEvidence = validReport();
   strictWithEvidence.run.behavior = "strict";
-  strictWithEvidence.verdict.status = "selected_tests_passed";
+  strictWithEvidence.verdict.status = "selected_cells_passed";
   strictWithEvidence.candidate_build = {
     artifacts: [{ artifact_id: "anyharness/x", version: "1", sha256: "e".repeat(64) }],
   };
@@ -466,6 +494,6 @@ test("candidate_build rejects undeclared fields beside artifacts (CBH-002)", () 
   report.candidate_build = {
     artifacts: [{ artifact_id: "anyharness/x", version: "1", sha256: "e".repeat(64) }],
     map_path: "/tmp/leaked-map.json",
-  } as unknown as TestRunReportV2["candidate_build"];
+  } as unknown as TestRunReportV3["candidate_build"];
   assert.throws(() => validateReport(report), /exactly one field: artifacts/);
 });

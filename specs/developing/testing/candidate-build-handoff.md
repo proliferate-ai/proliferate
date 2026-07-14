@@ -234,6 +234,11 @@ comparison fails.
 
 ## Report V2
 
+Successor: [`exact-test-matrix.md`](exact-test-matrix.md) advances the
+combined report to `TestRunReportV3` (exact selected cells and cell results).
+`candidate_build` and its validation/redaction guarantees carry forward
+unchanged into V3; V2 is recorded repository history.
+
 Adding artifact identity changes the aggregate evidence contract, so the
 runner emits `TestRunReportV2` rather than silently changing V1:
 
