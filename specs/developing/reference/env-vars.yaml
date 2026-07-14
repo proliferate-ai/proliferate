@@ -952,8 +952,14 @@
 - name: SUPPORT_FEED_BEARER_TOKEN
   secret: true
   default: ""
-  description: Dedicated Bearer key for the private completed-report feed (GET /internal/support/reports); empty rejects every request so the route is dark-deployable
+  description: Dedicated Bearer key for the private completed-report feed (GET /internal/support/reports); empty rejects every request so the route is dark-deployable. In hosted deploys it is never set as a plain value — the server ECS task receives it as a secret reference projected from the SUPPORT_FEED_SECRET_ARN record's supportFeedToken field
   tags: [production]
+
+- name: SUPPORT_FEED_SECRET_ARN
+  secret: false
+  default: ""
+  description: Non-secret ARN of the environment's AWS Secrets Manager support-feed record (JSON field supportFeedToken). Set as a GitHub environment variable; _deploy-server.yml requires it, verifies the field exists without reading the value, and renders exactly one SUPPORT_FEED_BEARER_TOKEN ECS secret with valueFrom `<ARN>:supportFeedToken::`. GitHub stores only the ARN; ECS resolves the token through the execution role
+  tags: [ci, production]
 
 - name: SUPPORT_REPORT_REQUIRE_CLIENT_RELEASE
   secret: false
