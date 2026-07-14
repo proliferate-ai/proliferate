@@ -115,7 +115,8 @@ The normal onboarding path is:
 
 ## Analytics And Support
 
-Onboarding analytics must follow [../../../../developing/analytics/README.md](../../../../developing/analytics/README.md):
+Onboarding analytics must follow the
+[Engineering Analytics contract](../../engineering/analytics/README.md):
 
 - Use stable event names and scrubbed properties.
 - Do not send prompts, repo names, raw file paths, request bodies, auth
