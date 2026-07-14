@@ -20,7 +20,7 @@ import { DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES } from "#product/lib/domain/prefere
  */
 
 const testDir = dirname(fileURLToPath(import.meta.url));
-const designCssDir = resolve(testDir, "../../../../../packages/design/src/css");
+const designCssDir = resolve(testDir, "../../../../../design/src/css");
 
 // Cascade order matters: product.css imports dom.css on its first line, so
 // product.css's own @theme declarations override dom.css's.
