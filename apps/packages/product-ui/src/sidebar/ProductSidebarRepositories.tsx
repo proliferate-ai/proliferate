@@ -37,7 +37,7 @@ export function ProductSidebarRepoGroupHeader({
     <SidebarRowSurface
       onPress={onToggleCollapsed}
       aria-expanded={!collapsed}
-      className={`group/folder-row h-[30px] justify-between overflow-x-hidden py-1 text-sidebar-nav focus-visible:outline-offset-[-2px] ${className}`}
+      className={`group/folder-row h-[28px] justify-between overflow-x-hidden py-1 text-sidebar-nav focus-visible:outline-offset-[-2px] ${className}`}
       {...props}
     >
       <div className="flex min-w-0 flex-1 items-center gap-1 pl-1">
@@ -140,7 +140,7 @@ export function ProductSidebarWorkspaceRow({
     <SidebarRowSurface
       active={active}
       onPress={onSelect}
-      className={`${hasSubtitle ? "h-[42px]" : "h-[30px]"} px-2 py-1 text-sidebar-row focus-visible:outline-offset-[-2px] ${className}`}
+      className={`${hasSubtitle ? "h-[40px]" : "h-[28px]"} px-2 py-1 text-sidebar-row focus-visible:outline-offset-[-2px] ${className}`}
       {...props}
     >
       {hoverAction ? (
@@ -213,7 +213,7 @@ export function ProductSidebarWorkspaceRow({
                 />
               </Tooltip>
             ) : trailingLabel ? (
-              <div className={`col-start-1 row-start-1 flex items-center justify-end overflow-visible truncate whitespace-nowrap text-right text-ui-sm tabular-nums text-faint transition-opacity duration-150 ${shortcutLabel && shortcutRevealVisible
+              <div className={`col-start-1 row-start-1 flex items-center justify-end overflow-visible truncate whitespace-nowrap text-right text-ui tabular-nums text-faint transition-opacity duration-150 ${shortcutLabel && shortcutRevealVisible
                   ? "opacity-0"
                   : "group-hover:opacity-0 group-focus-within:opacity-0"
                 }`}>
