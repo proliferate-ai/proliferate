@@ -29,6 +29,33 @@ describe("getPreferencesStore browser fallback", () => {
     const store = await getPreferencesStore();
     expect(await store!.get("never-set")).toBeUndefined();
   });
+
+  it("deletes keys so ProductStorage.removeItem works in the browser renderer", async () => {
+    const { getPreferencesStore } = await import("./store");
+    const store = await getPreferencesStore();
+
+    await store!.set("keep", "kept");
+    await store!.set("drop", "dropped");
+
+    // The main-branch product-storage adapter calls store.delete(key) from
+    // removeItem; the browser fallback must support the same surface.
+    expect(await store!.delete("drop")).toBe(true);
+    expect(await store!.get("drop")).toBeUndefined();
+    expect(await store!.get<string>("keep")).toBe("kept");
+
+    // Deleting an absent key reports false rather than throwing.
+    expect(await store!.delete("drop")).toBe(false);
+  });
+
+  it("removes preferences through the ProductStorage adapter", async () => {
+    const { desktopProductStorage } = await import("../browser/product-storage");
+
+    await desktopProductStorage.setItem("pref-key", "pref-value");
+    expect(await desktopProductStorage.getItem("pref-key")).toBe("pref-value");
+
+    await desktopProductStorage.removeItem("pref-key");
+    expect(await desktopProductStorage.getItem("pref-key")).toBeNull();
+  });
 });
 
 describe("getPreferencesStore inside Tauri", () => {

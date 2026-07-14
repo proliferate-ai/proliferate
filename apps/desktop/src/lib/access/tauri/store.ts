@@ -51,6 +51,20 @@ function createBrowserPreferencesStore(): StoreInstance | null {
         // Storage unavailable/quota exceeded — persistence is best-effort.
       }
     },
+    delete: async (key: string): Promise<boolean> => {
+      try {
+        const all = readAll();
+        if (!Object.prototype.hasOwnProperty.call(all, key)) {
+          return false;
+        }
+        delete all[key];
+        localStorage.setItem(BROWSER_STORE_KEY, JSON.stringify(all));
+        return true;
+      } catch {
+        // Storage unavailable/quota exceeded — persistence is best-effort.
+        return false;
+      }
+    },
     save: async (): Promise<void> => {
       // Writes are synchronous in `set`; nothing to flush.
     },
