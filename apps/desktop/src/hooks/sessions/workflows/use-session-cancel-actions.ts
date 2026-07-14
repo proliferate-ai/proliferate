@@ -13,7 +13,9 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import { useToastStore } from "@/stores/toast/toast-store";
 
 export function useSessionCancelActions() {
-  const ssh = useProductHost().desktop?.ssh ?? null;
+  const host = useProductHost();
+  const ssh = host.desktop?.ssh ?? null;
+  const cloudClient = host.cloud.client;
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const showToast = useToastStore((state) => state.show);
   const cancelSessionMutation = useCancelSessionMutation();
@@ -36,13 +38,14 @@ export function useSessionCancelActions() {
       const { materializedSessionId, workspaceId } = await getSessionClientAndWorkspace(
         sessionId,
         ssh,
+        cloudClient,
       );
       await cancelSessionMutation.mutateAsync({ workspaceId, sessionId: materializedSessionId });
       patchSessionRecord(sessionId, { status: "idle" });
     } catch {
       // Cancel failed.
     }
-  }, [cancelSessionMutation, getWorkspaceRuntimeBlockReason, showToast, ssh]);
+  }, [cancelSessionMutation, cloudClient, getWorkspaceRuntimeBlockReason, showToast, ssh]);
 
   return { cancelActiveSession };
 }

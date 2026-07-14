@@ -1,10 +1,13 @@
 import { useMemo } from "react";
 import { useOrganizationMembers } from "@/hooks/access/cloud/organizations/use-organization-members";
 import { isSettingsAdminRole, isSettingsOwnerRole } from "@/lib/domain/settings/admin-roles";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 
 export function useIsAdmin(organizationId: string | null) {
-  const currentUserId = useAuthStore((state) => state.user?.id ?? null);
+  const authState = useProductHost().auth.state;
+  const currentUserId = authState.status === "authenticated"
+    ? authState.user?.id ?? null
+    : null;
   const membersQuery = useOrganizationMembers(organizationId);
   const currentMember = useMemo(
     () => membersQuery.data?.members.find((member) => member.userId === currentUserId) ?? null,

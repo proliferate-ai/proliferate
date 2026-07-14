@@ -7,16 +7,23 @@ import {
   getCloudWorktreeRetentionPolicy,
   putCloudWorktreeRetentionPolicy,
 } from "@proliferate/cloud-sdk/client/worktree-policy";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { requireHostCloudClient } from "@/lib/access/cloud/host-client";
 import { cloudWorktreeRetentionPolicyKey } from "@/hooks/access/cloud/query-keys";
 
 export function useCloudWorktreeRetentionPolicy() {
-  const authStatus = useAuthStore((state) => state.status);
-  const userId = useAuthStore((state) => state.user?.id ?? null);
+  const host = useProductHost();
+  const authState = host.auth.state;
+  const cloudClient = host.cloud.client;
+  const authStatus = authState.status;
+  const userId = authState.status === "authenticated" ? authState.user?.id ?? null : null;
   return useQuery<CloudWorktreeRetentionPolicyResponse>({
     queryKey: cloudWorktreeRetentionPolicyKey(userId),
-    queryFn: getCloudWorktreeRetentionPolicy,
-    enabled: authStatus === "authenticated" && userId !== null,
+    queryFn: () => getCloudWorktreeRetentionPolicy(cloudClient!),
+    enabled:
+      authStatus === "authenticated"
+      && userId !== null
+      && cloudClient !== null,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
   });
@@ -24,10 +31,13 @@ export function useCloudWorktreeRetentionPolicy() {
 
 export function usePutCloudWorktreeRetentionPolicy() {
   const queryClient = useQueryClient();
-  const userId = useAuthStore((state) => state.user?.id ?? null);
+  const host = useProductHost();
+  const authState = host.auth.state;
+  const cloudClient = host.cloud.client;
+  const userId = authState.status === "authenticated" ? authState.user?.id ?? null : null;
   return useMutation({
     mutationFn: (input: CloudWorktreeRetentionPolicyRequest) =>
-      putCloudWorktreeRetentionPolicy(input),
+      putCloudWorktreeRetentionPolicy(input, requireHostCloudClient(cloudClient)),
     onSuccess: (policy) => {
       queryClient.setQueryData(cloudWorktreeRetentionPolicyKey(userId), policy);
     },

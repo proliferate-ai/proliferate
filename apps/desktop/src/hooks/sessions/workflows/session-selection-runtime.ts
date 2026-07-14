@@ -1,6 +1,7 @@
 import {
   getLatencyFlowRequestHeaders,
 } from "@/lib/infra/measurement/latency-flow";
+import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
 import type {
   DesktopRuntimeBridge,
   DesktopSshBridge,
@@ -59,6 +60,7 @@ export async function fetchWorkspaceSessions(
     requestHeaders?: HeadersInit;
     measurementOperationId?: MeasurementOperationId | null;
     ssh?: DesktopSshBridge | null;
+    cloudClient?: ProliferateCloudClient | null;
   },
 ): Promise<WorkspaceSession[]> {
   const sessions = await fetchWorkspaceSessionSummaries(
@@ -70,6 +72,7 @@ export async function fetchWorkspaceSessions(
       headers: options?.requestHeaders,
     }),
     options?.ssh ?? null,
+    options?.cloudClient ?? null,
   );
   const visibleSessions = filterReplacedSessionTombstones(workspaceId, sessions) ?? [];
   return visibleSessions.map((session) => ({

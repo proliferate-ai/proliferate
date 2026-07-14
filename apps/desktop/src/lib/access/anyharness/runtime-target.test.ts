@@ -72,4 +72,11 @@ describe("resolveRuntimeTargetForWorkspace", () => {
     expect(ssh.getProfile).not.toHaveBeenCalled();
     expect(ssh.ensureTunnel).not.toHaveBeenCalled();
   });
+
+  it("fails closed for a cloud workspace without a host Cloud client", async () => {
+    await expect(resolveRuntimeTargetForWorkspace(
+      "http://runtime.test",
+      "cloud:cloud-workspace-1",
+    )).rejects.toThrow("Cloud workspace access is unavailable for this host.");
+  });
 });

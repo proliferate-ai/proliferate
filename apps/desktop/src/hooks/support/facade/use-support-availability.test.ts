@@ -1,8 +1,26 @@
 /* @vitest-environment jsdom */
 import { renderHook } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { useSupportAvailability } from "./use-support-availability";
+
+vi.mock("@proliferate/product-client/host/ProductHostProvider", async () => {
+  const { useAuthStore } = await import("@/stores/auth/auth-store");
+  return {
+    useProductHost: () => {
+      const status = useAuthStore((state) => state.status);
+      return {
+        auth: {
+          state: status === "bootstrapping"
+            ? { status: "loading" as const }
+            : status === "authenticated"
+              ? { status: "authenticated" as const, user: null, readiness: { status: "ready" as const } }
+              : { status: "anonymous" as const, methods: [] },
+        },
+      };
+    },
+  };
+});
 
 const initial = useAuthStore.getState();
 

@@ -3,10 +3,11 @@ import { registerCurrentAuthSessionProvider } from "@/lib/domain/auth/current-au
 import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
 import { bootstrapAuth } from "@/lib/integrations/auth/orchestration-bootstrap";
 import { useAuthOrchestrationEffects } from "@/hooks/auth/workflows/use-auth-orchestration-effects";
+import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
 
 // Owns app-mounted auth bootstrap wiring. Does not own sign-in/sign-out actions.
-export function useAuthBootstrap() {
-  const authEffects = useAuthOrchestrationEffects();
+export function useAuthBootstrap(cloudClient: ProliferateCloudClient | null) {
+  const authEffects = useAuthOrchestrationEffects(cloudClient);
 
   useEffect(() => {
     registerCurrentAuthSessionProvider(() => authEffects.getAuthState().session);

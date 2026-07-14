@@ -17,5 +17,6 @@ export function terminalStreamKey(identity: TerminalStreamIdentity): string {
     identity.workspaceId,
     identity.terminalId,
     identity.runtimeIdentity,
+    identity.cloudAuthorityScopeKey ?? "",
   ].join("\u0000");
 }

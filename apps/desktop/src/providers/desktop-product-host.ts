@@ -28,6 +28,7 @@ import {
   encodeDesktopReturnUrl,
 } from "@/lib/domain/auth/desktop-navigation";
 import { subscribeDeepLinkUrls } from "@/lib/access/tauri/deep-link";
+import { subscribeDevDesktopHandoffs } from "@/lib/integrations/navigation/dev-desktop-handoff-source";
 import { resolveDesktopTelemetryRoute } from "@/lib/domain/telemetry/routes";
 import {
   captureTelemetryException,
@@ -38,7 +39,15 @@ import {
   setTelemetryUser,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
-import { handleDesktopCallbackUrl } from "@/lib/integrations/auth/orchestration-callback";
+import {
+  beginDesktopAuthTransaction,
+  handleDesktopCallbackUrl,
+} from "@/lib/integrations/auth/orchestration-callback";
+import {
+  isCurrentDesktopAuthTransaction,
+  staleDesktopAuthTransactionError,
+  type DesktopAuthTransaction,
+} from "@/lib/integrations/auth/desktop-auth-transaction";
 import { discoverDesktopSso } from "@/lib/integrations/auth/proliferate-sso-auth";
 import { DESKTOP_AUTH_REDIRECT_URI } from "@/lib/integrations/auth/proliferate-auth";
 
@@ -122,12 +131,21 @@ export function buildAnonymousMethods({
  * so the concrete hook result (with richer return types) is assignable.
  */
 export interface DesktopAuthActions {
-  signInWithGitHub: (options?: GitHubDesktopSignInOptions) => Promise<unknown>;
-  signInWithPassword: (credentials: PasswordSignInCredentials) => Promise<unknown>;
-  signInWithSso: (options?: DesktopSsoSignInOptions) => Promise<unknown>;
-  signOut: () => Promise<unknown>;
+  signInWithGitHub: (
+    options: GitHubDesktopSignInOptions | undefined,
+    transaction: DesktopAuthTransaction,
+  ) => Promise<unknown>;
+  signInWithPassword: (
+    credentials: PasswordSignInCredentials,
+    transaction: DesktopAuthTransaction,
+  ) => Promise<unknown>;
+  signInWithSso: (
+    options: DesktopSsoSignInOptions | undefined,
+    transaction: DesktopAuthTransaction,
+  ) => Promise<unknown>;
+  signOut: (transaction: DesktopAuthTransaction) => Promise<unknown>;
   cancelAuthFlow: (message?: string) => Promise<void>;
-  linkGoogle: () => Promise<unknown>;
+  linkGoogle: (transaction: DesktopAuthTransaction) => Promise<unknown>;
 }
 
 export type DesktopAuthOperations = Pick<
@@ -147,14 +165,33 @@ export function createDesktopAuthOperations(
   actions: DesktopAuthActions,
   getCallbackDeps: () => AuthOrchestrationDeps,
 ): DesktopAuthOperations {
+  async function claimLoginAttempt(): Promise<DesktopAuthTransaction> {
+    // Generation replacement and callback-flight detachment are synchronous:
+    // the old exchange is stale before its controller cancellation can yield.
+    const transaction = beginDesktopAuthTransaction();
+    await actions.cancelAuthFlow(
+      "A new sign-in attempt replaced the previous one.",
+    );
+    if (!isCurrentDesktopAuthTransaction(transaction)) {
+      throw staleDesktopAuthTransactionError();
+    }
+    getCallbackDeps().setAuthState({ error: null, issue: null });
+    return transaction;
+  }
+
   async function startLogin(request: LoginRequest): Promise<void> {
     switch (request.kind) {
-      case "password":
-        await actions.signInWithPassword({
-          email: request.email,
-          password: request.password,
-        });
+      case "password": {
+        const transaction = await claimLoginAttempt();
+        await actions.signInWithPassword(
+          {
+            email: request.email,
+            password: request.password,
+          },
+          transaction,
+        );
         return;
+      }
 
       case "github": {
         if (
@@ -165,14 +202,16 @@ export function createDesktopAuthOperations(
             "GitHub account linking is not available from Desktop sign-in.",
           );
         }
+        const transaction = await claimLoginAttempt();
         // Omitted purpose or "login": the existing action hard-codes login.
-        await actions.signInWithGitHub({ prompt: request.prompt });
+        await actions.signInWithGitHub({ prompt: request.prompt }, transaction);
         return;
       }
 
       case "google": {
         if (request.purpose === "link") {
-          await actions.linkGoogle();
+          const transaction = await claimLoginAttempt();
+          await actions.linkGoogle(transaction);
           return;
         }
         throw new Error("Google sign-in is not available on Desktop.");
@@ -183,11 +222,16 @@ export function createDesktopAuthOperations(
 
       case "sso": {
         if (!request.slug) {
-          await actions.signInWithSso({
-            email: request.email,
-            organizationId: request.organizationId,
-            connectionId: request.connectionId,
-          });
+          const transaction = await claimLoginAttempt();
+          await actions.signInWithSso(
+            {
+              email: request.email,
+              organizationId: request.organizationId,
+              connectionId: request.connectionId,
+              prompt: request.prompt,
+            },
+            transaction,
+          );
           return;
         }
         const discovery = await discoverDesktopSso({
@@ -199,21 +243,26 @@ export function createDesktopAuthOperations(
         if (!discovery.enabled || !discovery.organizationId) {
           throw new Error(SSO_UNAVAILABLE);
         }
-        await actions.signInWithSso({
-          organizationId: discovery.organizationId,
-          connectionId: discovery.connectionId,
-          prompt: "select_account",
-        });
+        const transaction = await claimLoginAttempt();
+        await actions.signInWithSso(
+          {
+            organizationId: discovery.organizationId,
+            connectionId: discovery.connectionId,
+            prompt: "select_account",
+          },
+          transaction,
+        );
         return;
       }
     }
   }
 
-  async function finishLogin({ code, state }: AuthCallback): Promise<void> {
-    if (!state) {
-      throw new Error("Desktop OAuth state is required to finish sign-in.");
+  async function finishLogin(callback: AuthCallback): Promise<void> {
+    const params = new URLSearchParams();
+    params.set(callback.status === "success" ? "code" : "error", callback.code);
+    if (callback.state) {
+      params.set("state", callback.state);
     }
-    const params = new URLSearchParams({ code, state });
     const url = `${DESKTOP_AUTH_REDIRECT_URI}?${params.toString()}`;
     const handled = await handleDesktopCallbackUrl(url, getCallbackDeps());
     if (!handled) {
@@ -222,11 +271,13 @@ export function createDesktopAuthOperations(
   }
 
   async function cancelLogin(): Promise<void> {
+    beginDesktopAuthTransaction();
     await actions.cancelAuthFlow();
   }
 
   async function logout(): Promise<void> {
-    await actions.signOut();
+    const transaction = beginDesktopAuthTransaction();
+    await actions.signOut(transaction);
   }
 
   return { startLogin, finishLogin, cancelLogin, logout };
@@ -248,12 +299,20 @@ export const desktopProductLinks: ProductLinks = {
     return encodeDesktopReturnUrl(entry);
   },
   observeInboundEntries(listener: (entry: ProductEntry) => void): () => void {
-    return subscribeDeepLinkUrls((url) => {
+    const unsubscribeNative = subscribeDeepLinkUrls((url) => {
       const entry = decodeDesktopProductEntry(url);
       if (entry !== null) {
         listener(entry);
       }
     });
+    const unsubscribeDevHandoff = subscribeDevDesktopHandoffs(
+      getProliferateApiBaseUrl(),
+      listener,
+    );
+    return () => {
+      unsubscribeNative();
+      unsubscribeDevHandoff();
+    };
   },
 };
 

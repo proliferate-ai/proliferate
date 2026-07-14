@@ -1,4 +1,5 @@
 import type { Session } from "@anyharness/sdk";
+import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
 import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
 import type { useSetSessionConfigOptionMutation } from "@anyharness/sdk-react";
 import {
@@ -28,6 +29,7 @@ type SetSessionConfigOptionMutation = ReturnType<typeof useSetSessionConfigOptio
 
 export interface ConfigIntentDispatchDeps {
   ssh?: DesktopSshBridge | null;
+  cloudClient?: ProliferateCloudClient | null;
   getWorkspaceSurface: (
     workspaceId: string | null | undefined,
   ) => Parameters<typeof persistDefaultSessionModePreference>[0]["workspaceSurface"];
@@ -55,6 +57,7 @@ export async function dispatchConfigIntent(
     const { workspaceId, materializedSessionId } = await getSessionClientAndWorkspace(
       intent.clientSessionId,
       deps.ssh ?? null,
+      deps.cloudClient ?? null,
     );
     useSessionIntentStore.getState().bindMaterializedSession(
       intent.clientSessionId,

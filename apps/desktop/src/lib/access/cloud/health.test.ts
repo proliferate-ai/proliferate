@@ -18,11 +18,13 @@ describe("control plane health", () => {
     } as Response));
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(checkControlPlaneReachable()).resolves.toBe(true);
+    await expect(
+      checkControlPlaneReachable("https://self-hosted.example.test/root/"),
+    ).resolves.toBe(true);
 
     expect(getLastKnownControlPlaneReachable()).toBe(true);
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringMatching(/\/health$/),
+      "https://self-hosted.example.test/root/health",
       expect.objectContaining({
         headers: { Accept: "application/json" },
         signal: expect.any(AbortSignal),

@@ -33,7 +33,9 @@ import {
 } from "@/hooks/sessions/workflows/session-replacement-dismissals";
 
 export function useSessionRestoreActions() {
-  const desktop = useProductHost().desktop;
+  const host = useProductHost();
+  const desktop = host.desktop;
+  const cloudClient = host.cloud.client;
   const localRuntime = desktop?.runtime ?? null;
   const ssh = desktop?.ssh ?? null;
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
@@ -90,7 +92,12 @@ export function useSessionRestoreActions() {
       });
 
       const targetResolveStartedAt = startLatencyTimer();
-      const { target } = await getWorkspaceClientAndId(runtimeUrl, workspaceId, ssh);
+      const { target } = await getWorkspaceClientAndId(
+        runtimeUrl,
+        workspaceId,
+        ssh,
+        cloudClient,
+      );
       logLatency("session.restore.target_resolved", {
         workspaceId,
         anyharnessWorkspaceId: target.anyharnessWorkspaceId,
@@ -175,6 +182,7 @@ export function useSessionRestoreActions() {
       throw error;
     }
   }, [
+    cloudClient,
     getWorkspaceRuntimeBlockReason,
     localRuntime,
     dismissSessionMutation,

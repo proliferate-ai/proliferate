@@ -50,6 +50,48 @@ describe("deep-link raw source", () => {
     expect(received).toEqual(["proliferate://initial", "proliferate://live"])
   })
 
+  it("orders a startup live url after the unresolved initial snapshot and suppresses after unsubscribe", async () => {
+    const current = deferred<string[]>()
+    deepLinkMocks.getCurrent.mockReturnValue(current.promise)
+    let openUrlCallback: ((urls: string[]) => void) | undefined
+    deepLinkMocks.onOpenUrl.mockImplementation(async (cb: (urls: string[]) => void) => {
+      openUrlCallback = cb
+      return () => {}
+    })
+
+    const { subscribeDeepLinkUrls } = await loadDeepLink()
+    const received: string[] = []
+    const unsubscribe = subscribeDeepLinkUrls((url) => received.push(url))
+
+    await vi.waitFor(() => expect(openUrlCallback).toBeDefined())
+    await vi.waitFor(() => expect(deepLinkMocks.getCurrent).toHaveBeenCalledTimes(1))
+    openUrlCallback?.(["proliferate://live-during-startup"])
+    expect(received).toEqual([])
+
+    current.resolve(["proliferate://initial"])
+    await vi.waitFor(() => {
+      expect(received).toEqual([
+        "proliferate://initial",
+        "proliferate://live-during-startup",
+      ])
+    })
+
+    openUrlCallback?.(["proliferate://live-after-startup"])
+    expect(received).toEqual([
+      "proliferate://initial",
+      "proliferate://live-during-startup",
+      "proliferate://live-after-startup",
+    ])
+
+    unsubscribe()
+    openUrlCallback?.(["proliferate://after-unsubscribe"])
+    expect(received).toEqual([
+      "proliferate://initial",
+      "proliferate://live-during-startup",
+      "proliferate://live-after-startup",
+    ])
+  })
+
   it("shares a single native live listener across multiple subscribers", async () => {
     deepLinkMocks.getCurrent.mockResolvedValue(null)
     let openUrlCallback: ((urls: string[]) => void) | undefined
@@ -166,6 +208,41 @@ describe("deep-link raw source", () => {
   })
 
   describe("ensureDeepLinkBridge", () => {
+    it("registers auth beside product routing before a startup live callback is delivered", async () => {
+      const current = deferred<string[] | null>()
+      deepLinkMocks.getCurrent.mockReturnValue(current.promise)
+      let openUrlCallback: ((urls: string[]) => void) | undefined
+      deepLinkMocks.onOpenUrl.mockImplementation(async (cb: (urls: string[]) => void) => {
+        openUrlCallback = cb
+        return () => {}
+      })
+
+      const { ensureDeepLinkBridge, subscribeDeepLinkUrls } = await loadDeepLink()
+      const productUrls: string[] = []
+      const authHandler = vi.fn().mockResolvedValue(true)
+
+      // Product routing mounts first. Auth bootstrap still joins synchronously
+      // in the same turn, before the one native-listener registration settles.
+      subscribeDeepLinkUrls((url) => productUrls.push(url))
+      const bridge = ensureDeepLinkBridge(authHandler)
+
+      await vi.waitFor(() => expect(openUrlCallback).toBeDefined())
+      await vi.waitFor(() => expect(deepLinkMocks.getCurrent).toHaveBeenCalledTimes(2))
+      const authUrl = "proliferate://auth/callback?code=code-1&state=state-1"
+      openUrlCallback?.([authUrl])
+
+      // Both consumers keep initial-before-live ordering while their snapshot
+      // reads are unresolved.
+      expect(productUrls).toEqual([])
+      expect(authHandler).not.toHaveBeenCalled()
+
+      current.resolve(null)
+      await bridge
+      await vi.waitFor(() => expect(productUrls).toEqual([authUrl]))
+      expect(authHandler).toHaveBeenCalledTimes(1)
+      expect(authHandler).toHaveBeenCalledWith(authUrl)
+    })
+
     it("drains the current snapshot then forwards live urls to the handler", async () => {
       deepLinkMocks.getCurrent.mockResolvedValue(["proliferate://initial"])
       let openUrlCallback: ((urls: string[]) => void) | undefined

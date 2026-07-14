@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import type { DesktopWorkerBridge } from "@proliferate/product-client/host/desktop-bridge";
+import type { AuthState } from "@proliferate/product-client/host/product-host";
+import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
 import { desktopWorkerStartupFailureCopy } from "@/copy/cloud/desktop-worker-copy";
 import {
   ensureDesktopWorker,
   teardownDesktopWorker,
 } from "@/lib/workflows/cloud/ensure-desktop-worker";
-import { useAuthStore } from "@/stores/auth/auth-store";
 import { useOrganizationStore } from "@/stores/organizations/organization-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
@@ -45,19 +46,25 @@ function identityKey(userId: string, organizationId: string | null): string {
 // and then re-enroll once the organizations query resolves on every cold
 // start. A stale selection 404s server-side and the guard re-enrolls once the
 // selection lifecycle falls back to a real membership.
-export function useDesktopWorkerEnrollment(worker: DesktopWorkerBridge): void {
-  const authStatus = useAuthStore((state) => state.status);
-  const authUserId = useAuthStore((state) => state.user?.id ?? null);
+export function useDesktopWorkerEnrollment(
+  worker: DesktopWorkerBridge,
+  authState: AuthState,
+  cloudClient: ProliferateCloudClient | null,
+): void {
+  const authStatus = authState.status;
+  const authUserId = authState.status === "authenticated"
+    ? authState.user?.id ?? null
+    : null;
   const activeOrganizationId = useOrganizationStore(
     (state) => state.activeOrganizationId,
   );
   const showToast = useToastStore((state) => state.show);
   const [retryNonce, setRetryNonce] = useState(0);
   useEffect(() => {
-    if (authStatus === "bootstrapping") {
+    if (authStatus === "loading") {
       return;
     }
-    if (authStatus !== "authenticated" || !authUserId) {
+    if (authStatus !== "authenticated" || !authUserId || !cloudClient) {
       // Signed out: stop the worker and clear the guard so the next login
       // (any user) re-enrolls with a fresh identity.
       if (enrolledIdentityKey !== null) {
@@ -78,7 +85,7 @@ export function useDesktopWorkerEnrollment(worker: DesktopWorkerBridge): void {
     enrolledIdentityKey = nextIdentityKey;
     let cancelled = false;
     let retryTimer: number | null = null;
-    void ensureDesktopWorker(activeOrganizationId, worker, {
+    void ensureDesktopWorker(activeOrganizationId, worker, cloudClient, {
       onFailure: (error) => {
         if (cancelled || enrolledIdentityKey !== nextIdentityKey) {
           return;
@@ -106,5 +113,13 @@ export function useDesktopWorkerEnrollment(worker: DesktopWorkerBridge): void {
         window.clearTimeout(retryTimer);
       }
     };
-  }, [authStatus, authUserId, activeOrganizationId, retryNonce, showToast, worker]);
+  }, [
+    activeOrganizationId,
+    authStatus,
+    authUserId,
+    cloudClient,
+    retryNonce,
+    showToast,
+    worker,
+  ]);
 }

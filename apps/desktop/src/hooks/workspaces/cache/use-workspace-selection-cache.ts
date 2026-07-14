@@ -8,9 +8,9 @@ import {
 } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import type { CloudMobilityWorkspaceSummary } from "@/lib/access/cloud/client";
 import { cloudBillingKey, cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
-import { useAuthStore } from "@/stores/auth/auth-store";
 import type { WorkspaceCollections } from "@/lib/domain/workspaces/cloud/collections";
 import {
   getWorkspaceCollectionsFromCache,
@@ -33,8 +33,11 @@ interface CancelPreviousWorkspaceDisplayQueriesInput {
 export function useWorkspaceSelectionCache() {
   const queryClient = useQueryClient();
   const cacheScopeKey = useAnyHarnessCacheScopeKey();
-  const authStatus = useAuthStore((state) => state.status);
-  const authUserId = useAuthStore((state) => state.user?.id ?? null);
+  const authState = useProductHost().auth.state;
+  const authStatus = authState.status;
+  const authUserId = authState.status === "authenticated"
+    ? authState.user?.id ?? null
+    : null;
 
   const getWorkspaceSelectionSnapshot = useCallback((
     runtimeUrl: string,

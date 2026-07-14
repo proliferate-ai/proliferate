@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect } from "react"
+import { Suspense, lazy, useEffect, useRef } from "react"
 import { Navigate, Route } from "react-router-dom"
 import { BootstrappedRoute, PublicOnlyRoute } from "@/components/auth/AuthGate"
 import { UserPreferencesGate } from "@/components/app/UserPreferencesGate"
@@ -10,7 +10,7 @@ import { Toaster } from "@proliferate/ui/kit/Sonner"
 import { MacWindowControlsSafeArea } from "@/components/app/chrome/MacWindowControlsSafeArea"
 import { useConnectivityListeners } from "@/hooks/app/lifecycle/use-connectivity-listeners"
 import { useDebugSessionActivity } from "@/hooks/app/lifecycle/use-debug-session-activity"
-import { useDevDesktopHandoff } from "@/hooks/app/lifecycle/use-dev-desktop-handoff"
+import { useProductEntryRouting } from "@/hooks/app/lifecycle/use-product-entry-routing"
 import { useOrganizationJoinAuthLaunch } from "@/hooks/organizations/lifecycle/use-organization-join-auth-launch"
 import { useAppShortcuts } from "@/hooks/app/lifecycle/use-app-shortcuts"
 import { useAppCommandActions } from "@/hooks/app/workflows/use-app-command-actions"
@@ -29,6 +29,7 @@ import { useSessionSelectionLifecycle } from "@/hooks/sessions/lifecycle/use-ses
 import { useShortcutDispatcher } from "@/hooks/shortcuts/lifecycle/use-shortcut-dispatcher"
 import { useSupportReportUploadQueue } from "@/hooks/support/lifecycle/use-support-report-upload-queue"
 import { useTurnEndSound } from "@/hooks/sessions/lifecycle/use-turn-end-sound"
+import { useTerminalStreamAuthorityLifecycle } from "@/hooks/terminals/lifecycle/use-terminal-stream-authority-lifecycle"
 import { useLocalWorktreeSettingsTarget } from "@/hooks/workspaces/facade/use-local-worktree-settings-target"
 import { useWorkspaceGitStatusPersistence } from "@/hooks/workspaces/lifecycle/use-workspace-git-status-persistence"
 import { useWorktreeCleanupPolicySync } from "@/hooks/workspaces/lifecycle/use-worktree-cleanup-policy-sync"
@@ -49,7 +50,6 @@ import { InstrumentedRoutes } from "@/lib/integrations/telemetry/sentry"
 import { AuthenticatedAppHost } from "@/pages/AuthenticatedAppHost"
 import { LoginPage } from "@/pages/LoginPage"
 import { SettingsCloudRedirect } from "@/pages/SettingsCloudRedirect"
-import { useAuthStore } from "@/stores/auth/auth-store"
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store"
 import { AppCommandActionsProvider } from "@/providers/AppCommandActionsProvider"
 import { DesktopProductLifecycleRoot } from "@/providers/DesktopProductLifecycleRoot"
@@ -145,17 +145,19 @@ function AppRuntime() {
   recordBootDiagnosticOnce("app_runtime.render.before.use_auth_bootstrap")
   const productHost = useProductHost()
   const bootstrapAuth = productHost.auth.restoreSession
+  const authStateRef = useRef(productHost.auth.state)
+  authStateRef.current = productHost.auth.state
   const diagnostics = productHost.desktop?.diagnostics ?? null
   recordBootDiagnosticOnce("app_runtime.render.after.use_auth_bootstrap")
   recordBootDiagnosticOnce("app_runtime.render.before.auth_status")
-  const authStatus = useAuthStore((s) => s.status)
+  const authStatus = productHost.auth.state.status
   recordBootDiagnosticOnce("app_runtime.render.after.auth_status", { authStatus })
   recordBootDiagnosticOnce("app_runtime.render.before.use_app_command_actions")
   const appCommandActions = useAppCommandActions()
   recordBootDiagnosticOnce("app_runtime.render.after.use_app_command_actions")
   useConnectivityListeners()
   useDebugSessionActivity()
-  useDevDesktopHandoff()
+  useProductEntryRouting()
   useOrganizationJoinAuthLaunch()
   recordBootDiagnosticOnce("app_runtime.render.before.use_shortcut_dispatcher")
   useShortcutDispatcher()
@@ -208,6 +210,7 @@ function AppRuntime() {
   recordBootDiagnosticOnce("app_runtime.render.before.use_support_report_upload_queue")
   useSupportReportUploadQueue()
   recordBootDiagnosticOnce("app_runtime.render.after.use_support_report_upload_queue")
+  useTerminalStreamAuthorityLifecycle()
 
   useEffect(() => {
     recordAppRendererEvent(diagnostics, "app.bootstrap.start")
@@ -223,7 +226,7 @@ function AppRuntime() {
       )
       logStartupDebug("app.auth_bootstrap.completed", {
         elapsedMs: elapsedStartupMs(authBootstrapStartedAt),
-        authStatus: useAuthStore.getState().status,
+        authStatus: authStateRef.current.status,
       })
     })
   }, [bootstrapAuth, diagnostics])

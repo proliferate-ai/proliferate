@@ -3,6 +3,8 @@ import type {
   DesktopNativeUiBridge,
 } from "@proliferate/product-client/host/desktop-bridge";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import type { AuthState } from "@proliferate/product-client/host/product-host";
+import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
 
 import { useExportRunningAgentCount } from "@/hooks/app/lifecycle/use-export-running-agent-count";
 import { useDesktopRuntimeBootstrapLifecycle } from "@/hooks/app/lifecycle/use-desktop-runtime-bootstrap-lifecycle";
@@ -20,28 +22,36 @@ import { recordBootDiagnosticOnce } from "@/lib/infra/measurement/boot-stall-dia
  * that bridge. On a non-Desktop host (`desktop === null`) it renders nothing.
  */
 export function DesktopProductLifecycleRoot() {
-  const { auth, desktop } = useProductHost();
+  const { auth, cloud, desktop } = useProductHost();
   return desktop === null
     ? null
-    : <DesktopProductLifecycles desktop={desktop} authStatus={auth.state.status} />;
+    : (
+      <DesktopProductLifecycles
+        desktop={desktop}
+        authState={auth.state}
+        cloudClient={cloud.client}
+      />
+    );
 }
 
 // Nested so hook membership stays valid if `desktop` flips between a bridge and
 // null across a host replacement.
 function DesktopProductLifecycles({
   desktop,
-  authStatus,
+  authState,
+  cloudClient,
 }: {
   desktop: DesktopBridge;
-  authStatus: "loading" | "anonymous" | "authenticated";
+  authState: AuthState;
+  cloudClient: ProliferateCloudClient | null;
 }) {
   useDesktopRuntimeBootstrapLifecycle(
     desktop.runtime,
     desktop.diagnostics,
-    authStatus,
+    authState.status,
   );
   useUpdateRestartWatcher(desktop.updater);
-  useDesktopWorkerEnrollment(desktop.worker);
+  useDesktopWorkerEnrollment(desktop.worker, authState, cloudClient);
   const nativeUi: DesktopNativeUiBridge = desktop.nativeUi;
   useExportRunningAgentCount(nativeUi.setRunningAgentCount);
   useNativeMenuCommandDispatcher(nativeUi.subscribeMenuCommands);

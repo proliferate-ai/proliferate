@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useOrganizations } from "@/hooks/access/cloud/organizations/use-organizations";
 import {
   clearSelectedOrganizationCookie,
@@ -6,11 +7,13 @@ import {
   writeSelectedOrganizationCookie,
 } from "@/lib/access/browser/organization-selection-cookie";
 import { useOrganizationStore } from "@/stores/organizations/organization-store";
-import { useAuthStore } from "@/stores/auth/auth-store";
 
 export function useOrganizationSelectionLifecycle() {
-  const authStatus = useAuthStore((state) => state.status);
-  const authUserId = useAuthStore((state) => state.user?.id ?? null);
+  const authState = useProductHost().auth.state;
+  const authStatus = authState.status;
+  const authUserId = authState.status === "authenticated"
+    ? authState.user?.id ?? null
+    : null;
   const organizationsQuery = useOrganizations();
   const activeOrganizationId = useOrganizationStore((state) => state.activeOrganizationId);
   const setActiveOrganizationId = useOrganizationStore((state) => state.setActiveOrganizationId);
@@ -21,7 +24,7 @@ export function useOrganizationSelectionLifecycle() {
   const hydratedUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (authStatus === "bootstrapping") {
+    if (authStatus === "loading") {
       return;
     }
     if (authStatus !== "authenticated" || !authUserId) {

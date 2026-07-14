@@ -3,10 +3,7 @@ import { useProductHost } from "@proliferate/product-client/host/ProductHostProv
 import { CONNECT_SERVER_LABELS } from "@/copy/auth/auth-copy";
 import { fetchServerMeta } from "@/lib/access/tauri/connect-server";
 import { isDesktopVersionSupported } from "@/lib/domain/capabilities/version-compat";
-import {
-  getRuntimeDesktopAppConfig,
-  isOfficialHostedApiBaseUrl,
-} from "@/lib/infra/proliferate-api";
+import { isOfficialHostedApiBaseUrl } from "@/lib/infra/proliferate-api";
 import {
   normalizeServerUrl,
   type ServerMeta,
@@ -71,17 +68,16 @@ export function useConnectServer(): UseConnectServerResult {
   const [pendingUrl, setPendingUrl] = useState<string | null>(null);
   const [versionWarning, setVersionWarning] = useState<string | null>(null);
 
-  const currentConfig = getRuntimeDesktopAppConfig();
   const connectedServerHost = useMemo(() => {
-    if (!currentConfig.apiBaseUrl || isOfficialHostedApiBaseUrl(currentConfig.apiBaseUrl)) {
+    if (isOfficialHostedApiBaseUrl(deployment.apiBaseUrl)) {
       return null;
     }
     try {
-      return new URL(currentConfig.apiBaseUrl).host;
+      return new URL(deployment.apiBaseUrl).host;
     } catch {
-      return currentConfig.apiBaseUrl;
+      return deployment.apiBaseUrl;
     }
-  }, [currentConfig.apiBaseUrl]);
+  }, [deployment.apiBaseUrl]);
 
   const open = useCallback(() => {
     if (!available) return;

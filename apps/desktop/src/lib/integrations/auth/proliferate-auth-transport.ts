@@ -25,8 +25,8 @@ export function isDefinitiveAuthRejection(error: unknown): boolean {
   )
 }
 
-export function buildAuthUrl(path: string): string {
-  return buildProliferateApiUrl(path)
+export function buildAuthUrl(path: string, apiBaseUrl?: string): string {
+  return buildProliferateApiUrl(path, apiBaseUrl)
 }
 
 export async function fetchAuthResponse(

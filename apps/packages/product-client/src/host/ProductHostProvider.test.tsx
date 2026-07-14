@@ -85,6 +85,7 @@ describe("ProductHostProvider", () => {
         state: {
           status: "authenticated",
           user: { id: "user-1", email: "user@example.test" },
+          readiness: { status: "ready" },
         },
       },
     });

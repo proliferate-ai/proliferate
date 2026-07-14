@@ -4,38 +4,23 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  signInWithSso: vi.fn(async () => ({ provider: "sso", source: "browser" })),
-  discoverDesktopSso: vi.fn(),
+  startLogin: vi.fn(async () => {}),
 }));
 
-vi.mock("@/hooks/auth/workflows/use-auth-actions", () => ({
-  useAuthActions: () => ({ signInWithSso: mocks.signInWithSso }),
-}));
-
-vi.mock("@/lib/integrations/auth/proliferate-sso-auth", () => ({
-  discoverDesktopSso: mocks.discoverDesktopSso,
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => ({ auth: { startLogin: mocks.startLogin } }),
 }));
 
 import { useOrgSlugSsoSignIn } from "./use-org-slug-sso-sign-in";
 
 afterEach(() => {
   cleanup();
-  mocks.signInWithSso.mockClear();
-  mocks.discoverDesktopSso.mockReset();
+  mocks.startLogin.mockReset();
+  mocks.startLogin.mockResolvedValue(undefined);
 });
 
 describe("useOrgSlugSsoSignIn", () => {
   it("resolves the slug and starts SSO for an enabled org connection", async () => {
-    mocks.discoverDesktopSso.mockResolvedValue({
-      enabled: true,
-      scope: "organization",
-      organizationId: "org-123",
-      connectionId: "conn-456",
-      protocol: "oidc",
-      displayName: "Okta",
-      reason: null,
-    });
-
     const { result } = renderHook(() => useOrgSlugSsoSignIn());
     let outcome = false;
     await act(async () => {
@@ -43,25 +28,14 @@ describe("useOrgSlugSsoSignIn", () => {
     });
 
     expect(outcome).toBe(true);
-    expect(mocks.discoverDesktopSso).toHaveBeenCalledWith({ slug: "acme" });
-    expect(mocks.signInWithSso).toHaveBeenCalledWith({
-      organizationId: "org-123",
-      connectionId: "conn-456",
-      prompt: "select_account",
-    });
+    expect(mocks.startLogin).toHaveBeenCalledWith({ kind: "sso", slug: "acme" });
     expect(result.current.error).toBeNull();
   });
 
   it("surfaces a generic error and does not start SSO when the slug is unavailable", async () => {
-    mocks.discoverDesktopSso.mockResolvedValue({
-      enabled: false,
-      scope: null,
-      organizationId: null,
-      connectionId: null,
-      protocol: null,
-      displayName: null,
-      reason: "not_available",
-    });
+    mocks.startLogin.mockRejectedValue(new Error(
+      "We could not find single sign-on for that workspace. Check the sign-in link your admin shared.",
+    ));
 
     const { result } = renderHook(() => useOrgSlugSsoSignIn());
     let outcome = true;
@@ -70,7 +44,7 @@ describe("useOrgSlugSsoSignIn", () => {
     });
 
     expect(outcome).toBe(false);
-    expect(mocks.signInWithSso).not.toHaveBeenCalled();
+    expect(mocks.startLogin).toHaveBeenCalledWith({ kind: "sso", slug: "ghost-org" });
     expect(result.current.error).toContain("sign-in link your admin shared");
   });
 
@@ -82,7 +56,7 @@ describe("useOrgSlugSsoSignIn", () => {
     });
 
     expect(outcome).toBe(false);
-    expect(mocks.discoverDesktopSso).not.toHaveBeenCalled();
+    expect(mocks.startLogin).not.toHaveBeenCalled();
     expect(result.current.error).toBeTruthy();
   });
 });

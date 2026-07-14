@@ -27,7 +27,9 @@ export interface ProductHost {
   auth: ProductAuthHost;
 
   cloud: {
-    /** Authenticated Cloud client, or null before an authority is resolved. */
+    /** Host-configured Cloud client, or null when this host has no Cloud access.
+     * Authentication authority is resolved by the host's access layer rather
+     * than by replacing this transport client on every auth transition. */
     client: ProliferateCloudClient | null;
   };
 
@@ -68,14 +70,39 @@ export interface ProductAuthUser {
   githubLogin?: string | null;
 }
 
+/** A normalized authentication problem the shared gate can present safely. */
+export type ProductAuthIssue =
+  | { kind: "deployment_unreachable" }
+  | { kind: "access_denied"; code: string }
+  | {
+      kind: "callback_failed";
+      reason:
+        | "provider_error"
+        | "malformed_callback"
+        | "state_mismatch"
+        | "expired"
+        | "exchange_failed"
+        | "already_consumed";
+      providerCode?: string;
+    };
+
+/** Product readiness is explicit and independent from transport authority. */
+export type ProductAuthReadiness =
+  | { status: "ready" }
+  | { status: "action_required"; action: "connect_github" };
+
 /**
  * Normalized authentication state. The transport differs per host, but the
  * shared login UI reads the same state shape on both.
  */
 export type AuthState =
   | { status: "loading" }
-  | { status: "anonymous"; methods: AuthMethod[] }
-  | { status: "authenticated"; user: ProductAuthUser };
+  | { status: "anonymous"; methods: AuthMethod[]; issue?: ProductAuthIssue }
+  | {
+      status: "authenticated";
+      user: ProductAuthUser | null;
+      readiness: ProductAuthReadiness;
+    };
 
 /**
  * A shared login intent. Password completes in `startLogin`; provider flows
@@ -106,6 +133,7 @@ export type LoginRequest =
       organizationId?: string;
       connectionId?: string;
       slug?: string;
+      prompt?: "select_account";
     };
 
 /** Why an external identity-provider flow is being started. */
@@ -114,12 +142,11 @@ export type ProductProviderAuthPurpose =
   | "link"
   | "required_github_link";
 
-/** Host-decoded provider callback. The raw callback URL and OAuth/PKCE state
+/** Host-decoded provider callback. The raw callback URL and OAuth/PKCE proof
  * never cross this boundary. */
-export interface AuthCallback {
-  code: string;
-  state?: string;
-}
+export type AuthCallback =
+  | { status: "success"; code: string; state?: string }
+  | { status: "failure"; code: string; state?: string };
 
 /**
  * The shared authentication operations. ProductClient owns the auth gate and
@@ -151,10 +178,20 @@ export interface ProductStorage {
 }
 
 /**
- * A normalized inbound destination. Each host decodes its raw URL
- * (`https://...` on Web, `proliferate://...` on Desktop) into this shape.
+ * Query values decoded from a host location, in transport order. An ordered
+ * pair list is required: records and maps collapse duplicate keys, which are
+ * meaningful to some product destinations.
  */
-export type ProductQueryParams = Readonly<Record<string, string>>;
+export type ProductQueryParams = readonly (
+  readonly [key: string, value: string]
+)[];
+
+/** Host-neutral location state carried by every normalized product entry. */
+export interface ProductLocationState {
+  query?: ProductQueryParams;
+  /** Decoded fragment value without the leading `#`. */
+  fragment?: string;
+}
 
 export type ProductSettingsEntrySection =
   | "account"
@@ -164,12 +201,11 @@ export type ProductSettingsEntrySection =
   | "integrations"
   | "organization";
 
-export type ProductEntry =
+type ProductEntryDestination =
+  | { kind: "home" }
   | {
       kind: "workspace";
       workspaceId: string;
-      /** Host-decoded query state, such as a selected session or tab. */
-      query?: ProductQueryParams;
     }
   | { kind: "workflow"; workflowId: string }
   | { kind: "invitation"; token: string }
@@ -193,14 +229,15 @@ export type ProductEntry =
   | {
       kind: "billing-return";
       status: "success" | "cancel" | "done";
-      query?: ProductQueryParams;
     }
   | {
       kind: "settings";
       section: ProductSettingsEntrySection;
       source?: "github_app_callback";
-      query?: ProductQueryParams;
     };
+
+/** A host-decoded destination plus its lossless product location state. */
+export type ProductEntry = ProductEntryDestination & ProductLocationState;
 
 /**
  * External-link, Desktop-handoff, and inbound-deep-link transport. Internal

@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { getIntegrationHealth } from "@proliferate/cloud-sdk/client/integrations";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { cloudIntegrationsHealthKey, cloudIntegrationsRootKey } from "./query-keys";
 
 export function useIntegrationHealth(
@@ -12,13 +12,18 @@ export function useIntegrationHealth(
     refetchOnWindowFocus?: boolean;
   },
 ) {
-  const authStatus = useAuthStore((state) => state.status);
+  const host = useProductHost();
+  const authStatus = host.auth.state.status;
+  const cloudClient = host.cloud.client;
   return useQuery({
     queryKey: cloudIntegrationsHealthKey(organizationId),
-    enabled: authStatus === "authenticated" && (options?.enabled ?? true),
+    enabled:
+      authStatus === "authenticated"
+      && cloudClient !== null
+      && (options?.enabled ?? true),
     refetchInterval: options?.refetchInterval ?? false,
     refetchOnWindowFocus: options?.refetchOnWindowFocus ?? true,
-    queryFn: () => getIntegrationHealth({ organizationId }),
+    queryFn: () => getIntegrationHealth({ organizationId }, cloudClient!),
   });
 }
 

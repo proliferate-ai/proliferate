@@ -1,3 +1,4 @@
+import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
 import type {
   CloudConnectionInfo,
   CloudWorkspaceDetail,
@@ -63,17 +64,19 @@ export async function retryCloudWorkspaceRequest<T>(
 
 export function getCloudWorkspaceWithRetry(
   workspaceId: string,
+  cloudClient: ProliferateCloudClient,
 ): Promise<CloudWorkspaceDetail | undefined> {
   return retryCloudWorkspaceRequest(
-    () => getCloudWorkspace(workspaceId),
+    () => getCloudWorkspace(workspaceId, cloudClient),
     "Failed to load cloud workspace.",
   );
 }
 
 export async function getResolvedCloudWorkspaceConnection(
   workspaceId: string,
+  cloudClient: ProliferateCloudClient,
 ): Promise<CloudConnectionInfo> {
-  const workspace = await getCloudWorkspace(workspaceId);
+  const workspace = await getCloudWorkspace(workspaceId, cloudClient);
   if (!workspace) {
     throw new ProliferateClientError(
       "Cloud workspace not found.",
@@ -81,14 +84,15 @@ export async function getResolvedCloudWorkspaceConnection(
       "workspace_not_found",
     );
   }
-  return resolveCloudSandboxGatewayConnectionForWorkspace(workspace);
+  return resolveCloudSandboxGatewayConnectionForWorkspace(workspace, cloudClient);
 }
 
 export function getCloudWorkspaceConnectionWithRetry(
   workspaceId: string,
+  cloudClient: ProliferateCloudClient,
 ): Promise<CloudConnectionInfo> {
   return retryCloudWorkspaceRequest(
-    () => getResolvedCloudWorkspaceConnection(workspaceId),
+    () => getResolvedCloudWorkspaceConnection(workspaceId, cloudClient),
     "Failed to connect to cloud workspace.",
   );
 }

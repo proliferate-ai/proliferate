@@ -8,12 +8,12 @@ import {
 } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   getWorkspaceCollectionsFromCache,
   workspaceCollectionsScopeKey,
 } from "@/hooks/workspaces/cache/query-keys";
 import { scheduleRepoPrStatusRefresh } from "@/hooks/workspaces/cache/use-pr-status-refresh";
-import { useAuthStore } from "@/stores/auth/auth-store";
 
 export interface SessionStreamCache {
   invalidateWorkspaceCollections(runtimeUrl: string): void;
@@ -43,6 +43,10 @@ export interface SessionStreamCache {
 export function useSessionStreamCache(): SessionStreamCache {
   const queryClient = useQueryClient();
   const cacheScopeKey = useAnyHarnessCacheScopeKey();
+  const authState = useProductHost().auth.state;
+  const authUserId = authState.status === "authenticated"
+    ? authState.user?.id ?? null
+    : null;
 
   return useMemo<SessionStreamCache>(() => ({
     invalidateWorkspaceCollections(runtimeUrl) {
@@ -92,7 +96,7 @@ export function useSessionStreamCache(): SessionStreamCache {
       const collections = getWorkspaceCollectionsFromCache(
         queryClient,
         runtimeUrl,
-        useAuthStore.getState().user?.id ?? null,
+        authUserId,
       );
       const repoRootId = collections?.allWorkspaces
         .find((workspace) => workspace.id === workspaceId)
@@ -107,5 +111,5 @@ export function useSessionStreamCache(): SessionStreamCache {
         cacheScopeKey,
       });
     },
-  }), [cacheScopeKey, queryClient]);
+  }), [authUserId, cacheScopeKey, queryClient]);
 }

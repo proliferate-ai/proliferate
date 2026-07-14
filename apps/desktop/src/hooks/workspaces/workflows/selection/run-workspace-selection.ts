@@ -292,7 +292,7 @@ export async function runWorkspaceSelection(
     cloudWorkspaceId: null,
   };
 
-  const cloudReadiness = await resolveCloudWorkspaceReadiness(baseContext);
+  const cloudReadiness = await resolveCloudWorkspaceReadiness(baseContext, deps.cloudClient ?? null);
   if (
     cloudReadiness.kind === "stale"
   ) {

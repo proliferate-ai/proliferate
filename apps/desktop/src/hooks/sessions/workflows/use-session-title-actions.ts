@@ -11,7 +11,6 @@ import {
 import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
 import { useSessionSummaryActions } from "@/hooks/sessions/workflows/use-session-summary-actions";
 import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
-import { useAuthStore } from "@/stores/auth/auth-store";
 
 const requestedAutoSessionTitles = new Map<string, number>();
 const MAX_TRACKED_AUTO_SESSION_TITLES = 500;
@@ -34,7 +33,10 @@ function markAutoSessionTitleRequested(sessionId: string): boolean {
 }
 
 export function useSessionTitleActions() {
-  const ssh = useProductHost().desktop?.ssh ?? null;
+  const host = useProductHost();
+  const ssh = host.desktop?.ssh ?? null;
+  const cloudClient = host.cloud.client;
+  const authStatus = host.auth.state.status;
   const { applySessionSummary } = useSessionSummaryActions();
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
   const updateSessionTitleMutation = useUpdateSessionTitleMutation();
@@ -46,7 +48,7 @@ export function useSessionTitleActions() {
     }
 
     const { workspaceId, materializedSessionId } =
-      await getSessionClientAndWorkspace(sessionId, ssh);
+      await getSessionClientAndWorkspace(sessionId, ssh, cloudClient);
     const operationId = startMeasurementOperation({
       kind: "session_rename",
       surfaces: ["header-tabs", "workspace-sidebar", "chat-surface"],
@@ -76,7 +78,13 @@ export function useSessionTitleActions() {
     }
 
     return session;
-  }, [applySessionSummary, ssh, updateSessionTitleMutation, upsertWorkspaceSessionRecord]);
+  }, [
+    applySessionSummary,
+    cloudClient,
+    ssh,
+    updateSessionTitleMutation,
+    upsertWorkspaceSessionRecord,
+  ]);
 
   const maybeGenerateSessionTitle = useCallback(async (input: {
     sessionId: string;
@@ -90,12 +98,12 @@ export function useSessionTitleActions() {
     if (!trimmedPrompt) {
       return;
     }
-    if (useAuthStore.getState().status !== "authenticated") {
+    if (authStatus !== "authenticated" || !cloudClient) {
       return;
     }
 
     try {
-      const response = await generateSessionTitle(trimmedPrompt);
+      const response = await generateSessionTitle(trimmedPrompt, cloudClient);
       const title = response.title?.trim();
       if (!title) {
         return;
@@ -104,7 +112,7 @@ export function useSessionTitleActions() {
     } catch {
       // Best-effort title generation should never block chat.
     }
-  }, [updateSessionTitle]);
+  }, [authStatus, cloudClient, updateSessionTitle]);
 
   return {
     updateSessionTitle,

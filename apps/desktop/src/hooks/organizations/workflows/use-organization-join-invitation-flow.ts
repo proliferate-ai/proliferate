@@ -6,7 +6,7 @@ import {
   useState,
 } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useAuthActions } from "@/hooks/auth/workflows/use-auth-actions";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   useConnectServer,
   type UseConnectServerResult,
@@ -20,12 +20,9 @@ import {
   writePendingOrganizationJoinTarget,
 } from "@/lib/access/browser/organization-join-target";
 import { buildSettingsHref } from "@/lib/domain/settings/navigation";
-import { getDesktopAuthMethods } from "@/lib/integrations/auth/proliferate-auth-password";
 import {
-  getRuntimeDesktopAppConfig,
   isOfficialHostedApiBaseUrl,
 } from "@/lib/infra/proliferate-api";
-import { useAuthStore } from "@/stores/auth/auth-store";
 
 /**
  * Normalize a URL to its origin (scheme + host + port, no path or trailing
@@ -49,9 +46,11 @@ function toOrigin(value: string | null | undefined): string | null {
  * itself an official hosted origin "matches" (Cloud invite on Cloud desktop —
  * no switch needed).
  */
-function joinServerOriginMatchesCurrent(joinServerOrigin: string): boolean {
-  const currentBaseUrl = getRuntimeDesktopAppConfig().apiBaseUrl;
-  if (!currentBaseUrl || isOfficialHostedApiBaseUrl(currentBaseUrl)) {
+function joinServerOriginMatchesCurrent(
+  joinServerOrigin: string,
+  currentBaseUrl: string,
+): boolean {
+  if (isOfficialHostedApiBaseUrl(currentBaseUrl)) {
     return isOfficialHostedApiBaseUrl(joinServerOrigin);
   }
   return toOrigin(currentBaseUrl) === toOrigin(joinServerOrigin);
@@ -74,8 +73,8 @@ export interface UseOrganizationJoinInvitationFlowResult {
 export function useOrganizationJoinInvitationFlow(): UseOrganizationJoinInvitationFlowResult {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const authStatus = useAuthStore((state) => state.status);
-  const { signInWithGitHub, signInWithSso } = useAuthActions();
+  const host = useProductHost();
+  const authStatus = host.auth.state.status;
   const connectServer = useConnectServer();
   const signInStartedRef = useRef(false);
   const serverSwitchStartedRef = useRef(false);
@@ -104,7 +103,10 @@ export function useOrganizationJoinInvitationFlow(): UseOrganizationJoinInvitati
   const requiresServerSwitch = Boolean(
     transientJoinServerOrigin
     && connectServer.available
-    && !joinServerOriginMatchesCurrent(transientJoinServerOrigin),
+    && !joinServerOriginMatchesCurrent(
+      transientJoinServerOrigin,
+      host.deployment.apiBaseUrl,
+    ),
   );
 
   useEffect(() => {
@@ -191,26 +193,24 @@ export function useOrganizationJoinInvitationFlow(): UseOrganizationJoinInvitati
     signInStartedRef.current = true;
 
     void (async () => {
-      // Methods-aware sign-in: a password-only server (self-hosted with no
-      // GitHub OAuth app) has no SSO/GitHub browser flow to launch, so leave
-      // the user on the normal sign-in surface with guidance instead of firing
-      // a dead redirect. Cloud advertises github, so it keeps today's behavior;
-      // a fetch failure also falls through to the SSO/GitHub path.
-      try {
-        const methods = await getDesktopAuthMethods();
-        if (methods.passwordLogin && !methods.github) {
-          setStatusMessage(
-            "Sign in to accept this invitation. Use the sign-in form below.",
-          );
-          return;
-        }
-      } catch {
-        // Ignore — fall through to the SSO/GitHub launch (today's behavior).
+      // The host already normalized the authoritative method set. A
+      // password-only server has no GitHub browser flow to launch, so leave the
+      // user on the normal sign-in surface instead of bypassing ProductHost to
+      // probe Desktop transport again.
+      const methods = host.auth.state.status === "anonymous"
+        ? host.auth.state.methods
+        : [];
+      if (methods.includes("password") && !methods.includes("github")) {
+        setStatusMessage(
+          "Sign in to accept this invitation. Use the sign-in form below.",
+        );
+        return;
       }
 
       setStatusMessage("Opening organization sign-in to accept this invitation.");
       try {
-        await signInWithSso({
+        await host.auth.startLogin({
+          kind: "sso",
           organizationId: transientJoinOrganizationId,
           prompt: "select_account",
         });
@@ -224,7 +224,7 @@ export function useOrganizationJoinInvitationFlow(): UseOrganizationJoinInvitati
 
         setStatusMessage("Opening sign-in to accept this invitation.");
         try {
-          await signInWithGitHub();
+          await host.auth.startLogin({ kind: "github" });
         } catch {
           setStatusMessage(
             "Sign in could not start. Use Account settings to sign in, then reopen the invite link.",
@@ -235,8 +235,7 @@ export function useOrganizationJoinInvitationFlow(): UseOrganizationJoinInvitati
   }, [
     authStatus,
     requiresServerSwitch,
-    signInWithGitHub,
-    signInWithSso,
+    host.auth,
     transientJoinOrganizationId,
   ]);
 

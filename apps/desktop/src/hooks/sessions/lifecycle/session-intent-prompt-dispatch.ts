@@ -1,4 +1,5 @@
 import type { Session } from "@anyharness/sdk";
+import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
 import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
 import type { usePromptSessionMutation } from "@anyharness/sdk-react";
 import {
@@ -43,6 +44,7 @@ type PromptSessionMutation = ReturnType<typeof usePromptSessionMutation>;
 
 export interface PromptIntentDispatchDeps {
   ssh?: DesktopSshBridge | null;
+  cloudClient?: ProliferateCloudClient | null;
   applySessionSummary: (clientSessionId: string, session: Session, workspaceId: string) => void;
   maybeGenerateSessionTitle: (input: {
     sessionId: string;
@@ -127,7 +129,11 @@ export async function dispatchPromptIntent(
     const {
       workspaceId,
       materializedSessionId: resolvedSessionId,
-    } = await getSessionClientAndWorkspace(entry.clientSessionId, deps.ssh ?? null);
+    } = await getSessionClientAndWorkspace(
+      entry.clientSessionId,
+      deps.ssh ?? null,
+      deps.cloudClient ?? null,
+    );
     requestHeaders = getLatencyFlowRequestHeaders(entry.latencyFlowId) ?? null;
     const requestOptions = requestHeaders ? { headers: requestHeaders } : undefined;
 

@@ -9,6 +9,7 @@ import {
 import { useWorkspaceSessionLoader } from "./use-workspace-session-loader";
 
 const mocks = vi.hoisted(() => ({
+  cloudClient: {},
   localRuntime: {},
   ssh: {},
   ensureRuntimeReadyForSessions: vi.fn(async () => "http://runtime.test"),
@@ -20,6 +21,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   useProductHost: () => ({
+    cloud: { client: mocks.cloudClient },
     desktop: { runtime: mocks.localRuntime, ssh: mocks.ssh },
   }),
 }));
@@ -110,6 +112,7 @@ describe("useWorkspaceSessionLoader replacement filtering", () => {
       {
         requestHeaders: undefined,
         measurementOperationId: undefined,
+        cloudClient: mocks.cloudClient,
         ssh: mocks.ssh,
       },
     );

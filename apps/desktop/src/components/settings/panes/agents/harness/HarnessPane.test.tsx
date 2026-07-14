@@ -115,6 +115,13 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
   useUpsertCatalogOverride: () => ({ mutate: overrideMutate, isPending: false }),
 }));
 
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => ({
+    auth: { state: { status: "anonymous", methods: [] } },
+    cloud: { client: {} },
+  }),
+}));
+
 // Local surface + gateway route reads the RUNTIME's resolved gateway models
 // (contract §5) instead of the cloud catalog — mock the anyharness SDK hooks
 // standing in for that runtime call.

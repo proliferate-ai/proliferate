@@ -10,8 +10,11 @@ const mocks = vi.hoisted(() => ({
   copyText: vi.fn(),
   openExternal: vi.fn(),
   subscribeDeepLinkUrls: vi.fn(),
+  subscribeDevDesktopHandoffs: vi.fn(),
   discoverDesktopSso: vi.fn(),
   handleDesktopCallbackUrl: vi.fn(),
+  authGeneration: 0,
+  beginDesktopAuthTransaction: vi.fn(),
   trackProductEvent: vi.fn(),
   captureTelemetryException: vi.fn(),
   setTelemetryUser: vi.fn(),
@@ -41,11 +44,24 @@ vi.mock("@/lib/access/tauri/shell", () => ({
 vi.mock("@/lib/access/tauri/deep-link", () => ({
   subscribeDeepLinkUrls: mocks.subscribeDeepLinkUrls,
 }));
+vi.mock("@/lib/integrations/navigation/dev-desktop-handoff-source", () => ({
+  subscribeDevDesktopHandoffs: mocks.subscribeDevDesktopHandoffs,
+}));
 vi.mock("@/lib/integrations/auth/proliferate-sso-auth", () => ({
   discoverDesktopSso: mocks.discoverDesktopSso,
 }));
 vi.mock("@/lib/integrations/auth/orchestration-callback", () => ({
+  beginDesktopAuthTransaction: mocks.beginDesktopAuthTransaction,
   handleDesktopCallbackUrl: mocks.handleDesktopCallbackUrl,
+}));
+vi.mock("@/lib/integrations/auth/desktop-auth-transaction", () => ({
+  isCurrentDesktopAuthTransaction: (transaction: { generation: number }) =>
+    transaction.generation === mocks.authGeneration,
+  staleDesktopAuthTransactionError: () => {
+    const error = new Error("Authentication attempt was replaced.");
+    error.name = "AbortError";
+    return error;
+  },
 }));
 vi.mock("@/lib/integrations/auth/proliferate-auth", () => ({
   DESKTOP_AUTH_REDIRECT_URI: "proliferate://auth/callback",
@@ -85,11 +101,19 @@ function makeActions() {
   };
 }
 
-const deps = {} as AuthOrchestrationDeps;
+const deps = {
+  setAuthState: vi.fn(),
+} as unknown as AuthOrchestrationDeps;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.authGeneration = 0;
+  mocks.beginDesktopAuthTransaction.mockImplementation(() => ({
+    generation: ++mocks.authGeneration,
+  }));
   mocks.isTauriRuntimeAvailable.mockReturnValue(true);
+  mocks.getProliferateApiBaseUrl.mockReturnValue("https://api.example.test");
+  mocks.subscribeDevDesktopHandoffs.mockReturnValue(vi.fn());
 });
 
 describe("createDesktopDeployment", () => {
@@ -203,6 +227,46 @@ describe("buildAnonymousMethods", () => {
 });
 
 describe("createDesktopAuthOperations - startLogin disposition", () => {
+  it("cancels a prior provider transaction before claiming a supported login", async () => {
+    const order: string[] = [];
+    const actions = makeActions();
+    actions.cancelAuthFlow.mockImplementation(async () => {
+      order.push("cancel");
+    });
+    actions.signInWithPassword.mockImplementation(async () => {
+      order.push("password");
+    });
+    mocks.beginDesktopAuthTransaction.mockImplementation(() => {
+      order.push("reset");
+      return { generation: ++mocks.authGeneration };
+    });
+    const ops = createDesktopAuthOperations(actions, () => deps);
+
+    await ops.startLogin({
+      kind: "password",
+      email: "a@example.test",
+      password: "pw",
+    });
+
+    expect(actions.cancelAuthFlow).toHaveBeenCalledWith(
+      "A new sign-in attempt replaced the previous one.",
+    );
+    expect(order).toEqual(["reset", "cancel", "password"]);
+  });
+
+  it("does not disturb the current transaction for an unsupported request", async () => {
+    const actions = makeActions();
+    const ops = createDesktopAuthOperations(actions, () => deps);
+
+    await expect(
+      ops.startLogin({ kind: "github", purpose: "required_github_link" }),
+    ).rejects.toThrow();
+
+    expect(actions.cancelAuthFlow).not.toHaveBeenCalled();
+    expect(mocks.beginDesktopAuthTransaction).not.toHaveBeenCalled();
+    expect(deps.setAuthState).not.toHaveBeenCalled();
+  });
+
   it("password delegates email/password to signInWithPassword", async () => {
     const actions = makeActions();
     const ops = createDesktopAuthOperations(actions, () => deps);
@@ -214,14 +278,17 @@ describe("createDesktopAuthOperations - startLogin disposition", () => {
     expect(actions.signInWithPassword).toHaveBeenCalledWith({
       email: "a@example.test",
       password: "pw",
-    });
+    }, expect.any(Object));
   });
 
   it("github with omitted purpose delegates prompt to signInWithGitHub", async () => {
     const actions = makeActions();
     const ops = createDesktopAuthOperations(actions, () => deps);
     await ops.startLogin({ kind: "github" });
-    expect(actions.signInWithGitHub).toHaveBeenCalledWith({ prompt: undefined });
+    expect(actions.signInWithGitHub).toHaveBeenCalledWith(
+      { prompt: undefined },
+      expect.any(Object),
+    );
   });
 
   it("github with purpose login forwards the select_account prompt", async () => {
@@ -234,7 +301,7 @@ describe("createDesktopAuthOperations - startLogin disposition", () => {
     });
     expect(actions.signInWithGitHub).toHaveBeenCalledWith({
       prompt: "select_account",
-    });
+    }, expect.any(Object));
   });
 
   it("github link and required_github_link reject without delegating", async () => {
@@ -291,7 +358,7 @@ describe("createDesktopAuthOperations - startLogin disposition", () => {
       email: "a@example.test",
       organizationId: "org-1",
       connectionId: "conn-1",
-    });
+    }, expect.any(Object));
     expect(mocks.discoverDesktopSso).not.toHaveBeenCalled();
   });
 
@@ -320,7 +387,7 @@ describe("createDesktopAuthOperations - startLogin disposition", () => {
       organizationId: "org-resolved",
       connectionId: "conn-resolved",
       prompt: "select_account",
-    });
+    }, expect.any(Object));
   });
 
   it("sso with slug rejects with the generic message when discovery is disabled or unresolved", async () => {
@@ -342,23 +409,80 @@ describe("createDesktopAuthOperations - startLogin disposition", () => {
 
     expect(actions.signInWithSso).not.toHaveBeenCalled();
   });
+
+  it("lets only the latest overlapping accepted start reach its auth action", async () => {
+    let releaseFirstCancel!: () => void;
+    let releaseSecondCancel!: () => void;
+    const firstCancel = new Promise<void>((resolve) => {
+      releaseFirstCancel = resolve;
+    });
+    const secondCancel = new Promise<void>((resolve) => {
+      releaseSecondCancel = resolve;
+    });
+    const actions = makeActions();
+    actions.cancelAuthFlow
+      .mockReturnValueOnce(firstCancel)
+      .mockReturnValueOnce(secondCancel);
+    const ops = createDesktopAuthOperations(actions, () => deps);
+
+    const first = ops.startLogin({
+      kind: "password",
+      email: "old@example.test",
+      password: "old",
+    });
+    const second = ops.startLogin({
+      kind: "password",
+      email: "new@example.test",
+      password: "new",
+    });
+
+    releaseSecondCancel();
+    await expect(second).resolves.toBeUndefined();
+    releaseFirstCancel();
+    await expect(first).rejects.toMatchObject({ name: "AbortError" });
+
+    expect(actions.signInWithPassword).toHaveBeenCalledTimes(1);
+    expect(actions.signInWithPassword).toHaveBeenCalledWith(
+      { email: "new@example.test", password: "new" },
+      expect.objectContaining({ generation: 2 }),
+    );
+  });
 });
 
 describe("createDesktopAuthOperations - finishLogin", () => {
-  it("rejects when state is missing and never calls the callback handler", async () => {
+  it("passes a missing state to the host callback state machine as malformed input", async () => {
+    mocks.handleDesktopCallbackUrl.mockResolvedValue(true);
     const actions = makeActions();
     const ops = createDesktopAuthOperations(actions, () => deps);
-    await expect(ops.finishLogin({ code: "abc" })).rejects.toThrow();
-    expect(mocks.handleDesktopCallbackUrl).not.toHaveBeenCalled();
+    await ops.finishLogin({ status: "success", code: "abc" });
+    expect(mocks.handleDesktopCallbackUrl).toHaveBeenCalledWith(
+      "proliferate://auth/callback?code=abc",
+      deps,
+    );
   });
 
   it("reconstructs the callback URL and delegates to the existing handler", async () => {
     mocks.handleDesktopCallbackUrl.mockResolvedValue(true);
     const actions = makeActions();
     const ops = createDesktopAuthOperations(actions, () => deps);
-    await ops.finishLogin({ code: "abc", state: "xyz" });
+    await ops.finishLogin({ status: "success", code: "abc", state: "xyz" });
     expect(mocks.handleDesktopCallbackUrl).toHaveBeenCalledWith(
       "proliferate://auth/callback?code=abc&state=xyz",
+      deps,
+    );
+  });
+
+  it("normalizes provider failure as an error callback", async () => {
+    mocks.handleDesktopCallbackUrl.mockResolvedValue(true);
+    const actions = makeActions();
+    const ops = createDesktopAuthOperations(actions, () => deps);
+    await ops.finishLogin({
+      status: "failure",
+      code: "access_denied",
+      state: "xyz",
+    });
+    expect(mocks.handleDesktopCallbackUrl).toHaveBeenCalledWith(
+      "proliferate://auth/callback?error=access_denied&state=xyz",
       deps,
     );
   });
@@ -368,7 +492,7 @@ describe("createDesktopAuthOperations - finishLogin", () => {
     const actions = makeActions();
     const ops = createDesktopAuthOperations(actions, () => deps);
     await expect(
-      ops.finishLogin({ code: "abc", state: "xyz" }),
+      ops.finishLogin({ status: "success", code: "abc", state: "xyz" }),
     ).rejects.toThrow();
   });
 });
@@ -386,6 +510,7 @@ describe("createDesktopAuthOperations - cancel/logout", () => {
     const ops = createDesktopAuthOperations(actions, () => deps);
     await ops.logout();
     expect(actions.signOut).toHaveBeenCalledTimes(1);
+    expect(actions.signOut).toHaveBeenCalledWith({ generation: 1 });
   });
 });
 
@@ -411,25 +536,33 @@ describe("clipboard and links adapters", () => {
 
   it("links.observeInboundEntries subscribes once and delivers only decoded entries", () => {
     let rawListener: ((url: string) => void) | null = null;
-    const unsub = vi.fn();
+    const unsubscribeNative = vi.fn();
+    const unsubscribeDev = vi.fn();
     mocks.subscribeDeepLinkUrls.mockImplementation((listener) => {
       rawListener = listener;
-      return unsub;
+      return unsubscribeNative;
     });
+    mocks.subscribeDevDesktopHandoffs.mockReturnValue(unsubscribeDev);
     const received: ProductEntry[] = [];
     const returned = desktopProductLinks.observeInboundEntries((entry) => {
       received.push(entry);
     });
 
     expect(mocks.subscribeDeepLinkUrls).toHaveBeenCalledTimes(1);
-    expect(returned).toBe(unsub);
+    expect(mocks.subscribeDevDesktopHandoffs).toHaveBeenCalledWith(
+      "https://api.example.test",
+      expect.any(Function),
+    );
 
     rawListener!("proliferate://workspaces/ws1");
     rawListener!("https://unknown.example.test/nope");
 
     expect(received).toEqual([
-      { kind: "workspace", workspaceId: "ws1", query: {} },
+      { kind: "workspace", workspaceId: "ws1" },
     ]);
+    returned();
+    expect(unsubscribeNative).toHaveBeenCalledTimes(1);
+    expect(unsubscribeDev).toHaveBeenCalledTimes(1);
   });
 });
 

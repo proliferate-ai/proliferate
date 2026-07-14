@@ -25,7 +25,7 @@ import {
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
 import type { SetupScriptTelemetryStatus } from "@/lib/domain/telemetry/events";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import { productAuthUserToDesktopUser } from "@/lib/domain/auth/product-auth-user-mapping";
 import {
   type CreateWorktreeWorkspaceInput,
   type ResolvedWorktreeCreation,
@@ -52,9 +52,13 @@ interface RuntimeBoundResult<T> {
 }
 
 export function useWorkspaceActions() {
-  const desktop = useProductHost().desktop;
+  const host = useProductHost();
+  const desktop = host.desktop;
   const localRuntime = desktop?.runtime ?? null;
   const files = desktop?.files ?? null;
+  const authUser = productAuthUserToDesktopUser(
+    host.auth.state.status === "authenticated" ? host.auth.state.user : null,
+  );
   const {
     upsertLocalWorkspaceInWorkspaceCollections,
   } = useWorkspaceCollectionsMutationCacheActions();
@@ -234,7 +238,6 @@ export function useWorkspaceActions() {
       }
       const homeDir = await files.getHomeDirectory();
       const userPreferences = useUserPreferencesStore.getState();
-      const authUser = useAuthStore.getState().user;
       const repoPreferences = useRepoPreferencesStore.getState();
 
       const existingWorktreeBasenames = sourceWorkspace

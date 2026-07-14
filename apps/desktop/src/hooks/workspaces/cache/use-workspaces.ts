@@ -1,5 +1,6 @@
 import type { AnyHarnessRequestOptions } from "@anyharness/sdk";
 import { useQuery } from "@tanstack/react-query";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import type { WorkspaceCollections } from "@/lib/domain/workspaces/cloud/collections";
 import {
   buildWorkspaceCollections,
@@ -7,7 +8,6 @@ import {
 } from "@/lib/domain/workspaces/cloud/collections";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useWorkspaceCollectionsCache } from "@/hooks/workspaces/cache/use-workspace-collections-cache";
-import { useAuthStore } from "@/stores/auth/auth-store";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import {
   elapsedMs,
@@ -94,7 +94,10 @@ async function preservePreviousOnNonAbort<T>(
 export function useWorkspaces(options?: UseWorkspacesOptions) {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const hasLocalRuntime = runtimeUrl.trim().length > 0;
-  const authUserId = useAuthStore((state) => state.user?.id ?? null);
+  const authState = useProductHost().auth.state;
+  const authUserId = authState.status === "authenticated"
+    ? authState.user?.id ?? null
+    : null;
   const { cloudActive } = useCloudAvailabilityState();
   const canQuery = (options?.enabled ?? true) && hasLocalRuntime;
   const {

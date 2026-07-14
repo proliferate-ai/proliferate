@@ -8,11 +8,23 @@ import { connectTerminal } from "@anyharness/sdk";
 import type { ProductHost } from "@proliferate/product-client/host/product-host";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import { resetTerminalStreamRegistryForTests } from "@/lib/infra/terminals/terminal-stream-registry";
+import { resolveWorkspaceConnection } from "@/lib/access/anyharness/resolve-workspace-connection";
+import { useTerminalStreamAuthorityLifecycle } from "./use-terminal-stream-authority-lifecycle";
 import { useTerminalStreamController } from "./use-terminal-stream-controller";
 
 const mockState = vi.hoisted(() => ({
   token: "token-a",
   runtimeGeneration: 3,
+  selectedCloudRuntime: {
+    workspaceId: null as string | null,
+    state: null as { phase: "ready" } | null,
+    connectionInfo: null as {
+      runtimeUrl: string;
+      accessToken: string;
+      anyharnessWorkspaceId: string;
+      runtimeGeneration: number;
+    } | null,
+  },
   connections: [] as Array<{
     options: {
       afterSeq?: number;
@@ -36,7 +48,18 @@ const mockState = vi.hoisted(() => ({
   }>,
 }));
 
-const testProductHost = { desktop: null } as ProductHost;
+const testProductHost = {
+  deployment: { apiBaseUrl: "https://api.test" },
+  auth: {
+    state: {
+      status: "authenticated",
+      user: { id: "user-1" },
+      readiness: { status: "ready" },
+    },
+  },
+  cloud: { client: {} },
+  desktop: null,
+} as ProductHost;
 
 vi.mock("@anyharness/sdk", () => ({
   AnyHarnessError: class AnyHarnessError extends Error {
@@ -70,26 +93,36 @@ vi.mock("@/hooks/access/cloud/query-keys", () => ({
     workspaceId,
     "connection",
   ],
+  cloudWorkspaceConnectionAuthorityKey: (
+    workspaceId: string,
+    authorityScopeKey: string,
+  ) => ["cloud", "workspaces", workspaceId, "connection", "authority", authorityScopeKey],
 }));
 
 vi.mock("@/hooks/workspaces/derived/use-workspace-runtime-block", () => ({
   useWorkspaceRuntimeBlock: () => ({
-    selectedCloudRuntime: {
-      workspaceId: null,
-      state: null,
-      connectionInfo: null,
-    },
+    selectedCloudRuntime: mockState.selectedCloudRuntime,
     getWorkspaceRuntimeBlockReason: vi.fn(() => null),
   }),
 }));
 
 vi.mock("@/lib/access/anyharness/resolve-workspace-connection", () => ({
-  resolveWorkspaceConnection: vi.fn(async () => ({
-    runtimeUrl: "http://runtime.test",
-    authToken: mockState.token,
-    anyharnessWorkspaceId: "anyharness-workspace-1",
-    runtimeGeneration: mockState.runtimeGeneration,
-  })),
+  resolveWorkspaceConnection: vi.fn(async (
+    _runtimeUrl: string,
+    workspaceId: string,
+    _ssh: unknown,
+    cloudClient: unknown,
+  ) => {
+    if (workspaceId.startsWith("cloud:") && !cloudClient) {
+      throw new Error("Cloud workspace access is unavailable for this host.");
+    }
+    return {
+      runtimeUrl: "http://runtime.test",
+      authToken: mockState.token,
+      anyharnessWorkspaceId: "anyharness-workspace-1",
+      runtimeGeneration: mockState.runtimeGeneration,
+    };
+  }),
 }));
 
 vi.mock("@/stores/sessions/harness-connection-store", () => {
@@ -138,6 +171,11 @@ describe("useTerminalStreamController terminal stream identity", () => {
     resetTerminalStreamRegistryForTests();
     mockState.token = "token-a";
     mockState.runtimeGeneration = 3;
+    mockState.selectedCloudRuntime = {
+      workspaceId: null,
+      state: null,
+      connectionInfo: null,
+    };
     mockState.connections = [];
     vi.clearAllMocks();
   });
@@ -163,6 +201,129 @@ describe("useTerminalStreamController terminal stream identity", () => {
     );
 
     expect(firstIdentity).toEqual(secondIdentity);
+    expect(connectTerminal).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not reuse a selected cloud connection after host authority is removed", async () => {
+    mockState.selectedCloudRuntime = {
+      workspaceId: "cloud:workspace-1",
+      state: { phase: "ready" },
+      connectionInfo: {
+        runtimeUrl: "http://stale-runtime.test",
+        accessToken: "stale-token",
+        anyharnessWorkspaceId: "stale-workspace",
+        runtimeGeneration: 1,
+      },
+    };
+    const nullAuthorityHost = {
+      ...testProductHost,
+      cloud: { client: null },
+    } as ProductHost;
+    const { result } = renderActions(nullAuthorityHost);
+
+    await expect(result.current.ensureTabConnection(
+      "terminal-1",
+      "cloud:workspace-1",
+      "running",
+    )).rejects.toThrow("Cloud workspace access is unavailable for this host.");
+
+    expect(resolveWorkspaceConnection).toHaveBeenCalledWith(
+      "http://desktop-runtime.test",
+      "cloud:workspace-1",
+      null,
+      null,
+    );
+  });
+
+  it("retires and replaces an active cloud stream when host authority changes", async () => {
+    mockState.selectedCloudRuntime = readySelectedCloudRuntime();
+    const cloudClientA = testCloudClient();
+    const cloudClientB = testCloudClient();
+    const rendered = renderActions(productHostWithCloudClient(cloudClientA, "user-a"));
+
+    const firstIdentity = await rendered.result.current.ensureTabConnection(
+      "terminal-1",
+      "cloud:workspace-1",
+      "running",
+    );
+    rendered.replaceHost(productHostWithCloudClient(cloudClientB, "user-a"));
+
+    expect(mockState.connections[0]!.handle.close).toHaveBeenCalledTimes(1);
+
+    const secondIdentity = await rendered.result.current.ensureTabConnection(
+      "terminal-1",
+      "cloud:workspace-1",
+      "running",
+    );
+
+    expect(firstIdentity?.runtimeIdentity).toBe(secondIdentity?.runtimeIdentity);
+    expect(firstIdentity?.cloudAuthorityScopeKey).not.toBe(
+      secondIdentity?.cloudAuthorityScopeKey,
+    );
+    expect(connectTerminal).toHaveBeenCalledTimes(2);
+  });
+
+  it("discards a pending cloud resolution when host authority changes", async () => {
+    const cloudClientA = testCloudClient();
+    const cloudClientB = testCloudClient();
+    type ResolvedConnection = Awaited<ReturnType<typeof resolveWorkspaceConnection>>;
+    let finishResolution!: (connection: ResolvedConnection) => void;
+    const pendingResolution = new Promise<ResolvedConnection>((resolve) => {
+      finishResolution = resolve;
+    });
+    vi.mocked(resolveWorkspaceConnection).mockImplementationOnce(
+      () => pendingResolution,
+    );
+    const rendered = renderActions(productHostWithCloudClient(cloudClientA, "user-a"));
+
+    const staleAttempt = rendered.result.current.ensureTabConnection(
+      "terminal-1",
+      "cloud:workspace-1",
+      "running",
+    );
+    rendered.replaceHost(productHostWithCloudClient(cloudClientB, "user-a"));
+    finishResolution({
+      runtimeUrl: "http://authority-a-runtime.test",
+      authToken: "authority-a-token",
+      anyharnessWorkspaceId: "anyharness-workspace-1",
+      runtimeGeneration: 1,
+    });
+
+    await expect(staleAttempt).resolves.toBeNull();
+    expect(connectTerminal).not.toHaveBeenCalled();
+
+    const currentIdentity = await rendered.result.current.ensureTabConnection(
+      "terminal-1",
+      "cloud:workspace-1",
+      "running",
+    );
+    expect(currentIdentity?.cloudAuthorityScopeKey).toBeDefined();
+    expect(connectTerminal).toHaveBeenCalledTimes(1);
+    expect(resolveWorkspaceConnection).toHaveBeenLastCalledWith(
+      "http://desktop-runtime.test",
+      "cloud:workspace-1",
+      null,
+      cloudClientB,
+    );
+  });
+
+  it("retires an active cloud stream when host authority disappears", async () => {
+    mockState.selectedCloudRuntime = readySelectedCloudRuntime();
+    const rendered = renderActions(productHostWithCloudClient(testCloudClient(), "user-a"));
+
+    await rendered.result.current.ensureTabConnection(
+      "terminal-1",
+      "cloud:workspace-1",
+      "running",
+    );
+    rendered.replaceHost(productHostWithCloudClient(null, "user-a"));
+
+    expect(mockState.connections[0]!.handle.close).toHaveBeenCalledTimes(1);
+    await expect(rendered.result.current.ensureTabConnection(
+      "terminal-1",
+      "cloud:workspace-1",
+      "running",
+    )).rejects.toThrow("Cloud workspace access is unavailable for this host.");
     expect(connectTerminal).toHaveBeenCalledTimes(1);
   });
 
@@ -270,16 +431,62 @@ describe("useTerminalStreamController terminal stream identity", () => {
   });
 });
 
-function renderActions() {
+function renderActions(host: ProductHost = testProductHost) {
+  let currentHost = host;
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
     },
   });
   const wrapper = ({ children }: { children: ReactNode }) => (
-    <ProductHostProvider host={testProductHost}>
+    <ProductHostProvider host={currentHost}>
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </ProductHostProvider>
   );
-  return renderHook(() => useTerminalStreamController(), { wrapper });
+  const rendered = renderHook(() => {
+    useTerminalStreamAuthorityLifecycle();
+    return useTerminalStreamController();
+  }, { wrapper });
+
+  return Object.assign(rendered, {
+    replaceHost(nextHost: ProductHost) {
+      currentHost = nextHost;
+      rendered.rerender();
+    },
+  });
+}
+
+function readySelectedCloudRuntime() {
+  return {
+    workspaceId: "cloud:workspace-1",
+    state: { phase: "ready" as const },
+    connectionInfo: {
+      runtimeUrl: "http://runtime.test",
+      accessToken: mockState.token,
+      anyharnessWorkspaceId: "anyharness-workspace-1",
+      runtimeGeneration: mockState.runtimeGeneration,
+    },
+  };
+}
+
+function productHostWithCloudClient(
+  client: ProductHost["cloud"]["client"],
+  userId: string,
+): ProductHost {
+  return {
+    ...testProductHost,
+    auth: {
+      ...testProductHost.auth,
+      state: {
+        status: "authenticated",
+        user: { id: userId },
+        readiness: { status: "ready" },
+      },
+    },
+    cloud: { client },
+  };
+}
+
+function testCloudClient(): NonNullable<ProductHost["cloud"]["client"]> {
+  return {} as NonNullable<ProductHost["cloud"]["client"]>;
 }

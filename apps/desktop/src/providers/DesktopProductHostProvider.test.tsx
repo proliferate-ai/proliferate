@@ -39,16 +39,16 @@ vi.mock("@/hooks/auth/workflows/use-auth-orchestration-effects", () => ({
   useAuthOrchestrationEffects: () => h.deps,
 }));
 vi.mock("@/hooks/capabilities/derived/use-app-capabilities", () => ({
-  useAppCapabilities: () => ({ cloudEnabled: h.cloudEnabled }),
+  useAppCapabilitiesAtApiBaseUrl: () => ({ cloudEnabled: h.cloudEnabled }),
 }));
 vi.mock("@/hooks/access/cloud/auth/use-auth-methods", () => ({
-  useDesktopAuthMethods: () => ({ data: h.authMethods }),
+  useDesktopAuthMethodsAtApiBaseUrl: () => ({ data: h.authMethods }),
 }));
 vi.mock("@/hooks/access/cloud/auth/use-github-auth-availability", () => ({
-  useGitHubDesktopAuthAvailability: () => ({ data: h.github }),
+  useGitHubDesktopAuthAvailabilityAtApiBaseUrl: () => ({ data: h.github }),
 }));
 vi.mock("@/hooks/access/cloud/auth/use-sso-discovery", () => ({
-  useSsoDiscovery: () => ({ data: h.sso }),
+  useSsoDiscoveryAtApiBaseUrl: () => ({ data: h.sso }),
 }));
 vi.mock("@/lib/domain/auth/auth-mode", () => ({
   isProductAuthRequired: () => true,
@@ -77,6 +77,7 @@ vi.mock("@/lib/access/tauri/deep-link", () => ({
 }));
 vi.mock("@/lib/integrations/auth/orchestration-callback", () => ({
   handleDesktopCallbackUrl: vi.fn(),
+  resetDesktopAuthCallbackConsumption: vi.fn(),
 }));
 vi.mock("@/lib/integrations/auth/proliferate-auth", () => ({
   DESKTOP_AUTH_REDIRECT_URI: "proliferate://auth/callback",
@@ -124,6 +125,7 @@ beforeEach(() => {
     user: null,
     session: null,
     error: null,
+    issue: null,
   });
 });
 
@@ -167,6 +169,19 @@ describe("DesktopProductHostProvider", () => {
         avatarUrl: null,
         githubLogin: "ada",
       },
+      readiness: { status: "ready" },
+    });
+  });
+
+  it("does not fabricate an identity for the cached-session degraded path", () => {
+    act(() => {
+      useAuthStore.setState({ status: "authenticated", user: null });
+    });
+    const { result } = renderHook(() => useProductHost(), { wrapper });
+    expect(result.current.auth.state).toEqual({
+      status: "authenticated",
+      user: null,
+      readiness: { status: "ready" },
     });
   });
 
@@ -303,6 +318,22 @@ describe("DesktopProductHostProvider", () => {
     expect(result.current.auth.state).toEqual({
       status: "anonymous",
       methods: ["password", "sso"],
+    });
+  });
+
+  it("replaces the anonymous host when a structured auth issue changes", () => {
+    const { result } = renderHook(() => useProductHost(), { wrapper });
+    const before = result.current;
+    act(() => {
+      useAuthStore.setState({
+        issue: { kind: "callback_failed", reason: "exchange_failed" },
+      });
+    });
+    expect(result.current).not.toBe(before);
+    expect(result.current.auth.state).toEqual({
+      status: "anonymous",
+      methods: ["password", "github", "sso"],
+      issue: { kind: "callback_failed", reason: "exchange_failed" },
     });
   });
 

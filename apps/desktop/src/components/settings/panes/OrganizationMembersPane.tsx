@@ -18,15 +18,17 @@ import {
   type OrganizationMemberRecord,
   type OrganizationRole,
 } from "@/lib/domain/organizations/organization-records";
-import { useAuthStore } from "@/stores/auth/auth-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 const EMPTY_MEMBERS: OrganizationMemberRecord[] = [];
 const EMPTY_INVITATIONS: OrganizationInvitationRecord[] = [];
 
 export function OrganizationMembersPane() {
-  const authStatus = useAuthStore((state) => state.status);
-  const currentUser = useAuthStore((state) => state.user);
+  const host = useProductHost();
+  const authStatus = host.auth.state.status;
+  const currentUser = host.auth.state.status === "authenticated"
+    ? host.auth.state.user
+    : null;
   const {
     activeOrganization,
     activeOrganizationId,
@@ -40,7 +42,7 @@ export function OrganizationMembersPane() {
   const canManage = admin.isAdmin || TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION;
   const canManageOwners = admin.isOwner || TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION;
   const joinLinkQuery = useOrganizationJoinLink(activeOrganizationId, canManage);
-  const { writeText } = useProductHost().clipboard;
+  const { writeText } = host.clipboard;
   const showToast = useToastStore((state) => state.show);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");

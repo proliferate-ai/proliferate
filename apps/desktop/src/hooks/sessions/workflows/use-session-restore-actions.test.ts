@@ -16,6 +16,7 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import { useSessionRestoreActions } from "./use-session-restore-actions";
 
 const mocks = vi.hoisted(() => ({
+  cloudClient: {},
   localRuntime: {},
   getWorkspaceClientAndId: vi.fn(async () => ({
     target: {
@@ -32,7 +33,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
-  useProductHost: () => ({ desktop: { runtime: mocks.localRuntime } }),
+  useProductHost: () => ({
+    cloud: { client: mocks.cloudClient },
+    desktop: { runtime: mocks.localRuntime },
+  }),
 }));
 
 vi.mock("@/lib/access/browser/session-replacement-tombstones-storage", () => ({
@@ -126,6 +130,12 @@ describe("useSessionRestoreActions", () => {
     expect(mocks.resolveRuntimeUrlForWorkspaceSessions).toHaveBeenCalledWith(
       "workspace-1",
       mocks.localRuntime,
+    );
+    expect(mocks.getWorkspaceClientAndId).toHaveBeenCalledWith(
+      "http://runtime.test",
+      "workspace-1",
+      null,
+      mocks.cloudClient,
     );
     expect(isReplacedSessionTombstoned("workspace-1", "runtime-old")).toBe(false);
     expect(isReplacedSessionTombstoned("workspace-1", "client-old")).toBe(false);

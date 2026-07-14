@@ -5,7 +5,6 @@ import {
   type AccountPasswordCredentialSubmit,
 } from "@proliferate/product-ui/account/AccountSettingsPane";
 import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
-import { setPasswordCredential } from "@proliferate/cloud-sdk";
 import {
   useGitHubAppUserAuthorizationStatus,
   useStartGitHubAppUserAuthorization,
@@ -29,14 +28,12 @@ import {
   getAccountProfileSummary,
   getGitHubStatusLabel,
 } from "@/lib/domain/auth/account-profile-presentation";
-import { isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
-import { useAuthActions } from "@/hooks/auth/workflows/use-auth-actions";
 import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
 import { useOrganizationJoinInvitationFlow } from "@/hooks/organizations/workflows/use-organization-join-invitation-flow";
 import { useJoinedOrganizationActivation } from "@/hooks/organizations/workflows/use-joined-organization-activation";
 import { buildGitHubOAuthAppSettingsUrl } from "@/lib/integrations/auth/proliferate-auth";
+import { useSetPasswordCredential } from "@/hooks/access/cloud/auth/use-password-credential";
 import type { OrganizationInvitationRecord } from "@/lib/domain/organizations/organization-records";
-import { useAuthStore } from "@/stores/auth/auth-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { buildGitHubAppUserAuthorizationServiceView } from "./account/GitHubAppUserAuthorizationService";
 
@@ -44,10 +41,10 @@ const EMPTY_INVITATIONS: OrganizationInvitationRecord[] = [];
 
 export function AccountPane() {
   const navigate = useNavigate();
-  const status = useAuthStore((state) => state.status);
-  const user = useAuthStore((state) => state.user);
-  const { linkGoogle, signOut } = useAuthActions();
-  const { links } = useProductHost();
+  const host = useProductHost();
+  const status = host.auth.state.status;
+  const user = host.auth.state.status === "authenticated" ? host.auth.state.user : null;
+  const { links } = host;
   const {
     signIn: signInWithGitHub,
     submitting: signingIn,
@@ -60,7 +57,7 @@ export function AccountPane() {
   const [linkingGoogle, setLinkingGoogle] = useState(false);
   const [providerLinkError, setProviderLinkError] = useState<string | null>(null);
   const githubAppAuthorizationRefreshTimersRef = useRef<number[]>([]);
-  const devAuthBypassed = isDevAuthBypassed();
+  const devAuthBypassed = !host.auth.authRequired;
   const isAuthenticated = status === "authenticated";
   const authViewerCacheScope = user?.id
     ? `desktop-account:${user.id}`
@@ -83,6 +80,7 @@ export function AccountPane() {
   const joinFlow = useOrganizationJoinInvitationFlow();
   const { activateJoinedOrganization } = useJoinedOrganizationActivation();
   const showToast = useToastStore((state) => state.show);
+  const setPasswordCredential = useSetPasswordCredential();
   const linkedProviders = authViewer.data?.linkedProviders ?? [];
   const linkedGitHub = linkedProviders.find((provider) => (
     provider.provider === "github" && provider.connected
@@ -96,7 +94,7 @@ export function AccountPane() {
   const googleAvailability = authViewer.data?.providerAvailability.find((provider) => (
     provider.provider === "google"
   ));
-  const githubLogin = user?.github_login?.trim() || null;
+  const githubLogin = user?.githubLogin?.trim() || null;
   const githubConnected = Boolean(authViewer.data?.githubConnected || linkedGitHub || githubLogin);
   const githubAccountLabel = githubLogin
     ? `@${githubLogin}`
@@ -123,7 +121,7 @@ export function AccountPane() {
   const signedInWhileCloudUnavailable = cloudUnavailable && isAuthenticated;
   const displayName = getAccountDisplayName({
     email: user?.email,
-    displayName: user?.display_name,
+    displayName: user?.displayName,
     githubLogin,
     isAuthenticated,
     devAuthBypassed,
@@ -136,7 +134,7 @@ export function AccountPane() {
     signInUnavailable,
     signedInWhileCloudUnavailable,
   });
-  const profileAvatarUrl = user?.avatar_url?.trim()
+  const profileAvatarUrl = user?.avatarUrl?.trim()
     || (githubLogin
       ? `https://github.com/${encodeURIComponent(githubLogin)}.png?size=160`
       : null);
@@ -166,7 +164,7 @@ export function AccountPane() {
   async function handleSignOut() {
     setSigningOut(true);
     try {
-      await signOut();
+      await host.auth.logout();
       navigate("/login", { replace: true });
     } finally {
       setSigningOut(false);
@@ -177,7 +175,7 @@ export function AccountPane() {
     setLinkingGoogle(true);
     setProviderLinkError(null);
     try {
-      await linkGoogle();
+      await host.auth.startLogin({ kind: "google", purpose: "link" });
       await authViewer.refetch();
     } catch (error) {
       setProviderLinkError(error instanceof Error ? error.message : "Google linking failed");

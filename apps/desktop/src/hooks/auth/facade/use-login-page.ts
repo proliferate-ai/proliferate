@@ -1,16 +1,15 @@
 import { useLocation, useNavigate } from "react-router-dom";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
 import { usePasswordSignIn } from "@/hooks/auth/workflows/use-password-sign-in";
 import { useSsoSignIn } from "@/hooks/auth/workflows/use-sso-sign-in";
-import { isProductAuthRequired } from "@/lib/domain/auth/auth-mode";
-import { useAuthStore } from "@/stores/auth/auth-store";
 import { getRedirectTarget } from "@/lib/domain/auth/login-redirect";
 
 // Owns the login page view model by composing auth state and sign-in actions.
 export function useLoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const status = useAuthStore((state) => state.status);
+  const { auth } = useProductHost();
   const {
     signIn,
     submitting,
@@ -36,10 +35,11 @@ export function useLoginPage() {
     error: passwordError,
     signInAvailable: passwordSignInAvailable,
   } = usePasswordSignIn();
-  const canContinueLocally = !isProductAuthRequired();
+  const canContinueLocally = !auth.authRequired;
 
   const redirectTarget = getRedirectTarget(location.state);
-  const busy = submitting || ssoSubmitting || passwordSubmitting || status === "bootstrapping";
+  const busy = submitting || ssoSubmitting || passwordSubmitting
+    || auth.state.status === "loading";
 
   async function handleGitHubSignIn() {
     try {

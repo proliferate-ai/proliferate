@@ -120,6 +120,10 @@ pub struct AuthSessionRecord {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PendingAuthRecord {
+    #[serde(default)]
+    pub provider: Option<String>,
+    #[serde(default)]
+    pub purpose: Option<String>,
     pub state: String,
     pub code_verifier: String,
     pub redirect_uri: String,
@@ -448,6 +452,8 @@ mod tests {
     fn pending_auth_record_round_trips_through_file() {
         let path = temp_path("pending-auth.json");
         let record = PendingAuthRecord {
+            provider: Some("github".to_string()),
+            purpose: Some("login".to_string()),
             state: "state".to_string(),
             code_verifier: "verifier".to_string(),
             redirect_uri: "proliferate://auth".to_string(),
@@ -460,11 +466,29 @@ mod tests {
             .expect("read should succeed")
             .expect("file should exist");
         assert_eq!(parsed.state, record.state);
+        assert_eq!(parsed.provider, record.provider);
+        assert_eq!(parsed.purpose, record.purpose);
         assert_eq!(parsed.code_verifier, record.code_verifier);
         assert_eq!(parsed.redirect_uri, record.redirect_uri);
         assert_eq!(parsed.last_handled_callback_url, None);
 
         cleanup(&path);
+    }
+
+    #[test]
+    fn pending_auth_record_reads_legacy_file_without_provider_metadata() {
+        let record: PendingAuthRecord = serde_json::from_value(serde_json::json!({
+            "state": "legacy-state",
+            "code_verifier": "legacy-verifier",
+            "redirect_uri": "proliferate://auth/callback",
+            "created_at": "2026-06-10T00:00:00Z",
+            "last_handled_callback_url": null
+        }))
+        .expect("legacy pending auth should deserialize");
+
+        assert_eq!(record.provider, None);
+        assert_eq!(record.purpose, None);
+        assert_eq!(record.state, "legacy-state");
     }
 
     #[test]

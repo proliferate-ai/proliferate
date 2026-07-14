@@ -1,6 +1,7 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import type {
   CloudMobilityWorkspaceSummary,
   CloudWorkspaceDetail,
@@ -18,7 +19,6 @@ import {
   workspaceCollectionsKey,
   workspaceCollectionsScopeKey,
 } from "@/hooks/workspaces/cache/query-keys";
-import { useAuthStore } from "@/stores/auth/auth-store";
 
 export interface WorkspaceCollectionsLocalUpsertSummary {
   previousLocalCount: number;
@@ -86,7 +86,10 @@ export function upsertCloudWorkspaceForRuntime(
 
 export function useWorkspaceCollectionsMutationCache(runtimeUrl: string) {
   const queryClient = useQueryClient();
-  const authUserId = useAuthStore((state) => state.user?.id ?? null);
+  const authState = useProductHost().auth.state;
+  const authUserId = authState.status === "authenticated"
+    ? authState.user?.id ?? null
+    : null;
 
   const upsertLocalWorkspace = useCallback(
     (

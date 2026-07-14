@@ -8,16 +8,27 @@ import { useAuthStore } from "@/stores/auth/auth-store";
 import { useOrganizationJoinAuthLaunch } from "./use-organization-join-auth-launch";
 
 const authActionMocks = vi.hoisted(() => ({
-  signInWithGitHub: vi.fn<() => Promise<unknown>>(),
-  signInWithSso: vi.fn<(_options?: unknown) => Promise<unknown>>(),
+  startLogin: vi.fn<(_options?: unknown) => Promise<void>>(),
 }));
 
-vi.mock("@/hooks/auth/workflows/use-auth-actions", () => ({
-  useAuthActions: () => ({
-    signInWithGitHub: authActionMocks.signInWithGitHub,
-    signInWithSso: authActionMocks.signInWithSso,
-  }),
-}));
+vi.mock("@proliferate/product-client/host/ProductHostProvider", async () => {
+  const { useAuthStore } = await import("@/stores/auth/auth-store");
+  return {
+    useProductHost: () => {
+      const status = useAuthStore((state) => state.status);
+      return {
+        auth: {
+          state: status === "bootstrapping"
+            ? { status: "loading" as const }
+            : status === "authenticated"
+              ? { status: "authenticated" as const, user: null, readiness: { status: "ready" as const } }
+              : { status: "anonymous" as const, methods: [] },
+          startLogin: authActionMocks.startLogin,
+        },
+      };
+    },
+  };
+});
 
 function clearTestStorage() {
   window.localStorage?.clear();
@@ -40,15 +51,14 @@ function renderJoinAuthLaunch() {
 describe("useOrganizationJoinAuthLaunch", () => {
   beforeEach(() => {
     clearTestStorage();
-    authActionMocks.signInWithGitHub.mockReset();
-    authActionMocks.signInWithSso.mockReset();
-    authActionMocks.signInWithGitHub.mockResolvedValue({});
-    authActionMocks.signInWithSso.mockResolvedValue({});
+    authActionMocks.startLogin.mockReset();
+    authActionMocks.startLogin.mockResolvedValue(undefined);
     useAuthStore.setState({
       status: "anonymous",
       session: null,
       user: null,
       error: null,
+      issue: null,
     });
   });
 
@@ -67,23 +77,24 @@ describe("useOrganizationJoinAuthLaunch", () => {
     renderJoinAuthLaunch();
 
     await waitFor(() => {
-      expect(authActionMocks.signInWithSso).toHaveBeenCalledWith({
+      expect(authActionMocks.startLogin).toHaveBeenCalledWith({
+        kind: "sso",
         organizationId: "org-1",
         prompt: "select_account",
       });
     });
-    expect(authActionMocks.signInWithGitHub).not.toHaveBeenCalled();
+    expect(authActionMocks.startLogin).toHaveBeenCalledTimes(1);
   });
 
   it("falls back to standard sign-in when the invited organization has no SSO", async () => {
-    authActionMocks.signInWithSso.mockRejectedValueOnce(
-      new Error("SSO is not configured for this environment."),
-    );
+    authActionMocks.startLogin
+      .mockRejectedValueOnce(new Error("SSO is not configured for this environment."))
+      .mockResolvedValueOnce(undefined);
 
     renderJoinAuthLaunch();
 
     await waitFor(() => {
-      expect(authActionMocks.signInWithGitHub).toHaveBeenCalledTimes(1);
+      expect(authActionMocks.startLogin).toHaveBeenLastCalledWith({ kind: "github" });
     });
   });
 
@@ -93,7 +104,6 @@ describe("useOrganizationJoinAuthLaunch", () => {
     renderJoinAuthLaunch();
 
     await new Promise((resolve) => window.setTimeout(resolve, 0));
-    expect(authActionMocks.signInWithSso).not.toHaveBeenCalled();
-    expect(authActionMocks.signInWithGitHub).not.toHaveBeenCalled();
+    expect(authActionMocks.startLogin).not.toHaveBeenCalled();
   });
 });

@@ -15,6 +15,35 @@ import { useAuthStore } from "@/stores/auth/auth-store";
 const workflowSurface = vi.hoisted(() => vi.fn());
 const authMode = vi.hoisted(() => ({ devBypassed: false }));
 
+vi.mock("@proliferate/product-client/host/ProductHostProvider", async () => {
+  const { useAuthStore } = await import("@/stores/auth/auth-store");
+  return {
+    useProductHost: () => {
+      const auth = useAuthStore();
+      return {
+        auth: {
+          authRequired: !authMode.devBypassed,
+          state: auth.status === "bootstrapping"
+            ? { status: "loading" as const }
+            : auth.status === "authenticated"
+              ? {
+                  status: "authenticated" as const,
+                  user: auth.user
+                    ? {
+                        id: auth.user.id,
+                        email: auth.user.email ?? undefined,
+                        name: auth.user.display_name ?? undefined,
+                      }
+                    : null,
+                  readiness: { status: "ready" as const },
+                }
+              : { status: "anonymous" as const, methods: [] },
+        },
+      };
+    },
+  };
+});
+
 class TestIntersectionObserver {
   observe() {}
   unobserve() {}
@@ -22,10 +51,6 @@ class TestIntersectionObserver {
 }
 
 vi.stubGlobal("IntersectionObserver", TestIntersectionObserver);
-
-vi.mock("@/lib/domain/auth/auth-mode", () => ({
-  isDevAuthBypassed: () => authMode.devBypassed,
-}));
 
 vi.mock("@proliferate/product-surfaces/workflows/WorkflowDefinitionsSurface", () => ({
   WorkflowDefinitionsSurface: (props: {
@@ -69,6 +94,7 @@ describe("WorkflowsPage authentication boundary", () => {
       session: null,
       user: null,
       error: null,
+      issue: null,
     });
   });
 

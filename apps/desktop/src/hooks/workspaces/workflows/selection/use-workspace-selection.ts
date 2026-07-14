@@ -20,7 +20,9 @@ function removeWorkspaceSessionRecordsForWorkspace(workspaceId: string): void {
 }
 
 export function useWorkspaceSelection() {
-  const desktop = useProductHost().desktop;
+  const productHost = useProductHost();
+  const desktop = productHost.desktop;
+  const cloudClient = productHost.cloud.client;
   const localRuntime = desktop?.runtime ?? null;
   const ssh = desktop?.ssh ?? null;
   const {
@@ -71,6 +73,7 @@ export function useWorkspaceSelection() {
         })
         : [];
       const deps = {
+        cloudClient,
         localRuntime,
         ssh,
         cache: {
@@ -108,6 +111,7 @@ export function useWorkspaceSelection() {
     }, [
       bootstrapWorkspace,
       cancelPreviousWorkspaceDisplayQueries,
+      cloudClient,
       clearSelection,
       getWorkspaceSelectionSnapshot,
       invalidateCloudWorkspaceStartState,

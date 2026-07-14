@@ -1,10 +1,10 @@
+import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
 import type {
   CloudConnectionInfo,
   CloudWorkspaceDetail,
 } from "@/lib/access/cloud/client";
 import {
   getDesktopCloudAccessToken,
-  getProliferateClient,
   isCloudAgentKind,
   ProliferateClientError,
 } from "@/lib/access/cloud/client";
@@ -38,13 +38,14 @@ export async function withFreshCloudSandboxGatewayAccessToken<
 
 export function resolveCloudSandboxGatewayConnectionForWorkspace(
   workspace: CloudWorkspaceDetail,
+  cloudClient: ProliferateCloudClient,
 ): Promise<CloudSandboxGatewayConnectionInfo> {
   return resolveCloudSandboxGatewayConnectionForCloudWorkspace({
     anyharnessWorkspaceId: workspace.anyharnessWorkspaceId ?? null,
     allowedAgentKinds: workspace.allowedAgentKinds,
     readyAgentKinds: workspace.readyAgentKinds,
     runtimeGeneration: workspace.runtime?.generation ?? 0,
-  });
+  }, cloudClient);
 }
 
 export async function resolveCloudSandboxGatewayConnectionForCloudWorkspace(input: {
@@ -52,7 +53,9 @@ export async function resolveCloudSandboxGatewayConnectionForCloudWorkspace(inpu
   allowedAgentKinds?: string[];
   readyAgentKinds?: string[];
   runtimeGeneration?: number;
-}): Promise<CloudSandboxGatewayConnectionInfo> {
+}, cloudClient: ProliferateCloudClient): Promise<
+  CloudSandboxGatewayConnectionInfo
+> {
   if (!input.anyharnessWorkspaceId) {
     throw new ProliferateClientError(
       "Cloud workspace is missing its AnyHarness workspace id.",
@@ -62,7 +65,7 @@ export async function resolveCloudSandboxGatewayConnectionForCloudWorkspace(inpu
   }
   const productToken = await getDesktopCloudAccessToken();
   return {
-    runtimeUrl: getProliferateClient().buildUrl("/v1/gateway/cloud-sandbox/anyharness"),
+    runtimeUrl: cloudClient.buildUrl("/v1/gateway/cloud-sandbox/anyharness"),
     accessToken: productToken,
     anyharnessWorkspaceId: input.anyharnessWorkspaceId,
     runtimeGeneration: input.runtimeGeneration ?? 0,

@@ -124,7 +124,11 @@ function makeHost(
 
 function makeAuthState(status: AuthState["status"]): AuthState {
   if (status === "authenticated") {
-    return { status, user: { id: "user-1" } };
+    return {
+      status,
+      user: { id: "user-1" },
+      readiness: { status: "ready" },
+    };
   }
   if (status === "anonymous") {
     return { status, methods: [] };
@@ -232,7 +236,11 @@ describe("DesktopProductLifecycleRoot", () => {
     expect(useWorkspaceActivityIndicator).toHaveBeenCalledWith(setWorkspaceActivity);
     expect(useDesktopZoomPreferenceLifecycle).toHaveBeenCalledWith(setZoom);
     expect(lifecycleMocks.useUpdateRestartWatcher).toHaveBeenCalledWith(bridge.updater);
-    expect(lifecycleMocks.useDesktopWorkerEnrollment).toHaveBeenCalledWith(bridge.worker);
+    expect(lifecycleMocks.useDesktopWorkerEnrollment).toHaveBeenCalledWith(
+      bridge.worker,
+      makeAuthState("loading"),
+      null,
+    );
 
     cleanup();
     vi.mocked(useWorkspaceActivityIndicator).mockClear();

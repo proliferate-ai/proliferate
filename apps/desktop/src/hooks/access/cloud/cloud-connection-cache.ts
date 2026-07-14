@@ -1,6 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
 import {
-  cloudWorkspaceConnectionKey,
   isCloudWorkspaceConnectionQueryKey,
 } from "@/hooks/access/cloud/query-keys";
 
@@ -10,8 +9,9 @@ export async function clearCachedCloudConnections(
 ): Promise<void> {
   if (workspaceId) {
     const filters = {
-      queryKey: cloudWorkspaceConnectionKey(workspaceId),
-      exact: true as const,
+      predicate: (query: { queryKey: readonly unknown[] }) =>
+        isCloudWorkspaceConnectionQueryKey(query.queryKey)
+        && query.queryKey[2] === workspaceId,
     };
     await queryClient.cancelQueries(filters);
     queryClient.removeQueries(filters);

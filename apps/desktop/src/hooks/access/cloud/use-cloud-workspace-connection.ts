@@ -1,6 +1,8 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
+import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
 import type { CloudConnectionInfo } from "@/lib/access/cloud/client";
-import { cloudWorkspaceConnectionKey } from "@/hooks/access/cloud/query-keys";
+import { cloudWorkspaceConnectionAuthorityKey } from "@/hooks/access/cloud/query-keys";
+import { useCloudConnectionAuthority } from "@/hooks/access/cloud/use-cloud-connection-authority";
 import {
   CLOUD_WORKSPACE_CONNECTION_MAX_RETRIES,
   CLOUD_WORKSPACE_CONNECTION_RETRY_DELAY_MS,
@@ -16,10 +18,22 @@ export {
   isRetryableCloudWorkspaceConnectionError,
 };
 
-export function cloudWorkspaceConnectionQueryOptions(workspaceId: string) {
+export function cloudWorkspaceConnectionQueryOptions(
+  workspaceId: string,
+  cloudClient: ProliferateCloudClient | null,
+  authorityScopeKey: string,
+) {
   return queryOptions<CloudConnectionInfo>({
-    queryKey: cloudWorkspaceConnectionKey(workspaceId),
-    queryFn: () => getResolvedCloudWorkspaceConnection(workspaceId),
+    queryKey: cloudWorkspaceConnectionAuthorityKey(
+      workspaceId,
+      authorityScopeKey,
+    ),
+    queryFn: () => {
+      if (!cloudClient) {
+        throw new Error("Cloud workspace access is unavailable for this host.");
+      }
+      return getResolvedCloudWorkspaceConnection(workspaceId, cloudClient);
+    },
     staleTime: 30_000,
     refetchOnMount: true,
     refetchOnWindowFocus: true,
@@ -35,8 +49,13 @@ export function useCloudWorkspaceConnection(
   workspaceId: string | null,
   enabled: boolean,
 ) {
+  const { client: cloudClient, scopeKey } = useCloudConnectionAuthority();
   return useQuery({
-    ...cloudWorkspaceConnectionQueryOptions(workspaceId ?? ""),
-    enabled: enabled && workspaceId !== null,
+    ...cloudWorkspaceConnectionQueryOptions(
+      workspaceId ?? "",
+      cloudClient,
+      scopeKey,
+    ),
+    enabled: enabled && workspaceId !== null && cloudClient !== null,
   });
 }

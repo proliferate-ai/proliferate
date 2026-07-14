@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { generateWorkspaceName } from "@proliferate/cloud-sdk/client/ai-magic";
 import { findLogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
@@ -8,7 +9,6 @@ import {
   workspaceDisplayNameOverride,
   workspaceHasOtherPromptedSession,
 } from "@/hooks/workspaces/workflows/workspace-name-eligibility";
-import { useAuthStore } from "@/stores/auth/auth-store";
 
 const requestedAutoWorkspaceNames = new Map<string, number>();
 const MAX_TRACKED_AUTO_WORKSPACE_NAMES = 500;
@@ -31,6 +31,9 @@ function markAutoWorkspaceNameRequested(workspaceId: string): boolean {
 }
 
 export function useWorkspaceNameActions() {
+  const host = useProductHost();
+  const authStatus = host.auth.state.status;
+  const cloudClient = host.cloud.client;
   const { logicalWorkspaces } = useLogicalWorkspaces();
   const { getWorkspaceSessionCacheSnapshot } = useWorkspaceSessionCache();
   const { updateWorkspaceDisplayName } = useWorkspaceDisplayNameActions();
@@ -44,7 +47,7 @@ export function useWorkspaceNameActions() {
     if (!trimmedPrompt) {
       return;
     }
-    if (useAuthStore.getState().status !== "authenticated") {
+    if (authStatus !== "authenticated" || !cloudClient) {
       return;
     }
 
@@ -72,7 +75,7 @@ export function useWorkspaceNameActions() {
     }
 
     try {
-      const response = await generateWorkspaceName(trimmedPrompt);
+      const response = await generateWorkspaceName(trimmedPrompt, cloudClient);
       const name = response.name.trim();
       if (!name) {
         return;
@@ -99,7 +102,13 @@ export function useWorkspaceNameActions() {
     } catch {
       // Best-effort workspace naming should never block chat.
     }
-  }, [getWorkspaceSessionCacheSnapshot, logicalWorkspaces, updateWorkspaceDisplayName]);
+  }, [
+    authStatus,
+    cloudClient,
+    getWorkspaceSessionCacheSnapshot,
+    logicalWorkspaces,
+    updateWorkspaceDisplayName,
+  ]);
 
   return {
     maybeGenerateWorkspaceName,

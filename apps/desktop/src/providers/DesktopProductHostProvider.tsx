@@ -14,10 +14,10 @@ import { useAuthStore } from "@/stores/auth/auth-store";
 import { useAuthBootstrap } from "@/hooks/auth/lifecycle/use-auth-bootstrap";
 import { useAuthActions } from "@/hooks/auth/workflows/use-auth-actions";
 import { useAuthOrchestrationEffects } from "@/hooks/auth/workflows/use-auth-orchestration-effects";
-import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
-import { useDesktopAuthMethods } from "@/hooks/access/cloud/auth/use-auth-methods";
-import { useGitHubDesktopAuthAvailability } from "@/hooks/access/cloud/auth/use-github-auth-availability";
-import { useSsoDiscovery } from "@/hooks/access/cloud/auth/use-sso-discovery";
+import { useAppCapabilitiesAtApiBaseUrl } from "@/hooks/capabilities/derived/use-app-capabilities";
+import { useDesktopAuthMethodsAtApiBaseUrl } from "@/hooks/access/cloud/auth/use-auth-methods";
+import { useGitHubDesktopAuthAvailabilityAtApiBaseUrl } from "@/hooks/access/cloud/auth/use-github-auth-availability";
+import { useSsoDiscoveryAtApiBaseUrl } from "@/hooks/access/cloud/auth/use-sso-discovery";
 
 import {
   buildAnonymousMethods,
@@ -38,7 +38,7 @@ export interface DesktopProductHostProviderProps {
  * Constructs the one Desktop-owned ProductHost snapshot and supplies it through
  * ProductHostProvider. The snapshot is replaced only when an approved reactive
  * input changes (auth status, authenticated user identity, the anonymous
- * method list, or the `cloudClient` reference); token rotation, auth errors,
+ * method list, normalized auth issue, or the `cloudClient` reference); token rotation,
  * organization selection, routes, workspace/runtime state, and preference
  * changes do not replace it. Static adapters retain stable identity across
  * replacements. It constructs no second Cloud/Query/runtime/auth/telemetry
@@ -48,6 +48,7 @@ export function DesktopProductHostProvider({
   cloudClient,
   children,
 }: DesktopProductHostProviderProps) {
+  const deployment = useMemo(() => createDesktopDeployment(), []);
   const status = useAuthStore((state) => state.status);
   // Read identity fields narrowly so token rotation (which does not touch these
   // fields) never replaces the host.
@@ -56,15 +57,22 @@ export function DesktopProductHostProvider({
   const email = useAuthStore((state) => state.user?.email ?? null);
   const avatarUrl = useAuthStore((state) => state.user?.avatar_url ?? null);
   const githubLogin = useAuthStore((state) => state.user?.github_login ?? null);
+  const authIssue = useAuthStore((state) => state.issue);
 
-  const restoreSession = useAuthBootstrap();
-  const actions = useAuthActions();
-  const orchestrationEffects = useAuthOrchestrationEffects();
+  const restoreSession = useAuthBootstrap(cloudClient);
+  const actions = useAuthActions(cloudClient);
+  const orchestrationEffects = useAuthOrchestrationEffects(cloudClient);
 
-  const { cloudEnabled } = useAppCapabilities();
-  const { data: authMethods } = useDesktopAuthMethods();
-  const { data: githubAvailability } = useGitHubDesktopAuthAvailability();
-  const { data: ssoDiscovery } = useSsoDiscovery({ enabled: cloudEnabled });
+  const { cloudEnabled } = useAppCapabilitiesAtApiBaseUrl(deployment.apiBaseUrl);
+  const { data: authMethods } = useDesktopAuthMethodsAtApiBaseUrl(
+    deployment.apiBaseUrl,
+  );
+  const { data: githubAvailability } =
+    useGitHubDesktopAuthAvailabilityAtApiBaseUrl(deployment.apiBaseUrl);
+  const { data: ssoDiscovery } = useSsoDiscoveryAtApiBaseUrl(
+    deployment.apiBaseUrl,
+    { enabled: cloudEnabled },
+  );
 
   const passwordAvailable = cloudEnabled && authMethods?.passwordLogin === true;
   const githubAvailable = cloudEnabled && githubAvailability?.enabled === true;
@@ -93,6 +101,7 @@ export function DesktopProductHostProvider({
   const authenticatedEmail = isAuthenticated ? email : null;
   const authenticatedAvatarUrl = isAuthenticated ? avatarUrl : null;
   const authenticatedGithubLogin = isAuthenticated ? githubLogin : null;
+  const anonymousIssue = status === "anonymous" ? authIssue : null;
 
   const authState = useMemo<AuthState>(() => {
     if (status === "bootstrapping") {
@@ -101,16 +110,23 @@ export function DesktopProductHostProvider({
     if (status === "authenticated") {
       return {
         status: "authenticated",
-        user: mapProductAuthUser({
-          id: userId ?? "",
-          email: email ?? "",
-          display_name: displayName,
-          github_login: githubLogin,
-          avatar_url: avatarUrl,
-        }),
+        user: userId === null
+          ? null
+          : mapProductAuthUser({
+              id: userId,
+              email: email ?? "",
+              display_name: displayName,
+              github_login: githubLogin,
+              avatar_url: avatarUrl,
+            }),
+        readiness: { status: "ready" },
       };
     }
-    return { status: "anonymous", methods };
+    return {
+      status: "anonymous",
+      methods,
+      ...(anonymousIssue ? { issue: anonymousIssue } : {}),
+    };
     // methods is folded into anonymousMethodsKey so authenticated method
     // changes do not recompute the snapshot; identity fields are gated to
     // authenticated status so anonymous/bootstrapping identity mutations do
@@ -124,6 +140,7 @@ export function DesktopProductHostProvider({
     authenticatedAvatarUrl,
     authenticatedGithubLogin,
     anonymousMethodsKey,
+    anonymousIssue,
   ]);
 
   // Auth operations stay stable as long as the underlying action callbacks do
@@ -161,8 +178,6 @@ export function DesktopProductHostProvider({
     }),
     [authRequired, authState, restoreSession, authOps],
   );
-
-  const deployment = useMemo(() => createDesktopDeployment(), []);
 
   const host = useMemo<ProductHost>(
     () => ({

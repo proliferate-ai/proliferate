@@ -23,6 +23,7 @@ describe("auth state mapping", () => {
     expect(bootstrappingAuthStatePatch()).toEqual({
       status: "bootstrapping",
       error: null,
+      issue: null,
     });
 
     expect(anonymousAuthState()).toEqual({
@@ -30,6 +31,7 @@ describe("auth state mapping", () => {
       session: null,
       user: null,
       error: null,
+      issue: null,
     });
   });
 
@@ -55,6 +57,7 @@ describe("auth state mapping", () => {
       session: storedSession,
       user: validatedUser,
       error: null,
+      issue: null,
     });
   });
 

@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { useCloudConnectionAuthority } from "@/hooks/access/cloud/use-cloud-connection-authority";
 import { useCloudWorkspaceConnectionCache } from "@/hooks/access/cloud/use-cloud-workspace-connection-cache";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
 import {
@@ -11,6 +12,7 @@ import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-
 import { withFreshCloudSandboxGatewayAccessToken } from "@/lib/access/cloud/cloud-sandbox-gateway";
 
 export interface TerminalWorkspaceConnectionController {
+  cloudAuthorityScopeKey: string;
   getWorkspaceRuntimeBlockReason(workspaceId: string): string | null;
   resolveTerminalWorkspaceConnection(
     workspaceId: string,
@@ -20,7 +22,12 @@ export interface TerminalWorkspaceConnectionController {
 
 // Owns terminal workspace runtime resolution, including the selected cloud runtime fast path.
 export function useTerminalWorkspaceConnection(): TerminalWorkspaceConnectionController {
-  const ssh = useProductHost().desktop?.ssh ?? null;
+  const host = useProductHost();
+  const ssh = host.desktop?.ssh ?? null;
+  const {
+    client: cloudClient,
+    scopeKey: cloudAuthorityScopeKey,
+  } = useCloudConnectionAuthority();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const { invalidateCloudWorkspaceConnection } = useCloudWorkspaceConnectionCache();
   const { selectedCloudRuntime, getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
@@ -29,7 +36,8 @@ export function useTerminalWorkspaceConnection(): TerminalWorkspaceConnectionCon
     workspaceId: string,
   ): Promise<AnyHarnessDesktopResolvedConnection> => {
     if (
-      selectedCloudRuntime.workspaceId === workspaceId
+      cloudClient
+      && selectedCloudRuntime.workspaceId === workspaceId
       && selectedCloudRuntime.state?.phase === "ready"
       && selectedCloudRuntime.connectionInfo
     ) {
@@ -45,8 +53,9 @@ export function useTerminalWorkspaceConnection(): TerminalWorkspaceConnectionCon
       };
     }
 
-    return resolveWorkspaceConnection(runtimeUrl, workspaceId, ssh);
+    return resolveWorkspaceConnection(runtimeUrl, workspaceId, ssh, cloudClient);
   }, [
+    cloudClient,
     runtimeUrl,
     ssh,
     selectedCloudRuntime.connectionInfo,
@@ -75,6 +84,7 @@ export function useTerminalWorkspaceConnection(): TerminalWorkspaceConnectionCon
   ]);
 
   return {
+    cloudAuthorityScopeKey,
     getWorkspaceRuntimeBlockReason,
     resolveTerminalWorkspaceConnection,
     triggerSelectedCloudReconnect,

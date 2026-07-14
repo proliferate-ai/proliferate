@@ -181,16 +181,20 @@ function InvitationRow({
   updating: boolean;
   onRevokeInvitation?: (invitationId: string) => void;
 }) {
-  const { writeText } = useProductHost().clipboard;
+  const host = useProductHost();
+  const { writeText } = host.clipboard;
   const showToast = useToastStore((state) => state.show);
   const deliveryHint = invitationDeliveryHint(invitation.deliveryStatus);
 
   async function handleCopyInviteLink() {
-    const url = buildProliferateApiUrl(
-      `/register?token=${invitation.id}&email=${encodeURIComponent(invitation.email)}`,
-    );
+    const url = new URL(buildProliferateApiUrl(
+      "/register",
+      host.deployment.apiBaseUrl,
+    ));
+    url.searchParams.set("token", invitation.id);
+    url.searchParams.set("email", invitation.email);
     try {
-      await writeText(url);
+      await writeText(url.toString());
       showToast("Invite link copied.", "info");
     } catch {
       showToast("Invite link could not be copied.");

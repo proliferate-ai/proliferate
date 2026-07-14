@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ProliferateClientError } from "@proliferate/cloud-sdk";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { getCurrentUser, updateCurrentUser } from "@proliferate/cloud-sdk/client/users";
-import { useAuthStore } from "@/stores/auth/auth-store";
 
 /**
  * Footer state for the support modals: which address support follow-up goes to,
@@ -26,7 +26,12 @@ export interface SupportOutreachEmailState {
 }
 
 export function useSupportOutreachEmail(): SupportOutreachEmailState {
-  const sessionEmail = useAuthStore((state) => state.session?.email ?? null);
+  const host = useProductHost();
+  const authState = host.auth.state;
+  const cloudClient = host.cloud.client;
+  const sessionEmail = authState.status === "authenticated"
+    ? authState.user?.email ?? null
+    : null;
   const [accountEmail, setAccountEmail] = useState<string | null>(sessionEmail);
   const [outreachEmail, setOutreachEmail] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -47,9 +52,14 @@ export function useSupportOutreachEmail(): SupportOutreachEmailState {
   // the session email silently.
   useEffect(() => {
     let cancelled = false;
+    if (!cloudClient) {
+      return () => {
+        cancelled = true;
+      };
+    }
     void (async () => {
       try {
-        const user = await getCurrentUser();
+        const user = await getCurrentUser(cloudClient);
         if (cancelled) {
           return;
         }
@@ -62,7 +72,7 @@ export function useSupportOutreachEmail(): SupportOutreachEmailState {
     return () => {
       cancelled = true;
     };
-  }, [sessionEmail]);
+  }, [cloudClient, sessionEmail]);
 
   const effectiveEmail = outreachEmail ?? accountEmail;
 
@@ -85,7 +95,13 @@ export function useSupportOutreachEmail(): SupportOutreachEmailState {
     setError(null);
     const trimmed = draft.trim();
     try {
-      const user = await updateCurrentUser({ outreach_email: trimmed.length > 0 ? trimmed : null });
+      if (!cloudClient) {
+        throw new Error("Cloud access is unavailable for this host.");
+      }
+      const user = await updateCurrentUser(
+        { outreach_email: trimmed.length > 0 ? trimmed : null },
+        cloudClient,
+      );
       if (!mountedRef.current) {
         return;
       }
@@ -106,7 +122,7 @@ export function useSupportOutreachEmail(): SupportOutreachEmailState {
         setIsSaving(false);
       }
     }
-  }, [accountEmail, draft, isSaving]);
+  }, [accountEmail, cloudClient, draft, isSaving]);
 
   return {
     effectiveEmail,

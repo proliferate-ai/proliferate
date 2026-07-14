@@ -30,9 +30,10 @@ export async function getCurrentTeam(
 export async function updateOrganization(
   organizationId: string,
   input: OrganizationUpdateRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<OrganizationResponse> {
   return (
-    await getProliferateClient().PATCH("/v1/organizations/{organization_id}", {
+    await client.PATCH("/v1/organizations/{organization_id}", {
       params: { path: { organization_id: organizationId } },
       body: input,
     })
@@ -54,9 +55,10 @@ export async function updateOrganizationMembership(
   organizationId: string,
   membershipId: string,
   input: OrganizationMembershipUpdateRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<OrganizationMembershipResponse> {
   return (
-    await getProliferateClient().PATCH(
+    await client.PATCH(
       "/v1/organizations/{organization_id}/members/{membership_id}",
       {
         params: { path: { organization_id: organizationId, membership_id: membershipId } },
@@ -69,9 +71,10 @@ export async function updateOrganizationMembership(
 export async function removeOrganizationMembership(
   organizationId: string,
   membershipId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<OrganizationMembershipResponse> {
   return (
-    await getProliferateClient().DELETE(
+    await client.DELETE(
       "/v1/organizations/{organization_id}/members/{membership_id}",
       {
         params: { path: { organization_id: organizationId, membership_id: membershipId } },
@@ -110,9 +113,10 @@ export async function listCurrentUserOrganizationInvitations(
 
 export async function acceptCurrentUserOrganizationInvitation(
   invitationId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<OrganizationInvitationAcceptResponse> {
   return (
-    await getProliferateClient().POST(
+    await client.POST(
       "/v1/organizations/invitations/current/{invitation_id}/accept",
       {
         params: { path: { invitation_id: invitationId } },
@@ -124,9 +128,10 @@ export async function acceptCurrentUserOrganizationInvitation(
 export async function createOrganizationInvitation(
   organizationId: string,
   input: OrganizationInviteRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<OrganizationInvitationResponse> {
   return (
-    await getProliferateClient().POST("/v1/organizations/{organization_id}/invitations", {
+    await client.POST("/v1/organizations/{organization_id}/invitations", {
       params: { path: { organization_id: organizationId } },
       body: input,
     })
@@ -136,9 +141,10 @@ export async function createOrganizationInvitation(
 export async function resendOrganizationInvitation(
   organizationId: string,
   invitationId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<OrganizationInvitationResponse> {
   return (
-    await getProliferateClient().POST(
+    await client.POST(
       "/v1/organizations/{organization_id}/invitations/{invitation_id}/resend",
       {
         params: { path: { organization_id: organizationId, invitation_id: invitationId } },
@@ -150,9 +156,10 @@ export async function resendOrganizationInvitation(
 export async function revokeOrganizationInvitation(
   organizationId: string,
   invitationId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<OrganizationInvitationResponse> {
   return (
-    await getProliferateClient().DELETE(
+    await client.DELETE(
       "/v1/organizations/{organization_id}/invitations/{invitation_id}",
       {
         params: { path: { organization_id: organizationId, invitation_id: invitationId } },
@@ -163,9 +170,10 @@ export async function revokeOrganizationInvitation(
 
 export async function acceptOrganizationInvitation(
   input: OrganizationInvitationAcceptRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<OrganizationInvitationAcceptResponse> {
   return (
-    await getProliferateClient().POST("/v1/organizations/invitations/accept", {
+    await client.POST("/v1/organizations/invitations/accept", {
       body: input,
     })
   ).data!;

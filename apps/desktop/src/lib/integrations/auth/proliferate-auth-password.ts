@@ -19,12 +19,17 @@ export interface DesktopAuthMethods {
   github: boolean
 }
 
-export async function getDesktopAuthMethods(): Promise<DesktopAuthMethods> {
-  const response = await fetchAuthResponse(buildUrl("/auth/desktop/methods"), {
-    headers: {
-      Accept: "application/json",
+export async function getDesktopAuthMethods(
+  apiBaseUrl?: string,
+): Promise<DesktopAuthMethods> {
+  const response = await fetchAuthResponse(
+    buildUrl("/auth/desktop/methods", apiBaseUrl),
+    {
+      headers: {
+        Accept: "application/json",
+      },
     },
-  })
+  )
 
   if (!response.ok) {
     throw await parseAuthError(response)

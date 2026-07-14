@@ -29,7 +29,6 @@ import {
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { TEAM_UPGRADE_GATE_COPY } from "@/copy/billing/upgrade-gate-copy";
 import { organizationLogoImageValidationError } from "@/lib/domain/organizations/logo-image";
-import { useAuthStore } from "@/stores/auth/auth-store";
 
 function readLogoImage(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -41,14 +40,15 @@ function readLogoImage(file: File): Promise<string> {
 }
 
 export function OrganizationPane() {
-  const authStatus = useAuthStore((state) => state.status);
+  const host = useProductHost();
+  const authStatus = host.auth.state.status;
   const {
     activeOrganization,
     activeOrganizationId,
     organizations,
     organizationsQuery,
   } = useActiveOrganization();
-  const { openExternal } = useProductHost().links;
+  const { openExternal } = host.links;
   const actions = useOrganizationActions(activeOrganizationId);
   const [settingsName, setSettingsName] = useState("");
   const [settingsLogoImage, setSettingsLogoImage] = useState<string | null>(null);
@@ -135,7 +135,11 @@ export function OrganizationPane() {
       const response = await githubAppInstallationStart.mutateAsync({
         organizationId: activeOrganizationId,
         options: {
-          returnTo: "proliferate://settings/organization?source=github_app_installation_callback",
+          returnTo: host.links.buildReturnUrl({
+            kind: "settings",
+            section: "organization",
+            query: [["source", "github_app_installation_callback"]],
+          }),
         },
       });
       await openExternal(response.installationUrl);

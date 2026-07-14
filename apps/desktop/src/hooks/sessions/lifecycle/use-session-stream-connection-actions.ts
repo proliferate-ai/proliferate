@@ -13,7 +13,9 @@ export function useSessionStreamConnectionActions({
   refreshSessionSlotMeta,
   rehydrateSessionSlotFromHistory,
 }: UseSessionStreamConnectionActionsOptions) {
-  const ssh = useProductHost().desktop?.ssh ?? null;
+  const host = useProductHost();
+  const ssh = host.desktop?.ssh ?? null;
+  const cloudClient = host.cloud.client;
   const closeSessionSlotStream = useCallback((sessionId: string) => {
     closeSessionSlotStreamForSession(sessionId);
   }, []);
@@ -38,6 +40,7 @@ export function useSessionStreamConnectionActions({
     await openSessionStreamConnection({
       sessionId,
       ssh,
+      cloudClient,
       options,
       createSessionStreamFlushController,
       refreshSessionSlotMeta,
@@ -45,6 +48,7 @@ export function useSessionStreamConnectionActions({
     });
   }, [
     closeSessionSlotStream,
+    cloudClient,
     createSessionStreamFlushController,
     refreshSessionSlotMeta,
     rehydrateSessionSlotFromHistory,

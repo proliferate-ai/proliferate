@@ -8,7 +8,9 @@ export function usePromptAttachmentUrl(
   sessionId: string | null | undefined,
   attachmentId: string | null | undefined,
 ) {
-  const ssh = useProductHost().desktop?.ssh ?? null;
+  const host = useProductHost();
+  const ssh = host.desktop?.ssh ?? null;
+  const cloudClient = host.cloud.client;
   const fetchPromptAttachmentMutation = useFetchPromptAttachmentMutation();
   const query = useQuery({
     queryKey: ["prompt-attachment", sessionId, attachmentId],
@@ -17,7 +19,7 @@ export function usePromptAttachmentUrl(
     gcTime: 60_000,
     queryFn: async () => {
       const { materializedSessionId, workspaceId } =
-        await getSessionClientAndWorkspace(sessionId!, ssh);
+        await getSessionClientAndWorkspace(sessionId!, ssh, cloudClient);
       const blob = await fetchPromptAttachmentMutation.mutateAsync({
         workspaceId,
         sessionId: materializedSessionId,

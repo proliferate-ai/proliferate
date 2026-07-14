@@ -1,5 +1,7 @@
 import type {
   StoredPendingAuthSession,
+  StoredPendingAuthProvider,
+  StoredPendingAuthPurpose,
 } from "@/lib/access/tauri/auth"
 
 export interface DesktopAuthCallback {
@@ -21,8 +23,13 @@ const DESKTOP_REDIRECT_PATH = "/callback"
 export const DESKTOP_AUTH_REDIRECT_URI = `${desktopRedirectScheme()}://${DESKTOP_REDIRECT_HOST}${DESKTOP_REDIRECT_PATH}`
 export const PENDING_AUTH_MAX_AGE_MS = 10 * 60 * 1000
 
-export function createPendingGitHubDesktopAuth(): StoredPendingAuthSession {
+export function createPendingDesktopAuth(
+  provider: StoredPendingAuthProvider,
+  purpose: StoredPendingAuthPurpose,
+): StoredPendingAuthSession {
   return {
+    provider,
+    purpose,
     state: randomBase64Url(24),
     code_verifier: randomBase64Url(48),
     redirect_uri: DESKTOP_AUTH_REDIRECT_URI,
@@ -41,23 +48,8 @@ export function isPendingDesktopAuthExpired(
 }
 
 export function parseDesktopAuthCallback(url: string): DesktopAuthCallback | null {
-  let parsed: URL
-
-  try {
-    parsed = new URL(url)
-  } catch {
-    return null
-  }
-
-  if (!DESKTOP_REDIRECT_SCHEMES.has(parsed.protocol.replace(/:$/, ""))) {
-    return null
-  }
-
-  if (parsed.hostname !== DESKTOP_REDIRECT_HOST) {
-    return null
-  }
-
-  if (parsed.pathname !== DESKTOP_REDIRECT_PATH) {
+  const parsed = parseDesktopAuthCallbackUrl(url)
+  if (!parsed) {
     return null
   }
 
@@ -74,6 +66,27 @@ export function parseDesktopAuthCallback(url: string): DesktopAuthCallback | nul
     code,
     error,
   }
+}
+
+/** True for the Desktop auth callback transport even when its query is malformed. */
+export function isDesktopAuthCallbackUrl(url: string): boolean {
+  return parseDesktopAuthCallbackUrl(url) !== null
+}
+
+function parseDesktopAuthCallbackUrl(url: string): URL | null {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return null
+  }
+  if (!DESKTOP_REDIRECT_SCHEMES.has(parsed.protocol.replace(/:$/, ""))) {
+    return null
+  }
+  if (parsed.hostname !== DESKTOP_REDIRECT_HOST) {
+    return null
+  }
+  return parsed.pathname === DESKTOP_REDIRECT_PATH ? parsed : null
 }
 
 export async function sha256Base64Url(input: string): Promise<string> {

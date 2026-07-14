@@ -9,18 +9,58 @@ import { AuthScreenLayout } from "@/components/auth/AuthScreenLayout";
 import { LoginScreen } from "@/components/auth/LoginScreen";
 import { SessionCheckScreen } from "@/components/auth/SessionCheckScreen";
 
-vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
-  useProductHost: () => ({
-    deployment: {
-      apiBaseUrl: "https://api.example.test",
-      switchDeployment: vi.fn(async () => {}),
-      resetDeployment: vi.fn(async () => {}),
-    },
-    desktop: {
-      updater: { getVersion: vi.fn(async () => "0.0.0-test") },
-    },
-  }),
+const hostAuthOverrides = vi.hoisted(() => ({
+  readiness: { status: "ready" } as
+    | { status: "ready" }
+    | { status: "action_required"; action: "connect_github" },
 }));
+
+vi.mock("@proliferate/product-client/host/ProductHostProvider", async () => {
+  const { useAuthStore } = await import("@/stores/auth/auth-store");
+  return {
+    useProductHost: () => {
+      const storedAuth = useAuthStore();
+      const state = storedAuth.status === "bootstrapping"
+        ? { status: "loading" as const }
+        : storedAuth.status === "authenticated"
+          ? {
+              status: "authenticated" as const,
+              user: storedAuth.user
+                ? {
+                    id: storedAuth.user.id,
+                    email: storedAuth.user.email ?? undefined,
+                    name: storedAuth.user.display_name ?? undefined,
+                  }
+                : null,
+              readiness: hostAuthOverrides.readiness,
+            }
+          : {
+              status: "anonymous" as const,
+              methods: [{ kind: "github" as const, enabled: true }],
+              issue: storedAuth.issue ?? undefined,
+            };
+
+      return {
+        auth: {
+          authRequired: true,
+          state,
+          startLogin: vi.fn(async () => {}),
+          finishLogin: vi.fn(async () => {}),
+          cancelLogin: vi.fn(async () => {}),
+          logout: vi.fn(async () => {}),
+        },
+        deployment: {
+          apiBaseUrl: "https://api.example.test",
+          switchDeployment: vi.fn(async () => {}),
+          resetDeployment: vi.fn(async () => {}),
+        },
+        desktop: {
+          updater: { getVersion: vi.fn(async () => "0.0.0-test") },
+        },
+      };
+    },
+  };
+});
 
 // Force the auth-required gate so anonymous resolves to the sign-in shell
 // (exercising the loading -> login -> app reveal path).
@@ -171,11 +211,25 @@ describe("LoginScreen", () => {
 
 describe("BootstrappedRoute", () => {
   beforeEach(() => {
-    useAuthStore.setState({ status: "bootstrapping", session: null, user: null, error: null });
+    hostAuthOverrides.readiness = { status: "ready" };
+    useAuthStore.setState({
+      status: "bootstrapping",
+      session: null,
+      user: null,
+      error: null,
+      issue: null,
+    });
   });
 
   afterEach(() => {
-    useAuthStore.setState({ status: "bootstrapping", session: null, user: null, error: null });
+    hostAuthOverrides.readiness = { status: "ready" };
+    useAuthStore.setState({
+      status: "bootstrapping",
+      session: null,
+      user: null,
+      error: null,
+      issue: null,
+    });
   });
 
   it("shows the loading shell and withholds the workspace while bootstrapping", () => {
@@ -221,6 +275,34 @@ describe("BootstrappedRoute", () => {
     });
     await waitFor(() => expect(screen.getByTestId("workspace")).toBeTruthy());
     await waitFor(() => expect(screen.queryByTestId("auth-shell")).toBeNull());
+  });
+
+  it("requires GitHub linking before revealing an authenticated workspace", () => {
+    hostAuthOverrides.readiness = {
+      status: "action_required",
+      action: "connect_github",
+    };
+    useAuthStore.setState({
+      status: "authenticated",
+      user: {
+        id: "user-1",
+        email: "founder@example.com",
+        display_name: "Founder",
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <Routes>
+          <Route element={<BootstrappedRoute />}>
+            <Route path="/" element={<main data-testid="workspace">Workspace</main>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Connect GitHub")).toBeTruthy();
+    expect(screen.queryByTestId("workspace")).toBeNull();
   });
 });
 

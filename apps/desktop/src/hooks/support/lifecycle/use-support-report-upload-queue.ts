@@ -6,6 +6,7 @@ import {
 import { useEffect, useMemo, useRef } from "react";
 import type { DesktopDiagnosticsBridge } from "@proliferate/product-client/host/desktop-bridge";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
 import {
   completeSupportReportUpload,
   createSupportReport,
@@ -58,7 +59,9 @@ interface SupportReportUploadResult {
 }
 
 export function useSupportReportUploadQueue(): void {
-  const diagnostics = useProductHost().desktop?.diagnostics ?? null;
+  const host = useProductHost();
+  const diagnostics = host.desktop?.diagnostics ?? null;
+  const cloudClient = host.cloud.client;
   const workspaceContext = useAnyHarnessWorkspaceContext();
   const contextWorkspaceId = workspaceContext.workspaceId;
   const resolveConnection = workspaceContext.resolveConnection;
@@ -87,11 +90,11 @@ export function useSupportReportUploadQueue(): void {
     let unlistenJobs: (() => void) | null = null;
 
     const processQueue = () => {
-      if (disposed || processingRef.current) {
+      if (disposed || processingRef.current || !cloudClient) {
         return;
       }
       processingRef.current = true;
-      void drainSupportReportQueue(dependencies, diagnostics, showToast)
+      void drainSupportReportQueue(dependencies, diagnostics, cloudClient, showToast)
         .finally(() => {
           processingRef.current = false;
           if (!disposed) {
@@ -126,12 +129,13 @@ export function useSupportReportUploadQueue(): void {
         window.clearTimeout(retryTimerRef.current);
       }
     };
-  }, [dependencies, diagnostics, showToast]);
+  }, [cloudClient, dependencies, diagnostics, showToast]);
 }
 
 async function drainSupportReportQueue(
   dependencies: SupportReportUploadDependencies<AnyHarnessResolvedConnection>,
   diagnostics: DesktopDiagnosticsBridge | null,
+  cloudClient: ProliferateCloudClient,
   showToast: (message: string, type?: "error" | "info") => void,
 ): Promise<void> {
   const queued = readPersistedJobs();
@@ -143,7 +147,12 @@ async function drainSupportReportQueue(
     }
 
     try {
-      const result = await uploadSupportReport(entry.job, dependencies, diagnostics);
+      const result = await uploadSupportReport(
+        entry.job,
+        dependencies,
+        diagnostics,
+        cloudClient,
+      );
       removePersistedJob(entry.job.jobId);
       showToast(
         `Thanks. Report sent. Support has the details. (${result.reportId})`,
@@ -218,9 +227,13 @@ async function uploadSupportReport(
   job: SupportReportJob,
   dependencies: SupportReportUploadDependencies<AnyHarnessResolvedConnection>,
   diagnostics: DesktopDiagnosticsBridge | null,
+  cloudClient: ProliferateCloudClient,
 ): Promise<SupportReportUploadResult> {
   validateAttachmentSizes(job);
-  const report = await createSupportReport(buildCreateReportRequest(job, job.attachments.length));
+  const report = await createSupportReport(
+    buildCreateReportRequest(job, job.attachments.length),
+    cloudClient,
+  );
   const serverCorrelation = toLocalServerCorrelation(report);
   if (report.status === "completed") {
     trackSupportReportSubmitted(job, serverCorrelation, job.attachments.length);
@@ -272,7 +285,7 @@ async function uploadSupportReport(
       cloudDiagnosticsStatus: report.cloudDiagnosticsStatus,
       attachments: [],
     });
-    await completeSupportReportUpload(report.reportId, completeRequest);
+    await completeSupportReportUpload(report.reportId, completeRequest, cloudClient);
     trackSupportReportSubmitted(job, serverCorrelation, 0);
     await deleteSupportReportJobAttachments(job, diagnostics?.deleteAttachment);
     return {
@@ -291,7 +304,11 @@ async function uploadSupportReport(
     attachments: attachmentUploadFiles(attachmentBlobs, attachmentHashes),
   };
 
-  const upload = await createSupportReportUploadTargets(report.reportId, uploadRequest);
+  const upload = await createSupportReportUploadTargets(
+    report.reportId,
+    uploadRequest,
+    cloudClient,
+  );
   if (diagnosticsUpload) {
     if (!upload.diagnostics) {
       throw new Error("Cloud did not return a diagnostics upload URL.");
@@ -329,7 +346,7 @@ async function uploadSupportReport(
     cloudDiagnosticsStatus: report.cloudDiagnosticsStatus,
     attachments: completedAttachments,
   });
-  await completeSupportReportUpload(upload.reportId, completeRequest);
+  await completeSupportReportUpload(upload.reportId, completeRequest, cloudClient);
   trackSupportReportSubmitted(job, serverCorrelation, completedAttachments.length);
   await deleteSupportReportJobAttachments(job, diagnostics?.deleteAttachment);
   return {

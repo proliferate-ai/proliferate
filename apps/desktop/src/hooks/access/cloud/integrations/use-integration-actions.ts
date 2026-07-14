@@ -5,23 +5,29 @@ import {
   removeIntegrationAccount,
   type AuthenticateIntegrationRequest,
 } from "@proliferate/cloud-sdk/client/integrations";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { requireHostCloudClient } from "@/lib/access/cloud/host-client";
 import { useInvalidateCloudIntegrations } from "./use-integration-health";
 
 export function useIntegrationActions() {
   const invalidateCloudIntegrations = useInvalidateCloudIntegrations();
+  const cloudClient = useProductHost().cloud.client;
 
   const authenticateMutation = useMutation({
-    mutationFn: (input: AuthenticateIntegrationRequest) => authenticateIntegration(input),
+    mutationFn: (input: AuthenticateIntegrationRequest) =>
+      authenticateIntegration(input, requireHostCloudClient(cloudClient)),
     onSuccess: () => invalidateCloudIntegrations(),
   });
 
   const disconnectMutation = useMutation({
-    mutationFn: (accountId: string) => removeIntegrationAccount(accountId),
+    mutationFn: (accountId: string) =>
+      removeIntegrationAccount(accountId, requireHostCloudClient(cloudClient)),
     onSuccess: () => invalidateCloudIntegrations(),
   });
 
   const cancelOauthFlowMutation = useMutation({
-    mutationFn: (flowId: string) => cancelIntegrationOauthFlow(flowId),
+    mutationFn: (flowId: string) =>
+      cancelIntegrationOauthFlow(flowId, requireHostCloudClient(cloudClient)),
     onSuccess: () => invalidateCloudIntegrations(),
   });
 

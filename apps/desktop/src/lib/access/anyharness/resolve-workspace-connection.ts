@@ -1,4 +1,5 @@
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
+import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
 import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
 import { resolveRuntimeTargetForWorkspace } from "./runtime-target";
 
@@ -11,8 +12,14 @@ export async function resolveWorkspaceConnection(
   runtimeUrl: string,
   workspaceId: string,
   ssh: DesktopSshBridge | null = null,
+  cloudClient: ProliferateCloudClient | null = null,
 ): Promise<AnyHarnessDesktopResolvedConnection> {
-  const target = await resolveRuntimeTargetForWorkspace(runtimeUrl, workspaceId, ssh);
+  const target = await resolveRuntimeTargetForWorkspace(
+    runtimeUrl,
+    workspaceId,
+    ssh,
+    cloudClient,
+  );
   return {
     runtimeUrl: target.baseUrl,
     authToken: target.authToken,

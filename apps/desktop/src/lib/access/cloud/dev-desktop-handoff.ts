@@ -12,9 +12,10 @@ interface DevDesktopHandoffResponse {
 }
 
 export async function takeDevDesktopHandoff(
+  apiBaseUrl: string,
   signal?: AbortSignal,
 ): Promise<DevDesktopHandoffRecord | null> {
-  const response = await fetch(buildProliferateApiUrl("/v1/dev/desktop-handoff"), {
+  const response = await fetch(buildProliferateApiUrl("/v1/dev/desktop-handoff", apiBaseUrl), {
     method: "GET",
     headers: {
       "Cache-Control": "no-store",
@@ -31,8 +32,14 @@ export async function takeDevDesktopHandoff(
   return body.handoff;
 }
 
-export async function markDevDesktopHandoffOpened(id: string): Promise<void> {
-  const response = await fetch(buildProliferateApiUrl(`/v1/dev/desktop-handoff/${id}/opened`), {
+export async function markDevDesktopHandoffOpened(
+  apiBaseUrl: string,
+  id: string,
+): Promise<void> {
+  const response = await fetch(buildProliferateApiUrl(
+    `/v1/dev/desktop-handoff/${id}/opened`,
+    apiBaseUrl,
+  ), {
     method: "POST",
     headers: {
       "Cache-Control": "no-store",

@@ -1,20 +1,23 @@
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { WorkflowDefinitionsSurface } from "@proliferate/product-surfaces/workflows/WorkflowDefinitionsSurface";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { WorkflowDefinitionsAccessScreen } from "@/components/workflows/definitions/WorkflowDefinitionsAccessScreen";
 import { MainSidebarPageShell } from "@/components/workspace/shell/screen/MainSidebarPageShell";
 import { APP_ROUTES } from "@/config/app-routes";
 import { WORKFLOW_AUTH_COPY } from "@/copy/workflows/workflow-copy";
-import { isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
-import { useAuthStore } from "@/stores/auth/auth-store";
 
 export function WorkflowsPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const { workflowId } = useParams<{ workflowId: string }>();
-  const authStatus = useAuthStore((state) => state.status);
-  const authUserId = useAuthStore((state) => state.user?.id ?? null);
+  const auth = useProductHost().auth;
+  const authState = auth.state;
+  const authStatus = authState.status;
+  const authUserId = authState.status === "authenticated"
+    ? authState.user?.id ?? null
+    : null;
 
-  if (isDevAuthBypassed()) {
+  if (!auth.authRequired) {
     return (
       <WorkflowDefinitionsAccessScreen
         title={WORKFLOW_AUTH_COPY.devBypassTitle}

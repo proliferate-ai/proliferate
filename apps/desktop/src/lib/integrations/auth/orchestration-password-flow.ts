@@ -9,6 +9,11 @@ import {
   toError,
   type AuthOrchestrationDeps,
 } from "./orchestration-effects";
+import {
+  isCurrentDesktopAuthTransaction,
+  staleDesktopAuthTransactionError,
+  type DesktopAuthTransaction,
+} from "./desktop-auth-transaction";
 
 export interface PasswordSignInCredentials {
   email: string;
@@ -20,10 +25,12 @@ export interface PasswordSignInCredentials {
 export async function signInWithPassword(
   credentials: PasswordSignInCredentials,
   deps: AuthOrchestrationDeps,
+  transaction: DesktopAuthTransaction,
 ): Promise<{
   provider: AuthTelemetryProvider;
   source: AuthSignInSource;
 }> {
+  assertCurrentTransaction(transaction);
   if (isDevAuthBypassed()) {
     applyDevBypassState(deps);
     return {
@@ -33,6 +40,7 @@ export async function signInWithPassword(
   }
 
   const controlPlaneReachable = await checkControlPlaneReachable();
+  assertCurrentTransaction(transaction);
   if (!controlPlaneReachable) {
     throw new AuthRequestError(
       "Signing in requires a reachable control plane.",
@@ -45,12 +53,20 @@ export async function signInWithPassword(
       credentials.email,
       credentials.password,
     );
-    await applyAuthenticatedState(deps, session);
+    assertCurrentTransaction(transaction);
+    await applyAuthenticatedState(deps, session, transaction);
+    assertCurrentTransaction(transaction);
     return {
       provider: "password",
       source: "password_form",
     };
   } catch (error) {
     throw toError(error, "Sign-in failed");
+  }
+}
+
+function assertCurrentTransaction(transaction: DesktopAuthTransaction): void {
+  if (!isCurrentDesktopAuthTransaction(transaction)) {
+    throw staleDesktopAuthTransactionError();
   }
 }

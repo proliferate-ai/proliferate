@@ -4,6 +4,7 @@ import type {
   DesktopSshBridge,
 } from "@proliferate/product-client/host/desktop-bridge";
 import type { Workspace } from "@anyharness/sdk";
+import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
 import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
 
@@ -29,6 +30,8 @@ export interface WorkspaceSelectionContext {
 }
 
 export interface WorkspaceSelectionDeps {
+  /** Exact ProductHost authority; omitted legacy/test dependencies fail closed. */
+  cloudClient?: ProliferateCloudClient | null;
   localRuntime: DesktopRuntimeBridge | null;
   ssh?: DesktopSshBridge | null;
   logicalWorkspaces: LogicalWorkspace[];

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   cloudBillingKey,
   cloudWorktreeRetentionPolicyKey,
+  cloudWorkspaceConnectionAuthorityKey,
   cloudWorkspaceConnectionKey,
   isCloudWorkspaceConnectionQueryKey,
 } from "./query-keys";
@@ -45,5 +46,21 @@ describe("cloud query keys", () => {
     expect(isCloudWorkspaceConnectionQueryKey(
       cloudWorkspaceConnectionKey("workspace-1"),
     )).toBe(true);
+  });
+
+  it("adds a credential-free authority scope to connection keys", () => {
+    expect(cloudWorkspaceConnectionAuthorityKey(
+      "workspace-1",
+      "https://api.example.test::user:user-1::cloud-client:7",
+    )).toEqual([
+      "cloud",
+      "workspaces",
+      "workspace-1",
+      "connection",
+      "personal",
+      null,
+      "authority",
+      "https://api.example.test::user:user-1::cloud-client:7",
+    ]);
   });
 });

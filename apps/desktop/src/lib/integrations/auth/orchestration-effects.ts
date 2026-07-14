@@ -1,11 +1,9 @@
 import {
-  clearStoredAuthSession,
   clearStoredPendingAuthSession,
-  setStoredAuthSession,
+  getStoredPendingAuthSession,
   setStoredPendingAuthSession,
   type StoredPendingAuthSession,
 } from "@/lib/access/tauri/auth";
-import { desktopNavigationTarget } from "@/lib/domain/auth/desktop-navigation";
 import { markTelemetryHandled } from "@/lib/domain/telemetry/errors";
 import {
   cancelGitHubSignIn,
@@ -13,7 +11,6 @@ import {
 import { createDevBypassSession } from "@/lib/domain/auth/auth-mode";
 import {
   anonymousAuthState,
-  authErrorStatePatch,
   type AuthClientState,
   type AuthClientStatePatch,
 } from "@/lib/domain/auth/auth-state-mapping";
@@ -29,21 +26,29 @@ import {
   refreshDesktopUserSession,
 } from "@/lib/integrations/auth/proliferate-auth";
 import {
-  captureTelemetryException,
-} from "@/lib/integrations/telemetry/client";
+  claimDesktopAuthPendingState,
+  currentDesktopAuthTransaction,
+  isCurrentDesktopAuthSessionAuthority,
+  replaceDesktopAuthSessionAuthority,
+  releaseDesktopAuthPendingState,
+  withDesktopAuthPendingMutation,
+  type DesktopAuthSessionAuthority,
+  type DesktopAuthTransaction,
+} from "./desktop-auth-transaction";
 import {
-  applyAnonymousAuthState,
-  applyPersistedAuthenticatedAuthState,
-  applyVolatileAuthenticatedAuthState,
-} from "@/lib/workflows/auth/apply-auth-state";
+  applyAnonymousStateForAuthority,
+  applyAuthenticatedStateForAuthority,
+} from "./orchestration-session-authority";
+import { applyVolatileAuthenticatedAuthState } from "@/lib/workflows/auth/apply-auth-state";
+import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
 
 export interface AuthOrchestrationDeps {
+  cloudClient?: ProliferateCloudClient | null;
   getAuthState(): AuthClientState;
   setAuthState(state: AuthClientStatePatch): void;
   clearSessionRuntimeState(): void;
   closeRepoSetupModal(): void;
   showToast(message: string): void;
-  navigateDesktopRoute(target: string): void;
 }
 
 export function applyDevBypassState(deps: AuthOrchestrationDeps): void {
@@ -85,6 +90,7 @@ export async function validateSession(
 export async function recoverValidatedSessionAfterTransientFailure(
   storedSession: StoredAuthSession,
   deps: AuthOrchestrationDeps,
+  authority: DesktopAuthSessionAuthority,
 ): Promise<void> {
   const expectedRefreshToken = storedSession.refresh_token;
 
@@ -92,31 +98,40 @@ export async function recoverValidatedSessionAfterTransientFailure(
     await wait(1000);
 
     const currentSession = deps.getAuthState().session;
-    if (currentSession?.refresh_token !== expectedRefreshToken) {
+    if (
+      !isCurrentDesktopAuthSessionAuthority(authority)
+      || currentSession?.refresh_token !== expectedRefreshToken
+    ) {
       return;
     }
 
     try {
       const { session, user } = await validateSession(storedSession);
       const persistedSession = storedSessionWithValidatedUser(session, user);
-      await setStoredAuthSession(persistedSession);
-
-      if (deps.getAuthState().session?.refresh_token !== expectedRefreshToken) {
-        return;
-      }
-
-      applyVolatileAuthenticatedAuthState({ session: persistedSession, user }, deps);
+      await applyAuthenticatedStateForAuthority(
+        deps,
+        persistedSession,
+        authority,
+        { user, expectedStoredSession: storedSession },
+      );
       return;
     } catch (error) {
       if (isTransientBootstrapError(error)) {
         continue;
       }
 
-      if (deps.getAuthState().session?.refresh_token !== expectedRefreshToken) {
+      if (
+        !isCurrentDesktopAuthSessionAuthority(authority)
+        || deps.getAuthState().session?.refresh_token !== expectedRefreshToken
+      ) {
         return;
       }
 
-      await applyAnonymousState(deps);
+      await applyAnonymousStateForAuthority(
+        deps,
+        authority,
+        { expectedStoredSession: storedSession },
+      );
       return;
     }
   }
@@ -135,86 +150,87 @@ export async function applyAnonymousState(
   options?: {
     clearPendingAuth?: boolean;
   },
-): Promise<void> {
-  await applyAnonymousAuthState(options ?? {}, {
-    clearStoredAuthSession,
-    clearStoredPendingAuthSession,
-    clearSessionRuntimeState: deps.clearSessionRuntimeState,
-    closeRepoSetupModal: deps.closeRepoSetupModal,
-    setAuthState: deps.setAuthState,
-  });
+  transaction: DesktopAuthTransaction = currentDesktopAuthTransaction(),
+): Promise<boolean> {
+  const authority = replaceDesktopAuthSessionAuthority(transaction);
+  if (!authority) {
+    return false;
+  }
+  return applyAnonymousStateForAuthority(deps, authority, options);
 }
 
 export async function applyAuthenticatedState(
   deps: AuthOrchestrationDeps,
   session: StoredAuthSession,
-): Promise<void> {
-  await applyPersistedAuthenticatedAuthState({ session }, {
-    setStoredAuthSession,
-    setAuthState: deps.setAuthState,
-  });
+  transaction?: DesktopAuthTransaction,
+): Promise<boolean> {
+  const authority = replaceDesktopAuthSessionAuthority(
+    transaction ?? currentDesktopAuthTransaction(),
+  );
+  if (!authority) {
+    return false;
+  }
+
+  return applyAuthenticatedStateForAuthority(deps, session, authority);
 }
 
 export function applyAnonymousClientState(deps: AuthOrchestrationDeps): void {
   deps.setAuthState(anonymousAuthState());
 }
 
-export function reportBackgroundAuthError(
-  message: string,
-  deps: AuthOrchestrationDeps,
-): void {
-  deps.showToast(message);
-  if (deps.getAuthState().status !== "authenticated") {
-    deps.setAuthState(authErrorStatePatch(message));
-  }
-  captureTelemetryException(new Error(message), {
-    level: "warning",
-    tags: {
-      action: "background_callback",
-      domain: "auth",
-      provider: "github",
-    },
-  });
-}
-
-export function handleDesktopNavigationUrl(
-  url: string,
-  deps: AuthOrchestrationDeps,
-): boolean {
-  const target = desktopNavigationTarget(url);
-  if (!target) {
-    return false;
-  }
-
-  deps.navigateDesktopRoute(target);
-  return true;
-}
-
 export async function clearPendingGitHubAuth(
   state?: string,
   error?: Error,
-): Promise<void> {
-  await clearStoredPendingAuthSession();
-  cancelGitHubSignIn(state, error);
+  transaction: DesktopAuthTransaction = currentDesktopAuthTransaction(),
+): Promise<boolean> {
+  if (state && !claimDesktopAuthPendingState(transaction, state)) {
+    return false;
+  }
+
+  const cleared = await withDesktopAuthPendingMutation(
+    transaction,
+    async () => {
+      if (state) {
+        const stored = await getStoredPendingAuthSession();
+        if (stored && stored.state !== state) {
+          return false;
+        }
+      }
+      await clearStoredPendingAuthSession();
+      cancelGitHubSignIn(state, error);
+      if (state) {
+        releaseDesktopAuthPendingState(transaction, state);
+      }
+      return true;
+    },
+  );
+  return cleared === true;
 }
 
 export async function markPendingCallbackUrl(
   pending: StoredPendingAuthSession,
   url: string,
-): Promise<void> {
-  await setStoredPendingAuthSession({
-    ...pending,
-    last_handled_callback_url: url,
-  });
-}
+  transaction: DesktopAuthTransaction = currentDesktopAuthTransaction(),
+): Promise<boolean> {
+  if (!claimDesktopAuthPendingState(transaction, pending.state)) {
+    return false;
+  }
 
-export async function restorePendingCallbackMarker(
-  pending: StoredPendingAuthSession,
-): Promise<void> {
-  await setStoredPendingAuthSession({
-    ...pending,
-    last_handled_callback_url: pending.last_handled_callback_url,
-  });
+  const marked = await withDesktopAuthPendingMutation(
+    transaction,
+    async () => {
+      const stored = await getStoredPendingAuthSession();
+      if (!stored || stored.state !== pending.state) {
+        return false;
+      }
+      await setStoredPendingAuthSession({
+        ...stored,
+        last_handled_callback_url: url,
+      });
+      return true;
+    },
+  );
+  return marked === true;
 }
 
 export { markTelemetryHandled };

@@ -119,7 +119,9 @@ export function useAcceptOrganizationInviteMutation() {
     Error,
     OrganizationInvitationAcceptRequest
   >({
-    mutationFn: acceptOrganizationInvitation,
+    // Keep React Query's mutation context out of the SDK's optional explicit
+    // client slot. This hook continues to use the configured SDK client.
+    mutationFn: (input) => acceptOrganizationInvitation(input),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: organizationsListKey() }),

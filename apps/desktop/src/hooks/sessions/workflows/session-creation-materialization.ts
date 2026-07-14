@@ -1,4 +1,5 @@
 import type { Session } from "@anyharness/sdk";
+import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
 import type {
   DesktopRuntimeBridge,
   DesktopSshBridge,
@@ -65,6 +66,7 @@ interface MaterializeSessionCreationInput {
   existingProjectedRecord: SessionRuntimeRecord | null;
   frozenDefaultLiveSessionControlValuesByAgentKind: Record<string, Record<string, string>>;
   localRuntime: DesktopRuntimeBridge | null;
+  cloudClient?: ProliferateCloudClient | null;
   ssh?: DesktopSshBridge | null;
   options: CreateSessionWithResolvedConfigOptions;
   pendingSessionId: string;
@@ -105,8 +107,7 @@ async function runSessionCreationMaterialization({
   ensureCloudAgentCatalog,
   existingProjectedRecord,
   frozenDefaultLiveSessionControlValuesByAgentKind,
-  localRuntime,
-  ssh,
+  localRuntime, cloudClient = null, ssh,
   options,
   pendingSessionId,
   resolvedModeId,
@@ -130,7 +131,7 @@ async function runSessionCreationMaterialization({
   });
 
   const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(workspaceId);
-  const target = await resolveRuntimeTargetForWorkspace(runtimeUrl, workspaceId, ssh ?? null);
+  const target = await resolveRuntimeTargetForWorkspace(runtimeUrl, workspaceId, ssh ?? null, cloudClient);
   logLatency("session.create.materialize.target_resolved", {
     clientSessionId: pendingSessionId,
     workspaceId,

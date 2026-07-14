@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
 import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import type {
@@ -45,7 +46,9 @@ export function usePlanHandoffWorkflow({
   plan: PromptPlanAttachmentDescriptor;
   onCompleted: () => void;
 }) {
-  const ssh = useProductHost().desktop?.ssh ?? null;
+  const host = useProductHost();
+  const ssh = host.desktop?.ssh ?? null;
+  const cloudClient = host.cloud.client;
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const connectionState = useHarnessConnectionStore((state) => state.connectionState);
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
@@ -157,6 +160,7 @@ export function usePlanHandoffWorkflow({
             currentCollaborationModeForSession(sessionId),
             setSessionConfigOptionMutation.mutateAsync,
             ssh,
+            cloudClient,
           ),
         promptSession,
         dismissSession,
@@ -175,6 +179,7 @@ export function usePlanHandoffWorkflow({
     }
   }, [
     createEmptySessionWithResolvedConfig,
+    cloudClient,
     dismissSession,
     effectiveSelection,
     onCompleted,
@@ -185,6 +190,7 @@ export function usePlanHandoffWorkflow({
     selectedWorkspaceId,
     setSessionConfigOptionMutation,
     showToast,
+    ssh,
   ]);
 
   return {
@@ -277,6 +283,7 @@ async function applyPlanHandoffPrePromptConfigChanges(
   collaborationMode: NormalizedSessionControl | null,
   setSessionConfigOption: ReturnType<typeof useSetSessionConfigOptionMutation>["mutateAsync"],
   ssh: DesktopSshBridge | null,
+  cloudClient: ProliferateCloudClient | null,
 ): Promise<void> {
   const changes = resolvePlanHandoffPrePromptConfigChanges(collaborationMode);
   if (changes.length === 0) {
@@ -286,6 +293,7 @@ async function applyPlanHandoffPrePromptConfigChanges(
   const { materializedSessionId, workspaceId } = await getSessionClientAndWorkspace(
     sessionId,
     ssh,
+    cloudClient,
   );
   for (const change of changes) {
     const response = await setSessionConfigOption({

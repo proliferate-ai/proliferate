@@ -41,7 +41,10 @@ vi.mock("@anyharness/sdk-react", () => ({
 }));
 
 vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
-  useProductHost: () => ({ desktop: { runtime: mocks.localRuntime } }),
+  useProductHost: () => ({
+    auth: { state: { status: "anonymous", methods: [] } },
+    desktop: { runtime: mocks.localRuntime },
+  }),
 }));
 
 vi.mock("./runtime-ready", () => ({

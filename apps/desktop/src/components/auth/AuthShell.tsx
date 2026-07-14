@@ -1,7 +1,9 @@
 import { AuthScreenLayout } from "@/components/auth/AuthScreenLayout";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
 import { usePasswordSignIn } from "@/hooks/auth/workflows/use-password-sign-in";
 import { useSsoSignIn } from "@/hooks/auth/workflows/use-sso-sign-in";
+import { productAuthIssueMessage } from "@/lib/domain/auth/product-auth-issue-presentation";
 
 // Persistent owner of the pre-app experience. BootstrappedRoute keeps a single
 // <AuthShell> mounted across the bootstrapping -> anonymous transition, so the
@@ -15,6 +17,7 @@ interface AuthShellProps {
 }
 
 export function AuthShell({ mode, markComplete, onMarkResolved }: AuthShellProps) {
+  const { auth } = useProductHost();
   const {
     signIn,
     submitting,
@@ -42,6 +45,9 @@ export function AuthShell({ mode, markComplete, onMarkResolved }: AuthShellProps
   } = usePasswordSignIn();
   const busy = submitting || ssoSubmitting || passwordSubmitting;
   const handleCancelSignIn = ssoSubmitting ? cancelSsoSignIn : cancelSignIn;
+  const hostIssue = auth.state.status === "anonymous"
+    ? productAuthIssueMessage(auth.state.issue)
+    : null;
 
   return (
     <AuthScreenLayout
@@ -50,7 +56,7 @@ export function AuthShell({ mode, markComplete, onMarkResolved }: AuthShellProps
       onMarkResolved={onMarkResolved}
       submitting={submitting}
       busy={busy}
-      error={error ?? ssoError ?? passwordError}
+      error={error ?? ssoError ?? passwordError ?? hostIssue}
       githubSignInAvailable={signInAvailable}
       githubSignInChecking={signInChecking}
       githubSignInUnavailableDescription={signInUnavailableDescription}

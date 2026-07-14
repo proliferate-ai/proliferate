@@ -15,6 +15,7 @@ import type { MainScreenLayoutState } from "@/hooks/main/facade/use-main-screen-
 const productLinks = vi.hoisted(() => ({
   openExternal: vi.fn(async () => undefined),
 }));
+const productCloudClient = vi.hoisted(() => ({}));
 
 vi.mock("@anyharness/sdk-react", () => ({
   useRenameGitBranchMutation: () => ({
@@ -44,7 +45,10 @@ vi.mock("@/stores/toast/toast-store", () => ({
 }));
 
 vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
-  useProductHost: () => ({ links: productLinks }),
+  useProductHost: () => ({
+    links: productLinks,
+    cloud: { client: productCloudClient },
+  }),
 }));
 
 vi.mock("@proliferate/cloud-sdk/client/workspaces", () => ({

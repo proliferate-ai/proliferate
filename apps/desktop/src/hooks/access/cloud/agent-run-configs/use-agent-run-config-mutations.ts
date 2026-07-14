@@ -18,9 +18,12 @@ import {
   agentRunConfigKey,
   agentRunConfigsRootKey,
 } from "./query-keys";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { requireHostCloudClient } from "@/lib/access/cloud/host-client";
 
 export function useAgentRunConfigMutations() {
   const queryClient = useQueryClient();
+  const cloudClient = useProductHost().cloud.client;
 
   const invalidateAgentRunConfigs = useCallback(async (configId?: string) => {
     await queryClient.invalidateQueries({ queryKey: agentRunConfigsRootKey() });
@@ -34,7 +37,7 @@ export function useAgentRunConfigMutations() {
     Error,
     CreateCloudAgentRunConfigRequest
   >({
-    mutationFn: (body) => createAgentRunConfig(body),
+    mutationFn: (body) => createAgentRunConfig(body, requireHostCloudClient(cloudClient)),
     onSuccess: (config) => invalidateAgentRunConfigs(config.id),
   });
 
@@ -43,12 +46,14 @@ export function useAgentRunConfigMutations() {
     Error,
     { configId: string; body: UpdateCloudAgentRunConfigRequest }
   >({
-    mutationFn: ({ configId, body }) => updateAgentRunConfig(configId, body),
+    mutationFn: ({ configId, body }) =>
+      updateAgentRunConfig(configId, body, requireHostCloudClient(cloudClient)),
     onSuccess: (config) => invalidateAgentRunConfigs(config.id),
   });
 
   const deleteMutation = useMutation<void, Error, string>({
-    mutationFn: (configId) => deleteAgentRunConfig(configId),
+    mutationFn: (configId) =>
+      deleteAgentRunConfig(configId, requireHostCloudClient(cloudClient)),
     onSuccess: (_, configId) => invalidateAgentRunConfigs(configId),
   });
 
@@ -62,7 +67,12 @@ export function useAgentRunConfigMutations() {
     }
   >({
     mutationFn: ({ agentKind, body, options }) =>
-      setAgentRunConfigDefault(agentKind, body, options),
+      setAgentRunConfigDefault(
+        agentKind,
+        body,
+        options,
+        requireHostCloudClient(cloudClient),
+      ),
     onSuccess: () => invalidateAgentRunConfigs(),
   });
 

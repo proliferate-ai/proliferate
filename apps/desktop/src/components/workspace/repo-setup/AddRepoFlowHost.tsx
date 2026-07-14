@@ -44,7 +44,11 @@ export function AddRepoFlowHost() {
       section: "environments",
       source: "github_app_callback",
     }),
-    installationReturnTo: "proliferate://settings/environments?source=github_app_installation_callback",
+    installationReturnTo: host.links.buildReturnUrl({
+      kind: "settings",
+      section: "environments",
+      query: [["source", "github_app_installation_callback"]],
+    }),
     onOpenExternalUrl: host.links.openExternal,
     onEnvironmentAdded: (repoId) => {
       // Read before closeFlow — close() clears the completion callback.

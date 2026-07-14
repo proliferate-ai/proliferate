@@ -7,10 +7,12 @@ import {
   sendInput,
   sendResize,
   subscribeWithReplay,
-  TERMINAL_OUTPUT_GAP_MESSAGE,
-  type TerminalReplayEntry,
   type TerminalStreamIdentity,
 } from "@/lib/infra/terminals/terminal-stream-registry";
+import {
+  TERMINAL_OUTPUT_GAP_MESSAGE,
+  type TerminalReplayEntry,
+} from "@/lib/infra/terminals/terminal-replay-buffer";
 import { useTerminalStore } from "@/stores/terminal/terminal-store";
 
 interface UseTerminalViewportInput {
@@ -79,6 +81,7 @@ export function useTerminalViewport({
         existingIdentity?.workspaceId === identity.workspaceId
         && existingIdentity.terminalId === identity.terminalId
         && existingIdentity.runtimeIdentity === identity.runtimeIdentity
+        && existingIdentity.cloudAuthorityScopeKey === identity.cloudAuthorityScopeKey
         && unsubscribeReplayRef.current
       ) {
         return;

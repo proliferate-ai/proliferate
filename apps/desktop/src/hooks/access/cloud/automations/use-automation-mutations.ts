@@ -18,9 +18,12 @@ import {
   automationRunsKey,
   automationsRootKey,
 } from "./query-keys";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { requireHostCloudClient } from "@/lib/access/cloud/host-client";
 
 export function useAutomationMutations() {
   const queryClient = useQueryClient();
+  const cloudClient = useProductHost().cloud.client;
 
   const invalidateAutomation = useCallback(async (automationId?: string) => {
     await queryClient.invalidateQueries({ queryKey: automationsRootKey() });
@@ -34,7 +37,7 @@ export function useAutomationMutations() {
   }, [queryClient]);
 
   const createMutation = useMutation<AutomationResponse, Error, CreateAutomationRequest>({
-    mutationFn: (body) => createAutomation(body),
+    mutationFn: (body) => createAutomation(body, requireHostCloudClient(cloudClient)),
     onSuccess: (automation) => invalidateAutomation(automation.id),
   });
 
@@ -42,22 +45,26 @@ export function useAutomationMutations() {
     automationId: string;
     body: UpdateAutomationRequest;
   }>({
-    mutationFn: ({ automationId, body }) => updateAutomation(automationId, body),
+    mutationFn: ({ automationId, body }) =>
+      updateAutomation(automationId, body, requireHostCloudClient(cloudClient)),
     onSuccess: (automation) => invalidateAutomation(automation.id),
   });
 
   const pauseMutation = useMutation<AutomationResponse, Error, string>({
-    mutationFn: (automationId) => pauseAutomation(automationId),
+    mutationFn: (automationId) =>
+      pauseAutomation(automationId, requireHostCloudClient(cloudClient)),
     onSuccess: (automation) => invalidateAutomation(automation.id),
   });
 
   const resumeMutation = useMutation<AutomationResponse, Error, string>({
-    mutationFn: (automationId) => resumeAutomation(automationId),
+    mutationFn: (automationId) =>
+      resumeAutomation(automationId, requireHostCloudClient(cloudClient)),
     onSuccess: (automation) => invalidateAutomation(automation.id),
   });
 
   const runNowMutation = useMutation<AutomationRunResponse, Error, string>({
-    mutationFn: (automationId) => runAutomationNow(automationId),
+    mutationFn: (automationId) =>
+      runAutomationNow(automationId, requireHostCloudClient(cloudClient)),
     onSuccess: (_, automationId) => invalidateAutomation(automationId),
   });
 

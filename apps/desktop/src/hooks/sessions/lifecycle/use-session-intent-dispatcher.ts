@@ -37,7 +37,9 @@ import {
 let activeDispatcherOwner: symbol | null = null;
 
 export function useSessionIntentDispatcher(): void {
-  const ssh = useProductHost().desktop?.ssh ?? null;
+  const host = useProductHost();
+  const ssh = host.desktop?.ssh ?? null;
+  const cloudClient = host.cloud.client;
   const dispatchVersion = useSessionIntentStore((state) => state.dispatchVersion);
   const { rehydrateSessionSlotFromHistory } = useSessionHistoryHydration();
   const { applySessionSummary } = useSessionSummaryActions();
@@ -73,6 +75,7 @@ export function useSessionIntentDispatcher(): void {
       case "send_prompt":
         await dispatchPromptIntent(intent, {
           applySessionSummary,
+          cloudClient,
           maybeGenerateSessionTitle,
           maybeGenerateWorkspaceName,
           promptSessionMutation,
@@ -84,23 +87,25 @@ export function useSessionIntentDispatcher(): void {
       case "update_config":
         await dispatchConfigIntent(intent, {
           getWorkspaceSurface,
+          cloudClient,
           setSessionConfigOptionMutation,
           ssh,
           upsertWorkspaceSessionRecord,
         });
         break;
       case "resolve_interaction":
-        await dispatchInteractionIntent(intent, { resolveInteractionMutation, ssh });
+        await dispatchInteractionIntent(intent, { cloudClient, resolveInteractionMutation, ssh });
         break;
       case "edit_pending_prompt":
-        await dispatchEditPendingPromptIntent(intent, { editPendingPromptMutation, ssh });
+        await dispatchEditPendingPromptIntent(intent, { cloudClient, editPendingPromptMutation, ssh });
         break;
       case "delete_pending_prompt":
-        await dispatchDeletePendingPromptIntent(intent, { deletePendingPromptMutation, ssh });
+        await dispatchDeletePendingPromptIntent(intent, { cloudClient, deletePendingPromptMutation, ssh });
         break;
     }
   }, [
     applySessionSummary,
+    cloudClient,
     deletePendingPromptMutation,
     editPendingPromptMutation,
     getWorkspaceSurface,

@@ -1,4 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import type {
   CloudWorkspaceDetail,
 } from "@/lib/access/cloud/client";
@@ -23,6 +24,7 @@ import {
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
 import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
+import { requireHostCloudClient } from "@/lib/access/cloud/host-client";
 
 interface DeleteCloudWorkspaceContext {
   viewedSessionErrorIdsToClear: string[];
@@ -37,6 +39,7 @@ function resolveCloudWorkspaceRuntimeId(workspaceId: string): string {
 }
 
 export function useCloudWorkspaceActions() {
+  const cloudClient = useProductHost().cloud.client;
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const { clearWorkspaceRuntimeState } = useWorkspaceSelection();
   const invalidateCloudBillingState = useInvalidateCloudBillingState();
@@ -57,7 +60,10 @@ export function useCloudWorkspaceActions() {
       const cloudWorkspaceId = workspaceId.startsWith("cloud:")
         ? workspaceId.slice("cloud:".length)
         : workspaceId;
-      const workspace = await getCloudWorkspace(cloudWorkspaceId);
+      const workspace = await getCloudWorkspace(
+        cloudWorkspaceId,
+        requireHostCloudClient(cloudClient),
+      );
       if (!workspace) throw new Error("Cloud workspace not found.");
       return workspace;
     },
@@ -83,7 +89,7 @@ export function useCloudWorkspaceActions() {
       const cloudWorkspaceId = workspaceId.startsWith("cloud:")
         ? workspaceId.slice("cloud:".length)
         : workspaceId;
-      await deleteCloudWorkspace(cloudWorkspaceId);
+      await deleteCloudWorkspace(cloudWorkspaceId, requireHostCloudClient(cloudClient));
       await clearCachedCloudWorkspaceConnections(cloudWorkspaceId);
     },
     onSuccess: async (_, workspaceId, context) => {
@@ -118,7 +124,10 @@ export function useCloudWorkspaceActions() {
       const cloudWorkspaceId = workspaceId.startsWith("cloud:")
         ? workspaceId.slice("cloud:".length)
         : workspaceId;
-      const workspace = await archiveCloudWorkspace(cloudWorkspaceId);
+      const workspace = await archiveCloudWorkspace(
+        cloudWorkspaceId,
+        requireHostCloudClient(cloudClient),
+      );
       await clearCachedCloudWorkspaceConnections(cloudWorkspaceId);
       return workspace;
     },
@@ -146,7 +155,7 @@ export function useCloudWorkspaceActions() {
       const cloudWorkspaceId = workspaceId.startsWith("cloud:")
         ? workspaceId.slice("cloud:".length)
         : workspaceId;
-      return restoreCloudWorkspace(cloudWorkspaceId);
+      return restoreCloudWorkspace(cloudWorkspaceId, requireHostCloudClient(cloudClient));
     },
     onSuccess: async (workspace) => {
       upsertCloudWorkspace(workspace);

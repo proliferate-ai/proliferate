@@ -7,42 +7,23 @@ import {
 } from "@anyharness/sdk";
 import { terminalStreamKey } from "./terminal-stream-key";
 import { resetTerminalCloseIntentForTests } from "./terminal-close-intent";
-
-const MAX_REPLAY_DATA_BYTES = 256 * 1024;
-const MAX_REPLAY_ENTRIES = 1000;
-export const TERMINAL_OUTPUT_GAP_MESSAGE = "[terminal output gap: earlier output was discarded]";
+import {
+  appendDataEntry,
+  appendExitEntry,
+  appendRuntimeGapEntry,
+  type TerminalReplayBuffer,
+  type TerminalReplayEntry,
+} from "./terminal-replay-buffer";
 
 export interface TerminalStreamIdentity {
   workspaceId: string;
   terminalId: string;
   runtimeIdentity: string;
+  /** Credential-free authority that owns a cloud terminal stream. */
+  cloudAuthorityScopeKey?: string;
 }
 
-export type TerminalReplayEntry =
-  | {
-      type: "data";
-      order: number;
-      seq: number;
-      data: Uint8Array;
-    }
-  | {
-      type: "runtime-gap";
-      order: number;
-      requestedAfterSeq: number;
-      floorSeq: number;
-    }
-  | {
-      type: "local-overflow";
-      order: number;
-    }
-  | {
-      type: "exit";
-      order: number;
-      afterSeq: number;
-      code: number | null;
-    };
-
-interface TerminalRegistryEntry {
+interface TerminalRegistryEntry extends TerminalReplayBuffer {
   identity: TerminalStreamIdentity;
   handle: TerminalStreamHandle | null;
   lastDataSeq: number;
@@ -152,7 +133,30 @@ export function adoptTerminalStreamIdentity(identity: TerminalStreamIdentity): v
     if (
       entry.identity.workspaceId === identity.workspaceId
       && entry.identity.terminalId === identity.terminalId
-      && entry.identity.runtimeIdentity !== identity.runtimeIdentity
+      && (
+        entry.identity.runtimeIdentity !== identity.runtimeIdentity
+        || normalizeCloudAuthorityScopeKey(entry.identity)
+          !== normalizeCloudAuthorityScopeKey(identity)
+      )
+    ) {
+      closeAndDeleteEntry(key, entry);
+    }
+  }
+}
+
+/**
+ * Retire cloud terminal handles that belong to a superseded ProductHost
+ * authority. Local and direct-target handles have no cloud authority scope and
+ * deliberately survive cloud login or deployment changes.
+ */
+export function retireCloudTerminalStreamsOutsideAuthority(
+  cloudAuthorityScopeKey: string,
+): void {
+  for (const [key, entry] of registry.entries()) {
+    const entryAuthorityScopeKey = normalizeCloudAuthorityScopeKey(entry.identity);
+    if (
+      entryAuthorityScopeKey !== null
+      && entryAuthorityScopeKey !== cloudAuthorityScopeKey
     ) {
       closeAndDeleteEntry(key, entry);
     }
@@ -191,12 +195,7 @@ export function markExited(identity: TerminalStreamIdentity, code: number | null
   }
   entry.exited = true;
   entry.exitCode = code;
-  appendReplayEntry(entry, {
-    type: "exit",
-    order: nextOrder(entry),
-    afterSeq: entry.lastDataSeq,
-    code,
-  });
+  appendExitEntry(entry, code);
 }
 
 export function clearTerminal(input: {
@@ -261,114 +260,6 @@ function getOrCreateEntry(identity: TerminalStreamIdentity): TerminalRegistryEnt
   return entry;
 }
 
-function appendDataEntry(
-  entry: TerminalRegistryEntry,
-  data: Uint8Array,
-  frame: TerminalDataFrame,
-): boolean {
-  if (frame.seq <= entry.lastDataSeq) {
-    return false;
-  }
-  entry.lastDataSeq = frame.seq;
-  appendReplayEntry(entry, {
-    type: "data",
-    order: nextOrder(entry),
-    seq: frame.seq,
-    data,
-  });
-  return true;
-}
-
-function appendRuntimeGapEntry(
-  entry: TerminalRegistryEntry,
-  frame: TerminalReplayGapFrame,
-): void {
-  const replayEntry: TerminalReplayEntry = {
-    type: "runtime-gap",
-    order: nextOrder(entry),
-    requestedAfterSeq: frame.requestedAfterSeq,
-    floorSeq: frame.floorSeq,
-  };
-  const insertIndex = entry.replayEntries.findIndex((candidate) =>
-    candidate.type === "data" && candidate.seq > frame.floorSeq
-  );
-  if (insertIndex >= 0) {
-    entry.replayEntries.splice(insertIndex, 0, replayEntry);
-  } else {
-    entry.replayEntries.push(replayEntry);
-  }
-  trimReplayEntries(entry);
-  emitReplayEntry(entry, replayEntry);
-}
-
-function appendReplayEntry(
-  entry: TerminalRegistryEntry,
-  replayEntry: TerminalReplayEntry,
-): void {
-  entry.replayEntries.push(replayEntry);
-  if (replayEntry.type === "data") {
-    entry.replayDataBytes += replayEntry.data.byteLength;
-  }
-  trimReplayEntries(entry);
-  emitReplayEntry(entry, replayEntry);
-}
-
-function trimReplayEntries(entry: TerminalRegistryEntry): void {
-  let lostEntries = false;
-  while (
-    entry.replayEntries.length > MAX_REPLAY_ENTRIES
-    || entry.replayDataBytes > MAX_REPLAY_DATA_BYTES
-  ) {
-    const removed = removeOldestReplayEntry(entry);
-    if (!removed) {
-      break;
-    }
-    lostEntries = true;
-    if (removed.type === "data") {
-      entry.replayDataBytes -= removed.data.byteLength;
-    }
-  }
-
-  if (!lostEntries || entry.overflowMarkedSinceReplay) {
-    return;
-  }
-
-  while (entry.replayEntries.length >= MAX_REPLAY_ENTRIES) {
-    const removed = removeOldestReplayEntry(entry);
-    if (removed?.type === "data") {
-      entry.replayDataBytes -= removed.data.byteLength;
-    }
-  }
-
-  entry.replayEntries.unshift({
-    type: "local-overflow",
-    order: nextOrder(entry),
-  });
-  entry.overflowMarkedSinceReplay = true;
-}
-
-function removeOldestReplayEntry(
-  entry: TerminalRegistryEntry,
-): TerminalReplayEntry | undefined {
-  const removalIndex =
-    entry.overflowMarkedSinceReplay
-    && entry.replayEntries[0]?.type === "local-overflow"
-    && entry.replayEntries.length > 1
-      ? 1
-      : 0;
-  const [removed] = entry.replayEntries.splice(removalIndex, 1);
-  return removed;
-}
-
-function emitReplayEntry(
-  entry: TerminalRegistryEntry,
-  replayEntry: TerminalReplayEntry,
-): void {
-  for (const listener of entry.listeners) {
-    listener(replayEntry);
-  }
-}
-
 function forgetHandle(identity: TerminalStreamIdentity): void {
   const entry = registry.get(terminalStreamKey(identity));
   if (entry) {
@@ -389,7 +280,8 @@ function closeAndDeleteEntry(key: string, entry: TerminalRegistryEntry): void {
   registry.delete(key);
 }
 
-function nextOrder(entry: TerminalRegistryEntry): number {
-  entry.nextOrder += 1;
-  return entry.nextOrder;
+function normalizeCloudAuthorityScopeKey(
+  identity: TerminalStreamIdentity,
+): string | null {
+  return identity.cloudAuthorityScopeKey ?? null;
 }

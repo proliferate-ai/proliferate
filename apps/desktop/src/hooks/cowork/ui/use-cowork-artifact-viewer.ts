@@ -1,7 +1,10 @@
 import type { CoworkArtifactDetailResponse } from "@anyharness/sdk";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { buildProliferateApiUrl, getProliferateApiOrigin } from "@/lib/infra/proliferate-api";
+import {
+  buildProliferateApiUrl,
+  getProliferateApiOrigin,
+} from "@/lib/infra/proliferate-api";
 import {
   buildCoworkRuntimeContentMessage,
   isCoworkRuntimeMessage,
@@ -13,15 +16,22 @@ export function useCoworkArtifactViewer(
   enabled: boolean,
 ) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  const { openExternal } = useProductHost().links;
+  const host = useProductHost();
+  const { openExternal } = host.links;
   const [ready, setReady] = useState(false);
   const [runtimeError, setRuntimeError] = useState<CoworkRuntimeMessage | null>(null);
   const runtimeUrl = useMemo(() => {
-    const url = new URL(buildProliferateApiUrl("/artifact-runtime/"));
+    const url = new URL(buildProliferateApiUrl(
+      "/artifact-runtime/",
+      host.deployment.apiBaseUrl,
+    ));
     url.searchParams.set("parentOrigin", window.location.origin);
     return url.toString();
-  }, []);
-  const runtimeOrigin = useMemo(() => getProliferateApiOrigin(), []);
+  }, [host.deployment.apiBaseUrl]);
+  const runtimeOrigin = useMemo(
+    () => getProliferateApiOrigin(host.deployment.apiBaseUrl),
+    [host.deployment.apiBaseUrl],
+  );
   const contentMessage = useMemo(
     () => (detail ? buildCoworkRuntimeContentMessage(detail) : null),
     [detail],

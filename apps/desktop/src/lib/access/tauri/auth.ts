@@ -13,13 +13,23 @@ export interface StoredAuthSession {
   avatar_url?: string | null
 }
 
+export type StoredPendingAuthProvider = "github" | "google" | "apple" | "sso"
+export type StoredPendingAuthPurpose = "login" | "link" | "required_github_link"
+
 export interface StoredPendingAuthSession {
+  provider: StoredPendingAuthProvider | null
+  purpose: StoredPendingAuthPurpose | null
   state: string
   code_verifier: string
   redirect_uri: string
   created_at: string
   last_handled_callback_url: string | null
 }
+
+type SerializedPendingAuthSession = Omit<
+  StoredPendingAuthSession,
+  "provider" | "purpose"
+> & Partial<Pick<StoredPendingAuthSession, "provider" | "purpose">>
 
 const BROWSER_AUTH_SESSION_KEY = "proliferate.auth.session"
 const BROWSER_PENDING_AUTH_KEY = "proliferate.auth.pending"
@@ -78,9 +88,19 @@ function readBrowserPendingAuth(): StoredPendingAuthSession | null {
   try {
     const raw = window.localStorage.getItem(BROWSER_PENDING_AUTH_KEY)
     if (!raw) return null
-    return JSON.parse(raw) as StoredPendingAuthSession
+    return normalizePendingAuthSession(JSON.parse(raw) as SerializedPendingAuthSession)
   } catch {
     return null
+  }
+}
+
+function normalizePendingAuthSession(
+  record: SerializedPendingAuthSession,
+): StoredPendingAuthSession {
+  return {
+    ...record,
+    provider: record.provider ?? null,
+    purpose: record.purpose ?? null,
   }
 }
 
@@ -131,7 +151,8 @@ export async function clearStoredAuthSession(): Promise<void> {
 
 export async function getStoredPendingAuthSession(): Promise<StoredPendingAuthSession | null> {
   try {
-    return await invoke<StoredPendingAuthSession | null>("get_pending_auth")
+    const record = await invoke<SerializedPendingAuthSession | null>("get_pending_auth")
+    return record ? normalizePendingAuthSession(record) : null
   } catch (error) {
     reportKeychainFailure("get_pending_auth", error)
     return readBrowserPendingAuth()

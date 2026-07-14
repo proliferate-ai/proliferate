@@ -1,5 +1,5 @@
 import type { TerminalRecord } from "@anyharness/sdk";
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { useTerminalCache } from "@/hooks/access/anyharness/terminals/use-terminal-cache";
 import { useTerminalWorkspaceConnection } from "@/hooks/terminals/workflows/use-terminal-workspace-connection";
 import {
@@ -12,6 +12,7 @@ import {
 } from "@/lib/infra/terminals/terminal-stream-registry";
 import { isTerminalIntentionalClose } from "@/lib/infra/terminals/terminal-close-intent";
 import { createTerminalRuntimeIdentity } from "@/lib/infra/terminals/terminal-stream-key";
+import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useTerminalStore } from "@/stores/terminal/terminal-store";
 
@@ -19,10 +20,13 @@ import { useTerminalStore } from "@/stores/terminal/terminal-store";
 export function useTerminalStreamController() {
   const { invalidateWorkspaceTerminals } = useTerminalCache();
   const {
+    cloudAuthorityScopeKey,
     getWorkspaceRuntimeBlockReason,
     resolveTerminalWorkspaceConnection,
     triggerSelectedCloudReconnect,
   } = useTerminalWorkspaceConnection();
+  const cloudAuthorityScopeKeyRef = useRef(cloudAuthorityScopeKey);
+  cloudAuthorityScopeKeyRef.current = cloudAuthorityScopeKey;
   const markUnread = useTerminalStore((state) => state.markUnread);
   const bumpConnectionVersion = useTerminalStore((state) => state.bumpConnectionVersion);
 
@@ -32,6 +36,7 @@ export function useTerminalStreamController() {
     workspaceConnection?: Awaited<ReturnType<typeof resolveTerminalWorkspaceConnection>>,
     options?: { readOnlyReplay?: boolean },
   ): Promise<TerminalStreamIdentity | null> => {
+    const authorityAtStart = cloudAuthorityScopeKey;
     if (isTerminalIntentionalClose(terminalId)) {
       return null;
     }
@@ -42,6 +47,12 @@ export function useTerminalStreamController() {
 
     const resolvedConnection =
       workspaceConnection ?? await resolveTerminalWorkspaceConnection(workspaceId);
+    if (
+      parseCloudWorkspaceSyntheticId(workspaceId)
+      && cloudAuthorityScopeKeyRef.current !== authorityAtStart
+    ) {
+      return null;
+    }
     const identity: TerminalStreamIdentity = {
       workspaceId,
       terminalId,
@@ -50,6 +61,9 @@ export function useTerminalStreamController() {
         anyharnessWorkspaceId: resolvedConnection.anyharnessWorkspaceId,
         runtimeGeneration: resolvedConnection.runtimeGeneration,
       }),
+      ...(parseCloudWorkspaceSyntheticId(workspaceId)
+        ? { cloudAuthorityScopeKey }
+        : {}),
     };
     let sawExitEvent = false;
     const didConnect = ensureConnected({
@@ -103,6 +117,7 @@ export function useTerminalStreamController() {
     invalidateWorkspaceTerminals,
     markUnread,
     resolveTerminalWorkspaceConnection,
+    cloudAuthorityScopeKey,
     triggerSelectedCloudReconnect,
   ]);
 
@@ -111,6 +126,7 @@ export function useTerminalStreamController() {
     workspaceId: string,
     status: TerminalRecord["status"],
   ): Promise<TerminalStreamIdentity | null> => {
+    const authorityAtStart = cloudAuthorityScopeKey;
     if (isTerminalIntentionalClose(terminalId)) {
       return null;
     }
@@ -118,6 +134,12 @@ export function useTerminalStreamController() {
       return null;
     }
     const connection = await resolveTerminalWorkspaceConnection(workspaceId);
+    if (
+      parseCloudWorkspaceSyntheticId(workspaceId)
+      && cloudAuthorityScopeKeyRef.current !== authorityAtStart
+    ) {
+      return null;
+    }
     const identity: TerminalStreamIdentity = {
       workspaceId,
       terminalId,
@@ -126,6 +148,9 @@ export function useTerminalStreamController() {
         anyharnessWorkspaceId: connection.anyharnessWorkspaceId,
         runtimeGeneration: connection.runtimeGeneration,
       }),
+      ...(parseCloudWorkspaceSyntheticId(workspaceId)
+        ? { cloudAuthorityScopeKey }
+        : {}),
     };
     adoptTerminalStreamIdentity(identity);
     if (status === "exited" || status === "failed") {
@@ -143,6 +168,7 @@ export function useTerminalStreamController() {
     return attachTerminalStream(terminalId, workspaceId, connection);
   }, [
     attachTerminalStream,
+    cloudAuthorityScopeKey,
     getWorkspaceRuntimeBlockReason,
     resolveTerminalWorkspaceConnection,
   ]);

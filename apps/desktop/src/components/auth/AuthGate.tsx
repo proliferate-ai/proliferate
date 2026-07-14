@@ -1,39 +1,44 @@
 import { useCallback, useEffect, useState } from "react"
 import { Navigate, Outlet } from "react-router-dom"
+import type { AuthState } from "@proliferate/product-client/host/product-host"
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider"
 import { twMerge } from "@proliferate/ui/utils/tw-merge"
 import { AuthShell } from "@/components/auth/AuthShell"
-import { isProductAuthRequired } from "@/lib/domain/auth/auth-mode"
-import { useAuthStore } from "@/stores/auth/auth-store"
+import { RequiredGitHubLinkScreen } from "@/components/auth/RequiredGitHubLinkScreen"
 
 // Where the gate resolves to once auth state is known:
 //   loading -> still bootstrapping (mark breathing)
 //   app     -> reveal the workspace (authenticated, or auth not required)
 //   login   -> stay on the sign-in screen (anonymous + auth required)
-type GateDestination = "loading" | "app" | "login"
+type GateDestination = "loading" | "app" | "login" | "connect_github"
 
 // Tracks the mark-settle -> fade-out lifecycle for the app reveal only.
 type ShellFadeState = "checking" | "resolving" | "fading" | null
 
 function resolveDestination(
-  status: ReturnType<typeof useAuthStore.getState>["status"],
+  state: AuthState,
   authRequired: boolean,
 ): GateDestination {
-  if (status === "bootstrapping") {
+  if (state.status === "loading") {
     return "loading"
   }
-  if (status === "authenticated" || !authRequired) {
+  if (state.status === "authenticated") {
+    return state.readiness.status === "action_required"
+      ? "connect_github"
+      : "app"
+  }
+  if (!authRequired) {
     return "app"
   }
   return "login"
 }
 
 export function BootstrappedRoute() {
-  const status = useAuthStore((state) => state.status)
-  const authRequired = isProductAuthRequired()
-  const destination = resolveDestination(status, authRequired)
+  const { auth } = useProductHost()
+  const destination = resolveDestination(auth.state, auth.authRequired)
 
   const [fadeState, setFadeState] = useState<ShellFadeState>(
-    status === "bootstrapping" ? "checking" : null,
+    auth.state.status === "loading" ? "checking" : null,
   )
   // The living mark settled to its resolved icon at least once. Tracked as state
   // (not derived from the mark callback alone) because the SAME persistent mark
@@ -43,13 +48,16 @@ export function BootstrappedRoute() {
   const [markResolved, setMarkResolved] = useState(false)
 
   useEffect(() => {
-    if (status === "bootstrapping") {
+    if (auth.state.status === "loading") {
       setFadeState("checking")
       setMarkResolved(false)
       return
     }
+    if (destination === "connect_github") {
+      setMarkResolved(true)
+    }
     setFadeState((current) => (current === "checking" ? "resolving" : current))
-  }, [status])
+  }, [auth.state.status, destination])
 
   const handleResolved = useCallback(() => setMarkResolved(true), [])
   const handleFadeComplete = useCallback(() => setFadeState(null), [])
@@ -100,20 +108,24 @@ export function BootstrappedRoute() {
         )}
         onTransitionEnd={isFadingOut ? handleFadeComplete : undefined}
       >
-        <AuthShell
-          mode={shellMode}
-          markComplete={markComplete}
-          onMarkResolved={handleResolved}
-        />
+        {destination === "connect_github" ? (
+          <RequiredGitHubLinkScreen />
+        ) : (
+          <AuthShell
+            mode={shellMode}
+            markComplete={markComplete}
+            onMarkResolved={handleResolved}
+          />
+        )}
       </div>
     </>
   )
 }
 
 export function PublicOnlyRoute() {
-  const status = useAuthStore((state) => state.status)
+  const { auth } = useProductHost()
 
-  if (status === "authenticated") {
+  if (auth.state.status === "authenticated") {
     return <Navigate to="/" replace />
   }
 

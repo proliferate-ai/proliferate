@@ -1,4 +1,5 @@
 import { enrollDesktopWorker } from "@proliferate/cloud-sdk";
+import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
 import type { DesktopWorkerBridge } from "@proliferate/product-client/host/desktop-bridge";
 import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
 
@@ -30,6 +31,7 @@ function enqueueWorkerLifecycleTask<T>(task: () => Promise<T>): Promise<T> {
 export function ensureDesktopWorker(
   organizationId: string | null,
   worker: DesktopWorkerBridge,
+  cloudClient: ProliferateCloudClient,
   deps: EnsureDesktopWorkerDeps,
 ): Promise<boolean> {
   return enqueueWorkerLifecycleTask(async () => {
@@ -38,6 +40,7 @@ export function ensureDesktopWorker(
       const { enrollmentToken } = await enrollDesktopWorker(
         desktopInstallId,
         organizationId,
+        cloudClient,
       );
       await worker.ensure({
         targetId: desktopInstallId,

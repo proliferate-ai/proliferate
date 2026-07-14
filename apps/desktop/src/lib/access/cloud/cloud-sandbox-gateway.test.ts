@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
 import {
   getDesktopCloudAccessToken,
-  getProliferateClient,
   isCloudAgentKind,
   type CloudWorkspaceDetail,
 } from "@/lib/access/cloud/client";
@@ -11,21 +11,19 @@ import {
 
 vi.mock("@/lib/access/cloud/client", () => ({
   getDesktopCloudAccessToken: vi.fn(),
-  getProliferateClient: vi.fn(),
   isCloudAgentKind: vi.fn(),
 }));
 
 const getProductToken = vi.mocked(getDesktopCloudAccessToken);
-const getClient = vi.mocked(getProliferateClient);
 const isKnownCloudAgent = vi.mocked(isCloudAgentKind);
+const cloudClient = {
+  buildUrl: (path: string) => `http://api.test${path}`,
+} as ProliferateCloudClient;
 
 describe("resolveCloudSandboxGatewayConnectionForWorkspace", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     getProductToken.mockResolvedValue("product-token");
-    getClient.mockReturnValue({
-      buildUrl: (path: string) => `http://api.test${path}`,
-    } as ReturnType<typeof getProliferateClient>);
     isKnownCloudAgent.mockImplementation((kind) => kind === "claude" || kind === "codex");
   });
 
@@ -45,7 +43,7 @@ describe("resolveCloudSandboxGatewayConnectionForWorkspace", () => {
       runtime: {
         generation: 7,
       },
-    } as unknown as CloudWorkspaceDetail);
+    } as unknown as CloudWorkspaceDetail, cloudClient);
 
     expect(connection).toMatchObject({
       runtimeUrl: "http://api.test/v1/gateway/cloud-sandbox/anyharness",

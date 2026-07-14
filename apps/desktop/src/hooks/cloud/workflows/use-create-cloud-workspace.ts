@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import type {
   CloudWorkspaceDetail,
   CreateCloudWorkspaceRequest,
@@ -29,7 +30,8 @@ import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { ensureRepoGroupExpanded } from "@/stores/preferences/workspace-ui-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import { productAuthUserToDesktopUser } from "@/lib/domain/auth/product-auth-user-mapping";
+import { requireHostCloudClient } from "@/lib/access/cloud/host-client";
 import { useWorkspaceCollectionsCache } from "@/hooks/workspaces/cache/use-workspace-collections-cache";
 import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
 import {
@@ -91,7 +93,12 @@ export function useCreateCloudWorkspace() {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const setPendingWorkspaceEntry = useSessionSelectionStore((state) => state.setPendingWorkspaceEntry);
   const branchPrefixType = useUserPreferencesStore((state) => state.branchPrefixType);
-  const authUser = useAuthStore((state) => state.user);
+  const productHost = useProductHost();
+  const authState = productHost.auth.state;
+  const cloudClient = productHost.cloud.client;
+  const authUser = productAuthUserToDesktopUser(
+    authState.status === "authenticated" ? authState.user : null,
+  );
   const { selectWorkspace } = useWorkspaceSelection();
   const { beginPendingWorkspace, failPendingEntry, finalizeSelection } = useWorkspaceEntryFlow();
   const invalidateCloudBillingState = useInvalidateCloudBillingState();
@@ -108,7 +115,7 @@ export function useCreateCloudWorkspace() {
       telemetryHandled: true,
     },
     mutationFn: async (input) => {
-      return createCloudWorkspace(input);
+      return createCloudWorkspace(input, undefined, requireHostCloudClient(cloudClient));
     },
     onSuccess: async (workspace) => {
       await clearCachedCloudWorkspaceConnections(workspace.id);

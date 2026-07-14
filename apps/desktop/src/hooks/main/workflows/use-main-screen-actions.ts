@@ -40,7 +40,9 @@ export function useMainScreenActions({
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const renameBranchMutation = useRenameGitBranchMutation({ workspaceId: selectedWorkspaceId });
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
-  const { openExternal } = useProductHost().links;
+  const productHost = useProductHost();
+  const { openExternal } = productHost.links;
+  const cloudClient = productHost.cloud.client;
   const showToast = useToastStore((state) => state.show);
   const {
     rightPanelOpen,
@@ -177,12 +179,14 @@ export function useMainScreenActions({
     }
     await renameBranchMutation.mutateAsync(newName);
     const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
-    if (cloudWorkspaceId) {
-      await updateCloudWorkspaceDisplayName(cloudWorkspaceId, newName).catch(() => undefined);
+    if (cloudWorkspaceId && cloudClient) {
+      await updateCloudWorkspaceDisplayName(cloudWorkspaceId, newName, undefined, cloudClient)
+        .catch(() => undefined);
     }
     await invalidateWorkspaceCollections();
   }, [
     invalidateWorkspaceCollections,
+    cloudClient,
     renameBranchMutation,
     getWorkspaceRuntimeBlockReason,
     selectedWorkspaceId,

@@ -147,8 +147,9 @@ export async function listAutomationRuns(
 
 export async function claimLocalAutomationRuns(
   body: LocalAutomationClaimRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<LocalAutomationClaimListResponse> {
-  return getProliferateClient().requestJson<LocalAutomationClaimListResponse>({
+  return client.requestJson<LocalAutomationClaimListResponse>({
     method: "POST",
     path: "/v1/automations/executor/local/claims",
     body,
@@ -158,8 +159,9 @@ export async function claimLocalAutomationRuns(
 export async function heartbeatLocalAutomationRun(
   runId: string,
   body: LocalAutomationClaimActionRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<LocalAutomationMutationResponse> {
-  return getProliferateClient().requestJson<LocalAutomationMutationResponse>({
+  return client.requestJson<LocalAutomationMutationResponse>({
     method: "POST",
     path: "/v1/automations/executor/local/runs/{run_id}/heartbeat",
     pathParams: { run_id: runId },
@@ -170,8 +172,9 @@ export async function heartbeatLocalAutomationRun(
 export async function markLocalAutomationRunCreatingWorkspace(
   runId: string,
   body: LocalAutomationClaimActionRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<LocalAutomationMutationResponse> {
-  return getProliferateClient().requestJson<LocalAutomationMutationResponse>({
+  return client.requestJson<LocalAutomationMutationResponse>({
     method: "POST",
     path: "/v1/automations/executor/local/runs/{run_id}/creating-workspace",
     pathParams: { run_id: runId },
@@ -182,8 +185,9 @@ export async function markLocalAutomationRunCreatingWorkspace(
 export async function attachLocalAutomationRunWorkspace(
   runId: string,
   body: LocalAutomationAttachWorkspaceRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<LocalAutomationMutationResponse> {
-  return getProliferateClient().requestJson<LocalAutomationMutationResponse>({
+  return client.requestJson<LocalAutomationMutationResponse>({
     method: "POST",
     path: "/v1/automations/executor/local/runs/{run_id}/attach-workspace",
     pathParams: { run_id: runId },
@@ -194,8 +198,9 @@ export async function attachLocalAutomationRunWorkspace(
 export async function markLocalAutomationRunProvisioningWorkspace(
   runId: string,
   body: LocalAutomationClaimActionRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<LocalAutomationMutationResponse> {
-  return getProliferateClient().requestJson<LocalAutomationMutationResponse>({
+  return client.requestJson<LocalAutomationMutationResponse>({
     method: "POST",
     path: "/v1/automations/executor/local/runs/{run_id}/provisioning-workspace",
     pathParams: { run_id: runId },
@@ -206,8 +211,9 @@ export async function markLocalAutomationRunProvisioningWorkspace(
 export async function markLocalAutomationRunCreatingSession(
   runId: string,
   body: LocalAutomationAttachWorkspaceRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<LocalAutomationMutationResponse> {
-  return getProliferateClient().requestJson<LocalAutomationMutationResponse>({
+  return client.requestJson<LocalAutomationMutationResponse>({
     method: "POST",
     path: "/v1/automations/executor/local/runs/{run_id}/creating-session",
     pathParams: { run_id: runId },
@@ -218,8 +224,9 @@ export async function markLocalAutomationRunCreatingSession(
 export async function attachLocalAutomationRunSession(
   runId: string,
   body: LocalAutomationAttachSessionRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<LocalAutomationMutationResponse> {
-  return getProliferateClient().requestJson<LocalAutomationMutationResponse>({
+  return client.requestJson<LocalAutomationMutationResponse>({
     method: "POST",
     path: "/v1/automations/executor/local/runs/{run_id}/attach-session",
     pathParams: { run_id: runId },
@@ -230,8 +237,9 @@ export async function attachLocalAutomationRunSession(
 export async function markLocalAutomationRunDispatching(
   runId: string,
   body: LocalAutomationClaimActionRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<LocalAutomationMutationResponse> {
-  return getProliferateClient().requestJson<LocalAutomationMutationResponse>({
+  return client.requestJson<LocalAutomationMutationResponse>({
     method: "POST",
     path: "/v1/automations/executor/local/runs/{run_id}/dispatching",
     pathParams: { run_id: runId },
@@ -242,8 +250,9 @@ export async function markLocalAutomationRunDispatching(
 export async function markLocalAutomationRunDispatched(
   runId: string,
   body: LocalAutomationAttachSessionRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<LocalAutomationMutationResponse> {
-  return getProliferateClient().requestJson<LocalAutomationMutationResponse>({
+  return client.requestJson<LocalAutomationMutationResponse>({
     method: "POST",
     path: "/v1/automations/executor/local/runs/{run_id}/dispatched",
     pathParams: { run_id: runId },
@@ -254,8 +263,9 @@ export async function markLocalAutomationRunDispatched(
 export async function markLocalAutomationRunFailed(
   runId: string,
   body: LocalAutomationFailRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<LocalAutomationMutationResponse> {
-  return getProliferateClient().requestJson<LocalAutomationMutationResponse>({
+  return client.requestJson<LocalAutomationMutationResponse>({
     method: "POST",
     path: "/v1/automations/executor/local/runs/{run_id}/failed",
     pathParams: { run_id: runId },

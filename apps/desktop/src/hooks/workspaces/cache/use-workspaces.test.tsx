@@ -40,6 +40,12 @@ vi.mock("@proliferate/cloud-sdk/client/workspaces", () => ({
   listCloudWorkspaces: mocks.listCloudWorkspaces,
 }));
 
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => ({
+    auth: { state: { status: "anonymous", methods: [] } },
+  }),
+}));
+
 describe("useWorkspaces", () => {
 
   beforeEach(() => {

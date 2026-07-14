@@ -13,6 +13,7 @@ import type {
   ListCloudAgentRunConfigsOptions,
 } from "@/lib/access/cloud/client";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   agentRunConfigDefaultsKey,
   agentRunConfigKey,
@@ -24,19 +25,21 @@ export function useAgentRunConfigs(
   enabled = true,
 ) {
   const { cloudActive } = useCloudAvailabilityState();
+  const cloudClient = useProductHost().cloud.client;
   return useQuery<CloudAgentRunConfigListResponse>({
     queryKey: agentRunConfigsListKey(options),
-    enabled: enabled && cloudActive,
-    queryFn: () => listAgentRunConfigs(options),
+    enabled: enabled && cloudActive && cloudClient !== null,
+    queryFn: () => listAgentRunConfigs(options, cloudClient!),
   });
 }
 
 export function useAgentRunConfig(configId: string | null, enabled = true) {
   const { cloudActive } = useCloudAvailabilityState();
+  const cloudClient = useProductHost().cloud.client;
   return useQuery<CloudAgentRunConfig>({
     queryKey: agentRunConfigKey(configId),
-    enabled: enabled && cloudActive && configId !== null,
-    queryFn: () => getAgentRunConfig(configId!),
+    enabled: enabled && cloudActive && configId !== null && cloudClient !== null,
+    queryFn: () => getAgentRunConfig(configId!, cloudClient!),
   });
 }
 
@@ -45,9 +48,10 @@ export function useAgentRunConfigDefaults(
   enabled = true,
 ) {
   const { cloudActive } = useCloudAvailabilityState();
+  const cloudClient = useProductHost().cloud.client;
   return useQuery<CloudAgentRunConfigDefaultsResponse>({
     queryKey: agentRunConfigDefaultsKey(options),
-    enabled: enabled && cloudActive,
-    queryFn: () => listAgentRunConfigDefaults(options),
+    enabled: enabled && cloudActive && cloudClient !== null,
+    queryFn: () => listAgentRunConfigDefaults(options, cloudClient!),
   });
 }

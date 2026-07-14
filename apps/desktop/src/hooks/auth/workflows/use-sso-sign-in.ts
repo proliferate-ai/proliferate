@@ -1,12 +1,16 @@
 import { useCallback, useState } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import type { LoginRequest } from "@proliferate/product-client/host/product-host";
 import { useSsoDiscovery } from "@/hooks/access/cloud/auth/use-sso-discovery";
 import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
-import { useAuthActions } from "@/hooks/auth/workflows/use-auth-actions";
-import { isAbortError } from "@/lib/integrations/auth/proliferate-auth";
-import type { DesktopSsoSignInOptions } from "@/lib/integrations/auth/proliferate-sso-auth";
+
+type SsoSignInOptions = Omit<
+  Extract<LoginRequest, { kind: "sso" }>,
+  "kind"
+>;
 
 export interface UseSsoSignInResult {
-  signIn: (options?: DesktopSsoSignInOptions) => Promise<void>;
+  signIn: (options?: SsoSignInOptions) => Promise<void>;
   submitting: boolean;
   error: string | null;
   signInAvailable: boolean;
@@ -20,7 +24,7 @@ export interface UseSsoSignInResult {
 // Owns SSO sign-in form state and submit callback. Discovery stays in the Cloud
 // access hook so the login surface can render only when deployment SSO is enabled.
 export function useSsoSignIn(): UseSsoSignInResult {
-  const { cancelAuthFlow, signInWithSso } = useAuthActions();
+  const { auth } = useProductHost();
   const { cloudEnabled } = useAppCapabilities();
   const {
     data: ssoDiscovery,
@@ -35,7 +39,7 @@ export function useSsoSignIn(): UseSsoSignInResult {
     ? "SSO is not configured for this environment."
     : "SSO is not available for this environment.";
 
-  const signIn = useCallback(async (options?: DesktopSsoSignInOptions) => {
+  const signIn = useCallback(async (options?: SsoSignInOptions) => {
     if (!signInAvailable) {
       setError(signInUnavailableDescription);
       return;
@@ -44,9 +48,10 @@ export function useSsoSignIn(): UseSsoSignInResult {
     setSubmitting(true);
     setError(null);
     try {
-      await signInWithSso({
-        organizationId: ssoDiscovery?.organizationId ?? null,
-        connectionId: ssoDiscovery?.connectionId ?? null,
+      await auth.startLogin({
+        kind: "sso",
+        organizationId: ssoDiscovery?.organizationId ?? undefined,
+        connectionId: ssoDiscovery?.connectionId ?? undefined,
         prompt: "select_account",
         ...options,
       });
@@ -63,7 +68,7 @@ export function useSsoSignIn(): UseSsoSignInResult {
   }, [
     signInAvailable,
     signInUnavailableDescription,
-    signInWithSso,
+    auth,
     ssoDiscovery?.connectionId,
     ssoDiscovery?.organizationId,
   ]);
@@ -75,8 +80,8 @@ export function useSsoSignIn(): UseSsoSignInResult {
   const cancelSignIn = useCallback(async () => {
     setSubmitting(false);
     setError(null);
-    await cancelAuthFlow("SSO sign-in cancelled.");
-  }, [cancelAuthFlow]);
+    await auth.cancelLogin();
+  }, [auth]);
 
   return {
     signIn,
@@ -89,4 +94,8 @@ export function useSsoSignIn(): UseSsoSignInResult {
     clearError,
     cancelSignIn,
   };
+}
+
+function isAbortError(error: unknown): error is Error {
+  return error instanceof Error && error.name === "AbortError";
 }

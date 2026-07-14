@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { usePutCloudWorktreeRetentionPolicy } from "@/hooks/access/cloud/use-cloud-worktree-retention-policy";
 import { useWorktreeAutoDeleteAdoption } from "@/hooks/preferences/workflows/use-worktree-auto-delete-adoption";
 import {
@@ -10,7 +11,6 @@ import {
   WORKTREE_AUTO_DELETE_LIMIT_MAX,
   WORKTREE_AUTO_DELETE_LIMIT_MIN,
 } from "@/lib/domain/preferences/user/worktree-auto-delete";
-import { useAuthStore } from "@/stores/auth/auth-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
 export interface WorktreeCleanupPolicyState {
@@ -41,7 +41,7 @@ export function useWorktreeCleanupPolicy(
   targets: WorktreeCleanupPolicySyncTargetState[],
   syncPolicyToTarget: SyncPolicyToTarget,
 ): WorktreeCleanupPolicyState {
-  const authStatus = useAuthStore((state) => state.status);
+  const authStatus = useProductHost().auth.state.status;
   const setPreference = useUserPreferencesStore((state) => state.set);
   const markWorktreeAutoDeleteLimitAdopted = useWorktreeAutoDeleteAdoption();
   const [draftValue, setDraftValue] = useState("");

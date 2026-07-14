@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -8,8 +8,7 @@ import { useAuthStore } from "@/stores/auth/auth-store";
 import { useOrganizationJoinInvitationFlow } from "./use-organization-join-invitation-flow";
 
 const authActionMocks = vi.hoisted(() => ({
-  signInWithGitHub: vi.fn<() => Promise<unknown>>(),
-  signInWithSso: vi.fn<(_options?: unknown) => Promise<unknown>>(),
+  startLogin: vi.fn<(_options?: unknown) => Promise<void>>(),
 }));
 
 const connectServerMocks = vi.hoisted(() => ({
@@ -19,20 +18,33 @@ const connectServerMocks = vi.hoisted(() => ({
 }));
 
 const apiMocks = vi.hoisted(() => ({
-  getRuntimeDesktopAppConfig: vi.fn<() => { apiBaseUrl: string | null }>(),
+  apiBaseUrl: "https://api.proliferate.com",
   isOfficialHostedApiBaseUrl: vi.fn<(_url: string) => boolean>(),
 }));
 
-const authMethodsMocks = vi.hoisted(() => ({
-  getDesktopAuthMethods: vi.fn<() => Promise<{ passwordLogin: boolean; github: boolean }>>(),
+const hostMocks = vi.hoisted(() => ({
+  methods: ["github"] as Array<"password" | "github" | "sso">,
 }));
 
-vi.mock("@/hooks/auth/workflows/use-auth-actions", () => ({
-  useAuthActions: () => ({
-    signInWithGitHub: authActionMocks.signInWithGitHub,
-    signInWithSso: authActionMocks.signInWithSso,
-  }),
-}));
+vi.mock("@proliferate/product-client/host/ProductHostProvider", async () => {
+  const { useAuthStore } = await import("@/stores/auth/auth-store");
+  return {
+    useProductHost: () => {
+      const status = useAuthStore((state) => state.status);
+      return {
+        auth: {
+          state: status === "bootstrapping"
+            ? { status: "loading" as const }
+            : status === "authenticated"
+              ? { status: "authenticated" as const, user: null, readiness: { status: "ready" as const } }
+              : { status: "anonymous" as const, methods: hostMocks.methods },
+          startLogin: authActionMocks.startLogin,
+        },
+        deployment: { apiBaseUrl: apiMocks.apiBaseUrl },
+      };
+    },
+  };
+});
 
 vi.mock("@/hooks/auth/workflows/use-connect-server", () => ({
   useConnectServer: () => ({
@@ -43,16 +55,33 @@ vi.mock("@/hooks/auth/workflows/use-connect-server", () => ({
 }));
 
 vi.mock("@/lib/infra/proliferate-api", () => ({
-  getRuntimeDesktopAppConfig: apiMocks.getRuntimeDesktopAppConfig,
   isOfficialHostedApiBaseUrl: apiMocks.isOfficialHostedApiBaseUrl,
-}));
-
-vi.mock("@/lib/integrations/auth/proliferate-auth-password", () => ({
-  getDesktopAuthMethods: authMethodsMocks.getDesktopAuthMethods,
 }));
 
 function clearTestStorage() {
   window.localStorage?.clear();
+}
+
+function installTestStorage() {
+  const values = new Map<string, string>();
+  const storage: Storage = {
+    get length() {
+      return values.size;
+    },
+    clear: () => values.clear(),
+    getItem: (key) => values.get(key) ?? null,
+    key: (index) => Array.from(values.keys())[index] ?? null,
+    removeItem: (key) => {
+      values.delete(key);
+    },
+    setItem: (key, value) => {
+      values.set(key, String(value));
+    },
+  };
+  Object.defineProperty(window, "localStorage", {
+    configurable: true,
+    value: storage,
+  });
 }
 
 function renderJoinInvitationFlow(initialEntry: string) {
@@ -64,27 +93,25 @@ function renderJoinInvitationFlow(initialEntry: string) {
 }
 
 const ORIGIN_LESS = "/settings?section=account&joinOrganizationId=org-1";
+const PENDING_JOIN_STORAGE_KEY = "proliferate.organizationJoinTarget";
 
 describe("useOrganizationJoinInvitationFlow", () => {
   beforeEach(() => {
+    installTestStorage();
     clearTestStorage();
-    authActionMocks.signInWithGitHub.mockReset();
-    authActionMocks.signInWithSso.mockReset();
-    authActionMocks.signInWithGitHub.mockResolvedValue({});
-    authActionMocks.signInWithSso.mockResolvedValue({});
+    authActionMocks.startLogin.mockReset();
+    authActionMocks.startLogin.mockResolvedValue(undefined);
     connectServerMocks.available = true;
     connectServerMocks.step = "closed";
     connectServerMocks.openForUrl.mockReset();
     connectServerMocks.openForUrl.mockResolvedValue(undefined);
     // Default: current server is Cloud (no configured base URL); GitHub is
     // advertised, so the SSO/GitHub launch path is exercised.
-    apiMocks.getRuntimeDesktopAppConfig.mockReset();
-    apiMocks.getRuntimeDesktopAppConfig.mockReturnValue({ apiBaseUrl: null });
+    apiMocks.apiBaseUrl = "https://api.proliferate.com";
     apiMocks.isOfficialHostedApiBaseUrl.mockReset();
     apiMocks.isOfficialHostedApiBaseUrl.mockImplementation((url: string) => url.includes("proliferate.com"));
-    authMethodsMocks.getDesktopAuthMethods.mockReset();
-    authMethodsMocks.getDesktopAuthMethods.mockResolvedValue({ passwordLogin: false, github: true });
-    useAuthStore.setState({ status: "anonymous", session: null, user: null, error: null });
+    hostMocks.methods = ["github"];
+    useAuthStore.setState({ status: "anonymous", session: null, user: null, error: null, issue: null });
   });
 
   afterEach(() => {
@@ -97,29 +124,30 @@ describe("useOrganizationJoinInvitationFlow", () => {
     renderJoinInvitationFlow(ORIGIN_LESS);
 
     await waitFor(() => {
-      expect(authActionMocks.signInWithSso).toHaveBeenCalledWith({
+      expect(authActionMocks.startLogin).toHaveBeenCalledWith({
+        kind: "sso",
         organizationId: "org-1",
         prompt: "select_account",
       });
     });
-    expect(authActionMocks.signInWithGitHub).not.toHaveBeenCalled();
+    expect(authActionMocks.startLogin).toHaveBeenCalledTimes(1);
     expect(connectServerMocks.openForUrl).not.toHaveBeenCalled();
   });
 
   it("falls back to standard sign-in when the invited organization has no SSO", async () => {
-    authActionMocks.signInWithSso.mockRejectedValueOnce(
-      new Error("SSO is not configured for this environment."),
-    );
+    authActionMocks.startLogin
+      .mockRejectedValueOnce(new Error("SSO is not configured for this environment."))
+      .mockResolvedValueOnce(undefined);
 
     renderJoinInvitationFlow(ORIGIN_LESS);
 
     await waitFor(() => {
-      expect(authActionMocks.signInWithGitHub).toHaveBeenCalledTimes(1);
+      expect(authActionMocks.startLogin).toHaveBeenLastCalledWith({ kind: "github" });
     });
   });
 
   it("does not fall back to GitHub for a configured SSO provider failure", async () => {
-    authActionMocks.signInWithSso.mockRejectedValueOnce(new Error("SSO sign-in failed"));
+    authActionMocks.startLogin.mockRejectedValueOnce(new Error("SSO sign-in failed"));
 
     const { result } = renderJoinInvitationFlow(ORIGIN_LESS);
 
@@ -128,7 +156,7 @@ describe("useOrganizationJoinInvitationFlow", () => {
         "Sign in could not start. Use Account settings to sign in, then reopen the invite link.",
       );
     });
-    expect(authActionMocks.signInWithGitHub).not.toHaveBeenCalled();
+    expect(authActionMocks.startLogin).toHaveBeenCalledTimes(1);
   });
 
   it("surfaces the trust-confirm dialog and starts NO auth when the invite origin differs from the current server", async () => {
@@ -140,21 +168,19 @@ describe("useOrganizationJoinInvitationFlow", () => {
     await waitFor(() => {
       expect(connectServerMocks.openForUrl).toHaveBeenCalledWith("https://proliferate.corp.example");
     });
-    expect(authActionMocks.signInWithSso).not.toHaveBeenCalled();
-    expect(authActionMocks.signInWithGitHub).not.toHaveBeenCalled();
+    expect(authActionMocks.startLogin).not.toHaveBeenCalled();
   });
 
   it("treats an origin matching the currently-configured server as a normal same-server join", async () => {
-    apiMocks.getRuntimeDesktopAppConfig.mockReturnValue({
-      apiBaseUrl: "https://proliferate.corp.example",
-    });
+    apiMocks.apiBaseUrl = "https://proliferate.corp.example";
     const entry =
       "/settings?section=account&joinOrganizationId=org-1&joinServerOrigin=https%3A%2F%2Fproliferate.corp.example";
 
     renderJoinInvitationFlow(entry);
 
     await waitFor(() => {
-      expect(authActionMocks.signInWithSso).toHaveBeenCalledWith({
+      expect(authActionMocks.startLogin).toHaveBeenCalledWith({
+        kind: "sso",
         organizationId: "org-1",
         prompt: "select_account",
       });
@@ -163,7 +189,7 @@ describe("useOrganizationJoinInvitationFlow", () => {
   });
 
   it("leaves the user on the sign-in surface (no auth launch) when the server is password-only", async () => {
-    authMethodsMocks.getDesktopAuthMethods.mockResolvedValue({ passwordLogin: true, github: false });
+    hostMocks.methods = ["password"];
 
     const { result } = renderJoinInvitationFlow(ORIGIN_LESS);
 
@@ -172,7 +198,56 @@ describe("useOrganizationJoinInvitationFlow", () => {
         "Sign in to accept this invitation. Use the sign-in form below.",
       );
     });
-    expect(authActionMocks.signInWithSso).not.toHaveBeenCalled();
-    expect(authActionMocks.signInWithGitHub).not.toHaveBeenCalled();
+    expect(authActionMocks.startLogin).not.toHaveBeenCalled();
+  });
+
+  it("resumes one persisted join after authentication and clears it explicitly", async () => {
+    const arrival = renderJoinInvitationFlow(ORIGIN_LESS);
+    await waitFor(() => {
+      expect(window.localStorage.getItem(PENDING_JOIN_STORAGE_KEY)).not.toBeNull();
+      expect(authActionMocks.startLogin).toHaveBeenCalledTimes(1);
+    });
+    arrival.unmount();
+
+    authActionMocks.startLogin.mockClear();
+    act(() => {
+      useAuthStore.setState({ status: "authenticated" });
+    });
+    const resumed = renderJoinInvitationFlow("/settings?section=account");
+
+    await waitFor(() => {
+      expect(resumed.result.current.joinOrganizationId).toBe("org-1");
+      expect(resumed.result.current.statusMessage).toBe(
+        "Review and accept the invitation below to join this organization.",
+      );
+    });
+    expect(authActionMocks.startLogin).not.toHaveBeenCalled();
+
+    act(() => resumed.result.current.clearJoinTarget());
+    expect(resumed.result.current.joinOrganizationId).toBeNull();
+    expect(window.localStorage.getItem(PENDING_JOIN_STORAGE_KEY)).toBeNull();
+    resumed.unmount();
+
+    const afterClear = renderJoinInvitationFlow("/settings?section=account");
+    expect(afterClear.result.current.joinOrganizationId).toBeNull();
+  });
+
+  it("drops an expired persisted join instead of resuming it", () => {
+    window.localStorage.setItem(
+      PENDING_JOIN_STORAGE_KEY,
+      JSON.stringify({
+        organizationId: "org-expired",
+        createdAt: Date.now() - (60 * 60 * 1000) - 1,
+      }),
+    );
+    act(() => {
+      useAuthStore.setState({ status: "authenticated" });
+    });
+
+    const { result } = renderJoinInvitationFlow("/settings?section=account");
+
+    expect(result.current.joinOrganizationId).toBeNull();
+    expect(window.localStorage.getItem(PENDING_JOIN_STORAGE_KEY)).toBeNull();
+    expect(authActionMocks.startLogin).not.toHaveBeenCalled();
   });
 });

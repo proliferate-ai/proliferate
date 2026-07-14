@@ -1,4 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
+import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   updateWorkspaceDisplayName as updateAnyHarnessWorkspaceDisplayName,
 } from "@/lib/access/anyharness/workspaces";
@@ -33,6 +35,7 @@ interface UpdateWorkspaceDisplayNameInput {
 }
 
 export function useWorkspaceDisplayNameActions() {
+  const cloudClient = useProductHost().cloud.client;
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const { upsertLocalWorkspace } = useWorkspaceCollectionsMutationCache(runtimeUrl);
   const invalidateWorkspaceCollections = useWorkspaceCollectionsInvalidation(runtimeUrl);
@@ -55,6 +58,9 @@ export function useWorkspaceDisplayNameActions() {
       }
 
       if (logicalWorkspace.cloudWorkspace && !logicalWorkspace.localWorkspace) {
+        if (!cloudClient) {
+          throw new Error("Cloud workspace access is unavailable for this host.");
+        }
         const cloudWorkspaceId = logicalWorkspace.cloudWorkspace.id;
         const clearsDisplayName = displayName === null;
         if (clearsDisplayName) {
@@ -62,6 +68,7 @@ export function useWorkspaceDisplayNameActions() {
             cloudWorkspaceId,
             operationId,
             selectedCloudRuntime,
+            cloudClient,
           });
         }
 
@@ -73,6 +80,7 @@ export function useWorkspaceDisplayNameActions() {
           cloudWorkspaceId,
           displayName,
           operationId ? { measurementOperationId: operationId } : undefined,
+          cloudClient,
         );
         if (clearsDisplayName) {
           suppressCloudDisplayNameBackfill(cloudWorkspaceId);
@@ -136,13 +144,17 @@ async function clearCloudRuntimeWorkspaceDisplayName(input: {
   cloudWorkspaceId: string;
   operationId: MeasurementOperationId | null;
   selectedCloudRuntime: ReturnType<typeof useSelectedCloudRuntimeState>;
+  cloudClient: ProliferateCloudClient;
 }): Promise<void> {
   try {
     const connectionInfo =
       input.selectedCloudRuntime.cloudWorkspaceId === input.cloudWorkspaceId
         && input.selectedCloudRuntime.connectionInfo
         ? input.selectedCloudRuntime.connectionInfo
-        : await getCloudWorkspaceConnectionWithRetry(input.cloudWorkspaceId);
+        : await getCloudWorkspaceConnectionWithRetry(
+          input.cloudWorkspaceId,
+          input.cloudClient,
+        );
     if (!connectionInfo?.anyharnessWorkspaceId) {
       return;
     }

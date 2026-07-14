@@ -7,6 +7,8 @@ type DeepLinkListener = (url: string) => void
 interface DeepLinkSubscription {
   listener: DeepLinkListener
   active: boolean
+  awaitingInitialSnapshot: boolean
+  pendingLiveUrls: string[]
 }
 
 // Every active subscription, in subscribe order. Delivery always reads this
@@ -26,9 +28,7 @@ function ensureLiveListener(): Promise<void> {
         onOpenUrl((urls) => {
           for (const url of urls) {
             for (const subscription of subscriptions) {
-              if (subscription.active) {
-                subscription.listener(url)
-              }
+              deliverLiveUrl(subscription, url)
             }
           }
         }),
@@ -38,18 +38,58 @@ function ensureLiveListener(): Promise<void> {
   return liveListenerPromise
 }
 
+function deliverLiveUrl(subscription: DeepLinkSubscription, url: string): void {
+  if (!subscription.active) return
+
+  if (subscription.awaitingInitialSnapshot) {
+    // This per-subscription barrier exists only while getCurrent() settles. It
+    // prevents a live URL from overtaking the initial snapshot without making
+    // live URLs replayable to subscribers that mount later.
+    subscription.pendingLiveUrls.push(url)
+    return
+  }
+
+  subscription.listener(url)
+}
+
 function deliverInitialSnapshot(subscription: DeepLinkSubscription): Promise<void> {
   return (async () => {
     try {
       const currentUrls = await getCurrent()
       if (subscription.active && currentUrls?.length) {
         for (const url of currentUrls) {
+          if (!subscription.active) break
           subscription.listener(url)
         }
       }
     } catch {
       // Ignore when running outside Tauri or before the plugin is available.
+    } finally {
+      // Keep the barrier raised while draining. A live event synchronously
+      // triggered by a listener is appended and delivered after every URL
+      // already waiting, so initial-before-live ordering remains strict.
+      while (subscription.active && subscription.pendingLiveUrls.length > 0) {
+        const url = subscription.pendingLiveUrls.shift()
+        if (url !== undefined) subscription.listener(url)
+      }
+      subscription.awaitingInitialSnapshot = false
+      subscription.pendingLiveUrls.length = 0
     }
+  })()
+}
+
+function initializeSubscription(subscription: DeepLinkSubscription): Promise<void> {
+  return (async () => {
+    // Register live delivery before reading the snapshot. Any event delivered
+    // during registration or getCurrent() waits behind this subscription's
+    // short-lived ordering barrier, closing the startup gap between the two
+    // native APIs.
+    await ensureLiveListener().catch(() => {
+      // Ignore when running outside Tauri or before the plugin is available.
+    })
+
+    if (!subscription.active) return
+    await deliverInitialSnapshot(subscription)
   })()
 }
 
@@ -60,8 +100,10 @@ function deliverInitialSnapshot(subscription: DeepLinkSubscription): Promise<voi
  * native live listener is ever registered — it is created lazily on the
  * first subscription and shared by every subscriber.
  *
- * There is no history or queue: a URL delivered before a later subscriber
- * mounts is never replayed to it, and no raw URL is retained after delivery.
+ * Each subscription has a short-lived ordering barrier only while its initial
+ * snapshot settles. Buffered live URLs are drained immediately afterward (or
+ * discarded on unsubscribe). There is no shared/durable history: a URL
+ * delivered before a later subscriber mounts is never replayed to it.
  *
  * Returns a synchronous unsubscribe function. Unsubscribing is race-safe
  * even while native registration (or this subscriber's initial snapshot
@@ -71,16 +113,19 @@ function deliverInitialSnapshot(subscription: DeepLinkSubscription): Promise<voi
  * Safe to call outside Tauri — errors are silently swallowed.
  */
 export function subscribeDeepLinkUrls(listener: DeepLinkListener): () => void {
-  const subscription: DeepLinkSubscription = { listener, active: true }
+  const subscription: DeepLinkSubscription = {
+    listener,
+    active: true,
+    awaitingInitialSnapshot: true,
+    pendingLiveUrls: [],
+  }
   subscriptions.add(subscription)
 
-  void deliverInitialSnapshot(subscription)
-  void ensureLiveListener().catch(() => {
-    // Ignore when running outside Tauri or before the plugin is available.
-  })
+  void initializeSubscription(subscription)
 
   return () => {
     subscription.active = false
+    subscription.pendingLiveUrls.length = 0
     subscriptions.delete(subscription)
   }
 }
@@ -91,9 +136,9 @@ export function subscribeDeepLinkUrls(listener: DeepLinkListener): () => void {
 let deepLinkBridgePromise: Promise<void> | null = null
 
 /**
- * Legacy adapter over the multiplexed raw source above. Drains any URLs
- * that arrived before subscription, then forwards every subsequent
- * deep-link URL to `handler`. Unlike `subscribeDeepLinkUrls`, this handler
+ * Legacy adapter over the multiplexed raw source above. Registers its
+ * subscription synchronously, then delivers its own initial snapshot before
+ * every live URL received during that read. Unlike `subscribeDeepLinkUrls`, this handler
  * is never unsubscribed — it lives for the process, matching the existing
  * bootstrap-time callback consumer.
  *
@@ -107,37 +152,38 @@ let deepLinkBridgePromise: Promise<void> | null = null
  */
 export function ensureDeepLinkBridge(handler: DeepLinkUrlHandler): Promise<void> {
   if (!deepLinkBridgePromise) {
-    deepLinkBridgePromise = (async () => {
-      // Drain the initial snapshot exactly like the pre-multiplex bridge: each
-      // URL is awaited in order and a handler rejection is contained here rather
-      // than escaping as an unhandled rejection.
-      try {
-        const currentUrls = await getCurrent()
-        if (currentUrls?.length) {
-          for (const url of currentUrls) {
-            await handler(url)
-          }
-        }
-      } catch {
-        // Ignore when running outside Tauri or before the plugin is available.
-      }
-
-      // Live URLs begin flowing only after the drain, matching the original
-      // registration order. Handler results are discarded; rejections are
-      // contained so a failing callback cannot surface as an unhandled rejection.
-      subscriptions.add({
-        listener: (url) => {
+    // Register synchronously. Product routing may already have requested the
+    // shared native listener in this React effect turn; joining the subscriber
+    // set before that registration microtask settles prevents an auth callback
+    // from being delivered only to (and ignored by) product routing.
+    let deliveryTail = Promise.resolve();
+    let serializingInitialDelivery = true;
+    const subscription: DeepLinkSubscription = {
+      listener: (url) => {
+        if (!serializingInitialDelivery) {
           void handler(url).catch(() => {
             // Callback failures are contained by this legacy adapter.
-          })
-        },
-        active: true,
-      })
+          });
+          return;
+        }
+        deliveryTail = deliveryTail
+          .then(() => handler(url))
+          .then(() => undefined)
+          .catch(() => {
+            // Callback failures are contained by this legacy adapter.
+          });
+      },
+      active: true,
+      awaitingInitialSnapshot: true,
+      pendingLiveUrls: [],
+    };
+    subscriptions.add(subscription);
 
-      await ensureLiveListener().catch(() => {
-        // Ignore when running outside Tauri or before the plugin is available.
-      })
-    })()
+    deepLinkBridgePromise = (async () => {
+      await initializeSubscription(subscription);
+      await deliveryTail;
+      serializingInitialDelivery = false;
+    })();
   }
-  return deepLinkBridgePromise
+  return deepLinkBridgePromise;
 }

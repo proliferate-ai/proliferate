@@ -61,6 +61,7 @@ const cloudSupportMocks = vi.hoisted(() => ({
     linearIssueUrl: null,
   })),
 }));
+const productHostMocks = vi.hoisted(() => ({ cloudClient: {} }));
 
 const diagnosticsMocks = vi.hoisted(() => ({
   collectSupportBundle: vi.fn(async () => null),
@@ -107,7 +108,10 @@ vi.mock("@anyharness/sdk-react", () => ({
 vi.mock("@proliferate/cloud-sdk/client/support", () => cloudSupportMocks);
 
 vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
-  useProductHost: () => ({ desktop: { diagnostics: diagnosticsMocks } }),
+  useProductHost: () => ({
+    cloud: { client: productHostMocks.cloudClient },
+    desktop: { diagnostics: diagnosticsMocks },
+  }),
 }));
 
 vi.mock("@/lib/access/browser/support-report-job-events", () => supportAccessMocks);

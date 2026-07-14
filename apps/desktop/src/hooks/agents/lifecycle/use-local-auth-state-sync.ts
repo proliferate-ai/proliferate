@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useAgentAuthState } from "@proliferate/cloud-sdk-react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { applyAgentAuthState } from "@/lib/access/anyharness/agent-auth";
 import { getProliferateApiOrigin } from "@/lib/infra/proliferate-api";
@@ -20,6 +21,7 @@ import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-
  * change — the runtime keeps launching against its last persisted state.
  */
 export function useLocalAuthStateSync() {
+  const { apiBaseUrl } = useProductHost().deployment;
   const { cloudActive } = useCloudAvailabilityState();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const connectionState = useHarnessConnectionStore((state) => state.connectionState);
@@ -45,7 +47,10 @@ export function useLocalAuthStateSync() {
       return;
     }
     let cancelled = false;
-    const stamped = stampIssuingServerOrigin(state, getProliferateApiOrigin());
+    const stamped = stampIssuingServerOrigin(
+      state,
+      getProliferateApiOrigin(apiBaseUrl),
+    );
     applyAgentAuthState({ runtimeUrl }, stamped)
       .then(() => {
         if (!cancelled) {
@@ -58,5 +63,5 @@ export function useLocalAuthStateSync() {
     return () => {
       cancelled = true;
     };
-  }, [cloudActive, runtimeHealthy, runtimeUrl, state]);
+  }, [apiBaseUrl, cloudActive, runtimeHealthy, runtimeUrl, state]);
 }

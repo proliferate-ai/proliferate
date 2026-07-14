@@ -203,7 +203,7 @@ async function reconcileAfterHotPaint(input: {
     return;
   }
 
-  const cloudReadiness = await resolveCloudWorkspaceReadiness(context);
+  const cloudReadiness = await resolveCloudWorkspaceReadiness(context, deps.cloudClient ?? null);
   if (!isCurrent() || cloudReadiness.kind === "stale") {
     return;
   }

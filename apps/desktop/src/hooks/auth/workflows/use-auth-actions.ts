@@ -22,15 +22,20 @@ import {
 } from "@/lib/integrations/auth/proliferate-auth";
 import type { DesktopSsoSignInOptions } from "@/lib/integrations/auth/proliferate-sso-auth";
 import { useAuthOrchestrationEffects } from "@/hooks/auth/workflows/use-auth-orchestration-effects";
+import type { DesktopAuthTransaction } from "@/lib/integrations/auth/desktop-auth-transaction";
+import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
 
 // Owns user-triggered auth actions and their telemetry. Does not own auth bootstrap.
-export function useAuthActions() {
-  const authEffects = useAuthOrchestrationEffects();
+export function useAuthActions(cloudClient: ProliferateCloudClient | null) {
+  const authEffects = useAuthOrchestrationEffects(cloudClient);
 
   return {
-    signInWithGitHub: useCallback(async (options?: GitHubDesktopSignInOptions) => {
+    signInWithGitHub: useCallback(async (
+      options: GitHubDesktopSignInOptions | undefined,
+      transaction: DesktopAuthTransaction,
+    ) => {
       try {
-        const result = await signInWithGitHub(options, authEffects);
+        const result = await signInWithGitHub(options, authEffects, transaction);
         trackProductEvent("auth_signed_in", {
           provider: result.provider,
           source: result.source,
@@ -56,9 +61,16 @@ export function useAuthActions() {
         throw error;
       }
     }, [authEffects]),
-    signInWithPassword: useCallback(async (credentials: PasswordSignInCredentials) => {
+    signInWithPassword: useCallback(async (
+      credentials: PasswordSignInCredentials,
+      transaction: DesktopAuthTransaction,
+    ) => {
       try {
-        const result = await signInWithPassword(credentials, authEffects);
+        const result = await signInWithPassword(
+          credentials,
+          authEffects,
+          transaction,
+        );
         trackProductEvent("auth_signed_in", {
           provider: result.provider,
           source: result.source,
@@ -84,9 +96,12 @@ export function useAuthActions() {
         throw error;
       }
     }, [authEffects]),
-    signInWithSso: useCallback(async (options?: DesktopSsoSignInOptions) => {
+    signInWithSso: useCallback(async (
+      options: DesktopSsoSignInOptions | undefined,
+      transaction: DesktopAuthTransaction,
+    ) => {
       try {
-        const result = await signInWithSso(options, authEffects);
+        const result = await signInWithSso(options, authEffects, transaction);
         trackProductEvent("auth_signed_in", {
           provider: result.provider,
           source: result.source,
@@ -112,9 +127,9 @@ export function useAuthActions() {
         throw error;
       }
     }, [authEffects]),
-    signOut: useCallback(async () => {
+    signOut: useCallback(async (transaction: DesktopAuthTransaction) => {
       try {
-        const result = await signOut(authEffects);
+        const result = await signOut(authEffects, transaction);
         trackProductEvent("auth_signed_out", {
           provider: result.provider,
         });
@@ -132,15 +147,22 @@ export function useAuthActions() {
     cancelAuthFlow: useCallback(async (message?: string) => {
       await cancelActiveAuthFlow(message);
     }, []),
-    linkGoogle: useCallback(async () => {
+    linkGoogle: useCallback(async (transaction: DesktopAuthTransaction) => {
       try {
-        const result = await linkDesktopProvider("google", authEffects);
+        const result = await linkDesktopProvider(
+          "google",
+          authEffects,
+          transaction,
+        );
         trackProductEvent("auth_signed_in", {
           provider: result.provider,
           source: result.source,
         });
         return result;
       } catch (error) {
+        if (isAbortError(error)) {
+          throw error;
+        }
         if (!isTelemetryHandled(error)) {
           captureTelemetryException(error, {
             tags: {

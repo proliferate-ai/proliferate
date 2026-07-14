@@ -1,12 +1,6 @@
 import {
-  getStoredPendingAuthSession,
-  setStoredPendingAuthSession,
-  clearStoredPendingAuthSession,
-} from "@/lib/access/tauri/auth";
-import {
   getActiveGitHubSignIn,
   resolveGitHubSignIn,
-  startGitHubSignIn,
 } from "@/lib/domain/auth/github-signin-state";
 import { isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
 import type { AuthSignInSource, AuthTelemetryProvider } from "@/lib/domain/telemetry/events";
@@ -17,9 +11,7 @@ import {
   AuthRequestError,
   beginDesktopProviderAuth,
   beginGitHubDesktopSignIn,
-  createPendingGitHubDesktopAuth,
   getGitHubDesktopAuthAvailability,
-  isPendingDesktopAuthExpired,
   pollGitHubDesktopSession,
   type DesktopIdentityProvider,
 } from "@/lib/integrations/auth/proliferate-auth";
@@ -37,14 +29,25 @@ import {
   toError,
   type AuthOrchestrationDeps,
 } from "./orchestration-effects";
+import {
+  isCurrentDesktopAuthTransaction,
+  staleDesktopAuthTransactionError,
+  type DesktopAuthTransaction,
+} from "./desktop-auth-transaction";
+import {
+  assertCurrentTransaction,
+  prepareProviderTransaction,
+} from "./orchestration-provider-transaction";
 
 export async function signInWithGitHub(
   options: GitHubDesktopSignInOptions | undefined,
   deps: AuthOrchestrationDeps,
+  transaction: DesktopAuthTransaction,
 ): Promise<{
   provider: AuthTelemetryProvider;
   source: AuthSignInSource;
 }> {
+  assertCurrentTransaction(transaction);
   if (isDevAuthBypassed()) {
     applyDevBypassState(deps);
     return {
@@ -54,6 +57,7 @@ export async function signInWithGitHub(
   }
 
   const controlPlaneReachable = await checkControlPlaneReachable();
+  assertCurrentTransaction(transaction);
   if (!controlPlaneReachable) {
     throw new AuthRequestError(
       "GitHub sign-in requires a reachable control plane.",
@@ -62,6 +66,7 @@ export async function signInWithGitHub(
   }
 
   const availability = await getGitHubDesktopAuthAvailability();
+  assertCurrentTransaction(transaction);
   if (!availability.enabled) {
     throw new AuthRequestError(
       "GitHub sign-in is not configured for this environment",
@@ -69,21 +74,11 @@ export async function signInWithGitHub(
     );
   }
 
-  const existingPending = await getStoredPendingAuthSession();
-  if (existingPending) {
-    if (isPendingDesktopAuthExpired(existingPending)) {
-      await clearPendingGitHubAuth(existingPending.state);
-    } else if (getActiveGitHubSignIn() && !getActiveGitHubSignIn()?.settled) {
-      throw new Error("GitHub sign-in is already in progress");
-    } else {
-      await clearPendingGitHubAuth(existingPending.state);
-    }
-  }
-
-  const pending = createPendingGitHubDesktopAuth();
-  await setStoredPendingAuthSession(pending);
-
-  const controller = startGitHubSignIn(pending.state);
+  const { pending, controller } = await prepareProviderTransaction(
+    "github",
+    "login",
+    transaction,
+  );
 
   try {
     await beginGitHubDesktopSignIn(
@@ -92,6 +87,7 @@ export async function signInWithGitHub(
       pending.redirect_uri,
       options,
     );
+    assertCurrentTransaction(transaction);
 
     const recoverySession = pollGitHubDesktopSession(
       pending.state,
@@ -113,18 +109,24 @@ export async function signInWithGitHub(
         source: "interactive_poll" as const,
       })),
     ]);
+    assertCurrentTransaction(transaction);
     const activeSignIn = getActiveGitHubSignIn();
     if (activeSignIn?.state === pending.state && !activeSignIn.settled) {
       resolveGitHubSignIn(pending.state, session);
     }
 
-    await clearStoredPendingAuthSession();
-    await applyAuthenticatedState(deps, session);
+    await clearPendingGitHubAuth(pending.state, undefined, transaction);
+    assertCurrentTransaction(transaction);
+    await applyAuthenticatedState(deps, session, transaction);
+    assertCurrentTransaction(transaction);
     return {
       provider: "github",
       source,
     };
   } catch (error) {
+    if (!isCurrentDesktopAuthTransaction(transaction)) {
+      throw staleDesktopAuthTransactionError();
+    }
     if (
       error instanceof Error
       && error.name === "AbortError"
@@ -139,6 +141,7 @@ export async function signInWithGitHub(
     await clearPendingGitHubAuth(
       pending.state,
       toError(error, "GitHub sign-in failed"),
+      transaction,
     );
     throw toError(error, "GitHub sign-in failed");
   }
@@ -147,10 +150,12 @@ export async function signInWithGitHub(
 export async function linkDesktopProvider(
   provider: Exclude<DesktopIdentityProvider, "github">,
   deps: AuthOrchestrationDeps,
+  transaction: DesktopAuthTransaction,
 ): Promise<{
   provider: AuthTelemetryProvider;
   source: AuthSignInSource;
 }> {
+  assertCurrentTransaction(transaction);
   if (isDevAuthBypassed()) {
     throw new AuthRequestError("Provider linking requires real sign-in.", 401);
   }
@@ -161,6 +166,7 @@ export async function linkDesktopProvider(
   }
 
   const controlPlaneReachable = await checkControlPlaneReachable();
+  assertCurrentTransaction(transaction);
   if (!controlPlaneReachable) {
     throw new AuthRequestError(
       "Provider linking requires a reachable control plane.",
@@ -168,20 +174,11 @@ export async function linkDesktopProvider(
     );
   }
 
-  const existingPending = await getStoredPendingAuthSession();
-  if (existingPending) {
-    if (isPendingDesktopAuthExpired(existingPending)) {
-      await clearPendingGitHubAuth(existingPending.state);
-    } else if (getActiveGitHubSignIn() && !getActiveGitHubSignIn()?.settled) {
-      throw new Error("Another auth flow is already in progress.");
-    } else {
-      await clearPendingGitHubAuth(existingPending.state);
-    }
-  }
-
-  const pending = createPendingGitHubDesktopAuth();
-  await setStoredPendingAuthSession(pending);
-  const controller = startGitHubSignIn(pending.state);
+  const { pending, controller } = await prepareProviderTransaction(
+    provider,
+    "link",
+    transaction,
+  );
 
   try {
     await beginDesktopProviderAuth(
@@ -195,6 +192,7 @@ export async function linkDesktopProvider(
         accessToken: authState.session.access_token,
       },
     );
+    assertCurrentTransaction(transaction);
 
     const recoverySession = pollGitHubDesktopSession(
       pending.state,
@@ -216,21 +214,28 @@ export async function linkDesktopProvider(
         source: "interactive_poll" as const,
       })),
     ]);
+    assertCurrentTransaction(transaction);
     const activeSignIn = getActiveGitHubSignIn();
     if (activeSignIn?.state === pending.state && !activeSignIn.settled) {
       resolveGitHubSignIn(pending.state, session);
     }
 
-    await clearStoredPendingAuthSession();
-    await applyAuthenticatedState(deps, session);
+    await clearPendingGitHubAuth(pending.state, undefined, transaction);
+    assertCurrentTransaction(transaction);
+    await applyAuthenticatedState(deps, session, transaction);
+    assertCurrentTransaction(transaction);
     return {
       provider,
       source,
     };
   } catch (error) {
+    if (!isCurrentDesktopAuthTransaction(transaction)) {
+      throw staleDesktopAuthTransactionError();
+    }
     await clearPendingGitHubAuth(
       pending.state,
       toError(error, "Provider linking failed"),
+      transaction,
     );
     throw toError(error, "Provider linking failed");
   }
@@ -239,10 +244,12 @@ export async function linkDesktopProvider(
 export async function signInWithSso(
   options: DesktopSsoSignInOptions | undefined,
   deps: AuthOrchestrationDeps,
+  transaction: DesktopAuthTransaction,
 ): Promise<{
   provider: AuthTelemetryProvider;
   source: AuthSignInSource;
 }> {
+  assertCurrentTransaction(transaction);
   if (isDevAuthBypassed()) {
     applyDevBypassState(deps);
     return {
@@ -252,6 +259,7 @@ export async function signInWithSso(
   }
 
   const controlPlaneReachable = await checkControlPlaneReachable();
+  assertCurrentTransaction(transaction);
   if (!controlPlaneReachable) {
     throw new AuthRequestError(
       "SSO sign-in requires a reachable control plane.",
@@ -260,6 +268,7 @@ export async function signInWithSso(
   }
 
   const discovery = await discoverDesktopSso(options);
+  assertCurrentTransaction(transaction);
   if (!discovery.enabled) {
     throw new AuthRequestError(
       discovery.reason === "not_configured"
@@ -269,20 +278,11 @@ export async function signInWithSso(
     );
   }
 
-  const existingPending = await getStoredPendingAuthSession();
-  if (existingPending) {
-    if (isPendingDesktopAuthExpired(existingPending)) {
-      await clearPendingGitHubAuth(existingPending.state);
-    } else if (getActiveGitHubSignIn() && !getActiveGitHubSignIn()?.settled) {
-      throw new Error("Another auth flow is already in progress.");
-    } else {
-      await clearPendingGitHubAuth(existingPending.state);
-    }
-  }
-
-  const pending = createPendingGitHubDesktopAuth();
-  await setStoredPendingAuthSession(pending);
-  const controller = startGitHubSignIn(pending.state);
+  const { pending, controller } = await prepareProviderTransaction(
+    "sso",
+    "login",
+    transaction,
+  );
 
   try {
     await beginDesktopSsoSignIn(
@@ -296,6 +296,7 @@ export async function signInWithSso(
         prompt: options?.prompt ?? "select_account",
       },
     );
+    assertCurrentTransaction(transaction);
 
     const recoverySession = pollGitHubDesktopSession(
       pending.state,
@@ -317,31 +318,43 @@ export async function signInWithSso(
         source: "interactive_poll" as const,
       })),
     ]);
+    assertCurrentTransaction(transaction);
     const activeSignIn = getActiveGitHubSignIn();
     if (activeSignIn?.state === pending.state && !activeSignIn.settled) {
       resolveGitHubSignIn(pending.state, session);
     }
 
-    await clearStoredPendingAuthSession();
-    await applyAuthenticatedState(deps, session);
+    await clearPendingGitHubAuth(pending.state, undefined, transaction);
+    assertCurrentTransaction(transaction);
+    await applyAuthenticatedState(deps, session, transaction);
+    assertCurrentTransaction(transaction);
     return {
       provider: "sso",
       source,
     };
   } catch (error) {
+    if (!isCurrentDesktopAuthTransaction(transaction)) {
+      throw staleDesktopAuthTransactionError();
+    }
     await clearPendingGitHubAuth(
       pending.state,
       toError(error, "SSO sign-in failed"),
+      transaction,
     );
     throw toError(error, "SSO sign-in failed");
   }
 }
 
-export async function signOut(deps: AuthOrchestrationDeps): Promise<{
+export async function signOut(
+  deps: AuthOrchestrationDeps,
+  transaction: DesktopAuthTransaction,
+): Promise<{
   provider: AuthTelemetryProvider;
 }> {
+  assertCurrentTransaction(transaction);
   if (isDevAuthBypassed()) {
-    await clearPendingGitHubAuth();
+    await clearPendingGitHubAuth(undefined, undefined, transaction);
+    assertCurrentTransaction(transaction);
     applyDevBypassState(deps);
     return {
       provider: "dev_bypass",
@@ -352,9 +365,12 @@ export async function signOut(deps: AuthOrchestrationDeps): Promise<{
   // session is still valid; once applyAnonymousState clears it the request
   // can only fail. The enrollment hook's teardown (fired by the store
   // flipping to anonymous) handles the local process + dotfile cleanup.
-  await revokeDesktopWorkerServerSide();
-  await clearPendingGitHubAuth();
-  await applyAnonymousState(deps, { clearPendingAuth: true });
+  await revokeDesktopWorkerServerSide(deps.cloudClient ?? null);
+  assertCurrentTransaction(transaction);
+  await clearPendingGitHubAuth(undefined, undefined, transaction);
+  assertCurrentTransaction(transaction);
+  await applyAnonymousState(deps, undefined, transaction);
+  assertCurrentTransaction(transaction);
   return {
     provider: "github",
   };

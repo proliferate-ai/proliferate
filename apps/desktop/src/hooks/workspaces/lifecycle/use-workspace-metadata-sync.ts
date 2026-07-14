@@ -21,12 +21,14 @@ import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/derived
 import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
 import { withFreshCloudSandboxGatewayAccessToken } from "@/lib/access/cloud/cloud-sandbox-gateway";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 
 const WORKSPACE_METADATA_POLL_INTERVAL_MS = 250;
 
 // Owns mounted metadata synchronization for the selected workspace.
 // Display state and user-triggered workspace actions live in sibling hook folders.
 export function useWorkspaceMetadataSync() {
+  const cloudClient = useProductHost().cloud.client;
   const syncingCloudDisplayNameRef = useRef<string | null>(null);
   const cloudDisplayNameSyncStateRef = useRef<CloudDisplayNameSyncState | null>(null);
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
@@ -71,6 +73,7 @@ export function useWorkspaceMetadataSync() {
   useEffect(() => {
     if (
       !selectedCloudWorkspace
+      || !cloudClient
       || selectedCloudWorkspace.displayName?.trim()
       || selectedCloudRuntime.state?.phase !== "ready"
       || !selectedCloudRuntime.connectionInfo
@@ -119,6 +122,8 @@ export function useWorkspaceMetadataSync() {
         const cloudWorkspace = await updateCloudWorkspaceDisplayName(
           selectedCloudWorkspaceId,
           backfill.displayName,
+          undefined,
+          cloudClient!,
         );
         cloudDisplayNameSyncStateRef.current = markCloudDisplayNameSyncCompleted(
           decision.state,
@@ -141,6 +146,7 @@ export function useWorkspaceMetadataSync() {
     return () => window.clearInterval(intervalId);
   }, [
     invalidateWorkspaceCollections,
+    cloudClient,
     runtimeUrl,
     selectedCloudRuntime.connectionInfo,
     selectedCloudRuntime.state?.phase,

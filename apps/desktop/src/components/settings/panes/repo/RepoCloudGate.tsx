@@ -13,11 +13,6 @@ import { useGitHubAppInstallation } from "@/hooks/settings/workflows/use-github-
 import { useGitHubAppUserAuthorization } from "@/hooks/settings/workflows/use-github-app-user-authorization";
 import { type CloudRepoEnvironmentEditor } from "@/hooks/settings/workflows/use-cloud-repo-environment-editor";
 
-// Land the GitHub authorization callback on the cloud environments settings
-// surface (the same return target the add-repo flow uses).
-const INSTALLATION_RETURN_TO =
-  "proliferate://settings/environments?source=github_app_installation_callback";
-
 interface RepoCloudGateProps {
   editor: CloudRepoEnvironmentEditor;
   cloudEnabled: boolean;
@@ -181,7 +176,11 @@ function RepoCloudAuthorizationRequired({
   });
   const installation = useGitHubAppInstallation({
     organizationId: activeOrganizationId,
-    returnTo: INSTALLATION_RETURN_TO,
+    returnTo: links.buildReturnUrl({
+      kind: "settings",
+      section: "environments",
+      query: [["source", "github_app_installation_callback"]],
+    }),
     onInstallationReturn: onAuthorizationReturn,
   });
 

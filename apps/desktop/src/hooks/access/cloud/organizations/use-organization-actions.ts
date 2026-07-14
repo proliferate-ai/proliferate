@@ -14,6 +14,8 @@ import type {
   OrganizationMembershipUpdateRequest,
   OrganizationUpdateRequest,
 } from "@/lib/access/cloud/client";
+import { requireHostCloudClient } from "@/lib/access/cloud/host-client";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   currentUserOrganizationInvitationsKey,
   organizationInvitationsKey,
@@ -23,6 +25,7 @@ import {
 
 export function useOrganizationActions(organizationId: string | null) {
   const queryClient = useQueryClient();
+  const cloudClient = useProductHost().cloud.client;
 
   async function invalidateOrganization() {
     await Promise.all([
@@ -35,7 +38,7 @@ export function useOrganizationActions(organizationId: string | null) {
   const updateOrganizationMutation = useMutation({
     mutationFn: (input: OrganizationUpdateRequest) => {
       if (!organizationId) throw new Error("Organization is required.");
-      return updateOrganization(organizationId, input);
+      return updateOrganization(organizationId, input, requireHostCloudClient(cloudClient));
     },
     onSuccess: invalidateOrganization,
   });
@@ -43,7 +46,11 @@ export function useOrganizationActions(organizationId: string | null) {
   const createInvitationMutation = useMutation({
     mutationFn: (input: OrganizationInviteRequest) => {
       if (!organizationId) throw new Error("Organization is required.");
-      return createOrganizationInvitation(organizationId, input);
+      return createOrganizationInvitation(
+        organizationId,
+        input,
+        requireHostCloudClient(cloudClient),
+      );
     },
     onSuccess: invalidateOrganization,
   });
@@ -51,7 +58,11 @@ export function useOrganizationActions(organizationId: string | null) {
   const resendInvitationMutation = useMutation({
     mutationFn: (invitationId: string) => {
       if (!organizationId) throw new Error("Organization is required.");
-      return resendOrganizationInvitation(organizationId, invitationId);
+      return resendOrganizationInvitation(
+        organizationId,
+        invitationId,
+        requireHostCloudClient(cloudClient),
+      );
     },
     onSuccess: invalidateOrganization,
   });
@@ -59,7 +70,11 @@ export function useOrganizationActions(organizationId: string | null) {
   const revokeInvitationMutation = useMutation({
     mutationFn: (invitationId: string) => {
       if (!organizationId) throw new Error("Organization is required.");
-      return revokeOrganizationInvitation(organizationId, invitationId);
+      return revokeOrganizationInvitation(
+        organizationId,
+        invitationId,
+        requireHostCloudClient(cloudClient),
+      );
     },
     onSuccess: invalidateOrganization,
   });
@@ -73,7 +88,12 @@ export function useOrganizationActions(organizationId: string | null) {
       input: OrganizationMembershipUpdateRequest;
     }) => {
       if (!organizationId) throw new Error("Organization is required.");
-      return updateOrganizationMembership(organizationId, membershipId, input);
+      return updateOrganizationMembership(
+        organizationId,
+        membershipId,
+        input,
+        requireHostCloudClient(cloudClient),
+      );
     },
     onSuccess: invalidateOrganization,
   });
@@ -81,14 +101,21 @@ export function useOrganizationActions(organizationId: string | null) {
   const removeMembershipMutation = useMutation({
     mutationFn: (membershipId: string) => {
       if (!organizationId) throw new Error("Organization is required.");
-      return removeOrganizationMembership(organizationId, membershipId);
+      return removeOrganizationMembership(
+        organizationId,
+        membershipId,
+        requireHostCloudClient(cloudClient),
+      );
     },
     onSuccess: invalidateOrganization,
   });
 
   const acceptInvitationMutation = useMutation({
     mutationFn: (joinOrganizationId: string) =>
-      acceptOrganizationInvitation({ organizationId: joinOrganizationId }),
+      acceptOrganizationInvitation(
+        { organizationId: joinOrganizationId },
+        requireHostCloudClient(cloudClient),
+      ),
     onSuccess: async (response) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: organizationsListKey() }),
@@ -101,7 +128,11 @@ export function useOrganizationActions(organizationId: string | null) {
   });
 
   const acceptCurrentInvitationMutation = useMutation({
-    mutationFn: (invitationId: string) => acceptCurrentUserOrganizationInvitation(invitationId),
+    mutationFn: (invitationId: string) =>
+      acceptCurrentUserOrganizationInvitation(
+        invitationId,
+        requireHostCloudClient(cloudClient),
+      ),
     onSuccess: async (response) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: organizationsListKey() }),

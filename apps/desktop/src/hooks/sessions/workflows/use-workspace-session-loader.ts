@@ -18,7 +18,9 @@ import {
 } from "@/hooks/sessions/workflows/session-replacement-tombstones";
 
 export function useWorkspaceSessionLoader() {
-  const desktop = useProductHost().desktop;
+  const host = useProductHost();
+  const desktop = host.desktop;
+  const cloudClient = host.cloud.client;
   const localRuntime = desktop?.runtime ?? null;
   const ssh = desktop?.ssh ?? null;
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
@@ -73,6 +75,7 @@ export function useWorkspaceSessionLoader() {
       {
         requestHeaders,
         measurementOperationId: options?.measurementOperationId,
+        cloudClient,
         ssh,
       },
     );
@@ -83,6 +86,7 @@ export function useWorkspaceSessionLoader() {
     setWorkspaceSessions(workspaceId, () => sessions);
     return sessions;
   }, [
+    cloudClient,
     getWorkspaceRuntimeBlockReason,
     getWorkspaceSessionCacheSnapshot,
     localRuntime,

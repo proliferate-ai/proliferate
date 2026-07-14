@@ -1,4 +1,8 @@
-import type { CloudAgentKind, CloudWorkspaceDetail } from "@/lib/access/cloud/client";
+import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
+import type {
+  CloudAgentKind,
+  CloudWorkspaceDetail,
+} from "@/lib/access/cloud/client";
 import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
 import type { TerminalWebSocketAuthTransport } from "@anyharness/sdk";
 import { resolveCloudSandboxGatewayConnectionForWorkspace } from "@/lib/access/cloud/cloud-sandbox-gateway";
@@ -29,6 +33,7 @@ export async function resolveRuntimeTargetForWorkspace(
   runtimeUrl: string,
   workspaceId: string,
   ssh: DesktopSshBridge | null = null,
+  cloudClient: ProliferateCloudClient | null = null,
 ): Promise<RuntimeTarget> {
   const targetWorkspace = parseTargetWorkspaceSyntheticId(workspaceId);
   if (targetWorkspace) {
@@ -61,8 +66,12 @@ export async function resolveRuntimeTargetForWorkspace(
     };
   }
 
+  if (!cloudClient) {
+    throw new Error("Cloud workspace access is unavailable for this host.");
+  }
+
   const cloudWorkspace: CloudWorkspaceDetail | undefined =
-    await getCloudWorkspaceWithRetry(cloudWorkspaceId);
+    await getCloudWorkspaceWithRetry(cloudWorkspaceId, cloudClient);
   if (!cloudWorkspace) throw new Error("Cloud workspace not found.");
   const cloudWorkspaceCommandMetadata = cloudWorkspace as CloudWorkspaceCommandMetadata;
   if (resolveCloudWorkspaceStatus(cloudWorkspace) !== "ready") {
@@ -73,7 +82,10 @@ export async function resolveRuntimeTargetForWorkspace(
     throw new Error("Claim this workspace before opening it directly in Desktop.");
   }
 
-  const connection = await resolveCloudSandboxGatewayConnectionForWorkspace(cloudWorkspace);
+  const connection = await resolveCloudSandboxGatewayConnectionForWorkspace(
+    cloudWorkspace,
+    cloudClient,
+  );
   return {
     location: "cloud",
     baseUrl: connection.runtimeUrl,

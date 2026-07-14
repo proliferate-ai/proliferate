@@ -1,4 +1,4 @@
-import { getProliferateClient } from "./core.js";
+import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
 import type {
   GenerateSessionTitleRequest,
   GenerateSessionTitleResponse,
@@ -8,13 +8,14 @@ import type {
 
 export async function generateSessionTitle(
   promptText: string,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<GenerateSessionTitleResponse> {
   const request: GenerateSessionTitleRequest = {
     promptText,
   };
 
   return (
-    await getProliferateClient().POST("/v1/ai_magic/session-titles/generate", {
+    await client.POST("/v1/ai_magic/session-titles/generate", {
       body: request,
     })
   ).data!;
@@ -22,13 +23,14 @@ export async function generateSessionTitle(
 
 export async function generateWorkspaceName(
   promptText: string,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<GenerateWorkspaceNameResponse> {
   const request: GenerateWorkspaceNameRequest = {
     promptText,
   };
 
   return (
-    await getProliferateClient().POST("/v1/ai_magic/workspace-names/generate", {
+    await client.POST("/v1/ai_magic/workspace-names/generate", {
       body: request,
     })
   ).data!;

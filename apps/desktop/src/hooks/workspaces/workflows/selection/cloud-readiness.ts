@@ -1,4 +1,5 @@
 import type { CloudWorkspaceDetail } from "@/lib/access/cloud/client";
+import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
 import { getCloudWorkspace } from "@proliferate/cloud-sdk/client/workspaces";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { resolveCloudWorkspaceStatus } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
@@ -11,9 +12,11 @@ import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-stat
 import { markWorkspaceViewed } from "@/stores/preferences/workspace-ui-store";
 import { isWorkspaceSelectionCurrent } from "./guards";
 import type { CloudReadinessResult, WorkspaceSelectionContext } from "./types";
+import { requireHostCloudClient } from "@/lib/access/cloud/host-client";
 
 export async function resolveCloudWorkspaceReadiness(
   context: WorkspaceSelectionContext,
+  cloudClient: ProliferateCloudClient | null,
 ): Promise<CloudReadinessResult> {
   const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(context.workspaceId);
   if (!cloudWorkspaceId) {
@@ -21,7 +24,10 @@ export async function resolveCloudWorkspaceReadiness(
   }
 
   const cloudLookupStartedAt = startLatencyTimer();
-  const cloudWorkspace: CloudWorkspaceDetail | undefined = await getCloudWorkspace(cloudWorkspaceId);
+  const cloudWorkspace: CloudWorkspaceDetail | undefined = await getCloudWorkspace(
+    cloudWorkspaceId,
+    requireHostCloudClient(cloudClient),
+  );
   if (!cloudWorkspace) {
     return { kind: "cloud-missing", cloudWorkspaceId };
   }

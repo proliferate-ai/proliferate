@@ -8,13 +8,14 @@ import {
   getLastDataSeq,
   hasActiveHandle,
   markReadOnly,
+  retireCloudTerminalStreamsOutsideAuthority,
   resetTerminalStreamRegistryForTests,
   sendInput,
   sendResize,
   subscribeWithReplay,
-  type TerminalReplayEntry,
   type TerminalStreamIdentity,
 } from "./terminal-stream-registry";
+import type { TerminalReplayEntry } from "./terminal-replay-buffer";
 import {
   clearTerminalIntentionalClose,
   isTerminalIntentionalClose,
@@ -207,6 +208,57 @@ describe("terminal stream registry", () => {
     expect(mockState.connections[0]!.handle.close).toHaveBeenCalledTimes(1);
   });
 
+  it("retires prior cloud authorities for the same workspace terminal", () => {
+    const oldIdentity = streamIdentity(
+      "terminal-1",
+      "runtime-1",
+      "cloud:workspace-1",
+      "authority-a",
+    );
+    const newIdentity = streamIdentity(
+      "terminal-1",
+      "runtime-1",
+      "cloud:workspace-1",
+      "authority-b",
+    );
+    ensureConnected({ identity: oldIdentity, baseUrl: "http://cloud.test" });
+
+    adoptTerminalStreamIdentity(newIdentity);
+
+    expect(hasActiveHandle(oldIdentity)).toBe(false);
+    expect(mockState.connections[0]!.handle.close).toHaveBeenCalledTimes(1);
+    ensureConnected({ identity: newIdentity, baseUrl: "http://cloud.test" });
+    expect(hasActiveHandle(newIdentity)).toBe(true);
+  });
+
+  it("retires superseded cloud authority handles without closing local handles", () => {
+    const cloudA = streamIdentity(
+      "terminal-a",
+      "runtime-cloud",
+      "cloud:workspace-a",
+      "authority-a",
+    );
+    const cloudB = streamIdentity(
+      "terminal-b",
+      "runtime-cloud",
+      "cloud:workspace-b",
+      "authority-b",
+    );
+    const local = streamIdentity("terminal-local", "runtime-local", "workspace-local");
+    ensureConnected({ identity: cloudA, baseUrl: "http://cloud.test" });
+    ensureConnected({ identity: cloudB, baseUrl: "http://cloud.test" });
+    ensureConnected({ identity: local, baseUrl: "http://local.test" });
+
+    retireCloudTerminalStreamsOutsideAuthority("authority-b");
+
+    expect(hasActiveHandle(cloudA)).toBe(false);
+    expect(hasActiveHandle(cloudB)).toBe(true);
+    expect(hasActiveHandle(local)).toBe(true);
+    expect(mockState.connections[0]!.handle.close).toHaveBeenCalledTimes(1);
+    expect(mockState.connections[1]!.handle.close).not.toHaveBeenCalled();
+    expect(mockState.connections[2]!.handle.close).not.toHaveBeenCalled();
+  });
+
   it("clears explicit terminal state across runtime identities", () => {
     const local = streamIdentity("terminal-1", "runtime-local", "workspace-1");
     const cloud = streamIdentity("terminal-1", "runtime-cloud", "workspace-1");
@@ -267,8 +319,14 @@ function streamIdentity(
   terminalId = "terminal-1",
   runtimeIdentity = "runtime-1",
   workspaceId = "workspace-1",
+  cloudAuthorityScopeKey?: string,
 ): TerminalStreamIdentity {
-  return { workspaceId, terminalId, runtimeIdentity };
+  return {
+    workspaceId,
+    terminalId,
+    runtimeIdentity,
+    ...(cloudAuthorityScopeKey ? { cloudAuthorityScopeKey } : {}),
+  };
 }
 
 function dataFrame(seq: number) {
