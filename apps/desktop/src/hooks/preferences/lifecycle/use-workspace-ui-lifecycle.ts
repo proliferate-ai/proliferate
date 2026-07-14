@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useProductStorageContext } from "@/hooks/persistence/use-product-storage-context";
+import { useProductStorageContext } from "@/hooks/persistence/facade/use-product-storage-context";
 import { migrateWorkspaceUiState } from "@/lib/domain/preferences/workspace-ui/migration";
 import {
   WORKSPACE_UI_DEFAULTS,

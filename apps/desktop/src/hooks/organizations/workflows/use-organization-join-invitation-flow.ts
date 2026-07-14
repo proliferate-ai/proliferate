@@ -19,7 +19,7 @@ import {
   readPendingOrganizationJoinTarget,
   writePendingOrganizationJoinTarget,
 } from "@/lib/access/persistence/organization-join-target";
-import { useProductStorageContext } from "@/hooks/persistence/use-product-storage-context";
+import { useProductStorageContext } from "@/hooks/persistence/facade/use-product-storage-context";
 import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 import { getDesktopAuthMethods } from "@/lib/integrations/auth/proliferate-auth-password";
 import {

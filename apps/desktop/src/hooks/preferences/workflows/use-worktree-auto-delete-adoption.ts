@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { useProductStorageContext } from "@/hooks/persistence/use-product-storage-context";
+import { useProductStorageContext } from "@/hooks/persistence/facade/use-product-storage-context";
 import {
   clearWorktreeAutoDeleteLimitAdoption,
   selectPersistedUserPreferencesSlice,

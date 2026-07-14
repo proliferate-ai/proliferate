@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useProductStorageContext } from "@/hooks/persistence/use-product-storage-context";
+import { useProductStorageContext } from "@/hooks/persistence/facade/use-product-storage-context";
 import type { ComputeTargetAppearancePreference } from "@/lib/domain/compute/target-appearance";
 import {
   getComputeTargetAppearancePreferences,

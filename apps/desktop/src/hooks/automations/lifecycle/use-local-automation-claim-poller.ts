@@ -22,7 +22,7 @@ import {
   writePersistedString,
   type ProductStorageContext,
 } from "@/lib/infra/persistence/product-storage";
-import { useProductStorageContext } from "@/hooks/persistence/use-product-storage-context";
+import { useProductStorageContext } from "@/hooks/persistence/facade/use-product-storage-context";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { writePendingOrganizationJoinTarget } from "@/lib/access/persistence/organization-join-target";
-import { useProductStorageContext } from "@/hooks/persistence/use-product-storage-context";
+import { useProductStorageContext } from "@/hooks/persistence/facade/use-product-storage-context";
 import { canFallbackToStandardInviteSignIn } from "@/lib/domain/organizations/join-auth";
 
 function organizationJoinTargetFromSearch(search: string): string | null {

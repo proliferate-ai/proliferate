@@ -18,7 +18,7 @@ import {
 } from "@/lib/domain/settings/navigation";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useProductStorageContext } from "@/hooks/persistence/use-product-storage-context";
+import { useProductStorageContext } from "@/hooks/persistence/facade/use-product-storage-context";
 import {
   readPersistedStringValue,
   writePersistedString,

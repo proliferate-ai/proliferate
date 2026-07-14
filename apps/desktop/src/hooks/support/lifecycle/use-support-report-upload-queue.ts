@@ -6,7 +6,7 @@ import {
 import { useEffect, useMemo, useRef } from "react";
 import type { DesktopDiagnosticsBridge } from "@proliferate/product-client/host/desktop-bridge";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { useProductStorageContext } from "@/hooks/persistence/use-product-storage-context";
+import { useProductStorageContext } from "@/hooks/persistence/facade/use-product-storage-context";
 import type { ProductStorageContext } from "@/lib/infra/persistence/product-storage";
 import {
   completeSupportReportUpload,
