@@ -70,7 +70,10 @@ const GATEWAY_SYNC_TIMEOUT_MS = 120_000;
 const HARNESS_READY_TIMEOUT_MS = 300_000;
 const MODEL_PICKER_TIMEOUT_MS = 60_000;
 const WORKSPACE_SETTLE_TIMEOUT_MS = 90_000;
-const TURN_TIMEOUT_MS = 120_000;
+// A full assistant turn through the live gateway can legitimately take minutes
+// on a loaded host (local dev boxes run Docker + builds concurrently); the
+// window stays bounded, only wider.
+const TURN_TIMEOUT_MS = 300_000;
 const ASSISTANT_REPLY_TIMEOUT_MS = 20_000;
 
 type ScenarioCellOutcomeWithEvidence = ScenarioCellOutcome & { evidence?: CellEvidenceV1 };
