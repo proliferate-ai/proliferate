@@ -51,6 +51,7 @@ import {
 } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import { ChatInputControlRow } from "./ChatInputControlRow";
+import { ConnectedWorkspaceStatusComposerControl } from "./workspace-status/ConnectedWorkspaceStatusComposerControl";
 import { ChatInputDraftArea } from "./ChatInputDraftArea";
 import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
 import { Input } from "@proliferate/ui/primitives/Input";
@@ -384,6 +385,9 @@ export function ChatInput({
               isEmpty={effectiveIsEmpty}
               onSubmit={onSubmit}
               onCancel={onCancel}
+              statusControl={suppressActiveSessionState
+                ? undefined
+                : <ConnectedWorkspaceStatusComposerControl />}
             />
           </form>
         </ChatComposerSurface>

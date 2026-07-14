@@ -15,7 +15,7 @@ export function createPlaygroundWorkspaceStatusModel(): WorkspaceStatusModel {
       checks: {
         label: "1 failing check",
         state: "failing",
-        actionLabel: "Fix",
+        actionLabel: "View",
         items: [
           {
             key: "check-vitest",
@@ -44,6 +44,7 @@ export function createPlaygroundWorkspaceStatusModel(): WorkspaceStatusModel {
         {
           key: "sub-epicurus",
           name: "Epicurus",
+          sessionId: "playground-session-epicurus",
           tintClassName: "text-delegated-agent-1",
         },
       ],
@@ -51,11 +52,13 @@ export function createPlaygroundWorkspaceStatusModel(): WorkspaceStatusModel {
         {
           key: "sub-averroes",
           name: "Averroes",
+          sessionId: "playground-session-averroes",
           tintClassName: "text-delegated-agent-2",
         },
         {
           key: "sub-darwin",
           name: "Darwin",
+          sessionId: "playground-session-darwin",
           tintClassName: "text-delegated-agent-3",
         },
       ],

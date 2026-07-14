@@ -53,6 +53,8 @@ export interface WorkspaceStatusDetailItem {
 export interface WorkspaceStatusSubagentRow {
   key: string;
   name: string;
+  /** Session to focus when the group row is clicked (tab activation). */
+  sessionId?: string | null;
   /** oklab agent tint (text-delegated-agent-N). */
   tintClassName?: string;
 }
@@ -91,9 +93,10 @@ export interface WorkspaceStatusActions {
   onOpenChanges?: () => void;
   onCommitOrPush?: () => void;
   onCompareBranch?: () => void;
-  onFixChecks?: () => void;
-  onOpenSubagents?: () => void;
-  onOpenNative?: (kind: WorkspaceStatusNativeRow["kind"]) => void;
+  /** Checks row action ("View") — opens the PR itself. */
+  onViewChecks?: () => void;
+  /** Focus one of our agents' chat tabs (subagent or review session). */
+  onOpenAgentSession?: (sessionId: string) => void;
 }
 
 export function WorkspaceStatusComposerControl({
@@ -179,13 +182,13 @@ export function WorkspaceStatusCard({
                 )}
                 label={model.environment.checks.label}
                 hoverItems={model.environment.checks.items}
-                trailing={model.environment.checks.actionLabel && actions.onFixChecks
+                trailing={model.environment.checks.actionLabel && actions.onViewChecks
                   ? (
                     <Button
                       type="button"
                       variant="unstyled"
                       size="unstyled"
-                      onClick={run(actions.onFixChecks)}
+                      onClick={run(actions.onViewChecks)}
                       className="shrink-0 rounded-sm px-1 text-ui text-muted-foreground hover:text-foreground"
                     >
                       {model.environment.checks.actionLabel}
@@ -199,30 +202,18 @@ export function WorkspaceStatusCard({
 
         {(model.subagents.working.length > 0 || model.subagents.done.length > 0) && (
           <StatusSection title="Subagents">
-            {model.subagents.working.length > 0 && (
-              <StatusRow
-                leading={<SubagentSpriteCluster rows={model.subagents.working} />}
-                label={`${model.subagents.working.length} working`}
-                hoverItems={model.subagents.working.map((row) => ({
-                  key: row.key,
-                  name: row.name,
-                  state: "working" as const,
-                }))}
-                onSelect={run(actions.onOpenSubagents)}
-              />
-            )}
-            {model.subagents.done.length > 0 && (
-              <StatusRow
-                leading={<SubagentSpriteCluster rows={model.subagents.done} />}
-                label={`${model.subagents.done.length} done`}
-                hoverItems={model.subagents.done.map((row) => ({
-                  key: row.key,
-                  name: row.name,
-                  state: "done" as const,
-                }))}
-                onSelect={run(actions.onOpenSubagents)}
-              />
-            )}
+            <SubagentGroupRow
+              rows={model.subagents.working}
+              state="working"
+              actions={actions}
+              close={close}
+            />
+            <SubagentGroupRow
+              rows={model.subagents.done}
+              state="done"
+              actions={actions}
+              close={close}
+            />
           </StatusSection>
         )}
 
@@ -239,9 +230,6 @@ export function WorkspaceStatusCard({
                 label={row.label}
                 meta={row.meta}
                 hoverItems={row.items}
-                onSelect={actions.onOpenNative
-                  ? run(() => actions.onOpenNative?.(row.kind))
-                  : undefined}
               />
             ))}
           </StatusSection>
@@ -369,6 +357,44 @@ function StatusRow({
         </TooltipContent>
       </KitTooltip>
     </TooltipProvider>
+  );
+}
+
+/* One state group of our agents, codex-format: sprite cluster + "N working".
+   Clicking focuses the group's first agent session (tab activation) — the
+   hover card lists every member. */
+function SubagentGroupRow({
+  rows,
+  state,
+  actions,
+  close,
+}: {
+  rows: WorkspaceStatusSubagentRow[];
+  state: "working" | "done";
+  actions: WorkspaceStatusActions;
+  close: () => void;
+}) {
+  if (rows.length === 0) {
+    return null;
+  }
+  const firstSessionId = rows.find((row) => row.sessionId)?.sessionId ?? null;
+  const onSelect = actions.onOpenAgentSession && firstSessionId
+    ? () => {
+      actions.onOpenAgentSession?.(firstSessionId);
+      close();
+    }
+    : undefined;
+  return (
+    <StatusRow
+      leading={<SubagentSpriteCluster rows={rows} />}
+      label={`${rows.length} ${state}`}
+      hoverItems={rows.map((row) => ({
+        key: row.key,
+        name: row.name,
+        state,
+      }))}
+      onSelect={onSelect}
+    />
   );
 }
 

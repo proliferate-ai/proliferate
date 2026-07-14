@@ -42,9 +42,8 @@ export function renderComposerSurfaceForScenario(scenario: ScenarioKey): ReactNo
                 onOpenChanges: noop,
                 onCommitOrPush: noop,
                 onCompareBranch: noop,
-                onFixChecks: noop,
-                onOpenSubagents: noop,
-                onOpenNative: noop,
+                onViewChecks: noop,
+                onOpenAgentSession: noop,
               }}
             />
           )}
