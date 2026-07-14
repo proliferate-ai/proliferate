@@ -11,13 +11,15 @@ import {
 import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 
 export function useSessionModelFallbackAction() {
-  const ssh = useProductHost().desktop?.ssh ?? null;
+  const host = useProductHost();
+  const ssh = host.desktop?.ssh ?? null;
+  const cloudClient = host.cloud.client;
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
   const setSessionConfigOptionMutation = useSetSessionConfigOptionMutation();
 
   return useCallback(async (sessionId: string, fallbackModelId: string) => {
     const { workspaceId, materializedSessionId } =
-      await getSessionClientAndWorkspace(sessionId, ssh);
+      await getSessionClientAndWorkspace(sessionId, ssh, cloudClient);
     const response = await setSessionConfigOptionMutation.mutateAsync({
       workspaceId,
       sessionId: materializedSessionId,
@@ -63,5 +65,5 @@ export function useSessionModelFallbackAction() {
     });
 
     return response;
-  }, [setSessionConfigOptionMutation, ssh, upsertWorkspaceSessionRecord]);
+  }, [setSessionConfigOptionMutation, ssh, cloudClient, upsertWorkspaceSessionRecord]);
 }

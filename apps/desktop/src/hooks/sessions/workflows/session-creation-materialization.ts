@@ -5,17 +5,14 @@ import type {
 } from "@proliferate/product-client/host/desktop-bridge";
 import { applySessionLaunchDefaults } from "@/lib/workflows/sessions/session-launch-defaults";
 import { createSessionLaunchDefaultsClient } from "@/lib/access/anyharness/session-launch-defaults-client";
-import {
-  resolveRuntimeTargetForWorkspace,
-} from "@/lib/access/anyharness/runtime-target";
+import { resolveRuntimeTargetForWorkspace } from "@/lib/access/anyharness/runtime-target";
+import type { CloudSandboxGatewayUrlSource } from "@/lib/access/cloud/cloud-sandbox-gateway";
 import { resolveStatusFromExecutionSummary } from "@proliferate/product-domain/sessions/activity";
 import {
   findCompatibleExistingSession,
   shouldProbeCompatibleRuntimeSessions,
 } from "@/lib/domain/sessions/creation/compatible-session";
-import {
-  mergeLiveDefaultLaunchControls,
-} from "@/lib/domain/sessions/creation/launch-controls";
+import { mergeLiveDefaultLaunchControls } from "@/lib/domain/sessions/creation/launch-controls";
 import { trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
@@ -66,6 +63,7 @@ interface MaterializeSessionCreationInput {
   frozenDefaultLiveSessionControlValuesByAgentKind: Record<string, Record<string, string>>;
   localRuntime: DesktopRuntimeBridge | null;
   ssh?: DesktopSshBridge | null;
+  cloudClient: CloudSandboxGatewayUrlSource | null;
   options: CreateSessionWithResolvedConfigOptions;
   pendingSessionId: string;
   resolvedModeId: string | null;
@@ -107,6 +105,7 @@ async function runSessionCreationMaterialization({
   frozenDefaultLiveSessionControlValuesByAgentKind,
   localRuntime,
   ssh,
+  cloudClient,
   options,
   pendingSessionId,
   resolvedModeId,
@@ -130,7 +129,7 @@ async function runSessionCreationMaterialization({
   });
 
   const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(workspaceId);
-  const target = await resolveRuntimeTargetForWorkspace(runtimeUrl, workspaceId, ssh ?? null);
+  const target = await resolveRuntimeTargetForWorkspace(runtimeUrl, workspaceId, ssh ?? null, cloudClient);
   logLatency("session.create.materialize.target_resolved", {
     clientSessionId: pendingSessionId,
     workspaceId,

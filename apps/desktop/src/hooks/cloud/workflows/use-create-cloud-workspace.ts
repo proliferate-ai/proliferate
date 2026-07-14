@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import type {
   CloudWorkspaceDetail,
@@ -29,7 +29,8 @@ import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { ensureRepoGroupExpanded } from "@/stores/preferences/workspace-ui-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import type { AuthUser } from "@/lib/domain/auth/auth-user";
+import { useProductAuthUser } from "@/hooks/auth/facade/use-product-auth";
 import { useWorkspaceCollectionsCache } from "@/hooks/workspaces/cache/use-workspace-collections-cache";
 import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
 import {
@@ -91,7 +92,24 @@ export function useCreateCloudWorkspace() {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const setPendingWorkspaceEntry = useSessionSelectionStore((state) => state.setPendingWorkspaceEntry);
   const branchPrefixType = useUserPreferencesStore((state) => state.branchPrefixType);
-  const authUser = useAuthStore((state) => state.user);
+  // Only the branch prefix (github login) is consumed downstream, so the
+  // normalized host user maps losslessly onto the AuthUser shape the domain
+  // helpers expect. Memoized on the stable host user so the create callback
+  // keeps its identity across unrelated renders.
+  const hostAuthUser = useProductAuthUser();
+  const authUser = useMemo<AuthUser | null>(
+    () =>
+      hostAuthUser
+        ? {
+            id: hostAuthUser.id,
+            email: hostAuthUser.email ?? "",
+            display_name: hostAuthUser.displayName ?? null,
+            github_login: hostAuthUser.githubLogin ?? null,
+            avatar_url: hostAuthUser.avatarUrl ?? null,
+          }
+        : null,
+    [hostAuthUser],
+  );
   const { selectWorkspace } = useWorkspaceSelection();
   const { beginPendingWorkspace, failPendingEntry, finalizeSelection } = useWorkspaceEntryFlow();
   const invalidateCloudBillingState = useInvalidateCloudBillingState();

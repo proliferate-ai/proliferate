@@ -92,8 +92,8 @@ export interface DesktopProviderAuthOptions {
 const GITHUB_RECOVERY_TIMEOUT_MS = 2 * 60 * 1000
 const GITHUB_APP_SETTINGS_FALLBACK_URL = "https://github.com/settings/applications"
 
-export function buildUrl(path: string): string {
-  return buildAuthUrl(path)
+export function buildUrl(path: string, baseUrl?: string): string {
+  return buildAuthUrl(path, baseUrl)
 }
 
 export function toStoredSession(response: DesktopTokenResponse): StoredAuthSession {
@@ -124,12 +124,14 @@ export function buildGitHubOAuthAppSettingsUrl(clientId?: string | null): string
   return `https://github.com/settings/connections/applications/${encodeURIComponent(clientId)}`
 }
 
-export async function getGitHubDesktopAuthAvailability(): Promise<GitHubDesktopAuthAvailability> {
+export async function getGitHubDesktopAuthAvailability(
+  apiBaseUrl?: string,
+): Promise<GitHubDesktopAuthAvailability> {
   const startedAt = startStartupTimer()
   logStartupDebug("auth.github_desktop_availability.start")
 
   try {
-    const response = await fetchAuthResponse(buildUrl("/auth/desktop/github/availability"), {
+    const response = await fetchAuthResponse(buildUrl("/auth/desktop/github/availability", apiBaseUrl), {
       headers: {
         Accept: "application/json",
       },

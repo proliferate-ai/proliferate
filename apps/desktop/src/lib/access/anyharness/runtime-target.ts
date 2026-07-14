@@ -1,7 +1,10 @@
 import type { CloudAgentKind, CloudWorkspaceDetail } from "@/lib/access/cloud/client";
 import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
 import type { TerminalWebSocketAuthTransport } from "@anyharness/sdk";
-import { resolveCloudSandboxGatewayConnectionForWorkspace } from "@/lib/access/cloud/cloud-sandbox-gateway";
+import {
+  type CloudSandboxGatewayUrlSource,
+  resolveCloudSandboxGatewayConnectionForWorkspace,
+} from "@/lib/access/cloud/cloud-sandbox-gateway";
 import { getCloudWorkspaceWithRetry } from "@/lib/access/cloud/workspace-connection-retry";
 import { parseTargetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
@@ -28,7 +31,8 @@ export interface RuntimeTarget {
 export async function resolveRuntimeTargetForWorkspace(
   runtimeUrl: string,
   workspaceId: string,
-  ssh: DesktopSshBridge | null = null,
+  ssh: DesktopSshBridge | null,
+  cloudClient: CloudSandboxGatewayUrlSource | null,
 ): Promise<RuntimeTarget> {
   const targetWorkspace = parseTargetWorkspaceSyntheticId(workspaceId);
   if (targetWorkspace) {
@@ -73,7 +77,10 @@ export async function resolveRuntimeTargetForWorkspace(
     throw new Error("Claim this workspace before opening it directly in Desktop.");
   }
 
-  const connection = await resolveCloudSandboxGatewayConnectionForWorkspace(cloudWorkspace);
+  const connection = await resolveCloudSandboxGatewayConnectionForWorkspace(
+    cloudWorkspace,
+    cloudClient,
+  );
   return {
     location: "cloud",
     baseUrl: connection.runtimeUrl,

@@ -8,7 +8,10 @@ import {
 import {
   getCloudWorkspace,
 } from "@proliferate/cloud-sdk/client/workspaces";
-import { resolveCloudSandboxGatewayConnectionForWorkspace } from "@/lib/access/cloud/cloud-sandbox-gateway";
+import {
+  type CloudSandboxGatewayUrlSource,
+  resolveCloudSandboxGatewayConnectionForWorkspace,
+} from "@/lib/access/cloud/cloud-sandbox-gateway";
 
 export const CLOUD_WORKSPACE_CONNECTION_RETRY_DELAY_MS = 750;
 export const CLOUD_WORKSPACE_CONNECTION_MAX_RETRIES = 8;
@@ -72,6 +75,7 @@ export function getCloudWorkspaceWithRetry(
 
 export async function getResolvedCloudWorkspaceConnection(
   workspaceId: string,
+  cloudClient: CloudSandboxGatewayUrlSource | null,
 ): Promise<CloudConnectionInfo> {
   const workspace = await getCloudWorkspace(workspaceId);
   if (!workspace) {
@@ -81,14 +85,15 @@ export async function getResolvedCloudWorkspaceConnection(
       "workspace_not_found",
     );
   }
-  return resolveCloudSandboxGatewayConnectionForWorkspace(workspace);
+  return resolveCloudSandboxGatewayConnectionForWorkspace(workspace, cloudClient);
 }
 
 export function getCloudWorkspaceConnectionWithRetry(
   workspaceId: string,
+  cloudClient: CloudSandboxGatewayUrlSource | null,
 ): Promise<CloudConnectionInfo> {
   return retryCloudWorkspaceRequest(
-    () => getResolvedCloudWorkspaceConnection(workspaceId),
+    () => getResolvedCloudWorkspaceConnection(workspaceId, cloudClient),
     "Failed to connect to cloud workspace.",
   );
 }

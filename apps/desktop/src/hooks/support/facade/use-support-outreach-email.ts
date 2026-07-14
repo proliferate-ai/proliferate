@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ProliferateClientError } from "@proliferate/cloud-sdk";
 import { getCurrentUser, updateCurrentUser } from "@proliferate/cloud-sdk/client/users";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import { useProductAuthUser } from "@/hooks/auth/facade/use-product-auth";
 
 /**
  * Footer state for the support modals: which address support follow-up goes to,
@@ -26,7 +26,11 @@ export interface SupportOutreachEmailState {
 }
 
 export function useSupportOutreachEmail(): SupportOutreachEmailState {
-  const sessionEmail = useAuthStore((state) => state.session?.email ?? null);
+  // The signed-in identity's email, from the mounted ProductHost. This replaces
+  // the former auth-store `session.email` read; the effective address is still
+  // `outreach_email ?? account email` and the GET /users/me load below remains
+  // the source of truth once it resolves.
+  const sessionEmail = useProductAuthUser()?.email ?? null;
   const [accountEmail, setAccountEmail] = useState<string | null>(sessionEmail);
   const [outreachEmail, setOutreachEmail] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);

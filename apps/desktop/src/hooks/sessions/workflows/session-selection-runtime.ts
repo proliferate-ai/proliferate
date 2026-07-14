@@ -11,6 +11,7 @@ import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-meas
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { bootstrapHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap";
 import { fetchWorkspaceSessionSummaries } from "@/lib/access/anyharness/session-runtime";
+import type { CloudSandboxGatewayUrlSource } from "@/lib/access/cloud/cloud-sandbox-gateway";
 import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import {
@@ -59,6 +60,7 @@ export async function fetchWorkspaceSessions(
     requestHeaders?: HeadersInit;
     measurementOperationId?: MeasurementOperationId | null;
     ssh?: DesktopSshBridge | null;
+    cloudClient: CloudSandboxGatewayUrlSource | null;
   },
 ): Promise<WorkspaceSession[]> {
   const sessions = await fetchWorkspaceSessionSummaries(
@@ -70,6 +72,7 @@ export async function fetchWorkspaceSessions(
       headers: options?.requestHeaders,
     }),
     options?.ssh ?? null,
+    options?.cloudClient ?? null,
   );
   const visibleSessions = filterReplacedSessionTombstones(workspaceId, sessions) ?? [];
   return visibleSessions.map((session) => ({

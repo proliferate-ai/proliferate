@@ -35,7 +35,7 @@ export async function resolveSelectionConnection(
 
   const connectionStartedAt = startLatencyTimer();
   const workspaceConnection = cloudReadiness.kind === "local"
-    ? await resolveWorkspaceConnection(desktopRuntimeUrl, localWorkspaceId, deps.ssh ?? null)
+    ? await resolveWorkspaceConnection(desktopRuntimeUrl, localWorkspaceId, deps.ssh ?? null, deps.cloudClient)
     : await deps.cache.refreshCloudWorkspaceConnection(cloudReadiness.cloudWorkspaceId)
       .then((connection) => ({
         runtimeUrl: connection.runtimeUrl,

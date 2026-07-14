@@ -6,6 +6,7 @@ import type {
 import type { Workspace } from "@anyharness/sdk";
 import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
+import type { CloudSandboxGatewayUrlSource } from "@/lib/access/cloud/cloud-sandbox-gateway";
 
 export interface WorkspaceSelectionOptions {
   force?: boolean;
@@ -31,6 +32,7 @@ export interface WorkspaceSelectionContext {
 export interface WorkspaceSelectionDeps {
   localRuntime: DesktopRuntimeBridge | null;
   ssh?: DesktopSshBridge | null;
+  cloudClient: CloudSandboxGatewayUrlSource | null;
   logicalWorkspaces: LogicalWorkspace[];
   rawWorkspaces: Workspace[];
   cache: {

@@ -27,6 +27,20 @@ vi.mock("@/lib/domain/auth/auth-mode", () => ({
   isDevAuthBypassed: () => authMode.devBypassed,
 }));
 
+// WorkflowsPage reads normalized auth through the host; bridge the store so the
+// existing setState-driven tests keep steering it.
+vi.mock("@proliferate/product-client/host/ProductHostProvider", async () => {
+  const { useAuthStore } = await import("@/stores/auth/auth-store");
+  const { authStoreBridgedHost } = await import("@/test/product-host-fixtures");
+  return {
+    useProductHost: () =>
+      authStoreBridgedHost(
+        useAuthStore((s) => s.status),
+        useAuthStore((s) => s.user),
+      ),
+  };
+});
+
 vi.mock("@proliferate/product-surfaces/workflows/WorkflowDefinitionsSurface", () => ({
   WorkflowDefinitionsSurface: (props: {
     authCacheScope: string;

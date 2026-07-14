@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react"
 import { Navigate, Outlet } from "react-router-dom"
 import { twMerge } from "@proliferate/ui/utils/tw-merge"
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider"
+import type { AuthState } from "@proliferate/product-client/host/product-host"
 import { AuthShell } from "@/components/auth/AuthShell"
-import { isProductAuthRequired } from "@/lib/domain/auth/auth-mode"
-import { useAuthStore } from "@/stores/auth/auth-store"
 
 // Where the gate resolves to once auth state is known:
 //   loading -> still bootstrapping (mark breathing)
@@ -15,10 +15,10 @@ type GateDestination = "loading" | "app" | "login"
 type ShellFadeState = "checking" | "resolving" | "fading" | null
 
 function resolveDestination(
-  status: ReturnType<typeof useAuthStore.getState>["status"],
+  status: AuthState["status"],
   authRequired: boolean,
 ): GateDestination {
-  if (status === "bootstrapping") {
+  if (status === "loading") {
     return "loading"
   }
   if (status === "authenticated" || !authRequired) {
@@ -28,12 +28,13 @@ function resolveDestination(
 }
 
 export function BootstrappedRoute() {
-  const status = useAuthStore((state) => state.status)
-  const authRequired = isProductAuthRequired()
+  const { auth } = useProductHost()
+  const status = auth.state.status
+  const authRequired = auth.authRequired
   const destination = resolveDestination(status, authRequired)
 
   const [fadeState, setFadeState] = useState<ShellFadeState>(
-    status === "bootstrapping" ? "checking" : null,
+    status === "loading" ? "checking" : null,
   )
   // The living mark settled to its resolved icon at least once. Tracked as state
   // (not derived from the mark callback alone) because the SAME persistent mark
@@ -43,7 +44,7 @@ export function BootstrappedRoute() {
   const [markResolved, setMarkResolved] = useState(false)
 
   useEffect(() => {
-    if (status === "bootstrapping") {
+    if (status === "loading") {
       setFadeState("checking")
       setMarkResolved(false)
       return
@@ -111,7 +112,7 @@ export function BootstrappedRoute() {
 }
 
 export function PublicOnlyRoute() {
-  const status = useAuthStore((state) => state.status)
+  const status = useProductHost().auth.state.status
 
   if (status === "authenticated") {
     return <Navigate to="/" replace />

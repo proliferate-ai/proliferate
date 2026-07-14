@@ -37,8 +37,8 @@ canonical feature spec are the durable handoff.
 
 Current handoff:
 
-- Current PR: Finish the Desktop Capability Boundary — review.
-- Next PR: Complete Shared ProductHost Adoption and Extraction Readiness — provisional.
+- Current PR: Route Shared Identity and Navigation Through ProductHost — review.
+- Next PR: Route Shared Persistence and Telemetry Through ProductHost — provisional.
 
 - Repository: `proliferate-ai/proliferate`.
 - Canonical contract:
@@ -65,7 +65,11 @@ Current handoff:
   `36e96e7bea1c409dfde1797b3a691003f82d8f5a`.
 - Finish the Desktop Capability Boundary contract:
   `specs/codebase/features/web-desktop-client-unification-d1d.md`, exact
-  implementation base `66f45bfbe2839ae1382133393844ba61dce035cd`.
+  implementation base `66f45bfbe2839ae1382133393844ba61dce035cd`, final PR #1168
+  merge `de249faf06c629e094c20e33f94f33d4e6c4c8f2`.
+- Route Shared Identity and Navigation Through ProductHost contract:
+  `specs/codebase/features/web-desktop-client-unification-d1e.md`, exact
+  implementation base `0eab251fd35d26022165f7f0852db2885a8c4093`.
 - Current role: review. Material scope changes are decided with the
   founder and recorded before the slice broadens.
 
@@ -78,11 +82,12 @@ Current handoff:
 | Desktop Host Adoption | Construct the concrete Desktop host, mount the provider, replace reactive snapshots, and gate running-agent export through one Desktop-only lifecycle root while product files remain in Desktop. | [`web-desktop-client-unification-d1a.md`](../../codebase/features/web-desktop-client-unification-d1a.md), `D1a-r2`; PR #1157 merge `a76ab5911e2af39593b4b31530535f0811a3558b` | Complete |
 | Desktop Native UI Adoption | Route native menus, native commands, Dock attention, and Desktop zoom through the mounted bridge while product files remain in Desktop. | [`web-desktop-client-unification-d1b.md`](../../codebase/features/web-desktop-client-unification-d1b.md); PR #1165 merge `736d181575e4d81389d19ba7a78afd14566e1fda` | Complete |
 | Desktop Local Runtime Adoption | Route product-owned local AnyHarness discovery, restart, readiness, and connection through the Desktop bridge while raw sidecar/process startup remains Desktop-owned. | [`web-desktop-client-unification-d1c.md`](../../codebase/features/web-desktop-client-unification-d1c.md); PR #1167 merge `36e96e7bea1c409dfde1797b3a691003f82d8f5a` | Complete |
-| Finish the Desktop Capability Boundary | Route real remaining Desktop-only product consumers plus shared links/clipboard through the mounted host while native implementations stay Desktop-owned. | [`web-desktop-client-unification-d1d.md`](../../codebase/features/web-desktop-client-unification-d1d.md), base `66f45bfbe2839ae1382133393844ba61dce035cd` | Review |
-| Complete Shared ProductHost Adoption and Extraction Readiness | Adopt shared auth, deployment reads, telemetry, storage hydration, and inbound routing, then prove the host envelope, compiled assets/builds, move ledger/codemod, minimal browser host, and fail-closed boundaries. | Shape the exact checklist from the completed capability-boundary diff. | Directional |
+| Finish the Desktop Capability Boundary | Route real remaining Desktop-only product consumers plus shared links/clipboard through the mounted host while native implementations stay Desktop-owned. | [`web-desktop-client-unification-d1d.md`](../../codebase/features/web-desktop-client-unification-d1d.md), base `66f45bfbe2839ae1382133393844ba61dce035cd`; PR #1168 merge `de249faf06c629e094c20e33f94f33d4e6c4c8f2` | Complete |
+| Route Shared Identity and Navigation Through ProductHost | Read normalized auth identity/operations, deployment base URL, and the single Cloud client through the host; close the ordered-query-pairs and fragment/callback contract gaps; route each inbound deep link through one lossless `ProductEntry` lifecycle and delete the legacy parallel navigation decoder. | [`web-desktop-client-unification-d1e.md`](../../codebase/features/web-desktop-client-unification-d1e.md), base `0eab251fd35d26022165f7f0852db2885a8c4093` | Review |
+| Route Shared Persistence and Telemetry Through ProductHost | Adopt shared storage hydration and telemetry identity/transport through the host, then prove the host envelope, compiled assets/builds, move ledger/codemod, minimal browser host, and fail-closed boundaries. | Shape the exact checklist from the identity/navigation diff. | Directional |
 | Mechanical Desktop extraction | Move the working Desktop product into ProductClient and leave Desktop as a thin native host. | Exact file ledger, landing window, codemod, builds, and behavior proof required. | Directional |
 | Legacy Web replacement | Delete the duplicate Web product and mount the same ProductClient from a thin browser host with `desktop: null`. | Browser host/auth contract and shared-product proof required. | Directional |
-| Hosted Web qualification and cutover | Qualify both hosts, Web performance, managed-cloud flows, and every external callback/return producer. | §7 external-configuration gate applies. | Directional |
+| Hosted Web qualification and cutover | Qualify both hosts, Web performance, managed-cloud flows, and every external callback/return producer. | §8 external-configuration gate applies. | Directional |
 | Self-hosted Web | Add self-hosted Web configuration, deployment, and documentation after hosted Web is clean. | Separate follow-up contract. | Deferred follow-up |
 
 The superseded auth-generation, runtime-lifecycle, PR-1 intake, and
@@ -183,7 +188,52 @@ shared ProductHost checkpoint.
 The complete living contract is
 [`web-desktop-client-unification-d1d.md`](../../codebase/features/web-desktop-client-unification-d1d.md).
 
-## 6. Remaining migration map and gates
+The implementation merged in PR #1168 at
+`de249faf06c629e094c20e33f94f33d4e6c4c8f2`.
+
+## 6. Route Shared Identity and Navigation working record
+
+This slice reads normalized auth identity and semantic operations,
+`host.deployment.apiBaseUrl`, and the single `host.cloud.client` through
+`useProductHost()`, and makes one product-owned lifecycle route each inbound
+deep link decoded once into a lossless `ProductEntry`. It also closes two
+ProductClient contract gaps so the states already rendered by both gates are
+representable: ordered duplicate-preserving query pairs plus a surviving
+fragment on every entry, a nullable authenticated user with an
+`issue`/`readiness` shape, and a success/failure `AuthCallback` union.
+
+The exact implementation base is
+`0eab251fd35d26022165f7f0852db2885a8c4093`; the predecessor is PR #1168 (D1d)
+at `de249faf06c629e094c20e33f94f33d4e6c4c8f2`. The legacy parallel navigation
+decoder (`desktopNavigationTarget`, `handleDesktopNavigationUrl`) is deleted so
+each deep link reaches exactly one consumer, and the callback is normalized to
+success/failure before commit behind one bounded host-owned single-flight. Raw
+callback URLs, PKCE values, tokens, cookies, and mutable config stay
+host-owned. There remains one auth bootstrap, one Cloud client, one Query
+client, one `ProductHostProvider`, and one router.
+
+Recorded deviations carried into review: the OAuth `source` discriminator is
+not re-emitted into internal routes because no route consumer reads it; and
+`desktop-navigation.ts` is split into it plus `desktop-navigation-codec.ts` to
+stay under the frontend size threshold. The deployment/Cloud rewire is now
+complete: the six deployment/capability probe hooks derive their scope and probe
+target from `host.deployment.apiBaseUrl` (each `queryFn` receives that base URL
+so the hook's inputs are fully host-derived; query keys and enablement
+unchanged), and `cloud-sandbox-gateway.ts` receives the Cloud client's `buildUrl`
+as an explicit parameter threaded from `host.cloud.client` instead of calling
+`getProliferateClient()`. Because the host provider builds the host and cannot
+read it back, each probe hook keeps a `*For(apiBaseUrl)` core that the provider
+calls with its own deployment-adapter URL. `getProliferateApiBaseUrl()` /
+`getProliferateClient()` now remain only in the definitions, the `AppProviders`
+composition root, the `desktop-product-host` deployment adapter, and
+`telemetry/client.ts` (deferred to the telemetry slice). The
+`pnpm --dir apps/desktop test` command keeps the prior founder-approved waiver
+for base-identical `pretest` violations in unchanged files.
+
+The complete living contract is
+[`web-desktop-client-unification-d1e.md`](../../codebase/features/web-desktop-client-unification-d1e.md).
+
+## 7. Remaining migration map and gates
 
 The plain sequence after the current PR is:
 
@@ -210,10 +260,10 @@ external-configuration table, and release-record template are retired. Before
 a later Web-cutover slice, reconcile current deployment workflows and external
 configuration, then shape a slice-specific rollout checklist with its own
 exact base and acceptance proof. The durable external-configuration evidence
-requirements in §7 remain binding. Do not reuse retired phase mechanics by
+requirements in §8 remain binding. Do not reuse retired phase mechanics by
 implication.
 
-## 7. Later Web cutover external-configuration gate
+## 8. Later Web cutover external-configuration gate
 
 The future Web cutover must inventory every external producer of a hosted Web
 URL, including OAuth registrations, Stripe checkout/portal return URLs,

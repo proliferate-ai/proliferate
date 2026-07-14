@@ -6,7 +6,7 @@ import {
   useState,
 } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useAuthActions } from "@/hooks/auth/workflows/use-auth-actions";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   useConnectServer,
   type UseConnectServerResult,
@@ -25,7 +25,6 @@ import {
   getRuntimeDesktopAppConfig,
   isOfficialHostedApiBaseUrl,
 } from "@/lib/infra/proliferate-api";
-import { useAuthStore } from "@/stores/auth/auth-store";
 
 /**
  * Normalize a URL to its origin (scheme + host + port, no path or trailing
@@ -74,8 +73,9 @@ export interface UseOrganizationJoinInvitationFlowResult {
 export function useOrganizationJoinInvitationFlow(): UseOrganizationJoinInvitationFlowResult {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const authStatus = useAuthStore((state) => state.status);
-  const { signInWithGitHub, signInWithSso } = useAuthActions();
+  const { auth } = useProductHost();
+  const authStatus = auth.state.status;
+  const { startLogin } = auth;
   const connectServer = useConnectServer();
   const signInStartedRef = useRef(false);
   const serverSwitchStartedRef = useRef(false);
@@ -210,9 +210,9 @@ export function useOrganizationJoinInvitationFlow(): UseOrganizationJoinInvitati
 
       setStatusMessage("Opening organization sign-in to accept this invitation.");
       try {
-        await signInWithSso({
+        await startLogin({
+          kind: "sso",
           organizationId: transientJoinOrganizationId,
-          prompt: "select_account",
         });
       } catch (error: unknown) {
         if (!canFallbackToStandardInviteSignIn(error)) {
@@ -224,7 +224,7 @@ export function useOrganizationJoinInvitationFlow(): UseOrganizationJoinInvitati
 
         setStatusMessage("Opening sign-in to accept this invitation.");
         try {
-          await signInWithGitHub();
+          await startLogin({ kind: "github" });
         } catch {
           setStatusMessage(
             "Sign in could not start. Use Account settings to sign in, then reopen the invite link.",
@@ -235,8 +235,7 @@ export function useOrganizationJoinInvitationFlow(): UseOrganizationJoinInvitati
   }, [
     authStatus,
     requiresServerSwitch,
-    signInWithGitHub,
-    signInWithSso,
+    startLogin,
     transientJoinOrganizationId,
   ]);
 

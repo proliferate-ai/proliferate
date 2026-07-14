@@ -30,13 +30,15 @@ import {
   getGitHubStatusLabel,
 } from "@/lib/domain/auth/account-profile-presentation";
 import { isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
-import { useAuthActions } from "@/hooks/auth/workflows/use-auth-actions";
+import {
+  useProductAuthStatus,
+  useProductAuthUser,
+} from "@/hooks/auth/facade/use-product-auth";
 import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
 import { useOrganizationJoinInvitationFlow } from "@/hooks/organizations/workflows/use-organization-join-invitation-flow";
 import { useJoinedOrganizationActivation } from "@/hooks/organizations/workflows/use-joined-organization-activation";
 import { buildGitHubOAuthAppSettingsUrl } from "@/lib/integrations/auth/proliferate-auth";
 import type { OrganizationInvitationRecord } from "@/lib/domain/organizations/organization-records";
-import { useAuthStore } from "@/stores/auth/auth-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { buildGitHubAppUserAuthorizationServiceView } from "./account/GitHubAppUserAuthorizationService";
 
@@ -44,10 +46,9 @@ const EMPTY_INVITATIONS: OrganizationInvitationRecord[] = [];
 
 export function AccountPane() {
   const navigate = useNavigate();
-  const status = useAuthStore((state) => state.status);
-  const user = useAuthStore((state) => state.user);
-  const { linkGoogle, signOut } = useAuthActions();
-  const { links } = useProductHost();
+  const status = useProductAuthStatus();
+  const user = useProductAuthUser();
+  const { links, auth } = useProductHost();
   const {
     signIn: signInWithGitHub,
     submitting: signingIn,
@@ -96,7 +97,7 @@ export function AccountPane() {
   const googleAvailability = authViewer.data?.providerAvailability.find((provider) => (
     provider.provider === "google"
   ));
-  const githubLogin = user?.github_login?.trim() || null;
+  const githubLogin = user?.githubLogin?.trim() || null;
   const githubConnected = Boolean(authViewer.data?.githubConnected || linkedGitHub || githubLogin);
   const githubAccountLabel = githubLogin
     ? `@${githubLogin}`
@@ -123,7 +124,7 @@ export function AccountPane() {
   const signedInWhileCloudUnavailable = cloudUnavailable && isAuthenticated;
   const displayName = getAccountDisplayName({
     email: user?.email,
-    displayName: user?.display_name,
+    displayName: user?.displayName,
     githubLogin,
     isAuthenticated,
     devAuthBypassed,
@@ -136,7 +137,7 @@ export function AccountPane() {
     signInUnavailable,
     signedInWhileCloudUnavailable,
   });
-  const profileAvatarUrl = user?.avatar_url?.trim()
+  const profileAvatarUrl = user?.avatarUrl?.trim()
     || (githubLogin
       ? `https://github.com/${encodeURIComponent(githubLogin)}.png?size=160`
       : null);
@@ -166,7 +167,7 @@ export function AccountPane() {
   async function handleSignOut() {
     setSigningOut(true);
     try {
-      await signOut();
+      await auth.logout();
       navigate("/login", { replace: true });
     } finally {
       setSigningOut(false);
@@ -177,7 +178,7 @@ export function AccountPane() {
     setLinkingGoogle(true);
     setProviderLinkError(null);
     try {
-      await linkGoogle();
+      await auth.startLogin({ kind: "google", purpose: "link" });
       await authViewer.refetch();
     } catch (error) {
       setProviderLinkError(error instanceof Error ? error.message : "Google linking failed");

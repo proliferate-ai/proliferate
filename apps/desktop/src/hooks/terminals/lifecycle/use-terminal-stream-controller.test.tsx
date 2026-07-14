@@ -36,7 +36,7 @@ const mockState = vi.hoisted(() => ({
   }>,
 }));
 
-const testProductHost = { desktop: null } as ProductHost;
+const testProductHost = { desktop: null, cloud: { client: null } } as ProductHost;
 
 vi.mock("@anyharness/sdk", () => ({
   AnyHarnessError: class AnyHarnessError extends Error {

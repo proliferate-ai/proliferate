@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { generateWorkspaceName } from "@proliferate/cloud-sdk/client/ai-magic";
 import { findLogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
@@ -8,7 +8,7 @@ import {
   workspaceDisplayNameOverride,
   workspaceHasOtherPromptedSession,
 } from "@/hooks/workspaces/workflows/workspace-name-eligibility";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import { useProductAuthStatus } from "@/hooks/auth/facade/use-product-auth";
 
 const requestedAutoWorkspaceNames = new Map<string, number>();
 const MAX_TRACKED_AUTO_WORKSPACE_NAMES = 500;
@@ -34,6 +34,12 @@ export function useWorkspaceNameActions() {
   const { logicalWorkspaces } = useLogicalWorkspaces();
   const { getWorkspaceSessionCacheSnapshot } = useWorkspaceSessionCache();
   const { updateWorkspaceDisplayName } = useWorkspaceDisplayNameActions();
+  // The auto-name callback runs outside render; read the latest normalized auth
+  // status through a ref so the callback identity stays stable (matching the
+  // former non-reactive the Desktop auth store read).
+  const authStatus = useProductAuthStatus();
+  const authStatusRef = useRef(authStatus);
+  authStatusRef.current = authStatus;
 
   const maybeGenerateWorkspaceName = useCallback(async (input: {
     workspaceId: string;
@@ -44,7 +50,7 @@ export function useWorkspaceNameActions() {
     if (!trimmedPrompt) {
       return;
     }
-    if (useAuthStore.getState().status !== "authenticated") {
+    if (authStatusRef.current !== "authenticated") {
       return;
     }
 

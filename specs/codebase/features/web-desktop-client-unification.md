@@ -626,11 +626,22 @@ product-lifecycle root, and leaves raw sidecar process ownership in Desktop.
 The complete contract is
 [`web-desktop-client-unification-d1c.md`](web-desktop-client-unification-d1c.md).
 
-Finish the Desktop Capability Boundary is the current implementation slice. It
-routes active product-owned files, credentials, SSH, scratch, updater, worker,
-diagnostics, support, links, and clipboard behavior through the mounted host
-while product source remains in Desktop. The complete living contract is
+Finish the Desktop Capability Boundary is complete at PR #1168 merge
+`de249faf06c629e094c20e33f94f33d4e6c4c8f2`. It routes active product-owned
+files, credentials, SSH, scratch, updater, worker, diagnostics, support, links,
+and clipboard behavior through the mounted host while product source remains in
+Desktop. The complete contract is
 [`web-desktop-client-unification-d1d.md`](web-desktop-client-unification-d1d.md).
+
+Route Shared Identity and Navigation Through ProductHost is the current
+implementation slice. It reads normalized auth identity/operations,
+`host.deployment.apiBaseUrl`, and the single `host.cloud.client` through
+`useProductHost()`, closes the ordered-query-pairs and fragment/callback
+contract gaps in ProductClient, and makes one product-owned lifecycle route
+each inbound deep link decoded once into a lossless `ProductEntry` (the legacy
+parallel navigation decoder is deleted). Product source remains in Desktop. The
+complete living contract is
+[`web-desktop-client-unification-d1e.md`](web-desktop-client-unification-d1e.md).
 
 Related authoritative docs:
 

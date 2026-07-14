@@ -7,12 +7,15 @@ import {
   getCloudWorktreeRetentionPolicy,
   putCloudWorktreeRetentionPolicy,
 } from "@proliferate/cloud-sdk/client/worktree-policy";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import {
+  useProductAuthStatus,
+  useProductAuthUserId,
+} from "@/hooks/auth/facade/use-product-auth";
 import { cloudWorktreeRetentionPolicyKey } from "@/hooks/access/cloud/query-keys";
 
 export function useCloudWorktreeRetentionPolicy() {
-  const authStatus = useAuthStore((state) => state.status);
-  const userId = useAuthStore((state) => state.user?.id ?? null);
+  const authStatus = useProductAuthStatus();
+  const userId = useProductAuthUserId();
   return useQuery<CloudWorktreeRetentionPolicyResponse>({
     queryKey: cloudWorktreeRetentionPolicyKey(userId),
     queryFn: getCloudWorktreeRetentionPolicy,
@@ -24,7 +27,7 @@ export function useCloudWorktreeRetentionPolicy() {
 
 export function usePutCloudWorktreeRetentionPolicy() {
   const queryClient = useQueryClient();
-  const userId = useAuthStore((state) => state.user?.id ?? null);
+  const userId = useProductAuthUserId();
   return useMutation({
     mutationFn: (input: CloudWorktreeRetentionPolicyRequest) =>
       putCloudWorktreeRetentionPolicy(input),

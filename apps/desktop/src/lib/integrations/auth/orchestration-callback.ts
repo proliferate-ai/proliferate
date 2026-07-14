@@ -12,6 +12,7 @@ import {
   exchangeDesktopAuthCode,
   isPendingDesktopAuthExpired,
   parseDesktopAuthCallback,
+  type DesktopAuthCallback,
 } from "@/lib/integrations/auth/proliferate-auth";
 import {
   captureTelemetryException,
@@ -19,23 +20,43 @@ import {
 import {
   applyAuthenticatedState,
   clearPendingGitHubAuth,
-  handleDesktopNavigationUrl,
   markPendingCallbackUrl,
   markTelemetryHandled,
-  reportBackgroundAuthError,
-  restorePendingCallbackMarker,
+  publishCallbackIssue,
   toError,
   type AuthOrchestrationDeps,
 } from "./orchestration-effects";
+
+/**
+ * The bounded, single-flight callback state machine. Every raw callback URL is
+ * decoded, then one host-owned single-flight (keyed by the normalized callback
+ * URL) drives it to exactly one terminal result:
+ *
+ *  - provider failure -> clear the matching pending transaction, publish issue;
+ *  - success          -> exchange once, commit, clear pending, publish snapshot;
+ *  - malformed/expired -> no exchange, clear the matching/expired transaction,
+ *                         publish issue;
+ *  - state mismatch   -> no exchange, DO NOT destroy a different valid pending.
+ *
+ * An exchange failure is TERMINAL for that callback: the pending transaction is
+ * cleared and the user must start a new login (no retry marker restore). A
+ * duplicate delivery (React StrictMode, rerender, reload/back, or a repeated OS
+ * event) either joins the in-flight promise for the same callback or observes
+ * the persisted already-consumed marker, and never exchanges or commits twice.
+ *
+ * This is not a queue, durable replay, or retry system: the single-flight map
+ * is bounded to callbacks currently being processed and is cleared as each
+ * settles.
+ */
+const inFlightCallbacks = new Map<string, Promise<boolean>>();
 
 export async function handleDesktopCallbackUrl(
   url: string,
   deps: AuthOrchestrationDeps,
 ): Promise<boolean> {
-  if (handleDesktopNavigationUrl(url, deps)) {
-    return true;
-  }
-
+  // Auth transport consumes ONLY auth-callback URLs. Every other inbound deep
+  // link is decoded to a ProductEntry and routed by use-product-entry-routing;
+  // it never reaches here (a non-auth URL fails parseDesktopAuthCallback below).
   if (isDevAuthBypassed()) {
     return false;
   }
@@ -45,26 +66,50 @@ export async function handleDesktopCallbackUrl(
     return false;
   }
 
+  // Single-flight: a concurrent duplicate delivery of the same callback joins
+  // the in-flight promise instead of starting a second transaction.
+  const existing = inFlightCallbacks.get(callback.url);
+  if (existing) {
+    return existing;
+  }
+  const run = processCallback(callback, deps).finally(() => {
+    inFlightCallbacks.delete(callback.url);
+  });
+  inFlightCallbacks.set(callback.url, run);
+  return run;
+}
+
+async function processCallback(
+  callback: DesktopAuthCallback,
+  deps: AuthOrchestrationDeps,
+): Promise<boolean> {
   const pending = await getStoredPendingAuthSession();
   if (!pending) {
     return false;
   }
 
   if (isPendingDesktopAuthExpired(pending)) {
+    // Terminal: clear only the expired transaction, no exchange.
     const message = "Authentication expired. Start again from Proliferate.";
     await clearPendingGitHubAuth(pending.state, new Error(message));
-    reportBackgroundAuthError(message, deps);
+    publishCallbackIssue({ kind: "callback_failed", reason: "expired" }, message, deps);
     return false;
   }
 
   if (pending.state !== callback.state) {
-    reportBackgroundAuthError(
+    // Do NOT destroy a different valid pending transaction; publish the issue
+    // and leave the pending record intact so its own callback can still land.
+    publishCallbackIssue(
+      { kind: "callback_failed", reason: "state_mismatch" },
       "Proliferate ignored a stale browser callback because it did not match the active auth flow.",
       deps,
     );
     return false;
   }
 
+  // Persisted already-consumed marker: a duplicate delivery (reload/back, a
+  // repeated OS event) observes the prior terminal result without exchanging or
+  // committing again, and without republishing over it.
   if (pending.last_handled_callback_url === callback.url) {
     return true;
   }
@@ -72,15 +117,31 @@ export async function handleDesktopCallbackUrl(
   await markPendingCallbackUrl(pending, callback.url);
 
   if (callback.error) {
+    // Provider failure: clear the matching pending transaction, no exchange.
     const message = `Authentication failed: ${callback.error}`;
     await clearPendingGitHubAuth(pending.state, new Error(message));
-    reportBackgroundAuthError(message, deps);
+    publishCallbackIssue(
+      {
+        kind: "callback_failed",
+        reason: "provider_error",
+        providerCode: callback.error,
+      },
+      message,
+      deps,
+    );
     return true;
   }
 
   if (!callback.code) {
-    reportBackgroundAuthError("Authentication failed: missing authorization code.", deps);
-    await restorePendingCallbackMarker(pending);
+    // Malformed/missing code: clear the matching pending transaction, no
+    // exchange. This is terminal — a fresh login is required.
+    const message = "Authentication failed: missing authorization code.";
+    await clearPendingGitHubAuth(pending.state, new Error(message));
+    publishCallbackIssue(
+      { kind: "callback_failed", reason: "malformed_callback" },
+      message,
+      deps,
+    );
     return false;
   }
 
@@ -97,11 +158,17 @@ export async function handleDesktopCallbackUrl(
   } catch (error) {
     const latestPending = await getStoredPendingAuthSession();
     if (!latestPending || latestPending.state !== pending.state) {
+      // A newer login replaced ours mid-exchange; this callback is terminal but
+      // we must not clobber the newer valid transaction.
       return true;
     }
 
-    await restorePendingCallbackMarker(pending);
+    // Exchange failure is TERMINAL: clear the pending transaction (no marker
+    // restore, no retry) so the user must start a new login. Cleanup happens
+    // before any reporting, so it holds even if reporting throws.
+    await clearStoredPendingAuthSession();
 
+    const message = error instanceof Error ? error.message : "Authentication failed";
     if (getActiveGitHubSignIn()?.state === pending.state) {
       captureTelemetryException(error, {
         tags: {
@@ -114,11 +181,11 @@ export async function handleDesktopCallbackUrl(
         pending.state,
         markTelemetryHandled(toError(error, "Authentication failed")),
       );
-      return false;
     }
 
-    reportBackgroundAuthError(
-      error instanceof Error ? error.message : "Authentication failed",
+    publishCallbackIssue(
+      { kind: "callback_failed", reason: "exchange_failed" },
+      message,
       deps,
     );
     return false;

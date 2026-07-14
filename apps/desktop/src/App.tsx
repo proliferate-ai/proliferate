@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect } from "react"
+import { Suspense, lazy, useEffect, useRef } from "react"
 import { Navigate, Route } from "react-router-dom"
 import { BootstrappedRoute, PublicOnlyRoute } from "@/components/auth/AuthGate"
 import { UserPreferencesGate } from "@/components/app/UserPreferencesGate"
@@ -11,6 +11,7 @@ import { MacWindowControlsSafeArea } from "@/components/app/chrome/MacWindowCont
 import { useConnectivityListeners } from "@/hooks/app/lifecycle/use-connectivity-listeners"
 import { useDebugSessionActivity } from "@/hooks/app/lifecycle/use-debug-session-activity"
 import { useDevDesktopHandoff } from "@/hooks/app/lifecycle/use-dev-desktop-handoff"
+import { useProductEntryRouting } from "@/hooks/app/lifecycle/use-product-entry-routing"
 import { useOrganizationJoinAuthLaunch } from "@/hooks/organizations/lifecycle/use-organization-join-auth-launch"
 import { useAppShortcuts } from "@/hooks/app/lifecycle/use-app-shortcuts"
 import { useAppCommandActions } from "@/hooks/app/workflows/use-app-command-actions"
@@ -49,7 +50,7 @@ import { InstrumentedRoutes } from "@/lib/integrations/telemetry/sentry"
 import { AuthenticatedAppHost } from "@/pages/AuthenticatedAppHost"
 import { LoginPage } from "@/pages/LoginPage"
 import { SettingsCloudRedirect } from "@/pages/SettingsCloudRedirect"
-import { useAuthStore } from "@/stores/auth/auth-store"
+import { useProductAuthStatus } from "@/hooks/auth/facade/use-product-auth"
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store"
 import { AppCommandActionsProvider } from "@/providers/AppCommandActionsProvider"
 import { DesktopProductLifecycleRoot } from "@/providers/DesktopProductLifecycleRoot"
@@ -148,7 +149,9 @@ function AppRuntime() {
   const diagnostics = productHost.desktop?.diagnostics ?? null
   recordBootDiagnosticOnce("app_runtime.render.after.use_auth_bootstrap")
   recordBootDiagnosticOnce("app_runtime.render.before.auth_status")
-  const authStatus = useAuthStore((s) => s.status)
+  const authStatus = useProductAuthStatus()
+  const authStatusRef = useRef(authStatus)
+  authStatusRef.current = authStatus
   recordBootDiagnosticOnce("app_runtime.render.after.auth_status", { authStatus })
   recordBootDiagnosticOnce("app_runtime.render.before.use_app_command_actions")
   const appCommandActions = useAppCommandActions()
@@ -156,6 +159,9 @@ function AppRuntime() {
   useConnectivityListeners()
   useDebugSessionActivity()
   useDevDesktopHandoff()
+  // Mounted here — above the auth route gate — so invitation/login-dependent
+  // inbound entries reach the shared gate rather than being blocked by it.
+  useProductEntryRouting()
   useOrganizationJoinAuthLaunch()
   recordBootDiagnosticOnce("app_runtime.render.before.use_shortcut_dispatcher")
   useShortcutDispatcher()
@@ -223,7 +229,7 @@ function AppRuntime() {
       )
       logStartupDebug("app.auth_bootstrap.completed", {
         elapsedMs: elapsedStartupMs(authBootstrapStartedAt),
-        authStatus: useAuthStore.getState().status,
+        authStatus: authStatusRef.current,
       })
     })
   }, [bootstrapAuth, diagnostics])

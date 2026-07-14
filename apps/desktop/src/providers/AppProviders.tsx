@@ -6,6 +6,7 @@ import {
 import type { CoworkStatus, TerminalWebSocketAuthTransport } from "@anyharness/sdk";
 import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
 import type { CloudMobilityWorkspaceSummary } from "@/lib/access/cloud/client";
 import { getProliferateClient } from "@/lib/access/cloud/client";
 import { CloudClientProvider } from "@proliferate/cloud-sdk-react";
@@ -33,9 +34,8 @@ import { resolveRouteScopedWorkspaceProviderId } from "@/lib/domain/workspaces/s
 import { getWorkspaceCollectionsFromCache } from "@/hooks/workspaces/cache/query-keys";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import type { AuthClientStatus } from "@/lib/domain/auth/auth-state-mapping";
 import { buildAnyHarnessCacheScopeKey } from "@/lib/domain/auth/anyharness-cache-scope";
-import { getProliferateApiBaseUrl } from "@/lib/infra/proliferate-api";
 import { withFreshCloudSandboxGatewayAccessToken } from "@/lib/access/cloud/cloud-sandbox-gateway";
 import { useCloudWorkspaceMaterializationCacheBoundary } from "@/hooks/workspaces/cache/use-cloud-workspace-materialization-cache-boundary";
 import { DesktopProductHostProvider } from "./DesktopProductHostProvider";
@@ -45,14 +45,15 @@ async function resolveWorkspaceConnectionWithCache(
   runtimeUrl: string,
   workspaceId: string,
   ssh: DesktopSshBridge | null,
+  cloudClient: ProliferateCloudClient | null,
 ) {
   const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(workspaceId);
   if (!cloudWorkspaceId) {
-    return resolveWorkspaceConnection(runtimeUrl, workspaceId, ssh);
+    return resolveWorkspaceConnection(runtimeUrl, workspaceId, ssh, cloudClient);
   }
 
   const cachedConnection = await appQueryClient.fetchQuery(
-    cloudWorkspaceConnectionQueryOptions(cloudWorkspaceId),
+    cloudWorkspaceConnectionQueryOptions(cloudWorkspaceId, cloudClient),
   );
   const connection = await withFreshCloudSandboxGatewayAccessToken(cachedConnection);
   const webSocketAuthTransport = (
@@ -83,16 +84,26 @@ export function AppProviders({ children }: { children: ReactNode }) {
 }
 
 function WorkspaceProviders({ children }: { children: ReactNode }) {
-  const ssh = useProductHost().desktop?.ssh ?? null;
+  const host = useProductHost();
+  const ssh = host.desktop?.ssh ?? null;
+  const cloudClient = host.cloud.client;
+  const apiBaseUrl = host.deployment.apiBaseUrl;
+  const authState = host.auth.state;
+  const authStatus = authState.status;
+  const authUserId =
+    authState.status === "authenticated" ? (authState.user?.id ?? null) : null;
+  // The AnyHarness cache-scope key embeds the auth status string verbatim, so
+  // the shared `loading` maps back to the Desktop `bootstrapping` spelling to
+  // keep the exact cache namespace unchanged.
+  const cacheAuthStatus: AuthClientStatus =
+    authStatus === "loading" ? "bootstrapping" : authStatus;
   const location = useLocation();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
-  const authStatus = useAuthStore((state) => state.status);
-  const authUserId = useAuthStore((state) => state.user?.id ?? null);
   const cacheScopeKey = useMemo(() => buildAnyHarnessCacheScopeKey({
-    apiBaseUrl: getProliferateApiBaseUrl(),
-    authStatus,
+    apiBaseUrl,
+    authStatus: cacheAuthStatus,
     authUserId,
-  }), [authStatus, authUserId]);
+  }), [apiBaseUrl, cacheAuthStatus, authUserId]);
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore((state) => state.selectedLogicalWorkspaceId);
   const providerWorkspaceId = resolveRouteScopedWorkspaceProviderId({
@@ -162,6 +173,7 @@ function WorkspaceProviders({ children }: { children: ReactNode }) {
             runtimeUrl,
             explicitCloudRuntimeMaterializationId,
             ssh,
+            cloudClient,
           );
         }
 
@@ -169,20 +181,20 @@ function WorkspaceProviders({ children }: { children: ReactNode }) {
           explicitTargetMaterializationId
           && materializationId === explicitTargetMaterializationId
         ) {
-          return resolveWorkspaceConnectionWithCache(runtimeUrl, explicitTargetMaterializationId, ssh);
+          return resolveWorkspaceConnectionWithCache(runtimeUrl, explicitTargetMaterializationId, ssh, cloudClient);
         }
 
         if (
           logicalWorkspace.localWorkspace
           && materializationId === logicalWorkspace.localWorkspace.id
         ) {
-          return resolveWorkspaceConnectionWithCache(runtimeUrl, logicalWorkspace.localWorkspace.id, ssh);
+          return resolveWorkspaceConnectionWithCache(runtimeUrl, logicalWorkspace.localWorkspace.id, ssh, cloudClient);
         }
       }
 
-      return resolveWorkspaceConnectionWithCache(runtimeUrl, workspaceId, ssh);
+      return resolveWorkspaceConnectionWithCache(runtimeUrl, workspaceId, ssh, cloudClient);
     },
-    [authStatus, authUserId, cacheScopeKey, runtimeUrl, selectedWorkspaceId, ssh],
+    [authStatus, authUserId, cacheScopeKey, cloudClient, runtimeUrl, selectedWorkspaceId, ssh],
   );
 
   return (

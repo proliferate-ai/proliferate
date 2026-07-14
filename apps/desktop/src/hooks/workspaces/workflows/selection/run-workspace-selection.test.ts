@@ -98,6 +98,7 @@ describe("runWorkspaceSelection", () => {
 
     await runWorkspaceSelection({
       localRuntime: null,
+      cloudClient: null,
       cache: selectionCache(),
       logicalWorkspaces,
       rawWorkspaces: [],
@@ -121,6 +122,7 @@ describe("runWorkspaceSelection", () => {
 
     await expect(runWorkspaceSelection({
       localRuntime: null,
+      cloudClient: null,
       cache: selectionCache(),
       logicalWorkspaces: [
         ...logicalWorkspaces,
@@ -177,6 +179,7 @@ describe("runWorkspaceSelection", () => {
 
     await runWorkspaceSelection({
       localRuntime: null,
+      cloudClient: null,
       cache,
       logicalWorkspaces,
       rawWorkspaces: [],
@@ -213,6 +216,7 @@ describe("runWorkspaceSelection", () => {
 
     await runWorkspaceSelection({
       localRuntime: null,
+      cloudClient: null,
       cache: selectionCache(),
       logicalWorkspaces,
       rawWorkspaces: [],
@@ -256,6 +260,7 @@ describe("runWorkspaceSelection", () => {
 
     await runWorkspaceSelection({
       localRuntime: null,
+      cloudClient: null,
       cache: selectionCache(),
       logicalWorkspaces,
       rawWorkspaces: [],
@@ -293,6 +298,7 @@ describe("runWorkspaceSelection", () => {
 
     await runWorkspaceSelection({
       localRuntime: null,
+      cloudClient: null,
       cache: selectionCache(),
       logicalWorkspaces,
       rawWorkspaces: [],
@@ -326,6 +332,7 @@ describe("runWorkspaceSelection", () => {
 
     await runWorkspaceSelection({
       localRuntime: null,
+      cloudClient: null,
       cache: selectionCache(),
       logicalWorkspaces,
       rawWorkspaces: [],
@@ -393,6 +400,7 @@ describe("runWorkspaceSelection", () => {
 
     await runWorkspaceSelection({
       localRuntime: null,
+      cloudClient: null,
       cache: selectionCache(),
       logicalWorkspaces,
       rawWorkspaces: [],

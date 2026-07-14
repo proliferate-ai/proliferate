@@ -1,5 +1,6 @@
 import type { Session } from "@anyharness/sdk";
 import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
+import type { CloudSandboxGatewayUrlSource } from "@/lib/access/cloud/cloud-sandbox-gateway";
 import type { useSetSessionConfigOptionMutation } from "@anyharness/sdk-react";
 import {
   getAuthoritativeConfigValue,
@@ -28,6 +29,7 @@ type SetSessionConfigOptionMutation = ReturnType<typeof useSetSessionConfigOptio
 
 export interface ConfigIntentDispatchDeps {
   ssh?: DesktopSshBridge | null;
+  cloudClient: CloudSandboxGatewayUrlSource | null;
   getWorkspaceSurface: (
     workspaceId: string | null | undefined,
   ) => Parameters<typeof persistDefaultSessionModePreference>[0]["workspaceSurface"];
@@ -55,6 +57,7 @@ export async function dispatchConfigIntent(
     const { workspaceId, materializedSessionId } = await getSessionClientAndWorkspace(
       intent.clientSessionId,
       deps.ssh ?? null,
+      deps.cloudClient,
     );
     useSessionIntentStore.getState().bindMaterializedSession(
       intent.clientSessionId,

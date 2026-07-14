@@ -49,7 +49,9 @@ interface SessionHistoryHydrationOptions {
  * Stream handle lifecycle stays in useSessionRuntimeActions.
  */
 export function useSessionHistoryHydration() {
-  const ssh = useProductHost().desktop?.ssh ?? null;
+  const host = useProductHost();
+  const ssh = host.desktop?.ssh ?? null;
+  const cloudClient = host.cloud.client;
   const { mountSubagentChildrenFromEvents } = useLinkedSessionMounting();
 
   const rehydrateSessionSlotFromHistory = useCallback(async (
@@ -111,8 +113,9 @@ export function useSessionHistoryHydration() {
               : {}),
             ...(options?.timeoutMs != null ? { timeoutMs: options.timeoutMs } : {}),
             ssh,
+            cloudClient,
           }
-          : { ssh },
+          : { ssh, cloudClient },
       );
       for (const operationId of historyApplyOperationIds) {
         recordMeasurementWorkflowStep({
@@ -382,7 +385,7 @@ export function useSessionHistoryHydration() {
       finishStandaloneApplyOperation(standaloneMeasurementOperationId, "error_sanitized");
       return false;
     }
-  }, [mountSubagentChildrenFromEvents, ssh]);
+  }, [mountSubagentChildrenFromEvents, ssh, cloudClient]);
 
   return {
     rehydrateSessionSlotFromHistory,

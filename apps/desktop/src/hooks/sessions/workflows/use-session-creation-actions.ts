@@ -57,9 +57,11 @@ import { cleanupSessionCreationFailure } from "@/hooks/sessions/workflows/sessio
 import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
 
 export function useSessionCreationActions() {
-  const desktop = useProductHost().desktop;
+  const host = useProductHost();
+  const desktop = host.desktop;
   const localRuntime = desktop?.runtime ?? null;
   const ssh = desktop?.ssh ?? null;
+  const cloudClient = host.cloud.client;
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const { getWorkspaceSurface } = useWorkspaceSurfaceLookup();
   const { promptSession } = useSessionPromptWorkflow();
@@ -286,6 +288,7 @@ export function useSessionCreationActions() {
       frozenDefaultLiveSessionControlValuesByAgentKind,
       localRuntime,
       ssh,
+      cloudClient,
       options,
       pendingSessionId,
       resolvedModeId: resolvedModeId ?? null,
@@ -364,6 +367,7 @@ export function useSessionCreationActions() {
     getWorkspaceSurface,
     localRuntime,
     ssh,
+    cloudClient,
     promptSession,
     removeWorkspaceSessionRecord,
     showToast,

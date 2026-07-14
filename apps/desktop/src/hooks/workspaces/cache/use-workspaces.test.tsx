@@ -9,6 +9,8 @@ import { buildWorkspaceCollections } from "@/lib/domain/workspaces/cloud/collect
 import { buildLogicalWorkspaces } from "@/lib/domain/workspaces/cloud/logical-workspaces";
 import type { CloudWorkspaceSummary } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
+import { makeTestProductHost } from "@/test/product-host-test-utils";
 import { workspaceCollectionsKey } from "./query-keys";
 import { useWorkspaces } from "./use-workspaces";
 
@@ -186,8 +188,11 @@ function createQueryClient() {
 }
 
 function renderUseWorkspaces(queryClient = createQueryClient()) {
+  const host = makeTestProductHost();
   const wrapper = ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      <ProductHostProvider host={host}>{children}</ProductHostProvider>
+    </QueryClientProvider>
   );
 
   return {

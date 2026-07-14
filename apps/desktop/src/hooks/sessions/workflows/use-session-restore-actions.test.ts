@@ -32,7 +32,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
-  useProductHost: () => ({ desktop: { runtime: mocks.localRuntime } }),
+  useProductHost: () => ({ desktop: { runtime: mocks.localRuntime }, cloud: { client: null } }),
 }));
 
 vi.mock("@/lib/access/browser/session-replacement-tombstones-storage", () => ({

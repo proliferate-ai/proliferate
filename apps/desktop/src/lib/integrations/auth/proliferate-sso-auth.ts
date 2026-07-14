@@ -41,13 +41,13 @@ export interface DesktopSsoSignInOptions {
   prompt?: "select_account"
 }
 
-function buildUrl(path: string): string {
-  return buildAuthUrl(path)
+function buildUrl(path: string, baseUrl?: string): string {
+  return buildAuthUrl(path, baseUrl)
 }
 
 export async function discoverDesktopSso(
   options: Pick<DesktopSsoSignInOptions, "email" | "organizationId" | "connectionId">
-    & { slug?: string | null } = {},
+    & { slug?: string | null; apiBaseUrl?: string } = {},
 ): Promise<DesktopSsoDiscovery> {
   const params = new URLSearchParams()
   if (options.email) params.set("email", options.email)
@@ -56,7 +56,7 @@ export async function discoverDesktopSso(
   if (options.slug) params.set("slug", options.slug)
   const query = params.toString()
   const response = await fetchAuthResponse(
-    buildUrl(`/auth/sso/discover${query ? `?${query}` : ""}`),
+    buildUrl(`/auth/sso/discover${query ? `?${query}` : ""}`, options.apiBaseUrl),
     {
       headers: {
         Accept: "application/json",

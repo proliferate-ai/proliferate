@@ -78,6 +78,7 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
 vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   useProductHost: () => ({
     links: { openExternal: hookMocks.openExternal },
+    auth: { authRequired: true, state: { status: "anonymous", methods: [] } },
   }),
 }));
 

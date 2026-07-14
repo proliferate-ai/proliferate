@@ -13,7 +13,7 @@ export function getLastKnownControlPlaneReachable(): boolean | null {
   return lastKnownControlPlaneReachable;
 }
 
-export async function checkControlPlaneReachable(): Promise<boolean> {
+export async function checkControlPlaneReachable(apiBaseUrl?: string): Promise<boolean> {
   const startedAt = startStartupTimer();
   logStartupDebug("control_plane.health.start");
   const abortController = typeof AbortController !== "undefined"
@@ -27,7 +27,7 @@ export async function checkControlPlaneReachable(): Promise<boolean> {
     : null;
 
   try {
-    const response = await fetch(buildProliferateApiUrl("/health"), {
+    const response = await fetch(buildProliferateApiUrl("/health", apiBaseUrl), {
       headers: {
         Accept: "application/json",
       },

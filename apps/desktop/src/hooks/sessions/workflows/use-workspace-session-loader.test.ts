@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   useProductHost: () => ({
     desktop: { runtime: mocks.localRuntime, ssh: mocks.ssh },
+    cloud: { client: null },
   }),
 }));
 
@@ -111,6 +112,7 @@ describe("useWorkspaceSessionLoader replacement filtering", () => {
         requestHeaders: undefined,
         measurementOperationId: undefined,
         ssh: mocks.ssh,
+        cloudClient: null,
       },
     );
   });

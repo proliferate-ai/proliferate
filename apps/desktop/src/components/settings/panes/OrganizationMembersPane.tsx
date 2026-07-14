@@ -18,15 +18,18 @@ import {
   type OrganizationMemberRecord,
   type OrganizationRole,
 } from "@/lib/domain/organizations/organization-records";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import {
+  useProductAuthStatus,
+  useProductAuthUserId,
+} from "@/hooks/auth/facade/use-product-auth";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 const EMPTY_MEMBERS: OrganizationMemberRecord[] = [];
 const EMPTY_INVITATIONS: OrganizationInvitationRecord[] = [];
 
 export function OrganizationMembersPane() {
-  const authStatus = useAuthStore((state) => state.status);
-  const currentUser = useAuthStore((state) => state.user);
+  const authStatus = useProductAuthStatus();
+  const currentUserId = useProductAuthUserId();
   const {
     activeOrganization,
     activeOrganizationId,
@@ -138,7 +141,7 @@ export function OrganizationMembersPane() {
             invitations={invitations}
             canManage={canManage}
             canManageOwners={canManageOwners}
-            currentUserId={currentUser?.id ?? null}
+            currentUserId={currentUserId}
             updating={actions.updatingMembership || actions.removingMembership || actions.revokingInvitation}
             onRoleChange={updateMemberRole}
             onRemove={(membershipId) => {

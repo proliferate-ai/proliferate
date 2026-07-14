@@ -3,7 +3,12 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DesktopWorkerBridge } from "@proliferate/product-client/host/desktop-bridge";
-import type { AuthUser } from "@/lib/domain/auth/auth-user";
+import type { AuthState } from "@proliferate/product-client/host/product-host";
+
+interface EnrollmentAuthProps {
+  authStatus: AuthState["status"];
+  authUserId: string | null;
+}
 
 const workflowMocks = vi.hoisted(() => ({
   ensureDesktopWorker: vi.fn<
@@ -21,43 +26,45 @@ vi.mock("@/lib/workflows/cloud/ensure-desktop-worker", () => ({
   teardownDesktopWorker: workflowMocks.teardownDesktopWorker,
 }));
 
-function authUser(id: string): AuthUser {
-  return { id, email: `${id}@example.com`, display_name: null };
-}
-
 const worker = {} as DesktopWorkerBridge;
 
 // The enrollment guard is module-level state, so each test loads the hook
-// (and the stores it observes) from a fresh module registry.
+// (and the stores it observes) from a fresh module registry. Normalized auth
+// (status + user id) now arrives as props from the lifecycle root, so the
+// harness drives it through rerender rather than the auth store.
 async function loadEnrollmentHarness() {
   vi.resetModules();
-  const { useAuthStore } = await import("@/stores/auth/auth-store");
   const { useOrganizationStore } = await import("@/stores/organizations/organization-store");
   const { useToastStore } = await import("@/stores/toast/toast-store");
   const { useDesktopWorkerEnrollment } = await import("./use-desktop-worker-enrollment");
-  useAuthStore.setState({
-    status: "bootstrapping",
-    session: null,
-    user: null,
-    error: null,
-  });
   useOrganizationStore.setState({
     activeOrganizationId: null,
     activeOrganizationValidated: false,
   });
   useToastStore.setState({ toasts: [] });
-  const rendered = renderHook(() => useDesktopWorkerEnrollment(worker));
+  const props: EnrollmentAuthProps = { authStatus: "loading", authUserId: null };
+  const rendered = renderHook(
+    ({ authStatus, authUserId }: EnrollmentAuthProps) =>
+      useDesktopWorkerEnrollment(worker, authStatus, authUserId),
+    { initialProps: props },
+  );
+  const setProps = (next: EnrollmentAuthProps) => {
+    props.authStatus = next.authStatus;
+    props.authUserId = next.authUserId;
+    rendered.rerender({ ...props });
+  };
   return {
     ...rendered,
+    rerender: () => rendered.rerender({ ...props }),
     signIn: (id: string) =>
-      useAuthStore.setState({ status: "authenticated", user: authUser(id) }),
-    signOut: () => useAuthStore.setState({ status: "anonymous", user: null }),
+      setProps({ authStatus: "authenticated", authUserId: id }),
+    signOut: () => setProps({ authStatus: "anonymous", authUserId: null }),
     setOrganization: (organizationId: string | null) =>
       useOrganizationStore.getState().setActiveOrganizationId(organizationId, {
         validated: true,
       }),
     getToasts: () => useToastStore.getState().toasts,
-    nudgeRender: () => useAuthStore.setState({ error: "nudge a re-render" }),
+    nudgeRender: () => rendered.rerender({ ...props }),
   };
 }
 

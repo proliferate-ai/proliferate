@@ -6,6 +6,7 @@ import type {
 } from "@anyharness/sdk";
 import { useQueries } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { cloudWorkspaceConnectionQueryOptions } from "@/hooks/access/cloud/use-cloud-workspace-connection";
 import { useWorktreeTargetActions } from "@/hooks/access/anyharness/worktrees/use-worktree-target-actions";
 import {
@@ -31,6 +32,7 @@ export type WorktreeSettingsTargetState = WorktreeTargetInventoryState;
 // Owns the Settings pane target view: local/cloud runtime discovery plus
 // worktree management actions for each discovered runtime.
 export function useWorktreeSettingsTargets() {
+  const cloudClient = useProductHost().cloud.client;
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const { data: workspaceCollections } = useWorkspaces();
   const cloudWorkspaces = workspaceCollections?.cloudWorkspaces ?? EMPTY_CLOUD_WORKSPACES;
@@ -50,7 +52,7 @@ export function useWorktreeSettingsTargets() {
 
   const cloudConnectionQueries = useQueries({
     queries: readyCloudWorkspaces.map((workspace) => ({
-      ...cloudWorkspaceConnectionQueryOptions(workspace.id),
+      ...cloudWorkspaceConnectionQueryOptions(workspace.id, cloudClient),
       enabled: true,
     })),
   });

@@ -20,7 +20,9 @@ export interface TerminalWorkspaceConnectionController {
 
 // Owns terminal workspace runtime resolution, including the selected cloud runtime fast path.
 export function useTerminalWorkspaceConnection(): TerminalWorkspaceConnectionController {
-  const ssh = useProductHost().desktop?.ssh ?? null;
+  const host = useProductHost();
+  const ssh = host.desktop?.ssh ?? null;
+  const cloudClient = host.cloud.client;
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const { invalidateCloudWorkspaceConnection } = useCloudWorkspaceConnectionCache();
   const { selectedCloudRuntime, getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
@@ -45,10 +47,11 @@ export function useTerminalWorkspaceConnection(): TerminalWorkspaceConnectionCon
       };
     }
 
-    return resolveWorkspaceConnection(runtimeUrl, workspaceId, ssh);
+    return resolveWorkspaceConnection(runtimeUrl, workspaceId, ssh, cloudClient);
   }, [
     runtimeUrl,
     ssh,
+    cloudClient,
     selectedCloudRuntime.connectionInfo,
     selectedCloudRuntime.state?.phase,
     selectedCloudRuntime.workspaceId,

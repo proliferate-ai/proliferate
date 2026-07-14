@@ -67,7 +67,13 @@ export async function bootstrapAuth(deps: AuthOrchestrationDeps): Promise<void> 
       return;
     }
 
-    deps.setAuthState(anonymousAuthState());
+    // No cached session and the control plane is unreachable: publish an
+    // anonymous state carrying the deployment_unreachable issue (never a fake
+    // authenticated or beta-denied state).
+    deps.setAuthState({
+      ...anonymousAuthState(),
+      issue: { kind: "deployment_unreachable" },
+    });
     logStartupDebug("auth.bootstrap.control_plane_unreachable.anonymous", {
       elapsedMs: elapsedStartupMs(startedAt),
     });

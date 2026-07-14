@@ -209,11 +209,27 @@ export function createDesktopAuthOperations(
     }
   }
 
-  async function finishLogin({ code, state }: AuthCallback): Promise<void> {
-    if (!state) {
+  async function finishLogin(callback: AuthCallback): Promise<void> {
+    if (!callback.state) {
       throw new Error("Desktop OAuth state is required to finish sign-in.");
     }
-    const params = new URLSearchParams({ code, state });
+    if (callback.status === "failure") {
+      // Failure callbacks never exchange. Reconstruct the provider-error URL and
+      // let the callback machine clear the matching pending transaction and
+      // publish the normalized callback issue.
+      const params = new URLSearchParams({
+        error: callback.code,
+        state: callback.state,
+      });
+      const url = `${DESKTOP_AUTH_REDIRECT_URI}?${params.toString()}`;
+      await handleDesktopCallbackUrl(url, getCallbackDeps());
+      return;
+    }
+    // Success: preserve the existing PKCE code exchange.
+    const params = new URLSearchParams({
+      code: callback.code,
+      state: callback.state,
+    });
     const url = `${DESKTOP_AUTH_REDIRECT_URI}?${params.toString()}`;
     const handled = await handleDesktopCallbackUrl(url, getCallbackDeps());
     if (!handled) {

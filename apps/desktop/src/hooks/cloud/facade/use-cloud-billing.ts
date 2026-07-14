@@ -9,7 +9,7 @@ import {
 } from "@/hooks/access/cloud/use-cloud-billing";
 import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import { useProductAuthStatus } from "@/hooks/auth/facade/use-product-auth";
 
 function billingOwnerKey(owner?: CloudOwnerSelection) {
   return {
@@ -24,7 +24,7 @@ export function useCloudBilling(
 ) {
   const { billingEnabled } = useAppCapabilities();
   const { cloudActive } = useCloudAvailabilityState();
-  const authStatus = useAuthStore((state) => state.status);
+  const authStatus = useProductAuthStatus();
   const ownerKey = billingOwnerKey(owner);
   const billingAccessible = billingEnabled
     && (
