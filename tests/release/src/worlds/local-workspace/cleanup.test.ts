@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -83,6 +83,47 @@ test("a releaser failure is counted (not thrown) and flips its category boolean"
     assert.equal(evidence.browserClosed, true);
     // Categories with no registered entry are false (an incomplete run cannot be green).
     assert.equal(evidence.virtualKeyDeleted, false);
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
+
+test("a failed releaser preserves the run directory (and its ledger) instead of letting run_directory delete it", async () => {
+  const { stack, runDir } = await stackInTemp();
+  try {
+    const order: string[] = [];
+    // Registered first ⇒ released LAST (reverse order), same as the real world.
+    const runDirId = await stack.register("run_directory", async () => {
+      order.push("run_directory");
+    });
+    await stack.acquired(runDirId, runDir);
+
+    const badId = await stack.register("docker_network", async () => {
+      order.push("docker_network");
+      throw new Error("network plq-run-net has active endpoints");
+    });
+    await stack.acquired(badId, "plq-run-net");
+
+    const evidence = await stack.runAll();
+
+    // The run_directory releaser must never have run: it would have deleted
+    // the directory (and the ledger inside it) before a replay-by-run command
+    // could find the unreconciled docker_network entry.
+    assert.deepEqual(order, ["docker_network"]);
+    assert.equal(evidence.failed, 2); // the network failure + the deliberate run_directory skip
+    assert.equal(evidence.reconciled, 0);
+    assert.equal(evidence.containersRemoved, false);
+    assert.equal(evidence.localPathsRemoved, false);
+
+    // The ledger file itself must still be on disk, still recording the
+    // unreconciled docker_network entry, for replay-by-run to act on.
+    const ledgerPath = path.join(runDir, "cleanup-ledger.json");
+    const persisted = JSON.parse(await readFile(ledgerPath, "utf8")) as {
+      entries: Array<{ kind: string; phase: string }>;
+    };
+    const networkEntry = persisted.entries.find((entry) => entry.kind === "docker_network");
+    assert.ok(networkEntry);
+    assert.notEqual(networkEntry!.phase, "reconciled");
   } finally {
     await rm(runDir, { recursive: true, force: true });
   }

@@ -181,7 +181,7 @@ export async function startDockerStack(options: DockerStackOptions): Promise<Run
   // Network first so it is registered first and therefore torn down LAST
   // (reverse order), after every container that attaches to it.
   await options.registerCleanup("docker_network", naming.network, () =>
-    ignoreMissing(exec("docker", ["network", "rm", naming.network])),
+    removeNetworkWithRetry(exec, naming.network),
   );
   await exec("docker", ["network", "create", naming.network]);
 
@@ -382,6 +382,46 @@ async function ignoreMissing(promise: Promise<unknown>): Promise<void> {
     }
     throw error;
   }
+}
+
+/** Backoff schedule for {@link removeNetworkWithRetry}: 5 attempts, ~9.5s total. */
+export const NETWORK_REMOVE_RETRY_DELAYS_MS: readonly number[] = [500, 1000, 2000, 3000, 3000];
+
+/**
+ * Removes the run-scoped Docker network, retrying briefly when removal fails
+ * because a container is still detaching (e.g. `docker rm -f` on the stopping
+ * Postgres container racing the network teardown). Docker reports this as
+ * "has active endpoints" / "network ... is in use". Without the retry, a
+ * transient loss here records a durable cleanup failure for a resource that
+ * would have gone away a moment later.
+ *
+ * `sleepFn` is an injectable seam so unit tests can exercise every retry
+ * without the real ~9.5s backoff.
+ */
+export async function removeNetworkWithRetry(
+  exec: Exec,
+  network: string,
+  sleepFn: (ms: number) => Promise<void> = sleep,
+): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < NETWORK_REMOVE_RETRY_DELAYS_MS.length + 1; attempt += 1) {
+    try {
+      await exec("docker", ["network", "rm", network]);
+      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/no such|not found|is not running/i.test(message)) {
+        return; // Already gone.
+      }
+      lastError = error;
+      const delay = NETWORK_REMOVE_RETRY_DELAYS_MS[attempt];
+      if (delay === undefined) {
+        break; // Out of retries.
+      }
+      await sleepFn(delay);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
 const execFileAsync = promisify(execFile);

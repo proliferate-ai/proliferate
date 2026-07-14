@@ -102,6 +102,21 @@ export class LocalWorldCleanupStack {
     const succeeded = new Set<string>();
     let failed = 0;
     for (const registration of [...this.registrations].reverse()) {
+      // The `run_directory` releaser deletes the run directory — which holds
+      // this very ledger — so it must never run while any earlier (reverse
+      // order) releaser this pass has failed. Deleting the directory anyway
+      // would destroy the only durable record of the unreconciled entry,
+      // leaving replay-by-run nothing to replay. Preserve the directory and
+      // record the skip as a failure instead; a later replay/recovery pass
+      // still has the ledger to work from.
+      if (registration.kind === "run_directory" && failed > 0) {
+        failed += 1;
+        this.log(
+          `cleanup releaser for run_directory skipped: ${failed - 1} earlier releaser(s) failed this run; ` +
+            `preserving the run directory and cleanup ledger for replay-by-run`,
+        );
+        continue;
+      }
       try {
         await registration.release();
         succeeded.add(registration.entryId);

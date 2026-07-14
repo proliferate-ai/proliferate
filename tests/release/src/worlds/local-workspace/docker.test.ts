@@ -8,6 +8,7 @@ import type { MaterializedArtifact } from "../../artifacts/local-candidate-set.j
 import {
   dockerInternalUrls,
   loadServerImage,
+  removeNetworkWithRetry,
   startDockerStack,
   type DockerResourceKind,
   type Exec,
@@ -144,6 +145,60 @@ test("startDockerStack registers each resource before creating it and verifies r
   } finally {
     await rm(runDir, { recursive: true, force: true });
   }
+});
+
+test("removeNetworkWithRetry retries through transient 'active endpoints' failures while containers detach", async () => {
+  let calls = 0;
+  const exec: Exec = async (_file, args) => {
+    if (args[0] === "network" && args[1] === "rm") {
+      calls += 1;
+      if (calls < 3) {
+        throw new Error(`network plq-run-net has active endpoints`);
+      }
+      return { stdout: "", stderr: "" };
+    }
+    return { stdout: "", stderr: "" };
+  };
+  const sleeps: number[] = [];
+  await removeNetworkWithRetry(exec, "plq-run-net", async (ms) => {
+    sleeps.push(ms);
+  });
+  assert.equal(calls, 3);
+  // Two retries were needed, so two backoff sleeps happened before success.
+  assert.deepEqual(sleeps, [500, 1000]);
+});
+
+test("removeNetworkWithRetry treats an already-removed network as success without retrying", async () => {
+  let calls = 0;
+  const exec: Exec = async () => {
+    calls += 1;
+    throw new Error("Error: No such network: plq-run-net");
+  };
+  await removeNetworkWithRetry(exec, "plq-run-net", async () => {
+    throw new Error("should not sleep for a not-found network");
+  });
+  assert.equal(calls, 1);
+});
+
+test("removeNetworkWithRetry exhausts its retry budget and throws the last error", async () => {
+  let calls = 0;
+  const sleeps: number[] = [];
+  await assert.rejects(
+    removeNetworkWithRetry(
+      async () => {
+        calls += 1;
+        throw new Error("network plq-run-net has active endpoints");
+      },
+      "plq-run-net",
+      async (ms) => {
+        sleeps.push(ms);
+      },
+    ),
+    /active endpoints/,
+  );
+  // 5 backoff delays between 6 attempts (1 initial + 5 retries).
+  assert.equal(calls, 6);
+  assert.deepEqual(sleeps, [500, 1000, 2000, 3000, 3000]);
 });
 
 test("startDockerStack fails when the server never reports version-bearing health", async () => {
