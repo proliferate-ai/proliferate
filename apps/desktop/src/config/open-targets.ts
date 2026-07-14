@@ -8,7 +8,7 @@ import {
   WindsurfIcon,
   ZedIcon,
 } from "@/components/workspace/open-target/app-icons";
-import type { OpenTargetIconId } from "@/lib/domain/open-targets/model";
+import type { OpenTargetIconId } from "@proliferate/product-client/host/desktop-bridge";
 
 export interface OpenTargetIconDefinition {
   component: ComponentType<{ className?: string }>;

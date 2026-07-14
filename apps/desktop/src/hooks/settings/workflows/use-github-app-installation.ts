@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useStartGitHubAppInstallation } from "@proliferate/cloud-sdk-react";
-import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 
 // Same staggered refetch cadence the user-authorization flow uses: the GitHub
 // return may land on another settings surface, so poll the caller's authority
@@ -38,7 +38,7 @@ export function useGitHubAppInstallation({
   onInstallationReturn?: () => void;
 }): GitHubAppInstallationFlow {
   const start = useStartGitHubAppInstallation();
-  const { openExternal } = useTauriShellActions();
+  const { openExternal } = useProductHost().links;
   const [error, setError] = useState<string | null>(null);
   const timersRef = useRef<number[]>([]);
   const onReturnRef = useRef(onInstallationReturn);

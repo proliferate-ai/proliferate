@@ -6,9 +6,9 @@ import { Input } from "@proliferate/ui/primitives/Input";
 import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { IntegrationConnectDialog, type IntegrationConnectSubmit } from "@/components/settings/panes/integrations/IntegrationConnectDialog";
 import { IntegrationRow } from "@/components/settings/panes/integrations/IntegrationRow";
-import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import {
   useCloudIntegrationActions,
   useCloudIntegrationOauthFlow,
@@ -51,7 +51,7 @@ export function UserIntegrationsPane({ focus = {} }: UserIntegrationsPaneProps) 
     cancellingOauthFlow,
     invalidateCloudIntegrations,
   } = useCloudIntegrationActions();
-  const { openExternal } = useTauriShellActions();
+  const { openExternal } = useProductHost().links;
   const showToast = useToastStore((state) => state.show);
 
   const [connectingDefinitionId, setConnectingDefinitionId] = useState<string | null>(null);

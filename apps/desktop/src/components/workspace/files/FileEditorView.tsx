@@ -5,6 +5,7 @@ import {
 import { FileViewerContent } from "./FileViewerContent";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
 import { useReadWorkspaceFileQuery } from "@anyharness/sdk-react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { CenterMessage } from "@/components/workspace/files/viewer/CenterMessage";
 import { FileViewerFrame } from "@/components/workspace/files/viewer/FileViewerFrame";
 import { FileTreeOverlay } from "@/components/workspace/files/tree/FileTreeOverlay";
@@ -30,6 +31,7 @@ interface FileEditorViewProps {
 
 export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorViewProps) {
   const fileContext = useWorkspaceFileContext();
+  const { writeText } = useProductHost().clipboard;
   const materializedWorkspaceId = fileContext.materializedWorkspaceId;
   const rawMode = useWorkspaceViewerTabsStore(
     (s) => s.modeByTargetKey[targetKey] ?? defaultFileViewerMode(filePath),
@@ -63,7 +65,7 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
 
   const read = readQuery.data;
   const copyContent = () => {
-    void navigator.clipboard.writeText(read?.content ?? "");
+    void writeText(read?.content ?? "");
   };
   const copyPath = () => {
     void fileActions.copyPath();

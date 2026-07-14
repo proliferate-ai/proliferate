@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   useDeletePendingPromptMutation,
   useEditPendingPromptMutation,
@@ -36,6 +37,7 @@ import {
 let activeDispatcherOwner: symbol | null = null;
 
 export function useSessionIntentDispatcher(): void {
+  const ssh = useProductHost().desktop?.ssh ?? null;
   const dispatchVersion = useSessionIntentStore((state) => state.dispatchVersion);
   const { rehydrateSessionSlotFromHistory } = useSessionHistoryHydration();
   const { applySessionSummary } = useSessionSummaryActions();
@@ -75,6 +77,7 @@ export function useSessionIntentDispatcher(): void {
           maybeGenerateWorkspaceName,
           promptSessionMutation,
           rehydrateSessionSlotFromHistory,
+          ssh,
           upsertWorkspaceSessionRecord,
         });
         break;
@@ -82,17 +85,18 @@ export function useSessionIntentDispatcher(): void {
         await dispatchConfigIntent(intent, {
           getWorkspaceSurface,
           setSessionConfigOptionMutation,
+          ssh,
           upsertWorkspaceSessionRecord,
         });
         break;
       case "resolve_interaction":
-        await dispatchInteractionIntent(intent, { resolveInteractionMutation });
+        await dispatchInteractionIntent(intent, { resolveInteractionMutation, ssh });
         break;
       case "edit_pending_prompt":
-        await dispatchEditPendingPromptIntent(intent, { editPendingPromptMutation });
+        await dispatchEditPendingPromptIntent(intent, { editPendingPromptMutation, ssh });
         break;
       case "delete_pending_prompt":
-        await dispatchDeletePendingPromptIntent(intent, { deletePendingPromptMutation });
+        await dispatchDeletePendingPromptIntent(intent, { deletePendingPromptMutation, ssh });
         break;
     }
   }, [
@@ -106,6 +110,7 @@ export function useSessionIntentDispatcher(): void {
     rehydrateSessionSlotFromHistory,
     resolveInteractionMutation,
     setSessionConfigOptionMutation,
+    ssh,
     upsertWorkspaceSessionRecord,
   ]);
 

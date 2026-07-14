@@ -2,18 +2,18 @@
 
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SUPPORT_REPORT_JOB_EVENT } from "@/lib/access/tauri/support";
+import { SUPPORT_REPORT_JOB_EVENT } from "@/lib/access/browser/support-report-job-events";
 import type { SupportReportJob } from "@/lib/domain/support/report-types";
 import { useSupportModalState } from "@/hooks/support/facade/use-support-modal-state";
 
-vi.mock("@/lib/access/tauri/support", () => ({
-  SUPPORT_REPORT_JOB_EVENT: "support-report-job",
-  deleteStagedSupportReportAttachment: vi.fn(async () => {}),
-  stageSupportReportAttachment: vi.fn(async () => null),
+const diagnosticsMocks = vi.hoisted(() => ({
+  logEvent: vi.fn(async () => {}),
+  deleteAttachment: vi.fn(async () => {}),
+  stageAttachment: vi.fn(async () => null),
 }));
 
-vi.mock("@/lib/access/tauri/diagnostics", () => ({
-  logRendererEvent: vi.fn(async () => {}),
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => ({ desktop: { diagnostics: diagnosticsMocks } }),
 }));
 
 vi.mock("@/hooks/support/derived/use-support-report-snapshot", () => ({

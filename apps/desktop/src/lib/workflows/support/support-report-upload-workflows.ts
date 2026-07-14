@@ -1,5 +1,5 @@
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
-import type { SupportDiagnosticsBundle } from "@/lib/access/tauri/diagnostics";
+import type { SupportBundle } from "@proliferate/product-client/host/desktop-bridge";
 import { sanitizeSupportUploadPayload } from "@/lib/domain/support/report-upload-sanitizer";
 import type {
   SupportReportJob,
@@ -19,7 +19,7 @@ export interface SupportReportUploadDependencies<
   Connection extends AnyHarnessResolvedConnection = AnyHarnessResolvedConnection,
 > {
   now: () => Date;
-  collectDiagnostics: () => Promise<SupportDiagnosticsBundle | null>;
+  collectDiagnostics: () => Promise<SupportBundle | null>;
   resolveWorkspace: (workspaceId: string) => Promise<SessionDebugResolvedWorkspace<Connection>>;
   getClient: (connection: Connection) => SessionDebugClient;
 }
@@ -56,7 +56,7 @@ export interface SupportReportPackage {
     activeSessionId?: string;
     reportOpenedAt?: string;
   };
-  runtimeDiagnostics: SupportDiagnosticsBundle | null;
+  runtimeDiagnostics: SupportBundle | null;
   workspaces: SupportReportPackageWorkspace[];
   attachments: Array<{
     clientFileId: string;

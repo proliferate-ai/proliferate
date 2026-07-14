@@ -3,9 +3,8 @@ import {
   useAnyHarnessWorkspaceContext,
   type AnyHarnessResolvedConnection,
 } from "@anyharness/sdk-react";
-import { useMemo, useState } from "react";
-import { useTauriDiagnosticsActions } from "@/hooks/access/tauri/use-diagnostics-actions";
-import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
+import { useCallback, useMemo, useState } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useSessionDebugReplayCapability } from "@/hooks/support/lifecycle/use-session-debug-replay-capability";
 import { createSessionDebugClient } from "@/lib/access/anyharness/debug-client";
 import {
@@ -30,13 +29,16 @@ import { useToastStore } from "@/stores/toast/toast-store";
  * Does not own session runtime lifecycle or replay ingestion.
  */
 export function useSessionDebugActions() {
+  const host = useProductHost();
+  const diagnostics = host.desktop?.diagnostics ?? null;
   const workspaceContext = useAnyHarnessWorkspaceContext();
   const contextWorkspaceId = workspaceContext.workspaceId;
-  const { copyText } = useTauriShellActions();
-  const {
-    isTauriDesktop,
-    saveDiagnosticJson,
-  } = useTauriDiagnosticsActions();
+  const copyText = host.clipboard.writeText;
+  const saveDiagnosticJson = useCallback(
+    (suggestedFileName: string, contents: string) =>
+      diagnostics?.saveJson({ suggestedFileName, contents }) ?? Promise.resolve(null),
+    [diagnostics],
+  );
   const resolveConnection = workspaceContext.resolveConnection;
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
@@ -73,7 +75,7 @@ export function useSessionDebugActions() {
     getClient: createSessionDebugClient,
   }), [contextWorkspaceId, copyText, resolveConnection, saveDiagnosticJson]);
 
-  const isDesktop = isTauriDesktop();
+  const isDesktop = diagnostics !== null;
   const isDev = import.meta.env.DEV;
   const baseAvailability = planSessionDebugActionAvailability(actionState, {
     isDev,

@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { useUpdaterStore } from "./updater-store";
 
+const update = (version: string, title: string | null = null) => ({
+  version,
+  title,
+  handle: {},
+});
+
 describe("updater store", () => {
   beforeEach(() => {
     useUpdaterStore.getState().reset();
@@ -26,7 +32,7 @@ describe("updater store", () => {
     expect(useUpdaterStore.getState().errorSource).toBeNull();
 
     useUpdaterStore.getState().setError("disk full", "download");
-    useUpdaterStore.getState().setAvailable("0.2.0", {});
+    useUpdaterStore.getState().setAvailable(update("0.2.0"));
 
     expect(useUpdaterStore.getState().errorMessage).toBeNull();
     expect(useUpdaterStore.getState().errorSource).toBeNull();
@@ -44,8 +50,7 @@ describe("updater store", () => {
 
   it("keeps the authored title with its available version", () => {
     useUpdaterStore.getState().setAvailable(
-      "0.3.25",
-      {},
+      update("0.3.25", "Introducing Grok"),
       "Introducing Grok",
     );
 
@@ -61,7 +66,7 @@ describe("updater store", () => {
     expect(useUpdaterStore.getState().restartWhenIdle).toBe(true);
 
     // A newly available update belongs to a fresh flow — the old arm no longer applies.
-    useUpdaterStore.getState().setAvailable("0.2.0", {});
+    useUpdaterStore.getState().setAvailable(update("0.2.0"));
     expect(useUpdaterStore.getState().restartWhenIdle).toBe(false);
   });
 

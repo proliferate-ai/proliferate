@@ -1,10 +1,10 @@
 import { useCallback } from "react";
-import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import type { WorkspaceCopyLocationTarget } from "@/lib/domain/workspaces/workspace-copy-metadata";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 export function useWorkspaceCopyActions() {
-  const { copyPath, copyText } = useTauriShellActions();
+  const { writeText } = useProductHost().clipboard;
   const showToast = useToastStore((state) => state.show);
 
   const copyWorkspaceLocation = useCallback(async (
@@ -17,12 +17,12 @@ export function useWorkspaceCopyActions() {
     }
 
     try {
-      await copyPath(value);
+      await writeText(value);
       showToast(`${target.toastLabel} copied`, "info");
     } catch {
       showToast(`Failed to copy ${target.toastLabel.toLowerCase()}.`);
     }
-  }, [copyPath, showToast]);
+  }, [showToast, writeText]);
 
   const copyBranchName = useCallback(async (branchName: string | null | undefined) => {
     if (!branchName?.trim()) {
@@ -31,12 +31,12 @@ export function useWorkspaceCopyActions() {
     }
 
     try {
-      await copyText(branchName.trim());
+      await writeText(branchName.trim());
       showToast("Branch name copied", "info");
     } catch {
       showToast("Failed to copy branch name.");
     }
-  }, [copyText, showToast]);
+  }, [showToast, writeText]);
 
   return {
     copyWorkspaceLocation,

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { CodeBlockTokenContent } from "@proliferate/product-ui/code/CodeBlockTokenContent";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useHighlightedTokens } from "@/hooks/ui/highlighting/use-highlighted-tokens";
 
 interface HighlightedCodeBlockProps {
@@ -31,13 +32,14 @@ export function HighlightedCodeBlock({
   contentClassName = "",
 }: HighlightedCodeBlockProps) {
   const [copied, setCopied] = useState(false);
+  const { writeText } = useProductHost().clipboard;
 
   const resolvedLang = language ?? filename ?? "text";
   const displayLang = language ?? filename?.split(".").pop() ?? "";
   const tokens = useHighlightedTokens(code, resolvedLang);
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(code);
+    void writeText(code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

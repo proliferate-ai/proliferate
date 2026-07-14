@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   setTelemetryTag: vi.fn(),
   getSupportReportReleaseId: vi.fn(),
   getSupportReportTelemetryRefs: vi.fn(),
+  isTauriRuntimeAvailable: vi.fn(() => true),
 }));
 
 vi.mock("@/lib/infra/proliferate-api", () => ({
@@ -26,6 +27,9 @@ vi.mock("@/lib/infra/proliferate-api", () => ({
 }));
 vi.mock("@/lib/access/tauri/config", () => ({
   setDesktopAppConfig: mocks.setDesktopAppConfig,
+}));
+vi.mock("@/lib/access/tauri/connect-server", () => ({
+  isTauriRuntimeAvailable: mocks.isTauriRuntimeAvailable,
 }));
 vi.mock("@/lib/access/tauri/updater", () => ({
   relaunch: mocks.relaunch,
@@ -85,6 +89,7 @@ const deps = {} as AuthOrchestrationDeps;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.isTauriRuntimeAvailable.mockReturnValue(true);
 });
 
 describe("createDesktopDeployment", () => {
@@ -92,6 +97,15 @@ describe("createDesktopDeployment", () => {
     mocks.getProliferateApiBaseUrl.mockReturnValue("https://api.example.test");
     const deployment = createDesktopDeployment();
     expect(deployment.apiBaseUrl).toBe("https://api.example.test");
+  });
+
+  it("omits native deployment actions outside the Tauri runtime", () => {
+    mocks.getProliferateApiBaseUrl.mockReturnValue("https://api.example.test");
+    mocks.isTauriRuntimeAvailable.mockReturnValue(false);
+
+    const deployment = createDesktopDeployment();
+
+    expect(deployment).toEqual({ apiBaseUrl: "https://api.example.test" });
   });
 
   it("switchDeployment writes config before relaunch", async () => {

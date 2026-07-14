@@ -1,4 +1,5 @@
 import type { Session } from "@anyharness/sdk";
+import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
 import type { usePromptSessionMutation } from "@anyharness/sdk-react";
 import {
   promptAttachmentSnapshotsToBlocks,
@@ -41,6 +42,7 @@ const ACCEPTED_RUNNING_RECONCILE_TIMEOUT_MS = 3_000;
 type PromptSessionMutation = ReturnType<typeof usePromptSessionMutation>;
 
 export interface PromptIntentDispatchDeps {
+  ssh?: DesktopSshBridge | null;
   applySessionSummary: (clientSessionId: string, session: Session, workspaceId: string) => void;
   maybeGenerateSessionTitle: (input: {
     sessionId: string;
@@ -125,7 +127,7 @@ export async function dispatchPromptIntent(
     const {
       workspaceId,
       materializedSessionId: resolvedSessionId,
-    } = await getSessionClientAndWorkspace(entry.clientSessionId);
+    } = await getSessionClientAndWorkspace(entry.clientSessionId, deps.ssh ?? null);
     requestHeaders = getLatencyFlowRequestHeaders(entry.latencyFlowId) ?? null;
     const requestOptions = requestHeaders ? { headers: requestHeaders } : undefined;
 

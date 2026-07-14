@@ -37,8 +37,8 @@ canonical feature spec are the durable handoff.
 
 Current handoff:
 
-- Current PR: Desktop Local Runtime Adoption — implementing.
-- Next PR: not yet selected — not started.
+- Current PR: Finish the Desktop Capability Boundary — review.
+- Next PR: Complete Shared ProductHost Adoption and Extraction Readiness — provisional.
 
 - Repository: `proliferate-ai/proliferate`.
 - Canonical contract:
@@ -60,8 +60,13 @@ Current handoff:
   `736d181575e4d81389d19ba7a78afd14566e1fda`.
 - Desktop Local Runtime Adoption contract:
   `specs/codebase/features/web-desktop-client-unification-d1c.md`, exact
-  implementation base `736d181575e4d81389d19ba7a78afd14566e1fda`.
-- Current role: implementation. Material scope changes are decided with the
+  implementation base `736d181575e4d81389d19ba7a78afd14566e1fda`,
+  final PR #1167 merge
+  `36e96e7bea1c409dfde1797b3a691003f82d8f5a`.
+- Finish the Desktop Capability Boundary contract:
+  `specs/codebase/features/web-desktop-client-unification-d1d.md`, exact
+  implementation base `36e96e7bea1c409dfde1797b3a691003f82d8f5a`.
+- Current role: review. Material scope changes are decided with the
   founder and recorded before the slice broadens.
 
 | Slice | Outcome | Final evidence | State |
@@ -72,12 +77,12 @@ Current handoff:
 | Preparation: ProductClient foundation | Add the compiled package, `ProductHost`, `DesktopBridge`, `ProductHostProvider`, tests, and enforcement. | PR #1153, merge `0b33e116d` | Complete |
 | Desktop Host Adoption | Construct the concrete Desktop host, mount the provider, replace reactive snapshots, and gate running-agent export through one Desktop-only lifecycle root while product files remain in Desktop. | [`web-desktop-client-unification-d1a.md`](../../codebase/features/web-desktop-client-unification-d1a.md), `D1a-r2`; PR #1157 merge `a76ab5911e2af39593b4b31530535f0811a3558b` | Complete |
 | Desktop Native UI Adoption | Route native menus, native commands, Dock attention, and Desktop zoom through the mounted bridge while product files remain in Desktop. | [`web-desktop-client-unification-d1b.md`](../../codebase/features/web-desktop-client-unification-d1b.md); PR #1165 merge `736d181575e4d81389d19ba7a78afd14566e1fda` | Complete |
-| Desktop Local Runtime Adoption | Route product-owned local AnyHarness discovery, restart, readiness, and connection through the Desktop bridge while raw sidecar/process startup remains Desktop-owned. | [`web-desktop-client-unification-d1c.md`](../../codebase/features/web-desktop-client-unification-d1c.md), base `736d181575e4d81389d19ba7a78afd14566e1fda` | Implementing |
-| Remaining Desktop capability adoption | Route only real remaining product consumers through coherent bridge slices while paths remain stable. | Specify only from current consumers; no bridge-completeness work for its own sake. | Directional |
-| Shared-client extraction readiness | Prove the host mount envelope, compiled assets/builds, move ledger/codemod, minimal browser host, and fail-closed boundaries. | Shape the focused checklist together before the source move. | Directional |
+| Desktop Local Runtime Adoption | Route product-owned local AnyHarness discovery, restart, readiness, and connection through the Desktop bridge while raw sidecar/process startup remains Desktop-owned. | [`web-desktop-client-unification-d1c.md`](../../codebase/features/web-desktop-client-unification-d1c.md); PR #1167 merge `36e96e7bea1c409dfde1797b3a691003f82d8f5a` | Complete |
+| Finish the Desktop Capability Boundary | Route real remaining Desktop-only product consumers plus shared links/clipboard through the mounted host while native implementations stay Desktop-owned. | [`web-desktop-client-unification-d1d.md`](../../codebase/features/web-desktop-client-unification-d1d.md), base `36e96e7bea1c409dfde1797b3a691003f82d8f5a` | Review |
+| Complete Shared ProductHost Adoption and Extraction Readiness | Adopt shared auth, deployment reads, telemetry, storage hydration, and inbound routing, then prove the host envelope, compiled assets/builds, move ledger/codemod, minimal browser host, and fail-closed boundaries. | Shape the exact checklist from the completed capability-boundary diff. | Directional |
 | Mechanical Desktop extraction | Move the working Desktop product into ProductClient and leave Desktop as a thin native host. | Exact file ledger, landing window, codemod, builds, and behavior proof required. | Directional |
 | Legacy Web replacement | Delete the duplicate Web product and mount the same ProductClient from a thin browser host with `desktop: null`. | Browser host/auth contract and shared-product proof required. | Directional |
-| Hosted Web qualification and cutover | Qualify both hosts, Web performance, managed-cloud flows, and every external callback/return producer. | §5 external-configuration gate applies. | Directional |
+| Hosted Web qualification and cutover | Qualify both hosts, Web performance, managed-cloud flows, and every external callback/return producer. | §7 external-configuration gate applies. | Directional |
 | Self-hosted Web | Add self-hosted Web configuration, deployment, and documentation after hosted Web is clean. | Separate follow-up contract. | Deferred follow-up |
 
 The superseded auth-generation, runtime-lifecycle, PR-1 intake, and
@@ -136,7 +141,7 @@ The implementation merged in PR #1165 from reviewed head
 `736d181575e4d81389d19ba7a78afd14566e1fda`. The complete contract is
 [`web-desktop-client-unification-d1b.md`](../../codebase/features/web-desktop-client-unification-d1b.md).
 
-## 4. Desktop Local Runtime Adoption working record
+## 4. Desktop Local Runtime Adoption acceptance record
 
 Desktop Local Runtime Adoption routes local runtime discovery, restart,
 readiness, and connection through `host.desktop.runtime`. Raw Tauri commands
@@ -150,18 +155,43 @@ bootstrap beneath the existing Desktop-only lifecycle root, starts the shared
 runtime scope empty/fail-closed, and explicitly keeps cloud and SSH-target
 flows independent of local discovery.
 
-The complete living contract is
+The complete contract is
 [`web-desktop-client-unification-d1c.md`](../../codebase/features/web-desktop-client-unification-d1c.md).
 
-## 5. Remaining migration map and gates
+The implementation merged in PR #1167 at
+`36e96e7bea1c409dfde1797b3a691003f82d8f5a`. Focused tests, Desktop
+typechecking, frontend structure enforcement, and the GitHub check suite passed
+at the accepted head. Review fixes ensure removing the Desktop capability
+clears the published local connection and that ready-to-ready auth changes do
+not repeat bootstrap.
+
+## 5. Finish the Desktop Capability Boundary working record
+
+This slice adopts the remaining active Desktop-only product capabilities
+through the already-mounted host: files, local credentials, SSH target
+resolution, workspace scratch, updater, Desktop worker, diagnostics, and
+support. It also moves shared external links and clipboard writes off the old
+product-facing shell wrapper.
+
+The exact implementation base is
+`36e96e7bea1c409dfde1797b3a691003f82d8f5a`. The existing bridge contract
+already covers every active operation; implementation is consumer rewiring,
+lifecycle placement, and deletion of superseded wrappers. Auth, telemetry,
+storage hydration, and inbound route normalization stay together in the next
+shared ProductHost checkpoint.
+
+The complete living contract is
+[`web-desktop-client-unification-d1d.md`](../../codebase/features/web-desktop-client-unification-d1d.md).
+
+## 6. Remaining migration map and gates
 
 The plain sequence after the current PR is:
 
-1. adopt local runtime and any other genuinely required Desktop-only product
-   consumers through the mounted bridge while files remain in Desktop;
-2. prove extraction mechanics: the host mount envelope, compiled assets,
-   narrow consumer-driven contract corrections, the file ledger/import
-   codemod, and a minimal browser-host conformance fixture;
+1. finish Desktop-only capability adoption while files remain in Desktop;
+2. adopt the shared ProductHost surfaces and prove extraction mechanics: auth,
+   deployment, telemetry, storage, inbound routing, the host mount envelope,
+   compiled assets, the file ledger/import codemod, and a minimal browser-host
+   conformance fixture;
 3. mechanically move the working Desktop product into ProductClient;
 4. delete the legacy Web product and mount ProductClient from a thin Web host;
 5. qualify and cut over hosted Web; then
@@ -180,10 +210,10 @@ external-configuration table, and release-record template are retired. Before
 a later Web-cutover slice, reconcile current deployment workflows and external
 configuration, then shape a slice-specific rollout checklist with its own
 exact base and acceptance proof. The durable external-configuration evidence
-requirements in §5 remain binding. Do not reuse retired phase mechanics by
+requirements in §7 remain binding. Do not reuse retired phase mechanics by
 implication.
 
-## 6. Later Web cutover external-configuration gate
+## 7. Later Web cutover external-configuration gate
 
 The future Web cutover must inventory every external producer of a hosted Web
 URL, including OAuth registrations, Stripe checkout/portal return URLs,

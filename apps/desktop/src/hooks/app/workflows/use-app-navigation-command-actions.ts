@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { APP_ROUTES } from "@/config/app-routes";
-import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useWebAppTarget } from "@/hooks/capabilities/derived/use-web-app-target";
 import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-navigation-workflow";
 import { useOpenSupportReportWindow } from "@/hooks/support/workflows/use-open-support-report-window";
@@ -24,7 +24,7 @@ export type AppNavigationCommandActions = Pick<
 export function useAppNavigationCommandActions(): AppNavigationCommandActions {
   const navigate = useNavigate();
   const showToast = useToastStore((state) => state.show);
-  const { openExternal } = useTauriShellActions();
+  const { openExternal } = useProductHost().links;
   const webApp = useWebAppTarget();
   const { goToTopLevelRoute } = useWorkspaceNavigationWorkflow();
 

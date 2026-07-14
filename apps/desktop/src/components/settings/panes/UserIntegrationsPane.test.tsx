@@ -38,8 +38,8 @@ vi.mock("@/hooks/cloud/facade/use-cloud-integrations", () => ({
   }),
   useCloudIntegrationOauthFlow: () => ({ data: undefined }),
 }));
-vi.mock("@/hooks/access/tauri/use-shell-actions", () => ({
-  useTauriShellActions: () => ({ openExternal }),
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => ({ links: { openExternal } }),
 }));
 vi.mock("@/stores/toast/toast-store", () => ({
   useToastStore: (selector: (state: { show: typeof showToast }) => unknown) =>

@@ -1,19 +1,19 @@
 import type { CoworkArtifactDetailResponse } from "@anyharness/sdk";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { buildProliferateApiUrl, getProliferateApiOrigin } from "@/lib/infra/proliferate-api";
 import {
   buildCoworkRuntimeContentMessage,
   isCoworkRuntimeMessage,
   type CoworkRuntimeMessage,
 } from "@/lib/domain/cowork/artifacts";
-import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 
 export function useCoworkArtifactViewer(
   detail: CoworkArtifactDetailResponse | null,
   enabled: boolean,
 ) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  const { openExternal } = useTauriShellActions();
+  const { openExternal } = useProductHost().links;
   const [ready, setReady] = useState(false);
   const [runtimeError, setRuntimeError] = useState<CoworkRuntimeMessage | null>(null);
   const runtimeUrl = useMemo(() => {

@@ -1,11 +1,6 @@
 import { readPersistedValue, persistValue } from "@/lib/infra/persistence/preferences-persistence";
-import {
-  normalizeComputeTargetAppearancePreference,
-  type ComputeTargetAppearancePreference,
-} from "@/lib/domain/compute/target-appearance";
 
 const SSH_DIRECT_TARGET_PROFILES_KEY = "ssh_direct_target_profiles";
-const COMPUTE_TARGET_APPEARANCE_KEY = "compute_target_appearance_preferences";
 const DEFAULT_SSH_PORT = 22;
 const DEFAULT_ANYHARNESS_PORT = 8457;
 
@@ -96,41 +91,4 @@ export async function deleteSshDirectTargetProfile(targetId: string): Promise<vo
   const profiles = await readProfiles();
   delete profiles[targetId];
   await persistValue(SSH_DIRECT_TARGET_PROFILES_KEY, profiles);
-}
-
-async function readAppearancePreferences(): Promise<
-  Record<string, ComputeTargetAppearancePreference>
-> {
-  const persisted = await readPersistedValue<Record<string, unknown>>(
-    COMPUTE_TARGET_APPEARANCE_KEY,
-  );
-  if (!persisted || typeof persisted !== "object" || Array.isArray(persisted)) {
-    return {};
-  }
-  const preferences: Record<string, ComputeTargetAppearancePreference> = {};
-  for (const value of Object.values(persisted)) {
-    const preference = normalizeComputeTargetAppearancePreference(value);
-    if (preference) {
-      preferences[preference.targetId] = preference;
-    }
-  }
-  return preferences;
-}
-
-export async function getComputeTargetAppearancePreferences(): Promise<
-  Record<string, ComputeTargetAppearancePreference>
-> {
-  return await readAppearancePreferences();
-}
-
-export async function setComputeTargetAppearancePreference(
-  preference: ComputeTargetAppearancePreference,
-): Promise<void> {
-  const normalized = normalizeComputeTargetAppearancePreference(preference);
-  if (!normalized) {
-    throw new Error("Target appearance requires a target id.");
-  }
-  const preferences = await readAppearancePreferences();
-  preferences[normalized.targetId] = normalized;
-  await persistValue(COMPUTE_TARGET_APPEARANCE_KEY, preferences);
 }

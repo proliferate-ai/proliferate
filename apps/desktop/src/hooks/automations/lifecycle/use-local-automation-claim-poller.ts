@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import type {
   LocalAutomationRunClaimResponse,
 } from "@/lib/access/cloud/client";
@@ -17,7 +18,6 @@ import {
   LocalAutomationExecutorError,
 } from "@/lib/workflows/automations/local-automation-executor";
 import { readPersistedValue, persistValue } from "@/lib/infra/persistence/preferences-persistence";
-import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 
@@ -53,7 +53,7 @@ export function useLocalAutomationClaimPoller(args: {
   const runClaims = useLocalAutomationRunClaims();
   const createRuntimeClient = useLocalAutomationRuntimeClientFactory();
   const { invalidateAfterLocalAutomationRun } = useLocalAutomationExecutorCache();
-  const { getHomeDir } = useTauriShellActions();
+  const files = useProductHost().desktop?.files ?? null;
   const workspacesQuery = useWorkspaces();
   const activeRef = useRef(false);
   const candidates = useMemo(
@@ -66,7 +66,7 @@ export function useLocalAutomationClaimPoller(args: {
   );
 
   useEffect(() => {
-    if (!args.enabled || !args.runtimeUrl.trim() || candidates.length === 0) {
+    if (!args.enabled || !args.runtimeUrl.trim() || candidates.length === 0 || !files) {
       return;
     }
     if (localExecutorMounted) {
@@ -94,7 +94,7 @@ export function useLocalAutomationClaimPoller(args: {
             claim,
             candidates,
             executorId,
-            getHomeDir,
+            getHomeDir: files.getHomeDirectory,
             runtimeUrl: args.runtimeUrl,
             runClaims,
             createRuntimeClient,
@@ -132,7 +132,7 @@ export function useLocalAutomationClaimPoller(args: {
     args.runtimeUrl,
     candidates,
     createRuntimeClient,
-    getHomeDir,
+    files,
     invalidateAfterLocalAutomationRun,
     runClaims,
   ]);

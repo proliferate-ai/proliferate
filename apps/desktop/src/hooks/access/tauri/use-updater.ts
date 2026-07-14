@@ -1,16 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
+import type { DesktopUpdaterBridge } from "@proliferate/product-client/host/desktop-bridge";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useUpdaterStore } from "@/stores/updater/updater-store";
 import {
   persistValue,
   readPersistedValue,
 } from "@/lib/infra/persistence/preferences-persistence";
 import type { UpdaterErrorSource, UpdaterPhase } from "@/stores/updater/updater-store";
-import {
-  checkForUpdate,
-  downloadAndInstall,
-  relaunch,
-  isTauriPackaged,
-} from "@/lib/access/tauri/updater";
 import {
   trackProductEvent,
   captureTelemetryException,
@@ -56,7 +52,10 @@ async function loadLastCheckedAt(): Promise<string | null> {
   return (await readPersistedValue<string>(LEGACY_LAST_CHECKED_KEY)) ?? null;
 }
 
-async function runUpdateCheck(options: { userInitiated?: boolean } = {}): Promise<void> {
+async function runUpdateCheck(
+  updater: DesktopUpdaterBridge,
+  options: { userInitiated?: boolean } = {},
+): Promise<void> {
   const store = useUpdaterStore.getState();
   if (store.phase === "downloading" || checkInFlight) {
     return;
@@ -67,34 +66,24 @@ async function runUpdateCheck(options: { userInitiated?: boolean } = {}): Promis
   trackProductEvent("app_update_check_started", undefined);
 
   try {
-    const result = await checkForUpdate();
+    const result = await updater.check();
     const timestamp = new Date().toISOString();
     useUpdaterStore.getState().setChecked(timestamp);
     void persistUpdaterMetadata({ lastCheckedAt: timestamp });
 
-    if (result.kind === "available") {
+    if (result !== null) {
       useUpdaterStore.getState().setAvailable(
-        result.version,
-        result.update,
+        result,
         normalizeReleaseTitle(result.title),
       );
       trackProductEvent("app_update_available", { version: result.version });
-    } else if (result.kind === "current") {
+    } else {
       useUpdaterStore.getState().setPhase("current");
       if (options.userInitiated) {
         // One-shot "you're up to date" signal. Only manual checks raise it —
         // background checks that find nothing stay silent by design.
         useUpdaterStore.getState().setManualCheckCompleted(Date.now());
       }
-    } else {
-      useUpdaterStore.getState().setError(result.message, "check");
-      captureTelemetryException(new Error(result.message), {
-        tags: {
-          action: "check_for_update",
-          domain: "updater",
-          route: "settings",
-        },
-      });
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -111,11 +100,13 @@ async function runUpdateCheck(options: { userInitiated?: boolean } = {}): Promis
   }
 }
 
-async function runDownloadAndPrepareRestart(): Promise<void> {
+async function runDownloadAndPrepareRestart(
+  updater: DesktopUpdaterBridge,
+): Promise<void> {
   const store = useUpdaterStore.getState();
-  const handle = store._updateHandle;
-  const version = store.availableVersion;
-  if (!handle) {
+  const update = store._update;
+  const version = update?.version ?? null;
+  if (!update) {
     return;
   }
 
@@ -124,13 +115,10 @@ async function runDownloadAndPrepareRestart(): Promise<void> {
   trackProductEvent("app_update_download_started", { version });
 
   try {
-    let totalReceived = 0;
-    await downloadAndInstall(handle, (chunkLength, contentLength) => {
-      totalReceived += chunkLength;
-      if (contentLength && contentLength > 0) {
-        const pct = Math.min(100, Math.round((totalReceived / contentLength) * 100));
-        useUpdaterStore.getState().setDownloadProgress(pct);
-      }
+    await updater.downloadAndInstall(update, (fraction) => {
+      useUpdaterStore.getState().setDownloadProgress(
+        Math.min(100, Math.round(fraction * 100)),
+      );
     });
 
     useUpdaterStore.getState().setReady();
@@ -152,7 +140,7 @@ async function runDownloadAndPrepareRestart(): Promise<void> {
   }
 }
 
-async function ensureAutoCheckScheduler(): Promise<void> {
+async function ensureAutoCheckScheduler(updater: DesktopUpdaterBridge): Promise<void> {
   const lastChecked = await loadLastCheckedAt();
   if (lastChecked) {
     useUpdaterStore.getState().setChecked(lastChecked);
@@ -167,12 +155,12 @@ async function ensureAutoCheckScheduler(): Promise<void> {
 
   if (elapsed >= CHECK_INTERVAL_MS) {
     timeout = window.setTimeout(() => {
-      void runUpdateCheck();
+      void runUpdateCheck(updater);
     }, INITIAL_CHECK_DELAY_MS);
   }
 
   interval = window.setInterval(() => {
-    void runUpdateCheck();
+    void runUpdateCheck(updater);
   }, CHECK_INTERVAL_MS);
 
   stopAutoCheckScheduler = () => {
@@ -189,6 +177,7 @@ async function ensureAutoCheckScheduler(): Promise<void> {
 }
 
 export function useUpdater() {
+  const updater = useProductHost().desktop?.updater ?? null;
   const storePhase = useUpdaterStore((s) => s.phase);
   const storeAvailableVersion = useUpdaterStore((s) => s.availableVersion);
   const storeAvailableTitle = useUpdaterStore((s) => s.availableTitle);
@@ -199,7 +188,7 @@ export function useUpdater() {
   const storeRestartPromptOpen = useUpdaterStore((s) => s.restartPromptOpen);
   const storeRestartWhenIdle = useUpdaterStore((s) => s.restartWhenIdle);
   const storeManualCheckCompletedAt = useUpdaterStore((s) => s.manualCheckCompletedAt);
-  const isPackaged = isTauriPackaged();
+  const isPackaged = updater?.isSupported() ?? false;
   const [devMock, setDevMock] = useState<DevUpdaterMockState | null>(() => readDevUpdaterMock());
 
   const phase = devMock?.phase ?? storePhase;
@@ -258,11 +247,11 @@ export function useUpdater() {
       return;
     }
 
-    if (!isPackaged) {
+    if (!isPackaged || updater === null) {
       return;
     }
-    await runUpdateCheck({ userInitiated: true });
-  }, [devMock, isPackaged]);
+    await runUpdateCheck(updater, { userInitiated: true });
+  }, [devMock, isPackaged, updater]);
 
   const clearManualCheckCompleted = useCallback(() => {
     if (devMock) {
@@ -280,11 +269,11 @@ export function useUpdater() {
       return;
     }
 
-    if (!isPackaged) {
+    if (!isPackaged || updater === null) {
       return;
     }
-    await runDownloadAndPrepareRestart();
-  }, [devMock, isPackaged]);
+    await runDownloadAndPrepareRestart(updater);
+  }, [devMock, isPackaged, updater]);
 
   const openRestartPrompt = useCallback(() => {
     if (devMock) {
@@ -325,21 +314,21 @@ export function useUpdater() {
       return;
     }
 
-    if (!isPackaged) {
+    if (!isPackaged || updater === null) {
       return;
     }
     useUpdaterStore.getState().setRestartPromptOpen(false);
-    await relaunch();
-  }, [devMock, isPackaged]);
+    await updater.relaunch();
+  }, [devMock, isPackaged, updater]);
 
   useEffect(() => {
-    if (!isPackaged) {
+    if (!isPackaged || updater === null) {
       return;
     }
 
     autoCheckConsumerCount += 1;
     if (autoCheckConsumerCount === 1 && !stopAutoCheckScheduler) {
-      void ensureAutoCheckScheduler();
+      void ensureAutoCheckScheduler(updater);
     }
 
     return () => {
@@ -348,7 +337,7 @@ export function useUpdater() {
         stopAutoCheckScheduler?.();
       }
     };
-  }, [isPackaged]);
+  }, [isPackaged, updater]);
 
   return {
     phase,

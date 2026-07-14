@@ -1,6 +1,6 @@
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ExternalLink } from "@proliferate/ui/icons";
-import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 
 interface RunCommandHelpProps {
   scope: string;
@@ -14,7 +14,7 @@ export function RunCommandHelp({
   scope,
   className = "text-sm text-muted-foreground",
 }: RunCommandHelpProps) {
-  const { openExternal } = useTauriShellActions();
+  const { openExternal } = useProductHost().links;
 
   return (
     <p className={className}>

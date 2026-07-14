@@ -7,10 +7,6 @@ vi.mock("@/lib/integrations/telemetry/client", () => ({
   trackProductEvent: vi.fn(),
 }));
 
-vi.mock("@/lib/access/tauri/support", () => ({
-  readStagedSupportReportAttachment: vi.fn(async () => ""),
-}));
-
 import {
   buildCreateReportRequest,
   completeRequestForUpload,

@@ -1,4 +1,5 @@
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
+import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
 import { resolveRuntimeTargetForWorkspace } from "./runtime-target";
 
 export type AnyHarnessDesktopResolvedConnection = AnyHarnessResolvedConnection & {
@@ -9,8 +10,9 @@ export type AnyHarnessDesktopResolvedConnection = AnyHarnessResolvedConnection &
 export async function resolveWorkspaceConnection(
   runtimeUrl: string,
   workspaceId: string,
+  ssh: DesktopSshBridge | null = null,
 ): Promise<AnyHarnessDesktopResolvedConnection> {
-  const target = await resolveRuntimeTargetForWorkspace(runtimeUrl, workspaceId);
+  const target = await resolveRuntimeTargetForWorkspace(runtimeUrl, workspaceId, ssh);
   return {
     runtimeUrl: target.baseUrl,
     authToken: target.authToken,

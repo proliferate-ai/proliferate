@@ -1,5 +1,8 @@
 import type { Session } from "@anyharness/sdk";
-import type { DesktopRuntimeBridge } from "@proliferate/product-client/host/desktop-bridge";
+import type {
+  DesktopRuntimeBridge,
+  DesktopSshBridge,
+} from "@proliferate/product-client/host/desktop-bridge";
 import { applySessionLaunchDefaults } from "@/lib/workflows/sessions/session-launch-defaults";
 import { createSessionLaunchDefaultsClient } from "@/lib/access/anyharness/session-launch-defaults-client";
 import {
@@ -62,6 +65,7 @@ interface MaterializeSessionCreationInput {
   existingProjectedRecord: SessionRuntimeRecord | null;
   frozenDefaultLiveSessionControlValuesByAgentKind: Record<string, Record<string, string>>;
   localRuntime: DesktopRuntimeBridge | null;
+  ssh?: DesktopSshBridge | null;
   options: CreateSessionWithResolvedConfigOptions;
   pendingSessionId: string;
   resolvedModeId: string | null;
@@ -102,6 +106,7 @@ async function runSessionCreationMaterialization({
   existingProjectedRecord,
   frozenDefaultLiveSessionControlValuesByAgentKind,
   localRuntime,
+  ssh,
   options,
   pendingSessionId,
   resolvedModeId,
@@ -125,7 +130,7 @@ async function runSessionCreationMaterialization({
   });
 
   const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(workspaceId);
-  const target = await resolveRuntimeTargetForWorkspace(runtimeUrl, workspaceId);
+  const target = await resolveRuntimeTargetForWorkspace(runtimeUrl, workspaceId, ssh ?? null);
   logLatency("session.create.materialize.target_resolved", {
     clientSessionId: pendingSessionId,
     workspaceId,

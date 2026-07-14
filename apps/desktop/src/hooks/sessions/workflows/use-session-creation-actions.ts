@@ -6,9 +6,7 @@ import {
   formatSessionCreateFailureMessage,
   toSessionCreateFailureDisplayError,
 } from "@/lib/domain/sessions/creation/create-session-error";
-import {
-  pickLiveDefaultLaunchControls,
-} from "@/lib/domain/sessions/creation/launch-controls";
+import { pickLiveDefaultLaunchControls } from "@/lib/domain/sessions/creation/launch-controls";
 import { resolveSessionCreationModeId } from "@/lib/domain/sessions/creation/mode";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useToastStore } from "@/stores/toast/toast-store";
@@ -36,31 +34,21 @@ import {
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import { writeChatShellIntentForSession } from "@/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
 import type { WorkspaceShellIntentKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
-import {
-  useWorkspaceUiStore,
-} from "@/stores/preferences/workspace-ui-store";
-import {
-  inFlightSessionCreatesByWorkspace,
-} from "@/hooks/sessions/workflows/session-creation-in-flight";
+import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+import { inFlightSessionCreatesByWorkspace } from "@/hooks/sessions/workflows/session-creation-in-flight";
 import { useCloudAgentCatalogCache } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import type {
   CreateEmptySessionWithResolvedConfigOptions,
   CreateSessionWithResolvedConfigOptions,
 } from "@/hooks/sessions/workflows/session-creation-types";
-import {
-  sessionStreamPruningDeps,
-} from "@/hooks/sessions/workflows/session-creation-runtime";
-import {
-  materializeSessionCreation,
-} from "@/hooks/sessions/workflows/session-creation-materialization";
+import { sessionStreamPruningDeps } from "@/hooks/sessions/workflows/session-creation-runtime";
+import { materializeSessionCreation } from "@/hooks/sessions/workflows/session-creation-materialization";
 import { useDismissSessionMutation } from "@anyharness/sdk-react";
 import {
   beginEmptySessionReplacement,
   type EmptySessionReplacementTransaction,
 } from "@/hooks/sessions/workflows/use-empty-session-replacement-cleanup";
-import {
-  registerSessionCreation,
-} from "@/hooks/sessions/workflows/session-creation-supersession";
+import { registerSessionCreation } from "@/hooks/sessions/workflows/session-creation-supersession";
 import {
   beginReplacementShellPreferences,
   type ReplacementShellPreferencesTransaction,
@@ -69,7 +57,9 @@ import { cleanupSessionCreationFailure } from "@/hooks/sessions/workflows/sessio
 import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
 
 export function useSessionCreationActions() {
-  const localRuntime = useProductHost().desktop?.runtime ?? null;
+  const desktop = useProductHost().desktop;
+  const localRuntime = desktop?.runtime ?? null;
+  const ssh = desktop?.ssh ?? null;
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const { getWorkspaceSurface } = useWorkspaceSurfaceLookup();
   const { promptSession } = useSessionPromptWorkflow();
@@ -295,6 +285,7 @@ export function useSessionCreationActions() {
       existingProjectedRecord,
       frozenDefaultLiveSessionControlValuesByAgentKind,
       localRuntime,
+      ssh,
       options,
       pendingSessionId,
       resolvedModeId: resolvedModeId ?? null,
@@ -372,6 +363,7 @@ export function useSessionCreationActions() {
     getWorkspaceRuntimeBlockReason,
     getWorkspaceSurface,
     localRuntime,
+    ssh,
     promptSession,
     removeWorkspaceSessionRecord,
     showToast,

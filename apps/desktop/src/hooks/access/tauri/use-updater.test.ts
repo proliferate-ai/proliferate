@@ -4,14 +4,17 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useUpdaterStore } from "@/stores/updater/updater-store";
 
-const tauriUpdaterMocks = vi.hoisted(() => ({
-  checkForUpdate: vi.fn(),
+const updaterMocks = vi.hoisted(() => ({
+  check: vi.fn(),
   downloadAndInstall: vi.fn(),
+  getVersion: vi.fn(),
   relaunch: vi.fn(),
-  isTauriPackaged: vi.fn(() => true),
+  isSupported: vi.fn(() => true),
 }));
 
-vi.mock("@/lib/access/tauri/updater", () => tauriUpdaterMocks);
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => ({ desktop: { updater: updaterMocks } }),
+}));
 
 vi.mock("@/lib/infra/persistence/preferences-persistence", () => ({
   persistValue: vi.fn(async () => undefined),
@@ -30,10 +33,15 @@ vi.mock("@/lib/domain/telemetry/failures", () => ({
 import { useUpdater } from "./use-updater";
 
 const AUTO_CHECK_INITIAL_DELAY_MS = 10_000;
+const localStorageMock = createLocalStorageMock();
 
 describe("useUpdater", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: localStorageMock,
+    });
     window.localStorage.clear();
     useUpdaterStore.getState().reset();
   });
@@ -46,7 +54,7 @@ describe("useUpdater", () => {
   });
 
   it("raises the one-shot up-to-date signal for a manual check that finds nothing", async () => {
-    tauriUpdaterMocks.checkForUpdate.mockResolvedValue({ kind: "current" });
+    updaterMocks.check.mockResolvedValue(null);
 
     const { result } = renderHook(() => useUpdater());
     await act(async () => {
@@ -64,7 +72,7 @@ describe("useUpdater", () => {
   });
 
   it("does not raise the up-to-date signal for background checks", async () => {
-    tauriUpdaterMocks.checkForUpdate.mockResolvedValue({ kind: "current" });
+    updaterMocks.check.mockResolvedValue(null);
 
     renderHook(() => useUpdater());
     // Let the auto-check scheduler install itself, then fire the initial check.
@@ -72,17 +80,16 @@ describe("useUpdater", () => {
       await vi.advanceTimersByTimeAsync(AUTO_CHECK_INITIAL_DELAY_MS);
     });
 
-    expect(tauriUpdaterMocks.checkForUpdate).toHaveBeenCalledTimes(1);
+    expect(updaterMocks.check).toHaveBeenCalledTimes(1);
     expect(useUpdaterStore.getState().phase).toBe("current");
     expect(useUpdaterStore.getState().manualCheckCompletedAt).toBeNull();
   });
 
   it("does not raise the up-to-date signal when a manual check finds an update", async () => {
-    tauriUpdaterMocks.checkForUpdate.mockResolvedValue({
-      kind: "available",
+    updaterMocks.check.mockResolvedValue({
       version: "0.2.0",
       title: "  Introducing Grok  ",
-      update: {},
+      handle: {},
     });
 
     const { result } = renderHook(() => useUpdater());
@@ -97,10 +104,7 @@ describe("useUpdater", () => {
   });
 
   it("attributes a failed check to the check step", async () => {
-    tauriUpdaterMocks.checkForUpdate.mockResolvedValue({
-      kind: "error",
-      message: "release feed unreachable",
-    });
+    updaterMocks.check.mockRejectedValue(new Error("release feed unreachable"));
 
     const { result } = renderHook(() => useUpdater());
     await act(async () => {
@@ -114,11 +118,15 @@ describe("useUpdater", () => {
   });
 
   it("attributes a failed download to the download step", async () => {
-    tauriUpdaterMocks.downloadAndInstall.mockRejectedValue(new Error("disk full"));
+    updaterMocks.downloadAndInstall.mockRejectedValue(new Error("disk full"));
 
     const { result } = renderHook(() => useUpdater());
     act(() => {
-      useUpdaterStore.getState().setAvailable("0.2.0", {});
+      useUpdaterStore.getState().setAvailable({
+        version: "0.2.0",
+        title: null,
+        handle: {},
+      });
     });
     await act(async () => {
       await result.current.downloadUpdate();
@@ -128,6 +136,34 @@ describe("useUpdater", () => {
     expect(useUpdaterStore.getState().errorMessage).toBe("disk full");
     expect(useUpdaterStore.getState().errorSource).toBe("download");
     expect(result.current.errorSource).toBe("download");
+  });
+
+  it("passes the exact checked update back to the bridge and maps progress", async () => {
+    const update = {
+      version: "0.2.0",
+      title: "Introducing Grok",
+      handle: { native: "opaque" },
+    };
+    let observedProgress: number | null = null;
+    updaterMocks.check.mockResolvedValue(update);
+    updaterMocks.downloadAndInstall.mockImplementation(async (_update, onProgress) => {
+      onProgress?.(0.42);
+      observedProgress = useUpdaterStore.getState().downloadProgress;
+    });
+
+    const { result } = renderHook(() => useUpdater());
+    await act(async () => {
+      await result.current.checkNow();
+      await result.current.downloadUpdate();
+    });
+
+    expect(updaterMocks.downloadAndInstall).toHaveBeenCalledWith(
+      update,
+      expect.any(Function),
+    );
+    expect(observedProgress).toBe(42);
+    expect(useUpdaterStore.getState().downloadProgress).toBeNull();
+    expect(useUpdaterStore.getState().phase).toBe("ready");
   });
 
   it("exposes the armed restart-when-idle flag", async () => {
@@ -143,3 +179,21 @@ describe("useUpdater", () => {
     expect(useUpdaterStore.getState().restartPromptOpen).toBe(false);
   });
 });
+
+function createLocalStorageMock(): Storage {
+  const entries = new Map<string, string>();
+  return {
+    get length() {
+      return entries.size;
+    },
+    clear: () => entries.clear(),
+    getItem: (key) => entries.get(key) ?? null,
+    key: (index) => [...entries.keys()][index] ?? null,
+    removeItem: (key) => {
+      entries.delete(key);
+    },
+    setItem: (key, value) => {
+      entries.set(key, value);
+    },
+  };
+}

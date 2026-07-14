@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useRenameGitBranchMutation } from "@anyharness/sdk-react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
-import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { updateCloudWorkspaceDisplayName } from "@proliferate/cloud-sdk/client/workspaces";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
@@ -40,7 +40,7 @@ export function useMainScreenActions({
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const renameBranchMutation = useRenameGitBranchMutation({ workspaceId: selectedWorkspaceId });
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
-  const { openExternal } = useTauriShellActions();
+  const { openExternal } = useProductHost().links;
   const showToast = useToastStore((state) => state.show);
   const {
     rightPanelOpen,

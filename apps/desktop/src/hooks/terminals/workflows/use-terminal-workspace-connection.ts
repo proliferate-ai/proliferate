@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useCloudWorkspaceConnectionCache } from "@/hooks/access/cloud/use-cloud-workspace-connection-cache";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
 import {
@@ -19,6 +20,7 @@ export interface TerminalWorkspaceConnectionController {
 
 // Owns terminal workspace runtime resolution, including the selected cloud runtime fast path.
 export function useTerminalWorkspaceConnection(): TerminalWorkspaceConnectionController {
+  const ssh = useProductHost().desktop?.ssh ?? null;
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const { invalidateCloudWorkspaceConnection } = useCloudWorkspaceConnectionCache();
   const { selectedCloudRuntime, getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
@@ -43,9 +45,10 @@ export function useTerminalWorkspaceConnection(): TerminalWorkspaceConnectionCon
       };
     }
 
-    return resolveWorkspaceConnection(runtimeUrl, workspaceId);
+    return resolveWorkspaceConnection(runtimeUrl, workspaceId, ssh);
   }, [
     runtimeUrl,
+    ssh,
     selectedCloudRuntime.connectionInfo,
     selectedCloudRuntime.state?.phase,
     selectedCloudRuntime.workspaceId,

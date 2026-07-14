@@ -4,6 +4,8 @@ import {
   type AnyHarnessResolvedConnection,
 } from "@anyharness/sdk-react";
 import { useEffect, useMemo, useRef } from "react";
+import type { DesktopDiagnosticsBridge } from "@proliferate/product-client/host/desktop-bridge";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   completeSupportReportUpload,
   createSupportReport,
@@ -13,13 +15,7 @@ import type {
   SupportReportCompleteRequest,
   SupportReportUploadTargetsRequest,
 } from "@proliferate/cloud-sdk/types";
-import {
-  collectSupportDiagnostics,
-  logRendererEvent,
-} from "@/lib/access/tauri/diagnostics";
-import {
-  listenSupportReportJobs,
-} from "@/lib/access/tauri/support";
+import { listenSupportReportJobs } from "@/lib/access/browser/support-report-job-events";
 import { createSessionDebugClient } from "@/lib/access/anyharness/debug-client";
 import type {
   SupportReportJob,
@@ -62,6 +58,7 @@ interface SupportReportUploadResult {
 }
 
 export function useSupportReportUploadQueue(): void {
+  const diagnostics = useProductHost().desktop?.diagnostics ?? null;
   const workspaceContext = useAnyHarnessWorkspaceContext();
   const contextWorkspaceId = workspaceContext.workspaceId;
   const resolveConnection = workspaceContext.resolveConnection;
@@ -74,7 +71,7 @@ export function useSupportReportUploadQueue(): void {
     SupportReportUploadDependencies<AnyHarnessResolvedConnection>
   >(() => ({
     now: () => new Date(),
-    collectDiagnostics: collectSupportDiagnostics,
+    collectDiagnostics: () => diagnostics?.collectSupportBundle() ?? Promise.resolve(null),
     resolveWorkspace: (workspaceId) => resolveWorkspaceConnectionFromContext(
       {
         workspaceId: contextWorkspaceId,
@@ -83,7 +80,7 @@ export function useSupportReportUploadQueue(): void {
       workspaceId,
     ),
     getClient: createSessionDebugClient,
-  }), [contextWorkspaceId, resolveConnection, runtimeUrl]);
+  }), [contextWorkspaceId, diagnostics, resolveConnection, runtimeUrl]);
 
   useEffect(() => {
     let disposed = false;
@@ -94,7 +91,7 @@ export function useSupportReportUploadQueue(): void {
         return;
       }
       processingRef.current = true;
-      void drainSupportReportQueue(dependencies, showToast)
+      void drainSupportReportQueue(dependencies, diagnostics, showToast)
         .finally(() => {
           processingRef.current = false;
           if (!disposed) {
@@ -129,11 +126,12 @@ export function useSupportReportUploadQueue(): void {
         window.clearTimeout(retryTimerRef.current);
       }
     };
-  }, [dependencies, showToast]);
+  }, [dependencies, diagnostics, showToast]);
 }
 
 async function drainSupportReportQueue(
   dependencies: SupportReportUploadDependencies<AnyHarnessResolvedConnection>,
+  diagnostics: DesktopDiagnosticsBridge | null,
   showToast: (message: string, type?: "error" | "info") => void,
 ): Promise<void> {
   const queued = readPersistedJobs();
@@ -145,7 +143,7 @@ async function drainSupportReportQueue(
     }
 
     try {
-      const result = await uploadSupportReport(entry.job, dependencies);
+      const result = await uploadSupportReport(entry.job, dependencies, diagnostics);
       removePersistedJob(entry.job.jobId);
       showToast(
         `Thanks. Report sent. Support has the details. (${result.reportId})`,
@@ -154,7 +152,7 @@ async function drainSupportReportQueue(
     } catch (error) {
       const attemptCount = entry.attemptCount + 1;
       const failure = describeSupportReportUploadFailure(error, attemptCount);
-      void logRendererEvent({
+      void diagnostics?.logEvent({
         source: "support_report_upload",
         message: `failed.${failure.kind}`,
       });
@@ -163,7 +161,10 @@ async function drainSupportReportQueue(
       // Clean up the queued job quietly instead of nagging.
       if (failure.kind === "already_completed") {
         removePersistedJob(entry.job.jobId);
-        await deleteSupportReportJobAttachments(entry.job);
+        await deleteSupportReportJobAttachments(
+          entry.job,
+          diagnostics?.deleteAttachment,
+        );
         showToast(failure.toastMessage, "info");
         continue;
       }
@@ -180,9 +181,12 @@ async function drainSupportReportQueue(
       });
       if (!failure.retryable || exhausted) {
         removePersistedJob(entry.job.jobId);
-        await deleteSupportReportJobAttachments(entry.job);
+        await deleteSupportReportJobAttachments(
+          entry.job,
+          diagnostics?.deleteAttachment,
+        );
         if (exhausted) {
-          void logRendererEvent({
+          void diagnostics?.logEvent({
             source: "support_report_upload",
             message: "dropped.exhausted",
           });
@@ -213,13 +217,14 @@ async function drainSupportReportQueue(
 async function uploadSupportReport(
   job: SupportReportJob,
   dependencies: SupportReportUploadDependencies<AnyHarnessResolvedConnection>,
+  diagnostics: DesktopDiagnosticsBridge | null,
 ): Promise<SupportReportUploadResult> {
   validateAttachmentSizes(job);
   const report = await createSupportReport(buildCreateReportRequest(job, job.attachments.length));
   const serverCorrelation = toLocalServerCorrelation(report);
   if (report.status === "completed") {
     trackSupportReportSubmitted(job, serverCorrelation, job.attachments.length);
-    await deleteSupportReportJobAttachments(job);
+    await deleteSupportReportJobAttachments(job, diagnostics?.deleteAttachment);
     return {
       reportId: report.reportId,
     };
@@ -232,7 +237,7 @@ async function uploadSupportReport(
 
   const attachmentBlobs = await Promise.all(job.attachments.map(async (attachment) => ({
     attachment,
-    blob: await loadAttachmentBlob(attachment),
+    blob: await loadAttachmentBlob(attachment, diagnostics?.readAttachment),
   })));
   const attachmentHashes = await Promise.all(attachmentBlobs.map(async ({ blob }) =>
     sha256Hex(await blob.arrayBuffer())
@@ -269,7 +274,7 @@ async function uploadSupportReport(
     });
     await completeSupportReportUpload(report.reportId, completeRequest);
     trackSupportReportSubmitted(job, serverCorrelation, 0);
-    await deleteSupportReportJobAttachments(job);
+    await deleteSupportReportJobAttachments(job, diagnostics?.deleteAttachment);
     return {
       reportId: report.reportId,
     };
@@ -326,7 +331,7 @@ async function uploadSupportReport(
   });
   await completeSupportReportUpload(upload.reportId, completeRequest);
   trackSupportReportSubmitted(job, serverCorrelation, completedAttachments.length);
-  await deleteSupportReportJobAttachments(job);
+  await deleteSupportReportJobAttachments(job, diagnostics?.deleteAttachment);
   return {
     reportId: upload.reportId,
   };

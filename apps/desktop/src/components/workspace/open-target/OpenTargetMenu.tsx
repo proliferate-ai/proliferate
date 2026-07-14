@@ -3,7 +3,7 @@ import { Copy } from "@proliferate/ui/icons";
 import { OpenTargetIcon } from "@/components/workspace/open-target/OpenTargetIcon";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { POPOVER_SURFACE_CLASS } from "@proliferate/ui/primitives/PopoverButton";
-import type { OpenTarget } from "@/hooks/access/tauri/use-shell-actions";
+import type { OpenTarget } from "@proliferate/product-client/host/desktop-bridge";
 
 export function TargetIcon({ target, size = "size-3.5" }: { target: OpenTarget; size?: string }) {
   if (target.kind === "copy") {

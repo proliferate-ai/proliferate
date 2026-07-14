@@ -2,16 +2,18 @@
 
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { DesktopWorkerBridge } from "@proliferate/product-client/host/desktop-bridge";
 import type { AuthUser } from "@/lib/domain/auth/auth-user";
 
 const workflowMocks = vi.hoisted(() => ({
   ensureDesktopWorker: vi.fn<
     (
       organizationId: string | null,
+      worker: DesktopWorkerBridge,
       deps: { onFailure: (error: unknown) => void },
     ) => Promise<boolean>
   >(),
-  teardownDesktopWorker: vi.fn<() => Promise<void>>(),
+  teardownDesktopWorker: vi.fn<(worker: DesktopWorkerBridge) => Promise<void>>(),
 }));
 
 vi.mock("@/lib/workflows/cloud/ensure-desktop-worker", () => ({
@@ -22,6 +24,8 @@ vi.mock("@/lib/workflows/cloud/ensure-desktop-worker", () => ({
 function authUser(id: string): AuthUser {
   return { id, email: `${id}@example.com`, display_name: null };
 }
+
+const worker = {} as DesktopWorkerBridge;
 
 // The enrollment guard is module-level state, so each test loads the hook
 // (and the stores it observes) from a fresh module registry.
@@ -42,7 +46,7 @@ async function loadEnrollmentHarness() {
     activeOrganizationValidated: false,
   });
   useToastStore.setState({ toasts: [] });
-  const rendered = renderHook(() => useDesktopWorkerEnrollment());
+  const rendered = renderHook(() => useDesktopWorkerEnrollment(worker));
   return {
     ...rendered,
     signIn: (id: string) =>
@@ -145,6 +149,7 @@ describe("useDesktopWorkerEnrollment", () => {
     });
     expect(workflowMocks.ensureDesktopWorker).toHaveBeenLastCalledWith(
       "org-2",
+      worker,
       expect.objectContaining({ onFailure: expect.any(Function) }),
     );
     expect(workflowMocks.teardownDesktopWorker).not.toHaveBeenCalled();
@@ -235,7 +240,11 @@ describe("useDesktopWorkerEnrollment", () => {
   });
 
   it("shows the native startup failure to the user", async () => {
-    workflowMocks.ensureDesktopWorker.mockImplementationOnce(async (_organizationId, deps) => {
+    workflowMocks.ensureDesktopWorker.mockImplementationOnce(async (
+      _organizationId,
+      _worker,
+      deps,
+    ) => {
       deps.onFailure("worker exited: enrollment contract mismatch");
       return false;
     });
@@ -256,7 +265,7 @@ describe("useDesktopWorkerEnrollment", () => {
   it("does not show a stale failure after sign-out cancels enrollment", async () => {
     let failOldEnrollment: (() => void) | null = null;
     workflowMocks.ensureDesktopWorker.mockImplementationOnce(
-      (_organizationId, deps) =>
+      (_organizationId, _worker, deps) =>
         new Promise<boolean>((resolve) => {
           failOldEnrollment = () => {
             deps.onFailure("old identity failed after sign-out");

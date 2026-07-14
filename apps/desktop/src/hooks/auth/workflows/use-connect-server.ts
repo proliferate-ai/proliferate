@@ -1,11 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { CONNECT_SERVER_LABELS } from "@/copy/auth/auth-copy";
-import {
-  fetchServerMeta,
-  isTauriRuntimeAvailable,
-} from "@/lib/access/tauri/connect-server";
-import { setDesktopAppConfig } from "@/lib/access/tauri/config";
-import { getAppVersion, relaunch } from "@/lib/access/tauri/updater";
+import { fetchServerMeta } from "@/lib/access/tauri/connect-server";
 import { isDesktopVersionSupported } from "@/lib/domain/capabilities/version-compat";
 import {
   getRuntimeDesktopAppConfig,
@@ -62,7 +58,11 @@ export interface UseConnectServerResult {
  * desktop-navigation.ts and self-hosting-v1.md's backlog table).
  */
 export function useConnectServer(): UseConnectServerResult {
-  const available = isTauriRuntimeAvailable();
+  const { deployment, desktop } = useProductHost();
+  const updater = desktop?.updater ?? null;
+  const available = updater !== null
+    && deployment.switchDeployment !== undefined
+    && deployment.resetDeployment !== undefined;
   const [step, setStep] = useState<ConnectServerStep>("closed");
   const [url, setUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -124,7 +124,7 @@ export function useConnectServer(): UseConnectServerResult {
     // the dialog stays presentational. Fail open: any error leaves no warning.
     let warning: string | null = null;
     try {
-      const appVersion = await getAppVersion();
+      const appVersion = await updater!.getVersion();
       if (!isDesktopVersionSupported(appVersion, result.meta.minDesktopVersion)) {
         warning = CONNECT_SERVER_LABELS.minVersionWarning(result.meta.minDesktopVersion);
       }
@@ -133,7 +133,7 @@ export function useConnectServer(): UseConnectServerResult {
     }
     setVersionWarning(warning);
     setStep("trust-confirm");
-  }, [available]);
+  }, [available, updater]);
 
   const submitUrl = useCallback(async () => {
     await runCheck(url);
@@ -157,26 +157,24 @@ export function useConnectServer(): UseConnectServerResult {
     setStep("connecting");
     setError(null);
     try {
-      await setDesktopAppConfig({ apiBaseUrl: pendingUrl });
-      await relaunch();
+      await deployment.switchDeployment!(pendingUrl);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not connect to that server.");
       setStep("trust-confirm");
     }
-  }, [available, pendingUrl]);
+  }, [available, deployment, pendingUrl]);
 
   const resetToDefaultServer = useCallback(async () => {
     if (!available) return;
     setStep("connecting");
     setError(null);
     try {
-      await setDesktopAppConfig({ apiBaseUrl: null });
-      await relaunch();
+      await deployment.resetDeployment!();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not reset to the default server.");
       setStep("closed");
     }
-  }, [available]);
+  }, [available, deployment]);
 
   return {
     available,

@@ -1,12 +1,12 @@
 import { Button } from "@proliferate/ui/primitives/Button";
 import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 import { CLOUD_SETUP_DOCS_URL } from "@/config/capabilities";
-import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 
 export function CloudAuthUnavailablePane() {
-  const { openExternal } = useTauriShellActions();
+  const { openExternal } = useProductHost().links;
 
   return (
     <section className="space-y-6">

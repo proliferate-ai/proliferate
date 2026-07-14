@@ -13,8 +13,8 @@ import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import { SplitButton } from "@/components/workspace/open-target/SplitButton";
 import {
   type OpenTarget,
-  useTauriShellActions,
-} from "@/hooks/access/tauri/use-shell-actions";
+} from "@proliferate/product-client/host/desktop-bridge";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   FilePen,
   Play,
@@ -52,31 +52,42 @@ export const GlobalHeader = memo(function GlobalHeader({
 }: GlobalHeaderProps) {
   useDebugRenderCount("global-header");
   const [targets, setTargets] = useState<OpenTarget[]>([]);
-  const {
-    listOpenTargets,
-    openTarget: execOpenTarget,
-  } = useTauriShellActions();
+  const host = useProductHost();
+  const files = host.desktop?.files ?? null;
   const defaultOpenInTargetId = useUserPreferencesStore((s) => s.defaultOpenInTargetId);
   const preferredTarget = resolvePreferredOpenTarget(targets, { defaultOpenInTargetId });
   const workspacePath = workspacePathProp ?? selectedWorkspace?.path;
   const title = workspaceHeaderTitle(selectedWorkspace, workspacePath);
 
   useEffect(() => {
-    void listOpenTargets("directory").then(setTargets);
-  }, [listOpenTargets]);
+    if (!files) {
+      setTargets([]);
+      return;
+    }
+    void files.listOpenTargets("directory").then(setTargets);
+  }, [files]);
 
   const handleDefaultOpen = useCallback(() => {
     if (!workspacePath) return;
-    const targetId = preferredTarget?.id ?? "finder";
-    void execOpenTarget(targetId, workspacePath);
-  }, [execOpenTarget, workspacePath, preferredTarget]);
+    if (!files) return;
+    if (preferredTarget?.kind === "copy") {
+      void host.clipboard.writeText(workspacePath);
+      return;
+    }
+    void files.openTarget(preferredTarget?.id ?? "finder", workspacePath);
+  }, [files, host.clipboard, workspacePath, preferredTarget]);
 
   const handleTargetClick = useCallback(
-    (targetId: string) => {
+    (target: OpenTarget) => {
       if (!workspacePath) return;
-      void execOpenTarget(targetId, workspacePath);
+      if (!files) return;
+      if (target.kind === "copy") {
+        void host.clipboard.writeText(workspacePath);
+        return;
+      }
+      void files.openTarget(target.id, workspacePath);
     },
-    [execOpenTarget, workspacePath],
+    [files, host.clipboard, workspacePath],
   );
 
   return (
@@ -111,7 +122,7 @@ export const GlobalHeader = memo(function GlobalHeader({
               <Play className="size-3.5" />
               <span>{runLabel}</span>
             </Button>
-            {workspacePath && (
+            {workspacePath && files && (
               <SplitButton
                 icon={<FilePen className="size-4" />}
                 label={preferredTarget?.label ?? "Open"}

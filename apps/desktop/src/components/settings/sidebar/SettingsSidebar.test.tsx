@@ -17,6 +17,18 @@ import {
 } from "@/lib/domain/shortcuts/registry";
 import { useSupportModalStore } from "@/stores/support/support-modal-store";
 
+const updaterMocks = vi.hoisted(() => ({
+  isSupported: vi.fn(() => false),
+  getVersion: vi.fn(async () => "0.0.0-test"),
+  check: vi.fn(async () => null),
+  downloadAndInstall: vi.fn(async () => {}),
+  relaunch: vi.fn(async () => {}),
+}));
+
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => ({ desktop: { updater: updaterMocks } }),
+}));
+
 vi.mock("@/components/app/sidebar/SidebarAccountFooter", () => ({
   SidebarAccountFooter: () => <div data-testid="sidebar-account-footer" />,
 }));
@@ -33,6 +45,13 @@ vi.mock("@/hooks/support/derived/use-support-report-snapshot", () => ({
     defaultScope: "app_only",
     defaultWorkspaceId: null,
     workspaceOptions: [],
+  }),
+}));
+
+vi.mock("@/hooks/support/facade/use-support-availability", () => ({
+  useSupportAvailability: () => ({
+    canSubmit: true,
+    disabledReason: null,
   }),
 }));
 
@@ -159,7 +178,6 @@ describe("SettingsSidebar layout and shortcuts", () => {
       "OpenCode",
       "Grok",
       "API keys",
-      "Defaults",
     ];
     let previousIndex = -1;
     for (const label of expectedOrder) {

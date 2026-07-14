@@ -10,10 +10,8 @@ import { Toaster } from "@proliferate/ui/kit/Sonner"
 import { MacWindowControlsSafeArea } from "@/components/app/chrome/MacWindowControlsSafeArea"
 import { useConnectivityListeners } from "@/hooks/app/lifecycle/use-connectivity-listeners"
 import { useDebugSessionActivity } from "@/hooks/app/lifecycle/use-debug-session-activity"
-import { useDesktopWorkerEnrollment } from "@/hooks/cloud/lifecycle/use-desktop-worker-enrollment"
 import { useDevDesktopHandoff } from "@/hooks/app/lifecycle/use-dev-desktop-handoff"
 import { useOrganizationJoinAuthLaunch } from "@/hooks/organizations/lifecycle/use-organization-join-auth-launch"
-import { useUpdateRestartWatcher } from "@/hooks/access/tauri/use-update-restart-watcher"
 import { useAppShortcuts } from "@/hooks/app/lifecycle/use-app-shortcuts"
 import { useAppCommandActions } from "@/hooks/app/workflows/use-app-command-actions"
 import { useAgentAutoReconcile } from "@/hooks/agents/lifecycle/use-agent-auto-reconcile"
@@ -48,7 +46,6 @@ import { RepoSetupModalHost } from "@/components/workspace/repo-setup/RepoSetupM
 import { SupportModalHost } from "@/components/support/SupportModalHost"
 import { AddRepoFlowHost } from "@/components/workspace/repo-setup/AddRepoFlowHost"
 import { InstrumentedRoutes } from "@/lib/integrations/telemetry/sentry"
-import { logRendererEvent } from "@/lib/access/tauri/diagnostics"
 import { AuthenticatedAppHost } from "@/pages/AuthenticatedAppHost"
 import { LoginPage } from "@/pages/LoginPage"
 import { SettingsCloudRedirect } from "@/pages/SettingsCloudRedirect"
@@ -58,6 +55,7 @@ import { AppCommandActionsProvider } from "@/providers/AppCommandActionsProvider
 import { DesktopProductLifecycleRoot } from "@/providers/DesktopProductLifecycleRoot"
 import { ShortcutRevealProvider } from "@/providers/ShortcutRevealProvider"
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider"
+import type { DesktopDiagnosticsBridge } from "@proliferate/product-client/host/desktop-bridge"
 
 const APP_RUNTIME_RENDER_MILESTONES = new Set([1, 2, 3, 5, 10, 25, 50, 100, 250])
 
@@ -113,12 +111,16 @@ const SubagentsUxPlaygroundPage = import.meta.env.DEV
     )
   : null
 
-function recordAppRendererEvent(message: string, elapsedMs?: number): void {
+function recordAppRendererEvent(
+  diagnostics: DesktopDiagnosticsBridge | null,
+  message: string,
+  elapsedMs?: number,
+): void {
   recordBootDiagnostic(
     `app_bootstrap.${message}`,
     elapsedMs === undefined ? undefined : { elapsedMs },
   )
-  void logRendererEvent({
+  void diagnostics?.logEvent({
     source: "app_bootstrap",
     message,
     elapsedMs,
@@ -141,7 +143,9 @@ function AppRuntime() {
     recordBootDiagnostic("app_runtime.render.pass", { count: appRuntimeRenderCount })
   }
   recordBootDiagnosticOnce("app_runtime.render.before.use_auth_bootstrap")
-  const bootstrapAuth = useProductHost().auth.restoreSession
+  const productHost = useProductHost()
+  const bootstrapAuth = productHost.auth.restoreSession
+  const diagnostics = productHost.desktop?.diagnostics ?? null
   recordBootDiagnosticOnce("app_runtime.render.after.use_auth_bootstrap")
   recordBootDiagnosticOnce("app_runtime.render.before.auth_status")
   const authStatus = useAuthStore((s) => s.status)
@@ -150,12 +154,7 @@ function AppRuntime() {
   const appCommandActions = useAppCommandActions()
   recordBootDiagnosticOnce("app_runtime.render.after.use_app_command_actions")
   useConnectivityListeners()
-  useUpdateRestartWatcher()
   useDebugSessionActivity()
-  // Mounted here (not in AuthenticatedAppHost, which unmounts on sign-out) so
-  // the enrollment hook observes the authenticated -> anonymous transition and
-  // can tear the worker down.
-  useDesktopWorkerEnrollment()
   useDevDesktopHandoff()
   useOrganizationJoinAuthLaunch()
   recordBootDiagnosticOnce("app_runtime.render.before.use_shortcut_dispatcher")
@@ -211,13 +210,14 @@ function AppRuntime() {
   recordBootDiagnosticOnce("app_runtime.render.after.use_support_report_upload_queue")
 
   useEffect(() => {
-    recordAppRendererEvent("app.bootstrap.start")
+    recordAppRendererEvent(diagnostics, "app.bootstrap.start")
     logStartupDebug("app.bootstrap.start")
     const authBootstrapStartedAt = startStartupTimer()
-    recordAppRendererEvent("app.auth_bootstrap.start")
+    recordAppRendererEvent(diagnostics, "app.auth_bootstrap.start")
     logStartupDebug("app.auth_bootstrap.start")
     void bootstrapAuth().finally(() => {
       recordAppRendererEvent(
+        diagnostics,
         "app.auth_bootstrap.completed",
         elapsedStartupMs(authBootstrapStartedAt),
       )
@@ -226,7 +226,7 @@ function AppRuntime() {
         authStatus: useAuthStore.getState().status,
       })
     })
-  }, [bootstrapAuth])
+  }, [bootstrapAuth, diagnostics])
 
   recordBootDiagnosticOnce("app_runtime.render.before_return", { authStatus })
 

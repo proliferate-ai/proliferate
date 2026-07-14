@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { RELEASE_NOTICE_CHANGELOG_URL } from "@/config/release-notice";
-import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import type { ReleaseNotice } from "@/lib/domain/updates/release-notice";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
@@ -8,7 +8,7 @@ export function useReleaseNoticeActions(notice: ReleaseNotice | null) {
   const setPreference = useUserPreferencesStore(
     (state) => state.set,
   );
-  const { openExternal } = useTauriShellActions();
+  const { openExternal } = useProductHost().links;
 
   const dismissNotice = useCallback(() => {
     if (!notice) {

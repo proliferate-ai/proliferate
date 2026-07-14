@@ -10,6 +10,7 @@ import {
   useGitHubAppUserAuthorizationStatus,
   useStartGitHubAppUserAuthorization,
 } from "@proliferate/cloud-sdk-react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { ExternalLink, RefreshCw } from "@proliferate/ui/icons";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { ConnectServerDialog } from "@/components/auth/ConnectServerDialog";
@@ -31,7 +32,6 @@ import {
 import { isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
 import { useAuthActions } from "@/hooks/auth/workflows/use-auth-actions";
 import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
-import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useOrganizationJoinInvitationFlow } from "@/hooks/organizations/workflows/use-organization-join-invitation-flow";
 import { useJoinedOrganizationActivation } from "@/hooks/organizations/workflows/use-joined-organization-activation";
 import { buildGitHubOAuthAppSettingsUrl } from "@/lib/integrations/auth/proliferate-auth";
@@ -47,7 +47,7 @@ export function AccountPane() {
   const status = useAuthStore((state) => state.status);
   const user = useAuthStore((state) => state.user);
   const { linkGoogle, signOut } = useAuthActions();
-  const { openExternal } = useTauriShellActions();
+  const { links } = useProductHost();
   const {
     signIn: signInWithGitHub,
     submitting: signingIn,
@@ -190,9 +190,13 @@ export function AccountPane() {
     setProviderLinkError(null);
     try {
       const response = await githubAppUserAuthorizationStart.mutateAsync({
-        returnTo: "proliferate://settings/account?source=github_app_callback",
+        returnTo: links.buildReturnUrl({
+          kind: "settings",
+          section: "account",
+          source: "github_app_callback",
+        }),
       });
-      await openExternal(response.authorizationUrl);
+      await links.openExternal(response.authorizationUrl);
       clearGitHubAppAuthorizationRefreshTimers(githubAppAuthorizationRefreshTimersRef.current);
       githubAppAuthorizationRefreshTimersRef.current = scheduleGitHubAppAuthorizationRefresh(() => {
         void githubAppUserAuthorization.refetch();
@@ -205,7 +209,7 @@ export function AccountPane() {
   }
 
   async function handleManageGitHubApp() {
-    await openExternal("https://github.com/settings/installations");
+    await links.openExternal("https://github.com/settings/installations");
   }
 
   async function handleSetPassword(input: AccountPasswordCredentialSubmit) {
@@ -343,7 +347,7 @@ export function AccountPane() {
             ? {
                 label: AUTH_ACCOUNT_LABELS.manageAccess,
                 icon: <ExternalLink className="size-3" />,
-                onClick: () => { void openExternal(githubSettingsUrl); },
+                onClick: () => { void links.openExternal(githubSettingsUrl); },
               }
             : undefined,
           signOut: isAuthenticated && !devAuthBypassed

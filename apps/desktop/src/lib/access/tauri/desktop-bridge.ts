@@ -178,7 +178,7 @@ export const desktopBridge: DesktopBridge = {
               received += chunkLength;
               // A bounded 0..1 fraction is only meaningful once the total
               // length is known.
-              if (contentLength !== undefined) {
+              if (contentLength !== undefined && contentLength > 0) {
                 onProgress(Math.min(received / contentLength, 1));
               }
             }

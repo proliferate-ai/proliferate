@@ -75,9 +75,9 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
   }),
 }));
 
-vi.mock("@/hooks/access/tauri/use-shell-actions", () => ({
-  useTauriShellActions: () => ({
-    openExternal: hookMocks.openExternal,
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => ({
+    links: { openExternal: hookMocks.openExternal },
   }),
 }));
 

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { DesktopUpdate } from "@proliferate/product-client/host/desktop-bridge";
 
 export type UpdaterPhase =
   | "idle"
@@ -25,12 +26,11 @@ interface UpdaterState {
   // One-shot signal: a user-initiated check completed and found no update. Background
   // checks never set this; the consumer clears it after surfacing the result.
   manualCheckCompletedAt: number | null;
-  _updateHandle: unknown | null;
+  _update: DesktopUpdate | null;
 
   setPhase: (phase: UpdaterPhase) => void;
   setAvailable: (
-    version: string,
-    handle: unknown,
+    update: DesktopUpdate,
     title?: string | null,
   ) => void;
   setDownloadProgress: (progress: number) => void;
@@ -55,17 +55,17 @@ export const useUpdaterStore = create<UpdaterState>((set) => ({
   restartPromptOpen: false,
   restartWhenIdle: false,
   manualCheckCompletedAt: null,
-  _updateHandle: null,
+  _update: null,
 
   setPhase: (phase) =>
     set({ phase, errorMessage: null, errorSource: null, restartPromptOpen: false }),
 
-  setAvailable: (version, handle, title = null) =>
+  setAvailable: (update, title = null) =>
     set({
       phase: "available",
-      availableVersion: version,
+      availableVersion: update.version,
       availableTitle: title,
-      _updateHandle: handle,
+      _update: update,
       errorMessage: null,
       errorSource: null,
       restartPromptOpen: false,
@@ -108,6 +108,6 @@ export const useUpdaterStore = create<UpdaterState>((set) => ({
       restartPromptOpen: false,
       restartWhenIdle: false,
       manualCheckCompletedAt: null,
-      _updateHandle: null,
+      _update: null,
     }),
 }));

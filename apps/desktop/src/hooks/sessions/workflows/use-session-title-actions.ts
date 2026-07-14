@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useUpdateSessionTitleMutation } from "@anyharness/sdk-react";
 import { generateSessionTitle } from "@proliferate/cloud-sdk/client/ai-magic";
 import { getSessionClientAndWorkspace } from "@/lib/access/anyharness/session-runtime";
@@ -33,6 +34,7 @@ function markAutoSessionTitleRequested(sessionId: string): boolean {
 }
 
 export function useSessionTitleActions() {
+  const ssh = useProductHost().desktop?.ssh ?? null;
   const { applySessionSummary } = useSessionSummaryActions();
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
   const updateSessionTitleMutation = useUpdateSessionTitleMutation();
@@ -44,7 +46,7 @@ export function useSessionTitleActions() {
     }
 
     const { workspaceId, materializedSessionId } =
-      await getSessionClientAndWorkspace(sessionId);
+      await getSessionClientAndWorkspace(sessionId, ssh);
     const operationId = startMeasurementOperation({
       kind: "session_rename",
       surfaces: ["header-tabs", "workspace-sidebar", "chat-surface"],
@@ -74,7 +76,7 @@ export function useSessionTitleActions() {
     }
 
     return session;
-  }, [applySessionSummary, updateSessionTitleMutation, upsertWorkspaceSessionRecord]);
+  }, [applySessionSummary, ssh, updateSessionTitleMutation, upsertWorkspaceSessionRecord]);
 
   const maybeGenerateSessionTitle = useCallback(async (input: {
     sessionId: string;

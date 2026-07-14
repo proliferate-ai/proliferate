@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   type OpenTarget,
-  useTauriShellActions,
-} from "@/hooks/access/tauri/use-shell-actions";
+} from "@proliferate/product-client/host/desktop-bridge";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { buildSettingsHref } from "@/lib/domain/settings/navigation";
@@ -20,10 +20,8 @@ export function useWorkspaceArrivalActions({
   sourceRepoRootPath,
 }: UseWorkspaceArrivalActionsArgs) {
   const navigate = useNavigate();
-  const {
-    listOpenTargets,
-    openTarget: execOpenTarget,
-  } = useTauriShellActions();
+  const host = useProductHost();
+  const files = host.desktop?.files ?? null;
   const showToast = useToastStore((state) => state.show);
   const setWorkspaceArrivalEvent = useSessionSelectionStore((state) => state.setWorkspaceArrivalEvent);
   const [targets, setTargets] = useState<OpenTarget[]>([]);
@@ -32,14 +30,14 @@ export function useWorkspaceArrivalActions({
   useEffect(() => {
     let cancelled = false;
 
-    if (!workspacePath) {
+    if (!workspacePath || !files) {
       setTargets([]);
       setIsLoadingTargets(false);
       return;
     }
 
     setIsLoadingTargets(true);
-    void listOpenTargets("directory")
+    void files.listOpenTargets("directory")
       .then((nextTargets) => {
         if (cancelled) return;
         setTargets(nextTargets);
@@ -56,18 +54,29 @@ export function useWorkspaceArrivalActions({
     return () => {
       cancelled = true;
     };
-  }, [listOpenTargets, workspacePath]);
+  }, [files, workspacePath]);
 
   const handleTargetClick = useCallback((target: OpenTarget) => {
     if (!workspacePath) {
       return;
     }
+    if (target.kind === "copy") {
+      void host.clipboard.writeText(workspacePath).catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        showToast(`Failed to open workspace: ${message}`);
+      });
+      return;
+    }
+    if (!files) {
+      showToast("Local file access is not available.");
+      return;
+    }
 
-    void execOpenTarget(target.id, workspacePath).catch((error) => {
+    void files.openTarget(target.id, workspacePath).catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
       showToast(`Failed to open workspace: ${message}`);
     });
-  }, [execOpenTarget, showToast, workspacePath]);
+  }, [files, host.clipboard, showToast, workspacePath]);
 
   const handleOpenRepositorySettings = useCallback(() => {
     navigate(buildSettingsHref({ section: "repo", repo: sourceRepoRootPath }));
