@@ -36,6 +36,7 @@ import { buildAnyHarnessCacheScopeKey } from "@/lib/domain/auth/anyharness-cache
 import { getProliferateApiBaseUrl } from "@/lib/infra/proliferate-api";
 import { withFreshCloudSandboxGatewayAccessToken } from "@/lib/access/cloud/cloud-sandbox-gateway";
 import { useCloudWorkspaceMaterializationCacheBoundary } from "@/hooks/workspaces/cache/use-cloud-workspace-materialization-cache-boundary";
+import { DesktopProductHostProvider } from "./DesktopProductHostProvider";
 import { TelemetryProvider } from "./TelemetryProvider";
 
 async function resolveWorkspaceConnectionWithCache(
@@ -68,9 +69,11 @@ export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={appQueryClient}>
       <CloudClientProvider client={cloudClient}>
-        <WorkspaceProviders>
-          <TelemetryProvider>{children}</TelemetryProvider>
-        </WorkspaceProviders>
+        <DesktopProductHostProvider cloudClient={cloudClient}>
+          <WorkspaceProviders>
+            <TelemetryProvider>{children}</TelemetryProvider>
+          </WorkspaceProviders>
+        </DesktopProductHostProvider>
       </CloudClientProvider>
     </QueryClientProvider>
   );

@@ -172,6 +172,7 @@ function ensureFrontendBuilt(): void {
     { filter: "@proliferate/cloud-sdk-react", path: "cloud/sdk-react" },
     { filter: "@proliferate/design", path: "apps/packages/design" },
     { filter: "@proliferate/product-domain", path: "apps/packages/product-domain" },
+    { filter: "@proliferate/product-client", path: "apps/packages/product-client" },
     { filter: "@proliferate/ui", path: "apps/packages/ui" },
     { filter: "@proliferate/product-ui", path: "apps/packages/product-ui" },
     { filter: "@proliferate/product-surfaces", path: "apps/packages/product-surfaces" },

@@ -1,3 +1,170 @@
+import type {
+  ProductEntry,
+  ProductQueryParams,
+  ProductSettingsEntrySection,
+} from "@proliferate/product-client/host/product-host";
+
+// Legacy in-app route mapping for `proliferate://settings/<path>` deep links.
+// Excludes `/environments` (no nav route) to stay byte-identical to the branches.
+const NAV_SETTINGS_SECTION_BY_PATH: Record<string, ProductSettingsEntrySection> = {
+  "/cloud": "billing",
+  "/billing": "billing",
+  "/account": "account",
+  "/organization": "organization",
+  "/slack-bot": "general",
+};
+
+/**
+ * Decode a raw Desktop deep-link URL into the shared {@link ProductEntry}
+ * normalization. This is the inverse of {@link encodeDesktopReturnUrl} for the
+ * destinations that round-trip. It recognizes exactly the URLs the legacy
+ * `desktopNavigationTarget` table supported plus the literal return URLs the
+ * codebase emits (github-app callbacks landing on account/organization/
+ * environments). Malformed, auth-callback, and unknown inbound URLs decode to
+ * `null`; the decoder never invents a destination.
+ */
+export function decodeDesktopProductEntry(url: string): ProductEntry | null {
+  let parsed: URL;
+
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+
+  if (parsed.protocol !== "proliferate:" && parsed.protocol !== "proliferate-local:") {
+    return null;
+  }
+
+  const host = parsed.hostname;
+  const pathname = parsed.pathname;
+
+  if (host === "join") {
+    const segments = pathname.split("/").filter(Boolean);
+    if (segments.length === 1) {
+      const organizationId = decodeRoutePart(segments[0]);
+      // The issuing server stamps its own origin so a self-hosted invite can
+      // point the desktop at the right server. Validate hard and DROP anything
+      // untrusted — a dropped origin degrades to today's behavior, never a
+      // silent server switch.
+      const serverOrigin = parseJoinServerOrigin(parsed.searchParams.get("origin"));
+      return serverOrigin
+        ? { kind: "organization-join", organizationId, serverOrigin }
+        : { kind: "organization-join", organizationId };
+    }
+    return null;
+  }
+
+  if (host === "workspaces") {
+    const segments = pathname.split("/").filter(Boolean);
+    if (segments.length === 1) {
+      return {
+        kind: "workspace",
+        workspaceId: decodeRoutePart(segments[0]),
+        query: searchToQuery(parsed.searchParams),
+      };
+    }
+    return null;
+  }
+
+  if (host === "billing" && (pathname === "/success" || pathname === "/cancel")) {
+    return {
+      kind: "billing-return",
+      status: pathname === "/success" ? "success" : "cancel",
+      query: searchToQuery(parsed.searchParams),
+    };
+  }
+
+  if (
+    (host === "integrations" || host === "plugins" || host === "powers")
+    && (pathname === "" || pathname === "/")
+  ) {
+    const source = parsed.searchParams.get("source");
+    if (source === "integration_oauth_callback" || source === "mcp_oauth_callback") {
+      return buildIntegrationCallbackEntry(source, parsed.searchParams);
+    }
+    return buildSettingsEntry("integrations", parsed.searchParams);
+  }
+
+  if (host === "settings") {
+    const section = settingsSectionForPath(pathname);
+    if (section) {
+      return buildSettingsEntry(section, parsed.searchParams);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Encode a normalized {@link ProductEntry} as the Desktop deep link the app
+ * hands to Cloud mutations as a return URL. Only entry kinds/sections that have
+ * a current Desktop URL are supported; everything else (workflow, invitation,
+ * the parked `general` settings section, and non-round-tripping billing
+ * statuses) throws, because D1a does not invent a route for an unsupported
+ * entry.
+ */
+export function encodeDesktopReturnUrl(entry: ProductEntry): string {
+  switch (entry.kind) {
+    case "workspace":
+      return `proliferate://workspaces/${encodeURIComponent(entry.workspaceId)}${queryToSearch(entry.query)}`;
+    case "organization-join": {
+      const base = `proliferate://join/${encodeURIComponent(entry.organizationId)}`;
+      if (entry.serverOrigin) {
+        const params = new URLSearchParams({ origin: entry.serverOrigin });
+        return `${base}?${params.toString()}`;
+      }
+      return base;
+    }
+    case "billing-return": {
+      if (entry.status !== "success" && entry.status !== "cancel") {
+        throw new Error(
+          `No Desktop return URL for billing-return status: ${entry.status}`,
+        );
+      }
+      return `proliferate://billing/${entry.status}${queryToSearch(entry.query)}`;
+    }
+    case "integration-callback": {
+      const params = new URLSearchParams();
+      params.set("source", entry.source);
+      if (entry.status) {
+        params.set("status", entry.status);
+      }
+      if (entry.flowId) {
+        params.set("flowId", entry.flowId);
+      }
+      if (entry.failureCode) {
+        params.set("failureCode", entry.failureCode);
+      }
+      return `proliferate://integrations?${params.toString()}`;
+    }
+    case "settings": {
+      const base = settingsReturnUrlForSection(entry.section);
+      if (base === null) {
+        throw new Error(`No Desktop return URL for settings section: ${entry.section}`);
+      }
+      const params = queryToParams(entry.query);
+      if (entry.source) {
+        params.set("source", entry.source);
+      }
+      const search = params.toString();
+      return search ? `${base}?${search}` : base;
+    }
+    default:
+      throw new Error(`No Desktop return URL for entry kind: ${(entry as ProductEntry).kind}`);
+  }
+}
+
+/**
+ * Existing-consumer adapter: the legacy in-app route string for a raw deep
+ * link, byte-identical to the historical route table (including exotic query
+ * semantics: percent-encoded spaces, duplicate keys, unrecognized params).
+ *
+ * Intentionally does NOT route through {@link decodeDesktopProductEntry}: the
+ * normalized {@link ProductEntry} codec collapses queries into a lossy
+ * `Record<string, string>` (`x=a%20b`→`x=a+b`, `x=1&x=2`→`x=2`, unknown params
+ * drop), so query-carrying routes are rebuilt from the raw `URL.search`.
+ */
 export function desktopNavigationTarget(url: string): string | null {
   let parsed: URL;
 
@@ -20,12 +187,11 @@ export function desktopNavigationTarget(url: string): string | null {
       // follow this link and see/accept their invitation.
       const params = new URLSearchParams({ section: "account" });
       params.set("joinOrganizationId", organizationId);
-      // The issuing server stamps its own origin so a self-hosted invite can
-      // point the desktop at the right server (the org id is meaningless on
-      // Cloud). Any web page can fire this deep link with an attacker-supplied
-      // origin, so we validate hard and DROP anything untrusted — a dropped
-      // origin degrades to today's behavior (resolve against the current
-      // server), never a silent server switch.
+      // The issuing server stamps its own origin so a self-hosted invite points
+      // the desktop at the right server. Any web page can fire this deep link
+      // with an attacker-supplied origin, so validate hard and DROP anything
+      // untrusted — a dropped origin degrades to today's behavior, never a
+      // silent server switch.
       const joinServerOrigin = parseJoinServerOrigin(parsed.searchParams.get("origin"));
       if (joinServerOrigin) {
         params.set("joinServerOrigin", joinServerOrigin);
@@ -34,22 +200,15 @@ export function desktopNavigationTarget(url: string): string | null {
     }
   }
 
-  if (parsed.hostname === "settings" && parsed.pathname === "/cloud") {
-    const params = new URLSearchParams(parsed.search);
-    params.set("section", "billing");
-    return `/settings?${params.toString()}`;
-  }
-
-  if (parsed.hostname === "settings" && parsed.pathname === "/billing") {
-    const params = new URLSearchParams(parsed.search);
-    params.set("section", "billing");
-    return `/settings?${params.toString()}`;
-  }
-
-  if (parsed.hostname === "settings" && parsed.pathname === "/account") {
-    const params = new URLSearchParams(parsed.search);
-    params.set("section", "account");
-    return `/settings?${params.toString()}`;
+  if (parsed.hostname === "settings") {
+    // Legacy settings deep links map their path to a settings section.
+    // SLACK BOT PARKED: /slack-bot lands on General while disabled.
+    const settingsSection = NAV_SETTINGS_SECTION_BY_PATH[parsed.pathname];
+    if (settingsSection) {
+      const params = new URLSearchParams(parsed.search);
+      params.set("section", settingsSection);
+      return `/settings?${params.toString()}`;
+    }
   }
 
   if (
@@ -59,19 +218,6 @@ export function desktopNavigationTarget(url: string): string | null {
     const params = new URLSearchParams(parsed.search);
     params.set("checkout", parsed.pathname === "/success" ? "success" : "cancel");
     params.set("section", "billing");
-    return `/settings?${params.toString()}`;
-  }
-
-  if (parsed.hostname === "settings" && parsed.pathname === "/organization") {
-    const params = new URLSearchParams(parsed.search);
-    params.set("section", "organization");
-    return `/settings?${params.toString()}`;
-  }
-
-  if (parsed.hostname === "settings" && parsed.pathname === "/slack-bot") {
-    const params = new URLSearchParams(parsed.search);
-    // SLACK BOT PARKED: legacy Slack settings links land on General while disabled.
-    params.set("section", "general");
     return `/settings?${params.toString()}`;
   }
 
@@ -95,6 +241,109 @@ export function desktopNavigationTarget(url: string): string | null {
   }
 
   return null;
+}
+
+function buildSettingsEntry(
+  section: ProductSettingsEntrySection,
+  params: URLSearchParams,
+): ProductEntry {
+  const query: Record<string, string> = {};
+  let source: "github_app_callback" | undefined;
+  for (const [key, value] of params) {
+    // ProductEntry.settings.source is typed only "github_app_callback"; other
+    // source values (e.g. github_app_installation_callback) stay in query.
+    if (key === "source" && value === "github_app_callback" && source === undefined) {
+      source = value;
+      continue;
+    }
+    query[key] = value;
+  }
+  return source
+    ? { kind: "settings", section, source, query }
+    : { kind: "settings", section, query };
+}
+
+function buildIntegrationCallbackEntry(
+  source: "integration_oauth_callback" | "mcp_oauth_callback",
+  params: URLSearchParams,
+): ProductEntry {
+  const entry: Extract<ProductEntry, { kind: "integration-callback" }> = {
+    kind: "integration-callback",
+    source,
+  };
+  const status = params.get("status");
+  if (status === "completed" || status === "failed") {
+    entry.status = status;
+  }
+  const flowId = params.get("flowId");
+  if (flowId) {
+    entry.flowId = flowId;
+  }
+  const failureCode = params.get("failureCode");
+  if (failureCode) {
+    entry.failureCode = failureCode;
+  }
+  return entry;
+}
+
+function settingsSectionForPath(pathname: string): ProductSettingsEntrySection | null {
+  switch (pathname) {
+    case "/cloud":
+    case "/billing":
+      return "billing";
+    case "/account":
+      return "account";
+    case "/organization":
+      return "organization";
+    case "/environments":
+      return "environments";
+    // SLACK BOT PARKED: legacy Slack settings links land on General while disabled.
+    case "/slack-bot":
+      return "general";
+    default:
+      return null;
+  }
+}
+
+function settingsReturnUrlForSection(section: ProductSettingsEntrySection): string | null {
+  switch (section) {
+    case "account":
+      return "proliferate://settings/account";
+    case "organization":
+      return "proliferate://settings/organization";
+    case "environments":
+      return "proliferate://settings/environments";
+    case "billing":
+      return "proliferate://settings/billing";
+    case "integrations":
+      return "proliferate://integrations";
+    // "general" is the parked slack-bot landing; it has no current return URL.
+    case "general":
+      return null;
+  }
+}
+
+function searchToQuery(params: URLSearchParams): ProductQueryParams {
+  const query: Record<string, string> = {};
+  for (const [key, value] of params) {
+    query[key] = value;
+  }
+  return query;
+}
+
+function queryToParams(query?: ProductQueryParams): URLSearchParams {
+  const params = new URLSearchParams();
+  if (query) {
+    for (const [key, value] of Object.entries(query)) {
+      params.set(key, value);
+    }
+  }
+  return params;
+}
+
+function queryToSearch(query?: ProductQueryParams): string {
+  const search = queryToParams(query).toString();
+  return search ? `?${search}` : "";
 }
 
 function decodeRoutePart(value: string): string {

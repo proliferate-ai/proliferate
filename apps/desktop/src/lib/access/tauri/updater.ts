@@ -39,17 +39,34 @@ export async function downloadAndInstall(
 ): Promise<void> {
   const u = update as {
     downloadAndInstall: (
-      cb?: (progress: {
-        chunk: number;
-        contentLength: number | undefined;
-      }) => void,
+      cb?: (
+        event:
+          | { event: "Started"; data: { contentLength?: number } }
+          | { event: "Progress"; data: { chunkLength: number } }
+          | { event: "Finished" },
+      ) => void,
     ) => Promise<void>;
   };
-  await u.downloadAndInstall(
-    onProgress
-      ? (progress) => onProgress(progress.chunk, progress.contentLength)
-      : undefined,
-  );
+  if (!onProgress) {
+    await u.downloadAndInstall();
+    return;
+  }
+  // The plugin emits a DownloadEvent union: contentLength arrives once on
+  // "Started", then each "Progress" carries only its own chunk length. Capture
+  // the total up front so we can forward the (chunkLength, contentLength) tuple.
+  let contentLength: number | undefined;
+  await u.downloadAndInstall((event) => {
+    switch (event.event) {
+      case "Started":
+        contentLength = event.data.contentLength;
+        break;
+      case "Progress":
+        onProgress(event.data.chunkLength, contentLength);
+        break;
+      case "Finished":
+        break;
+    }
+  });
 }
 
 export async function relaunch(): Promise<void> {
