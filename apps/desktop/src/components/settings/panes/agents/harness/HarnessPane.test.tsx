@@ -7,9 +7,8 @@ import { ProductHostProvider } from "@proliferate/product-client/host/ProductHos
 import { makeTestProductHost } from "@/test/product-host-test-utils";
 import { HarnessPane } from "./HarnessPane";
 
-// The pane's org/identity hooks now read normalized auth through the host. An
-// anonymous host keeps the organizations query disabled, matching the prior
-// default (unset auth store) behavior these tests ran under.
+// Anonymous host keeps the organizations query disabled, matching the prior
+// unset-auth-store default these tests ran under.
 const harnessTestHost = makeTestProductHost();
 
 type CapabilitiesData = {
