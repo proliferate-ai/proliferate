@@ -1,250 +1,181 @@
 # Dev Profiles
 
-Use dev profiles when running the full local stack from multiple worktrees.
-The profile is the unit of local dev state: ports, database, AnyHarness runtime
-home, desktop file-backed home, and the macOS dev app label.
+Status: current procedure
+
+A dev profile is the isolation boundary for one full-stack local worktree. It
+owns the worktree binding, ports, Postgres database name, AnyHarness runtime
+home, Desktop state, and generated Tauri identity used by that run.
 
 ## Commands
 
 ```bash
-make setup PROFILE=<name>          # create/update profile state and database
-make build                         # first clean worktree or artifact refresh
-make dev-list                      # list profiles and TCP-probed status
-make run PROFILE=<name>            # full stack for this profile, no rebuild
-make run PROFILE=<name> STRIPE=1   # also run Stripe webhook forwarding
-make run PROFILE=<name> AGENT_GATEWAY=1
-                                    # also run/reuse local Bifrost for gateway work
-make run PROFILE=<name> AGENT_GATEWAY=bifrost
-                                    # also run/reuse local Bifrost for gateway work
-make run PROFILE=<name> AGENT_GATEWAY=bifrost AGENT_GATEWAY_TUNNEL=ngrok
-                                    # expose Bifrost and API worker callbacks through ngrok for E2B/public sandbox tests
-make run PROFILE=<name> CLOUD_WORKER_TUNNEL=ngrok
-                                    # expose only API worker callbacks through ngrok
-make run PROFILE=<name> AUTH_PROFILE=google
-                                    # load .auth-env/.env.google for deployment SSO testing
-make seed-sso PROFILE=<name> AUTH_PROFILE=google ORG_ID=<org-id>
-                                    # seed that profile's local org SSO connection from .auth-env/.env.google
-make dev-web-auth                  # standalone web auth helper with ngrok callbacks
+make setup PROFILE=<name>
+make build # first clean worktree or after generated/Rust/frontend artifacts change
+make run PROFILE=<name>
+make dev-list
 ```
 
-Profile names must be lowercase letters, numbers, hyphens, or underscores.
-They are globally unique per machine and are bound to the first worktree that
-uses them.
+Optional modes are explicit:
 
-## What A Profile Owns
+```bash
+make run PROFILE=<name> STRIPE=1
+make run PROFILE=<name> AGENT_GATEWAY=litellm
+make run PROFILE=<name> CLOUD_WORKER_TUNNEL=ngrok
+make run PROFILE=<name> AUTH_PROFILE=google
+```
 
-Profile state lives in:
+Profile names match `^[a-z0-9][a-z0-9_-]{0,39}$`: at most 40 lowercase
+letters, numbers, hyphens, or underscores, starting with a letter or number. A
+name is bound to the first worktree that uses it. Give every worktree its own
+name; do not reuse another branch's profile.
+
+`make dev PROFILE=<name>` remains a compatibility alias for `setup` plus `run`.
+The default-port `make dev-runtime`, `make dev-server`, and `make dev-desktop`
+targets are not substitutes for an isolated full-stack profile.
+
+## State Ownership
+
+Profile state lives under:
 
 ```text
 ~/.proliferate-local/dev/profiles/<name>/
+├── profile.env       persisted profile allocation/input
+├── launch.env        generated effective launch values
+├── app/
+│   └── config.json   Desktop host configuration
+├── tauri.dev.json    generated Tauri configuration
+├── instance.json     worktree, branch, state, and port metadata
+└── run.lock          active-launch ownership
+
+~/.proliferate-local/runtimes/<name>/   AnyHarness runtime state
 ```
 
-The profile stores non-secret defaults in `profile.env`, an effective
-`launch.env`, generated Tauri dev config, launch runners, lock/instance state,
-and the desktop file-backed app home. AnyHarness runtime state lives in:
+`profile.env` persists allocated ports and owned paths so the profile remains
+stable across runs. `launch.env` is regenerated from those inputs and contains
+the values consumed by the local apps. They are launcher state, not interfaces
+for copying credentials between profiles.
 
-```text
-~/.proliferate-local/runtimes/<name>/
-```
+Desktop auth sessions, pending-auth entries, and stored provider API keys are
+profile-scoped files under `app/`. Native agent credential files and the
+AnyHarness runtime data key remain user-level state rather than profile state.
 
-The dev launcher also writes `ANYHARNESS_WORKTREES_ROOT` into the profile launch
-environment. By default it points at the standard local worktree checkout root:
+The default Postgres database is `proliferate_dev_<normalized_name>`, with
+profile hyphens replaced by underscores. `setup` prepares it; `run` checks it
+and applies migrations. An explicit invocation-level `DATABASE_URL` bypasses
+the profile database for that invocation. Keep a profile with its branch for
+the lifetime of any one-way Postgres or AnyHarness SQLite migration.
+
+Automatic AnyHarness checkouts default to:
 
 ```text
 ~/.proliferate-local/worktrees/
 ```
 
-That keeps automatic AnyHarness checkout retention aligned with the checkout
-paths normally created by the desktop app. Worktrees outside this managed root
-remain visible as explicit workspace history/checkout actions where applicable,
-but they are excluded from automatic per-repo retention and orphan pruning.
+The launcher writes that path into the profile as
+`ANYHARNESS_WORKTREES_ROOT`. Checkouts elsewhere can still be used explicitly,
+but are outside automatic retention and orphan pruning.
 
-The default database is `proliferate_dev_<name>` on the local Docker Postgres
-server. On macOS, profile database URLs default to `::1` so Docker Desktop's
-Postgres listener is not confused with a Homebrew Postgres bound to
-`127.0.0.1:5432`. Use `DATABASE_URL=... make run PROFILE=<name>` when you
-intentionally want to bypass the profile database for a one-off run, or
-`LOCAL_PGHOST=127.0.0.1` when you intentionally want a separate local Postgres.
-When `DATABASE_URL` is set, profile setup and run skip profile database
-creation/readiness checks and migrate the provided database URL.
+## Environment Composition
 
-`make run PROFILE=<name>` also starts and waits for the local Docker Redis
-service from `server/docker-compose.yml`. Redis backs RedBeat and cloud
-materialization locks in local development. Use `USE_EXISTING_REDIS=1` only
-when an external Redis is already reachable; in that case the server still reads
-the Redis URL from normal configuration, such as `REDBEAT_REDIS_URL`.
-
-Desktop auth sessions, pending-auth entries, and stored provider API keys are
-profile-scoped `0600` files under the dev app home, so per-profile databases do
-not reuse each other's login tokens. The AnyHarness runtime data key stays
-shared in the keychain in v1 because it is a user-level secret, not profile
-state. (See the sidecar spec's Local Secrets for the storage model.)
-
-## Agent Gateway Local Dev
-
-`make run PROFILE=<name> AGENT_GATEWAY=1` and
-`make run PROFILE=<name> AGENT_GATEWAY=bifrost` start or reuse a local Bifrost
-gateway and export the API env needed for Bifrost-backed managed credits and
-personal BYOK development:
+For ordinary variables, later layers override earlier layers:
 
 ```text
-AGENT_GATEWAY_ENABLED=true
-AGENT_GATEWAY_BIFROST_BASE_URL=http://127.0.0.1:8080
-AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL=http://127.0.0.1:8080
-AGENT_GATEWAY_RECONCILER_ENABLED=true
-AGENT_GATEWAY_USER_FREE_CREDIT_ENABLED=true
-AGENT_GATEWAY_USER_FREE_CREDIT_USD=5
-AGENT_GATEWAY_MANAGED_CREDIT_AGENT_KINDS=claude,codex
-AGENT_GATEWAY_BYOK_ENABLED=true
-AGENT_GATEWAY_PERSONAL_BYOK_ENABLED=true
-AGENT_GATEWAY_BIFROST_ISOLATION_VERIFIED=true
-AGENT_GATEWAY_ANTHROPIC_BYOK_ENABLED=true
-AGENT_GATEWAY_OPENAI_BYOK_ENABLED=true
-AGENT_GATEWAY_BEDROCK_BYOK_ENABLED=true
-AGENT_GATEWAY_GEMINI_BYOK_ENABLED=true
+.env
+  < .env.local
+  < server/.env
+  < server/.env.local
+  < generated launch.env for profile-owned values
+  < .auth-env/.env.<AUTH_PROFILE> when AUTH_PROFILE is selected
 ```
 
-For local UI testing, the public Bifrost URL can stay loopback. For E2B or any
-remote managed sandbox that must reach the gateway and enroll its worker, pass
-`AGENT_GATEWAY_TUNNEL=ngrok`. The dev command starts or reuses ngrok tunnels
-for both the API worker callback port and the Bifrost port, then writes those
-HTTPS URLs to `CLOUD_WORKER_BASE_URL`,
-`CLOUD_MCP_OAUTH_CALLBACK_BASE_URL`, and
-`AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL`. If a test only needs the worker/API
-callback tunnel, use `CLOUD_WORKER_TUNNEL=ngrok`.
+An invocation-level `DATABASE_URL` is captured before file loading and bypasses
+profile database selection; otherwise the launcher resolves and exports the
+profile database after composition. Keep real local secrets in ignored env
+files, not `profile.env`, `launch.env`, chat, issues, or committed
+documentation. The environment-variable ownership reference is
+[`../reference/env-vars.yaml`](../reference/env-vars.yaml).
 
-The dev launcher reads `.env`, `.env.local`, `server/.env`, and
-`server/.env.local`. In Bifrost mode it automatically seeds managed-credit
-provider env from `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` when the dedicated
-`AGENT_GATEWAY_MANAGED_ANTHROPIC_API_KEY` or
-`AGENT_GATEWAY_MANAGED_OPENAI_API_KEY` variables are not already set. The
-current managed-credit implementation chooses one backing provider for the
-default free-credit pool; if both Anthropic and OpenAI managed keys are set,
-Anthropic is selected first. Personal BYOK forms can still expose both provider
-types at the same time.
+## Ports And App Identity
 
-## Local SSO Auth Profiles
+The profile allocates stable values for:
 
-Manual OIDC SSO QA can load local-only provider credentials from
-`.auth-env/.env.<auth-profile>`. Those files are ignored by git because they
-contain client secrets. To run the deployment/self-hosted SSO path, pass the
-auth profile to the normal dev launcher:
+- `PROLIFERATE_API_PORT`;
+- `PROLIFERATE_WEB_PORT` and `PROLIFERATE_WEB_HMR_PORT` for the Desktop
+  renderer;
+- `PROLIFERATE_HOSTED_WEB_PORT` for Web;
+- `PROLIFERATE_MOBILE_WEB_PORT` for Mobile Web;
+- `PROLIFERATE_GOOGLE_WORKSPACE_MCP_PORT_BASE` for the local Gmail OAuth
+  callback pool; and
+- `ANYHARNESS_PORT`.
+
+The generated Tauri runner displays the macOS app as `Proliferate (<name>)` and
+points it at the profile renderer and runtime. Server CORS includes the
+profile's Desktop, Web, Mobile Web, and Tauri origins.
+
+Inspect allocation and reachability without sourcing generated env state:
+
+```bash
+make dev-list
+```
+
+## LiteLLM And External Callbacks
+
+Enable the local agent gateway with:
+
+```bash
+make run PROFILE=<name> AGENT_GATEWAY=litellm
+```
+
+The launcher starts or reuses the repository's local LiteLLM service and sets
+the server's LiteLLM gateway values. Its default URL is loopback. The known
+local development master key is accepted only for a loopback gateway; set an
+explicit secret for any shared or remote LiteLLM instance.
+
+If a remote Worker or product-MCP provider must call the local API, use:
+
+```bash
+make run PROFILE=<name> CLOUD_WORKER_TUNNEL=ngrok
+```
+
+This publishes the selected profile's API as `CLOUD_WORKER_BASE_URL` and
+`CLOUD_MCP_OAUTH_CALLBACK_BASE_URL`. It does not tunnel LiteLLM. Use it only
+while an external callback is required, do not publish secrets in the tunnel
+log, and stop it after the test.
+
+## Local SSO
+
+Deployment-style OIDC QA may load ignored provider credentials from
+`.auth-env/.env.<auth-profile>`:
 
 ```bash
 make run PROFILE=sso-google AUTH_PROFILE=google
 ```
 
-To test org-scoped SSO without filling the settings form by hand, run the
-normal profile and seed the local profile database:
+The launcher prints the callback URL to register with the dedicated test
+provider app. Use the same `PROLIFERATE_SSO_*` variables as deployment. When a
+provider requires `localhost` rather than `127.0.0.1`, set
+`PROLIFERATE_SSO_OIDC_CALLBACK_BASE_URL` in the ignored auth profile.
+
+For org-scoped SSO, seed only the selected profile database:
 
 ```bash
-make run PROFILE=sso-org
+make setup PROFILE=sso-org
 make seed-sso PROFILE=sso-org AUTH_PROFILE=google ORG_ID=<org-id>
+make run PROFILE=sso-org AUTH_PROFILE=google
 ```
 
-The auth profile env uses the same `PROLIFERATE_SSO_*` names as deployment SSO,
-including `PROLIFERATE_SSO_OIDC_ISSUER_URL`,
-`PROLIFERATE_SSO_OIDC_CLIENT_ID`, and
-`PROLIFERATE_SSO_OIDC_CLIENT_SECRET`. `PROLIFERATE_SSO_ALLOWED_DOMAINS` may be
-blank for provider-only manual QA, or set to a comma-separated allowlist when
-testing domain policy. If a provider app registration requires a different local
-callback hostname than the API base URL, set
-`PROLIFERATE_SSO_OIDC_CALLBACK_BASE_URL`, for example
-`http://localhost:${PROLIFERATE_API_PORT}` for Microsoft Entra app registrations
-that do not include the `127.0.0.1` callback.
+Never use a production/shared OAuth app for local callback experiments, and do
+not commit `.auth-env` credentials.
 
-## Ports And UI Identity
+## Concurrency And Focused Paths
 
-`scripts/dev.mjs` allocates stable ports for each profile:
+Independent profiles may run concurrently. OAuth and Desktop deep-link tests
+must run serially because generated development apps share the
+`proliferate-local://auth/callback` URL scheme. Concurrent Git operations on the
+same checkout can also contend on Git locks.
 
-- `PROLIFERATE_API_PORT`
-- `PROLIFERATE_WEB_PORT` for the Tauri desktop renderer
-- `PROLIFERATE_WEB_HMR_PORT`
-- `PROLIFERATE_HOSTED_WEB_PORT` for the separate `apps/web/` app
-- `PROLIFERATE_MOBILE_WEB_PORT` for Expo web smoke testing of `apps/mobile/`
-- `PROLIFERATE_GOOGLE_WORKSPACE_MCP_PORT_BASE`
-- `ANYHARNESS_PORT`
+Use the focused procedures for behavior-specific setup:
 
-The Google Workspace MCP value is the base of a 64-port loopback pool used for
-local Gmail OAuth callbacks. The generated Tauri config points the desktop at
-`PROLIFERATE_WEB_PORT`, while `make run PROFILE=<name>` also starts the hosted
-web app on `PROLIFERATE_HOSTED_WEB_PORT` and sets `FRONTEND_BASE_URL` to that
-hosted web origin. Server CORS includes the desktop renderer, hosted web, Expo
-mobile web, and Tauri origins. For browser-based mobile smoke tests, run Expo
-web from the same profile environment so Mobile uses the profile API and
-reserved mobile web port:
-
-```bash
-source ~/.proliferate-local/dev/profiles/<name>/launch.env
-pnpm --dir apps/mobile web:profile
-```
-
-On macOS, profile dev also uses a generated Tauri runner so the unbundled debug
-app appears as `Proliferate (<profile>)` in the app bar instead of every profile
-appearing as `proliferate`.
-
-## Scope Notes
-
-`make setup PROFILE=<name>` and `make run PROFILE=<name>` are the
-profile-aware workflow. `make dev PROFILE=<name>` remains a compatibility alias
-for setup plus run. The individual
-`make dev-runtime`, `make dev-server`, and `make dev-desktop` shortcuts remain
-default-port shortcuts.
-
-OAuth and deep-link login flows are still single-profile-at-a-time in v1 because
-the OS URL scheme is shared. Concurrent git operations against the same checkout
-can still race on git locks.
-
-## Mobile Auth Testing
-
-Use the mobile auth helper when testing Expo Go on a physical phone:
-
-```bash
-make dev-mobile-auth
-```
-
-The helper starts/checks local Postgres, runs server migrations, starts ngrok
-for the API, starts the server with `API_BASE_URL` set to the ngrok URL, and
-starts Expo with `EXPO_PUBLIC_PROLIFERATE_API_BASE_URL` set to the same URL.
-It prints the Google mobile redirect URI to add in Google Console:
-
-```text
-https://<ngrok-host>/auth/mobile/google/callback
-```
-
-By default Expo runs through its tunnel and picks the first free Metro port at
-or above `8081`. Override with:
-
-```bash
-PROLIFERATE_MOBILE_PORT=8090 make dev-mobile-auth
-MOBILE_EXPO_ARGS="--lan" make dev-mobile-auth
-```
-
-For the full local mobile decision tree, see
-[`mobile.md`](mobile.md).
-
-## Bundled Agent Seed Testing
-
-Packaged desktop builds resolve bundled agent seeds from Tauri resources and
-pass the resolved seed directory to the AnyHarness sidecar. Local development can
-exercise the same hydration path by setting:
-
-```bash
-ANYHARNESS_AGENT_SEED_DIR=/absolute/path/to/agent-seeds make run PROFILE=<name>
-```
-
-The directory should contain the generated target archive and checksum:
-
-```text
-agent-seed-<target>.tar.zst
-agent-seed-<target>.sha256
-```
-
-For normal dev/debug builds, `ANYHARNESS_AGENT_SEED_DIR` is trusted as a local
-developer override and health reports the source as `external_dev`. In packaged
-builds, arbitrary external seed dirs are ignored unless
-`ANYHARNESS_AGENT_SEED_DIR_UNSAFE=1` is also set. That keeps production packaged
-apps on signed Tauri resources by default.
-
-Each profile has its own AnyHarness runtime home, so seed hydration state lives
-under `~/.proliferate-local/runtimes/<name>/` and does not cross profiles.
+- [`feature-worktree-auth.md`](feature-worktree-auth.md) for local auth layers;
+- [`stripe-local-testing.md`](stripe-local-testing.md) for Stripe;
+- [`mobile.md`](mobile.md) for Mobile and native OAuth.

@@ -41,8 +41,8 @@ fn draft_catalog_parses_with_expected_shape() {
         vec!["bedrock", "anthropic-api", "anthropic-oauth", "gateway"]
     );
     // The gateway context is route-engaged: it references the registry gateway
-    // slot and carries a `route` signal (decisions ledger 13) so the classifier
-    // activates it on a `Route` fact.
+    // slot and carries a `route` signal so the classifier activates it on a
+    // workspace-derived `Route` fact.
     let gateway_context = claude
         .auth_contexts
         .iter()
@@ -148,7 +148,8 @@ fn draft_catalog_parses_with_expected_shape() {
 
 #[test]
 fn auth_signals_round_trip_bedrock_all_of_example() {
-    // The bedrock-style signature from the migration doc (§5.4).
+    // The signal algebra supports a flag-plus-discovery `allOf` signature even
+    // though the bundled Bedrock context currently routes on the flag alone.
     let json = serde_json::json!({
         "allOf": [
             { "envFlag": "CLAUDE_CODE_USE_BEDROCK=1" },

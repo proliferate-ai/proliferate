@@ -19,7 +19,7 @@ the current report V3 aggregate;
 and journey composition. `flows.md` is a legacy current-coverage view being
 replaced by generated manifest/collector output.
 
-Companion: `specs/developing/qa/README.md` owns *manual* release QA. This doc
+Companion: [`manual-release-qa.md`](manual-release-qa.md) owns *manual* release QA. This doc
 owns automated testing. A flow covered by an automated tier here does not also
 need a manual QA checklist entry.
 

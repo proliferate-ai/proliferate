@@ -1,26 +1,29 @@
 # Reference
 
-Status: authoritative index for canonical reference material.
+Status: authoritative index for current reference material.
 
-Reference docs are looked up, not read end-to-end. They provide the
-single source of truth for environment variables, secrets, and runtime
-environment shapes so that deploying, local, and runbook docs can link
-here rather than duplicate values.
+Reference docs are looked up, not read end-to-end. This area separates the
+curated catalog of supported product inputs from the procedures and source
+locations that supply them. It does not attempt to inventory every operating
+system, toolchain, runtime-injected workspace metadata, bootstrap, workflow,
+or release variable in the repository.
 
 ## Reference Map
 
 | Reference | Owns |
 | --- | --- |
-| [env-vars.yaml](env-vars.yaml) | Canonical inventory of every deploy-time environment variable: name, owner, surfaces it appears in, required/optional, and secret classification. |
-| [env-secrets-matrix.md](env-secrets-matrix.md) | Matrix of which secrets are required per deploy surface (hosted, self-hosted, local, CI) and where each value lives (GitHub environment, AWS SSM, local .env). |
-| [workspace-command-environment.md](workspace-command-environment.md) | Variables injected into each cloud workspace command environment: what is set, where it comes from, and which values are safe to read from agent context. |
+| [env-vars.yaml](env-vars.yaml) | Curated catalog of supported, preferred application/runtime inputs consumed by a Proliferate product process, product build, runtime, or qualification process. |
+| [environment-sources.md](environment-sources.md) | Configuration locations and precedence for local, self-hosted, hosted, client-build, and workflow surfaces. |
+| [workspace-command-environment.md](workspace-command-environment.md) | AnyHarness workspace-command environment layers, protected metadata, and propagation. |
 
 ## Usage
 
-- When adding or renaming an environment variable, update `env-vars.yaml`
-  first, then update `env-secrets-matrix.md` if the secret classification
-  or surface coverage changes.
+- Update `env-vars.yaml` when a supported product input is added, renamed,
+  removed, or changes its documented default, description, secrecy, or tags.
+- Keep deployment/bootstrap-only values and workflow/release controls in their
+  owning procedure rather than adding them to the curated catalog.
+- Update `environment-sources.md` when a configuration location or precedence
+  rule changes.
 - When changing what is injected into command environments, update
   `workspace-command-environment.md` in the same PR.
-- Deploying and local-dev docs link to these files rather than duplicating
-  variable names or values.
+- Never copy secret values into reference documentation.

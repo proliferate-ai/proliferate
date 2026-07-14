@@ -39,7 +39,7 @@ roles:
   worktree because that file referenced collectors absent from current main.
 - Every run emits immutable evidence separately from both manifests. Static
   implementation state never substitutes for an observed result.
-- [`../qa/README.md`](../qa/README.md) owns manual verification that cannot be
+- [`manual-release-qa.md`](manual-release-qa.md) owns manual verification that cannot be
   automated.
 
 When another testing document describes a smaller or provisional matrix, this

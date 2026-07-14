@@ -2,7 +2,13 @@ import { link, mkdir, unlink, writeFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
 
-import { validateReport, type TestRunReportV3 } from "./schema.js";
+import {
+  sanitizeReportV4Evidence,
+  validateReport,
+  validateReportV4,
+  type TestRunReportV3,
+  type TestRunReportV4,
+} from "./schema.js";
 
 export class ReportWriteError extends Error {
   constructor(message: string) {
@@ -11,7 +17,11 @@ export class ReportWriteError extends Error {
   }
 }
 
-export function reportPath(outputDir: string, report: TestRunReportV3): string {
+interface ReportPathIdentity {
+  run: { run_id: string; shard_id: string; attempt: number };
+}
+
+export function reportPath(outputDir: string, report: ReportPathIdentity): string {
   return path.join(
     outputDir,
     report.run.run_id,
@@ -30,6 +40,27 @@ export function reportPath(outputDir: string, report: TestRunReportV3): string {
  */
 export async function writeReport(outputDir: string, report: TestRunReportV3): Promise<string> {
   validateReport(report);
+  return writeValidatedReport(outputDir, report);
+}
+
+/**
+ * V4 counterpart of `writeReport`: sanitizes every evidence string field
+ * through the same redaction pipeline message fields use (BRIEF §6.6), then
+ * validates and writes with the same atomic, no-overwrite semantics.
+ * `secretValues` are the same resolved manifest secrets the V3 producer
+ * (`runner/execute.ts`) redacts message fields with.
+ */
+export async function writeReportV4(
+  outputDir: string,
+  report: TestRunReportV4,
+  secretValues: readonly string[] = [],
+): Promise<string> {
+  const sanitized = sanitizeReportV4Evidence(report, secretValues);
+  validateReportV4(sanitized);
+  return writeValidatedReport(outputDir, sanitized);
+}
+
+async function writeValidatedReport(outputDir: string, report: ReportPathIdentity): Promise<string> {
   const destination = reportPath(outputDir, report);
   try {
     await mkdir(path.dirname(destination), { recursive: true });

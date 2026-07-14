@@ -59,13 +59,10 @@ fn live_model_effort_candidates(
 }
 
 impl SessionService {
-    /// Is `value` a model this SESSION may switch to live? The catalog is
-    /// the switch authority (decision 10: same-harness switch never
-    /// recreates): a value validates iff the catalog resolves it (id, alias,
-    /// or variant) as available under the contexts CLASSIFIED AT CREATE
-    /// (recorded provenance). Sessions without recorded contexts (pre-v2
-    /// records) authorize nothing extra — the harness-advertised list keeps
-    /// governing them.
+    /// Is `value` a model this session may switch to? The current catalog
+    /// authorizes an id, alias, or variant only when it is available under the
+    /// auth contexts recorded at session creation. Sessions without recorded
+    /// contexts authorize nothing extra; advertised options still govern.
     pub fn live_model_switch_authorized(
         &self,
         record: &crate::domains::sessions::model::SessionRecord,

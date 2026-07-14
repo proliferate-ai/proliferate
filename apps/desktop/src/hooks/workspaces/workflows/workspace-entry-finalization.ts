@@ -1,6 +1,7 @@
 import {
   buildWorkspaceArrivalEvent,
 } from "@/lib/domain/workspaces/creation/arrival";
+import type { Workspace } from "@anyharness/sdk";
 import {
   buildPendingWorkspaceUiKey,
   type PendingWorkspaceEntry,
@@ -34,6 +35,7 @@ export interface WorkspaceEntrySelectionDeps {
       preservePending: true;
       initialActiveSessionId: string | null;
       latencyFlowId?: string | null;
+      knownWorkspace?: Workspace | null;
     },
   ) => Promise<void>;
   setPendingWorkspaceEntry: (entry: PendingWorkspaceEntry | null) => void;
@@ -48,6 +50,7 @@ export async function finalizePendingWorkspaceSelection(
     options?: {
       latencyFlowId?: string | null;
       repoGroupKeyToExpand?: string | null;
+      knownWorkspace?: Workspace | null;
     };
   },
   deps: WorkspaceEntrySelectionDeps,
@@ -85,6 +88,7 @@ export async function finalizePendingWorkspaceSelection(
     preservePending: true,
     initialActiveSessionId: projectedActiveSessionId,
     latencyFlowId: input.options?.latencyFlowId,
+    knownWorkspace: input.options?.knownWorkspace ?? null,
   });
 
   if (!isPendingWorkspaceAttemptCurrent(input.entry.attemptId, deps)) {

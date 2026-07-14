@@ -1,5 +1,8 @@
+import path from "node:path";
+
 import { HELP_TEXT, parseArgs, type CliArgs } from "./args.js";
 import type { ScenarioDefinition } from "../scenarios/types.js";
+import type { LocalWorldPorts } from "../worlds/local-workspace/ports.js";
 import type { FailureReport } from "../report/types.js";
 import { toFailureReports } from "../report/failure-reporter.js";
 import { IdentityError, type RunIdentityV1 } from "../runner/identity.js";
@@ -12,7 +15,7 @@ import {
   type CandidateBuildEvidenceV1,
   type CandidateBuildMapV1,
 } from "../artifacts/build-map.js";
-import type { TestRunReportV3 } from "../evidence/schema.js";
+import type { FinalCellResultV2, TestRunReportV3, TestRunReportV4 } from "../evidence/schema.js";
 
 /**
  * Testable command orchestration
@@ -31,12 +34,24 @@ export interface CommandDeps {
   }) => Promise<RunIdentityV1>;
   selectScenarios: (selector: readonly string[] | "all") => ScenarioDefinition[];
   loadBuildMap: (path: string, expectedSourceSha: string) => Promise<CandidateBuildMapV1>;
+  /**
+   * Loads the `local-world-ports.json` sidecar the candidate builder wrote into
+   * the run directory (the candidate map's directory). Returns null when the
+   * sidecar is absent; a world scenario then fails closed on the missing ports.
+   */
+  loadLocalWorldPorts: (runDir: string) => Promise<LocalWorldPorts | null>;
   /** Local durable-user seed; fills the locallySeeded set. */
   seedLocalDurableUser: (seeded: Set<string>) => Promise<void>;
   pushLocalGatewayAuth: () => Promise<void>;
   printEnvManifestReport: () => void;
   execute: typeof executeSelectedCells;
-  write: (outputDir: string, report: TestRunReportV3) => Promise<string>;
+  /**
+   * Writes the combined report. `command.ts` always hands this a V4 report
+   * (V3 semantics unchanged; `evidence: null` on every result that does not
+   * attach report-V4 evidence) — the caller's real implementation is
+   * `writeReportV4` (`evidence/write.ts`).
+   */
+  write: (outputDir: string, report: TestRunReportV4) => Promise<string>;
   fileIssues: (reports: readonly FailureReport[]) => Promise<string[]>;
   log: (message: string) => void;
   error: (message: string) => void;
@@ -89,10 +104,23 @@ export async function runReleaseCommand(argv: readonly string[], deps: CommandDe
   // invalid map exits 2 with zero user/gateway/provider/fixture/scenario work
   // and no report. Diagnostic omission is recorded explicitly as null.
   let candidateBuild: CandidateBuildEvidenceV1 | null = null;
+  // The full validated, path-bearing map — retained (not just its bounded
+  // evidence projection) so a world constructor can materialize the exact
+  // artifacts it names. In-memory only; never serialized into the report.
+  let candidateBuildMap: CandidateBuildMapV1 | null = null;
+  // The run/shard-scoped run directory and pre-allocated ports a world
+  // constructor needs. Both derived from the candidate map (its directory is the
+  // run dir; the ports sidecar sits next to it) so an invalid map still yields
+  // no world side effects. Null in a diagnostic run without a map.
+  let runDir: string | null = null;
+  let ports: LocalWorldPorts | null = null;
   if (args.candidateBuildMap !== undefined) {
     try {
       const map = await deps.loadBuildMap(args.candidateBuildMap, identity.source_sha);
       candidateBuild = toCandidateBuildEvidence(map);
+      candidateBuildMap = map;
+      runDir = path.dirname(path.resolve(args.candidateBuildMap));
+      ports = await deps.loadLocalWorldPorts(runDir);
     } catch (error) {
       deps.error(error instanceof Error ? error.message : String(error));
       return 2;
@@ -128,17 +156,24 @@ export async function runReleaseCommand(argv: readonly string[], deps: CommandDe
 
   let report: TestRunReportV3;
   try {
-    report = await deps.execute({
+    // The executor threads `candidateBuildMap` into every `ScenarioRunContext`
+    // (BRIEF §7a) so a world constructor can materialize the exact artifacts it
+    // names; it is in-memory only and never serialized into the report.
+    const executeOptions = {
       behavior: args.behavior,
-      execution: args.dryRun ? "dry_run" : "real",
+      execution: (args.dryRun ? "dry_run" : "real") as "real" | "dry_run",
       identity,
       inputs: { targetLane: args.lane, desktop: args.desktop, agents: args.agents, scenarios: args.scenarios },
       scenarios,
       cells,
       locallySeeded,
       candidateBuild,
-      log: (message) => deps.log(`  ${message}`),
-    });
+      candidateBuildMap,
+      runDir,
+      ports,
+      log: (message: string) => deps.log(`  ${message}`),
+    };
+    report = await deps.execute(executeOptions);
   } catch (error) {
     if (error instanceof SelectionError || error instanceof IdentityError || error instanceof BuildMapError) {
       deps.error(error.message);
@@ -150,8 +185,23 @@ export async function runReleaseCommand(argv: readonly string[], deps: CommandDe
 
   printSummary(report, deps);
 
+  // Report V4 (spec "Aggregate evidence"): schema_version 4, plus each
+  // result's bounded evidence attachment. `ResultTracker` (runner/result.ts)
+  // always sets `evidence` (defaulting `null`), so every result already
+  // carries it at runtime even where `report.results` is still statically
+  // typed `FinalCellResultV1[]`; a scenario that never attaches evidence
+  // (every existing scenario) round-trips as `null`, unchanged V3 semantics.
+  const reportV4: TestRunReportV4 = {
+    ...report,
+    schema_version: 4,
+    results: report.results.map((result) => ({
+      ...result,
+      evidence: (result as FinalCellResultV2).evidence ?? null,
+    })),
+  };
+
   try {
-    const written = await deps.write(args.outputDir, report);
+    const written = await deps.write(args.outputDir, reportV4);
     deps.log(`Combined report written: ${written}`);
   } catch (error) {
     deps.error(error instanceof Error ? error.message : String(error));

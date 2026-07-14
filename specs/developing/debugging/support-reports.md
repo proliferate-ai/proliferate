@@ -8,9 +8,9 @@ best-effort Slack receipt. It does not currently create GitHub/Linear issues,
 run triage/fix workflows, or notify reporters when a fix ships.
 
 Product behavior is defined in
-[`../../codebase/features/support-reporting.md`](../../codebase/features/support-reporting.md).
+[`../../codebase/systems/product/support/README.md`](../../codebase/systems/product/support/README.md).
 The accepted closed-loop contract is in
-[`../../codebase/features/support-system.md`](../../codebase/features/support-system.md).
+[`../../codebase/systems/engineering/issue-lifecycle/support-loop.md`](../../codebase/systems/engineering/issue-lifecycle/support-loop.md).
 
 ## Mental model
 
@@ -97,7 +97,7 @@ still be present. They do not activate a tracker in the current server.
 
 The complete inventory lives in
 [`../reference/env-vars.yaml`](../reference/env-vars.yaml); deployment ownership
-is in [`../deploying/ci-cd.md`](../deploying/ci-cd.md).
+is in [`../deploying/hosted.md`](../deploying/hosted.md).
 
 ## Find the report
 

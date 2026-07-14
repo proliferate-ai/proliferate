@@ -62,13 +62,24 @@ export function useHomeNextModelSelection({
   );
   const readyAgentsForLaunch = useMemo<AgentCatalogSummary[]>(() => {
     if (!isCloudLaunchTarget) {
-      return readyAgents;
+      // `readyAgents` is NATIVE readiness (`GET /v1/agents`: "is the vendor CLI
+      // installed and logged in"). An agent whose enrolled gateway/api_key
+      // route supplies the launch credential is reported `login_required`
+      // there, yet the runtime's launch options (`GET /v1/agents/launch-options`,
+      // launch-time readiness via `resolve_launch_agent`) list it with models —
+      // that is the source the launcher actually uses. Without this union a
+      // gateway-only actor sees "No agents" even though every launch would
+      // succeed (an ambient vendor-CLI login on a developer machine masks the
+      // gap). Launch options never list an uninstalled agent, so this cannot
+      // resurrect an install-required agent.
+      return mergeLaunchReadyAgents(readyAgents, runtimeLaunchOptions.data?.agents ?? null);
     }
     return buildCloudReadyAgentSummaries({ modelRegistries });
   }, [
     isCloudLaunchTarget,
     modelRegistries,
     readyAgents,
+    runtimeLaunchOptions.data?.agents,
   ]);
 
   const unselectedGroups = useMemo(
@@ -129,6 +140,34 @@ export function useHomeNextModelSelection({
       ?? (isCloudLaunchTarget ? null : runtimeLaunchOptions.error),
     modelAvailabilityState,
   };
+}
+
+/**
+ * Union of native-ready agents and launch-ready agents (present with models in
+ * the runtime's launch options — the enrolled route supplies their launch
+ * credential even when the vendor CLI itself is not logged in).
+ */
+function mergeLaunchReadyAgents(
+  readyAgents: AgentCatalogSummary[],
+  launchOptionAgents:
+    | ReadonlyArray<{ kind: string; displayName: string; models: ReadonlyArray<unknown> }>
+    | null,
+): AgentCatalogSummary[] {
+  if (!launchOptionAgents || launchOptionAgents.length === 0) {
+    return readyAgents;
+  }
+  const nativeReadyKinds = new Set(readyAgents.map((agent) => agent.kind));
+  const launchReady = launchOptionAgents
+    .filter((agent) => agent.models.length > 0 && !nativeReadyKinds.has(agent.kind))
+    .map((agent) => ({
+      kind: agent.kind,
+      displayName: agent.displayName,
+      readiness: "ready" as const,
+    }));
+  if (launchReady.length === 0) {
+    return readyAgents;
+  }
+  return [...readyAgents, ...launchReady];
 }
 
 function buildCloudReadyAgentSummaries({

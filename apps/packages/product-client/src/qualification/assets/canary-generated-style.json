@@ -1,0 +1,8 @@
+{
+  "kind": "qualification-canary-generated-style",
+  "note": "Stands in for a generated style/registry input (normal JSON import).",
+  "tokens": {
+    "accent": "#6c5ce7",
+    "radius": 8
+  }
+}

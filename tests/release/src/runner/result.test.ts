@@ -169,6 +169,62 @@ test("runner or integrity errors force exit 2 in both behaviors", () => {
   assert.equal(s1.status, "selected_cells_failed");
 });
 
+// ── Report V4 evidence threading (BRIEF §Workstream C: runner/result.ts) ────
+
+test("finalize defaults evidence to null when none is supplied", () => {
+  const tracker = new ResultTracker([selected("A")]);
+  tracker.finalize("A/local", { status: "green" });
+  const results = tracker.finalizeRun("real");
+  assert.equal(results[0].evidence, null);
+});
+
+test("finalize threads supplied evidence onto the finalized result", () => {
+  const evidence = {
+    kind: "local_workspace_turn" as const,
+    artifact_ids: ["server/linux-x64"],
+    server_version: "0.3.27",
+    anyharness_version: "0.3.27",
+    harness: "claude" as const,
+    model_id: "claude-haiku-4-5",
+    workspace_id_hash: "a".repeat(64),
+    session_id_hash: "b".repeat(64),
+    transcript_reopened: true as const,
+    litellm: {
+      token_id_hash: "c".repeat(64),
+      request_ids: ["req-1"],
+      window_started_at: "2026-07-14T00:00:00Z",
+      window_finished_at: "2026-07-14T00:00:01Z",
+      prompt_tokens: 1,
+      completion_tokens: 1,
+      total_tokens: 2,
+      spend_usd: 0.0001,
+    },
+    cleanup: {
+      ledger_id_hash: "d".repeat(64),
+      registered: 1,
+      reconciled: 1,
+      failed: 0,
+      virtual_key_deleted: true,
+      litellm_subjects_deleted: true,
+      browser_closed: true,
+      processes_stopped: true,
+      containers_removed: true,
+      local_paths_removed: true,
+    },
+  };
+  const tracker = new ResultTracker([selected("A")]);
+  tracker.finalize("A/local", { status: "green", evidence });
+  const results = tracker.finalizeRun("real");
+  assert.deepEqual(results[0].evidence, evidence);
+});
+
+test("a synthesized missing result carries null evidence", () => {
+  const tracker = new ResultTracker([selected("A")]);
+  const results = tracker.finalizeRun("real");
+  assert.equal(results[0].status, "missing");
+  assert.equal(results[0].evidence, null);
+});
+
 test("strict all-green with any error cannot pass", () => {
   const verdict = deriveVerdict({
     behavior: "strict",

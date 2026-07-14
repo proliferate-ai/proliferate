@@ -1,7 +1,6 @@
-// Pure helpers for the "connect to a self-hosted server" flow (self-hosting-v1
-// §3.5, B4-desktop). Kept dependency-free (no Tauri, no fetch) so they can be
-// unit tested directly and reused by both the manual-entry dialog and a future
-// deep-link handler.
+// Pure helpers for the "connect to a self-hosted server" flow. Kept
+// dependency-free (no Tauri, no fetch) so they can be unit tested directly and
+// reused by both the manual-entry dialog and a future deep-link handler.
 
 export interface NormalizedServerUrlOk {
   ok: true;

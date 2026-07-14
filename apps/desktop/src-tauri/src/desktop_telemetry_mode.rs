@@ -75,7 +75,7 @@ fn resolve_desktop_telemetry_mode_from_inputs(
 /// at — the configured `apiBaseUrl`, or the packaged default when unset. Used
 /// to stamp the anyharness sidecar's launch env (`sidecar.rs`) so the
 /// route-auth render plane can guard against injecting a previous server's
-/// gateway token after a connect-to-server switch (self-hosting-v1 §3.5).
+/// gateway token after a connect-to-server switch.
 pub fn current_api_origin() -> String {
     let config = load_app_config_record().unwrap_or_default();
     let base_url = config

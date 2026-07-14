@@ -122,10 +122,9 @@ impl AgentAuthState {
     }
 
     /// Guards against injecting a PREVIOUS server's gateway tokens after a
-    /// desktop server switch (self-hosting-v1 §3.5, D1): the worker may push
-    /// a fresh document for the new server before the app re-enrolls, but a
-    /// launch racing that window must not use the just-abandoned server's
-    /// still-cached state.
+    /// desktop server switch: the worker may push a fresh document for the new
+    /// server before the app re-enrolls, but a launch racing that window must
+    /// not use the just-abandoned server's still-cached state.
     ///
     /// - both origins present and equal (case-insensitively, ignoring a
     ///   trailing slash) → match.

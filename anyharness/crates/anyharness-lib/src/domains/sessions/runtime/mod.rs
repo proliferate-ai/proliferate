@@ -73,8 +73,9 @@ pub enum CreateAndStartSessionError {
         agent_kind: String,
         model_id: String,
     },
-    /// The model is gated behind inactive auth contexts (decisions ledger 16).
-    /// Carries the unlock condition (`required_contexts`) for the API layer.
+    /// A known model is gated behind inactive auth contexts. Carries the
+    /// unlock condition (`required_contexts`) for the API layer; an
+    /// unresolvable model uses `ModelUnsupported` instead.
     ModelGated {
         agent_kind: String,
         model_id: String,

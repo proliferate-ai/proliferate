@@ -15,10 +15,9 @@ interface ConnectServerDialogProps {
 }
 
 /**
- * Manual-entry connect-to-server dialog (self-hosting-v1 §3.5, B4-desktop):
- * URL entry -> validate (`GET {url}/meta`) -> trust-confirmation -> connect
- * (`set_app_config` + relaunch). Presentational only — all flow logic lives
- * in `useConnectServer`.
+ * Manual-entry connect-to-server dialog: URL entry -> validate
+ * (`GET {url}/meta`) -> trust-confirmation -> connect (`set_app_config` +
+ * relaunch). Presentational only — all flow logic lives in `useConnectServer`.
  */
 export function ConnectServerDialog({ controller, context }: ConnectServerDialogProps) {
   const {

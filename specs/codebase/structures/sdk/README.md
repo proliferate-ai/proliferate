@@ -1,17 +1,37 @@
-# SDK Standards
+# SDK Structure
 
-Status: authoritative for the AnyHarness SDK layers in this repo.
+Status: current structure rules for the TypeScript SDK layers in this repo.
 
 Scope:
 
+- `cloud/sdk/**`
+- `cloud/sdk-react/**`
 - `anyharness/sdk/**`
 - `anyharness/sdk-react/**`
 
-Use this doc to decide where new SDK logic goes and what rules it must follow.
+Use this document to choose the SDK family and layer that owns a change. The
+Cloud SDK speaks to the Proliferate control plane; the AnyHarness SDK speaks to
+an AnyHarness runtime. Neither SDK owns app-specific orchestration or product
+policy.
 
 ## 1. File Tree
 
 ```text
+cloud/
+  sdk/
+    src/
+      index.ts
+      client/       # resource-grouped control-plane clients
+      streams/      # framework-independent Cloud streams
+      types/        # public Cloud SDK types and aliases
+      generated/    # generated server OpenAPI types
+  sdk-react/
+    src/
+      index.ts
+      context/      # scoped Cloud client provider
+      hooks/        # generic Cloud queries and mutations
+      lib/          # query keys and React SDK infrastructure
+
 anyharness/
   sdk/
     src/
@@ -66,27 +86,31 @@ anyharness/
         query-keys.ts
 ```
 
-Use this as the default shape. `@anyharness/sdk` is the core TypeScript
-package. `@anyharness/sdk-react` is the generic React and TanStack Query layer
-on top of it.
+Each family has a framework-independent core package and a generic React and
+TanStack Query package. Apps and shared product packages compose them; they do
+not move product workflows into either SDK.
 
 ## 2. Non-Negotiable Rules
 
-- `@anyharness/sdk` is pure TypeScript only.
-- The core SDK must not depend on React, TanStack Query, Zustand, Tauri, or
-  app code.
+- `@proliferate/cloud-sdk` and `@anyharness/sdk` are pure TypeScript only.
+- Core SDKs must not depend on React, TanStack Query, Zustand, Tauri, or app
+  code.
+- `@proliferate/cloud-sdk-react` owns generic React-facing control-plane
+  providers, queries, and mutations.
 - `@anyharness/sdk-react` owns generic React-facing bindings for AnyHarness.
-- `@anyharness/sdk-react` must not depend on product policy, app stores, Tauri
-  APIs, or synthetic workspace logic.
+- React SDKs must not depend on product policy, app stores, Tauri APIs, or
+  synthetic app state.
 - Keep the public core client API resource-grouped.
 - Keep one clear public API per package. Do not preserve duplicate flat
   methods or duplicate wrapper layers.
 - `src/index.ts` is the curated public surface for each package.
 - Generated OpenAPI files must not be hand-edited.
-- Rust contract types are the source of truth for HTTP request, response, and
-  resource shapes.
-- `generated/openapi.json` and `src/generated/openapi.ts` are checked-in
-  generated artifacts and must be regenerated when the Rust contract changes.
+- The FastAPI schema is the source of truth for Cloud SDK wire types. Run
+  `make cloud-client-generate` after its server contract changes.
+- Rust contract types are the source of truth for AnyHarness SDK wire types.
+  Run `make sdk-generate` after that contract changes.
+- Checked-in generated OpenAPI files are generated artifacts and must not be
+  edited by hand.
 - SDK HTTP wrapper types in `src/types/*.ts` must alias generated OpenAPI
   schemas instead of hand-maintained mirrors.
 - Hand-authored public types should exist only when they materially improve the
@@ -102,6 +126,9 @@ Use the lowest package that can own the behavior cleanly.
 
 | Concern | Owner | Rule of thumb |
 | --- | --- | --- |
+| Typed control-plane HTTP operations | `@proliferate/cloud-sdk` | Add resource-grouped client methods under `cloud/sdk/src/client/**`. |
+| Generated control-plane wire types | `@proliferate/cloud-sdk` | Treat `cloud/sdk/src/generated/openapi.ts` as generated input only. |
+| Generic Cloud queries, mutations, providers, and query keys | `@proliferate/cloud-sdk-react` | Keep reusable server-resource wiring here; product workflows stay in the consuming product layer. |
 | Typed AnyHarness HTTP and resource operations | `@anyharness/sdk` | Add resource-grouped client methods under `src/client/**`. |
 | Generated wire contract types | `@anyharness/sdk` | Treat `src/generated/openapi.ts` as generated input only. |
 | SDK-facing public types | `@anyharness/sdk` | Prefer thin aliases first; only hand-author when the public API gets meaningfully better. |
@@ -112,6 +139,10 @@ Use the lowest package that can own the behavior cleanly.
 
 Package split:
 
+- `@proliferate/cloud-sdk` owns typed control-plane clients, Cloud transport,
+  public Cloud SDK types, and generated server contract types.
+- `@proliferate/cloud-sdk-react` owns generic Cloud client context, query keys,
+  queries, and mutations layered on the Cloud core SDK.
 - `@anyharness/sdk` owns typed client methods, transport behavior, public SDK
   types, generated contract types, low-level streams, and generic reducers.
 - `@anyharness/sdk-react` owns generic React providers plus generic query and
@@ -123,6 +154,16 @@ Package split:
 Use these folder notes after the ownership model above has already told you
 which package should own the behavior.
 
+- `cloud/sdk/src/client/`: resource-grouped Proliferate control-plane client
+  methods; no React or product workflow branching.
+- `cloud/sdk/src/streams/`: framework-independent Cloud streams only.
+- `cloud/sdk/src/types/`: public Cloud SDK types and generated-contract aliases;
+  do not duplicate server schemas by hand.
+- `cloud/sdk/src/generated/`: output of `make cloud-client-generate`; never
+  hand-edit.
+- `cloud/sdk-react/src/context/`, `hooks/`, and `lib/`: generic Cloud React
+  context, server-resource queries/mutations, query keys, and client
+  infrastructure; no app stores or product-specific orchestration.
 - `anyharness/sdk/src/client/`: resource-grouped client methods and request
   helpers only; no React, query state, or app workflow logic; keep one
   resource family per file.

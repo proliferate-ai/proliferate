@@ -21,10 +21,11 @@ runs. Existing workflow latency logs can include ids, URLs, and paths.
 For a fresh profile:
 
 ```bash
-make dev-init PROFILE=latency
+make setup PROFILE=latency
+make build # first clean worktree or after generated/Rust/frontend artifacts change
 VITE_PROLIFERATE_DEBUG_MAIN_THREAD=1 \
 VITE_PROLIFERATE_DEBUG_ANYHARNESS_TIMING=1 \
-make dev PROFILE=latency
+make run PROFILE=latency
 ```
 
 Rows printed by the measurement logger are dev-build rows. The logger prints

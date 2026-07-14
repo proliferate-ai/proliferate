@@ -1,9 +1,11 @@
 /**
  * Helpers for the tier-4 AnyHarness binary self-update scenario (T4-CLOUD-1,
- * specs/tbd/anyharness-self-update-v1.md §7). Two kinds of thing live here:
+ * owned by specs/developing/testing/tier-4-scenario-contract.md; shipped
+ * mechanics live in specs/codebase/structures/proliferate-worker/guides/lifecycle.md).
+ * Two kinds of thing live here:
  *
- * - Pure logic the scenario asserts against (version parsing, the §5
- *   "converged" predicate, the ECS task-definition mutation that bumps the
+ * - Pure logic the scenario asserts against (version parsing, binary
+ *   convergence, the ECS task-definition mutation that bumps the
  *   advertised runtime pin). These are unit-tested in
  *   `anyharness-upgrade.test.ts` — no network, no AWS.
  * - Thin impure wrappers (`bumpStagingRuntimePin`, `restoreStagingRuntimePin`)
@@ -17,9 +19,8 @@
  * override API. The only way to move the *advertised* pin without cutting a new
  * release is to override `RUNTIME_VERSION` in the staging server task
  * definition's `environment` array (ECS env wins over the image ENV), which
- * forces one rolling task replacement. Acceptable for a nightly test per the
- * self-update spec's testing ruling; the scenario restores the original task
- * definition in a `finally`.
+ * forces one rolling task replacement. Acceptable for the Tier 4 staging
+ * target; the scenario restores the original task definition in a `finally`.
  */
 
 import { execFile } from "node:child_process";
@@ -42,11 +43,11 @@ export function runtimeHealthVersion(health: RuntimeHealth): string {
 }
 
 /**
- * The §5 "converged" predicate for the binary track: the running AnyHarness
- * version (what `/health` reports) equals the version the server advertises in
- * `desiredVersions.anyharness`. An empty advertised pin is never "converged" —
- * an unstamped server pins nothing and the mechanism is a no-op, which is a
- * distinct state the scenario reports as blocked, not converged.
+ * The binary-track convergence predicate: the running AnyHarness version (what
+ * `/health` reports) equals the version the server advertises in
+ * `desiredVersions.anyharness`. An empty advertised pin is never converged; an
+ * unstamped server pins nothing and the mechanism is a no-op, which is a
+ * distinct state the scenario reports as blocked.
  */
 export function anyharnessBinaryConverged(runningVersion: string, advertisedPin: string): boolean {
   const running = runningVersion.trim();

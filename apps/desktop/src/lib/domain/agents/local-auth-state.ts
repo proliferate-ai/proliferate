@@ -37,9 +37,9 @@ export function localAuthStateFingerprint(state: AgentAuthState): string {
  * produced it before pushing it to the local runtime (spec §5 twin of the
  * cloud materializer). The runtime's route-auth render plane compares this
  * against the server it currently points at and skips a mismatched document
- * (self-hosting-v1 §3.5) rather than injecting a previous server's gateway
- * credentials — the class of bug a desktop server switch would otherwise hit
- * while the worker is still re-enrolling against the new server.
+ * rather than injecting a previous server's gateway credentials — the class of
+ * bug a desktop server switch would otherwise hit while the worker is still
+ * re-enrolling against the new server.
  */
 export function stampIssuingServerOrigin(
   state: AgentAuthState,
@@ -60,4 +60,28 @@ export function planLocalAuthStatePush(input: {
     return { shouldPush: false, fingerprint };
   }
   return { shouldPush: true, fingerprint };
+}
+
+/**
+ * Whether the local agent-auth state sync (server fetch + push to the local
+ * runtime) should run.
+ *
+ * The local-surface `state.json` carries the gateway AND BYOK route material
+ * for LOCAL sessions, which is independent of cloud COMPUTE (E2B sandboxes).
+ * Gating this sync on cloud compute (the previous `cloudActive =
+ * cloudComputeEnabled && authenticated` coupling) left a gateway-enabled server
+ * with cloud compute disabled — e.g. a local-only managed-gateway user, and the
+ * qualification local world — unable to launch gateway-routed sessions, because
+ * the runtime never received its routes and every gateway harness fell back to
+ * "no launchable model". The sync needs only an authenticated session against a
+ * reachable server and a healthy local runtime; when there is nothing to
+ * deliver the rendered document is revision-0 and `planLocalAuthStatePush`
+ * already declines to push it.
+ */
+export function shouldSyncLocalAuthState(input: {
+  authenticated: boolean;
+  serverReachable: boolean;
+  runtimeHealthy: boolean;
+}): boolean {
+  return input.authenticated && input.serverReachable && input.runtimeHealthy;
 }

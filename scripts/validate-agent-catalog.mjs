@@ -84,7 +84,7 @@ function validateCatalog(catalog) {
     }
     const modelIds = new Set();
     // Gateway-tagged rows: ids whose availability unlocks under the gateway
-    // route. The seedModels invariant (decisions ledger 14) checks against this.
+    // route. The seedModels invariant below checks against this set.
     const gatewayRowIds = new Set();
     for (const model of models) {
       const id = model.id;
@@ -159,7 +159,7 @@ function validateGatewayPolicy(kind, gatewayPolicy, gatewayRowIds) {
   };
   stringArray(gatewayPolicy.providers, "providers");
   stringArray(gatewayPolicy.seedModels, "seedModels");
-  // Build invariant (decisions ledger 14): every seedModel must be a
+  // Every seedModel must be a
   // first-class session.models row tagged with gateway availability.
   if (Array.isArray(gatewayPolicy.seedModels)) {
     for (const seed of gatewayPolicy.seedModels) {

@@ -127,12 +127,12 @@ pub fn resolve_launch_route_auth(
 /// origin so the server-switch guard is unit-testable without mutating
 /// process-global env state (tests run concurrently in this crate).
 ///
-/// Server-switch guard (self-hosting-v1 §3.5, D1): a state file stamped for a
-/// DIFFERENT server than `current_server_origin` is discarded (treated as
-/// absent, i.e. `Native`/no-injection) rather than rendering a launch that
-/// would inject the abandoned server's gateway token. This only ever changes
-/// behavior for a desktop that just switched servers and is mid-re-enrollment;
-/// see [`super::state::AgentAuthState::matches_server_origin`] for the exact
+/// Server-switch guard: a state file stamped for a DIFFERENT server than
+/// `current_server_origin` is discarded (treated as absent, i.e.
+/// `Native`/no-injection) rather than rendering a launch that would inject the
+/// abandoned server's gateway token. This only ever changes behavior for a
+/// desktop that just switched servers and is mid-re-enrollment; see
+/// [`super::state::AgentAuthState::matches_server_origin`] for the exact
 /// match/backward-compat rules.
 fn resolve_launch_route_auth_for_server(
     runtime_home: &Path,

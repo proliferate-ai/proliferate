@@ -10,6 +10,9 @@
     "sourceMap": true,
     "outDir": "dist",
     "rootDir": "src",
+    "paths": {
+      "#product/*": ["./src/*"]
+    },
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
