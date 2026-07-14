@@ -5,14 +5,17 @@ import type { Browser, BrowserContext, Page } from "playwright";
 
 import type { ReadyLocalWorld } from "../worlds/local-workspace/world.js";
 import type { AuthenticatedActor, StoredAuthSession } from "./authenticated-actor.js";
+import { scrubSecretText } from "./redact-diagnostics.js";
 
-/** Records browser console output for env-gated failure diagnostics. */
+/** Records browser console output for env-gated failure diagnostics. Secret
+ * shapes are scrubbed at capture time so the sink never holds a credential
+ * (these diagnostics are uploaded as CI artifacts). */
 function captureConsole(page: Page, sink: string[]): void {
   if (!process.env.LOCAL_WORLD_SMOKE_DEBUG_DIR) {
     return;
   }
-  page.on("console", (message) => sink.push(`[${message.type()}] ${message.text()}`));
-  page.on("pageerror", (error) => sink.push(`[pageerror] ${error.message}`));
+  page.on("console", (message) => sink.push(scrubSecretText(`[${message.type()}] ${message.text()}`)));
+  page.on("pageerror", (error) => sink.push(scrubSecretText(`[pageerror] ${error.message}`)));
 }
 
 /** Records non-2xx and failed network requests for env-gated failure diagnostics. */
@@ -21,7 +24,9 @@ function captureNetwork(page: Page, sink: string[]): void {
     return;
   }
   page.on("requestfailed", (request) => {
-    sink.push(`[requestfailed] ${request.method()} ${request.url()} :: ${request.failure()?.errorText ?? ""}`);
+    sink.push(
+      scrubSecretText(`[requestfailed] ${request.method()} ${request.url()} :: ${request.failure()?.errorText ?? ""}`),
+    );
   });
   page.on("response", (response) => {
     const status = response.status();
@@ -30,7 +35,7 @@ function captureNetwork(page: Page, sink: string[]): void {
         .text()
         .catch(() => "")
         .then((body) => {
-          sink.push(`[${status}] ${response.request().method()} ${response.url()} :: ${body.slice(0, 400)}`);
+          sink.push(scrubSecretText(`[${status}] ${response.request().method()} ${response.url()} :: ${body.slice(0, 400)}`));
         });
     }
   });
@@ -40,7 +45,7 @@ function captureNetwork(page: Page, sink: string[]): void {
   page.on("websocket", (ws) => {
     const record = (dir: string, payload: string) => {
       if (/error|not found|fail|workspace|session/i.test(payload)) {
-        sink.push(`[ws ${dir}] ${ws.url().slice(0, 80)} :: ${payload.slice(0, 500)}`);
+        sink.push(scrubSecretText(`[ws ${dir}] ${ws.url().slice(0, 80)} :: ${payload.slice(0, 500)}`));
       }
     };
     ws.on("framereceived", (frame) => record("recv", typeof frame.payload === "string" ? frame.payload : ""));
@@ -51,7 +56,8 @@ function captureNetwork(page: Page, sink: string[]): void {
 /**
  * Env-gated (`LOCAL_WORLD_SMOKE_DEBUG_DIR`) dump of the rendered DOM, a
  * screenshot, and captured console output on a UI failure. A no-op unless the
- * env var is set, so it never touches the green path or CI.
+ * env var is set, so it never touches the green path. When enabled (incl. in
+ * CI) every captured string is scrubbed of secret shapes before it is written.
  */
 async function dumpFailureArtifacts(page: Page | undefined, consoleLog: string[], label: string): Promise<void> {
   const dir = process.env.LOCAL_WORLD_SMOKE_DEBUG_DIR;
@@ -61,8 +67,8 @@ async function dumpFailureArtifacts(page: Page | undefined, consoleLog: string[]
   try {
     mkdirSync(dir, { recursive: true });
     const stamp = `${label}-${Date.now()}`;
-    writeFileSync(path.join(dir, `${stamp}.html`), await page.content().catch(() => "<no content>"));
-    writeFileSync(path.join(dir, `${stamp}.console.txt`), consoleLog.join("\n"));
+    writeFileSync(path.join(dir, `${stamp}.html`), scrubSecretText(await page.content().catch(() => "<no content>")));
+    writeFileSync(path.join(dir, `${stamp}.console.txt`), scrubSecretText(consoleLog.join("\n")));
     await page.screenshot({ path: path.join(dir, `${stamp}.png`), fullPage: true }).catch(() => undefined);
   } catch {
     // Diagnostics are best-effort; never mask the real failure.

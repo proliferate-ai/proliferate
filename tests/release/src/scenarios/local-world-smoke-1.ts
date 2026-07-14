@@ -15,6 +15,7 @@ import { authenticatedActor, type AuthenticatedActor } from "../fixtures/authent
 import { findErrorEvent, findTurnEndedEvent } from "../fixtures/local-runtime.js";
 import { preparedRepository, type PreparedRepository } from "../fixtures/prepared-repository.js";
 import { productPage, type ProductPage } from "../fixtures/product-page.js";
+import { redactDiagnostics, scrubSecretText } from "../fixtures/redact-diagnostics.js";
 import type { RunIdentityV1 } from "../runner/identity.js";
 import type { PlannedCellV1 } from "../runner/result.js";
 import { selectCheapestEligibleClaudeModel } from "../services/qualification-litellm.js";
@@ -719,11 +720,11 @@ async function captureUiFailure(page: ProductPage | undefined, label: string): P
     mkdirSync(dir, { recursive: true });
     const stamp = `${label}-${Date.now()}`;
     const html = await page.page.content().catch(() => "<no content>");
-    writeFileSync(nodePath.join(dir, `${stamp}.html`), html);
+    writeFileSync(nodePath.join(dir, `${stamp}.html`), scrubSecretText(html));
     await page.page.screenshot({ path: nodePath.join(dir, `${stamp}.png`), fullPage: true }).catch(() => undefined);
     if (page.debug) {
-      writeFileSync(nodePath.join(dir, `${stamp}.console.txt`), page.debug.console.join("\n"));
-      writeFileSync(nodePath.join(dir, `${stamp}.network.txt`), page.debug.network.join("\n"));
+      writeFileSync(nodePath.join(dir, `${stamp}.console.txt`), scrubSecretText(page.debug.console.join("\n")));
+      writeFileSync(nodePath.join(dir, `${stamp}.network.txt`), scrubSecretText(page.debug.network.join("\n")));
     }
   } catch {
     // Diagnostics are best-effort.
@@ -756,7 +757,10 @@ async function dumpHarnessReadinessDiagnostics(world: ReadyLocalWorld, harnessKi
     diag.stateJson = `err: ${describe(e)}`;
   }
   mkdirSync(dir, { recursive: true });
-  writeFileSync(nodePath.join(dir, `harness-readiness-diag-${Date.now()}.json`), JSON.stringify(diag, null, 2));
+  writeFileSync(
+    nodePath.join(dir, `harness-readiness-diag-${Date.now()}.json`),
+    JSON.stringify(redactDiagnostics(diag), null, 2),
+  );
 }
 
 /**
@@ -783,7 +787,10 @@ async function dumpServerGatewayState(actor: AuthenticatedActor, label: string):
     .get("/v1/cloud/agent-gateway/capabilities")
     .catch((e) => `err: ${describe(e)}`);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(nodePath.join(dir, `server-gateway-state-${label}-${Date.now()}.json`), JSON.stringify(diag, null, 2));
+  writeFileSync(
+    nodePath.join(dir, `server-gateway-state-${label}-${Date.now()}.json`),
+    JSON.stringify(redactDiagnostics(diag), null, 2),
+  );
 }
 
 /**
@@ -811,7 +818,10 @@ async function dumpRuntimeWorkspaces(world: ReadyLocalWorld, label: string): Pro
   }
   diag.sessionEvents = sessionDiags;
   mkdirSync(dir, { recursive: true });
-  writeFileSync(nodePath.join(dir, `runtime-workspaces-${label}-${Date.now()}.json`), JSON.stringify(diag, null, 2));
+  writeFileSync(
+    nodePath.join(dir, `runtime-workspaces-${label}-${Date.now()}.json`),
+    JSON.stringify(redactDiagnostics(diag), null, 2),
+  );
 }
 
 /** The repository's display name as Desktop lists it — the clone's basename. */

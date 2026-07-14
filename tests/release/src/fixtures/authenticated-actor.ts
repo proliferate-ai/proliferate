@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -251,7 +252,18 @@ export async function authenticatedActor(
 
   await transport.claimSetup({ apiBaseUrl: world.api.baseUrl, email, password, setupToken, organizationName });
 
-  const tokenResponse = await transport.loginWithPassword(world.api.baseUrl, email, password);
+  let tokenResponse: DesktopTokenResponse;
+  try {
+    tokenResponse = await transport.loginWithPassword(world.api.baseUrl, email, password);
+  } catch (error) {
+    // Env-gated (LOCAL_WORLD_SMOKE_DEBUG_DIR) secret-free diagnostics for the
+    // CI-only `POST /auth/desktop/password/login -> 401`. Distinguishes "claim
+    // never persisted the owner" (setup still open) from "owner exists but the
+    // password/verify path fails" (setup closed). Never writes the password,
+    // setup token, access/refresh tokens, or any credential.
+    await captureAuthFailureDiagnostics(world.api.baseUrl, email).catch(() => undefined);
+    throw error;
+  }
   const session = toStoredSession(tokenResponse);
   const api = world.api.client.withBearerToken(session.access_token);
 
@@ -330,4 +342,52 @@ function isNotFound(error: unknown): boolean {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Env-gated (`LOCAL_WORLD_SMOKE_DEBUG_DIR`) secret-free capture of why the
+ * setup-claim → password-login handshake failed. Only read-only, credential-free
+ * signals are recorded:
+ *
+ *   - `GET /setup`: 404/"nothing to set up" means the claim DID consume setup
+ *     (owner exists → the 401 is a verify/state problem); a 200 setup form means
+ *     the claim did NOT persist (commit/visibility problem);
+ *   - `GET /auth/desktop/methods`: whether password login is enabled at all.
+ *
+ * The setup page HTML is reduced to a boolean marker; no page body, password,
+ * setup token, or session token is ever written.
+ */
+async function captureAuthFailureDiagnostics(apiBaseUrl: string, email: string): Promise<void> {
+  const dir = process.env.LOCAL_WORLD_SMOKE_DEBUG_DIR;
+  if (!dir) {
+    return;
+  }
+  const diag: Record<string, unknown> = { emailLocalPartLength: email.split("@")[0]?.length ?? 0 };
+
+  try {
+    const setup = await fetch(`${apiBaseUrl}/setup`, { method: "GET" });
+    const body = await setup.text().catch(() => "");
+    diag.setupGet = {
+      status: setup.status,
+      // Boolean markers only — never the page body.
+      setupStillOpen: /name="setup_token"/.test(body),
+      nothingToSetUp: /nothing to set up/i.test(body),
+    };
+  } catch (error) {
+    diag.setupGet = `err: ${error instanceof Error ? error.message : String(error)}`;
+  }
+
+  try {
+    const methods = await fetch(`${apiBaseUrl}/auth/desktop/methods`, { method: "GET" });
+    diag.authMethods = { status: methods.status, body: await methods.json().catch(() => null) };
+  } catch (error) {
+    diag.authMethods = `err: ${error instanceof Error ? error.message : String(error)}`;
+  }
+
+  try {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, `auth-failure-diag-${Date.now()}.json`), JSON.stringify(diag, null, 2));
+  } catch {
+    // Best-effort diagnostics.
+  }
 }
