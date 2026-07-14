@@ -12,7 +12,9 @@ export interface ScenarioPlanStep {
  * `src/fixtures/identity.ts`. Distinct from `ScenarioFailure`: a blocked run
  * does not fail the release gate and does not get an issue filed against it
  * (the blocker already has its own tracking); it is reported so the gap stays
- * visible instead of silently passing or silently failing.
+ * visible instead of silently passing or silently failing. How a blocked
+ * outcome affects the verdict and exit code is owned by the runner policy in
+ * `../runner/result.ts`, not by this class.
  */
 export class ScenarioBlockedError extends Error {
   readonly reason: string;
@@ -28,8 +30,9 @@ export class ScenarioBlockedError extends Error {
  * Thrown when a scenario was attempted for real (per README's "3 real
  * attempts, then mark expected-fail" rule) and the diagnosis is recorded
  * here, distinct from an actual product bug (which gets a filed issue
- * instead — see `../report/issue-filer.ts`). An expected-fail run does not
- * fail the release gate; it is a documented, known gap.
+ * instead — see `../report/issue-filer.ts`). Whether an expected-fail run is
+ * tolerated (diagnostic) or fails the gate (strict) is owned by the runner
+ * policy in `../runner/result.ts`; it is a documented, known gap either way.
  */
 export class ScenarioExpectedFailError extends Error {
   readonly diagnosis: string;
@@ -71,8 +74,8 @@ export interface ScenarioDefinition {
   /**
    * Executes the scenario for one runtime lane. Throws `ScenarioBlockedError`
    * for a known out-of-band gate, `ScenarioExpectedFailError` for a diagnosed
-   * real gap, or any other error for a genuine red — see the two classes
-   * above for how the CLI (`src/cli/run.ts`) reports each differently.
+   * real gap, or any other error for a genuine red — the runner
+   * (`src/runner/execute.ts`) normalizes each into a final test status.
    */
   run(ctx: ScenarioRunContext): Promise<void>;
 }

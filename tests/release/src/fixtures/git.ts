@@ -4,6 +4,7 @@ import path from "node:path";
 import os from "node:os";
 
 import { ScenarioBlockedError } from "../scenarios/types.js";
+import { redactUrlCredentials } from "../evidence/schema.js";
 
 /**
  * Ensures a local clone of `owner/repo` exists at a stable scratch path,
@@ -82,6 +83,22 @@ async function pathExists(filePath: string): Promise<boolean> {
   }
 }
 
+/**
+ * Renders a git failure without leaking credentials: the clone URL may embed
+ * a runtime-discovered token (`gh auth token`) that no environment-manifest
+ * redaction knows about, and git also echoes the remote URL into stderr.
+ * Exported for the production-path regression test.
+ */
+export function describeGitFailure(
+  args: readonly string[],
+  cwd: string,
+  code: number | null,
+  stderr: string,
+): string {
+  const shownArgs = args.map((arg) => redactUrlCredentials(arg)).join(" ");
+  return `git ${shownArgs} (cwd=${cwd}) failed (${code}): ${redactUrlCredentials(stderr)}`;
+}
+
 function runGit(args: string[], cwd: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn("git", args, {
@@ -99,7 +116,7 @@ function runGit(args: string[], cwd: string): Promise<void> {
     child.on("error", reject);
     child.on("exit", (code) => {
       if (code !== 0) {
-        reject(new Error(`git ${args.join(" ")} (cwd=${cwd}) failed (${code}): ${stderr}`));
+        reject(new Error(describeGitFailure(args, cwd, code, stderr)));
         return;
       }
       resolve();

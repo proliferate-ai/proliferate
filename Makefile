@@ -42,6 +42,7 @@ LANE ?= local
 DESKTOP ?= web
 AGENTS ?= all
 SCENARIOS ?= all
+BEHAVIOR ?= diagnostic
 DRY_RUN ?=
 FILE_ISSUES ?=
 DESKTOP_RELEASE_TARGET_OS ?= macos
@@ -784,10 +785,11 @@ test-cloud-all: cloud-runtime-build server-db-ready
 # (specs/developing/testing/README.md "Running tier 3/4 locally"). One runner
 # CLI with lane flags; this target is a thin wrapper so CI and laptops call it
 # identically. LANE=local|staging DESKTOP=web|native AGENTS=<list|all>
-# SCENARIOS=<list|all> DRY_RUN=1 FILE_ISSUES=1.
+# SCENARIOS=<list|all> BEHAVIOR=diagnostic|strict DRY_RUN=1 FILE_ISSUES=1.
 release-e2e:
 	pnpm install --silent
 	cd tests/release && pnpm exec tsx src/cli/run.ts \
+		--behavior $(BEHAVIOR) \
 		--lane $(LANE) \
 		--desktop $(DESKTOP) \
 		--agents $(AGENTS) \

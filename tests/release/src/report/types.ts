@@ -17,12 +17,3 @@ export interface FailureReport {
   timestamp: string;
 }
 
-export interface ScenarioFailure {
-  scenarioId: string;
-  registryFlowRef: string;
-  lane: string;
-  expected: string;
-  error: unknown;
-  logsExcerpt?: string;
-  correlationIds?: string[];
-}

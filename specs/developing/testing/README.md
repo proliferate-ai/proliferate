@@ -4,6 +4,9 @@ How tests are organized across the repo: what each tier owns, where test files
 live, what gates merges vs releases, and how a change decides which tests it
 must add. [`core-release-validation.md`](core-release-validation.md) owns the
 complete target guarantee and qualification semantics;
+[`qualification-runner-core.md`](qualification-runner-core.md) owns the frozen
+test runner and results-reporting contract: selection, run identity, one final
+result per selected test, the combined report, and diagnostic/strict behavior;
 [`release-worlds-and-fixtures.md`](release-worlds-and-fixtures.md),
 [`tier-3-scenario-contract.md`](tier-3-scenario-contract.md), and
 [`tier-4-scenario-contract.md`](tier-4-scenario-contract.md) own the live world
