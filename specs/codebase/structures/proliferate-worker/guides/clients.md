@@ -1,93 +1,60 @@
-# Worker Clients
+# Worker HTTP Clients
 
 Status: authoritative for
-`anyharness/crates/proliferate-worker/src/cloud_client/**` and
-`anyharness/crates/proliferate-worker/src/anyharness_client/**`.
-
-The two clients own raw HTTP access boundaries. Clients are not services. They
-send and receive; callers decide. They are split into two top-level folders so
-the path tells you which side a call talks to.
-
-## Target Shape
-
-```text
-cloud_client/        # transport TO cloud — one file per endpoint
-  mod.rs             # module root/facade: CloudClient, shared helpers, module declarations
-  control.rs         # endpoint-specific DTOs and CloudClient methods
-  heartbeat.rs
-  ...
-
-anyharness_client/   # the local runtime substrate
-  mod.rs             # module root/facade; split endpoint files when it grows
-```
+`anyharness/crates/proliferate-worker/src/cloud_client/**` and the narrow raw
+HTTP calls in `catalog_sync.rs` and `anyharness_update.rs`.
 
 ## Cloud Client
 
-`cloud_client/` owns worker-facing Cloud HTTP endpoints and wire types — one
-file per endpoint, with typed DTOs generated from the shared contract.
+```text
+cloud_client/
+├── mod.rs       CloudClient, wire DTOs, endpoint methods, response parsing
+├── auth.rs      bearer-header formatting
+└── heartbeat.rs heartbeat request construction
+```
 
-`mod.rs` is not the "put the whole client here" file. It is the module root:
-declare child modules, define the shared `CloudClient` handle, and keep shared
-request helpers there. Endpoint-specific request/response structs and
-`impl CloudClient` methods belong in the endpoint file unless they are genuinely
-shared by multiple endpoints.
+`CloudClient` owns the current raw Cloud HTTP surface:
 
-Endpoints:
+- `POST /v1/cloud/worker/enroll`
+- `POST /v1/cloud/worker/heartbeat`
+- `GET /v1/cloud/worker/download/{target}/{asset}`
+- `GET /v1/cloud/runtime/download/{target}/{asset}`
+- `GET /v1/catalogs/agents`
+- a direct unauthenticated fetch from an already resolved CDN URL for the
+  sibling checksum
 
-- enrollment
-- heartbeat (carries desired versions in the response)
-- inventory upload (once, at startup)
-- the control long-poll (`/worker/control/wait`) — returns commands **and**
-  revision signals
-- command delivery/result report
-- reconcile bundle fetch (per domain, on demand)
-- applied-revisions report
-- event batch upload
-- backfill upload
+It has two `reqwest` clients. Authenticated requests never follow redirects,
+preventing a bearer token from crossing origins. Public artifact downloads
+use a redirect-following client and a longer request timeout.
 
-There is no separate exposures poll, revoked-jti poll, or command-lease poll:
-those all ride the control long-poll. There is no slot-fence field on any
-request or report.
+The client owns endpoint paths, headers, serialization, status checking, and
+wire compatibility. It does not decide when enrollment, catalog sync, or an
+update should happen, and it does not write the local store.
 
-## AnyHarness Client
+## AnyHarness Access
 
-`anyharness_client/` is the **only** path to local AnyHarness. Everything that
-touches the runtime goes through here.
+There is no general `anyharness_client` module in the current Worker.
 
-Endpoints:
+- `catalog_sync.rs` directly owns its focused catalog version GET and catalog
+  PUT, including optional runtime bearer auth.
+- `anyharness_update.rs` directly owns the post-relaunch `/health` probe.
 
-- health/version probe
-- workspace resolve/worktree/retire APIs
-- session start/prompt/config/cancel/close APIs
-- interaction resolution APIs
-- event listing (for the tail)
-- backfill snapshot
-- runtime-config apply (`PUT /runtime-config`)
-- agent-auth config apply (`/agents/auth-config`)
+These calls do not make the Worker the general execution client for
+AnyHarness. Cloud performs current workspace and session operations directly.
 
-## Allowed
+## Artifact Identity
 
-- base URL handling, auth headers, endpoint paths
-- request/response structs and HTTP method calls
-- HTTP status parsing and small wire-compatibility shims
-
-## Banned
-
-- command or reconcile lifecycle
-- event cursor reconciliation
-- retry loops beyond focused request mechanics
-- filesystem effects or store writes
-- Cloud product policy or AnyHarness execution semantics
+The Cloud download endpoint redirects to a public artifact. After the Worker
+follows that redirect, it derives the checksum URL from the resolved binary
+URL so the binary and checksum come from the same published directory. It does
+not resolve the two artifacts through separate Cloud redirects.
 
 ## Hard Rules
 
-- If code decides what a command means, it belongs in `control/commands`, not a
-  client.
-- If code decides what a revision or event cursor means, it belongs in
-  `control/reconcile` or `tail`, not a client.
-- If code writes target-local files or runs Git, it belongs in
-  `materialization`, not a client.
-- If code persists worker-local recovery state, it belongs in `store`, not a
-  client.
-- Generated wire types may be used when available, but each client stays a
-  narrow explicit access layer.
+- Never use the redirect-following client for authenticated Cloud requests.
+- Never attach Worker or runtime bearer credentials to public CDN downloads.
+- Keep transport parsing here and convergence decisions in their owning
+  modules.
+- Do not invent command, event, inventory, or projection endpoints.
+- Add a broader AnyHarness client only when multiple current flows require a
+  shared access boundary.

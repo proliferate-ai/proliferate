@@ -1,8 +1,9 @@
 # Cloud ↔ Worker Protocol — Target Design
 
-Status: design (step 3 output of the worker-comms design exercise). Companion to
-the worker-tier docs in this folder. Describes the target architecture for how
-the Cloud control plane talks to the remote Proliferate Worker.
+Status: draft
+
+Current gap: the Target, command/control, exposure/projection, and Worker
+event-tail paths described here are absent from current code.
 
 ## 1. Tiered Truth (the backbone)
 

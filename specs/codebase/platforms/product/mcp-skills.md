@@ -1,6 +1,8 @@
 # 01 — MCP / Skills / Plugins
 
-Status: implementation-ready spec.
+Status: target
+
+Current gap: managed-Target materialization described here is not deployed.
 
 Date: 2026-05-20.
 

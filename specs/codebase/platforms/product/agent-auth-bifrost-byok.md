@@ -1,7 +1,10 @@
 # Bifrost BYOK And Managed Credit Onboarding Spec
 
-Status: implemented on `codex/bifrost-byok-onboarding-spec`; live E2B/Bedrock
-checks are opt-in and environment-gated.
+Status: target
+
+Current gap: the Target/profile fields described here were removed and are not
+deployed. Historical implementation context remains below until canonical
+cleanup.
 
 Date: 2026-05-25
 

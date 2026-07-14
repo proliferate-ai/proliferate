@@ -1,10 +1,10 @@
 # Mobile Cloud Client Reference Spec
 
-Status: reference spec plus implementation checklist. This branch implements
-the first production slice of the checklist: mobile new chat, workspace handoff,
-chat optimistic UI/config/transcript rendering, workspace opening without an
-existing session, real automation list/create/toggle, and real settings
-account/org/billing summaries.
+Status: target
+
+Current gap: the command, projection, and managed-Target portions described
+here are not deployed. The implemented mobile slices below remain useful
+context, but this document is not current operating law.
 
 Scope:
 

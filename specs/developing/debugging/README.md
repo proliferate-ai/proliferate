@@ -10,8 +10,9 @@ debugging, and performance profiling. Product behavior belongs under
 
 1. Start from the GitHub issue when one exists. Support-submitted issues should
    link to the internal support report and any Linear ticket.
-2. Use the support report id, tenant id, user id, organization id, cloud
-   workspace id, AnyHarness workspace id, session id, command id, and worker id
+2. Use the support report id, tenant id, user id, organization id, Cloud
+   sandbox id, provider sandbox id, repo-environment materialization id, Cloud
+   workspace id, AnyHarness workspace id, session id, Worker id, and request id
    to correlate Cloud records, Sentry events, logs, and S3 diagnostics.
 3. Check Sentry for matching exceptions or native crashes before assuming the
    report is purely product confusion.
@@ -19,7 +20,7 @@ debugging, and performance profiling. Product behavior belongs under
    updater publish, runtime rollout, or cloud worker change.
 5. Reproduce locally with an isolated dev profile when the issue needs code
    inspection or a stateful workflow.
-6. Capture the narrowest useful evidence: failing command, request id, run id,
+6. Capture the narrowest useful evidence: failing request, request id, run id,
    screenshot, sanitized log tail, and exact surface/version.
 7. Update the GitHub issue with the diagnosis, linked PR or deploy, and any
    user-facing owner needed.
@@ -38,11 +39,13 @@ and support artifacts:
 | Support report id | Find uploaded diagnostics, sanitized logs, screenshots, and support-submitted GitHub/Linear links. |
 | Tenant id / organization id | Scope Cloud DB state, billing/account state, team settings, Metabase rows, and support dashboards. |
 | User id | Correlate account state, auth readiness, provider links, and user-scoped Sentry/PostHog events. |
-| Cloud workspace id | Inspect server workspace state, exposures, command history, cloud target state, and workspace visibility. |
+| Cloud sandbox id / provider sandbox id | Correlate the user's persisted sandbox, E2B provider state, runtime-access presence, and server logs. |
+| Repo environment / materialization id | Inspect repository setup state, materialization status, and the persisted materialization error. |
+| Cloud workspace id | Inspect the product workspace row, repository environment, archive state, and AnyHarness workspace handoff. |
 | AnyHarness workspace id | Follow local/runtime workspace state, sessions, transcript streams, and runtime diagnostics. |
 | Session id | Match transcript rows, runtime events, pending prompts, and Sentry support tags. |
-| Command id | Trace cloud command enqueue, lease, delivery, failure, and result state. |
-| Worker id / target id | Inspect target registration, worker logs, status updates, and supervisor/worker health. |
+| Worker id | Inspect enrollment, heartbeat-derived liveness, reported versions, integration-gateway state, and Worker logs. |
+| Request id | Follow one mounted API, gateway, webhook, or materialization request through structured logs and Sentry. |
 
 ## Tools And Permissions
 
@@ -97,7 +100,7 @@ When finishing debugging work, report:
 
 - GitHub issue, support report, PR, deploy run, or release artifact inspected
 - affected surface, environment, version, commit SHA, tenant/org/user ids, and
-  workspace/session/command ids when relevant
+  sandbox/materialization/workspace/session/Worker/request ids when relevant
 - shortest confirmed reproduction path or why reproduction was not possible
 - Sentry, logs, dashboards, or workflow evidence checked
 - diagnosis, linked fix/deploy, remaining owner, and user-facing owner

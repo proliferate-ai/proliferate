@@ -1,12 +1,14 @@
 # 09 — Billing
 
-Status: implementation-ready spec.
+Status: target
+
+Current gap: the removed Target and wake-job portions are not deployed; current
+sandbox billing gates and usage handling remain shipped context below.
 
 Date: 2026-05-20.
 
 Depends on: [`sandbox-provisioning.md`](sandbox-provisioning.md),
-[`agent-auth.md`](agent-auth.md),
-[`cloud-commands.md`](cloud-commands.md).
+[`agent-auth.md`](agent-auth.md).
 
 Soft: 03, 06, 07, 08.
 

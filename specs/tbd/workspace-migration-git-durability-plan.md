@@ -1,6 +1,9 @@
 # Workspace Migration Git Durability Plan
 
-Status: implementation in progress on `codex/workspace-migration-git-durability`.
+Status: draft
+
+Current gap: the Cloud-command portions of this plan are unimplemented and
+superseded by the current direct materialization/workspace path.
 
 Date: 2026-05-30.
 
@@ -63,7 +66,6 @@ reliability. The accepted fixes are now part of the branch:
 - `specs/README.md`
 - `specs/codebase/systems/product/workspaces/migration.md`
 - `specs/codebase/systems/product/workspaces/cloud-dispatch.md`
-- `specs/codebase/platforms/product/cloud-commands.md`
 - `specs/codebase/structures/frontend/README.md`
 - `specs/codebase/structures/frontend/guides/components.md`
 - `specs/codebase/structures/frontend/guides/hooks.md`
@@ -86,9 +88,8 @@ Key constraints from those docs:
   (`specs/codebase/systems/product/workspaces/migration.md:69`).
 - Desktop is the V1 executor for move operations
   (`specs/codebase/systems/product/workspaces/migration.md:164`).
-- Passive web/mobile UI must read from Cloud DB and not wake the sandbox; command
-  and mutation paths use Cloud commands (`specs/codebase/platforms/product/cloud-commands.md:47`,
-  `specs/codebase/platforms/product/cloud-commands.md:105`).
+- Passive web/mobile UI should not wake a sandbox. The Cloud-command mutation
+  path assumed by this draft is not implemented.
 - Frontend pure product decisions belong in `lib/domain/**`; multi-step
   sequences belong in `lib/workflows/**`; hooks wire React, stores, and access
   dependencies (`specs/codebase/structures/frontend/guides/lib.md:6`,

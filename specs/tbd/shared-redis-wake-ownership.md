@@ -1,7 +1,9 @@
 # Shared Redis/Wake Ownership Decision
 
-Status: ratified implementation decision for the post-529 worker/control and
-worker-tier migrations.
+Status: draft
+
+Current gap: the Worker-control doorbell and revision system ratified here was
+removed and is not current behavior.
 
 Date: 2026-06-05.
 

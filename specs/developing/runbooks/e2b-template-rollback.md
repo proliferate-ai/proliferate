@@ -4,7 +4,7 @@ Status: authoritative for rolling an E2B cloud runtime template tag back to a
 known-good immutable build.
 
 Use this runbook when a newly promoted E2B template causes managed cloud
-sandbox creation, runtime boot, worker enrollment, or template smoke failures.
+sandbox creation, runtime boot, or template smoke failures.
 The release lane is documented in
 [`../deploying/ci-cd.md`](../deploying/ci-cd.md), and the managed sandbox model
 is documented in
@@ -26,9 +26,9 @@ the affected rolling tag back to that immutable build. Do not edit server
 runtime or provisioning code for a template rollback.
 
 Rolling tags affect newly created E2B sandboxes. Existing running or paused
-sandboxes keep the image they already started with. If an already-created
-target must be replaced, coordinate the managed-target replacement path
-separately.
+sandboxes keep the image they already started with. There is no shipped atomic
+sandbox-replacement flow; escalate existing-sandbox recovery instead of
+improvising one.
 
 ## Required access
 
@@ -44,7 +44,7 @@ separately.
 Secrets policy:
 
 - Do not paste `E2B_API_KEY`, `E2B_ACCESS_TOKEN`, provider dashboard tokens,
-  sandbox environment values, or worker enrollment tokens into chat, issues,
+  sandbox environment values, or Worker enrollment tokens into chat, issues,
   PRs, or docs.
 - Share template family refs, rolling tags, immutable tags, workflow run URLs,
   sandbox ids from smoke tests, and sanitized log snippets.
@@ -97,8 +97,10 @@ E2B_API_KEY='<from-secret-store>' \
 ```
 
 The smoke test creates a throwaway sandbox, verifies the AnyHarness, Worker,
-and Supervisor binaries, checks agent install availability, starts Supervisor,
-and kills the sandbox before exit.
+Supervisor, and Git credential-helper binaries, checks agent install
+availability, proves Supervisor can start AnyHarness with an isolated smoke
+config, and kills the sandbox before exit. It does not enroll a Worker against
+Cloud or prove the hosted materialization path.
 
 If the source tag fails smoke, do not promote it. Choose an earlier known-good
 immutable tag or treat the incident as an E2B/provider or repo-wide runtime
@@ -157,9 +159,11 @@ The rollback is complete when all of these are true:
   ```
 
 - The next managed cloud sandbox creation in the affected environment uses the
-  rolled-back ref and reaches the normal running/enrolled state.
-- New cloud command failures are no longer dominated by template boot,
-  executable missing, Supervisor start, or Worker enrollment errors.
+  rolled-back ref and can launch authenticated AnyHarness during
+  materialization.
+- New materialization failures are no longer dominated by template boot or
+  missing-executable errors. Worker health is checked separately because
+  sidecar startup is best-effort.
 
 For staging, run the cloud E2B suite when provider credentials and time allow:
 
@@ -175,13 +179,13 @@ make test-cloud-e2b
 | Smoke fails on the rollback source | Pick an earlier successful `sha-*` tag; do not move the rolling tag to an unverified source. |
 | Promotion succeeds but new sandboxes still use the bad image | Check whether the environment is pinned to an immutable `E2B_TEMPLATE_REF` or `E2B_TEMPLATE_NAME` instead of the rolling tag. |
 | Production rollback workflow fails before smoke | Inspect GitHub secrets and E2B access; refresh credentials in the owning secret store without printing them. |
-| Existing user workspace still fails after rollback | The workspace may already be on the bad sandbox image; coordinate target replacement rather than rebuilding the template again. |
+| Existing user workspace still fails after rollback | Its existing sandbox may still use the bad image. Preserve evidence and escalate; do not improvise sandbox replacement. |
 | E2B API or sandbox create is degraded | Pause further promotion attempts, preserve workflow and smoke evidence, and update the incident owner. |
 
 ## Final report
 
 Report the affected environment, bad immutable tag, rollback immutable tag,
 template family, rolling tag moved, workflow run URL or exact local command,
-smoke results, whether any existing targets still need replacement, and any
+smoke results, whether any existing sandboxes still need recovery, and any
 remaining owner. State explicitly that no E2B secrets, enrollment tokens, or
 sandbox environment values were shared.

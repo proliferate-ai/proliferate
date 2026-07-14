@@ -155,11 +155,11 @@ make dev PROFILE=<name> STRIPE=1
 Profile QA must use the URLs and ports printed by that profile. Do not mix
 state from the default local stack with a release QA profile.
 
-When provider auth, billing, cloud commands, or real user-scoped visibility is
+When provider auth, billing, cloud sandbox materialization, or real user-scoped visibility is
 in scope, copy the developer's local non-example env files into the worktree
 before startup and keep them uncommitted. Without local secrets and a human
 login, QA can still verify type/build behavior but cannot fully verify provider
-auth, cloud command delivery, billing/account settings, or user-scoped
+auth, cloud materialization, billing/account settings, or user-scoped
 workspace visibility.
 
 ## Surface Matrix
@@ -175,16 +175,16 @@ the change crosses a shared contract.
 | Native mobile | Verify the same user workflow in simulator/device when native OAuth, SecureStore, deep links, keyboard, safe-area, or TestFlight behavior changed. | [../local/mobile.md](../local/mobile.md), [../../codebase/systems/product/clients/mobile-cloud.md](../../codebase/systems/product/clients/mobile-cloud.md) |
 | Server/API | Exercise changed API paths locally or in staging, verify auth/permission behavior, and confirm migrations/tests passed. | [../../codebase/structures/server/README.md](../../codebase/structures/server/README.md) |
 | AnyHarness runtime | Start a real session, stream transcript events, execute the changed tool/session/workspace behavior, and verify contract compatibility with Desktop/Web/Mobile callers. | [../../codebase/structures/anyharness/README.md](../../codebase/structures/anyharness/README.md) |
-| Cloud workers/supervisor | Provision or reuse a cloud target, verify command delivery, target status, logs, failure handling, and runtime version expectations. | [../../codebase/structures/proliferate-worker/README.md](../../codebase/structures/proliferate-worker/README.md), [../../codebase/structures/proliferate-supervisor/README.md](../../codebase/structures/proliferate-supervisor/README.md) |
+| Cloud sandbox and Worker | Through mounted APIs, ensure the personal sandbox row, save/materialize a cloud repo environment, create a Cloud workspace, verify authenticated AnyHarness gateway access, and then verify optional Worker enrollment, heartbeat-derived liveness, and reported versions independently. | [../runbooks/cloud-provisioning-failure.md](../runbooks/cloud-provisioning-failure.md), [../runbooks/worker-enrollment-failure.md](../runbooks/worker-enrollment-failure.md), [../../codebase/structures/proliferate-worker/README.md](../../codebase/structures/proliferate-worker/README.md) |
 | Billing | Use Stripe test mode, verify checkout/portal/refill/webhook behavior, budget/credit reconciliation, and UI state after webhook delivery. | [../local/stripe-local-testing.md](../local/stripe-local-testing.md), [../../codebase/platforms/product/billing.md](../../codebase/platforms/product/billing.md) |
 | Analytics/observability | Verify events, dashboards, replay gates, alerts, release health, and support-correlation ids without leaking sensitive content. | [../analytics/README.md](../analytics/README.md) |
 | Deploy/release | Verify the exact lanes that ran, environment gates, URLs, updater manifests, TestFlight submission, E2B smoke, and release/docs ownership. | [../deploying/ci-cd.md](../deploying/ci-cd.md) |
 
 ## Regression Rules
 
-- A QA pass must include at least one real commandable smoke when the release
-  changes chat, workspace, session, runtime, cloud dispatch, agent auth,
-  billing credits, or command delivery.
+- A QA pass must include at least one real end-to-end smoke when the release
+  changes chat, workspace, session, runtime, cloud materialization, agent auth,
+  or billing credits.
 - Faux visual fixtures are acceptable for UI-only state coverage, but they do
   not prove command delivery, auth, billing, or runtime behavior.
 - For composer-adjacent Desktop changes, load the dev playground and verify the
@@ -204,8 +204,8 @@ the change crosses a shared contract.
 When QA fails:
 
 1. Capture the exact surface, profile/environment, commit SHA, app version,
-   workflow run, browser/device, user/account type, workspace id, session id,
-   command id, and request id when available.
+   workflow run, browser/device, user/account type, sandbox id, materialization
+   id, workspace id, session id, Worker id, and request id when available.
 2. Prefer stable ids and support report ids over screenshots or free-form user
    content.
 3. Check GitHub issues first when the failure resembles an existing report.

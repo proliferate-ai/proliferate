@@ -1,6 +1,9 @@
 # 06 — Automations
 
-Status: implementation-ready spec.
+Status: target
+
+Current gap: this is not the deployed automation architecture, and its command,
+exposure, and projection substrate is absent.
 
 Date: 2026-05-20.
 
@@ -8,7 +11,6 @@ Depends on: [`sandbox-provisioning.md`](../../../platforms/product/sandbox-provi
 [`mcp-skills.md`](../../../platforms/product/mcp-skills.md),
 [`agent-auth.md`](../../../platforms/product/agent-auth.md),
 [`settings-admin-ia.md`](../settings/information-architecture.md),
-[`cloud-commands.md`](../../../platforms/product/cloud-commands.md),
 [`claiming.md`](../../../platforms/product/claiming.md).
 
 Automations are scheduled or manually-triggered work that uses the

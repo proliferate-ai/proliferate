@@ -1,6 +1,10 @@
 # Workspace Pruning And Worktree Management Spec
 
-Status: implementation spec with V1 archive-prune slice implemented.
+Status: target
+
+Current gap: the target/exposure pruning and runtime reconciliation described
+here are not deployed. Current Cloud workspace behavior is documented in
+[`workspace-provisioning.md`](workspace-provisioning.md).
 
 Date: 2026-05-25
 

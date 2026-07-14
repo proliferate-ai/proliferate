@@ -1,7 +1,8 @@
 # Model Catalog And Dynamic Registries
 
-Status: reference architecture for product model catalogs, target-discovered
-model registries, model visibility, and launch-time model resolution.
+Status: target
+
+Current gap: the Worker registry projection described here is not deployed.
 
 Scope:
 
@@ -16,7 +17,6 @@ Scope:
 Related docs:
 
 - `specs/codebase/platforms/product/agent-catalog-readiness.md`
-- `specs/codebase/platforms/product/cloud-commands.md`
 - `specs/codebase/structures/frontend/README.md`
 - `specs/codebase/structures/server/README.md`
 

@@ -1,10 +1,9 @@
 # Runtime: Worker + Supervisor + Cloud — Design
 
-Status: design (identity / lifecycle / structure for the runtime tier). Companion
-to `cloud-worker-protocol-design.md` (which owns the command/reconcile/event
-*contracts* and the up/down *protocol*). This doc owns the **collapsed identity
-model**, the **three runtime components**, the **lifecycle flows**, and the
-**code structure** for worker, supervisor, and the cloud transport.
+Status: draft
+
+Current gap: the collapsed Target identity, command/event loops, and hosted
+Supervisor topology described here are absent from current code.
 
 ## 1. Decision: Collapsed Identity Model (Target = Sandbox, ephemeral)
 
