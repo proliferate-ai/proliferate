@@ -12,7 +12,7 @@ Instead, use one of the following private channels:
 
 1. **GitHub Private Vulnerability Reporting (preferred)** — open a report via the
    repository's **Security → Report a vulnerability** tab
-   ([advisories/new](../../security/advisories/new)). This keeps the discussion
+   ([advisories/new](https://github.com/proliferate-ai/proliferate/security/advisories/new)). This keeps the discussion
    private until a fix is released.
 2. **Email** — `security@proliferate.com`
 

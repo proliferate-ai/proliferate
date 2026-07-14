@@ -164,7 +164,7 @@ on the way.
   documents every required and optional setting
 
 Point the desktop app at your control plane by setting `apiBaseUrl` in
-`~/.proliferate/config.json`. Expect rough edges — [open an issue](../../issues/new/choose) or ask in
+`~/.proliferate/config.json`. Expect rough edges — [open an issue](https://github.com/proliferate-ai/proliferate/issues/new/choose) or ask in
 [Discord](https://discord.gg/7b5afMTqW) if you hit problems, and see
 [SECURITY.md](./SECURITY.md) for reporting vulnerabilities.
 

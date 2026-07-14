@@ -292,7 +292,7 @@
 - name: PROLIFERATE_SSO_OIDC_TOKEN_ENDPOINT_AUTH_METHOD
   secret: false
   default: "client_secret_basic"
-  description: OIDC token endpoint auth method: client_secret_basic, client_secret_post, or none
+  description: "OIDC token endpoint auth method: client_secret_basic, client_secret_post, or none"
   tags: [local-dev, self-hosted, production]
 
 - name: PROLIFERATE_SSO_OIDC_ALLOW_PRIVATE_PROVIDER_URLS

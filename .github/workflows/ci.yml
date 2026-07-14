@@ -48,6 +48,11 @@ jobs:
       - name: Check AnyHarness layer boundaries
         run: python3 scripts/check_anyharness_boundaries.py
 
+      - name: Check documentation integrity
+        run: |
+          python3 -m unittest scripts/test_check_docs.py
+          python3 scripts/check_docs.py
+
   ci-cd-config:
     name: CI/CD config checks
     runs-on: ubuntu-latest
