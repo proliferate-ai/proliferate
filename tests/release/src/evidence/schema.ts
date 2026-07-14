@@ -63,6 +63,92 @@ export interface TestRunReportV3 {
   };
 }
 
+/**
+ * ── Report V4 type DELTA (spec "Aggregate evidence") ──────────────────────
+ *
+ * Report V3 cannot attach proof to a green result. LOCAL-WORLD-SMOKE-1 is the
+ * first consumer that justifies V4. V4 keeps every V3 plan/result/verdict
+ * semantic and adds ONE bounded optional evidence field to each result.
+ *
+ * Only the TYPES live here (added by the contracts stage). The V4 validator
+ * (`validateReportV4`) and writer changes are owned by the evidence workstream;
+ * this stage does not implement them. Required validator behavior, verbatim, is
+ * in BRIEF.md "Evidence workstream" — summarized:
+ *   - accept `schema_version: 4`, `kind: "proliferate.test-run"`;
+ *   - reuse every V3 invariant (identity/dimension/verdict recomputation);
+ *   - each result carries `evidence: CellEvidenceV1 | null`; existing cells
+ *     emit `null` and keep V3 semantics;
+ *   - a GREEN `LOCAL-WORLD-SMOKE-1/*` result with absent/incomplete evidence is
+ *     REJECTED;
+ *   - reject unknown evidence `kind`, extra fields, unsafe strings (must pass
+ *     the same safe-string checks as identity fields), invalid/negative counts,
+ *     internally inconsistent token math (prompt+completion === total, all > 0),
+ *     non-positive spend, or a `cleanup` block with `failed > 0` /
+ *     any deletion boolean false on a green cell.
+ */
+
+/** One result's optional bounded evidence; today only the local-workspace turn. */
+export type CellEvidenceV1 = LocalWorkspaceTurnEvidenceV1;
+
+export interface LocalWorkspaceTurnEvidenceV1 {
+  kind: "local_workspace_turn";
+  artifact_ids: string[];
+  server_version: string;
+  anyharness_version: string;
+  harness: "claude";
+  model_id: string;
+  workspace_id_hash: string;
+  session_id_hash: string;
+  transcript_reopened: true;
+  litellm: {
+    token_id_hash: string;
+    request_ids: string[];
+    window_started_at: string;
+    window_finished_at: string;
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    spend_usd: number;
+  };
+  cleanup: {
+    ledger_id_hash: string;
+    registered: number;
+    reconciled: number;
+    failed: number;
+    virtual_key_deleted: boolean;
+    litellm_subjects_deleted: boolean;
+    browser_closed: boolean;
+    processes_stopped: boolean;
+    containers_removed: boolean;
+    local_paths_removed: boolean;
+  };
+}
+
+/** V4 result: a V3 result plus one bounded optional evidence attachment. */
+export interface FinalCellResultV2 extends FinalCellResultV1 {
+  evidence: CellEvidenceV1 | null;
+}
+
+/**
+ * Report V4: structurally V3 with `schema_version: 4` and evidence-bearing
+ * results. The evidence workstream promotes the writer/validator to emit and
+ * check this; V3 remains recorded history.
+ */
+export interface TestRunReportV4 extends Omit<TestRunReportV3, "schema_version" | "results"> {
+  schema_version: 4;
+  results: FinalCellResultV2[];
+}
+
+/**
+ * The report fields validated identically across V3 and V4 (everything but
+ * the version-specific `schema_version` literal and the evidence attached to
+ * each V4 result — `FinalCellResultV2` is a structural supertype-safe
+ * substitute for `FinalCellResultV1` here). `validateReportCore` is the one
+ * shared invariant walk both `validateReport` (V3) and `validateReportV4`
+ * (V4) run after their own version-specific header check.
+ */
+type ValidatableReportCore = Omit<TestRunReportV3, "schema_version">;
+
 export class ReportValidationError extends Error {
   constructor(message: string) {
     super(message);
@@ -173,7 +259,7 @@ export function sanitizeReport(report: TestRunReportV3, secretValues: readonly s
  * value. Exported for the writer-side tests; execution calls it through
  * `sanitizeReport`.
  */
-export function assertNoSecretsInIdentity(report: TestRunReportV3, secretValues: readonly string[]): void {
+export function assertNoSecretsInIdentity(report: ValidatableReportCore, secretValues: readonly string[]): void {
   const secrets = secretValues.filter((secret) => secret.length > 0);
   if (secrets.length === 0) {
     return;
@@ -205,6 +291,26 @@ export function validateReport(report: TestRunReportV3): void {
   if (report.schema_version !== 3 || report.kind !== "proliferate.test-run") {
     throw new ReportValidationError("Report must be schema_version 3, kind proliferate.test-run.");
   }
+  validateReportCore(report);
+}
+
+/**
+ * Report V4: `schema_version: 4` plus every V3 invariant, plus per-result
+ * evidence. Existing cells emit `evidence: null` and keep V3 semantics; a
+ * green `LOCAL-WORLD-SMOKE-1` result must carry complete evidence.
+ */
+export function validateReportV4(report: TestRunReportV4): void {
+  if (report.schema_version !== 4 || report.kind !== "proliferate.test-run") {
+    throw new ReportValidationError("Report must be schema_version 4, kind proliferate.test-run.");
+  }
+  validateReportCore(report);
+  for (const result of report.results) {
+    validateCellEvidence(result);
+  }
+}
+
+/** The invariant walk shared by `validateReport` (V3) and `validateReportV4`. */
+function validateReportCore(report: ValidatableReportCore): void {
   if (report.run.behavior !== "diagnostic" && report.run.behavior !== "strict") {
     throw new ReportValidationError(`Unknown behavior "${report.run.behavior}".`);
   }
@@ -390,7 +496,7 @@ export function validateReport(report: TestRunReportV3): void {
  * sanitization) and this validator use for the persisted verdict, including
  * the bounded reasons array.
  */
-export function expectedVerdict(report: TestRunReportV3): {
+export function expectedVerdict(report: ValidatableReportCore): {
   status: VerdictStatus;
   intendedExitCode: 0 | 1 | 2;
   reasons: string[];
@@ -459,4 +565,283 @@ function validateCandidateBuildEvidence(evidence: CandidateBuildEvidenceV1 | nul
       throw new ReportValidationError("candidate_build sha256 must be a lowercase 64-hex digest.");
     }
   }
+}
+
+/**
+ * ── Report V4 evidence validation ─────────────────────────────────────────
+ *
+ * Every string field below passes the same bounded, path/secret-hostile
+ * safe-token or hash pattern used for candidate-build/identity fields
+ * elsewhere in this file: no leading slash, no `..` traversal segment, no
+ * whitespace/control/URL-credential characters, bounded length. This is the
+ * fail-closed backstop for BRIEF §6.5/§6.6: if a raw secret or local path
+ * ever reached an evidence field, `sanitizeSecretsInEvidence` below turns it
+ * into a `[REDACTED]`-bearing (or otherwise unsafe) string, and these
+ * patterns then reject it rather than silently accepting mangled evidence.
+ */
+const EVIDENCE_SAFE_TOKEN_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*(?:\/[A-Za-z0-9][A-Za-z0-9._:-]*)*$/;
+const MAX_EVIDENCE_TOKEN_LENGTH = 200;
+const ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
+const MAX_LITELLM_REQUEST_IDS = 50;
+
+const LOCAL_WORKSPACE_TURN_EVIDENCE_KEYS = [
+  "kind",
+  "artifact_ids",
+  "server_version",
+  "anyharness_version",
+  "harness",
+  "model_id",
+  "workspace_id_hash",
+  "session_id_hash",
+  "transcript_reopened",
+  "litellm",
+  "cleanup",
+] as const;
+
+const LITELLM_EVIDENCE_KEYS = [
+  "token_id_hash",
+  "request_ids",
+  "window_started_at",
+  "window_finished_at",
+  "prompt_tokens",
+  "completion_tokens",
+  "total_tokens",
+  "spend_usd",
+] as const;
+
+const CLEANUP_EVIDENCE_KEYS = [
+  "ledger_id_hash",
+  "registered",
+  "reconciled",
+  "failed",
+  "virtual_key_deleted",
+  "litellm_subjects_deleted",
+  "browser_closed",
+  "processes_stopped",
+  "containers_removed",
+  "local_paths_removed",
+] as const;
+
+function requireExactKeys(value: object, expected: readonly string[], where: string): void {
+  const keys = Object.keys(value).sort();
+  const expectedSorted = [...expected].sort();
+  if (keys.join(",") !== expectedSorted.join(",")) {
+    throw new ReportValidationError(`${where} has undeclared or missing field(s).`);
+  }
+}
+
+function requireSafeEvidenceToken(where: string, value: unknown): void {
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value.length > MAX_EVIDENCE_TOKEN_LENGTH ||
+    value.includes("..") ||
+    !EVIDENCE_SAFE_TOKEN_PATTERN.test(value)
+  ) {
+    throw new ReportValidationError(`${where} is missing or unsafe.`);
+  }
+}
+
+function requireEvidenceHash(where: string, value: unknown): void {
+  if (typeof value !== "string" || !EVIDENCE_SHA256_PATTERN.test(value)) {
+    throw new ReportValidationError(`${where} must be a lowercase 64-hex digest.`);
+  }
+}
+
+function requireEvidenceTimestamp(where: string, value: unknown): void {
+  if (typeof value !== "string" || !ISO_TIMESTAMP_PATTERN.test(value) || Number.isNaN(Date.parse(value))) {
+    throw new ReportValidationError(`${where} must be an ISO-8601 UTC timestamp.`);
+  }
+}
+
+function requireNonNegativeInteger(where: string, value: unknown): void {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    throw new ReportValidationError(`${where} must be a non-negative integer.`);
+  }
+}
+
+function requireBoolean(where: string, value: unknown): void {
+  if (typeof value !== "boolean") {
+    throw new ReportValidationError(`${where} must be a boolean.`);
+  }
+}
+
+/**
+ * Validates one result's `evidence: CellEvidenceV1 | null`. `null` is always
+ * representable except on a GREEN `LOCAL-WORLD-SMOKE-1` result, which must
+ * carry complete evidence (spec "Aggregate evidence" / BRIEF §6.3).
+ */
+function validateCellEvidence(result: FinalCellResultV2): void {
+  // `evidence` is a required field of FinalCellResultV2, but the report
+  // ultimately comes from parsed JSON (`writeReportV4`'s caller may pass an
+  // externally-constructed object at runtime), so a missing key is still
+  // rejected explicitly rather than reading `undefined` as if it were `null`.
+  if (!Object.prototype.hasOwnProperty.call(result, "evidence")) {
+    throw new ReportValidationError(`Result "${result.cell_id}" must carry an explicit evidence field (or null).`);
+  }
+  const evidence = result.evidence;
+  if (evidence === null) {
+    if (result.status === "green" && result.scenario_id === "LOCAL-WORLD-SMOKE-1") {
+      throw new ReportValidationError(
+        `Green result "${result.cell_id}" for LOCAL-WORLD-SMOKE-1 requires complete evidence.`,
+      );
+    }
+    return;
+  }
+  if (typeof evidence !== "object" || Array.isArray(evidence)) {
+    throw new ReportValidationError(`Result "${result.cell_id}" evidence must be an object or null.`);
+  }
+  const where = `Result "${result.cell_id}" evidence`;
+  requireExactKeys(evidence, LOCAL_WORKSPACE_TURN_EVIDENCE_KEYS, where);
+  if (evidence.kind !== "local_workspace_turn") {
+    throw new ReportValidationError(`${where}.kind is unknown.`);
+  }
+  if (!Array.isArray(evidence.artifact_ids) || evidence.artifact_ids.length === 0) {
+    throw new ReportValidationError(`${where}.artifact_ids must be a non-empty array.`);
+  }
+  for (const [index, id] of evidence.artifact_ids.entries()) {
+    requireSafeEvidenceToken(`${where}.artifact_ids[${index}]`, id);
+  }
+  requireSafeEvidenceToken(`${where}.server_version`, evidence.server_version);
+  requireSafeEvidenceToken(`${where}.anyharness_version`, evidence.anyharness_version);
+  if (evidence.harness !== "claude") {
+    throw new ReportValidationError(`${where}.harness must be "claude".`);
+  }
+  requireSafeEvidenceToken(`${where}.model_id`, evidence.model_id);
+  requireEvidenceHash(`${where}.workspace_id_hash`, evidence.workspace_id_hash);
+  requireEvidenceHash(`${where}.session_id_hash`, evidence.session_id_hash);
+  if (evidence.transcript_reopened !== true) {
+    throw new ReportValidationError(`${where}.transcript_reopened must be true.`);
+  }
+  validateLitellmEvidence(where, evidence.litellm);
+  validateCleanupEvidence(where, evidence.cleanup, result.status);
+}
+
+function validateLitellmEvidence(where: string, litellm: LocalWorkspaceTurnEvidenceV1["litellm"]): void {
+  if (typeof litellm !== "object" || litellm === null || Array.isArray(litellm)) {
+    throw new ReportValidationError(`${where}.litellm must be an object.`);
+  }
+  requireExactKeys(litellm, LITELLM_EVIDENCE_KEYS, `${where}.litellm`);
+  requireEvidenceHash(`${where}.litellm.token_id_hash`, litellm.token_id_hash);
+  if (!Array.isArray(litellm.request_ids) || litellm.request_ids.length === 0) {
+    throw new ReportValidationError(`${where}.litellm.request_ids must be a non-empty array.`);
+  }
+  if (litellm.request_ids.length > MAX_LITELLM_REQUEST_IDS) {
+    throw new ReportValidationError(`${where}.litellm.request_ids exceeds the bounded cap of ${MAX_LITELLM_REQUEST_IDS}.`);
+  }
+  const seen = new Set<string>();
+  let previous: string | undefined;
+  for (const [index, id] of litellm.request_ids.entries()) {
+    requireSafeEvidenceToken(`${where}.litellm.request_ids[${index}]`, id);
+    if (seen.has(id)) {
+      throw new ReportValidationError(`${where}.litellm.request_ids has a duplicate entry.`);
+    }
+    seen.add(id);
+    if (previous !== undefined && id < previous) {
+      throw new ReportValidationError(`${where}.litellm.request_ids must be sorted ascending.`);
+    }
+    previous = id;
+  }
+  requireEvidenceTimestamp(`${where}.litellm.window_started_at`, litellm.window_started_at);
+  requireEvidenceTimestamp(`${where}.litellm.window_finished_at`, litellm.window_finished_at);
+  if (litellm.window_finished_at < litellm.window_started_at) {
+    throw new ReportValidationError(`${where}.litellm window_finished_at precedes window_started_at.`);
+  }
+  for (const field of ["prompt_tokens", "completion_tokens", "total_tokens"] as const) {
+    const value = litellm[field];
+    if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
+      throw new ReportValidationError(`${where}.litellm.${field} must be a positive integer.`);
+    }
+  }
+  if (litellm.prompt_tokens + litellm.completion_tokens !== litellm.total_tokens) {
+    throw new ReportValidationError(`${where}.litellm token counts are internally inconsistent.`);
+  }
+  if (typeof litellm.spend_usd !== "number" || !Number.isFinite(litellm.spend_usd) || litellm.spend_usd <= 0) {
+    throw new ReportValidationError(`${where}.litellm.spend_usd must be positive.`);
+  }
+}
+
+function validateCleanupEvidence(
+  where: string,
+  cleanup: LocalWorkspaceTurnEvidenceV1["cleanup"],
+  status: FinalTestStatus,
+): void {
+  if (typeof cleanup !== "object" || cleanup === null || Array.isArray(cleanup)) {
+    throw new ReportValidationError(`${where}.cleanup must be an object.`);
+  }
+  requireExactKeys(cleanup, CLEANUP_EVIDENCE_KEYS, `${where}.cleanup`);
+  requireEvidenceHash(`${where}.cleanup.ledger_id_hash`, cleanup.ledger_id_hash);
+  requireNonNegativeInteger(`${where}.cleanup.registered`, cleanup.registered);
+  requireNonNegativeInteger(`${where}.cleanup.reconciled`, cleanup.reconciled);
+  requireNonNegativeInteger(`${where}.cleanup.failed`, cleanup.failed);
+  const deletionFields = [
+    "virtual_key_deleted",
+    "litellm_subjects_deleted",
+    "browser_closed",
+    "processes_stopped",
+    "containers_removed",
+    "local_paths_removed",
+  ] as const;
+  for (const field of deletionFields) {
+    requireBoolean(`${where}.cleanup.${field}`, cleanup[field]);
+  }
+  // Unconditional: a failed cleanup entry is never representable, green or not.
+  if (cleanup.failed > 0) {
+    throw new ReportValidationError(`${where}.cleanup.failed must be 0 for persisted evidence.`);
+  }
+  // Green-cell rule (spec "Cleanup and failure behavior"): a green cell whose
+  // cleanup left any deletion incomplete cannot remain green evidence.
+  if (status === "green" && deletionFields.some((field) => cleanup[field] !== true)) {
+    throw new ReportValidationError(`${where}.cleanup is incomplete on a green result.`);
+  }
+}
+
+/**
+ * Applies the same redaction pipeline message fields use
+ * (`redactSecrets`/`redactUrlCredentials`/`boundMessage`) to every
+ * string-bearing evidence field before validation, per BRIEF §6.6. A raw
+ * secret or local path that somehow reached evidence is turned into a
+ * `[REDACTED]`-bearing string here, which the safe-token/hash patterns above
+ * then reject rather than silently persisting.
+ */
+export function sanitizeCellEvidence(
+  evidence: CellEvidenceV1 | null,
+  secretValues: readonly string[],
+): CellEvidenceV1 | null {
+  if (evidence === null) {
+    return null;
+  }
+  const clean = (value: string): string => boundMessage(redactUrlCredentials(redactSecrets(value, secretValues)));
+  return {
+    ...evidence,
+    artifact_ids: evidence.artifact_ids.map(clean),
+    server_version: clean(evidence.server_version),
+    anyharness_version: clean(evidence.anyharness_version),
+    model_id: clean(evidence.model_id),
+    workspace_id_hash: clean(evidence.workspace_id_hash),
+    session_id_hash: clean(evidence.session_id_hash),
+    litellm: {
+      ...evidence.litellm,
+      token_id_hash: clean(evidence.litellm.token_id_hash),
+      request_ids: evidence.litellm.request_ids.map(clean),
+    },
+    cleanup: {
+      ...evidence.cleanup,
+      ledger_id_hash: clean(evidence.cleanup.ledger_id_hash),
+    },
+  };
+}
+
+/** Applies `sanitizeCellEvidence` to every result in a V4 report. */
+export function sanitizeReportV4Evidence(
+  report: TestRunReportV4,
+  secretValues: readonly string[],
+): TestRunReportV4 {
+  return {
+    ...report,
+    results: report.results.map((result) => ({
+      ...result,
+      evidence: sanitizeCellEvidence(result.evidence, secretValues),
+    })),
+  };
 }

@@ -9,6 +9,8 @@ import type {
   ScenarioDefinition,
 } from "../scenarios/types.js";
 import { ScenarioBlockedError, ScenarioExpectedFailError } from "../scenarios/types.js";
+import type { CandidateBuildMapV1 } from "../artifacts/build-map.js";
+import type { CellEvidenceV1 } from "../evidence/schema.js";
 import { executeSelectedCells, type ExecuteOptions } from "./execute.js";
 import { buildPlannedCells } from "./plan.js";
 import type { RunIdentityV1 } from "./identity.js";
@@ -624,4 +626,53 @@ test("a collector mutating ctx.agents cannot alter the persisted invocation inpu
     }),
   );
   assert.deepEqual(report.inputs.agents, ["claude"]);
+});
+
+test("the executor threads the path-bearing candidate build map into ctx.candidateBuildMap (BRIEF §7a)", async () => {
+  const sentinelMap = { source_sha: "s".repeat(40), artifacts: [] } as unknown as CandidateBuildMapV1;
+  let seen: unknown = "unset";
+  const matrix = fakeMatrix({
+    id: "M",
+    cells: [{ child: "a" }],
+    runCells: async (ctx, cells) => {
+      seen = ctx.candidateBuildMap;
+      return cells.map((cell) => ({ cellId: cell.cell_id, status: "green" as const }));
+    },
+  });
+  await executeSelectedCells(await optionsFor([matrix], { candidateBuildMap: sentinelMap }));
+  assert.equal(seen, sentinelMap);
+});
+
+test("ctx.candidateBuildMap defaults to null when no map is supplied (BRIEF §7a)", async () => {
+  let seen: unknown = "unset";
+  const matrix = fakeMatrix({
+    id: "M",
+    cells: [{ child: "a" }],
+    runCells: async (ctx, cells) => {
+      seen = ctx.candidateBuildMap;
+      return cells.map((cell) => ({ cellId: cell.cell_id, status: "green" as const }));
+    },
+  });
+  await executeSelectedCells(await optionsFor([matrix]));
+  assert.equal(seen, null);
+});
+
+test("a matrix outcome's evidence rides into the result; a cell without evidence defaults to null (BRIEF §7b)", async () => {
+  const attached = { kind: "local_workspace_turn", harness: "claude" } as unknown as CellEvidenceV1;
+  const matrix = fakeMatrix({
+    id: "M",
+    cells: [{ child: "a" }, { child: "b" }],
+    runCells: async (_ctx, cells) =>
+      cells.map((cell, index) =>
+        index === 0
+          ? { cellId: cell.cell_id, status: "green" as const, evidence: attached }
+          : { cellId: cell.cell_id, status: "green" as const },
+      ),
+  });
+  const report = await executeSelectedCells(await optionsFor([matrix]));
+  const results = report.results as Array<{ dimensions: Record<string, string>; evidence?: unknown }>;
+  const a = results.find((result) => result.dimensions.child === "a");
+  const b = results.find((result) => result.dimensions.child === "b");
+  assert.equal(a?.evidence, attached);
+  assert.equal(b?.evidence, null);
 });

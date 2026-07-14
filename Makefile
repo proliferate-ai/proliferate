@@ -831,6 +831,88 @@ qualification-candidate-handoff-smoke:
 	cd tests/release && pnpm exec tsx src/artifacts/anyharness-smoke.ts \
 		--map .output/candidate-build.json
 
+# "Prove One Real Local Workspace Turn": one exact candidate Server, one exact
+# candidate AnyHarness, and one exact candidate Desktop renderer built,
+# handed to the qualification runner, started as an isolated local world, and
+# used through the real product UI for one cheap managed-gateway turn. This
+# is the ONE entrypoint; GitHub Actions' manual `release-e2e.yml` job invokes
+# this same target — same four operations (resolve secrets, build candidates,
+# write the candidate map, run the same TypeScript command), same code path.
+#
+# PROFILE=<unique-name>   Names this run (becomes its run id). Never reuse a
+#                         PROFILE for two concurrent invocations.
+# BEHAVIOR=diagnostic|strict
+#
+# Locally, LiteLLM access comes from an ignored, mode-0600 secret profile
+# (never committed, never printed): AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL and
+# AGENT_GATEWAY_LITELLM_MASTER_KEY. When that file has no separate
+# AGENT_GATEWAY_LITELLM_BASE_URL (admin/control-plane URL), the verified
+# public origin is mapped to it too (the public staging origin serves both
+# inference and authenticated admin routes today). In GitHub Actions
+# (GITHUB_ACTIONS=true) the same three env vars are supplied directly by the
+# protected `staging` environment's secrets/vars — this target does not read
+# or expect the local file there.
+QUALIFICATION_INFRA_ENV ?= $(HOME)/.proliferate-local/dev/qualification-infra.env
+QUALIFICATION_LOCAL_WORLD_BASE_DIR ?= $(CURDIR)/tests/release/.output/local-world
+qualification-local-workspace:
+	@test -n "$(PROFILE)" || { \
+		echo "PROFILE=<unique-name> is required, e.g. make qualification-local-workspace PROFILE=$$(whoami)-1 BEHAVIOR=diagnostic"; \
+		exit 1; \
+	}
+	@test -n "$(BEHAVIOR)" || { \
+		echo "BEHAVIOR=<diagnostic|strict> is required."; \
+		exit 1; \
+	}
+	@if [ "$$GITHUB_ACTIONS" != "true" ]; then \
+		test -f "$(QUALIFICATION_INFRA_ENV)" || { \
+			echo "Missing qualification secret profile at $(QUALIFICATION_INFRA_ENV)."; \
+			echo "It must define AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL and AGENT_GATEWAY_LITELLM_MASTER_KEY (mode 0600, never committed)."; \
+			exit 1; \
+		}; \
+		perm=$$(stat -f '%Lp' "$(QUALIFICATION_INFRA_ENV)" 2>/dev/null || stat -c '%a' "$(QUALIFICATION_INFRA_ENV)"); \
+		test "$$perm" = "600" || { \
+			echo "$(QUALIFICATION_INFRA_ENV) must be mode 0600 (got $$perm). Run: chmod 600 $(QUALIFICATION_INFRA_ENV)"; \
+			exit 1; \
+		}; \
+	fi
+	pnpm install --silent
+	pnpm exec playwright install --with-deps chromium
+	@if [ "$$GITHUB_ACTIONS" = "true" ]; then \
+		: "$${AGENT_GATEWAY_LITELLM_BASE_URL:=$$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL}"; \
+		export AGENT_GATEWAY_LITELLM_BASE_URL; \
+	else \
+		set -a; \
+		. "$(QUALIFICATION_INFRA_ENV)"; \
+		: "$${AGENT_GATEWAY_LITELLM_BASE_URL:=$$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL}"; \
+		set +a; \
+		export AGENT_GATEWAY_LITELLM_BASE_URL; \
+	fi; \
+	test -n "$$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL" || { \
+		echo "AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL is required (local: $(QUALIFICATION_INFRA_ENV); Actions: staging environment vars)."; \
+		exit 1; \
+	}; \
+	test -n "$$AGENT_GATEWAY_LITELLM_MASTER_KEY" || { \
+		echo "AGENT_GATEWAY_LITELLM_MASTER_KEY is required (local: $(QUALIFICATION_INFRA_ENV); Actions: staging environment secrets)."; \
+		exit 1; \
+	}; \
+	run_id="ql-$(PROFILE)"; \
+	shard_id="1"; \
+	run_dir="$(QUALIFICATION_LOCAL_WORLD_BASE_DIR)/$$run_id/$$shard_id"; \
+	mkdir -p "$$run_dir"; \
+	build_summary=$$(node scripts/ci-cd/build-local-qualification-candidates.mjs \
+		--run-id "$$run_id" --shard-id "$$shard_id" --run-dir "$$run_dir") || exit $$?; \
+	echo "$$build_summary"; \
+	candidate_map=$$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).candidate_build_map)' "$$build_summary"); \
+	cd tests/release && pnpm exec tsx src/cli/run.ts \
+		--behavior $(BEHAVIOR) \
+		--lane local \
+		--desktop web \
+		--agents claude \
+		--scenarios LOCAL-WORLD-SMOKE-1 \
+		--candidate-build-map "$$candidate_map" \
+		--run-id "$$run_id" --shard-id "$$shard_id" \
+		--output-dir "$$run_dir/evidence"
+
 test-cloud-ssh-worker:
 	@test -n "$(SSH_TARGET)" || { \
 		echo "SSH_TARGET is required, for example:"; \

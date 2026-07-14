@@ -12,7 +12,7 @@ import {
   type CandidateBuildEvidenceV1,
   type CandidateBuildMapV1,
 } from "../artifacts/build-map.js";
-import type { TestRunReportV3 } from "../evidence/schema.js";
+import type { FinalCellResultV2, TestRunReportV3, TestRunReportV4 } from "../evidence/schema.js";
 
 /**
  * Testable command orchestration
@@ -36,7 +36,13 @@ export interface CommandDeps {
   pushLocalGatewayAuth: () => Promise<void>;
   printEnvManifestReport: () => void;
   execute: typeof executeSelectedCells;
-  write: (outputDir: string, report: TestRunReportV3) => Promise<string>;
+  /**
+   * Writes the combined report. `command.ts` always hands this a V4 report
+   * (V3 semantics unchanged; `evidence: null` on every result that does not
+   * attach report-V4 evidence) — the caller's real implementation is
+   * `writeReportV4` (`evidence/write.ts`).
+   */
+  write: (outputDir: string, report: TestRunReportV4) => Promise<string>;
   fileIssues: (reports: readonly FailureReport[]) => Promise<string[]>;
   log: (message: string) => void;
   error: (message: string) => void;
@@ -89,10 +95,15 @@ export async function runReleaseCommand(argv: readonly string[], deps: CommandDe
   // invalid map exits 2 with zero user/gateway/provider/fixture/scenario work
   // and no report. Diagnostic omission is recorded explicitly as null.
   let candidateBuild: CandidateBuildEvidenceV1 | null = null;
+  // The full validated, path-bearing map — retained (not just its bounded
+  // evidence projection) so a world constructor can materialize the exact
+  // artifacts it names. In-memory only; never serialized into the report.
+  let candidateBuildMap: CandidateBuildMapV1 | null = null;
   if (args.candidateBuildMap !== undefined) {
     try {
       const map = await deps.loadBuildMap(args.candidateBuildMap, identity.source_sha);
       candidateBuild = toCandidateBuildEvidence(map);
+      candidateBuildMap = map;
     } catch (error) {
       deps.error(error instanceof Error ? error.message : String(error));
       return 2;
@@ -128,17 +139,22 @@ export async function runReleaseCommand(argv: readonly string[], deps: CommandDe
 
   let report: TestRunReportV3;
   try {
-    report = await deps.execute({
+    // The executor threads `candidateBuildMap` into every `ScenarioRunContext`
+    // (BRIEF §7a) so a world constructor can materialize the exact artifacts it
+    // names; it is in-memory only and never serialized into the report.
+    const executeOptions = {
       behavior: args.behavior,
-      execution: args.dryRun ? "dry_run" : "real",
+      execution: (args.dryRun ? "dry_run" : "real") as "real" | "dry_run",
       identity,
       inputs: { targetLane: args.lane, desktop: args.desktop, agents: args.agents, scenarios: args.scenarios },
       scenarios,
       cells,
       locallySeeded,
       candidateBuild,
-      log: (message) => deps.log(`  ${message}`),
-    });
+      candidateBuildMap,
+      log: (message: string) => deps.log(`  ${message}`),
+    };
+    report = await deps.execute(executeOptions);
   } catch (error) {
     if (error instanceof SelectionError || error instanceof IdentityError || error instanceof BuildMapError) {
       deps.error(error.message);
@@ -150,8 +166,23 @@ export async function runReleaseCommand(argv: readonly string[], deps: CommandDe
 
   printSummary(report, deps);
 
+  // Report V4 (spec "Aggregate evidence"): schema_version 4, plus each
+  // result's bounded evidence attachment. `ResultTracker` (runner/result.ts)
+  // always sets `evidence` (defaulting `null`), so every result already
+  // carries it at runtime even where `report.results` is still statically
+  // typed `FinalCellResultV1[]`; a scenario that never attaches evidence
+  // (every existing scenario) round-trips as `null`, unchanged V3 semantics.
+  const reportV4: TestRunReportV4 = {
+    ...report,
+    schema_version: 4,
+    results: report.results.map((result) => ({
+      ...result,
+      evidence: (result as FinalCellResultV2).evidence ?? null,
+    })),
+  };
+
   try {
-    const written = await deps.write(args.outputDir, report);
+    const written = await deps.write(args.outputDir, reportV4);
     deps.log(`Combined report written: ${written}`);
   } catch (error) {
     deps.error(error instanceof Error ? error.message : String(error));

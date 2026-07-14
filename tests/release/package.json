@@ -10,6 +10,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.13.2",
+    "playwright": "^1.61.0",
     "tsx": "^4.22.4",
     "typescript": "^5.7.0"
   }

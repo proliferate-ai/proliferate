@@ -12,7 +12,7 @@ import { fileIssuesForFailures } from "../report/issue-filer.js";
 import { resolveRunIdentity } from "../runner/identity.js";
 import { executeSelectedCells } from "../runner/execute.js";
 import { loadCandidateBuildMap } from "../artifacts/build-map.js";
-import { writeReport } from "../evidence/write.js";
+import { writeReportV4 } from "../evidence/write.js";
 
 /**
  * Thin process adapter: supplies the real side-effect dependencies to
@@ -105,6 +105,17 @@ function nonEmpty(value: string | undefined): string | undefined {
   return value && value.trim().length > 0 ? value : undefined;
 }
 
+/**
+ * Every present secret value in the full env manifest — the same set
+ * `runner/execute.ts` redacts message fields with — applied to report-V4
+ * evidence string fields before validation (BRIEF §6.6).
+ */
+function resolveManifestSecretValues(): string[] {
+  return resolveEnv(envVarNames())
+    .all.filter((entry) => entry.spec.secret && entry.value !== undefined)
+    .map((entry) => entry.value as string);
+}
+
 function printEnvManifestReport(): void {
   const resolution = resolveEnv(envVarNames());
   console.log("\nEnv manifest:");
@@ -123,7 +134,7 @@ process.exitCode = await runReleaseCommand(process.argv.slice(2), {
   pushLocalGatewayAuth,
   printEnvManifestReport,
   execute: executeSelectedCells,
-  write: writeReport,
+  write: (outputDir, report) => writeReportV4(outputDir, report, resolveManifestSecretValues()),
   fileIssues: fileIssuesForFailures,
   log: (message) => console.log(message),
   error: (message) => console.error(message),

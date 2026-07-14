@@ -1,5 +1,7 @@
 import type { EnvResolution } from "../config/env-resolution.js";
 import type { DesktopMode, RuntimeLane, TargetLane } from "../config/types.js";
+import type { CandidateBuildMapV1 } from "../artifacts/build-map.js";
+import type { CellEvidenceV1 } from "../evidence/schema.js";
 import type { PlannedCellV1, ResultReason, ScenarioDeclarableStatus } from "../runner/result.js";
 
 export interface ScenarioPlanStep {
@@ -53,6 +55,12 @@ export interface ScenarioRunContext {
   agents: readonly string[];
   dryRun: boolean;
   env: EnvResolution;
+  /**
+   * The validated, path-bearing candidate build map (in-memory only), or null
+   * when no `--candidate-build-map` was supplied. Never serialized. A world
+   * constructor materializes the exact artifacts it names (BRIEF §7a).
+   */
+  candidateBuildMap: CandidateBuildMapV1 | null;
 }
 
 export interface ScenarioPlanContext {
@@ -82,6 +90,13 @@ export interface ScenarioCellOutcome {
   cellId: string;
   status: ScenarioDeclarableStatus;
   reason?: ResultReason;
+  /**
+   * Bounded report-V4 evidence a matrix collector attaches to this cell. The
+   * runner carries it into `FinalCellResultV2.evidence` (default `null`); this
+   * is how `LOCAL-WORLD-SMOKE-1`'s green cell attaches its
+   * `LocalWorkspaceTurnEvidenceV1` (BRIEF §7b).
+   */
+  evidence?: CellEvidenceV1;
 }
 
 interface ScenarioBase {

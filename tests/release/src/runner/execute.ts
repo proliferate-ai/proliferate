@@ -9,8 +9,8 @@ import {
   type MatrixScenarioDefinition,
   type ScenarioDefinition,
 } from "../scenarios/types.js";
-import type { CandidateBuildEvidenceV1 } from "../artifacts/build-map.js";
-import type { TestRunReportV3 } from "../evidence/schema.js";
+import type { CandidateBuildEvidenceV1, CandidateBuildMapV1 } from "../artifacts/build-map.js";
+import type { CellEvidenceV1, TestRunReportV3 } from "../evidence/schema.js";
 import { expectedVerdict, sanitizeReport } from "../evidence/schema.js";
 import type { RunIdentityV1 } from "./identity.js";
 import {
@@ -53,6 +53,13 @@ export interface ExecuteOptions {
    * (cli/command.ts) owns loading and validation before any setup.
    */
   candidateBuild?: CandidateBuildEvidenceV1 | null;
+  /**
+   * The validated, path-bearing candidate build map (in-memory only), threaded
+   * verbatim into every `ScenarioRunContext` as `candidateBuildMap` so a world
+   * constructor can materialize the exact artifacts it names. Explicit null
+   * when no map was supplied. Never serialized (BRIEF §7a).
+   */
+  candidateBuildMap?: CandidateBuildMapV1 | null;
   /** Names satisfied only by this run's local durable-user seeding. */
   locallySeeded?: ReadonlySet<string>;
   /** Injectable for tests; defaults to resolveEnv over the union of required env. */
@@ -320,16 +327,25 @@ async function runAll(
       agents: [...agents],
       dryRun: false,
       env: neededEnv,
+      // The path-bearing map (or null); a world constructor materializes the
+      // exact artifacts it names. In-memory only, never serialized.
+      candidateBuildMap: options.candidateBuildMap ?? null,
     };
     const startedAt = now().toISOString();
     const startedMs = now().getTime();
-    const finish = (cellId: string, status: FinalCellResultV1["status"], reason: ResultReason | null): void =>
+    const finish = (
+      cellId: string,
+      status: FinalCellResultV1["status"],
+      reason: ResultReason | null,
+      evidence?: CellEvidenceV1 | null,
+    ): void =>
       tracker.finalize(cellId, {
         status,
         reason: reason ?? undefined,
         startedAt,
         finishedAt: now().toISOString(),
         durationMs: now().getTime() - startedMs,
+        evidence: evidence ?? null,
       });
 
     try {
@@ -386,7 +402,12 @@ function applyCollectorOutcomes(
   assigned: readonly PlannedCellV1[],
   outcomes: unknown,
   tracker: ResultTracker,
-  finish: (cellId: string, status: FinalCellResultV1["status"], reason: ResultReason | null) => void,
+  finish: (
+    cellId: string,
+    status: FinalCellResultV1["status"],
+    reason: ResultReason | null,
+    evidence?: CellEvidenceV1 | null,
+  ) => void,
 ): void {
   // Malformed collector output (null/undefined/non-array, or entries without
   // a cell id and status) is a runner-integrity failure, not a product
@@ -432,7 +453,10 @@ function applyCollectorOutcomes(
       continue;
     }
     const status = outcome.status as ScenarioDeclarableStatus;
-    finish(outcome.cellId, status, outcome.reason ?? defaultReasonFor(status));
+    // Evidence rides through verbatim; its deep validation (unknown kind, extra
+    // fields, unsafe strings, token/spend math, green-cell completeness) is the
+    // report validator's job (`validateReportV4`), not the executor's.
+    finish(outcome.cellId, status, outcome.reason ?? defaultReasonFor(status), outcome.evidence);
   }
 }
 
@@ -445,7 +469,7 @@ function applyCollectorOutcomes(
  */
 function readCollectorOutcome(
   raw: unknown,
-): { cellId: string; status: string; reason?: ResultReason } | null {
+): { cellId: string; status: string; reason?: ResultReason; evidence?: CellEvidenceV1 | null } | null {
   try {
     if (typeof raw !== "object" || raw === null) {
       return null;
@@ -453,11 +477,15 @@ function readCollectorOutcome(
     const cellId = (raw as { cellId?: unknown }).cellId;
     const status = (raw as { status?: unknown }).status;
     const reason = (raw as { reason?: unknown }).reason;
+    // Snapshot the evidence reference exactly once (a throwing getter is caught
+    // below and treated as a malformed entry). It rides through opaquely; the
+    // report validator, not the executor, judges its shape.
+    const evidence = (raw as { evidence?: unknown }).evidence as CellEvidenceV1 | null | undefined;
     if (typeof cellId !== "string" || typeof status !== "string") {
       return null;
     }
     if (reason === undefined) {
-      return { cellId, status };
+      return { cellId, status, evidence };
     }
     if (typeof reason !== "object" || reason === null) {
       return null;
@@ -481,6 +509,7 @@ function readCollectorOutcome(
         code: code as ResultReasonCode,
         message,
       },
+      evidence,
     };
   } catch {
     return null;

@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { runReleaseCommand, type CommandDeps } from "./command.js";
 import { BuildMapError, type CandidateBuildMapV1 } from "../artifacts/build-map.js";
 import type { RunIdentityV1 } from "../runner/identity.js";
-import type { TestRunReportV3 } from "../evidence/schema.js";
+import type { TestRunReportV3, TestRunReportV4 } from "../evidence/schema.js";
 import { ALL_FINAL_STATUSES, type FinalTestStatus } from "../runner/result.js";
 import type { ScenarioDefinition } from "../scenarios/types.js";
 
@@ -205,7 +205,7 @@ test("--help exits 0 without identity, map loading, or a report", async () => {
 });
 
 test("the validated map's evidence reaches execute and the written report", async () => {
-  let written: TestRunReportV3 | undefined;
+  let written: TestRunReportV4 | undefined;
   const { deps } = makeDeps();
   deps.write = async (_outputDir, report) => {
     written = report;
@@ -221,6 +221,20 @@ test("the validated map's evidence reaches execute and the written report", asyn
   });
   // The evidence that reaches the report never carries locator paths.
   assert.ok(!JSON.stringify(written?.candidate_build).includes("/tmp/anyharness"));
+});
+
+test("report V4: schema_version 4 and null evidence for a scenario that attaches none", async () => {
+  let written: TestRunReportV4 | undefined;
+  const { deps } = makeDeps();
+  deps.write = async (_outputDir, report) => {
+    written = report;
+    return "/tmp/report.json";
+  };
+  const exit = await runReleaseCommand(["--behavior", "diagnostic"], deps);
+  assert.equal(exit, 0);
+  assert.equal(written?.schema_version, 4);
+  assert.equal(written?.results.length, 1);
+  assert.equal(written?.results[0].evidence, null);
 });
 
 test("a report write failure still exits 2", async () => {
@@ -256,6 +270,33 @@ test("an invalid cell expansion exits 2 before any setup side effect and writes 
   // Identity and selection happen, planning fails; zero user/gateway/
   // provider/fixture/scenario setup and no report write follow.
   assert.deepEqual(calls, ["identity", "select"]);
+});
+
+test("the validated path-bearing candidate build map reaches execute (not just its evidence)", async () => {
+  let seenMap: unknown = "unset";
+  const { deps } = makeDeps();
+  deps.execute = async (options) => {
+    seenMap = (options as unknown as { candidateBuildMap?: unknown }).candidateBuildMap;
+    return fakeReport(options.candidateBuild ?? null);
+  };
+  const exit = await runReleaseCommand(
+    ["--behavior", "diagnostic", "--candidate-build-map", "/tmp/map.json"],
+    deps,
+  );
+  assert.equal(exit, 0);
+  assert.deepEqual(seenMap, VALID_MAP);
+});
+
+test("diagnostic omission threads a null candidateBuildMap to execute", async () => {
+  let seenMap: unknown = "unset";
+  const { deps } = makeDeps();
+  deps.execute = async (options) => {
+    seenMap = (options as unknown as { candidateBuildMap?: unknown }).candidateBuildMap;
+    return fakeReport(options.candidateBuild ?? null);
+  };
+  const exit = await runReleaseCommand(["--behavior", "diagnostic"], deps);
+  assert.equal(exit, 0);
+  assert.equal(seenMap, null);
 });
 
 test("planning happens after map validation and before setup in the dependency order", async () => {

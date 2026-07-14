@@ -346,3 +346,65 @@ jobs:
           path: tests/release/.output/
           retention-days: 7
           if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # Local-world smoke — "Prove One Real Local Workspace Turn": builds one
+  # exact candidate Server, one exact candidate AnyHarness, and one exact
+  # candidate Desktop renderer; starts them as an isolated local world; and
+  # drives one real cheap managed-gateway turn through the actual product UI
+  # (the LOCAL-WORLD-SMOKE-1 cell). This is a provisional infrastructure
+  # proof, not the canonical LOCAL-2 guarantee.
+  #
+  # `workflow_dispatch` only while stability is established (no `schedule`
+  # trigger yet) — unlike the two lanes above, this job is NOT
+  # `continue-on-error`: a red command here stays red, with its real exit
+  # code. It runs `make qualification-local-workspace`, the exact same
+  # entrypoint a laptop uses; only the LiteLLM input source differs (the
+  # protected `staging` GitHub environment's vars/secrets, never the ignored
+  # local secret profile, and never routed to arbitrary pull-request code).
+  release-e2e-local-world-smoke:
+    name: local-world-smoke-1 (manual, strict)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: staging
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "."
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the three exact candidates and run LOCAL-WORLD-SMOKE-1 (strict)
+        env:
+          # Mapped from the protected `staging` environment. The public
+          # origin also covers AGENT_GATEWAY_LITELLM_BASE_URL when no
+          # separate control-plane URL variable exists yet (Makefile default
+          # mapping) — arbitrary PR code never runs this job or sees these.
+          AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL: ${{ vars.AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL }}
+          AGENT_GATEWAY_LITELLM_MASTER_KEY: ${{ secrets.LITELLM_MASTER_KEY }}
+        run: |
+          set -euo pipefail
+          make qualification-local-workspace \
+            PROFILE="ci-${{ github.run_id }}-${{ github.run_attempt }}" \
+            BEHAVIOR=strict
+
+      - name: Upload V4 report and bounded diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-world-smoke-1-evidence
+          path: |
+            tests/release/.output/local-world/*/*/evidence/
+            tests/release/.output/local-world/*/*/logs/
+          retention-days: 7
+          if-no-files-found: ignore

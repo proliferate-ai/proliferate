@@ -1,4 +1,10 @@
 import type { RuntimeLane } from "../config/types.js";
+// Type-only: evidence/schema.ts imports value bindings (ALL_FINAL_STATUSES,
+// deriveVerdict) from this module, but this import is erased at compile time
+// (isolatedModules + `import type`), so no runtime import cycle exists.
+// `FinalCellResultV2`/`CellEvidenceV1` are owned by schema.ts (report V4);
+// this module only threads the value through the tracker.
+import type { CellEvidenceV1, FinalCellResultV2 } from "../evidence/schema.js";
 
 /**
  * Cell state, finalization invariants, behavior policy, verdict, and intended
@@ -112,16 +118,27 @@ export interface Finalization {
   finishedAt?: string;
   durationMs?: number | null;
   planSteps?: string[];
+  /**
+   * Bounded report-V4 evidence for this cell (spec "Aggregate evidence").
+   * Optional; defaults to `null`, matching V3 semantics for every scenario
+   * that does not attach evidence.
+   */
+  evidence?: CellEvidenceV1 | null;
 }
 
 /**
  * Tracks one pending slot per planned cell and enforces the finalization
  * invariants: exactly one final result per planned cell, first accepted
  * result wins, duplicates and missing results are integrity errors.
+ *
+ * Every result this tracker produces is V2-shaped (carries an `evidence`
+ * field, defaulting to `null`) so `FinalCellResultV2.evidence` (report V4)
+ * is always present at runtime, even though most call sites still read the
+ * V1 shape.
  */
 export class ResultTracker {
   private readonly selected: readonly PlannedCellV1[];
-  private readonly results = new Map<string, FinalCellResultV1>();
+  private readonly results = new Map<string, FinalCellResultV2>();
   readonly integrityErrors: IntegrityErrorV1[] = [];
   readonly runnerErrors: RunnerErrorV1[] = [];
 
@@ -177,6 +194,7 @@ export class ResultTracker {
       duration_ms: finalization.durationMs ?? null,
       reason: finalization.reason ?? null,
       plan_steps: finalization.planSteps ?? [],
+      evidence: finalization.evidence ?? null,
     });
   }
 
@@ -184,7 +202,7 @@ export class ResultTracker {
    * Synthesizes `missing` for any planned cell with no recorded outcome and
    * records the integrity error; returns every result in selection order.
    */
-  finalizeRun(execution: "real" | "dry_run"): FinalCellResultV1[] {
+  finalizeRun(execution: "real" | "dry_run"): FinalCellResultV2[] {
     for (const cell of this.pendingCells()) {
       this.integrityErrors.push({
         code: "selection_result_mismatch",

@@ -70,6 +70,48 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     lanes: ["local"],
   },
   {
+    name: "AGENT_GATEWAY_LITELLM_BASE_URL",
+    description:
+      "Admin/control-plane base URL of the qualification LiteLLM gateway. LOCAL-WORLD-SMOKE-1's " +
+      "private world controller uses it (with the master key) to preflight admin reachability, " +
+      "resolve the actor's run-created virtual key, snapshot/correlate spend, and delete the " +
+      "run-created key/user/team on cleanup. Never exposed to AnyHarness (only the public URL is) " +
+      "and never serialized into evidence.",
+    whereItLives:
+      "Local: the ignored mode-0600 qualification profile " +
+      "`~/.proliferate-local/dev/qualification-infra.env` — the Makefile wrapper maps " +
+      "AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL to this when the separate control URL is absent. " +
+      "CI: the GitHub `staging` environment's LiteLLM public-URL variable, mapped to this input.",
+    secret: false,
+    lanes: ["local"],
+  },
+  {
+    name: "AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL",
+    description:
+      "Public inference base URL of the qualification LiteLLM gateway. This is the only gateway URL " +
+      "handed to the candidate Server / AnyHarness (as the managed-gateway endpoint the actor's " +
+      "enrollment key is used against); the admin URL and master key stay inside the world " +
+      "controller.",
+    whereItLives:
+      "Local: `~/.proliferate-local/dev/qualification-infra.env` (mode 0600). " +
+      "CI: `vars.AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL` in the GitHub `staging` environment.",
+    secret: false,
+    lanes: ["local"],
+  },
+  {
+    name: "AGENT_GATEWAY_LITELLM_MASTER_KEY",
+    description:
+      "Master key for the qualification LiteLLM gateway's admin API, used only inside the private " +
+      "world controller and passed only into the candidate Server container env. Never reaches the " +
+      "runner report, the renderer, AnyHarness, or any evidence field (stripped by the candidate " +
+      "child env denylist and redacted from the report).",
+    whereItLives:
+      "Local: `~/.proliferate-local/dev/qualification-infra.env` (mode 0600). " +
+      "CI: `secrets.LITELLM_MASTER_KEY` in the GitHub `staging` environment, mapped to this input.",
+    secret: true,
+    lanes: ["local"],
+  },
+  {
     name: "RELEASE_E2E_E2B_API_KEY",
     description:
       "E2B API key used to provision sandbox-lane cloud workspaces and to build/upload " +
