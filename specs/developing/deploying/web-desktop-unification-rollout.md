@@ -37,8 +37,8 @@ canonical feature spec are the durable handoff.
 
 Current handoff:
 
-- Current PR: Route Shared Persistence and Telemetry Through ProductHost — review.
-- Next PR: Prove ProductClient Extraction Mechanics — provisional.
+- Current PR: Prove ProductClient Extraction Mechanics — implementation.
+- Next PR: Move the Desktop Product into ProductClient — provisional.
 
 - Repository: `proliferate-ai/proliferate`.
 - Canonical contract:
@@ -73,8 +73,14 @@ Current handoff:
   merge `06bf880a1b98c6694bcf029badcc9fe5823111de`.
 - Route Shared Persistence and Telemetry Through ProductHost contract:
   `specs/codebase/features/web-desktop-client-unification-d1f.md`, exact
-  implementation base `06bf880a1b98c6694bcf029badcc9fe5823111de`.
-- Current role: review. Material scope changes are decided with the
+  implementation base `06bf880a1b98c6694bcf029badcc9fe5823111de`, final PR #1182
+  merge `f93afce8190bba943277d588c9bfb0d051c615c9`.
+- Prove ProductClient Extraction Mechanics contract:
+  `specs/codebase/features/web-desktop-client-unification-d1g.md`, exact
+  implementation base `f93afce8190bba943277d588c9bfb0d051c615c9`. Supporting
+  artifacts: `specs/codebase/features/web-desktop-product-client-entry-contract.md`
+  and `specs/codebase/features/web-desktop-product-client-move-ledger.md`.
+- Current role: implementation. Material scope changes are decided with the
   founder and recorded before the slice broadens.
 
 | Slice | Outcome | Final evidence | State |
@@ -88,8 +94,8 @@ Current handoff:
 | Desktop Local Runtime Adoption | Route product-owned local AnyHarness discovery, restart, readiness, and connection through the Desktop bridge while raw sidecar/process startup remains Desktop-owned. | [`web-desktop-client-unification-d1c.md`](../../codebase/features/web-desktop-client-unification-d1c.md); PR #1167 merge `36e96e7bea1c409dfde1797b3a691003f82d8f5a` | Complete |
 | Finish the Desktop Capability Boundary | Route real remaining Desktop-only product consumers plus shared links/clipboard through the mounted host while native implementations stay Desktop-owned. | [`web-desktop-client-unification-d1d.md`](../../codebase/features/web-desktop-client-unification-d1d.md), base `66f45bfbe2839ae1382133393844ba61dce035cd`; PR #1168 merge `de249faf06c629e094c20e33f94f33d4e6c4c8f2` | Complete |
 | Route Shared Identity and Navigation Through ProductHost | Read normalized auth identity/operations, deployment base URL, and the single Cloud client through the host; close the ordered-query-pairs and fragment/callback contract gaps; route each inbound deep link through one lossless `ProductEntry` lifecycle and delete the legacy parallel navigation decoder. | [`web-desktop-client-unification-d1e.md`](../../codebase/features/web-desktop-client-unification-d1e.md), base `0eab251fd35d26022165f7f0852db2885a8c4093`; PR #1180 merge `06bf880a1b98c6694bcf029badcc9fe5823111de` | Complete |
-| Route Shared Persistence and Telemetry Through ProductHost | Re-back product storage onto the existing Tauri store and route movable product persistence through `host.storage` with zero migration; route product telemetry identity/tags/route-classification/single `screen_viewed`/capture through the typed `host.telemetry` facade; make the Query client product-owned with injected capture; split the mount into host-owned `DesktopHostProviders`, `ProductProviderRoot`, and `ProductLifecycleRoot`. | [`web-desktop-client-unification-d1f.md`](../../codebase/features/web-desktop-client-unification-d1f.md), base `06bf880a1b98c6694bcf029badcc9fe5823111de` | Review |
-| Prove ProductClient Extraction Mechanics | Prove the host mount envelope, compiled assets/builds, move ledger/import codemod, minimal browser host, and fail-closed migration boundaries before the source move. | Shape the exact checklist from the persistence/telemetry diff. | Directional |
+| Route Shared Persistence and Telemetry Through ProductHost | Re-back product storage onto the existing Tauri store and route movable product persistence through `host.storage` with zero migration; route product telemetry identity/tags/route-classification/single `screen_viewed`/capture through the typed `host.telemetry` facade; make the Query client product-owned with injected capture; split the mount into host-owned `DesktopHostProviders`, `ProductProviderRoot`, and `ProductLifecycleRoot`. | [`web-desktop-client-unification-d1f.md`](../../codebase/features/web-desktop-client-unification-d1f.md), base `06bf880a1b98c6694bcf029badcc9fe5823111de`; PR #1182 merge `f93afce8190bba943277d588c9bfb0d051c615c9` | Complete |
+| Prove ProductClient Extraction Mechanics | Prove the host mount envelope, compiled assets/builds, move ledger/import codemod, minimal browser host, and fail-closed migration boundaries before the source move. | [`web-desktop-client-unification-d1g.md`](../../codebase/features/web-desktop-client-unification-d1g.md), base `f93afce8190bba943277d588c9bfb0d051c615c9` | Implementation |
 | Mechanical Desktop extraction | Move the working Desktop product into ProductClient and leave Desktop as a thin native host. | Exact file ledger, landing window, codemod, builds, and behavior proof required. | Directional |
 | Legacy Web replacement | Delete the duplicate Web product and mount the same ProductClient from a thin browser host with `desktop: null`. | Browser host/auth contract and shared-product proof required. | Directional |
 | Hosted Web qualification and cutover | Qualify both hosts, Web performance, managed-cloud flows, and every external callback/return producer. | §10 external-configuration gate applies. | Directional |
@@ -279,16 +285,27 @@ under the prior founder-approved waiver for base-identical `pretest` violations
 in unchanged files; its 13 failures were confirmed pre-existing and
 byte-identical at base `06bf880a1`.
 
-The complete living contract is
+The complete contract is
 [`web-desktop-client-unification-d1f.md`](../../codebase/features/web-desktop-client-unification-d1f.md).
+It merged in PR #1182 at `f93afce8190bba943277d588c9bfb0d051c615c9`.
 
-## 8. Prove ProductClient Extraction Mechanics — provisional Web baseline
+## 8. Prove ProductClient Extraction Mechanics — landed mechanics record
 
 This slice proves the extraction toolchain (host mount envelope, compiled
 assets/builds, move ledger/import codemod, minimal browser host, fail-closed
 boundaries) without moving Desktop product source. It also lands the
 deterministic legacy-Web bundle collector required by founder decision 7 and
-records the provisional baseline below.
+records the provisional baseline below. The complete living contract is
+[`web-desktop-client-unification-d1g.md`](../../codebase/features/web-desktop-client-unification-d1g.md);
+the recorded application-entry contract is
+[`web-desktop-product-client-entry-contract.md`](../../codebase/features/web-desktop-product-client-entry-contract.md)
+and the checked move ledger (2220 files; move=2069, split=20, retain=130,
+delete=1) is
+[`web-desktop-product-client-move-ledger.md`](../../codebase/features/web-desktop-product-client-move-ledger.md).
+The qualification builds serve 21 emitted browser-host asset URLs at HTTP 200
+with the lazy authenticated split verified on both hosts, and the import codemod
+is deterministic and idempotent (5653 rewrites across 1601 files, byte-identical
+`--check`/`--apply`, empty second run) — full evidence is in d1g.
 
 The exact implementation base is
 `f93afce8190bba943277d588c9bfb0d051c615c9` (PR #1182 merge, the Route Shared

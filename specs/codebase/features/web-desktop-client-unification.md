@@ -643,17 +643,35 @@ lossless `ProductEntry` (the legacy parallel navigation decoder is deleted).
 Product source remains in Desktop. The complete contract is
 [`web-desktop-client-unification-d1e.md`](web-desktop-client-unification-d1e.md).
 
-Route Shared Persistence and Telemetry Through ProductHost is the current
-implementation slice. It re-backs `desktopProductStorage` onto the existing
-Tauri preferences store and routes movable product persistence through
-`host.storage` with zero migration of existing values, routes product telemetry
+Route Shared Persistence and Telemetry Through ProductHost is complete at PR
+#1182 merge `f93afce8190bba943277d588c9bfb0d051c615c9`. It re-backs
+`desktopProductStorage` onto the existing Tauri preferences store and routes
+movable product persistence through `host.storage` with zero migration of
+existing values, routes product telemetry
 identity/tags/route-classification/exception-capture and the single
 `screen_viewed` through a product-owned `useProductTelemetry` facade backed by
 `host.telemetry`, makes the Query client product-owned with injected exception
 capture, and splits the mount into a host-owned `DesktopHostProviders`, a
 product `ProductProviderRoot`, and a product `ProductLifecycleRoot`. Product
-source remains in Desktop. The complete living contract is
+source remains in Desktop. The complete contract is
 [`web-desktop-client-unification-d1f.md`](web-desktop-client-unification-d1f.md).
+
+Prove ProductClient Extraction Mechanics is the current implementation slice
+(base `f93afce8190bba943277d588c9bfb0d051c615c9`). Without moving any Desktop
+product source, it records and qualifies the ProductClient application-entry
+contract (public `ProductClient({ RoutesComponent })`, `#product/*` package
+imports, lazy public-shell/authenticated split) via a build-only canary,
+compiles that canary through a Desktop qualification build and a minimal browser
+host (`desktop: null`) with every emitted resource URL served at HTTP 200,
+checks the complete 2220-file `move`/`split`/`retain`/`delete` ledger, proves a
+deterministic idempotent import codemod on a disposable copy, and lands the
+deterministic legacy-Web bundle collector with a provisional baseline. The
+reserved real files are not created. The complete living contract is
+[`web-desktop-client-unification-d1g.md`](web-desktop-client-unification-d1g.md);
+the recorded entry contract is
+[`web-desktop-product-client-entry-contract.md`](web-desktop-product-client-entry-contract.md)
+and the move ledger is
+[`web-desktop-product-client-move-ledger.md`](web-desktop-product-client-move-ledger.md).
 
 Related authoritative docs:
 
