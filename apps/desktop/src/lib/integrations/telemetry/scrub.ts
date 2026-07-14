@@ -2,6 +2,7 @@ import type * as Sentry from "@sentry/react";
 import type { Breadcrumb, ErrorEvent } from "@sentry/react";
 import {
   scrubTelemetryData as scrubSharedTelemetryData,
+  scrubTelemetryEvent as scrubSharedTelemetryEvent,
   scrubTelemetryText,
 } from "@proliferate/product-domain/telemetry/scrub";
 import type { CaptureResult } from "posthog-js/lib/src/types";
@@ -99,7 +100,7 @@ type SentryEventPayload = {
 };
 
 function scrubSentryEventPayload(event: SentryEventPayload): SentryEventPayload {
-  const scrubbed = scrubTelemetryData(event);
+  const scrubbed = scrubSharedTelemetryEvent(event);
   scrubbed.transaction = scrubbed.transaction
     ? scrubTelemetryText(scrubbed.transaction)
     : scrubbed.transaction;

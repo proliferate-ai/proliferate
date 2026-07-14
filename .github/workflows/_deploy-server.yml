@@ -141,22 +141,28 @@ jobs:
           echo "short_sha=$short_sha" >> "$GITHUB_OUTPUT"
 
       # Version pins stamped into the image and reported by /health and /meta.
-      # serverVersion comes from the root VERSION file; desktop/runtime/worker
-      # pins from their tracked package manifests at this commit.
+      # The canonical hosted release version is the root VERSION file, which must
+      # agree with anyharness/sdk/package.json. Server, runtime, and worker pins
+      # all use that canonical value: the worker/supervisor Cargo package version
+      # is a stale `0.1.0` and must never become a hosted `/meta` pin. Desktop
+      # keeps its own tracked package version.
       - name: Resolve version pins
         id: pins
         run: |
           set -euo pipefail
           server_version="$(cat VERSION)"
-          desktop_version="$(jq -r '.version' apps/desktop/package.json)"
           runtime_version="$(jq -r '.version' anyharness/sdk/package.json)"
-          worker_version="$(sed -n 's/^version = "\([^"]*\)"$/\1/p' anyharness/crates/proliferate-worker/Cargo.toml | head -n 1)"
-          : "${worker_version:?Failed to read the proliferate-worker crate version.}"
+          if [ "$server_version" != "$runtime_version" ]; then
+            echo "Canonical version mismatch: VERSION=${server_version} but anyharness/sdk/package.json=${runtime_version}. They must agree for hosted release pins." >&2
+            exit 1
+          fi
+          canonical_version="$server_version"
+          desktop_version="$(jq -r '.version' apps/desktop/package.json)"
           {
-            echo "server_version=${server_version}"
+            echo "server_version=${canonical_version}"
             echo "desktop_version=${desktop_version}"
-            echo "runtime_version=${runtime_version}"
-            echo "worker_version=${worker_version}"
+            echo "runtime_version=${canonical_version}"
+            echo "worker_version=${canonical_version}"
             echo "min_desktop_version=${desktop_version}"
           } >> "$GITHUB_OUTPUT"
 
@@ -269,14 +275,12 @@ jobs:
               {"name":"SANDBOX_PROVIDER","value":"e2b"},
               {"name":"E2B_TEMPLATE_NAME","value":$e2b},
               {"name":"SERVER_GIT_SHA","value":$git},
-              {"name":"ANYHARNESS_GIT_SHA","value":$git},
               {"name":"PROLIFERATE_TELEMETRY_MODE","value":"hosted_product"},
+              {"name":"PROLIFERATE_REQUIRE_RELEASE_IDENTITY","value":"1"},
               {"name":"SENTRY_ENVIRONMENT","value":$environment},
               {"name":"SENTRY_RELEASE","value":$release},
               {"name":"CLOUD_RUNTIME_SENTRY_ENVIRONMENT","value":$environment},
-              {"name":"CLOUD_RUNTIME_SENTRY_RELEASE","value":$release},
               {"name":"CLOUD_TARGET_SENTRY_ENVIRONMENT","value":$environment},
-              {"name":"CLOUD_TARGET_SENTRY_RELEASE","value":$release},
               {"name":"SUPPORT_REPORT_S3_BUCKET","value":$support_report_bucket},
               {"name":"SUPPORT_REPORT_S3_PREFIX","value":$support_report_prefix},
               {"name":"SUPPORT_REPORT_S3_REGION","value":$support_report_region},
@@ -344,10 +348,17 @@ jobs:
             (.environment // []) as $current
             | ($updates[0] | map(.name)) as $updated_names
             | ["SUPPORT_GITHUB_APP_PRIVATE_KEY", "SUPPORT_LINEAR_API_KEY", "SUPPORT_FEED_BEARER_TOKEN"] as $secret_names
+            # Stale runtime-identity overrides the server never re-authors. The
+            # task definition is merged from the previous revision, so dropping
+            # our own assignments is not enough: any inherited copy must be
+            # stripped here or it survives forever. Kept in lockstep with the
+            # ASSERT_JQ forbidden-name check below.
+            | ["SERVER_VERSION", "ANYHARNESS_VERSION", "ANYHARNESS_GIT_SHA", "E2B_TEMPLATE_VERSION", "CLOUD_RUNTIME_SENTRY_RELEASE", "CLOUD_TARGET_SENTRY_RELEASE", "E2B_RUNTIME_SENTRY_RELEASE"] as $forbidden_names
             | ($current | map(select(
                 .name as $name
                 | ($updated_names | index($name) | not)
                 and ($secret_names | index($name) | not)
+                and ($forbidden_names | index($name) | not)
               ))) + $updates[0];
 
           def merge_secrets($updates):
@@ -378,6 +389,9 @@ jobs:
           cat > assert-task.jq <<'ASSERT_JQ'
           def feed_secrets($c): [ $c.secrets[]? | select(.name == "SUPPORT_FEED_BEARER_TOKEN") ];
           def feed_plain($c): [ $c.environment[]? | select(.name == "SUPPORT_FEED_BEARER_TOKEN") ];
+          def forbidden_names: ["SERVER_VERSION", "ANYHARNESS_VERSION", "ANYHARNESS_GIT_SHA", "E2B_TEMPLATE_VERSION", "CLOUD_RUNTIME_SENTRY_RELEASE", "CLOUD_TARGET_SENTRY_RELEASE", "E2B_RUNTIME_SENTRY_RELEASE"];
+          def stale_vars($c): [ $c.environment[]? | select(.name as $n | forbidden_names | index($n)) ];
+          def strict_identity($c): [ $c.environment[]? | select(.name == "PROLIFERATE_REQUIRE_RELEASE_IDENTITY" and .value == "1") ];
           ([ .containerDefinitions[] | select(.name == $container) ]) as $matches
           | if ($matches | length) != 1 then
               error("expected exactly one \($container) container, found \($matches | length)")
@@ -385,6 +399,8 @@ jobs:
           | $matches[0] as $c
           | (feed_secrets($c)) as $secrets
           | (feed_plain($c)) as $plain
+          | (stale_vars($c)) as $stale
+          | (strict_identity($c)) as $strict
           | if ($secrets | length) != 1 then
               error("expected exactly one SUPPORT_FEED_BEARER_TOKEN ECS secret, found \($secrets | length)")
             elif ($plain | length) != 0 then
@@ -393,6 +409,10 @@ jobs:
               error("SUPPORT_FEED_BEARER_TOKEN must reference a Secrets Manager secret ARN")
             elif (($secrets[0].valueFrom // "") | endswith(":supportFeedToken::") | not) then
               error("SUPPORT_FEED_BEARER_TOKEN must project the supportFeedToken field")
+            elif ($stale | length) != 0 then
+              error("stale runtime-identity variables must not remain: \($stale | map(.name) | join(", "))")
+            elif ($strict | length) != 1 then
+              error("PROLIFERATE_REQUIRE_RELEASE_IDENTITY=1 must be set for strict hosted release identity")
             else empty end
           ASSERT_JQ
 

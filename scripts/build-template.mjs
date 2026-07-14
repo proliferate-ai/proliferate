@@ -7,6 +7,13 @@ import os from "node:os";
 import path from "node:path";
 
 const REPO_ROOT = path.join(import.meta.dirname, "..");
+const RUNTIME_SDK_PACKAGE_JSON = path.join(REPO_ROOT, "anyharness", "sdk", "package.json");
+// A release version segment: semver, optionally with a pre-release suffix.
+const RUNTIME_VERSION_RE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+// Versions that indicate an unstamped/degraded build; a production runtime
+// bundle must never carry any of these.
+const PLACEHOLDER_VERSIONS = new Set(["0.0.0", "0.0.0-dev", "0.1.0"]);
+const FULL_GIT_SHA_RE = /^[0-9a-f]{40}$/;
 const DEFAULT_BUILD_TARGET = "x86_64-unknown-linux-musl";
 const DEV_TEMPLATE_CPU_COUNT = 4;
 const DEV_TEMPLATE_MEMORY_MB = 8192;
@@ -225,8 +232,64 @@ function resolveBinaryPath({ explicitBinaryPath, binaryName, displayName, envNam
   );
 }
 
+/**
+ * The canonical runtime version, read from `anyharness/sdk/package.json`. This
+ * is the single source the immutable-template build stamps into all three
+ * binaries; a missing or placeholder version is rejected so a production build
+ * can never fall back to a crate's stale `0.1.0`.
+ */
+function readCanonicalRuntimeVersion() {
+  let parsed;
+  try {
+    parsed = JSON.parse(fs.readFileSync(RUNTIME_SDK_PACKAGE_JSON, "utf8"));
+  } catch (error) {
+    throw new Error(
+      `Failed to read runtime version from ${RUNTIME_SDK_PACKAGE_JSON}: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+  }
+  const version = typeof parsed.version === "string" ? parsed.version.trim() : "";
+  if (!RUNTIME_VERSION_RE.test(version) || PLACEHOLDER_VERSIONS.has(version)) {
+    throw new Error(
+      `anyharness/sdk/package.json version is missing or non-release: ${JSON.stringify(parsed.version)}`
+    );
+  }
+  return version;
+}
+
+/**
+ * The full 40-character SHA of the exact checked-out revision. Prefers an
+ * explicit `PROLIFERATE_BUILD_SHA`/`GIT_SHA` (set by the deploy workflow), else
+ * resolves `git rev-parse HEAD`. A missing or malformed SHA is rejected so the
+ * stamped Sentry release always carries a deterministic commit.
+ */
+function resolveBuildSha() {
+  const explicit = (process.env.PROLIFERATE_BUILD_SHA || process.env.GIT_SHA || "")
+    .trim()
+    .toLowerCase();
+  let resolved = explicit;
+  if (!resolved) {
+    const gitResult = spawnSync("git", ["rev-parse", "HEAD"], {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+    });
+    resolved = (gitResult.stdout || "").trim().toLowerCase();
+  }
+  if (!FULL_GIT_SHA_RE.test(resolved)) {
+    throw new Error(
+      `Could not resolve a full 40-character git SHA for the runtime build (got ${JSON.stringify(resolved)}).`
+    );
+  }
+  return resolved;
+}
+
 function rebuildRuntimeBundle() {
-  console.log("Rebuilding Linux runtime bundle artifacts...");
+  const buildVersion = readCanonicalRuntimeVersion();
+  const buildSha = resolveBuildSha();
+  console.log(
+    `Rebuilding Linux runtime bundle artifacts (version ${buildVersion}, sha ${buildSha.slice(0, 12)})...`
+  );
   const result = spawnSync(
     "cargo",
     [
@@ -244,7 +307,13 @@ function rebuildRuntimeBundle() {
     {
       cwd: REPO_ROOT,
       stdio: "inherit",
-      env: process.env,
+      // Stamp the exact version + SHA into all three binaries in this single
+      // build (build.rs reads these and fails closed on a malformed SHA).
+      env: {
+        ...process.env,
+        PROLIFERATE_BUILD_VERSION: buildVersion,
+        PROLIFERATE_BUILD_SHA: buildSha,
+      },
     }
   );
 

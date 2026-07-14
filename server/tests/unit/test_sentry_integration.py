@@ -194,6 +194,35 @@ def _init_and_capture_release(monkeypatch: pytest.MonkeyPatch) -> str:
     return release
 
 
+def test_scrub_event_preserves_top_level_deployment_environment() -> None:
+    # Top-level `environment` is deployment identity and must survive, while a
+    # nested `environment` value and a raw env map stay redacted.
+    scrubbed = sentry_integration._scrub_event(
+        {
+            "environment": "production",
+            "tags": {"environment": "prod"},
+            "extra": {"env": {"SECRET_TOKEN": "value"}},
+        },
+        {},
+    )
+
+    assert scrubbed is not None
+    assert scrubbed["environment"] == "production"
+    assert scrubbed["tags"]["environment"] == "[redacted]"
+    assert scrubbed["extra"]["env"] == "[redacted]"
+
+
+def test_scrub_event_scrubs_preserved_environment_as_text() -> None:
+    # An abusive environment string is still scrubbed as text before it survives.
+    scrubbed = sentry_integration._scrub_event(
+        {"environment": "Bearer secret-token /Users/pablo/proliferate"},
+        {},
+    )
+
+    assert scrubbed is not None
+    assert scrubbed["environment"] == "[redacted-token] [redacted-path]"
+
+
 def test_init_prefers_configured_canonical_server_release(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
