@@ -1,11 +1,12 @@
-# QA
+# Manual Release QA
 
-Status: authoritative entry point for release QA and manual verification.
+Status: authoritative procedure for release QA and manual verification.
 
-Use this folder for release QA process, smoke matrices, surface-specific
-manual checks, and final QA reporting. Feature-specific acceptance criteria
-stay in the owning feature or primitive spec under `specs/codebase/**`; this
-runbook owns how an operator plans, executes, records, and reports a QA pass.
+Use this procedure for manual release QA: release intake, smoke matrices,
+surface-specific manual checks, and final QA reporting. Feature-specific
+acceptance criteria stay in the owning feature or primitive spec under
+`specs/codebase/**`; this runbook owns how an operator plans, executes,
+records, and reports a QA pass.
 
 ## Read Order
 
@@ -49,8 +50,8 @@ Required tools and surfaces:
 - Browser or Chrome access with the right logged-in profile for local Web,
   Desktop renderer, GitHub, Stripe, PostHog, Sentry, Customer.io, Metabase,
   Vercel, Expo, Apple, or AWS dashboards.
-- Local dev profiles through `make dev-init PROFILE=<name>` and
-  `make dev PROFILE=<name>`.
+- Local dev profiles through `make setup PROFILE=<name>` and
+  `make run PROFILE=<name>`.
 - Stripe CLI when billing checkout, portal, subscription, refill, meter, or
   webhook behavior is in scope.
 - Expo/EAS and an iOS/Android simulator or device when native mobile behavior,
@@ -77,14 +78,15 @@ Required permissions:
   correlation.
 - AWS/Vercel/E2B/Expo/App Store Connect access only for the surfaces that the
   release or incident actually touches.
+- Production and provider verification is read-only unless an approved
+  runbook and explicit authorization permit a write.
 
 Secrets policy:
 
 - Do not paste secret values, refresh tokens, cookies, auth headers, private
   keys, Sentry DSNs, Stripe keys, webhook secrets, GitHub App private keys,
   Apple credentials, or AWS credentials into chat, PRs, issues, docs, or logs.
-- Local env files are QA fixtures and must remain uncommitted:
-  `.env`, `.env.local`, `.env.*`, `server/.env`, and `server/.env.local`.
+- Credential-bearing files must remain uncommitted.
 - Use [../reference/env-vars.yaml](../reference/env-vars.yaml) for canonical
   deployment variable ownership and storage.
 
@@ -141,26 +143,22 @@ build the SDK through the owning SDK workflow.
 Use a named profile for local full-stack QA:
 
 ```bash
-make dev-init PROFILE=<name>
-make dev PROFILE=<name>
-```
-
-Use `STRIPE=1` only when billing, checkout, portal, subscription, refill, or
-webhook behavior is part of the release:
-
-```bash
-make dev PROFILE=<name> STRIPE=1
+make setup PROFILE=<name>
+make build # first clean worktree or after generated/Rust/frontend changes
+make run PROFILE=<name>
+make run PROFILE=<name> STRIPE=1
 ```
 
 Profile QA must use the URLs and ports printed by that profile. Do not mix
 state from the default local stack with a release QA profile.
 
-When provider auth, billing, cloud sandbox materialization, or real user-scoped visibility is
-in scope, copy the developer's local non-example env files into the worktree
-before startup and keep them uncommitted. Without local secrets and a human
-login, QA can still verify type/build behavior but cannot fully verify provider
-auth, cloud materialization, billing/account settings, or user-scoped
-workspace visibility.
+Use `STRIPE=1` only when billing, checkout, portal, subscription, refill, or
+webhook behavior is part of the release. When provider auth, billing, cloud
+sandbox materialization, or real user-scoped visibility is in scope, use the
+credential source named by the applicable procedure and provide only the
+inputs required by the selected surfaces. Keep credential-bearing files
+uncommitted. If required access or input is unavailable, report the affected
+check as blocked.
 
 ## Surface Matrix
 
@@ -218,12 +216,17 @@ When QA fails:
 
 ## Final Report Shape
 
+A manual result is `passed`, `failed`, or `blocked`. Intentionally skipped
+surfaces remain separate. A blocked check names the missing access or input
+and never counts as passed.
+
 A QA report must include:
 
 - commit SHA, branch, PR, release, or deploy run under test
 - surfaces included and surfaces intentionally skipped
 - automated checks run, with pass/fail status
-- manual smoke cases run, with environment/profile and pass/fail status
+- manual smoke cases run, with environment/profile and `passed`, `failed`, or
+  `blocked` status
 - links to relevant GitHub Actions runs, dashboards, issues, or support reports
 - production/staging URLs, updater manifests, TestFlight builds, E2B template
   refs, or artifacts verified when applicable

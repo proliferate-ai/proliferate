@@ -132,7 +132,7 @@ for the operator path.
 ## Verification
 
 For onboarding changes, choose the narrowest useful matrix from
-[../../../../developing/qa/README.md](../../../../developing/qa/README.md) and include the
+[../../../../developing/testing/manual-release-qa.md](../../../../developing/testing/manual-release-qa.md) and include the
 touched surfaces.
 
 Minimum local smoke for end-to-end onboarding changes:

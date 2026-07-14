@@ -61,7 +61,7 @@ REQUIRED_READMES = (
     "specs/developing/deploying/README.md",
     "specs/developing/operating/README.md",
     "specs/developing/operating/analytics/README.md",
-    "specs/developing/qa/README.md",
+    "specs/developing/testing/manual-release-qa.md",
     "specs/developing/runbooks/README.md",
     "specs/developing/reference/README.md",
     "specs/generated/README.md",
