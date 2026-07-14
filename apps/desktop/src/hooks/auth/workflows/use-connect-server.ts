@@ -55,11 +55,10 @@ export interface UseConnectServerResult {
 }
 
 /**
- * Owns the connect-to-server flow's state machine (self-hosting-v1 §3.5):
- * entry -> checking (`GET {url}/meta`) -> trust-confirm -> connecting
- * (`set_app_config` + relaunch). Manual entry only for now — the deep-link
- * branch (`proliferate://connect?server=...`) is follow-up (see
- * desktop-navigation.ts and self-hosting-v1.md's backlog table).
+ * Owns the connect-to-server flow's state machine: entry -> checking
+ * (`GET {url}/meta`) -> trust-confirm -> connecting (`set_app_config` +
+ * relaunch). Manual entry ships now; the `proliferate://connect?server=...`
+ * deep-link branch remains a follow-up through desktop navigation.
  */
 export function useConnectServer(): UseConnectServerResult {
   const available = isTauriRuntimeAvailable();
