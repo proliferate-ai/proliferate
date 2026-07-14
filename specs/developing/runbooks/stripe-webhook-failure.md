@@ -5,7 +5,7 @@ failures.
 
 Use this runbook when Checkout, subscription, invoice, refill, or payment-hold
 state changed in Stripe but Proliferate did not reflect it. Billing behavior is
-owned by [`../../codebase/primitives/billing.md`](../../codebase/primitives/billing.md).
+owned by [`../../codebase/platforms/product/billing.md`](../../codebase/platforms/product/billing.md).
 Local webhook setup is owned by
 [`../local/stripe-local-testing.md`](../local/stripe-local-testing.md).
 

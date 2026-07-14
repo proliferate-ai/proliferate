@@ -111,7 +111,7 @@ recovery, idempotency everywhere, a real scheduler for time.**
   control and that change without notifying us. The broker covers *internal*
   lost work, so reconcilers shrink to this irreducible external-drift core.
 - **Existing claim/lease/fence primitives** (`automations` run claims,
-  `cloud/worker` command leasing, `specs/codebase/primitives/claiming.md`) are
+  `cloud/worker` command leasing, `specs/codebase/platforms/product/claiming.md`) are
   reused for idempotency, not rebuilt.
 
 ### The Unified Task Model

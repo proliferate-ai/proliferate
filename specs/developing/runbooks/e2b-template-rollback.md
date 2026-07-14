@@ -8,7 +8,7 @@ sandbox creation, runtime boot, worker enrollment, or template smoke failures.
 The release lane is documented in
 [`../deploying/ci-cd.md`](../deploying/ci-cd.md), and the managed sandbox model
 is documented in
-[`../../codebase/primitives/sandbox-provisioning.md`](../../codebase/primitives/sandbox-provisioning.md).
+[`../../codebase/platforms/product/sandbox-provisioning.md`](../../codebase/platforms/product/sandbox-provisioning.md).
 
 ## Mental model
 

@@ -4,7 +4,7 @@ Status: binding stage and implementation ledger for the Web/Desktop client unifi
 migration.
 
 This document records the current reviewed slice for the migration defined by
-[`../../codebase/features/web-desktop-client-unification.md`](../../codebase/features/web-desktop-client-unification.md)
+[`../../codebase/systems/product/clients/web-desktop-unification/README.md`](../../codebase/systems/product/clients/web-desktop-unification/README.md)
 (the canonical architecture; it wins any conflict). The founder and
 implementation agent control one current slice together, keep its contract
 current as evidence changes, review it, and then select the next slice.
@@ -42,39 +42,41 @@ Current handoff:
 
 - Repository: `proliferate-ai/proliferate`.
 - Canonical contract:
-  `specs/codebase/features/web-desktop-client-unification.md`.
+  `specs/codebase/systems/product/clients/web-desktop-unification/README.md`.
 - Founder working drafts live outside the repository. They are editing
   surfaces only; promoted repository specs and this ledger are sufficient for
   any developer or CI consumer to reproduce the binding handoff.
 - Desktop Host Adoption contract:
-  `specs/codebase/features/web-desktop-client-unification-d1a.md`, revision
+  `specs/codebase/systems/product/clients/web-desktop-unification/migration/d1a.md`, revision
   `D1a-r2`, exact implementation base
   `2ec15eaf8cfc870cbdbb42c225a5f1428e5282b4`.
 - Final implementation: PR #1157, merge
   `a76ab5911e2af39593b4b31530535f0811a3558b`, from accepted head
   `90926523c3662067e02f8511db6c8e0058e119f1`.
 - Desktop Native UI Adoption contract:
-  `specs/codebase/features/web-desktop-client-unification-d1b.md`, revision
+  `specs/codebase/systems/product/clients/web-desktop-unification/migration/d1b.md`, revision
   `D1b-r2`, final PR #1165 reviewed head
   `32632bd487e9be28592579728b87f0c18d73ee9c`, merge
   `736d181575e4d81389d19ba7a78afd14566e1fda`.
 - Desktop Local Runtime Adoption contract:
-  `specs/codebase/features/web-desktop-client-unification-d1c.md`, exact
+  `specs/codebase/systems/product/clients/web-desktop-unification/migration/d1c.md`, exact
   implementation base `736d181575e4d81389d19ba7a78afd14566e1fda`,
   final PR #1167 merge
   `36e96e7bea1c409dfde1797b3a691003f82d8f5a`.
 - Finish the Desktop Capability Boundary contract:
-  `specs/codebase/features/web-desktop-client-unification-d1d.md`, exact
+  `specs/codebase/systems/product/clients/web-desktop-unification/migration/d1d.md`, exact
   implementation base `66f45bfbe2839ae1382133393844ba61dce035cd`, final PR #1168
   merge `de249faf06c629e094c20e33f94f33d4e6c4c8f2`.
 - Route Shared Identity and Navigation Through ProductHost contract:
-  `specs/codebase/features/web-desktop-client-unification-d1e.md`, exact
+  `specs/codebase/systems/product/clients/web-desktop-unification/migration/d1e.md`, exact
   implementation base `0eab251fd35d26022165f7f0852db2885a8c4093`, final PR #1180
   merge `06bf880a1b98c6694bcf029badcc9fe5823111de`.
 - Route Shared Persistence and Telemetry Through ProductHost contract:
-  `specs/codebase/features/web-desktop-client-unification-d1f.md`, exact
-  implementation base `06bf880a1b98c6694bcf029badcc9fe5823111de`.
-- Current role: review. Material scope changes are decided with the
+  `specs/codebase/systems/product/clients/web-desktop-unification/migration/d1f.md`, exact
+  implementation base `06bf880a1b98c6694bcf029badcc9fe5823111de`, final PR #1182
+  merge `f93afce8190bba943277d588c9bfb0d051c615c9`.
+- Current role: shape ProductClient extraction mechanics. Material scope
+  changes are decided with the
   founder and recorded before the slice broadens.
 
 | Slice | Outcome | Final evidence | State |
@@ -83,12 +85,12 @@ Current handoff:
 | Preparation: shared CSS | Establish `product.css`, Desktop-only CSS, and package source scanning. | PR #1151, merge `36d40c2c0` | Complete |
 | Preparation: embedded browser | Delete the embedded workspace browser and its native child-WebView capability. | PR #1154, merge `4f7fe6ee5` | Complete |
 | Preparation: ProductClient foundation | Add the compiled package, `ProductHost`, `DesktopBridge`, `ProductHostProvider`, tests, and enforcement. | PR #1153, merge `0b33e116d` | Complete |
-| Desktop Host Adoption | Construct the concrete Desktop host, mount the provider, replace reactive snapshots, and gate running-agent export through one Desktop-only lifecycle root while product files remain in Desktop. | [`web-desktop-client-unification-d1a.md`](../../codebase/features/web-desktop-client-unification-d1a.md), `D1a-r2`; PR #1157 merge `a76ab5911e2af39593b4b31530535f0811a3558b` | Complete |
-| Desktop Native UI Adoption | Route native menus, native commands, Dock attention, and Desktop zoom through the mounted bridge while product files remain in Desktop. | [`web-desktop-client-unification-d1b.md`](../../codebase/features/web-desktop-client-unification-d1b.md); PR #1165 merge `736d181575e4d81389d19ba7a78afd14566e1fda` | Complete |
-| Desktop Local Runtime Adoption | Route product-owned local AnyHarness discovery, restart, readiness, and connection through the Desktop bridge while raw sidecar/process startup remains Desktop-owned. | [`web-desktop-client-unification-d1c.md`](../../codebase/features/web-desktop-client-unification-d1c.md); PR #1167 merge `36e96e7bea1c409dfde1797b3a691003f82d8f5a` | Complete |
-| Finish the Desktop Capability Boundary | Route real remaining Desktop-only product consumers plus shared links/clipboard through the mounted host while native implementations stay Desktop-owned. | [`web-desktop-client-unification-d1d.md`](../../codebase/features/web-desktop-client-unification-d1d.md), base `66f45bfbe2839ae1382133393844ba61dce035cd`; PR #1168 merge `de249faf06c629e094c20e33f94f33d4e6c4c8f2` | Complete |
-| Route Shared Identity and Navigation Through ProductHost | Read normalized auth identity/operations, deployment base URL, and the single Cloud client through the host; close the ordered-query-pairs and fragment/callback contract gaps; route each inbound deep link through one lossless `ProductEntry` lifecycle and delete the legacy parallel navigation decoder. | [`web-desktop-client-unification-d1e.md`](../../codebase/features/web-desktop-client-unification-d1e.md), base `0eab251fd35d26022165f7f0852db2885a8c4093`; PR #1180 merge `06bf880a1b98c6694bcf029badcc9fe5823111de` | Complete |
-| Route Shared Persistence and Telemetry Through ProductHost | Re-back product storage onto the existing Tauri store and route movable product persistence through `host.storage` with zero migration; route product telemetry identity/tags/route-classification/single `screen_viewed`/capture through the typed `host.telemetry` facade; make the Query client product-owned with injected capture; split the mount into host-owned `DesktopHostProviders`, `ProductProviderRoot`, and `ProductLifecycleRoot`. | [`web-desktop-client-unification-d1f.md`](../../codebase/features/web-desktop-client-unification-d1f.md), base `06bf880a1b98c6694bcf029badcc9fe5823111de` | Review |
+| Desktop Host Adoption | Construct the concrete Desktop host, mount the provider, replace reactive snapshots, and gate running-agent export through one Desktop-only lifecycle root while product files remain in Desktop. | [`web-desktop-client-unification-d1a.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1a.md), `D1a-r2`; PR #1157 merge `a76ab5911e2af39593b4b31530535f0811a3558b` | Complete |
+| Desktop Native UI Adoption | Route native menus, native commands, Dock attention, and Desktop zoom through the mounted bridge while product files remain in Desktop. | [`web-desktop-client-unification-d1b.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1b.md); PR #1165 merge `736d181575e4d81389d19ba7a78afd14566e1fda` | Complete |
+| Desktop Local Runtime Adoption | Route product-owned local AnyHarness discovery, restart, readiness, and connection through the Desktop bridge while raw sidecar/process startup remains Desktop-owned. | [`web-desktop-client-unification-d1c.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1c.md); PR #1167 merge `36e96e7bea1c409dfde1797b3a691003f82d8f5a` | Complete |
+| Finish the Desktop Capability Boundary | Route remaining Desktop-only product consumers plus shared links and clipboard through the mounted host. | [`web-desktop-client-unification-d1d.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1d.md); PR #1168 merge `de249faf06c629e094c20e33f94f33d4e6c4c8f2` | Complete |
+| Route Shared Identity and Navigation Through ProductHost | Route auth, deployment, Cloud authority, and inbound product destinations through the host. | [`web-desktop-client-unification-d1e.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1e.md); PR #1180 merge `06bf880a1b98c6694bcf029badcc9fe5823111de` | Complete |
+| Route Shared Persistence and Telemetry Through ProductHost | Route movable product persistence and product telemetry through the host and split provider/lifecycle composition. | [`web-desktop-client-unification-d1f.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1f.md); PR #1182 merge `f93afce8190bba943277d588c9bfb0d051c615c9` | Complete |
 | Prove ProductClient Extraction Mechanics | Prove the host mount envelope, compiled assets/builds, move ledger/import codemod, minimal browser host, and fail-closed migration boundaries before the source move. | Shape the exact checklist from the persistence/telemetry diff. | Directional |
 | Mechanical Desktop extraction | Move the working Desktop product into ProductClient and leave Desktop as a thin native host. | Exact file ledger, landing window, codemod, builds, and behavior proof required. | Directional |
 | Legacy Web replacement | Delete the duplicate Web product and mount the same ProductClient from a thin browser host with `desktop: null`. | Browser host/auth contract and shared-product proof required. | Directional |
@@ -149,7 +151,7 @@ Desktop host.
 The implementation merged in PR #1165 from reviewed head
 `32632bd487e9be28592579728b87f0c18d73ee9c` at merge
 `736d181575e4d81389d19ba7a78afd14566e1fda`. The complete contract is
-[`web-desktop-client-unification-d1b.md`](../../codebase/features/web-desktop-client-unification-d1b.md).
+[`web-desktop-client-unification-d1b.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1b.md).
 
 ## 4. Desktop Local Runtime Adoption acceptance record
 
@@ -166,7 +168,7 @@ runtime scope empty/fail-closed, and explicitly keeps cloud and SSH-target
 flows independent of local discovery.
 
 The complete contract is
-[`web-desktop-client-unification-d1c.md`](../../codebase/features/web-desktop-client-unification-d1c.md).
+[`web-desktop-client-unification-d1c.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1c.md).
 
 The implementation merged in PR #1167 at
 `36e96e7bea1c409dfde1797b3a691003f82d8f5a`. Focused tests, Desktop
@@ -190,8 +192,8 @@ lifecycle placement, and deletion of superseded wrappers. Auth, telemetry,
 storage hydration, and inbound route normalization stay together in the next
 shared ProductHost checkpoint.
 
-The complete living contract is
-[`web-desktop-client-unification-d1d.md`](../../codebase/features/web-desktop-client-unification-d1d.md).
+The complete contract is
+[`web-desktop-client-unification-d1d.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1d.md).
 
 The implementation merged in PR #1168 at
 `de249faf06c629e094c20e33f94f33d4e6c4c8f2`.
@@ -236,7 +238,7 @@ composition root, the `desktop-product-host` deployment adapter, and
 for base-identical `pretest` violations in unchanged files.
 
 The complete contract is
-[`web-desktop-client-unification-d1e.md`](../../codebase/features/web-desktop-client-unification-d1e.md).
+[`web-desktop-client-unification-d1e.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1e.md).
 The implementation merged in PR #1180 at
 `06bf880a1b98c6694bcf029badcc9fe5823111de`.
 
@@ -279,8 +281,11 @@ under the prior founder-approved waiver for base-identical `pretest` violations
 in unchanged files; its 13 failures were confirmed pre-existing and
 byte-identical at base `06bf880a1`.
 
-The complete living contract is
-[`web-desktop-client-unification-d1f.md`](../../codebase/features/web-desktop-client-unification-d1f.md).
+The complete contract is
+[`web-desktop-client-unification-d1f.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1f.md).
+
+The implementation merged in PR #1182 at
+`f93afce8190bba943277d588c9bfb0d051c615c9`.
 
 ## 8. Remaining migration map and gates
 

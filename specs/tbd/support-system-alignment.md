@@ -3,7 +3,7 @@
 Status: historical audit and superseded planning record.
 
 The accepted operating contract is
-[`../codebase/features/support-system.md`](../codebase/features/support-system.md).
+[`../codebase/systems/engineering/issue-lifecycle/support-loop.md`](../codebase/systems/engineering/issue-lifecycle/support-loop.md).
 This file preserves the 2026-07-12 evidence and earlier alternatives; its
 ownership recommendations and open decisions are not current operating law.
 
@@ -787,13 +787,13 @@ Until the target loop ships:
 ## 16. Related documents
 
 - Current capture contract:
-  [`../codebase/features/support-reporting.md`](../codebase/features/support-reporting.md)
+  [`../codebase/systems/product/support/README.md`](../codebase/systems/product/support/README.md)
 - Operator runbook:
   [`../developing/debugging/support-reports.md`](../developing/debugging/support-reports.md)
 - Historical capture implementation record:
   [`support-capture-v1.md`](support-capture-v1.md)
 - Current scheduled-automation architecture:
-  [`../codebase/features/automations.md`](../codebase/features/automations.md)
+  [`../codebase/systems/product/automations/target.md`](../codebase/systems/product/automations/target.md)
 - Testing law:
   [`../developing/testing/README.md`](../developing/testing/README.md)
 - Deployment and secret ownership:

@@ -12,9 +12,9 @@ _Written 2026-06-01. Update in the same PR when specs are added or removed._
 specs/
   codebase/
     structures/   Folder rules, ownership, code maps per system.
-    primitives/   Reusable runtime/product substrate (data models, APIs, acceptance criteria).
-    features/     User-facing workflows and surfaces assembled from primitives.
-  developing/     Operator runbooks — local dev, deploying, debugging, analytics, QA.
+    platforms/    Reusable product, engineering, and internal capabilities.
+    systems/      Complete product and engineering domains.
+  developing/     Current contributor and operator procedures.
   tbd/            Intentionally non-authoritative material; see tbd/README.md.
 ```
 
@@ -78,7 +78,7 @@ Guides: `domains`, `database`, `auth`, `errors`, `integrations`, `config`, `work
 **`specs/codebase/structures/sdk/README.md`** — `anyharness/sdk/**` and `anyharness/sdk-react/**`.
 
 Cloud SDK generated artifacts under `cloud/sdk/**` and `cloud/sdk-react/**`
-are owned by the Cloud API/server surface and the primitive specs that change
+are owned by the Cloud API/server surface and the platform specs that change
 Cloud contracts; regenerate them with the owning Cloud SDK generation flow when
 server OpenAPI changes.
 
@@ -86,8 +86,8 @@ server OpenAPI changes.
 No `specs/codebase/structures/auth-gateway/` exists today. The explicit
 cross-link lives in `specs/codebase/structures/README.md`. Coverage is split
 across `server/guides/auth.md` for server-side auth infrastructure,
-`features/product-auth.md` for product account auth, and
-`primitives/agent-auth.md` / `primitives/agent-auth-bifrost-byok.md` for LLM
+`systems/product/auth/README.md` for product account auth, and
+`platforms/product/agent-auth.md` / `platforms/product/agent-auth-bifrost-byok.md` for LLM
 gateway, BYOK, managed credits, and sandbox auth materialization.
 
 Create a dedicated Auth Gateway structure spec only if it becomes a separately
@@ -95,10 +95,10 @@ deployed or separately owned codebase boundary.
 
 ---
 
-## Codebase — Primitives
+## Codebase — Product Platforms
 
 ### Sandbox Provisioning (spec 00)
-**`specs/codebase/primitives/sandbox-provisioning.md`**
+**`specs/codebase/platforms/product/sandbox-provisioning.md`**
 
 Two objects kept separate: `sandbox_profile` (stable product/config identity, survives replacement) and the **ephemeral managed target = sandbox** (`cloud_target` is the addressable endpoint, `cloud_sandbox` its 1:1 provider-lifecycle row). The target is replaced as a new target, not edited; there is no slot layer.
 
@@ -109,17 +109,17 @@ Sync path: inserts rows, mints enrollment token — **never calls E2B**. Backgro
 10 chunks, 24 acceptance criteria, full files-to-change list.
 
 ### Workspace Provisioning / Creation
-**`specs/codebase/primitives/workspace-provisioning.md`**
+**`specs/codebase/platforms/product/workspace-provisioning.md`**
 
 Canonical read path for managed workspace creation. It stitches together the
 existing owners: sandbox profile/target/slot and `cloud_workspace` creation in
 `sandbox-provisioning.md`, `managed_profile_launch`, exposure, projection, wake,
 and command fencing in `cloud-commands.md`, post-creation materialization and
 lifecycle in `workspace-lifecycle.md`, and pending-shell handoff in
-`features/pending-workspace-shell.md`.
+`systems/product/workspaces/pending-shell.md`.
 
 ### Workspace Lifecycle / Materialization
-**`specs/codebase/primitives/workspace-lifecycle.md`**
+**`specs/codebase/platforms/product/workspace-lifecycle.md`**
 
 Core split: `Workspace` = durable product record; `Worktree` = filesystem materialization.
 
@@ -128,29 +128,29 @@ State model: product lifecycle (`active / archived / deleted`) × materializatio
 7 documented flows. Safety rule: never auto-prune uncommitted/conflicted work, live sessions, or paths outside Proliferate-managed roots.
 
 ### MCP + Skills Flow
-**`specs/codebase/primitives/mcp-runtime.md`** — MCP inside AnyHarness.
-**`specs/codebase/primitives/mcp-skills.md`** (spec 01) — Cloud-side MCP/skills/plugins as sandbox runtime config.
+**`specs/codebase/platforms/product/mcp-runtime.md`** — MCP inside AnyHarness.
+**`specs/codebase/platforms/product/mcp-skills.md`** (spec 01) — Cloud-side MCP/skills/plugins as sandbox runtime config.
 
 Four MCP concepts in AnyHarness: user bindings, session extensions, product MCP servers, MCP elicitation. Central assembly: `domains/sessions/mcp_bindings/assembly.rs::assemble_session_mcp_launch(...)`.
 
 mcp-skills.md adds: catalog entry → configured item → runtime manifest pipeline; `materialize_environment` command for applying config; `requiredRuntimeConfigRevision` session preflight.
 
 ### Product MCP Structure
-**`specs/codebase/features/agent-features/servers.md`** — repeatable two-part pattern.
-**`specs/codebase/features/agent-features/definitions/`** — concrete definitions: `artifacts.md`, `cowork.md`, `reviews.md`, `subagents.md`, `prompt-and-skill-policy.md`.
+**`specs/codebase/platforms/product/agent-features/servers.md`** — repeatable two-part pattern.
+**`specs/codebase/platforms/product/agent-features/definitions/`** — concrete definitions: `artifacts.md`, `cowork.md`, `reviews.md`, `subagents.md`, `prompt-and-skill-policy.md`.
 
 Every product MCP server: `definition.rs`, `auth.rs`, `context.rs`, `tools.rs`, `calls.rs`. Session binding side: `product_catalog.rs` — launch-side facade: select and materialize product MCP launch extras for this session (mints capability token). URL: `/v1/workspaces/{id}/.../{session_id}/mcp`.
 
 ### Agent Auth (spec 02)
-**`specs/codebase/primitives/agent-auth.md`**
-**`specs/codebase/primitives/agent-auth-bifrost-byok.md`**
+**`specs/codebase/platforms/product/agent-auth.md`**
+**`specs/codebase/platforms/product/agent-auth-bifrost-byok.md`**
 
 One question per profile per harness: which credential + which materialization mode (`synced_files` = native auth files written by worker; `gateway_env` = Bifrost virtual key injected as protected env).
 
 10 agent-auth DB tables. 10 gaps identified and addressed (proactive grant rotation, cleanup-on-revoke, AnyHarness fail-closed on no selection → `AGENT_AUTH_SELECTION_REQUIRED`, worker scope synthesis, `protected_env` allowlist per agent+mode, hosted capability API, `needs_resync` detection).
 
 ### Cloud Commands / Running Alignment (spec 04)
-**`specs/codebase/primitives/cloud-commands.md`**
+**`specs/codebase/platforms/product/cloud-commands.md`**
 
 Command flow: `client → enqueue_command (preflight + wake) → Worker → AnyHarness → event uplink (exposure-gated) → Cloud DB ← passive GET reads`.
 
@@ -159,44 +159,44 @@ Key additions: `cloud_workspace_exposure` table (visibility, commandable, projec
 `managed_profile_launch(...)` — canonical entry point for every managed cloud workspace creation. Passive UI rule: GET endpoints on workspaces/sessions/transcript never wake a sandbox.
 
 ### Claiming (spec 05)
-**`specs/codebase/primitives/claiming.md`**
+**`specs/codebase/platforms/product/claiming.md`**
 
 One-way irreversible: `shared_unclaimed → claimed`. `cloud_workspace_claim` table (immutable). Desktop direct-attach via RS256 JWT scoped to one workspace/session; per-token revocation only (claim itself cannot be revoked). Listing scopes: my work, team unclaimed pool, admin audit.
 
 ### Billing (spec 09)
-**`specs/codebase/primitives/billing.md`**
+**`specs/codebase/platforms/product/billing.md`**
 
 Most billing already shipped. Spec 09 closes: wire `authorize_sandbox_start` to wake hook, tie managed-credit budget to subscription plan, `free_cloud_allocation` table keyed by GitHub provider user id (anti-abuse), billing state in workspace SSE patches, web Settings → Billing pane.
 
-### Supporting Primitives
-- **`primitives/agent-catalog-readiness.md`** — single catalog input, trusted descriptor/model projection, seed artifacts, launch resolution.
-- **`primitives/agents/claude.md`**, **`primitives/agents/codex.md`** — per-harness behavior specs.
+### Supporting Product Platforms
+- **`platforms/product/agent-catalog-readiness.md`** — single catalog input, trusted descriptor/model projection, seed artifacts, launch resolution.
+- **`platforms/product/agents/claude.md`**, **`platforms/product/agents/codex.md`** — per-harness behavior specs.
 
 ---
 
-## Codebase — Features
+## Codebase — Product Systems
 
 | File | Covers |
 | --- | --- |
-| `agent-features/servers.md` | Product MCP server pattern (see Primitives above) |
-| `agent-features/definitions/*.md` | artifacts, cowork, reviews, subagents, prompt-and-skill-policy |
-| `automations.md` | Agent automation orchestration |
-| `chat-composer.md` | Chat input composer surface |
-| `chat-transcript.md` | Transcript rendering surface |
-| `cloud-dispatch.md` (spec 08) | Web/Mobile/Desktop dispatch UX — live hooks, exposure-aware listing, Continue remotely, Open in web, deep links |
-| `cowork-artifacts.md` | Cowork artifact creation and delegation |
-| `delegated-work.md` | Delegated work flows |
-| `desktop-updates.md` | Packaged Desktop updater UX, version-aware release notices, and release-title metadata |
-| `mobile-cloud-client.md` | Mobile Cloud SDK cutover from fixture data |
-| `onboarding.md` | Signed-out to product-ready account handoff, readiness gates, and first workspace transition |
-| `pending-workspace-shell.md` | Shell shown while workspace is pending |
-| `product-auth.md` | OAuth and sign-in flows |
-| `settings-admin-ia.md` (spec 03) | Settings and Admin IA placement |
-| `slack-bot.md` (spec 07) | Slack bot integration |
-| `support-reporting.md` | Desktop support report uploads |
-| `web-cloud-local-parity.md` | Web ↔ local Desktop cloud experience parity |
-| `workspace-files.md` | Workspace file browsing surface |
-| `workspace-migration.md` | Workspace migration flows |
+| `platforms/product/agent-features/servers.md` | Reusable Product MCP server pattern (see Product Platforms above) |
+| `platforms/product/agent-features/definitions/*.md` | artifacts, cowork, reviews, subagents, prompt-and-skill-policy |
+| `systems/product/automations/target.md` | Agent automation orchestration |
+| `systems/product/chat/composer.md` | Chat input composer surface |
+| `systems/product/chat/transcript.md` | Transcript rendering surface |
+| `systems/product/workspaces/cloud-dispatch.md` (spec 08) | Web/Mobile/Desktop dispatch UX — live hooks, exposure-aware listing, Continue remotely, Open in web, deep links |
+| `systems/product/agents/cowork-artifacts.md` | Cowork artifact creation and delegation |
+| `systems/product/agents/delegated-work.md` | Delegated work flows |
+| `systems/engineering/delivery/desktop-updates.md` | Packaged Desktop updater UX, version-aware release notices, and release-title metadata |
+| `systems/product/clients/mobile-cloud.md` | Mobile Cloud SDK cutover from fixture data |
+| `systems/product/onboarding/README.md` | Signed-out to product-ready account handoff, readiness gates, and first workspace transition |
+| `systems/product/workspaces/pending-shell.md` | Shell shown while workspace is pending |
+| `systems/product/auth/README.md` | OAuth and sign-in flows |
+| `systems/product/settings/information-architecture.md` (spec 03) | Settings and Admin IA placement |
+| `systems/product/automations/slack.md` (spec 07) | Slack bot integration |
+| `systems/product/support/README.md` | Desktop support report uploads |
+| `systems/product/clients/cloud-local-parity.md` | Web ↔ local Desktop cloud experience parity |
+| `systems/product/workspaces/files.md` | Workspace file browsing surface |
+| `systems/product/workspaces/migration.md` | Workspace migration flows |
 
 ### Feature spec queue
 
@@ -205,11 +205,11 @@ spec before end-to-end product work changes that surface.
 
 | Feature | Current owner | Next spec action |
 | --- | --- | --- |
-| **Onboarding** | `features/onboarding.md`; lower-level owners are `product-auth.md`, `agent-auth-bifrost-byok.md`, `billing.md`, `settings-admin-ia.md`, and workspace creation read path in `workspace-provisioning.md` | Covered for the current end-to-end read path; deepen the feature spec when onboarding UX grows. |
+| **Onboarding** | `systems/product/onboarding/README.md`; lower-level owners are Product Auth, agent auth, billing, settings, and the workspace creation read path | Covered for the current end-to-end read path; deepen the system spec when onboarding UX grows. |
 | **Browsers** | AnyHarness runtime structure and future Product MCP pattern | Add a browser feature spec or Product MCP definition before adding user-visible browser workflows. |
-| **Terminals** | `features/terminals.md` for product UX (terminal pane, creation grid contract); AnyHarness structure specs for runtime internals | Covered for terminal pane UX; runtime-only work belongs in AnyHarness structure specs. |
+| **Terminals** | `systems/product/workspaces/terminals.md` for product UX (terminal pane, creation grid contract); AnyHarness structure specs for runtime internals | Covered for terminal pane UX; runtime-only work belongs in AnyHarness structure specs. |
 | **Computer Use** | Future Product MCP pattern | Add a computer-use feature spec or Product MCP definition before changing permissions, UX, or QA behavior. |
-| **Plugins** | `primitives/mcp-skills.md`, `settings-admin-ia.md` | Add `features/plugins.md` only when catalog/install/manage UX grows beyond the primitive contract. |
+| **Plugins** | `platforms/product/mcp-skills.md`, Settings IA | Add `systems/product/plugins/README.md` only when catalog/install/manage UX grows beyond the platform contract. |
 | **Subagents** | `delegated-work.md`, `agent-features/definitions/subagents.md` | Covered for current UX and Product MCP semantics; split only if product-surface behavior outgrows those docs. |
 
 ---
@@ -388,8 +388,8 @@ until the operator-safe replacement flow and audit trail are implemented.
 
 | Gap | Action needed |
 | --- | --- |
-| Browsers feature | Write `features/browsers.md` |
-| Computer Use feature | Write `features/computer-use.md` |
+| Browsers system | Write `systems/product/browsers/README.md` |
+| Computer Use system | Write `systems/product/computer-use/README.md` |
 | Security spec | Write an authoritative security spec (no draft exists) |
 
 ### 🟡 Thin or split
@@ -397,14 +397,14 @@ until the operator-safe replacement flow and audit trail are implemented.
 | Gap | Action needed |
 | --- | --- |
 | Auth Gateway structure | Keep the explicit split-ownership cross-link unless Auth Gateway becomes a separate deployable/codebase boundary |
-| Plugins feature | Extract from mcp-skills.md into `features/plugins.md` |
+| Plugins system | Extract from mcp-skills.md into `systems/product/plugins/README.md` |
 | Specific operational runbooks | Add provisioning/worker/Stripe/E2B rollback runbooks to `developing/runbooks/` |
 | Per-surface QA detail | Add `developing/qa/*.md` files only when the root matrix is too shallow for release execution |
 
 ### ✅ Well covered
 
 All major structure areas (Frontend, Desktop Native, AnyHarness, Worker,
-Supervisor, Server, and SDK), the requested primitive map, most features, all 5
+Supervisor, Server, and SDK), the requested platform map, most product systems, all 5
 analytics systems, local dev, and deploying.
 
 ---
@@ -415,17 +415,17 @@ analytics systems, local dev, and deploying.
 | --- | --- |
 | Frontend components / hooks / stores | `structures/frontend/README.md` + relevant guide |
 | AnyHarness session logic | `structures/anyharness/README.md` + `structures/anyharness/specs/session-engine.md` |
-| Cloud provisioning / sandbox creation | `primitives/sandbox-provisioning.md` |
-| Managed workspace creation | `primitives/workspace-provisioning.md` |
-| Cloud workspace commands / wake / projection | `primitives/cloud-commands.md` |
-| Agent LLM auth / Bifrost | `primitives/agent-auth.md` |
-| MCP / skills / plugins runtime config | `primitives/mcp-skills.md` + `primitives/mcp-runtime.md` |
-| Product MCP tool (add/change) | `features/agent-features/servers.md` + `definitions/README.md` |
-| Onboarding / first-run readiness | `features/onboarding.md` + `features/product-auth.md` |
-| Desktop updater / release notices | `features/desktop-updates.md` + `developing/deploying/ci-cd.md` |
-| Workspace archive / prune / lifecycle | `primitives/workspace-lifecycle.md` |
-| Billing / wake gate | `primitives/billing.md` + `primitives/cloud-commands.md` |
-| Claiming | `primitives/claiming.md` |
+| Cloud provisioning / sandbox creation | `platforms/product/sandbox-provisioning.md` |
+| Managed workspace creation | `platforms/product/workspace-provisioning.md` |
+| Cloud workspace commands / wake / projection | `platforms/product/cloud-commands.md` |
+| Agent LLM auth / Bifrost | `platforms/product/agent-auth.md` |
+| MCP / skills / plugins runtime config | `platforms/product/mcp-skills.md` + `platforms/product/mcp-runtime.md` |
+| Product MCP tool (add/change) | `platforms/product/agent-features/servers.md` + `definitions/README.md` |
+| Onboarding / first-run readiness | `systems/product/onboarding/README.md` + `systems/product/auth/README.md` |
+| Desktop updater / release notices | `systems/engineering/delivery/desktop-updates.md` + `developing/deploying/ci-cd.md` |
+| Workspace archive / prune / lifecycle | `platforms/product/workspace-lifecycle.md` |
+| Billing / wake gate | `platforms/product/billing.md` + `platforms/product/cloud-commands.md` |
+| Claiming | `platforms/product/claiming.md` |
 | Deploying to production | `developing/deploying/ci-cd.md` |
 | Running locally | `developing/local/README.md` |
 | Debugging a support issue | `developing/debugging/README.md` + `debugging/support-reports.md` |

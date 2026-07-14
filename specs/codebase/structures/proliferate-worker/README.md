@@ -185,12 +185,12 @@ focused guide for the module being changed:
 When behavior crosses worker boundaries, also read the primitive or system doc
 that owns the external contract:
 
-- Cloud commands: `specs/codebase/primitives/cloud-commands.md`
-- Sandbox provisioning: `specs/codebase/primitives/sandbox-provisioning.md`
-- Workspace lifecycle: `specs/codebase/primitives/workspace-lifecycle.md`
-- Agent auth: `specs/codebase/primitives/agent-auth.md`
-- MCPs and skills: `specs/codebase/primitives/mcp-runtime.md` and
-  `specs/codebase/primitives/mcp-skills.md`
+- Cloud commands: `specs/codebase/platforms/product/cloud-commands.md`
+- Sandbox provisioning: `specs/codebase/platforms/product/sandbox-provisioning.md`
+- Workspace lifecycle: `specs/codebase/platforms/product/workspace-lifecycle.md`
+- Agent auth: `specs/codebase/platforms/product/agent-auth.md`
+- MCPs and skills: `specs/codebase/platforms/product/mcp-runtime.md` and
+  `specs/codebase/platforms/product/mcp-skills.md`
 - Server control plane: `specs/codebase/structures/server/README.md`
 - AnyHarness runtime: `specs/codebase/structures/anyharness/README.md`
 

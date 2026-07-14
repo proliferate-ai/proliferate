@@ -4,9 +4,9 @@
 > `issue-autofix-system-v1.md` draft no longer exists in the current tree and
 > its earlier resolution design was superseded by the accepted support-system
 > contract. Use
-> [`../codebase/features/support-system.md`](../codebase/features/support-system.md)
+> [`../codebase/systems/engineering/issue-lifecycle/support-loop.md`](../codebase/systems/engineering/issue-lifecycle/support-loop.md)
 > for downstream issue/release/changelog behavior, and
-> [`../codebase/features/support-reporting.md`](../codebase/features/support-reporting.md)
+> [`../codebase/systems/product/support/README.md`](../codebase/systems/product/support/README.md)
 > for shipped capture behavior.
 
 *2026-07-06. The complete record of the support-flow upgrade built across PRs
@@ -15,7 +15,7 @@
 (this doc's subject) is permanent and merging; the then-current
 resolution/triage/notify direction moved to an issue-service draft that has
 since been replaced by
-[`../codebase/features/support-system.md`](../codebase/features/support-system.md).
+[`../codebase/systems/engineering/issue-lifecycle/support-loop.md`](../codebase/systems/engineering/issue-lifecycle/support-loop.md).
 Read that document for everything after a report is captured.*
 
 ---
@@ -52,7 +52,7 @@ persisted upload queue ──POST──▶ /v1/support/reports ─────�
 ────────────────────────────── CAPTURE / RESOLUTION BOUNDARY ──────────────────────────────
 
 Everything below was assigned to the then-planned issues service (now replaced
-by [`../codebase/features/support-system.md`](../codebase/features/support-system.md)):
+by [`../codebase/systems/engineering/issue-lifecycle/support-loop.md`](../codebase/systems/engineering/issue-lifecycle/support-loop.md)):
 ingestion via a pollable /v1/support/reports endpoint (scoped, not built),
 triage/fix workflows, state machine, and ALL reporter-facing email (Customer.io
 transactional, approval-gated).
@@ -108,7 +108,7 @@ server/
 │  ├─ test_support_message_domain.py     [urgent-title assertions]
 │  └─ test_support_report_records.py     [NEW]
 cloud/sdk/src/generated/openapi.ts        [regenerated]
-specs/codebase/features/support-reporting.md
+specs/codebase/systems/product/support/README.md
 ```
 
 ### 3.2 Migration `c7f2a9b41d38` (chains off `ff9344886948`)
@@ -245,7 +245,7 @@ apps/desktop/src/
 cloud/sdk/src/client/users.ts         [NEW getCurrentUser/updateCurrentUser]
 cloud/sdk-react/src/hooks/support.ts  [fields threaded, web UI unchanged]
 server/proliferate/server/support/service.py  [credit_name bugfix — §4.5]
-specs/codebase/features/support-reporting.md
+specs/codebase/systems/product/support/README.md
 ```
 
 ### 4.2 The modals (copy is Pablo's, verbatim from the workspace doc)
@@ -355,7 +355,7 @@ modal, every bug report's name would have been silently dropped:
 Repo: `github.com/proliferate-ai/support-ops` (private), local `~/support-ops`,
 PR #1 open and permanently unmerged. Superseded 2026-07-06 by the then-planned
 issues service (now replaced by
-[`../codebase/features/support-system.md`](../codebase/features/support-system.md)): S3-polling → pollable
+[`../codebase/systems/engineering/issue-lifecycle/support-loop.md`](../codebase/systems/engineering/issue-lifecycle/support-loop.md)): S3-polling → pollable
 server endpoint; sqlite resolution state → issues-service Postgres; Resend
 sender → Customer.io transactional behind an approval queue. Rationale: two
 parallel "we fixed it" email systems is the failure mode that killed the old
