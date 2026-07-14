@@ -13,7 +13,7 @@ import { useOrgSlugSsoSignIn } from "./use-org-slug-sso-sign-in";
 const SLUG_UNAVAILABLE =
   "We could not find single sign-on for that workspace. Check the sign-in link your admin shared.";
 
-function harness(startLogin: (request: unknown) => Promise<void>) {
+function harness(startLogin: (request: unknown) => Promise<unknown>) {
   const host = makeTestProductHost({
     auth: { startLogin: startLogin as never },
   });
@@ -28,7 +28,10 @@ afterEach(() => {
 
 describe("useOrgSlugSsoSignIn", () => {
   it("resolves the slug and starts SSO for an enabled org connection", async () => {
-    const startLogin = vi.fn(async () => {});
+    const startLogin = vi.fn(async () => ({
+      provider: "sso",
+      source: "desktop_callback",
+    }));
     const { result } = harness(startLogin);
     let outcome = false;
     await act(async () => {

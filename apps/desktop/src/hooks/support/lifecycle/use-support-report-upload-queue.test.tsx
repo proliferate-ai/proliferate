@@ -106,8 +106,33 @@ vi.mock("@anyharness/sdk-react", () => ({
 
 vi.mock("@proliferate/cloud-sdk/client/support", () => cloudSupportMocks);
 
+// Stable host so `useProductStorageContext` (memoized on the host identity)
+// yields a stable storage context and the queue effect doesn't re-run per
+// render. The ProductStorage adapter reads/writes the same `window.localStorage`
+// mock the tests seed.
+const productHostMock = {
+  desktop: { diagnostics: diagnosticsMocks },
+  storage: {
+    getItem: async (key: string) => window.localStorage.getItem(key),
+    setItem: async (key: string, value: string) => {
+      window.localStorage.setItem(key, value);
+    },
+    removeItem: async (key: string) => {
+      window.localStorage.removeItem(key);
+    },
+  },
+  telemetry: {
+    track: vi.fn(),
+    captureException: vi.fn(),
+    getSupportContext: () => ({
+      clientReleaseId: "proliferate-desktop@0.0.0+test",
+      telemetryRefs: {},
+    }),
+  },
+};
+
 vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
-  useProductHost: () => ({ desktop: { diagnostics: diagnosticsMocks } }),
+  useProductHost: () => productHostMock,
 }));
 
 vi.mock("@/lib/access/browser/support-report-job-events", () => supportAccessMocks);
@@ -193,10 +218,15 @@ describe("useSupportReportUploadQueue", () => {
     listener?.handler(job);
     listener?.handler(job);
 
-    expect(sendingToastCalls()).toHaveLength(1);
+    // Persistence is async; the serialized persist chain dedups the second
+    // delivery so exactly one "Sending report..." toast is shown.
+    await waitFor(() => {
+      expect(sendingToastCalls()).toHaveLength(1);
+    });
     await waitFor(() => {
       expect(cloudSupportMocks.completeSupportReportUpload).toHaveBeenCalledTimes(1);
     });
+    expect(sendingToastCalls()).toHaveLength(1);
   });
 
   it("drops a transient job that has spent its attempt budget", async () => {
@@ -296,14 +326,19 @@ describe("useSupportReportUploadQueue", () => {
     });
     activeListeners()[0]?.handler(makeSupportReportJob("job-conflict", recentIso()));
 
+    // Persistence + drain are async; wait for the terminal toast (only shown
+    // after the conflict is handled) rather than an empty store, which is also
+    // momentarily empty before the async persist writes.
+    await waitFor(() => {
+      // Terminal conflict shows the actionable copy, NOT the "already sent" success.
+      expect(toastStoreMocks.show).toHaveBeenCalledWith(
+        "This report can no longer be sent. Start a new report from Help if you still need support.",
+      );
+    });
     await waitFor(() => {
       const raw = window.localStorage.getItem("proliferate.supportReportJobs.v1");
       expect(JSON.parse(raw ?? "[]")).toHaveLength(0);
     });
-    // Terminal conflict shows the actionable copy, NOT the "already sent" success.
-    expect(toastStoreMocks.show).toHaveBeenCalledWith(
-      "This report can no longer be sent. Start a new report from Help if you still need support.",
-    );
   });
 
   it("clears the job quietly when upload-targets reports the report already completed", async () => {
@@ -320,14 +355,18 @@ describe("useSupportReportUploadQueue", () => {
     });
     activeListeners()[0]?.handler(makeSupportReportJob("job-already-done"));
 
+    // Wait for the definitive post-drain toast; the store is also momentarily
+    // empty before the async persist writes.
+    await waitFor(() => {
+      expect(toastStoreMocks.show).toHaveBeenCalledWith(
+        "Report already sent. Support has the details.",
+        "info",
+      );
+    });
     await waitFor(() => {
       const raw = window.localStorage.getItem("proliferate.supportReportJobs.v1");
       expect(JSON.parse(raw ?? "[]")).toHaveLength(0);
     });
-    expect(toastStoreMocks.show).toHaveBeenCalledWith(
-      "Report already sent. Support has the details.",
-      "info",
-    );
   });
 
   it("skips diagnostics and completes directly when logs are excluded and there are no attachments", async () => {

@@ -26,7 +26,7 @@ import {
   resolvePlanImplementationTargetCheck,
   type PlanImplementationHarnessState,
 } from "@/lib/domain/plans/implementation-target";
-import { trackProductEvent } from "@/lib/integrations/telemetry/client";
+import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
 import {
   failLatencyFlow as failPromptLatencyFlow,
   startLatencyFlow as startPromptLatencyFlow,
@@ -178,6 +178,7 @@ function usePlanImplementationActions() {
   const { setActiveSessionConfigOption } = useSessionConfigActions();
   const { promptActiveSession } = useSessionPromptActions();
   const gitPromptEffects = useGitPromptSnapshotEffects();
+  const telemetry = useProductTelemetry();
 
   const implementPlanHere = useCallback((plan: PromptPlanAttachmentDescriptor) => {
     if (!claimPlanImplementationRun(isImplementingPlanRef)) {
@@ -207,7 +208,7 @@ function usePlanImplementationActions() {
             agentKind,
             reuseSession,
             setWorkspaceArrivalEvent,
-          }, { trackProductEvent, ...gitPromptEffects.promptSubmitDeps });
+          }, { trackProductEvent: telemetry.track, ...gitPromptEffects.promptSubmitDeps });
         },
         showToast,
       });
@@ -224,6 +225,7 @@ function usePlanImplementationActions() {
     setActiveSessionConfigOption,
     setWorkspaceArrivalEvent,
     showToast,
+    telemetry,
   ]);
 
   return {

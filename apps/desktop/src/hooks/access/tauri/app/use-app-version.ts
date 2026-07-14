@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
+import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
 import { appVersionKey } from "./query-keys";
 
 export function useAppVersion() {
   const updater = useProductHost().desktop?.updater ?? null;
+  const telemetry = useProductTelemetry();
   return useQuery<string>({
     queryKey: appVersionKey(),
     queryFn: async () => {
@@ -14,7 +15,7 @@ export function useAppVersion() {
       try {
         return await updater.getVersion();
       } catch (error) {
-        captureTelemetryException(error, {
+        telemetry.captureException(error, {
           tags: {
             action: "load_app_version",
             domain: "settings",

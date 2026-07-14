@@ -4,7 +4,17 @@ import type { ReactNode, TextareaHTMLAttributes } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HomeNextScreen } from "./HomeNextScreen";
-import { HOME_NEXT_TARGET_SELECTION_STORAGE_KEY } from "@/hooks/home/ui/use-home-next-target-selection-state";
+import {
+  HOME_NEXT_TARGET_SELECTION_STORAGE_KEY,
+  hydrateHomeNextTargetSelection,
+  resetHomeNextTargetSelectionForTests,
+  setHomeNextTargetSelectionStorageContext,
+} from "@/hooks/home/ui/use-home-next-target-selection-state";
+import {
+  createMemoryProductStorage,
+  type MemoryProductStorage,
+} from "@/test/product-storage-test-utils";
+import type { ProductStorage } from "@proliferate/product-client/host/product-host";
 import { HOME_CHAT_COMPOSER_INPUT } from "@/config/chat";
 
 const screenMocks = vi.hoisted(() => {
@@ -415,24 +425,29 @@ describe("HomeNextScreen composer control-row parity", () => {
 });
 
 describe("HomeNextScreen target selection persistence", () => {
+  let memory: MemoryProductStorage;
+
   beforeEach(() => {
-    installLocalStorageMock();
     resetHomeNext();
-    window.localStorage.clear();
+    resetHomeNextTargetSelectionForTests();
+    memory = createMemoryProductStorage();
+    setHomeNextTargetSelectionStorageContext(memory.context);
   });
 
   afterEach(() => {
     cleanup();
+    resetHomeNextTargetSelectionForTests();
   });
 
-  it("hydrates the last selected launch target into home next state", () => {
-    window.localStorage.setItem(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY, JSON.stringify({
+  it("hydrates the last selected launch target into home next state", async () => {
+    memory.values.set(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY, {
       destination: "repository",
       repositorySelection: { kind: "repository", sourceRoot: "/repo-a" },
       repoLaunchKind: "ssh",
       selectedSshTargetId: "ssh-target-1",
       baseBranchOverride: "feature/sticky",
-    }));
+    });
+    await hydrateHomeNextTargetSelection(memory.context);
 
     render(<HomeNextScreen />);
 
@@ -445,14 +460,15 @@ describe("HomeNextScreen target selection persistence", () => {
     });
   });
 
-  it("persists repository, branch, and runtime choices from the target picker", () => {
+  it("persists repository, branch, and runtime choices from the target picker", async () => {
     render(<HomeNextScreen />);
 
     fireEvent.click(screen.getByRole("button", { name: "Mock repo" }));
     fireEvent.click(screen.getByRole("button", { name: "Mock branch" }));
     fireEvent.click(screen.getByRole("button", { name: "Mock ssh" }));
+    await Promise.resolve();
 
-    expect(JSON.parse(window.localStorage.getItem(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY)!))
+    expect(memory.readJson(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY))
       .toMatchObject({
         destination: "repository",
         repositorySelection: { kind: "repository", sourceRoot: "/repo-b" },
@@ -462,19 +478,21 @@ describe("HomeNextScreen target selection persistence", () => {
       });
   });
 
-  it("keeps the selected branch when switching to a local runtime", () => {
-    window.localStorage.setItem(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY, JSON.stringify({
+  it("keeps the selected branch when switching to a local runtime", async () => {
+    memory.values.set(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY, {
       destination: "repository",
       repositorySelection: { kind: "repository", sourceRoot: "/repo-a" },
       repoLaunchKind: "worktree",
       selectedSshTargetId: null,
       baseBranchOverride: "feature/sticky",
-    }));
+    });
+    await hydrateHomeNextTargetSelection(memory.context);
     render(<HomeNextScreen />);
 
     fireEvent.click(screen.getByRole("button", { name: "Mock local" }));
+    await Promise.resolve();
 
-    expect(JSON.parse(window.localStorage.getItem(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY)!))
+    expect(memory.readJson(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY))
       .toMatchObject({
         destination: "repository",
         repositorySelection: { kind: "repository", sourceRoot: "/repo-a" },
@@ -483,17 +501,30 @@ describe("HomeNextScreen target selection persistence", () => {
       });
   });
 
-  it("keeps target selection in memory when localStorage writes fail", () => {
-    installLocalStorageMock({ throwOnSet: true });
-    resetHomeNext();
+  it("keeps target selection in memory when a ProductStorage write fails", async () => {
+    const captured: unknown[] = [];
+    const throwingStorage: ProductStorage = {
+      getItem: async () => null,
+      setItem: async () => {
+        throw new Error("storage write failed");
+      },
+      removeItem: async () => {},
+    };
+    setHomeNextTargetSelectionStorageContext({
+      storage: throwingStorage,
+      captureException: (error) => captured.push(error),
+    });
     render(<HomeNextScreen />);
 
     fireEvent.click(screen.getByRole("button", { name: "Mock repo" }));
+    await Promise.resolve();
+    await Promise.resolve();
 
+    // In-memory selection still applied even though the persisted write rejected.
     expect(screenMocks.homeNextStateArgs).toMatchObject({
       destination: "repository",
       repositorySelection: { kind: "repository", sourceRoot: "/repo-b" },
     });
-    expect(window.localStorage.getItem(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY)).toBeNull();
+    expect(captured.length).toBeGreaterThan(0);
   });
 });

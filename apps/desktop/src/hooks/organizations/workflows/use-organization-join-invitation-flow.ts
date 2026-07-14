@@ -7,6 +7,7 @@ import {
 } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { useAuditedAuth } from "@/hooks/auth/facade/use-audited-auth";
 import {
   useConnectServer,
   type UseConnectServerResult,
@@ -18,7 +19,8 @@ import {
   clearPendingOrganizationJoinTarget,
   readPendingOrganizationJoinTarget,
   writePendingOrganizationJoinTarget,
-} from "@/lib/access/browser/organization-join-target";
+} from "@/lib/access/persistence/organization-join-target";
+import { useProductStorageContext } from "@/hooks/persistence/facade/use-product-storage-context";
 import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 import { getDesktopAuthMethods } from "@/lib/integrations/auth/proliferate-auth-password";
 import {
@@ -74,8 +76,9 @@ export function useOrganizationJoinInvitationFlow(): UseOrganizationJoinInvitati
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { auth } = useProductHost();
+  const storage = useProductStorageContext();
   const authStatus = auth.state.status;
-  const { startLogin } = auth;
+  const { startLogin } = useAuditedAuth();
   const connectServer = useConnectServer();
   const signInStartedRef = useRef(false);
   const serverSwitchStartedRef = useRef(false);
@@ -88,9 +91,28 @@ export function useOrganizationJoinInvitationFlow(): UseOrganizationJoinInvitati
     () => searchParams.get("joinServerOrigin"),
     [searchParams],
   );
-  const [transientJoinOrganizationId, setTransientJoinOrganizationId] = useState(
-    () => joinOrganizationId ?? readPendingOrganizationJoinTarget(),
-  );
+  const [transientJoinOrganizationId, setTransientJoinOrganizationId] = useState<
+    string | null
+  >(() => joinOrganizationId);
+  // The pending target is read asynchronously through ProductStorage (the sync
+  // localStorage read is gone). Seed the transient id from persistence only when
+  // the URL didn't already carry one; the effect below ignores a late read after
+  // a URL-driven target arrives.
+  useEffect(() => {
+    if (joinOrganizationId) {
+      return;
+    }
+    let cancelled = false;
+    void readPendingOrganizationJoinTarget(storage).then((pending) => {
+      if (cancelled || !pending) {
+        return;
+      }
+      setTransientJoinOrganizationId((current) => current ?? pending);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [joinOrganizationId, storage]);
   // The origin only ever arrives on the URL (never persisted): the relaunch
   // that a switch triggers restarts the app pointed AT that origin, so the
   // post-relaunch resume is a plain same-server join with no origin at all.
@@ -114,19 +136,19 @@ export function useOrganizationJoinInvitationFlow(): UseOrganizationJoinInvitati
     // Persist the target BEFORE any trust-confirm/relaunch: the relaunch drops
     // the URL params, so localStorage is what lets the flow resume against the
     // now-correct server.
-    writePendingOrganizationJoinTarget(joinOrganizationId);
+    void writePendingOrganizationJoinTarget(storage, joinOrganizationId);
     signInStartedRef.current = false;
     setTransientJoinOrganizationId(joinOrganizationId);
     setTransientJoinServerOrigin(searchJoinServerOrigin);
     // Account is reachable by every signed-in user (Members is admin-only),
     // so this is where a non-admin invitee can actually see and accept.
     navigate(buildSettingsHref({ section: "account" }), { replace: true });
-  }, [joinOrganizationId, searchJoinServerOrigin, navigate]);
+  }, [joinOrganizationId, searchJoinServerOrigin, navigate, storage]);
 
   const clearJoinTarget = useCallback(() => {
-    clearPendingOrganizationJoinTarget();
+    void clearPendingOrganizationJoinTarget(storage);
     setTransientJoinOrganizationId(null);
-  }, []);
+  }, [storage]);
 
   useEffect(() => {
     if (

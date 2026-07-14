@@ -8,11 +8,13 @@ import type {
   ProductDeploymentHost,
   ProductEntry,
   ProductLinks,
+  ProductLoginOutcome,
+  ProductLogoutOutcome,
+  ProductRouteChange,
   ProductTelemetry,
 } from "@proliferate/product-client/host/product-host";
 
 import type { AuthUser } from "@/lib/domain/auth/auth-user";
-import type { DesktopTelemetryRoute } from "@/lib/domain/telemetry/events";
 import type { AuthOrchestrationDeps } from "@/lib/integrations/auth/orchestration-effects";
 import type { GitHubDesktopSignInOptions } from "@/lib/integrations/auth/proliferate-auth";
 import type { DesktopSsoSignInOptions } from "@/lib/integrations/auth/proliferate-sso-auth";
@@ -28,7 +30,6 @@ import {
   encodeDesktopReturnUrl,
 } from "@/lib/domain/auth/desktop-navigation";
 import { subscribeDeepLinkUrls } from "@/lib/access/tauri/deep-link";
-import { resolveDesktopTelemetryRoute } from "@/lib/domain/telemetry/routes";
 import {
   captureTelemetryException,
   clearTelemetryUser,
@@ -38,6 +39,7 @@ import {
   setTelemetryUser,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
+import { markLoginNotAttempted } from "@/lib/domain/telemetry/errors";
 import { handleDesktopCallbackUrl } from "@/lib/integrations/auth/orchestration-callback";
 import { discoverDesktopSso } from "@/lib/integrations/auth/proliferate-sso-auth";
 import { DESKTOP_AUTH_REDIRECT_URI } from "@/lib/integrations/auth/proliferate-auth";
@@ -122,12 +124,18 @@ export function buildAnonymousMethods({
  * so the concrete hook result (with richer return types) is assignable.
  */
 export interface DesktopAuthActions {
-  signInWithGitHub: (options?: GitHubDesktopSignInOptions) => Promise<unknown>;
-  signInWithPassword: (credentials: PasswordSignInCredentials) => Promise<unknown>;
-  signInWithSso: (options?: DesktopSsoSignInOptions) => Promise<unknown>;
-  signOut: () => Promise<unknown>;
+  signInWithGitHub: (
+    options?: GitHubDesktopSignInOptions,
+  ) => Promise<ProductLoginOutcome>;
+  signInWithPassword: (
+    credentials: PasswordSignInCredentials,
+  ) => Promise<ProductLoginOutcome>;
+  signInWithSso: (
+    options?: DesktopSsoSignInOptions,
+  ) => Promise<ProductLoginOutcome>;
+  signOut: () => Promise<ProductLogoutOutcome>;
   cancelAuthFlow: (message?: string) => Promise<void>;
-  linkGoogle: () => Promise<unknown>;
+  linkGoogle: () => Promise<ProductLoginOutcome>;
 }
 
 export type DesktopAuthOperations = Pick<
@@ -147,48 +155,54 @@ export function createDesktopAuthOperations(
   actions: DesktopAuthActions,
   getCallbackDeps: () => AuthOrchestrationDeps,
 ): DesktopAuthOperations {
-  async function startLogin(request: LoginRequest): Promise<void> {
+  // Pre-transport rejections (an unsupported method or an unresolved
+  // precondition) are tagged so the product audit wrapper re-throws them
+  // without emitting a sign-in-failed event, matching the prior below-host
+  // emitter which only fired once an orchestration flow actually ran.
+  async function startLogin(request: LoginRequest): Promise<ProductLoginOutcome> {
     switch (request.kind) {
       case "password":
-        await actions.signInWithPassword({
+        return actions.signInWithPassword({
           email: request.email,
           password: request.password,
         });
-        return;
 
       case "github": {
         if (
           request.purpose === "link" ||
           request.purpose === "required_github_link"
         ) {
-          throw new Error(
-            "GitHub account linking is not available from Desktop sign-in.",
+          throw markLoginNotAttempted(
+            new Error(
+              "GitHub account linking is not available from Desktop sign-in.",
+            ),
           );
         }
         // Omitted purpose or "login": the existing action hard-codes login.
-        await actions.signInWithGitHub({ prompt: request.prompt });
-        return;
+        return actions.signInWithGitHub({ prompt: request.prompt });
       }
 
       case "google": {
         if (request.purpose === "link") {
-          await actions.linkGoogle();
-          return;
+          return actions.linkGoogle();
         }
-        throw new Error("Google sign-in is not available on Desktop.");
+        throw markLoginNotAttempted(
+          new Error("Google sign-in is not available on Desktop."),
+        );
       }
 
       case "apple":
-        throw new Error("Apple sign-in is not available on Desktop.");
+        throw markLoginNotAttempted(
+          new Error("Apple sign-in is not available on Desktop."),
+        );
 
       case "sso": {
         if (!request.slug) {
-          await actions.signInWithSso({
+          return actions.signInWithSso({
             email: request.email,
             organizationId: request.organizationId,
             connectionId: request.connectionId,
           });
-          return;
         }
         const discovery = await discoverDesktopSso({
           slug: request.slug,
@@ -197,14 +211,13 @@ export function createDesktopAuthOperations(
           connectionId: request.connectionId,
         });
         if (!discovery.enabled || !discovery.organizationId) {
-          throw new Error(SSO_UNAVAILABLE);
+          throw markLoginNotAttempted(new Error(SSO_UNAVAILABLE));
         }
-        await actions.signInWithSso({
+        return actions.signInWithSso({
           organizationId: discovery.organizationId,
           connectionId: discovery.connectionId,
           prompt: "select_account",
         });
-        return;
       }
     }
   }
@@ -241,8 +254,8 @@ export function createDesktopAuthOperations(
     await actions.cancelAuthFlow();
   }
 
-  async function logout(): Promise<void> {
-    await actions.signOut();
+  async function logout(): Promise<ProductLogoutOutcome> {
+    return actions.signOut();
   }
 
   return { startLogin, finishLogin, cancelLogin, logout };
@@ -275,11 +288,6 @@ export const desktopProductLinks: ProductLinks = {
 
 // --- Telemetry --------------------------------------------------------------
 
-// The last resolved Desktop telemetry route, held across the process so a
-// repeat pathname resolving to the same route suppresses a duplicate emission
-// (mirroring use-telemetry-route-views).
-let previousTelemetryRoute: DesktopTelemetryRoute | null = null;
-
 export const desktopTelemetry: ProductTelemetry = {
   track({ name, properties }): void {
     // Boundary adaptation: the shared event is open-typed while the Desktop
@@ -309,14 +317,13 @@ export const desktopTelemetry: ProductTelemetry = {
   setTag(key: string, value: string): void {
     setTelemetryTag(key, value);
   },
-  routeChanged(pathname: string): void {
-    const route = resolveDesktopTelemetryRoute(pathname);
-    if (previousTelemetryRoute === route) {
-      return;
-    }
-    previousTelemetryRoute = route;
-    setTelemetryTag("route", route);
-    trackProductEvent("screen_viewed", { route });
+  routeChanged(change: ProductRouteChange): void {
+    // Host-owned vendor navigation metadata only. Product code
+    // (use-telemetry-route-views) owns route classification, screen-view
+    // deduplication, and the single `screen_viewed` product event; this adapter
+    // attaches the already-classified route to the vendor and emits no product
+    // event. `routeId` is not re-classified here.
+    setTelemetryTag("route", change.routeId);
   },
   getSupportContext() {
     return {
@@ -325,9 +332,3 @@ export const desktopTelemetry: ProductTelemetry = {
     };
   },
 };
-
-// Test-only: reset the module-held route ref so route-suppression tests start
-// from a clean slate.
-export function __resetDesktopTelemetryRouteForTest(): void {
-  previousTelemetryRoute = null;
-}

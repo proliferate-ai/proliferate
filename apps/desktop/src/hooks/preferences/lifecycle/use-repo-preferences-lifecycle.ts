@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useProductStorageContext } from "@/hooks/persistence/facade/use-product-storage-context";
 import {
   loadRepoPreferences,
   persistRepoPreferences,
@@ -8,12 +9,14 @@ import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-s
 // Owns loading persisted repo preferences and syncing repo config changes.
 // Does not own repository settings UI actions.
 export function useRepoPreferencesLifecycle(): void {
+  const storage = useProductStorageContext();
+
   useEffect(() => {
     let cancelled = false;
     let unsubscribe: (() => void) | null = null;
 
     const bootstrap = async () => {
-      const repoConfigs = await loadRepoPreferences();
+      const repoConfigs = await loadRepoPreferences(storage);
       if (cancelled) {
         return;
       }
@@ -23,7 +26,7 @@ export function useRepoPreferencesLifecycle(): void {
         if (!state._hydrated || !prev._hydrated || state.repoConfigs === prev.repoConfigs) {
           return;
         }
-        void persistRepoPreferences(state.repoConfigs);
+        void persistRepoPreferences(storage, state.repoConfigs);
       });
     };
 
@@ -33,5 +36,5 @@ export function useRepoPreferencesLifecycle(): void {
       cancelled = true;
       unsubscribe?.();
     };
-  }, []);
+  }, [storage]);
 }

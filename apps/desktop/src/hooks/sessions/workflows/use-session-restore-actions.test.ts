@@ -35,7 +35,7 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   useProductHost: () => ({ desktop: { runtime: mocks.localRuntime }, cloud: { client: null } }),
 }));
 
-vi.mock("@/lib/access/browser/session-replacement-tombstones-storage", () => ({
+vi.mock("@/lib/access/persistence/session-replacement-tombstones-storage", () => ({
   readSessionReplacementTombstones: () => ({}),
   writeSessionReplacementTombstones: mocks.writeSessionReplacementTombstones,
 }));

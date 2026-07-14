@@ -3,7 +3,22 @@ import {
   QueryCache,
   QueryClient,
 } from "@tanstack/react-query";
-import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
+
+/**
+ * The narrow exception-capture dependency the query cache reports through. The
+ * product-owned client imports no vendor sink directly; the host composition
+ * injects its concrete `captureException` (Desktop routes it to the telemetry
+ * transport) so there is exactly one QueryClient instance and one capture path.
+ */
+export interface AppQueryClientDeps {
+  captureException: (
+    error: unknown,
+    context: {
+      tags: Record<string, string>;
+      extras: Record<string, unknown>;
+    },
+  ) => void;
+}
 
 function isPlainObject(value: object): boolean {
   const prototype = Object.getPrototypeOf(value);
@@ -77,7 +92,9 @@ export function hashAppQueryKey(queryKey: unknown): string {
   }
 }
 
-function createAppQueryClient() {
+export function createAppQueryClient({
+  captureException,
+}: AppQueryClientDeps): QueryClient {
   return new QueryClient({
     queryCache: new QueryCache({
       onError: (error, query) => {
@@ -85,7 +102,7 @@ function createAppQueryClient() {
           return;
         }
 
-        captureTelemetryException(error, {
+        captureException(error, {
           tags: {
             action: "query_error",
             domain: "react_query",
@@ -103,7 +120,7 @@ function createAppQueryClient() {
         }
 
         const mutationKey = mutation.options.mutationKey;
-        captureTelemetryException(error, {
+        captureException(error, {
           tags: {
             action: "mutation_error",
             domain: "react_query",
@@ -130,5 +147,3 @@ function createAppQueryClient() {
     },
   });
 }
-
-export const appQueryClient = createAppQueryClient();

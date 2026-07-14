@@ -1,4 +1,4 @@
-import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
+import type { ErrorContext } from "@proliferate/product-client/host/product-host";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
@@ -45,6 +45,11 @@ interface SessionCreationFailureCleanupInput {
 
 interface SessionCreationFailureCleanupDeps {
   activateSession: (sessionId: string) => void;
+  /**
+   * Narrow exception-capture dependency injected from the calling hook (which
+   * reads the product telemetry facade). Keeps this plain workflow vendor-free.
+   */
+  captureException: (error: unknown, context?: ErrorContext) => void;
 }
 
 export function cleanupSessionCreationFailure(
@@ -105,7 +110,7 @@ export function cleanupSessionCreationFailure(
       deps.activateSession(input.previousActiveSessionId);
     }
     clearLaunchIntent(input.launchIntentId);
-    captureCreationFailure(input.error, "replace_empty_session");
+    captureCreationFailure(deps.captureException, input.error, "replace_empty_session");
     return;
   }
 
@@ -113,6 +118,7 @@ export function cleanupSessionCreationFailure(
     markProjectedSessionPromptCreateFailed(input.pendingSessionId, input.error);
     clearLaunchIntent(input.launchIntentId);
     captureCreationFailure(
+      deps.captureException,
       input.error,
       input.hasPrompt
         ? "create_session_with_resolved_config"
@@ -148,7 +154,7 @@ export function cleanupSessionCreationFailure(
     }
   }
   clearLaunchIntent(input.launchIntentId);
-  captureCreationFailure(input.error, "create_session_with_resolved_config");
+  captureCreationFailure(deps.captureException, input.error, "create_session_with_resolved_config");
 }
 
 function clearLaunchIntent(launchIntentId: string | null | undefined): void {
@@ -157,8 +163,12 @@ function clearLaunchIntent(launchIntentId: string | null | undefined): void {
   }
 }
 
-function captureCreationFailure(error: unknown, action: string): void {
-  captureTelemetryException(error, {
+function captureCreationFailure(
+  captureException: SessionCreationFailureCleanupDeps["captureException"],
+  error: unknown,
+  action: string,
+): void {
+  captureException(error, {
     tags: { action, domain: "sessions" },
   });
 }

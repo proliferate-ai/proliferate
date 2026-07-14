@@ -13,7 +13,8 @@ import {
   shouldProbeCompatibleRuntimeSessions,
 } from "@/lib/domain/sessions/creation/compatible-session";
 import { mergeLiveDefaultLaunchControls } from "@/lib/domain/sessions/creation/launch-controls";
-import { trackProductEvent } from "@/lib/integrations/telemetry/client";
+import type { ErrorContext } from "@proliferate/product-client/host/product-host";
+import type { DesktopProductEventMap } from "@/lib/domain/telemetry/events";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import {
@@ -55,7 +56,20 @@ import { filterReplacedSessionTombstones } from "@/hooks/sessions/workflows/sess
 import { scheduleCreatedRuntimeSessionCleanup } from "@/hooks/sessions/workflows/session-created-runtime-cleanup";
 import { runInterruptibleSessionCreationStep } from "@/hooks/sessions/workflows/session-creation-materialization-interruption";
 
+/**
+ * Narrow typed telemetry dependencies injected from the calling hook (which
+ * reads the product telemetry facade). Keeps this plain workflow free of any
+ * vendor import while preserving the exact event name/payload it emits.
+ */
+type TrackChatSessionCreated = (
+  name: "chat_session_created",
+  payload: DesktopProductEventMap["chat_session_created"],
+) => void;
+type CaptureException = (error: unknown, context?: ErrorContext) => void;
+
 interface MaterializeSessionCreationInput {
+  trackProductEvent: TrackChatSessionCreated;
+  captureException: CaptureException;
   ensureCloudAgentCatalog: () => Promise<{
     agents: Parameters<typeof buildDesktopLaunchModelRegistries>[0];
   }>;
@@ -100,6 +114,8 @@ export async function materializeSessionCreation(
 }
 
 async function runSessionCreationMaterialization({
+  trackProductEvent,
+  captureException,
   ensureCloudAgentCatalog,
   existingProjectedRecord,
   frozenDefaultLiveSessionControlValuesByAgentKind,
@@ -198,6 +214,7 @@ async function runSessionCreationMaterialization({
       workspaceId,
       runtimeSessionId: session.id,
       clientSessionId: pendingSessionId,
+      captureException,
     });
   };
   let sessionToRetain = session;

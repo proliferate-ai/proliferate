@@ -21,7 +21,12 @@ import {
   WORKTREE_AUTO_DELETE_LIMIT_ADOPTION_PENDING_KEY,
   type PersistedUserPreferencesMetadata,
 } from "@/lib/domain/preferences/persisted-metadata";
-import { readPersistedValue, persistValue } from "@/lib/infra/persistence/preferences-persistence";
+import {
+  readPersistedJsonValue,
+  readPersistedStringValue,
+  writePersistedJson,
+  type ProductStorageContext,
+} from "@/lib/infra/persistence/product-storage";
 import {
   resetFrontierModelVisibilityOverrides,
 } from "@/lib/domain/preferences/user/session-defaults";
@@ -38,13 +43,15 @@ export interface LoadedUserPreferences {
   shouldPersist: boolean;
 }
 
-function readLegacyThemeRecord(): LegacyThemeRecord {
-  if (typeof window === "undefined") {
-    return {};
-  }
-
-  const themePresetRaw = window.localStorage.getItem(LEGACY_THEME_KEY);
-  const colorModeRaw = window.localStorage.getItem(LEGACY_MODE_KEY);
+async function readLegacyThemeRecord(
+  context: ProductStorageContext,
+): Promise<LegacyThemeRecord> {
+  // The legacy theme keys historically lived in raw browser localStorage; the
+  // Desktop ProductStorage adapter reads through to it on a store miss, so
+  // routing them through the injected storage preserves the values while
+  // closing this module's direct browser-global import.
+  const themePresetRaw = await readPersistedStringValue(context, LEGACY_THEME_KEY);
+  const colorModeRaw = await readPersistedStringValue(context, LEGACY_MODE_KEY);
 
   return {
     // Any legacy preset choice collapses to the single Mono theme; a valid
@@ -63,14 +70,20 @@ function readLegacyThemeRecord(): LegacyThemeRecord {
   };
 }
 
-async function readLegacyUserPreferences(): Promise<LegacyUserPreferencesInput> {
-  const legacyTheme = readLegacyThemeRecord();
-  const legacyDefaultChatAgentKind = await readPersistedValue<string>("defaultChatAgentKind");
-  const legacyDefaultChatModelId = await readPersistedValue<string>("defaultChatModelId");
+async function readLegacyUserPreferences(
+  context: ProductStorageContext,
+): Promise<LegacyUserPreferencesInput> {
+  const legacyTheme = await readLegacyThemeRecord(context);
+  const legacyDefaultChatAgentKind =
+    await readPersistedStringValue(context, "defaultChatAgentKind");
+  const legacyDefaultChatModelId =
+    await readPersistedStringValue(context, "defaultChatModelId");
   const legacyDefaultChatModelIdByAgentKind =
-    await readPersistedValue<Record<string, string>>("defaultChatModelIdByAgentKind");
-  const legacyDefaultOpenInTargetId = await readPersistedValue<string>("defaultOpenInTargetId");
-  const legacyBranchPrefixType = await readPersistedValue<BranchPrefixType>("branchPrefixType");
+    await readPersistedJsonValue<Record<string, string>>(context, "defaultChatModelIdByAgentKind");
+  const legacyDefaultOpenInTargetId =
+    await readPersistedStringValue(context, "defaultOpenInTargetId");
+  const legacyBranchPrefixType =
+    await readPersistedStringValue(context, "branchPrefixType") as BranchPrefixType | undefined;
   const hasLegacyPreference =
     legacyTheme.themePreset !== undefined
     || legacyTheme.colorMode !== undefined
@@ -110,14 +123,17 @@ async function readLegacyUserPreferences(): Promise<LegacyUserPreferencesInput> 
   };
 }
 
-async function readPersistedUserPreferences(): Promise<{
+async function readPersistedUserPreferences(
+  context: ProductStorageContext,
+): Promise<{
   preferences: LegacyUserPreferencesInput;
   shouldPersist: boolean;
   persistedMetadata: PersistedUserPreferencesMetadata;
   deferWorktreeAutoDeleteLimitPersist: boolean;
   resetModelVisibilityDefaults: boolean;
 }> {
-  const persisted = await readPersistedValue<Record<string, unknown>>(USER_PREFERENCES_KEY);
+  const persisted =
+    await readPersistedJsonValue<Record<string, unknown>>(context, USER_PREFERENCES_KEY);
   if (persisted && typeof persisted === "object" && !Array.isArray(persisted)) {
     const needsWorktreeAdoption = !isValidWorktreeAutoDeleteLimit(
       persisted.worktreeAutoDeleteLimit,
@@ -138,7 +154,7 @@ async function readPersistedUserPreferences(): Promise<{
   }
 
   return {
-    preferences: await readLegacyUserPreferences(),
+    preferences: await readLegacyUserPreferences(context),
     shouldPersist: false,
     persistedMetadata: markModelVisibilityDefaultsReset({}),
     deferWorktreeAutoDeleteLimitPersist: false,
@@ -146,8 +162,10 @@ async function readPersistedUserPreferences(): Promise<{
   };
 }
 
-export async function loadUserPreferences(): Promise<LoadedUserPreferences> {
-  const persisted = await readPersistedUserPreferences();
+export async function loadUserPreferences(
+  context: ProductStorageContext,
+): Promise<LoadedUserPreferences> {
+  const persisted = await readPersistedUserPreferences(context);
   let migrated = migrateUserPreferences(persisted.preferences);
   let persistedMetadata = persisted.persistedMetadata;
   let shouldPersist = (
@@ -180,10 +198,12 @@ export async function loadUserPreferences(): Promise<LoadedUserPreferences> {
 }
 
 export async function persistUserPreferences(
+  context: ProductStorageContext,
   preferences: UserPreferences,
   persistedMetadata: PersistedUserPreferencesMetadata,
 ): Promise<void> {
-  await persistValue(
+  await writePersistedJson(
+    context,
     USER_PREFERENCES_KEY,
     buildPersistedUserPreferencesRecord(preferences, persistedMetadata),
   );

@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { useAuditedAuth } from "@/hooks/auth/facade/use-audited-auth";
 import { useDesktopAuthMethods } from "@/hooks/access/cloud/auth/use-auth-methods";
 import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
 import { isAbortError } from "@/lib/integrations/auth/proliferate-auth";
@@ -17,7 +17,7 @@ export interface UsePasswordSignInResult {
 // comes from the server's public auth-methods probe so the login surface can
 // show the form only when the connected server supports password login.
 export function usePasswordSignIn(): UsePasswordSignInResult {
-  const { startLogin } = useProductHost().auth;
+  const { startLogin } = useAuditedAuth();
   const { cloudEnabled } = useAppCapabilities();
   const {
     data: authMethods,

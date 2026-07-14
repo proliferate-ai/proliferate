@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { writePendingOrganizationJoinTarget } from "@/lib/access/browser/organization-join-target";
+import { useAuditedAuth } from "@/hooks/auth/facade/use-audited-auth";
+import { writePendingOrganizationJoinTarget } from "@/lib/access/persistence/organization-join-target";
+import { useProductStorageContext } from "@/hooks/persistence/facade/use-product-storage-context";
 import { canFallbackToStandardInviteSignIn } from "@/lib/domain/organizations/join-auth";
 
 function organizationJoinTargetFromSearch(search: string): string | null {
@@ -13,8 +15,9 @@ function organizationJoinTargetFromSearch(search: string): string | null {
 export function useOrganizationJoinAuthLaunch() {
   const location = useLocation();
   const { auth } = useProductHost();
+  const storage = useProductStorageContext();
   const authStatus = auth.state.status;
-  const { startLogin } = auth;
+  const { startLogin } = useAuditedAuth();
   const startedForOrganizationRef = useRef<string | null>(null);
   const joinOrganizationId = useMemo(
     () => organizationJoinTargetFromSearch(location.search),
@@ -25,8 +28,8 @@ export function useOrganizationJoinAuthLaunch() {
     if (!joinOrganizationId) {
       return;
     }
-    writePendingOrganizationJoinTarget(joinOrganizationId);
-  }, [joinOrganizationId]);
+    void writePendingOrganizationJoinTarget(storage, joinOrganizationId);
+  }, [joinOrganizationId, storage]);
 
   useEffect(() => {
     if (

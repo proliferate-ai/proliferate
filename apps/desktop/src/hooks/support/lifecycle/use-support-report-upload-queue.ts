@@ -5,7 +5,12 @@ import {
 } from "@anyharness/sdk-react";
 import { useEffect, useMemo, useRef } from "react";
 import type { DesktopDiagnosticsBridge } from "@proliferate/product-client/host/desktop-bridge";
+import type { ProductSupportTelemetryContext } from "@proliferate/product-client/host/product-host";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
+import { useProductStorageContext } from "@/hooks/persistence/facade/use-product-storage-context";
+import type { DesktopProductEventMap } from "@/lib/domain/telemetry/events";
+import type { ProductStorageContext } from "@/lib/infra/persistence/product-storage";
 import {
   completeSupportReportUpload,
   createSupportReport,
@@ -57,8 +62,23 @@ interface SupportReportUploadResult {
   reportId: string;
 }
 
+/**
+ * The narrow product telemetry surface this queue threads into its plain payload
+ * builders: the typed `support_report_submitted` emitter and the support-context
+ * accessor, both obtained from the `useProductTelemetry` facade.
+ */
+interface SupportReportUploadTelemetry {
+  track: (
+    name: "support_report_submitted",
+    payload: DesktopProductEventMap["support_report_submitted"],
+  ) => void;
+  getSupportContext: () => ProductSupportTelemetryContext;
+}
+
 export function useSupportReportUploadQueue(): void {
   const diagnostics = useProductHost().desktop?.diagnostics ?? null;
+  const telemetry = useProductTelemetry();
+  const storage = useProductStorageContext();
   const workspaceContext = useAnyHarnessWorkspaceContext();
   const contextWorkspaceId = workspaceContext.workspaceId;
   const resolveConnection = workspaceContext.resolveConnection;
@@ -85,17 +105,22 @@ export function useSupportReportUploadQueue(): void {
   useEffect(() => {
     let disposed = false;
     let unlistenJobs: (() => void) | null = null;
+    // Persisting is async now, so chain deliveries to preserve the synchronous
+    // dedup the old localStorage path had: a rapid double-delivery of the same
+    // job must read the first write before the second persist runs. This is a
+    // per-mount ordering of this listener's own writes, not a retry/queue system.
+    let persistChain: Promise<void> = Promise.resolve();
 
     const processQueue = () => {
       if (disposed || processingRef.current) {
         return;
       }
       processingRef.current = true;
-      void drainSupportReportQueue(dependencies, diagnostics, showToast)
+      void drainSupportReportQueue(storage, dependencies, diagnostics, showToast, telemetry)
         .finally(() => {
           processingRef.current = false;
           if (!disposed) {
-            scheduleNextRetry(processQueue, retryTimerRef);
+            void scheduleNextRetry(storage, processQueue, retryTimerRef);
           }
         });
     };
@@ -104,12 +129,17 @@ export function useSupportReportUploadQueue(): void {
       if (disposed) {
         return;
       }
-      const queued = persistSupportReportJob(job);
-      if (!queued) {
-        return;
-      }
-      showToast("Sending report...", "info");
-      processQueue();
+      persistChain = persistChain.then(async () => {
+        if (disposed) {
+          return;
+        }
+        const queued = await persistSupportReportJob(storage, job);
+        if (disposed || !queued) {
+          return;
+        }
+        showToast("Sending report...", "info");
+        processQueue();
+      });
     }).then((unlisten) => {
       if (disposed) {
         unlisten();
@@ -126,15 +156,17 @@ export function useSupportReportUploadQueue(): void {
         window.clearTimeout(retryTimerRef.current);
       }
     };
-  }, [dependencies, diagnostics, showToast]);
+  }, [dependencies, diagnostics, showToast, storage, telemetry]);
 }
 
 async function drainSupportReportQueue(
+  storage: ProductStorageContext,
   dependencies: SupportReportUploadDependencies<AnyHarnessResolvedConnection>,
   diagnostics: DesktopDiagnosticsBridge | null,
   showToast: (message: string, type?: "error" | "info") => void,
+  telemetry: SupportReportUploadTelemetry,
 ): Promise<void> {
-  const queued = readPersistedJobs();
+  const queued = await readPersistedJobs(storage);
   const now = Date.now();
   for (const entry of queued) {
     const nextAttemptMs = entry.nextAttemptAt ? Date.parse(entry.nextAttemptAt) : 0;
@@ -143,8 +175,8 @@ async function drainSupportReportQueue(
     }
 
     try {
-      const result = await uploadSupportReport(entry.job, dependencies, diagnostics);
-      removePersistedJob(entry.job.jobId);
+      const result = await uploadSupportReport(entry.job, dependencies, diagnostics, telemetry);
+      await removePersistedJob(storage, entry.job.jobId);
       showToast(
         `Thanks. Report sent. Support has the details. (${result.reportId})`,
         "info",
@@ -160,7 +192,7 @@ async function drainSupportReportQueue(
       // Already completed on a prior attempt — this is success, not failure.
       // Clean up the queued job quietly instead of nagging.
       if (failure.kind === "already_completed") {
-        removePersistedJob(entry.job.jobId);
+        await removePersistedJob(storage, entry.job.jobId);
         await deleteSupportReportJobAttachments(
           entry.job,
           diagnostics?.deleteAttachment,
@@ -180,7 +212,7 @@ async function drainSupportReportQueue(
         nowMs: Date.now(),
       });
       if (!failure.retryable || exhausted) {
-        removePersistedJob(entry.job.jobId);
+        await removePersistedJob(storage, entry.job.jobId);
         await deleteSupportReportJobAttachments(
           entry.job,
           diagnostics?.deleteAttachment,
@@ -206,7 +238,7 @@ async function drainSupportReportQueue(
         lastToastKind: entry.lastFailureToastKind,
         nowMs,
       });
-      markPersistedJobFailed(entry.job.jobId, failure, new Date(nowMs), shouldToast);
+      await markPersistedJobFailed(storage, entry.job.jobId, failure, new Date(nowMs), shouldToast);
       if (shouldToast) {
         showToast(failure.toastMessage);
       }
@@ -218,12 +250,15 @@ async function uploadSupportReport(
   job: SupportReportJob,
   dependencies: SupportReportUploadDependencies<AnyHarnessResolvedConnection>,
   diagnostics: DesktopDiagnosticsBridge | null,
+  telemetry: SupportReportUploadTelemetry,
 ): Promise<SupportReportUploadResult> {
   validateAttachmentSizes(job);
-  const report = await createSupportReport(buildCreateReportRequest(job, job.attachments.length));
+  const report = await createSupportReport(
+    buildCreateReportRequest(job, job.attachments.length, telemetry.getSupportContext()),
+  );
   const serverCorrelation = toLocalServerCorrelation(report);
   if (report.status === "completed") {
-    trackSupportReportSubmitted(job, serverCorrelation, job.attachments.length);
+    trackSupportReportSubmitted(job, serverCorrelation, job.attachments.length, telemetry.track);
     await deleteSupportReportJobAttachments(job, diagnostics?.deleteAttachment);
     return {
       reportId: report.reportId,
@@ -273,7 +308,7 @@ async function uploadSupportReport(
       attachments: [],
     });
     await completeSupportReportUpload(report.reportId, completeRequest);
-    trackSupportReportSubmitted(job, serverCorrelation, 0);
+    trackSupportReportSubmitted(job, serverCorrelation, 0, telemetry.track);
     await deleteSupportReportJobAttachments(job, diagnostics?.deleteAttachment);
     return {
       reportId: report.reportId,
@@ -330,7 +365,7 @@ async function uploadSupportReport(
     attachments: completedAttachments,
   });
   await completeSupportReportUpload(upload.reportId, completeRequest);
-  trackSupportReportSubmitted(job, serverCorrelation, completedAttachments.length);
+  trackSupportReportSubmitted(job, serverCorrelation, completedAttachments.length, telemetry.track);
   await deleteSupportReportJobAttachments(job, diagnostics?.deleteAttachment);
   return {
     reportId: upload.reportId,

@@ -61,7 +61,7 @@ vi.mock("@/lib/access/anyharness/direct-session-create-guard", () => ({
   assertDirectSessionCreateSupported: vi.fn(),
 }));
 
-vi.mock("@/lib/access/browser/session-replacement-tombstones-storage", () => ({
+vi.mock("@/lib/access/persistence/session-replacement-tombstones-storage", () => ({
   readSessionReplacementTombstones: () => ({}),
   writeSessionReplacementTombstones: mocks.writeTombstones,
 }));
@@ -86,6 +86,7 @@ describe("created runtime cleanup", () => {
       workspaceId: "workspace-1",
       runtimeSessionId: "runtime-created",
       clientSessionId: "client-created",
+      captureException: vi.fn(),
     });
 
     await expect(result).resolves.toBe(true);
@@ -107,6 +108,7 @@ describe("created runtime cleanup", () => {
       workspaceId: "workspace-1",
       runtimeSessionId: "runtime-created",
       clientSessionId: "client-created",
+      captureException: vi.fn(),
     })).resolves.toBe(false);
 
     expect(mocks.dismissSession).toHaveBeenCalledTimes(3);
@@ -136,6 +138,8 @@ describe("created runtime cleanup", () => {
     const localRuntime = { getConnection: vi.fn(), restart: vi.fn() };
 
     await expect(materializeSessionCreation({
+      trackProductEvent: vi.fn(),
+      captureException: vi.fn(),
       ensureCloudAgentCatalog: vi.fn(async () => ({ agents: [] })),
       existingProjectedRecord: projectedRecord,
       frozenDefaultLiveSessionControlValuesByAgentKind: {},
@@ -187,6 +191,8 @@ describe("created runtime cleanup", () => {
     const upsertWorkspaceSessionRecord = vi.fn();
     const unregister = registerSessionCreation(pendingSessionId);
     const materialization = materializeSessionCreation({
+      trackProductEvent: vi.fn(),
+      captureException: vi.fn(),
       ensureCloudAgentCatalog: vi.fn(async () => ({ agents: [] })),
       existingProjectedRecord: projectedRecord,
       frozenDefaultLiveSessionControlValuesByAgentKind: {},
@@ -250,6 +256,8 @@ describe("created runtime cleanup", () => {
     mocks.applySessionLaunchDefaults.mockReturnValue(defaultsGate.promise);
     const unregister = registerSessionCreation(pendingSessionId);
     const materialization = materializeSessionCreation({
+      trackProductEvent: vi.fn(),
+      captureException: vi.fn(),
       ensureCloudAgentCatalog: vi.fn(async () => ({ agents: [] })),
       existingProjectedRecord: projectedRecord,
       frozenDefaultLiveSessionControlValuesByAgentKind: {},

@@ -1,7 +1,7 @@
 import {
-  readSessionReplacementTombstones,
+  type PersistedSessionReplacementTombstones,
   writeSessionReplacementTombstones,
-} from "@/lib/access/browser/session-replacement-tombstones-storage";
+} from "@/lib/access/persistence/session-replacement-tombstones-storage";
 
 type SessionIdentity = { id: string };
 
@@ -21,15 +21,9 @@ const stagedByWorkspaceId = new Map<string, WorkspaceTombstones>();
 // that alias out of optimistic/header projections without inventing a fake
 // runtime tombstone that background cleanup could try to dismiss.
 const stagedClientAliasesByWorkspaceId = new Map<string, Set<string>>();
-const committedByWorkspaceId = new Map<string, WorkspaceTombstones>(
-  Object.entries(readSessionReplacementTombstones()).map(([workspaceId, entries]) => [
-    workspaceId,
-    new Map(entries.map((entry) => [
-      entry.runtimeSessionId,
-      createEntry(entry.runtimeSessionId, entry.suppressedSessionIds),
-    ])),
-  ]),
-);
+// Seeded empty; restored via hydrateCommittedReplacedSessionTombstones once
+// ProductStorage is wired (the backend read is async, unlike the old sync read).
+const committedByWorkspaceId = new Map<string, WorkspaceTombstones>();
 // Authoritative omission removes persistence, but suppression remains for the
 // lifetime of this renderer. That prevents a slower pre-dismiss list response
 // from arriving after the omission and repopulating the retired id. A cold
@@ -263,6 +257,23 @@ export function releaseReplacedSessionSuppression(
   removeClientAlias(stagedClientAliasesByWorkspaceId, workspaceId, runtimeSessionId);
   removeClientAlias(retiredClientAliasesByWorkspaceId, workspaceId, runtimeSessionId);
   return true;
+}
+
+// Restore async-hydrated committed tombstones without persisting back;
+// in-session commits and retired ids win so a slow hydration cannot clobber
+// newer state or resurrect a retired id.
+export function hydrateCommittedReplacedSessionTombstones(
+  entries: PersistedSessionReplacementTombstones,
+): void {
+  for (const [workspaceId, tombstones] of Object.entries(entries)) {
+    const existing = committedByWorkspaceId.get(workspaceId) ?? new Map();
+    const retired = retiredSuppressionByWorkspaceId.get(workspaceId);
+    for (const entry of tombstones) {
+      if (existing.has(entry.runtimeSessionId) || retired?.has(entry.runtimeSessionId)) continue;
+      existing.set(entry.runtimeSessionId, createEntry(entry.runtimeSessionId, entry.suppressedSessionIds));
+    }
+    if (existing.size > 0) committedByWorkspaceId.set(workspaceId, existing);
+  }
 }
 
 export function resetReplacedSessionTombstonesForTests(): void {

@@ -12,7 +12,7 @@ import { getCloudWorkspaceConnectionWithRetry } from "@/lib/access/cloud/workspa
 import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
+import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
 import {
   clearCloudDisplayNameBackfillSuppression,
   suppressCloudDisplayNameBackfill,
@@ -43,6 +43,7 @@ export function useWorkspaceDisplayNameActions() {
   const { logicalWorkspaces } = useLogicalWorkspaces();
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const cloudClient = useProductHost().cloud.client;
+  const telemetry = useProductTelemetry();
 
   const updateMutation = useMutation<void, Error, UpdateWorkspaceDisplayNameInput>({
     meta: {
@@ -122,7 +123,7 @@ export function useWorkspaceDisplayNameActions() {
       void invalidateWorkspaceCollections();
     },
     onError: (error) => {
-      captureTelemetryException(error, {
+      telemetry.captureException(error, {
         tags: {
           action: "update_workspace_display_name",
           domain: "workspace",

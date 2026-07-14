@@ -33,10 +33,7 @@ import type { AuthUser } from "@/lib/domain/auth/auth-user";
 import { useProductAuthUser } from "@/hooks/auth/facade/use-product-auth";
 import { useWorkspaceCollectionsCache } from "@/hooks/workspaces/cache/use-workspace-collections-cache";
 import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
-import {
-  captureTelemetryException,
-  trackProductEvent,
-} from "@/lib/integrations/telemetry/client";
+import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
 import {
   elapsedMs,
   logLatency,
@@ -89,6 +86,7 @@ function buildRepoTargetFromRequest(
 }
 
 export function useCreateCloudWorkspace() {
+  const telemetry = useProductTelemetry();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const setPendingWorkspaceEntry = useSessionSelectionStore((state) => state.setPendingWorkspaceEntry);
   const branchPrefixType = useUserPreferencesStore((state) => state.branchPrefixType);
@@ -208,7 +206,7 @@ export function useCreateCloudWorkspace() {
         });
         const workspace = await createCloudWorkspaceMutation(attempt.request);
         const workspaceStatus = resolveCloudWorkspaceStatus(workspace) ?? "pending";
-        trackProductEvent("cloud_workspace_created", {
+        telemetry.track("cloud_workspace_created", {
           workspace_kind: "cloud",
           status: workspaceStatus,
           git_provider: workspace.repo.provider,
@@ -290,7 +288,7 @@ export function useCreateCloudWorkspace() {
           continue;
         }
 
-        captureTelemetryException(error, {
+        telemetry.captureException(error, {
           tags: {
             action: "create_cloud_workspace",
             domain: "cloud_workspace",
@@ -326,6 +324,7 @@ export function useCreateCloudWorkspace() {
     getWorkspaceCollections,
     selectWorkspace,
     setPendingWorkspaceEntry,
+    telemetry,
   ]);
 
   const createCloudWorkspaceAndEnter = useCallback(async (

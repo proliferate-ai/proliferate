@@ -9,11 +9,17 @@ import { DiffViewer } from "@/components/content/ui/DiffViewer";
 import { FileDiffCard } from "@/components/content/ui/FileDiffCard";
 import {
   CHAT_DIFF_PREFERENCES_STORAGE_KEY,
+  resetChatDiffPreferencesForTests,
+  setChatDiffPreferencesStorageContext,
   useChatDiffPreferencesStore,
 } from "@/stores/chat/chat-diff-preferences-store";
 import {
   buildChatDiffLineWrapNativeContextMenuItems,
 } from "@/hooks/ui/native/use-chat-diff-line-wrap-native-context-menu";
+import {
+  createMemoryProductStorage,
+  type MemoryProductStorage,
+} from "@/test/product-storage-test-utils";
 
 const LONG_LINE_PATCH = `diff --git a/src/long.ts b/src/long.ts
 index 1111111..2222222 100644
@@ -31,24 +37,17 @@ function renderWithProductHost(ui: ReactElement) {
   );
 }
 
+let memory: MemoryProductStorage;
+
 beforeEach(() => {
-  const values = new Map<string, string>();
-  Object.defineProperty(window, "localStorage", {
-    configurable: true,
-    value: {
-      clear: () => values.clear(),
-      getItem: (key: string) => values.get(key) ?? null,
-      removeItem: (key: string) => values.delete(key),
-      setItem: (key: string, value: string) => values.set(key, value),
-    },
-  });
-  window.localStorage.clear();
+  memory = createMemoryProductStorage();
+  setChatDiffPreferencesStorageContext(memory.context);
   useChatDiffPreferencesStore.getState().setWrapLongLines(false);
 });
 
 afterEach(() => {
   cleanup();
-  window.localStorage.clear();
+  resetChatDiffPreferencesForTests();
 });
 
 describe("ChatDiffLineWrapContextMenu", () => {
@@ -71,7 +70,7 @@ describe("ChatDiffLineWrapContextMenu", () => {
     fireEvent.contextMenu(triggers[0]);
     fireEvent.click(screen.getByRole("button", { name: "Turn line wrapping on" }));
 
-    expect(JSON.parse(window.localStorage.getItem(CHAT_DIFF_PREFERENCES_STORAGE_KEY)!))
+    expect(memory.readJson(CHAT_DIFF_PREFERENCES_STORAGE_KEY))
       .toEqual({ wrapLongLines: true });
     for (const trigger of triggers) {
       expect(trigger.className).toContain("overflow-x-hidden");

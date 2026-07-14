@@ -8,7 +8,7 @@ import { useAuthStore } from "@/stores/auth/auth-store";
 import { useOrganizationJoinInvitationFlow } from "./use-organization-join-invitation-flow";
 
 const hostMocks = vi.hoisted(() => ({
-  startLogin: vi.fn<(_request?: unknown) => Promise<void>>(),
+  startLogin: vi.fn<(_request?: unknown) => Promise<{ provider: string; source: string }>>(),
 }));
 
 const connectServerMocks = vi.hoisted(() => ({
@@ -76,7 +76,7 @@ describe("useOrganizationJoinInvitationFlow", () => {
   beforeEach(() => {
     clearTestStorage();
     hostMocks.startLogin.mockReset();
-    hostMocks.startLogin.mockResolvedValue(undefined);
+    hostMocks.startLogin.mockResolvedValue({ provider: "sso", source: "desktop_callback" });
     connectServerMocks.available = true;
     connectServerMocks.step = "closed";
     connectServerMocks.openForUrl.mockReset();

@@ -1,9 +1,11 @@
 import { useEffect } from "react";
+import { useProductStorageContext } from "@/hooks/persistence/facade/use-product-storage-context";
 import {
   selectPersistedUserPreferencesSlice,
   type PersistedUserPreferencesMetadata,
 } from "@/lib/domain/preferences/persisted-metadata";
 import type { UserPreferences } from "@/lib/domain/preferences/user/model";
+import type { ProductStorageContext } from "@/lib/infra/persistence/product-storage";
 import {
   loadUserPreferences,
   persistUserPreferences,
@@ -15,28 +17,31 @@ function sameJson(left: unknown, right: unknown): boolean {
 }
 
 function persistSnapshot(
+  storage: ProductStorageContext,
   preferences: UserPreferences,
   persistedMetadata: PersistedUserPreferencesMetadata,
 ): void {
-  void persistUserPreferences(preferences, persistedMetadata);
+  void persistUserPreferences(storage, preferences, persistedMetadata);
 }
 
 // Owns loading persisted user preferences and syncing store changes to disk.
 // Does not own preference UI actions or worktree policy adoption.
 export function useUserPreferencesLifecycle(): void {
+  const storage = useProductStorageContext();
+
   useEffect(() => {
     let cancelled = false;
     let unsubscribe: (() => void) | null = null;
 
     const bootstrap = async () => {
-      const loaded = await loadUserPreferences();
+      const loaded = await loadUserPreferences(storage);
       if (cancelled) {
         return;
       }
 
       useUserPreferencesStore.getState().hydrate(loaded);
       if (loaded.shouldPersist) {
-        persistSnapshot(loaded.preferences, loaded.persistedMetadata);
+        persistSnapshot(storage, loaded.preferences, loaded.persistedMetadata);
       }
 
       unsubscribe = useUserPreferencesStore.subscribe((state, prev) => {
@@ -53,7 +58,7 @@ export function useUserPreferencesLifecycle(): void {
           return;
         }
 
-        persistSnapshot(currentPreferences, state._persistedMetadata);
+        persistSnapshot(storage, currentPreferences, state._persistedMetadata);
       });
     };
 
@@ -63,5 +68,5 @@ export function useUserPreferencesLifecycle(): void {
       cancelled = true;
       unsubscribe?.();
     };
-  }, []);
+  }, [storage]);
 }

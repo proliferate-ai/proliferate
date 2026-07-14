@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRepositories } from "@proliferate/cloud-sdk-react";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
@@ -18,21 +18,19 @@ import {
 } from "@/lib/domain/settings/navigation";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+import { useProductStorageContext } from "@/hooks/persistence/facade/use-product-storage-context";
+import {
+  readPersistedStringValue,
+  writePersistedString,
+} from "@/lib/infra/persistence/product-storage";
 
 const HOME_MODEL_PROBE_DISMISSED_STORAGE_KEY =
   "proliferate.home.modelProbeCardDismissed";
 
-function readHomeModelProbeDismissed(): boolean {
-  try {
-    return window.localStorage.getItem(HOME_MODEL_PROBE_DISMISSED_STORAGE_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
 // Owns the Home screen facade consumed by the component. Does not own Home Next launch flow.
 export function useHomeScreen() {
   const navigate = useNavigate();
+  const storage = useProductStorageContext();
   const { isAddingRepo } = useAddRepo();
   const openAddRepoFlow = useAddRepoFlowStore((state) => state.openFlow);
   const {
@@ -40,17 +38,26 @@ export function useHomeScreen() {
     isLoading: agentsLoading,
     isReconciling,
   } = useAgentCatalog();
-  const [modelProbeDismissed, setModelProbeDismissed] = useState<boolean>(() =>
-    readHomeModelProbeDismissed()
-  );
+  const [modelProbeDismissed, setModelProbeDismissed] = useState<boolean>(false);
+  useEffect(() => {
+    let cancelled = false;
+    // Bare "1" sentinel string (never JSON): read raw to preserve the existing
+    // dismissal with zero migration. A late read after unmount is discarded.
+    void readPersistedStringValue(storage, HOME_MODEL_PROBE_DISMISSED_STORAGE_KEY).then(
+      (value) => {
+        if (!cancelled && value === "1") {
+          setModelProbeDismissed(true);
+        }
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [storage]);
   const dismissModelProbeCard = useCallback(() => {
     setModelProbeDismissed(true);
-    try {
-      window.localStorage.setItem(HOME_MODEL_PROBE_DISMISSED_STORAGE_KEY, "1");
-    } catch {
-      // Persistence is best-effort; in-memory dismissal still applies.
-    }
-  }, []);
+    void writePersistedString(storage, HOME_MODEL_PROBE_DISMISSED_STORAGE_KEY, "1");
+  }, [storage]);
   const { cloudActive } = useCloudAvailabilityState();
   const {
     data: repoConfigs,

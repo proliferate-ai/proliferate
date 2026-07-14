@@ -42,7 +42,7 @@ export interface DesktopProductHostProviderProps {
  * organization selection, routes, workspace/runtime state, and preference
  * changes do not replace it. Static adapters retain stable identity across
  * replacements. It constructs no second Cloud/Query/runtime/auth/telemetry
- * instance — it reuses the exact `cloudClient` passed by AppProviders.
+ * instance — it reuses the exact `cloudClient` passed by DesktopHostProviders.
  */
 export function DesktopProductHostProvider({
   cloudClient,

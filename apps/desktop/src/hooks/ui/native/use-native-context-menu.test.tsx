@@ -20,10 +20,10 @@ function makeHost(desktop: DesktopBridge | null): ProductHost {
       authRequired: true,
       state: { status: "loading" },
       restoreSession: async () => {},
-      startLogin: async () => {},
+      startLogin: async () => ({ provider: "github", source: "desktop_callback" }),
       finishLogin: async () => {},
       cancelLogin: async () => {},
-      logout: async () => {},
+      logout: async () => ({ provider: "github" }),
     },
     cloud: { client: null },
     storage: {

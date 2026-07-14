@@ -28,7 +28,7 @@ const storageMocks = vi.hoisted(() => ({
   writeTombstones: vi.fn(() => true),
 }));
 
-vi.mock("@/lib/access/browser/session-replacement-tombstones-storage", () => ({
+vi.mock("@/lib/access/persistence/session-replacement-tombstones-storage", () => ({
   readSessionReplacementTombstones: () => ({}),
   writeSessionReplacementTombstones: storageMocks.writeTombstones,
 }));
@@ -39,6 +39,7 @@ function createDeps() {
     closeSessionSlotStream: vi.fn(),
     removeWorkspaceSessionRecord: vi.fn(),
     dismissSessionMutation: { mutateAsync } as never,
+    captureException: vi.fn(),
   };
   return { deps, mutateAsync };
 }

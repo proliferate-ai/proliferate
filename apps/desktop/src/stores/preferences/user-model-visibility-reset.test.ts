@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
   hasAppliedModelVisibilityDefaultsReset,
   selectPersistedUserPreferencesSlice,
@@ -12,40 +12,24 @@ import {
   persistUserPreferences,
 } from "@/lib/workflows/preferences/user-preferences-persistence";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+import {
+  createMemoryProductStorage,
+  type MemoryProductStorage,
+} from "@/test/product-storage-test-utils";
 
-const storeMocks = vi.hoisted(() => {
-  const values = new Map<string, unknown>();
-  const get = vi.fn(async (key: string) => values.get(key));
-  const set = vi.fn(async (key: string, value: unknown) => {
-    values.set(key, value);
-  });
-
-  return {
-    values,
-    get,
-    set,
-    getPreferencesStore: vi.fn(async () => ({ get, set })),
-  };
-});
-
-vi.mock("@/lib/access/tauri/store", () => ({
-  getPreferencesStore: storeMocks.getPreferencesStore,
-}));
+let memory: MemoryProductStorage;
 
 async function bootstrapUserPreferencesForTest(): Promise<void> {
-  const loaded = await loadUserPreferences();
+  const loaded = await loadUserPreferences(memory.context);
   useUserPreferencesStore.getState().hydrate(loaded);
   if (loaded.shouldPersist) {
-    await persistUserPreferences(loaded.preferences, loaded.persistedMetadata);
+    await persistUserPreferences(memory.context, loaded.preferences, loaded.persistedMetadata);
   }
 }
 
 describe("user model visibility reset", () => {
   beforeEach(() => {
-    storeMocks.values.clear();
-    storeMocks.get.mockClear();
-    storeMocks.set.mockClear();
-    storeMocks.getPreferencesStore.mockClear();
+    memory = createMemoryProductStorage();
     useUserPreferencesStore.setState({
       ...USER_PREFERENCE_DEFAULTS,
       _hydrated: false,
@@ -54,7 +38,7 @@ describe("user model visibility reset", () => {
   });
 
   it("resets existing frontier-agent visibility overrides once", async () => {
-    storeMocks.values.set("user_preferences", {
+    memory.values.set("user_preferences", {
       ...USER_PREFERENCE_DEFAULTS,
       chatModelVisibilityOverridesByAgentKind: {
         claude: {
@@ -78,12 +62,12 @@ describe("user model visibility reset", () => {
         "us.anthropic.claude-opus-4-8[1m]": false,
       },
     });
-    const persisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
+    const persisted = memory.readJson<Record<string, unknown>>("user_preferences")!;
     expect(hasAppliedModelVisibilityDefaultsReset(persisted)).toBe(true);
   });
 
   it("preserves frontier-agent visibility overrides after the reset marker exists", async () => {
-    storeMocks.values.set("user_preferences", {
+    memory.values.set("user_preferences", {
       ...USER_PREFERENCE_DEFAULTS,
       modelVisibilityDefaults20260531Reset: true,
       chatModelVisibilityOverridesByAgentKind: {
@@ -112,6 +96,7 @@ describe("user model visibility reset", () => {
       },
     });
     await persistUserPreferences(
+      memory.context,
       selectPersistedUserPreferencesSlice(useUserPreferencesStore.getState()),
       useUserPreferencesStore.getState()._persistedMetadata,
     );

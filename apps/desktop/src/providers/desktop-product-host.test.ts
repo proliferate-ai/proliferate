@@ -61,7 +61,6 @@ vi.mock("@/lib/integrations/telemetry/client", () => ({
 }));
 
 import {
-  __resetDesktopTelemetryRouteForTest,
   buildAnonymousMethods,
   createDesktopAuthOperations,
   createDesktopDeployment,
@@ -75,13 +74,23 @@ const SSO_UNAVAILABLE =
   "We could not find single sign-on for that workspace. Check the sign-in link your admin shared.";
 
 function makeActions() {
+  const loginOutcome = { provider: "github", source: "desktop_callback" };
   return {
-    signInWithGitHub: vi.fn().mockResolvedValue(undefined),
-    signInWithPassword: vi.fn().mockResolvedValue(undefined),
-    signInWithSso: vi.fn().mockResolvedValue(undefined),
-    signOut: vi.fn().mockResolvedValue(undefined),
+    signInWithGitHub: vi.fn().mockResolvedValue(loginOutcome),
+    signInWithPassword: vi.fn().mockResolvedValue({
+      provider: "password",
+      source: "password_form",
+    }),
+    signInWithSso: vi.fn().mockResolvedValue({
+      provider: "sso",
+      source: "desktop_callback",
+    }),
+    signOut: vi.fn().mockResolvedValue({ provider: "github" }),
     cancelAuthFlow: vi.fn().mockResolvedValue(undefined),
-    linkGoogle: vi.fn().mockResolvedValue(undefined),
+    linkGoogle: vi.fn().mockResolvedValue({
+      provider: "google",
+      source: "desktop_callback",
+    }),
   };
 }
 
@@ -488,18 +497,13 @@ describe("desktopTelemetry", () => {
     expect(mocks.setTelemetryTag).toHaveBeenCalledWith("k", "v");
   });
 
-  it("routeChanged emits once per resolved route and suppresses repeats", () => {
-    __resetDesktopTelemetryRouteForTest();
+  it("routeChanged attaches the supplied routeId to the vendor tag and emits no product event", () => {
+    // Product code owns classification, dedup, and the single screen_viewed
+    // event; the host adapter only tags the vendor with the classified route.
+    desktopTelemetry.routeChanged({ pathname: "/", routeId: "main" });
+    desktopTelemetry.routeChanged({ pathname: "/settings", routeId: "settings" });
 
-    desktopTelemetry.routeChanged("/");
-    desktopTelemetry.routeChanged("/");
-    desktopTelemetry.routeChanged("/settings");
-
-    // "main" (from "/") emits once, the repeat is suppressed, "settings" emits.
-    expect(mocks.trackProductEvent.mock.calls).toEqual([
-      ["screen_viewed", { route: "main" }],
-      ["screen_viewed", { route: "settings" }],
-    ]);
+    expect(mocks.trackProductEvent).not.toHaveBeenCalled();
     expect(mocks.setTelemetryTag.mock.calls).toEqual([
       ["route", "main"],
       ["route", "settings"],

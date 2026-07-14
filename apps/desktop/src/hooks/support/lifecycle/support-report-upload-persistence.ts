@@ -6,6 +6,11 @@ import type {
   SupportReportUploadFailure,
   SupportReportUploadFailureKind,
 } from "@/lib/domain/support/report-upload-failure";
+import {
+  readPersistedJson,
+  writePersistedJson,
+  type ProductStorageContext,
+} from "@/lib/infra/persistence/product-storage";
 
 const STORAGE_KEY = "proliferate.supportReportJobs.v1";
 
@@ -19,12 +24,15 @@ export interface PersistedSupportReportJob {
   lastFailureToastKind?: SupportReportUploadFailureKind | null;
 }
 
-export function persistSupportReportJob(job: SupportReportJob): boolean {
-  const current = readPersistedJobs();
+export async function persistSupportReportJob(
+  storage: ProductStorageContext,
+  job: SupportReportJob,
+): Promise<boolean> {
+  const current = await readPersistedJobs(storage);
   if (current.some((entry) => entry.job.jobId === job.jobId)) {
     return false;
   }
-  writePersistedJobs([
+  await writePersistedJobs(storage, [
     ...current,
     {
       job,
@@ -36,17 +44,24 @@ export function persistSupportReportJob(job: SupportReportJob): boolean {
   return true;
 }
 
-export function removePersistedJob(jobId: string): void {
-  writePersistedJobs(readPersistedJobs().filter((entry) => entry.job.jobId !== jobId));
+export async function removePersistedJob(
+  storage: ProductStorageContext,
+  jobId: string,
+): Promise<void> {
+  await writePersistedJobs(
+    storage,
+    (await readPersistedJobs(storage)).filter((entry) => entry.job.jobId !== jobId),
+  );
 }
 
-export function markPersistedJobFailed(
+export async function markPersistedJobFailed(
+  storage: ProductStorageContext,
   jobId: string,
   failure: SupportReportUploadFailure,
   failedAt: Date,
   markedToastShown: boolean,
-): void {
-  writePersistedJobs(readPersistedJobs().map((entry) => {
+): Promise<void> {
+  await writePersistedJobs(storage, (await readPersistedJobs(storage)).map((entry) => {
     if (entry.job.jobId !== jobId) {
       return entry;
     }
@@ -69,15 +84,16 @@ export function markPersistedJobFailed(
   }));
 }
 
-export function scheduleNextRetry(
+export async function scheduleNextRetry(
+  storage: ProductStorageContext,
   processQueue: () => void,
   retryTimerRef: MutableRefObject<number | null>,
-): void {
+): Promise<void> {
   if (retryTimerRef.current != null) {
     window.clearTimeout(retryTimerRef.current);
     retryTimerRef.current = null;
   }
-  const next = readPersistedJobs()
+  const next = (await readPersistedJobs(storage))
     .map((entry) => entry.nextAttemptAt ? Date.parse(entry.nextAttemptAt) : Date.now())
     .filter(Number.isFinite)
     .sort((a, b) => a - b)[0];
@@ -87,17 +103,14 @@ export function scheduleNextRetry(
   retryTimerRef.current = window.setTimeout(processQueue, Math.max(1000, next - Date.now()));
 }
 
-export function readPersistedJobs(): PersistedSupportReportJob[] {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return [];
-    }
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+export async function readPersistedJobs(
+  storage: ProductStorageContext,
+): Promise<PersistedSupportReportJob[]> {
+  const result = await readPersistedJson<PersistedSupportReportJob[]>(storage, STORAGE_KEY, {
+    parse: (raw) => (Array.isArray(raw) ? (raw as PersistedSupportReportJob[]) : []),
+    fallback: [],
+  });
+  return result.status === "settled" ? result.value : [];
 }
 
 export async function deleteSupportReportJobAttachments(
@@ -111,6 +124,9 @@ export async function deleteSupportReportJobAttachments(
   }));
 }
 
-function writePersistedJobs(jobs: PersistedSupportReportJob[]): void {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(jobs.slice(-10)));
+async function writePersistedJobs(
+  storage: ProductStorageContext,
+  jobs: PersistedSupportReportJob[],
+): Promise<void> {
+  await writePersistedJson(storage, STORAGE_KEY, jobs.slice(-10));
 }
