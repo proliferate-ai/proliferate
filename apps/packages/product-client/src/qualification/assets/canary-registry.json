@@ -1,0 +1,5 @@
+{
+  "kind": "qualification-canary-registry",
+  "note": "Imported as ?raw text to prove raw-string resource emission.",
+  "entries": ["alpha", "beta", "gamma"]
+}
