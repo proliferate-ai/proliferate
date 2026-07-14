@@ -393,9 +393,9 @@ fn queue_accepts_catalog_authorized_model_value_outside_live_options() {
         prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
     };
 
-    // Same value, same option list — the only difference is the catalog
-    // authorization computed at the runtime seam (decision 10: the catalog
-    // is the switch authority; the harness-advertised list is not a cage).
+    // Same value and option list: only the recorded-context catalog
+    // authorization differs. Catalog authorization allows this value beyond
+    // the harness-advertised list while preserving the same session.
     queue_pending_config_change(
         &store,
         "session-1",

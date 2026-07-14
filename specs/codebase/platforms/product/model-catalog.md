@@ -260,26 +260,35 @@ Rules:
   shared domain logic. Component-local fixes are compatibility shims only and
   must include regression tests.
 
-Switchability is a separate question from model identity:
+Action classification is a separate question from model identity:
 
 ```text
-current row
-  Shows selected/current state when the normalized effective model matches.
+no active session
+  Launches the first session from the resolved selection.
 
-non-current row with live model setter
-  Updates the running session by sending the exact live config/control value.
+same harness + equivalent normalized model
+  Renders as selected.
+  Selecting the exact current raw model id is a no-op.
+  Selecting an equivalent alias may still enter the update path.
 
-non-current row without live model setter
-  Starts a new chat/session with that requested model intent.
+same harness + different model
+  Uses update_current_chat to update current session, even when the row is
+  absent from the current live option list.
+
+different harness
+  Uses open_new_chat at the selector boundary.
 ```
 
-A model row should use an `open_new_chat` action because the active session
-cannot switch to that row, not because the provider differs or the model id
-failed to normalize. Visible "New chat" badges should be reserved for rows
-outside the current selected provider group or other places where the context
-would otherwise be ambiguous. Do not stamp "New chat" on every sibling of the
-current model inside the active provider group; that makes a normal model menu
-look broken even when the click behavior is correct.
+The harness boundary, not a live setter or advertised option list, determines
+whether a selection updates the current chat or opens another one. A
+same-harness update preserves the durable session identity. The runtime may
+apply the model to the existing agent process or relaunch that process under
+the same session; AnyHarness owns that distinction.
+
+Visible "New chat" badges should be reserved for different-harness rows or
+other places where the context would otherwise be ambiguous. Do not stamp
+"New chat" on every sibling of the current model inside the active harness
+group.
 
 Observed compatibility cases that must stay covered by tests:
 
@@ -291,8 +300,8 @@ Observed compatibility cases that must stay covered by tests:
 - Gemini may be launched with requested intent such as `auto-gemini-3` while
   the running session reports effective model `gemini-3-flash-preview` and no
   settable model live-config control. The current chip should show the
-  canonical effective model such as `Gemini 3 Flash`; other Gemini rows remain
-  new-chat actions unless the runtime exposes a switch path.
+  canonical effective model such as `Gemini 3 Flash`; other Gemini rows still
+  update the current session because they belong to the same harness.
 
 Regression coverage for model selector changes should include:
 

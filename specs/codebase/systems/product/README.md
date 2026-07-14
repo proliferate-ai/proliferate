@@ -16,7 +16,7 @@ restating folder rules or low-level reusable contracts.
 | Organization invitations | Organization invite links, pending invitation grants, desktop join behavior, and admin member/invite UX. | [organizations/invitations.md](organizations/invitations.md) |
 | Pending workspace shell | Pending workspace entry, projected session shell, optimistic prompts, and workspace/session materialization handoff. | [workspaces/pending-shell.md](workspaces/pending-shell.md) |
 | Cloud access / dispatch | Web/Mobile/Desktop cloud workspace access, dispatch UX, direct/open-in-desktop flows, commandability, and cloud/local parity. | [workspaces/cloud-dispatch.md](workspaces/cloud-dispatch.md), [clients/cloud-local-parity.md](clients/cloud-local-parity.md) |
-| Chat | Composer and transcript behavior. | [chat/README.md](chat/README.md) |
+| Chat | Chat lifecycle, composer, and transcript behavior. | [chat/README.md](chat/README.md) |
 | Workspace files, migration, and terminals | User-facing workspace file, migration, shell, dispatch, and terminal behavior. | [workspaces/README.md](workspaces/README.md) |
 | Mobile cloud client | Mobile auth, cloud chat, sessions, automations, settings, device/mobile-web smoke, and mobile acceptance matrix. | [clients/mobile-cloud.md](clients/mobile-cloud.md) |
 | Workflows | User-owned workflow definitions, ordered stages and prompt steps, catalog-backed harness validation, revisioning, optional default repository configuration, and definition-authoring UX. | [workflows/definitions.md](workflows/definitions.md) |
