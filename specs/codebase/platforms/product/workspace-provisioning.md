@@ -187,4 +187,4 @@ Use these focused tests as the code-level proof:
 - `server/tests/unit/test_cloud_sandbox_gateway_access.py`
 
 For incident diagnosis, use
-[`cloud-provisioning-failure.md`](../../../developing/runbooks/cloud-provisioning-failure.md).
+[`cloud-provisioning-failure.md`](../../../developing/operating/cloud-provisioning-failure.md).

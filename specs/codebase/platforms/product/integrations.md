@@ -216,4 +216,4 @@ Focused server tests include:
 
 Worker behavior is covered by `cargo test -p proliferate-worker`. For an
 enrollment incident, use
-[`worker-enrollment-failure.md`](../../../developing/runbooks/worker-enrollment-failure.md).
+[`worker-enrollment-failure.md`](../../../developing/operating/worker-enrollment-failure.md).

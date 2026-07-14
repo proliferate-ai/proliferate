@@ -34,6 +34,15 @@ ENV_VAR_TAGS = {
     "self-hosted",
     "web",
 }
+DEVELOPING_ROOTS = {
+    "process",
+    "local",
+    "testing",
+    "debugging",
+    "deploying",
+    "operating",
+    "reference",
+}
 SAFE_YAML_TO_JSON = r"""
 require "yaml"
 require "json"
@@ -80,6 +89,7 @@ REQUIRED_READMES = (
     "specs/codebase/systems/engineering/issue-lifecycle/README.md",
     "specs/codebase/systems/engineering/observability/README.md",
     "specs/developing/README.md",
+    "specs/developing/process/README.md",
     "specs/developing/local/README.md",
     "specs/developing/testing/README.md",
     "specs/developing/debugging/README.md",
@@ -87,7 +97,6 @@ REQUIRED_READMES = (
     "specs/developing/operating/README.md",
     "specs/developing/operating/analytics/README.md",
     "specs/developing/testing/manual-release-qa.md",
-    "specs/developing/runbooks/README.md",
     "specs/developing/reference/README.md",
     "specs/generated/README.md",
     "specs/tbd/README.md",
@@ -112,6 +121,23 @@ def tracked_files(*patterns: str) -> list[Path]:
         text=True,
     ).stdout
     return [ROOT / line for line in output.splitlines() if line and (ROOT / line).is_file()]
+
+
+def tracked_paths(*patterns: str) -> list[Path]:
+    """Return repository-relative tracked paths that exist in the worktree."""
+    command = ["git", "ls-files", "--cached", "--", *patterns]
+    output = subprocess.run(
+        command,
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    return [
+        Path(line)
+        for line in output.splitlines()
+        if line and (ROOT / line).exists()
+    ]
 
 
 def visible_markdown_lines(text: str):
@@ -383,8 +409,32 @@ def check_routing_roots() -> list[str]:
     return [f"missing documentation routing root: {path}" for path in REQUIRED_READMES if not (ROOT / path).is_file()]
 
 
+def check_developing_roots() -> list[str]:
+    prefix = Path("specs/developing")
+    unexpected: set[str] = set()
+    for path in tracked_paths(str(prefix)):
+        try:
+            relative = path.relative_to(prefix)
+        except ValueError:
+            continue
+        if len(relative.parts) >= 2 and relative.parts[0] not in DEVELOPING_ROOTS:
+            unexpected.add(relative.parts[0])
+
+    allowed = ", ".join(sorted(DEVELOPING_ROOTS))
+    return [
+        f"unexpected Developing documentation root: {prefix / root} "
+        f"(allowed roots: {allowed})"
+        for root in sorted(unexpected)
+    ]
+
+
 def main() -> int:
-    errors = check_routing_roots() + check_markdown() + check_structured_data()
+    errors = (
+        check_routing_roots()
+        + check_developing_roots()
+        + check_markdown()
+        + check_structured_data()
+    )
     if errors:
         print("Documentation integrity check failed:", file=sys.stderr)
         for error in errors:

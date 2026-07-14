@@ -157,17 +157,18 @@ path.
 
 ## Local recovery
 
-For local profile testing, prefer restarting the Stripe listener rather than
-editing `server/.env.local`.
+For local profile testing, use the canonical named-profile launcher rather
+than editing `server/.env.local` or starting a default-port listener:
 
 ```bash
-make dev PROFILE=billing STRIPE=1
+make setup PROFILE=<name>
+make run PROFILE=<name> STRIPE=1
 ```
 
-The profile launcher exports the listener's `STRIPE_WEBHOOK_SECRET` into the
-backend process only. If you run the server manually, start the listener
-yourself, copy the printed `whsec_...` into local process config, restart the
-server, and trigger a test event:
+The profile launcher exports the listener's `STRIPE_WEBHOOK_SECRET` in its
+shared recipe shell before it starts the profile processes, and the listener
+forwards to that profile's API port. With the profile listener running, trigger
+a test event from another shell:
 
 ```bash
 stripe trigger invoice.payment_failed
@@ -193,7 +194,7 @@ The incident is recovered when all of these are true:
 | Event receipt exists but no Pro grant appears | Check that the event references configured Cloud Pro or refill price ids; synthetic events may not. |
 | Payment failure hold did not clear after payment | Replay or inspect the later `invoice.paid` event for the same customer and subscription. |
 | Replayed event is ignored as duplicate | The receipt already processed successfully; inspect mirror rows and open a bug if side effects are still missing. |
-| Local listener forwards to the wrong port | Restart with `make dev PROFILE=<name> STRIPE=1` so the profile-specific API port is exported. |
+| Local listener forwards to the wrong port | Restart with the canonical `make setup PROFILE=<name>` then `make run PROFILE=<name> STRIPE=1` sequence so the profile-specific API port is exported. |
 
 ## Final report
 
