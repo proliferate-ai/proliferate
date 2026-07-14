@@ -3,7 +3,17 @@ import type { ComputeTargetAppearancePreference } from "@/lib/domain/compute/tar
 import {
   getComputeTargetAppearancePreferences,
   setComputeTargetAppearancePreference,
+  type ComputeTargetAppearancePreferencesDependencies,
 } from "@/lib/workflows/preferences/compute-target-appearance-preferences";
+import {
+  persistValue,
+  readPersistedValue,
+} from "@/lib/infra/persistence/preferences-persistence";
+
+const persistence: ComputeTargetAppearancePreferencesDependencies = {
+  readPersistedValue,
+  persistValue,
+};
 
 export function useComputeTargetAppearancePreferences() {
   const [preferences, setPreferences] = useState<
@@ -14,7 +24,7 @@ export function useComputeTargetAppearancePreferences() {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      setPreferences(await getComputeTargetAppearancePreferences());
+      setPreferences(await getComputeTargetAppearancePreferences(persistence));
     } finally {
       setLoading(false);
     }
@@ -27,7 +37,7 @@ export function useComputeTargetAppearancePreferences() {
   const savePreference = useCallback(async (
     preference: ComputeTargetAppearancePreference,
   ) => {
-    await setComputeTargetAppearancePreference(preference);
+    await setComputeTargetAppearancePreference(preference, persistence);
     setPreferences((current) => ({
       ...current,
       [preference.targetId]: preference,

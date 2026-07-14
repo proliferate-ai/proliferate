@@ -2,17 +2,20 @@ import {
   normalizeComputeTargetAppearancePreference,
   type ComputeTargetAppearancePreference,
 } from "@/lib/domain/compute/target-appearance";
-import {
-  persistValue,
-  readPersistedValue,
-} from "@/lib/infra/persistence/preferences-persistence";
 
 const COMPUTE_TARGET_APPEARANCE_KEY = "compute_target_appearance_preferences";
 
-async function readAppearancePreferences(): Promise<
+export interface ComputeTargetAppearancePreferencesDependencies {
+  readPersistedValue(key: string): Promise<unknown>;
+  persistValue(key: string, value: unknown): Promise<void>;
+}
+
+async function readAppearancePreferences(
+  dependencies: ComputeTargetAppearancePreferencesDependencies,
+): Promise<
   Record<string, ComputeTargetAppearancePreference>
 > {
-  const persisted = await readPersistedValue<Record<string, unknown>>(
+  const persisted = await dependencies.readPersistedValue(
     COMPUTE_TARGET_APPEARANCE_KEY,
   );
   if (!persisted || typeof persisted !== "object" || Array.isArray(persisted)) {
@@ -28,20 +31,21 @@ async function readAppearancePreferences(): Promise<
   return preferences;
 }
 
-export async function getComputeTargetAppearancePreferences(): Promise<
-  Record<string, ComputeTargetAppearancePreference>
-> {
-  return await readAppearancePreferences();
+export async function getComputeTargetAppearancePreferences(
+  dependencies: ComputeTargetAppearancePreferencesDependencies,
+): Promise<Record<string, ComputeTargetAppearancePreference>> {
+  return await readAppearancePreferences(dependencies);
 }
 
 export async function setComputeTargetAppearancePreference(
   preference: ComputeTargetAppearancePreference,
+  dependencies: ComputeTargetAppearancePreferencesDependencies,
 ): Promise<void> {
   const normalized = normalizeComputeTargetAppearancePreference(preference);
   if (!normalized) {
     throw new Error("Target appearance requires a target id.");
   }
-  const preferences = await readAppearancePreferences();
+  const preferences = await readAppearancePreferences(dependencies);
   preferences[normalized.targetId] = normalized;
-  await persistValue(COMPUTE_TARGET_APPEARANCE_KEY, preferences);
+  await dependencies.persistValue(COMPUTE_TARGET_APPEARANCE_KEY, preferences);
 }

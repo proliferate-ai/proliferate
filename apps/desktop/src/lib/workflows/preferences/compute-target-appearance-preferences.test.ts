@@ -5,15 +5,16 @@ const mocks = vi.hoisted(() => ({
   readPersistedValue: vi.fn(),
 }));
 
-vi.mock("@/lib/infra/persistence/preferences-persistence", () => ({
-  persistValue: mocks.persistValue,
-  readPersistedValue: mocks.readPersistedValue,
-}));
-
 import {
   getComputeTargetAppearancePreferences,
   setComputeTargetAppearancePreference,
+  type ComputeTargetAppearancePreferencesDependencies,
 } from "./compute-target-appearance-preferences";
+
+const dependencies: ComputeTargetAppearancePreferencesDependencies = {
+  readPersistedValue: mocks.readPersistedValue,
+  persistValue: mocks.persistValue,
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -33,7 +34,7 @@ describe("compute target appearance preference persistence", () => {
       invalid: { targetId: "" },
     });
 
-    await expect(getComputeTargetAppearancePreferences()).resolves.toEqual({
+    await expect(getComputeTargetAppearancePreferences(dependencies)).resolves.toEqual({
       "target-1": {
         targetId: "target-1",
         displayName: "Main box",
@@ -53,12 +54,15 @@ describe("compute target appearance preference persistence", () => {
       },
     });
 
-    await setComputeTargetAppearancePreference({
-      targetId: " target-2 ",
-      displayName: " Remote ",
-      iconId: "terminal",
-      colorId: "green",
-    });
+    await setComputeTargetAppearancePreference(
+      {
+        targetId: " target-2 ",
+        displayName: " Remote ",
+        iconId: "terminal",
+        colorId: "green",
+      },
+      dependencies,
+    );
 
     expect(mocks.persistValue).toHaveBeenCalledWith(
       "compute_target_appearance_preferences",

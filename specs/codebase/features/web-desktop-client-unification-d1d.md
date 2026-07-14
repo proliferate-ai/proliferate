@@ -3,7 +3,7 @@
 Status: **current implementation scope**.
 
 - Exact implementation base:
-  `36e96e7bea1c409dfde1797b3a691003f82d8f5a`
+  `66f45bfbe2839ae1382133393844ba61dce035cd`
 - Prior completed implementation: PR #1167, merge
   `36e96e7bea1c409dfde1797b3a691003f82d8f5a`
 - Parent architecture:
