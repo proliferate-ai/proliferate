@@ -222,7 +222,12 @@ function main() {
 
   const routeChunks = routeChunkKeys.map((key) => {
     const chunk = manifest[key];
-    const files = collectFiles(manifest, [key]);
+    // Marginal cost of loading this route: the chunk plus its transitive
+    // static imports, excluding what the entry already shipped.
+    const marginalKeys = [...staticClosure(manifest, [key])]
+      .filter((k) => !entryClosure.has(k))
+      .sort();
+    const files = collectFiles(manifest, marginalKeys);
     const m = measure(files);
     return {
       key,

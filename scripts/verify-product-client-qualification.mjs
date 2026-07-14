@@ -211,8 +211,8 @@ function serveDir(rootDir) {
   });
 }
 
-async function assertServedAssets(browserDistDir, manifest) {
-  const rootDir = join(REPO_ROOT, browserDistDir);
+async function assertServedAssets(label, distDir, manifest) {
+  const rootDir = join(REPO_ROOT, distDir);
   const { server, port } = await serveDir(rootDir);
   const base = `http://127.0.0.1:${port}`;
 
@@ -236,7 +236,7 @@ async function assertServedAssets(browserDistDir, manifest) {
       }
     }
     if (checked === urls.size) {
-      ok(`browser host served ${checked} asset URL(s), all HTTP 200`);
+      ok(`${label} host served ${checked} asset URL(s), all HTTP 200`);
     }
 
     // Cross-check: at least one font, one image, one audio, and the shared CSS
@@ -245,9 +245,9 @@ async function assertServedAssets(browserDistDir, manifest) {
     const emittedFiles = [...urls];
     const requireShape = (predicate, description) => {
       if (!emittedFiles.some(predicate)) {
-        fail(`browser host did not emit a ${description} asset`);
+        fail(`${label} host did not emit a ${description} asset`);
       } else {
-        ok(`browser host emitted a ${description} asset`);
+        ok(`${label} host emitted a ${description} asset`);
       }
     };
     requireShape((u) => u.endsWith(".css"), "CSS");
@@ -275,7 +275,10 @@ async function main() {
   assertLazySplit("browser", browserManifest);
 
   console.log("\n== Browser host served-asset check ==");
-  await assertServedAssets(browserDist, browserManifest);
+  await assertServedAssets("browser", browserDist, browserManifest);
+
+  console.log("\n== Desktop qualification served-asset check ==");
+  await assertServedAssets("desktop", desktopDist, desktopManifest);
 
   console.log("");
   if (failures.length > 0) {
