@@ -9,6 +9,7 @@ and product behavior belong under [`../codebase/`](../codebase/).
 
 | Task | Start here |
 | --- | --- |
+| Prepare, open, or mark a pull request ready for review | [`process/README.md`](process/README.md) |
 | Set up or run a local worktree, profile, Stripe, Web, Desktop, or Mobile | [`local/README.md`](local/README.md) |
 | Write or run automated tests and release qualification | [`testing/README.md`](testing/README.md) |
 | Investigate a local or production defect | [`debugging/README.md`](debugging/README.md) |
@@ -18,9 +19,10 @@ and product behavior belong under [`../codebase/`](../codebase/).
 | Follow a focused operational runbook | [`runbooks/README.md`](runbooks/README.md) |
 | Find environment and command reference data | [`reference/README.md`](reference/README.md) |
 
-PR title, label, release-note, and checklist rules live in
-[`deploying/ci-cd.md`](deploying/ci-cd.md) and
-[`../../.github/pull_request_template.md`](../../.github/pull_request_template.md).
+Pull-request preparation, title and label selection, readiness, support
+linkage, and proof records are owned by
+[`process/pull-requests.md`](process/pull-requests.md). CI and release
+procedures consume that metadata under [`deploying/`](deploying/README.md).
 
 ## Procedure Contract
 

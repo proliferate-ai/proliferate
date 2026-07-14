@@ -476,26 +476,10 @@ reporter email or private source bodies to the general agent API.
 
 ## PR metadata and attribution
 
-The existing PR contract remains authoritative:
-
-- title format: `<type>(<scope>): <plain-English change>`;
-- exactly one `release:*` label;
-- at least one `area:*` label.
-
+Contributors select PR titles and labels through the canonical
+[pull-request procedure](../../../../developing/process/pull-requests.md).
 There is no version number on an ordinary PR; the successful release boundary
-assigns it. Agent defaults are deterministic:
-
-- bug fix: `fix(<scope>): ...` plus `release:fix`;
-- feature: `feat(<scope>): ...` plus `release:minor-feature` unless the issue
-  explicitly describes a launch-level surface, in which case
-  `release:large-feature` requires human confirmation;
-- measured performance-only work: `perf(<scope>): ...` plus
-  `release:performance`;
-- `area:*` labels come from actual changed paths and all affected areas are
-  applied; component alone is not guessed into an area label.
-
-An ambiguous feature size or path-to-area result blocks PR finalization for
-human choice rather than selecting a plausible label silently.
+assigns it.
 
 Agents link PRs through the tracker rather than embedding support data in the
 PR body. The tracker stores the many-to-many relationship and maintains one

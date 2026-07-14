@@ -518,9 +518,8 @@ use it as a GitHub PR base.
 | R3 | `codex/support-r3-finalizer` | Proliferate | Locked public finalizer, tracker calls, strict manifest, landing dispatch | T3, R2, L1 merged |
 | O1 | no code branch | operations | Snapshot, migration, dark deploy, source enablement, backfill, canaries | T1-T3 and P1-P3 merged/deployed |
 
-PR titles and labels in the official repo must follow `ci-cd.md`: one
-`release:*` and every applicable `area:*` label. Never guess feature size or
-area when the detector is ambiguous.
+PR titles and labels in the official repo follow the canonical
+[pull-request procedure](../developing/process/pull-requests.md).
 
 ## Wave 1: tracker foundation
 
