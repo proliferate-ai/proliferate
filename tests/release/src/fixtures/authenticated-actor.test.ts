@@ -136,8 +136,8 @@ test("authenticatedActor drives claim -> login -> org lookup -> enrollment poll 
 
   assert.deepEqual(calls, [
     "readSetupToken:/tmp/run-1/setup-token",
-    "claimSetup:qual-owner-local-run-1-local-0@local-world-smoke.invalid",
-    "loginWithPassword:qual-owner-local-run-1-local-0@local-world-smoke.invalid",
+    "claimSetup:qual-owner-local-run-1-local-0@example.com",
+    "loginWithPassword:qual-owner-local-run-1-local-0@example.com",
     "listOrganizations",
     "getEnrollment:1",
     "getEnrollment:2",

@@ -241,7 +241,11 @@ export async function authenticatedActor(
   const setupTokenPath = options.setupTokenPath ?? path.join(world.paths.runDir, "setup-token");
   const setupToken = await transport.readSetupToken(setupTokenPath);
 
-  const email = options.email ?? `qual-owner-${world.run.run_id}-${world.run.shard_id}@local-world-smoke.invalid`;
+  // NOTE: a real, non-reserved TLD is required. `normalize_account_email`
+  // (server/proliferate/server/setup/accounts.py) rejects the special-use TLDs
+  // `.invalid`/`.test`/`.local`/`.localhost` with a 400, so the claim uses a
+  // syntactically valid `example.com` address (no mail is ever sent).
+  const email = options.email ?? `qual-owner-${world.run.run_id}-${world.run.shard_id}@example.com`;
   const password = randomBytes(24).toString("hex");
   const organizationName = options.organizationName ?? `local-world-smoke-${world.run.run_id}`;
 
@@ -290,20 +294,38 @@ async function waitForSyncedEnrollment(
 ): Promise<EnrollmentResponse> {
   const deadline = Date.now() + options.timeoutMs;
   let last: EnrollmentResponse | undefined;
+  let lastStatusNote = "no enrollment row yet";
   for (;;) {
-    last = await transport.getEnrollment(api);
-    if (last.syncStatus === SYNCED_ENROLLMENT_STATUS) {
-      return last;
+    try {
+      last = await transport.getEnrollment(api);
+      lastStatusNote = `status "${last.syncStatus}", lastErrorCode "${last.lastErrorCode ?? "none"}"`;
+      if (last.syncStatus === SYNCED_ENROLLMENT_STATUS) {
+        return last;
+      }
+    } catch (error) {
+      // The enrollment row is created asynchronously by the server's backfill
+      // loop (server/proliferate/server/cloud/agent_gateway/enrollment.py); the
+      // setup-claim account path does not eagerly enrol. Until the first
+      // backfill pass runs, `GET .../enrollment` returns 404 — a transient
+      // not-yet-enrolled state to poll through, not a hard failure.
+      if (!isNotFound(error)) {
+        throw error;
+      }
+      lastStatusNote = "enrollment row not created yet (404)";
     }
     if (Date.now() >= deadline) {
       throw new Error(
         `authenticatedActor: gateway enrollment did not reach "${SYNCED_ENROLLMENT_STATUS}" within ` +
-          `${options.timeoutMs}ms (last status "${last.syncStatus}", lastErrorCode ` +
-          `"${last.lastErrorCode ?? "none"}").`,
+          `${options.timeoutMs}ms (last: ${lastStatusNote}).`,
       );
     }
     await sleep(options.pollMs);
   }
+}
+
+/** True for a 404 from the enrollment endpoint (ApiRequestError.status === 404). */
+function isNotFound(error: unknown): boolean {
+  return typeof error === "object" && error !== null && (error as { status?: unknown }).status === 404;
 }
 
 function sleep(ms: number): Promise<void> {

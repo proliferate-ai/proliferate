@@ -188,8 +188,12 @@ export function buildDesktopRendererArchive({
   exec = defaultExec,
   log = () => {},
 }) {
-  log("pnpm --filter @proliferate/desktop build (VITE_* set to this run's allocated URLs)");
-  exec("pnpm", ["--filter", "@proliferate/desktop", "build"], {
+  // The Desktop app's package name is `proliferate` (apps/desktop/package.json),
+  // NOT `@proliferate/desktop`; the latter matches no pnpm project and silently
+  // builds nothing. Its `build` script also builds the shared frontend packages
+  // it consumes as dist before `tsc && vite build`.
+  log("pnpm --filter proliferate build (VITE_* set to this run's allocated URLs)");
+  exec("pnpm", ["--filter", "proliferate", "build"], {
     env: {
       ...process.env,
       VITE_PROLIFERATE_API_BASE_URL: apiBaseUrl,
@@ -198,8 +202,13 @@ export function buildDesktopRendererArchive({
   });
   requireRegularFile(path.join(distDir, "index.html"), "Desktop renderer dist");
   mkdirSync(path.dirname(outputPath), { recursive: true });
-  log(`tar -czf ${outputPath} -C ${path.dirname(distDir)} ${path.basename(distDir)}`);
-  exec("tar", ["-czf", outputPath, "-C", path.dirname(distDir), path.basename(distDir)]);
+  // Pack the CONTENTS of dist at the archive root (`-C distDir .`), so
+  // `index.html` lands directly under the extraction dir — the layout the
+  // world's renderer server serves from (`renderer.ts` "Archive layout
+  // contract"). Packing the `dist/` directory itself would nest index.html one
+  // level too deep and the static server's SPA fallback would 500.
+  log(`tar -czf ${outputPath} -C ${distDir} .`);
+  exec("tar", ["-czf", outputPath, "-C", distDir, "."]);
   requireRegularFile(outputPath, "Desktop renderer archive");
   return outputPath;
 }

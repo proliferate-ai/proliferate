@@ -163,10 +163,16 @@ test("buildDesktopRendererArchive bakes VITE_* URLs and archives the dist direct
     });
     assert.ok(existsSync(outputPath));
     const pnpmCall = calls.find((call) => call.command === "pnpm");
+    // The Desktop package name is `proliferate`; the wrong `@proliferate/desktop`
+    // filter matches no project and produces no dist.
+    assert.deepEqual(pnpmCall.args, ["--filter", "proliferate", "build"]);
     assert.equal(pnpmCall.options.env.VITE_PROLIFERATE_API_BASE_URL, "http://127.0.0.1:40001");
     assert.equal(pnpmCall.options.env.VITE_ANYHARNESS_DEV_URL, "http://127.0.0.1:40004");
     const tarCall = calls.find((call) => call.command === "tar");
     assert.equal(tarCall.args[1], outputPath);
+    // Packs dist CONTENTS at the archive root (`-C <distDir> .`) so index.html
+    // extracts directly under the world's renderer root (not nested in dist/).
+    assert.deepEqual(tarCall.args, ["-czf", outputPath, "-C", distDir, "."]);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
