@@ -13,7 +13,7 @@ and product behavior belong under [`../codebase/`](../codebase/).
 | Write or run automated tests and release qualification | [`testing/README.md`](testing/README.md) |
 | Investigate a local or production defect | [`debugging/README.md`](debugging/README.md) |
 | Change CI, package, release, deploy, or promote | [`deploying/README.md`](deploying/README.md) |
-| Operate analytics and observability surfaces | [`analytics/README.md`](analytics/README.md) |
+| Inspect or operate analytics, engagement, and observability providers | [`operating/analytics/README.md`](operating/analytics/README.md) |
 | Run manual release QA | [`qa/README.md`](qa/README.md) |
 | Follow a focused operational runbook | [`runbooks/README.md`](runbooks/README.md) |
 | Find environment and command reference data | [`reference/README.md`](reference/README.md) |

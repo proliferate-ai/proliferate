@@ -1,9 +1,11 @@
 # Dashboards: provider-cost analytics ingestion (v1)
 
-Status: implemented (alembic `15649bf2cf24`, `server/scripts/analytics_ingest.py`,
-infra provisioned in AWS + Metabase Cloud). See
-`server/infra/analytics/README.md` and `server/infra/analytics/metabase-dashboards.md`
-for the full operational writeup; this doc is the design record.
+Status: draft. This is a historical provider-ingestion design, not current
+implementation or live-provider authority. See the
+[Analytics system owner](../codebase/systems/engineering/analytics/README.md)
+for current code-owned behavior and the
+[Analytics operating index](../developing/operating/analytics/README.md) for
+operator procedures.
 
 ## Problem
 

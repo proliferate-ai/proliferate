@@ -28,9 +28,14 @@ class DocumentationIntegrityTest(unittest.TestCase):
             "specs/codebase/systems/product/workflows/README.md",
             "specs/codebase/systems/product/workspaces/README.md",
             "specs/codebase/systems/product/clients/web-desktop-unification/migration/README.md",
+            "specs/codebase/systems/product/engagement/README.md",
             "specs/codebase/systems/engineering/README.md",
+            "specs/codebase/systems/engineering/analytics/README.md",
             "specs/codebase/systems/engineering/delivery/README.md",
             "specs/codebase/systems/engineering/issue-lifecycle/README.md",
+            "specs/codebase/systems/engineering/observability/README.md",
+            "specs/developing/operating/README.md",
+            "specs/developing/operating/analytics/README.md",
         }
 
         self.assertLessEqual(required_indexes, set(check_docs.REQUIRED_READMES))
@@ -38,6 +43,9 @@ class DocumentationIntegrityTest(unittest.TestCase):
         legacy_workflow_root = "specs/codebase/" + "features/README.md"
         self.assertNotIn(legacy_capability_root, check_docs.REQUIRED_READMES)
         self.assertNotIn(legacy_workflow_root, check_docs.REQUIRED_READMES)
+        self.assertNotIn(
+            "specs/developing/analytics/README.md", check_docs.REQUIRED_READMES
+        )
 
     def markdown_errors(self, files: dict[str, str]) -> list[str]:
         with tempfile.TemporaryDirectory() as directory:
