@@ -45,11 +45,12 @@ Current handoff:
   `specs/codebase/features/web-desktop-client-unification-d1a.md`, revision
   `D1a-r2`, exact implementation base
   `2ec15eaf8cfc870cbdbb42c225a5f1428e5282b4`.
-- Accepted implementation: PR #1157, head
-  `90926523c3662067e02f8511db6c8e0058e119f1`, pending merge.
-- Current role: finish authority promotion and merge, then reconcile Desktop
-  Native UI Adoption against the exact merge SHA. That next slice remains
-  provisional and is not authorized for implementation.
+- Final implementation: PR #1157, merge
+  `a76ab5911e2af39593b4b31530535f0811a3558b`, from accepted head
+  `90926523c3662067e02f8511db6c8e0058e119f1`.
+- Current role: reconcile Desktop Native UI Adoption against that merge with
+  the founder. The next slice remains provisional and is not authorized for
+  implementation.
 
 | Slice | Outcome | Final evidence | State |
 | --- | --- | --- | --- |
@@ -57,8 +58,8 @@ Current handoff:
 | Preparation: shared CSS | Establish `product.css`, Desktop-only CSS, and package source scanning. | PR #1151, merge `36d40c2c0` | Complete |
 | Preparation: embedded browser | Delete the embedded workspace browser and its native child-WebView capability. | PR #1154, merge `4f7fe6ee5` | Complete |
 | Preparation: ProductClient foundation | Add the compiled package, `ProductHost`, `DesktopBridge`, `ProductHostProvider`, tests, and enforcement. | PR #1153, merge `0b33e116d` | Complete |
-| Desktop Host Adoption | Construct the concrete Desktop host, mount the provider, replace reactive snapshots, and gate running-agent export through one Desktop-only lifecycle root while product files remain in Desktop. | [`web-desktop-client-unification-d1a.md`](../../codebase/features/web-desktop-client-unification-d1a.md), `D1a-r2`; PR #1157 head `90926523c3662067e02f8511db6c8e0058e119f1` | Implementation accepted; pending merge |
-| Desktop Native UI Adoption | Route native menus, native commands, Dock attention, and Desktop zoom through the mounted bridge while product files remain in Desktop. | Founder Vault draft; exact base assigned only after prior merge | Provisional; reconciling next |
+| Desktop Host Adoption | Construct the concrete Desktop host, mount the provider, replace reactive snapshots, and gate running-agent export through one Desktop-only lifecycle root while product files remain in Desktop. | [`web-desktop-client-unification-d1a.md`](../../codebase/features/web-desktop-client-unification-d1a.md), `D1a-r2`; PR #1157 merge `a76ab5911e2af39593b4b31530535f0811a3558b` | Complete |
+| Desktop Native UI Adoption | Route native menus, native commands, Dock attention, and Desktop zoom through the mounted bridge while product files remain in Desktop. | Founder draft reconciled against `a76ab5911e2af39593b4b31530535f0811a3558b`; repository spec not promoted | Provisional; founder review |
 | Later slices | Remaining in-place bridge adoption, ProductClient source movement, legacy Web deletion, thin Web host, deployability, and self-hosted Web follow-up. | Specify and reconcile one slice at a time. | Deferred |
 
 The superseded auth-generation, runtime-lifecycle, PR-1 intake, and
@@ -67,16 +68,16 @@ not prerequisites for the current migration sequence.
 
 ## 2. Desktop Host Adoption acceptance record
 
-At the accepted PR #1157 head, the existing Desktop product runs beneath a
-real Desktop-owned `ProductHostProvider`, with a concrete `DesktopBridge`, and
-one product-aware Desktop lifecycle root that mounts only when `host.desktop`
-exists. Product source remains under `apps/desktop`; this state enters main
-only when the PR merges.
+The existing Desktop product runs beneath a real Desktop-owned
+`ProductHostProvider`, with a concrete `DesktopBridge`, and one product-aware
+Desktop lifecycle root that mounts only when `host.desktop` exists. Product
+source remains under `apps/desktop`.
 
-The founder accepted revision r2 on 2026-07-13 after review. The accepted
-implementation is PR #1157 at head
-`90926523c3662067e02f8511db6c8e0058e119f1`; record its actual merge SHA
-before marking this slice complete.
+The founder accepted revision r2 on 2026-07-13 after review. Authority was
+promoted through PR #1160 at
+`00f92b86c90bdcff288908b158e654c3bdbb543b`; implementation merged through
+PR #1157 at `a76ab5911e2af39593b4b31530535f0811a3558b` from reviewed head
+`90926523c3662067e02f8511db6c8e0058e119f1`.
 
 The accepted r2 deviations are narrow and recorded in the complete contract:
 

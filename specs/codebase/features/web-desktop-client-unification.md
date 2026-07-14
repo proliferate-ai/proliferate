@@ -546,21 +546,21 @@ enforcement. Shared `product.css`, Desktop-only CSS, and ProductClient Tailwind
 scanning are established separately. The embedded workspace browser and its
 native child-WebView capability have been removed.
 
-Desktop Host Adoption is frozen at revision r2 and accepted at PR #1157 head
-`90926523c3662067e02f8511db6c8e0058e119f1`, pending merge. It constructs the
-real Desktop-owned host and complete inventoried bridge, mounts the existing
+Desktop Host Adoption revision r2 is complete at PR #1157 merge
+`a76ab5911e2af39593b4b31530535f0811a3558b`. It constructs the real
+Desktop-owned host and complete inventoried bridge, mounts the existing
 Desktop product beneath `ProductHostProvider`, replaces the immutable host
 snapshot when its documented reactive inputs change, and gates running-agent
-export through one Desktop-only product-lifecycle root. The complete accepted
-contract is
+export through one Desktop-only product-lifecycle root. The complete contract
+and acceptance record is
 [`web-desktop-client-unification-d1a.md`](web-desktop-client-unification-d1a.md).
 
 Desktop Native UI Adoption is the next provisional slice. It routes existing
 native menus, native menu commands, Dock attention, and Desktop zoom through
-the `host.desktop.nativeUi` boundary supplied by the accepted Desktop Host
-Adoption head once it merges, while product files stay under `apps/desktop`.
-It is not frozen and does not authorize implementation until reconciled
-against the actual Desktop Host Adoption merge.
+the merged `host.desktop.nativeUi` boundary while product files stay under
+`apps/desktop`. It is not frozen and does not authorize implementation until
+the founder approves its reconciled flow, failure behavior, file plan, and
+acceptance proof.
 
 Related authoritative docs:
 
