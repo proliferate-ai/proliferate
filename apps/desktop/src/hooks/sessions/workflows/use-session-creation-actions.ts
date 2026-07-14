@@ -56,6 +56,7 @@ import {
 } from "@/hooks/sessions/workflows/session-replacement-shell-preferences";
 import { cleanupSessionCreationFailure } from "@/hooks/sessions/workflows/session-creation-failure-cleanup";
 import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
+import { toEmptySessionCreateOptions } from "@/hooks/sessions/workflows/session-creation-empty-options";
 
 export function useSessionCreationActions() {
   const host = useProductHost();
@@ -387,19 +388,7 @@ export function useSessionCreationActions() {
   const createEmptySessionWithResolvedConfig = useCallback(async (
     options: CreateEmptySessionWithResolvedConfigOptions,
   ): Promise<string> => {
-    return createSessionWithResolvedConfig({
-      text: "",
-      agentKind: options.agentKind,
-      modelId: options.modelId,
-      modeId: options.modeId,
-      launchControlValues: options.launchControlValues,
-      workspaceId: options.workspaceId,
-      latencyFlowId: options.latencyFlowId,
-      clientSessionId: options.clientSessionId,
-      reuseInFlightEmptySession: options.reuseInFlightEmptySession,
-      preserveProjectedSessionOnCreateFailure: options.preserveProjectedSessionOnCreateFailure,
-      replacesSessionId: options.replacesSessionId,
-    });
+    return createSessionWithResolvedConfig(toEmptySessionCreateOptions(options));
   }, [createSessionWithResolvedConfig]);
 
   return { createEmptySessionWithResolvedConfig, createSessionWithResolvedConfig };

@@ -23,6 +23,4 @@ apps/desktop/src/components/workspace/git/GitReviewFileRow.tsx 404 git review fi
 apps/desktop/src/components/workspace/shell/sidebar/WorkspaceItem.tsx 414 workspace sidebar item pending indicator/menu split
 apps/desktop/src/hooks/sessions/lifecycle/session-stream-flush-apply.ts 401 session stream flush/apply pending reducer split
 apps/packages/product-domain/src/chats/transcript/transcript-row-model.ts 946 transcript row model pending row-kind module split
-apps/desktop/src/hooks/sessions/workflows/session-creation-materialization.ts 415 injected typed telemetry deps threaded from the calling hook; split deferred
 apps/desktop/src/hooks/sessions/workflows/session-replacement-tombstones.ts 408 async ProductStorage hydration added to the in-memory tombstone model
-apps/desktop/src/hooks/sessions/workflows/use-session-creation-actions.ts 406 product telemetry facade threading into session-creation workflows; split deferred

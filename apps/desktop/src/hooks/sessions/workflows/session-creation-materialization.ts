@@ -50,8 +50,10 @@ import { resolveDesktopRuntimeUrlForWorkspace } from "@/hooks/sessions/workflows
 import { annotateLatencyFlow } from "@/lib/infra/measurement/latency-flow";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import {
-  shouldDiscardSupersededSessionCreation,
-} from "@/hooks/sessions/workflows/session-creation-supersession";
+  discardCreatedRuntimeSession,
+  discardMaterializationIfSuperseded,
+  type MaterializationLifecycle,
+} from "@/hooks/sessions/workflows/session-creation-materialization-cleanup";
 import { filterReplacedSessionTombstones } from "@/hooks/sessions/workflows/session-replacement-tombstones";
 import { scheduleCreatedRuntimeSessionCleanup } from "@/hooks/sessions/workflows/session-created-runtime-cleanup";
 import { runInterruptibleSessionCreationStep } from "@/hooks/sessions/workflows/session-creation-materialization-interruption";
@@ -88,11 +90,6 @@ interface MaterializeSessionCreationInput {
   workspaceId: string;
 }
 
-interface MaterializationLifecycle {
-  discardCreatedSession: (() => Promise<boolean>) | null;
-  retainCreatedSession: (() => void) | null;
-}
-
 export async function materializeSessionCreation(
   input: MaterializeSessionCreationInput,
 ): Promise<string> {
@@ -103,7 +100,7 @@ export async function materializeSessionCreation(
   try {
     return await runSessionCreationMaterialization(input, lifecycle);
   } catch (error) {
-    if (await discardIfSuperseded(input.pendingSessionId, lifecycle)) {
+    if (await discardMaterializationIfSuperseded(input.pendingSessionId, lifecycle)) {
       return input.pendingSessionId;
     }
     if (!await discardCreatedRuntimeSession(lifecycle)) {
@@ -163,7 +160,7 @@ async function runSessionCreationMaterialization({
     ...targetConnection,
     anyharnessWorkspaceId: target.anyharnessWorkspaceId,
   };
-  if (await discardIfSuperseded(pendingSessionId, lifecycle)) {
+  if (await discardMaterializationIfSuperseded(pendingSessionId, lifecycle)) {
     return pendingSessionId;
   }
   if (shouldProbeCompatibleRuntimeSessions({
@@ -179,9 +176,9 @@ async function runSessionCreationMaterialization({
         agentKind: options.agentKind,
         modelId: options.modelId,
       }))
-      .catch(() => null);
+    .catch(() => null);
     if (existingSession) {
-      if (await discardIfSuperseded(pendingSessionId, lifecycle)) {
+      if (await discardMaterializationIfSuperseded(pendingSessionId, lifecycle)) {
         return pendingSessionId;
       }
       return materializeExistingSession({
@@ -246,7 +243,7 @@ async function runSessionCreationMaterialization({
       workspaceId,
     });
   };
-  if (await discardIfSuperseded(pendingSessionId, lifecycle)) {
+  if (await discardMaterializationIfSuperseded(pendingSessionId, lifecycle)) {
     return pendingSessionId;
   }
   logLatency("session.create.materialize.session_created", {
@@ -266,7 +263,7 @@ async function runSessionCreationMaterialization({
   const catalogStep = await runInterruptibleSessionCreationStep({
     sessionId: pendingSessionId,
     step: ensureCloudAgentCatalog().catch(() => null),
-    onSuperseded: () => discardIfSuperseded(pendingSessionId, lifecycle),
+    onSuperseded: () => discardMaterializationIfSuperseded(pendingSessionId, lifecycle),
   });
   if (catalogStep.discarded) {
     return pendingSessionId;
@@ -289,7 +286,7 @@ async function runSessionCreationMaterialization({
       modelRegistries,
       defaultLiveSessionControlValuesByAgentKind: liveDefaultsForLaunch,
     }),
-    onSuperseded: () => discardIfSuperseded(pendingSessionId, lifecycle),
+    onSuperseded: () => discardMaterializationIfSuperseded(pendingSessionId, lifecycle),
   });
   if (launchDefaultsStep.discarded) {
     return pendingSessionId;
@@ -303,7 +300,7 @@ async function runSessionCreationMaterialization({
     ...launchedSession,
     liveConfig: launchedLiveConfig,
   };
-  if (await discardIfSuperseded(pendingSessionId, lifecycle)) {
+  if (await discardMaterializationIfSuperseded(pendingSessionId, lifecycle)) {
     return pendingSessionId;
   }
   const realRecord: SessionRuntimeRecord = {
@@ -376,40 +373,4 @@ async function runSessionCreationMaterialization({
   lifecycle.discardCreatedSession = null;
   lifecycle.retainCreatedSession = null;
   return pendingSessionId;
-}
-
-async function discardIfSuperseded(
-  sessionId: string,
-  lifecycle: MaterializationLifecycle,
-): Promise<boolean> {
-  if (!await shouldDiscardSupersededSessionCreation(sessionId)) {
-    return false;
-  }
-  const discardCreatedSession = lifecycle.discardCreatedSession;
-  lifecycle.discardCreatedSession = null;
-  if (!discardCreatedSession || await discardCreatedSession()) {
-    lifecycle.retainCreatedSession = null;
-    return true;
-  }
-  // The successor already committed, but this created runtime could not be
-  // retired safely. Publish it honestly and stop this older materializer here.
-  const retainCreatedSession = lifecycle.retainCreatedSession;
-  lifecycle.retainCreatedSession = null;
-  retainCreatedSession?.();
-  return true;
-}
-
-async function discardCreatedRuntimeSession(
-  lifecycle: MaterializationLifecycle,
-): Promise<boolean> {
-  const discardCreatedSession = lifecycle.discardCreatedSession;
-  lifecycle.discardCreatedSession = null;
-  if (!discardCreatedSession || await discardCreatedSession()) {
-    lifecycle.retainCreatedSession = null;
-    return true;
-  }
-  const retainCreatedSession = lifecycle.retainCreatedSession;
-  lifecycle.retainCreatedSession = null;
-  retainCreatedSession?.();
-  return false;
 }
