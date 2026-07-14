@@ -5,7 +5,8 @@
  * number + state. Two render modes:
  *  - `PrStatusDot` — standalone dot (workspaces page rows, after branch name)
  *  - `PrStatusIconOverlay` — wraps a row icon and anchors the dot on its
- *    bottom-right corner (sidebar workspace rows), mirroring codex's
+ *    bottom-right corner (web sidebar rows; the desktop sidebar renders
+ *    PR state via SidebarWorkspaceGitGlyph instead), mirroring codex's
  *    `--pr-status-dot-color` circle-on-icon pattern.
  *
  * Tone rules (spec §3.3): every dot tone is an OPAQUE color — no alpha
