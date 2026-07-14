@@ -667,11 +667,11 @@ checks the complete 2220-file `move`/`split`/`retain`/`delete` ledger, proves a
 deterministic idempotent import codemod on a disposable copy, and lands the
 deterministic legacy-Web bundle collector with a provisional baseline. The
 reserved real files are not created. The complete living contract is
-[`web-desktop-client-unification-d1g.md`](web-desktop-client-unification-d1g.md);
+[`web-desktop-client-unification-d1g.md`](migration/d1g.md);
 the recorded entry contract is
-[`web-desktop-product-client-entry-contract.md`](web-desktop-product-client-entry-contract.md)
+[`web-desktop-product-client-entry-contract.md`](entry-contract.md)
 and the move ledger is
-[`web-desktop-product-client-move-ledger.md`](web-desktop-product-client-move-ledger.md).
+[`web-desktop-product-client-move-ledger.md`](move-ledger.md).
 
 Related authoritative docs:
 
