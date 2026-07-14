@@ -35,15 +35,17 @@ export const ALL_FINAL_STATUSES: readonly FinalTestStatus[] = [
 export const SCENARIO_DECLARABLE_STATUSES = ["green", "failed", "blocked", "expected_fail"] as const;
 export type ScenarioDeclarableStatus = (typeof SCENARIO_DECLARABLE_STATUSES)[number];
 
-export type ResultReasonCode =
-  | "missing_requirement"
-  | "scenario_blocked"
-  | "known_gap"
-  | "scenario_failure"
-  | "strict_preflight_failed"
-  | "dry_run"
-  | "plan_error"
-  | "missing_result";
+export const RESULT_REASON_CODES = [
+  "missing_requirement",
+  "scenario_blocked",
+  "known_gap",
+  "scenario_failure",
+  "strict_preflight_failed",
+  "dry_run",
+  "plan_error",
+  "missing_result",
+] as const;
+export type ResultReasonCode = (typeof RESULT_REASON_CODES)[number];
 
 export interface ResultReason {
   code: ResultReasonCode;

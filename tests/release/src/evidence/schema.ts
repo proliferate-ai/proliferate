@@ -1,7 +1,7 @@
 import type { DesktopMode, RuntimeLane, TargetLane } from "../config/types.js";
 import type { CandidateBuildEvidenceV1 } from "../artifacts/build-map.js";
 import type { RunIdentityV1 } from "../runner/identity.js";
-import { canonicalCellId } from "../runner/plan.js";
+import { canonicalCellId, dimensionShapeProblem } from "../runner/plan.js";
 import {
   ALL_FINAL_STATUSES,
   deriveVerdict,
@@ -253,6 +253,14 @@ export function validateReport(report: TestRunReportV3): void {
     ) {
       throw new ReportValidationError(`required_env on "${cell.cell_id}" is malformed.`);
     }
+    // The planner's complete dimension rules apply to persisted evidence too:
+    // a report carrying dimensions the planner could never have produced
+    // (invalid keys, empty/oversized/non-string values) is not valid even if
+    // its cell id was edited consistently.
+    const dimensionProblem = dimensionShapeProblem(cell.dimensions);
+    if (dimensionProblem) {
+      throw new ReportValidationError(`Selected cell "${cell.cell_id}" has ${dimensionProblem}.`);
+    }
     const expectedId = canonicalCellId(cell.scenario_id, cell.runtime_lane, cell.dimensions ?? {});
     if (cell.cell_id !== expectedId) {
       throw new ReportValidationError(
@@ -359,12 +367,7 @@ export function validateReport(report: TestRunReportV3): void {
   // Recompute the complete verdict/exit policy from the results and errors
   // and require the persisted fields to match — the validator, not the
   // producer, is the last line against false-success evidence.
-  const expected = deriveVerdict({
-    behavior: report.run.behavior,
-    results: report.results,
-    integrityErrors: report.summary.integrity_errors,
-    runnerErrors: report.summary.runner_errors,
-  });
+  const expected = expectedVerdict(report);
   if (report.verdict.status !== expected.status) {
     throw new ReportValidationError(
       `Verdict "${report.verdict.status}" does not match the recomputed "${expected.status}".`,
@@ -375,6 +378,30 @@ export function validateReport(report: TestRunReportV3): void {
       `intended_exit_code ${report.summary.intended_exit_code} does not match the recomputed ${expected.intendedExitCode}.`,
     );
   }
+  // The reasons array is derived evidence too: arbitrary prose (e.g.
+  // "production fully qualified") must not validate.
+  if (JSON.stringify(report.verdict.reasons) !== JSON.stringify(expected.reasons)) {
+    throw new ReportValidationError("verdict.reasons do not match the recomputed derived reasons.");
+  }
+}
+
+/**
+ * The single derivation both the producer (runner/execute.ts, applied after
+ * sanitization) and this validator use for the persisted verdict, including
+ * the bounded reasons array.
+ */
+export function expectedVerdict(report: TestRunReportV3): {
+  status: VerdictStatus;
+  intendedExitCode: 0 | 1 | 2;
+  reasons: string[];
+} {
+  const derived = deriveVerdict({
+    behavior: report.run.behavior,
+    results: report.results,
+    integrityErrors: report.summary.integrity_errors,
+    runnerErrors: report.summary.runner_errors,
+  });
+  return { ...derived, reasons: derived.reasons.map(boundMessage) };
 }
 
 const EVIDENCE_SHA256_PATTERN = /^[0-9a-f]{64}$/;

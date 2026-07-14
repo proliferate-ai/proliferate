@@ -11,18 +11,20 @@ import {
 } from "../scenarios/types.js";
 import type { CandidateBuildEvidenceV1 } from "../artifacts/build-map.js";
 import type { TestRunReportV3 } from "../evidence/schema.js";
-import { sanitizeReport } from "../evidence/schema.js";
+import { expectedVerdict, sanitizeReport } from "../evidence/schema.js";
 import type { RunIdentityV1 } from "./identity.js";
 import {
   clonePlannedCell,
   countByStatus,
   deriveVerdict,
+  RESULT_REASON_CODES,
   ResultTracker,
   SCENARIO_DECLARABLE_STATUSES,
   type FinalCellResultV1,
   type PlannedCellV1,
   type ResultBehavior,
   type ResultReason,
+  type ResultReasonCode,
   type ScenarioDeclarableStatus,
 } from "./result.js";
 
@@ -126,8 +128,10 @@ export async function executeSelectedCells(options: ExecuteOptions): Promise<Tes
     inputs: {
       target_lane: options.inputs.targetLane,
       desktop: options.inputs.desktop,
-      agents: options.inputs.agents,
-      scenarios: options.inputs.scenarios,
+      // Copied so no scenario holding a reference to the selector arrays can
+      // alter the persisted invocation inputs.
+      agents: options.inputs.agents === "all" ? "all" : [...options.inputs.agents],
+      scenarios: options.inputs.scenarios === "all" ? "all" : [...options.inputs.scenarios],
     },
     selected_cells: cells.map(clonePlannedCell),
     results,
@@ -148,7 +152,16 @@ export async function executeSelectedCells(options: ExecuteOptions): Promise<Tes
   };
 
   const resolveSecrets = options.resolveSecretValues ?? defaultResolveSecretValues;
-  return sanitizeReport(report, resolveSecrets());
+  const sanitized = sanitizeReport(report, resolveSecrets());
+  // The persisted verdict (including its reasons) is derived from the
+  // sanitized content through the same single derivation the report
+  // validator recomputes, so validation can require byte-for-byte equality.
+  const finalVerdict = expectedVerdict(sanitized);
+  return {
+    ...sanitized,
+    summary: { ...sanitized.summary, intended_exit_code: finalVerdict.intendedExitCode },
+    verdict: { ...sanitized.verdict, status: finalVerdict.status, reasons: finalVerdict.reasons },
+  };
 }
 
 /**
@@ -199,7 +212,7 @@ function planAll(
   const agents = options.inputs.agents === "all" ? ["all"] : options.inputs.agents;
   for (const cell of cells) {
     const scenario = scenariosById.get(cell.scenario_id)!;
-    const planCtx = { runtimeLane: cell.runtime_lane, desktop: options.inputs.desktop, agents };
+    const planCtx = { runtimeLane: cell.runtime_lane, desktop: options.inputs.desktop, agents: [...agents] };
     try {
       const steps = isMatrixScenario(scenario)
         ? scenario.planCell(planCtx, clonePlannedCell(cell))
@@ -302,7 +315,9 @@ async function runAll(
       targetLane: options.inputs.targetLane,
       runtimeLane: first.runtime_lane,
       desktop: options.inputs.desktop,
-      agents,
+      // A fresh copy per invocation: a collector mutating ctx.agents cannot
+      // alter the persisted invocation inputs or a sibling's context.
+      agents: [...agents],
       dryRun: false,
       env: neededEnv,
     };
@@ -323,7 +338,17 @@ async function runAll(
         // Collectors receive independent copies; the canonical plan stays
         // with the tracker.
         const outcomes = await scenario.runCells(ctx, assigned.map(clonePlannedCell));
-        applyCollectorOutcomes(scenario, assigned, outcomes, tracker, finish);
+        try {
+          applyCollectorOutcomes(scenario, assigned, outcomes, tracker, finish);
+        } catch (error) {
+          // A throw while consuming the returned data (e.g. a poisoned
+          // iterator) is malformed collector output — runner integrity, not
+          // a product failure.
+          tracker.recordIntegrityError(
+            "selection_result_mismatch",
+            `Collector "${scenario.id}" output could not be consumed: ${evidenceSafeMessage(error)}`,
+          );
+        }
       } else {
         await scenario.run(ctx);
         finish(first.cell_id, "green", null);
@@ -376,19 +401,19 @@ function applyCollectorOutcomes(
   }
   const assignedIds = new Set(assigned.map((cell) => cell.cell_id));
   for (const raw of outcomes) {
-    if (
-      typeof raw !== "object" ||
-      raw === null ||
-      typeof (raw as { cellId?: unknown }).cellId !== "string" ||
-      typeof (raw as { status?: unknown }).status !== "string"
-    ) {
+    // The complete outcome — including the optional reason — is validated
+    // separately from collector execution, and property reads are guarded:
+    // a throwing getter or a malformed reason is runner integrity (the cell
+    // stays pending and finalizes missing/exit 2), never an ordinary failed
+    // result and never a lost aggregate.
+    const outcome = readCollectorOutcome(raw);
+    if (outcome === null) {
       tracker.recordIntegrityError(
         "selection_result_mismatch",
         `Collector "${scenario.id}" returned a malformed outcome entry.`,
       );
       continue;
     }
-    const outcome = raw as { cellId: string; status: string; reason?: ResultReason };
     if (!assignedIds.has(outcome.cellId)) {
       // Never finalize a cell outside this invocation's assignment — even one
       // that is planned for another collector — or one collector could write
@@ -408,6 +433,50 @@ function applyCollectorOutcomes(
     }
     const status = outcome.status as ScenarioDeclarableStatus;
     finish(outcome.cellId, status, outcome.reason ?? defaultReasonFor(status));
+  }
+}
+
+/**
+ * Reads one raw collector outcome defensively: every property access is
+ * guarded (a throwing getter is malformed data, not a scenario failure) and
+ * the optional reason must be a well-formed `{ code, message }` with a known
+ * reason code and string message — `reason: "oops"` would otherwise crash
+ * sanitization and lose the aggregate. Returns null for any malformed entry.
+ */
+function readCollectorOutcome(
+  raw: unknown,
+): { cellId: string; status: string; reason?: ResultReason } | null {
+  try {
+    if (typeof raw !== "object" || raw === null) {
+      return null;
+    }
+    const cellId = (raw as { cellId?: unknown }).cellId;
+    const status = (raw as { status?: unknown }).status;
+    const reason = (raw as { reason?: unknown }).reason;
+    if (typeof cellId !== "string" || typeof status !== "string") {
+      return null;
+    }
+    if (reason === undefined || reason === null) {
+      return { cellId, status };
+    }
+    if (
+      typeof reason !== "object" ||
+      typeof (reason as { code?: unknown }).code !== "string" ||
+      !(RESULT_REASON_CODES as readonly string[]).includes((reason as { code: string }).code) ||
+      typeof (reason as { message?: unknown }).message !== "string"
+    ) {
+      return null;
+    }
+    return {
+      cellId,
+      status,
+      reason: {
+        code: (reason as { code: ResultReasonCode }).code,
+        message: (reason as { message: string }).message,
+      },
+    };
+  } catch {
+    return null;
   }
 }
 

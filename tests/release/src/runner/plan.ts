@@ -102,23 +102,38 @@ function addCell(cells: PlannedCellV1[], seen: Set<string>, cell: PlannedCellV1)
   cells.push(cell);
 }
 
+/**
+ * The complete dimension-shape rules, shared between the planner (rejecting a
+ * scenario's expansion) and the report validator (rejecting evidence whose
+ * dimensions the planner could never have produced). Returns a description of
+ * the first problem, or null when the shape is valid. An empty object is a
+ * valid shape here — leaf cells have no dimensions; the matrix-specific
+ * at-least-one-key rule stays with the planner.
+ */
+export function dimensionShapeProblem(dimensions: unknown): string | null {
+  if (typeof dimensions !== "object" || dimensions === null || Array.isArray(dimensions)) {
+    return "dimensions must be a plain object";
+  }
+  for (const [key, value] of Object.entries(dimensions)) {
+    if (!DIMENSION_KEY_PATTERN.test(key)) {
+      return `invalid dimension key "${key}"`;
+    }
+    if (typeof value !== "string" || value.length === 0 || value.length > MAX_DIMENSION_VALUE_LENGTH) {
+      return `empty, non-string, or unbounded value for dimension "${key}"`;
+    }
+  }
+  return null;
+}
+
 function validateDimensions(scenarioId: string, spec: ScenarioCellSpec): Record<string, string> {
-  const keys = Object.keys(spec.dimensions);
-  if (keys.length === 0) {
+  if (Object.keys(spec.dimensions ?? {}).length === 0) {
     // A dimensionless matrix cell would collide with the scenario's own leaf
     // id form; a matrix child must be distinguishable by at least one key.
     throw new SelectionError(`Matrix scenario "${scenarioId}" declared a cell with no dimensions.`);
   }
-  for (const key of keys) {
-    if (!DIMENSION_KEY_PATTERN.test(key)) {
-      throw new SelectionError(`Matrix scenario "${scenarioId}" declared an invalid dimension key "${key}".`);
-    }
-    const value = spec.dimensions[key];
-    if (typeof value !== "string" || value.length === 0 || value.length > MAX_DIMENSION_VALUE_LENGTH) {
-      throw new SelectionError(
-        `Matrix scenario "${scenarioId}" declared an empty or unbounded value for dimension "${key}".`,
-      );
-    }
+  const problem = dimensionShapeProblem(spec.dimensions);
+  if (problem) {
+    throw new SelectionError(`Matrix scenario "${scenarioId}" declared ${problem}.`);
   }
   return spec.dimensions;
 }

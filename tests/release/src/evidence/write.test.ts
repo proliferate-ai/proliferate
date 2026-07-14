@@ -7,6 +7,7 @@ import { test } from "node:test";
 import {
   assertNoSecretsInIdentity,
   boundMessage,
+  expectedVerdict,
   redactExternalPayloads,
   redactSecrets,
   redactUrlCredentials,
@@ -15,6 +16,7 @@ import {
   type TestRunReportV3,
 } from "./schema.js";
 import { reportPath, ReportWriteError, writeReport } from "./write.js";
+import { canonicalCellId } from "../runner/plan.js";
 import { ALL_FINAL_STATUSES, type FinalTestStatus } from "../runner/result.js";
 
 function validReport(overrides: Partial<TestRunReportV3> = {}): TestRunReportV3 {
@@ -77,6 +79,16 @@ function validReport(overrides: Partial<TestRunReportV3> = {}): TestRunReportV3 
   };
 }
 
+/**
+ * Reports carry derived reasons; after a test mutates behavior/results it
+ * re-derives them the same way the producer does, so validation exercises the
+ * field under test instead of tripping the reasons-equality check.
+ */
+function withDerivedReasons(report: TestRunReportV3): TestRunReportV3 {
+  report.verdict.reasons = expectedVerdict(report).reasons;
+  return report;
+}
+
 
 // Minimal valid candidate evidence for strict-report tests (strict requires
 // non-null candidate_build per CBH-001).
@@ -85,7 +97,7 @@ const STRICT_CB: TestRunReportV3["candidate_build"] = {
 };
 
 test("validateReport accepts a consistent report", () => {
-  validateReport(validReport());
+  validateReport(withDerivedReasons(validReport()));
 });
 
 test("validateReport rejects selected/result set mismatch and duplicates", () => {
@@ -132,7 +144,7 @@ test("validateReport enforces the strict verdict against results and errors", ()
   passing.run.behavior = "strict";
   passing.candidate_build = STRICT_CB;
   passing.verdict.status = "selected_cells_passed";
-  validateReport(passing);
+  validateReport(withDerivedReasons(passing));
 
   const mislabeled = validReport();
   mislabeled.run.behavior = "strict";
@@ -237,7 +249,7 @@ for (const [index, row] of MATRIX_ROWS.entries()) {
     }
     report.summary.intended_exit_code = row.exit;
     report.verdict.status = row.verdict;
-    validateReport(report);
+    validateReport(withDerivedReasons(report));
   });
 }
 
@@ -344,7 +356,7 @@ test("boundMessage caps at 4096 code points; redactSecrets replaces exact values
 test("writeReport writes one parseable artifact at the attempt path with trailing newline", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "q1-evidence-"));
   try {
-    const report = validReport();
+    const report = withDerivedReasons(validReport());
     const written = await writeReport(dir, report);
     assert.equal(written, path.join(dir, "run-1", "shard-1", "attempt-1", "qualification-evidence.json"));
     const raw = await readFile(written, "utf8");
@@ -360,8 +372,8 @@ test("writeReport writes one parseable artifact at the attempt path with trailin
 test("writeReport refuses to overwrite an existing attempt artifact", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "q1-evidence-"));
   try {
-    await writeReport(dir, validReport());
-    await assert.rejects(writeReport(dir, validReport()), ReportWriteError);
+    await writeReport(dir, withDerivedReasons(validReport()));
+    await assert.rejects(writeReport(dir, withDerivedReasons(validReport())), ReportWriteError);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -370,8 +382,8 @@ test("writeReport refuses to overwrite an existing attempt artifact", async () =
 test("distinct attempts write distinct non-overwriting paths", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "q1-evidence-"));
   try {
-    const first = validReport();
-    const second = validReport();
+    const first = withDerivedReasons(validReport());
+    const second = withDerivedReasons(validReport());
     second.run.attempt = 2;
     const path1 = await writeReport(dir, first);
     const path2 = await writeReport(dir, second);
@@ -400,13 +412,13 @@ test("validateReport requires candidate_build to be present (null or evidence)",
 
   const withNull = validReport();
   withNull.candidate_build = null;
-  validateReport(withNull);
+  validateReport(withDerivedReasons(withNull));
 
   const withEvidence = validReport();
   withEvidence.candidate_build = {
     artifacts: [{ artifact_id: "anyharness/aarch64-apple-darwin", version: "0.3.27", sha256: "e".repeat(64) }],
   };
-  validateReport(withEvidence);
+  validateReport(withDerivedReasons(withEvidence));
 });
 
 test("validateReport rejects unsafe or path-carrying candidate evidence", () => {
@@ -487,7 +499,7 @@ test("strict reports require non-null candidate_build (CBH-001)", () => {
   strictWithEvidence.candidate_build = {
     artifacts: [{ artifact_id: "anyharness/x", version: "1", sha256: "e".repeat(64) }],
   };
-  validateReport(strictWithEvidence);
+  validateReport(withDerivedReasons(strictWithEvidence));
 });
 
 test("candidate_build rejects undeclared fields beside artifacts (CBH-002)", () => {
@@ -552,4 +564,39 @@ test("a resolved secret in a cell id or dimension fails closed (ETM-004)", () =>
 
   // Clean identities pass, and message redaction still applies elsewhere.
   assertNoSecretsInIdentity(validReport(), [secret]);
+});
+
+test("planner-impossible dimensions reject even with a consistently edited id (ETM-001)", () => {
+  const cases: Array<Record<string, unknown>> = [
+    { "Bad Key": "x" },
+    { harness: "" },
+    { harness: "x".repeat(200) },
+    { harness: ["array", "value"] },
+  ];
+  for (const dimensions of cases) {
+    const report = validReport();
+    const dims = dimensions as Record<string, string>;
+    // Edit the id consistently with the tampered dimensions so only the
+    // dimension-shape rule can catch it.
+    report.selected_cells[0].dimensions = dims;
+    report.results[0].dimensions = dims;
+    try {
+      const id = canonicalCellId("A", "local", dims);
+      report.selected_cells[0].cell_id = id;
+      report.results[0].cell_id = id;
+    } catch {
+      // encodeURIComponent can throw for exotic values; the raw id stays.
+    }
+    assert.throws(() => validateReport(report), ReportValidationError, JSON.stringify(dimensions));
+  }
+});
+
+test("arbitrary verdict reasons cannot validate (ETM-001)", () => {
+  const report = withDerivedReasons(validReport());
+  report.verdict.reasons = ["production fully qualified"];
+  assert.throws(() => validateReport(report), /reasons do not match/);
+
+  const appended = withDerivedReasons(validReport());
+  appended.verdict.reasons = [...appended.verdict.reasons, "and also fully audited"];
+  assert.throws(() => validateReport(appended), /reasons do not match/);
 });

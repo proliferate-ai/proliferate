@@ -510,3 +510,79 @@ test("null, undefined, and malformed collector output is runner integrity, never
     assert.equal(report.summary.intended_exit_code, 2);
   }
 });
+
+test("a throwing reason getter is runner integrity, never an ordinary failed result (ETM-003)", async () => {
+  const matrix = fakeMatrix({
+    id: "M",
+    cells: [{ child: "a" }],
+    runCells: async (_ctx, cells) => {
+      const poisoned = { cellId: cells[0].cell_id, status: "failed" as const };
+      Object.defineProperty(poisoned, "reason", {
+        get() {
+          throw new Error("hostile getter");
+        },
+        enumerable: true,
+      });
+      return [poisoned as ScenarioCellOutcome];
+    },
+  });
+  const report = await executeSelectedCells(await optionsFor([matrix]));
+  assert.equal(report.results[0].status, "missing");
+  assert.notEqual(report.results[0].status, "failed");
+  assert.ok(report.summary.integrity_errors.length > 0);
+  assert.equal(report.summary.intended_exit_code, 2);
+});
+
+test("a malformed reason value preserves the aggregate as integrity exit 2 (ETM-003)", async () => {
+  for (const badReason of ["oops", 42, { code: "not_a_known_code", message: "x" }, { code: "scenario_failure" }]) {
+    const matrix = fakeMatrix({
+      id: "M",
+      cells: [{ child: "a" }],
+      runCells: async (_ctx, cells) => [
+        { cellId: cells[0].cell_id, status: "failed", reason: badReason } as unknown as ScenarioCellOutcome,
+      ],
+    });
+    const report = await executeSelectedCells(await optionsFor([matrix]));
+    assert.equal(report.results[0].status, "missing", `for reason ${JSON.stringify(badReason)}`);
+    assert.equal(report.summary.intended_exit_code, 2);
+    // The aggregate survived — sanitization did not crash on the bad reason.
+    assert.equal(report.schema_version, 3);
+  }
+});
+
+test("a poisoned outcome iterator is runner integrity, not a collector failure (ETM-003)", async () => {
+  const matrix = fakeMatrix({
+    id: "M",
+    cells: [{ child: "a" }],
+    runCells: async () => {
+      const hostile: unknown = {
+        [Symbol.iterator]() {
+          throw new Error("hostile iterator");
+        },
+      };
+      Object.setPrototypeOf(hostile, Array.prototype);
+      return hostile as ScenarioCellOutcome[];
+    },
+  });
+  const report = await executeSelectedCells(await optionsFor([matrix]));
+  // Not an ordinary failed result either way; the cell must be missing/2.
+  assert.notEqual(report.results[0].status, "failed");
+  assert.equal(report.summary.intended_exit_code, 2);
+});
+
+test("a collector mutating ctx.agents cannot alter the persisted invocation inputs", async () => {
+  const matrix = fakeMatrix({
+    id: "M",
+    cells: [{ child: "a" }],
+    runCells: async (ctx, cells) => {
+      (ctx.agents as string[]).push("injected-agent");
+      return cells.map((cell) => ({ cellId: cell.cell_id, status: "green" as const }));
+    },
+  });
+  const report = await executeSelectedCells(
+    await optionsFor([matrix], {
+      inputs: { targetLane: "local", desktop: "web", agents: ["claude"], scenarios: "all" },
+    }),
+  );
+  assert.deepEqual(report.inputs.agents, ["claude"]);
+});
