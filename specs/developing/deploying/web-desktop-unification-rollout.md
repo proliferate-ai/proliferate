@@ -92,7 +92,7 @@ Current handoff:
 | Prove ProductClient Extraction Mechanics | Prove the host mount envelope, compiled assets/builds, move ledger/import codemod, minimal browser host, and fail-closed migration boundaries before the source move. | Shape the exact checklist from the persistence/telemetry diff. | Directional |
 | Mechanical Desktop extraction | Move the working Desktop product into ProductClient and leave Desktop as a thin native host. | Exact file ledger, landing window, codemod, builds, and behavior proof required. | Directional |
 | Legacy Web replacement | Delete the duplicate Web product and mount the same ProductClient from a thin browser host with `desktop: null`. | Browser host/auth contract and shared-product proof required. | Directional |
-| Hosted Web qualification and cutover | Qualify both hosts, Web performance, managed-cloud flows, and every external callback/return producer. | §9 external-configuration gate applies. | Directional |
+| Hosted Web qualification and cutover | Qualify both hosts, Web performance, managed-cloud flows, and every external callback/return producer. | §10 external-configuration gate applies. | Directional |
 | Self-hosted Web | Add self-hosted Web configuration, deployment, and documentation after hosted Web is clean. | Separate follow-up contract. | Deferred follow-up |
 
 The superseded auth-generation, runtime-lifecycle, PR-1 intake, and
@@ -282,7 +282,61 @@ byte-identical at base `06bf880a1`.
 The complete living contract is
 [`web-desktop-client-unification-d1f.md`](../../codebase/features/web-desktop-client-unification-d1f.md).
 
-## 8. Remaining migration map and gates
+## 8. Prove ProductClient Extraction Mechanics — provisional Web baseline
+
+This slice proves the extraction toolchain (host mount envelope, compiled
+assets/builds, move ledger/import codemod, minimal browser host, fail-closed
+boundaries) without moving Desktop product source. It also lands the
+deterministic legacy-Web bundle collector required by founder decision 7 and
+records the provisional baseline below.
+
+The exact implementation base is
+`f93afce8190bba943277d588c9bfb0d051c615c9` (PR #1182 merge, the Route Shared
+Persistence and Telemetry slice).
+
+Collector (deterministic, no timestamps, stable-sorted, exact byte counts):
+
+- Tool: `scripts/collect-web-bundle-baseline.mjs`.
+- Command:
+  `PROLIFERATE_WEB_BUNDLE_MANIFEST=1 pnpm --filter @proliferate/web build`,
+  then walk `apps/web/dist/.vite/manifest.json`. The `manifest` opt-in is an
+  env flag that is off in normal builds, so
+  `pnpm --filter @proliferate/web build` output is byte-identical without it
+  (same hashed chunk filenames; only the extra manifest file differs).
+- Compression metric: **gzip (Node `zlib`, level 9)**.
+- Attribution: the unauthenticated entry is the entry chunk's *static* import
+  closure (what the `/login` path loads before auth); per-route chunks are
+  chunks reached only via dynamic import; the authenticated total is the entry
+  closure plus every dynamically reachable chunk.
+
+Provisional legacy-Web baseline (base `f93afce81`):
+
+| Segment | gzip | raw | Composition |
+| --- | --- | --- | --- |
+| Unauthenticated `/login` entry | 487,569 B (476.1 KiB) | 1,670,977 B | 1 JS chunk 470,427 B gzip + 1 CSS chunk 17,142 B gzip; **0 fonts, 0 images** emitted as separate assets |
+| Per-route lazy chunks | — | — | **none** (route splitting: `none`) |
+| Authenticated total | 487,569 B (476.1 KiB) | 1,670,977 B | identical to the entry — see finding below |
+
+Findings recorded from this baseline:
+
+- Legacy Web performs **no route-level code splitting**: `apps/web/src/App.tsx`
+  statically imports every page, so the `/login` page eagerly loads the entire
+  authenticated product (editor, terminal, and all authenticated-only code) in
+  one JS chunk. Unauthenticated and authenticated totals are therefore equal.
+  This is exactly the eager-load problem founder decision 4 fixes when the
+  mechanical move applies the public-shell / lazy-authenticated split to the
+  real product.
+- Legacy Web emits **no separate font or image assets**: `apps/web/src/index.css`
+  imports only `@proliferate/design/dom.css`, whose built CSS contains no
+  `@font-face`, `url()`, or `data:` font references. Font/image totals are `0`
+  by construction, not omitted by the collector.
+
+These numbers are a **provisional historical baseline, not a budget** (founder
+decision 7). The Legacy-Web-replacement PR reruns this exact collector on its
+own exact base immediately before deletion; those later numbers are the binding
+cutover baseline. Historical numbers here are diagnostic only.
+
+## 9. Remaining migration map and gates
 
 The plain sequence after the current PR is:
 
@@ -309,10 +363,10 @@ external-configuration table, and release-record template are retired. Before
 a later Web-cutover slice, reconcile current deployment workflows and external
 configuration, then shape a slice-specific rollout checklist with its own
 exact base and acceptance proof. The durable external-configuration evidence
-requirements in §9 remain binding. Do not reuse retired phase mechanics by
+requirements in §10 remain binding. Do not reuse retired phase mechanics by
 implication.
 
-## 9. Later Web cutover external-configuration gate
+## 10. Later Web cutover external-configuration gate
 
 The future Web cutover must inventory every external producer of a hosted Web
 URL, including OAuth registrations, Stripe checkout/portal return URLs,

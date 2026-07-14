@@ -17,6 +17,14 @@ const sentryUploadEnabled =
   && Boolean(sentryProject)
   && Boolean(sentryRelease);
 
+// Deterministic bundle-baseline collector opt-in. Off by default so normal
+// `pnpm --filter @proliferate/web build` output is byte-identical; the collector
+// (`scripts/collect-web-bundle-baseline.mjs`) sets this env flag to emit
+// `dist/.vite/manifest.json` so it can attribute every chunk/asset. This adds
+// only the manifest file; it changes no application code or chunking.
+const bundleBaselineManifest =
+  process.env.PROLIFERATE_WEB_BUNDLE_MANIFEST === "1";
+
 // Root VERSION file (repo root, two levels up from apps/web). Only used for
 // the local-dev telemetry release fallback so it reflects the real product
 // version instead of a hardcoded stale literal; real builds always set
@@ -55,6 +63,7 @@ export default defineConfig({
   clearScreen: false,
   build: {
     sourcemap: sentryUploadEnabled ? "hidden" : false,
+    ...(bundleBaselineManifest ? { manifest: true } : {}),
   },
   server: {
     host: "127.0.0.1",
