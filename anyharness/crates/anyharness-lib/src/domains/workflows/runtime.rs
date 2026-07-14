@@ -12,7 +12,7 @@ use tokio::runtime::Handle;
 
 use crate::domains::sessions::runtime::{
     CreateAndStartSessionError, InternalSessionCreateError, InternalSessionCreateInput,
-    SendPromptError, SendPromptOutcome, SessionRuntime,
+    SendPromptOutcome, SessionRuntime, TextPromptDispatchError,
 };
 use crate::domains::workflows::model::WorkflowRunFailureCode;
 use crate::domains::workflows::service::{
@@ -260,6 +260,11 @@ async fn run_execution(
     }
 
     // 7. Dispatch the one rendered prompt with the deterministic prompt id.
+    // Ambiguity rule (spec §6.1, symmetric): a LOST acknowledgement is never a
+    // failure claim — the actor may be running the turn. The step stays
+    // running with a null turn id; the extension terminalizes it if the turn
+    // ran, and the startup fence resolves it if not. Only a verifiably failed
+    // dispatch persists `prompt_dispatch_failed`.
     let acceptance = session_runtime
         .send_text_prompt_with_id(
             &session_id,
@@ -274,13 +279,20 @@ async fn run_execution(
         Ok(SendPromptOutcome::Queued { .. }) => {
             // Stay running with a null turn id; no queue model, no retry.
         }
-        Err(error) => {
+        Err(TextPromptDispatchError::AcknowledgementLost) => {
+            // Same posture as Queued: no failure write, no retry.
+            tracing::warn!(
+                run_id = %run_id,
+                session_id = %session_id,
+                "workflow prompt acknowledgement lost; leaving step running for the extension or fence"
+            );
+        }
+        Err(TextPromptDispatchError::Dispatch(_error)) => {
             tracing::warn!(
                 run_id = %run_id,
                 session_id = %session_id,
                 "workflow prompt dispatch failed"
             );
-            let _: SendPromptError = error;
             return Err(ExecutionAbort::Fail(
                 WorkflowRunFailureCode::PromptDispatchFailed,
             ));

@@ -129,44 +129,45 @@ impl SessionRuntime {
     /// Domain-owned text-only prompt seam with a caller-supplied deterministic
     /// `prompt_id`. Reuses the normal access check, live handle, actor command,
     /// and `Started`/`Queued` result. No provenance, no wire `PromptInputBlock`.
+    ///
+    /// The typed error separates a genuinely failed dispatch from a LOST
+    /// acknowledgement: when the actor received the prompt command but its
+    /// reply channel dropped, the turn may in fact be running, so the caller
+    /// must not treat it as a failure.
     pub(crate) async fn send_text_prompt_with_id(
         &self,
         session_id: &str,
         text: String,
         prompt_id: String,
-    ) -> Result<SendPromptOutcome, SendPromptError> {
+    ) -> Result<SendPromptOutcome, TextPromptDispatchError> {
         self.access_gate
             .assert_can_mutate_for_session(session_id)
-            .map_err(|error| SendPromptError::Internal(anyhow::anyhow!(error.to_string())))?;
+            .map_err(|error| {
+                TextPromptDispatchError::Dispatch(SendPromptError::Internal(anyhow::anyhow!(
+                    error.to_string()
+                )))
+            })?;
         if text.trim().is_empty() {
-            return Err(SendPromptError::EmptyPrompt);
+            return Err(TextPromptDispatchError::Dispatch(
+                SendPromptError::EmptyPrompt,
+            ));
         }
-        let record = self
-            .get_session_or_not_found(session_id)
-            .map_err(map_lifecycle_error_to_prompt)?;
+        let record = self.get_session_or_not_found(session_id).map_err(|error| {
+            TextPromptDispatchError::Dispatch(map_lifecycle_error_to_prompt(error))
+        })?;
         let handle = self
             .ensure_live_session_handle(&record, None)
             .await
-            .map_err(map_start_error_to_prompt)?;
+            .map_err(|error| TextPromptDispatchError::Dispatch(map_start_error_to_prompt(error)))?;
         let payload = crate::domains::sessions::prompt::PromptPayload::text(text);
         let acceptance = handle
             .send_prompt(payload, Some(prompt_id))
             .await
-            .map_err(|error| match error {
-                LiveSessionCommandError::ActorUnavailable => {
-                    SendPromptError::Internal(anyhow::anyhow!("session actor channel closed"))
-                }
-                LiveSessionCommandError::ResponseDropped => {
-                    SendPromptError::Internal(anyhow::anyhow!("session actor dropped response"))
-                }
-                LiveSessionCommandError::Rejected(PromptAcceptError::EnqueueFailed(detail)) => {
-                    SendPromptError::Internal(anyhow::anyhow!("failed to enqueue prompt: {detail}"))
-                }
-            })?;
+            .map_err(classify_text_prompt_command_error)?;
         let session = self
             .session_service
             .get_session(session_id)
-            .map_err(SendPromptError::Internal)?
+            .map_err(|error| TextPromptDispatchError::Dispatch(SendPromptError::Internal(error)))?
             .unwrap_or(record);
         Ok(match acceptance {
             PromptAcceptance::Started { turn_id } => {
@@ -225,6 +226,39 @@ impl SessionRuntime {
     }
 }
 
+/// Typed failure for the deterministic-prompt-id seam. `AcknowledgementLost`
+/// means the actor took the command but the reply channel dropped: the turn
+/// may be running, so callers must not record a terminal failure (mirror of
+/// the spec rule "never claim completion" — never claim failure on an
+/// ambiguous acknowledgement either).
+#[derive(Debug)]
+pub(crate) enum TextPromptDispatchError {
+    /// The prompt command reached the actor but its acknowledgement was lost.
+    AcknowledgementLost,
+    /// The dispatch verifiably failed before or at command delivery.
+    Dispatch(SendPromptError),
+}
+
+/// Pure classification of a live-session command failure for the text-prompt
+/// seam: `ResponseDropped` is the one ambiguous case (command consumed, reply
+/// lost); `ActorUnavailable` (command never processed) and an explicit
+/// rejection are safe to report as failed dispatch.
+fn classify_text_prompt_command_error(
+    error: LiveSessionCommandError<PromptAcceptError>,
+) -> TextPromptDispatchError {
+    match error {
+        LiveSessionCommandError::ResponseDropped => TextPromptDispatchError::AcknowledgementLost,
+        LiveSessionCommandError::ActorUnavailable => TextPromptDispatchError::Dispatch(
+            SendPromptError::Internal(anyhow::anyhow!("session actor channel closed")),
+        ),
+        LiveSessionCommandError::Rejected(PromptAcceptError::EnqueueFailed(detail)) => {
+            TextPromptDispatchError::Dispatch(SendPromptError::Internal(anyhow::anyhow!(
+                "failed to enqueue prompt: {detail}"
+            )))
+        }
+    }
+}
+
 fn map_lifecycle_error_to_prompt(error: SessionLifecycleError) -> SendPromptError {
     match error {
         SessionLifecycleError::SessionNotFound(session_id) => {
@@ -257,5 +291,32 @@ fn map_start_error_to_prompt(error: StartSessionError) -> SendPromptError {
         StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => {
             SendPromptError::Internal(error)
         }
+    }
+}
+
+#[cfg(test)]
+mod dispatch_classification_tests {
+    use super::*;
+
+    #[test]
+    fn response_dropped_is_a_lost_acknowledgement() {
+        assert!(matches!(
+            classify_text_prompt_command_error(LiveSessionCommandError::ResponseDropped),
+            TextPromptDispatchError::AcknowledgementLost
+        ));
+    }
+
+    #[test]
+    fn actor_unavailable_and_rejection_are_failed_dispatch() {
+        assert!(matches!(
+            classify_text_prompt_command_error(LiveSessionCommandError::ActorUnavailable),
+            TextPromptDispatchError::Dispatch(SendPromptError::Internal(_))
+        ));
+        assert!(matches!(
+            classify_text_prompt_command_error(LiveSessionCommandError::Rejected(
+                PromptAcceptError::EnqueueFailed("queue closed".to_string())
+            )),
+            TextPromptDispatchError::Dispatch(SendPromptError::Internal(_))
+        ));
     }
 }

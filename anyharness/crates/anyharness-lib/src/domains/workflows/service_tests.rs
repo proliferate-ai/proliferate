@@ -870,6 +870,33 @@ impl Drop for TempDir {
 }
 
 #[test]
+fn fence_resolves_a_lost_acknowledgement_step() {
+    // The lost-ack shape: run running, step running, turn_id null (dispatch
+    // acknowledgement never arrived). If no completion ever comes from the
+    // extension, the startup fence is the resolver: both rows become
+    // failed(runtime_restarted). (The other resolution path — the extension
+    // completing the running null-turn step — is covered by
+    // completion_terminalizes_run_and_step_with_finished_at.)
+    let svc = service();
+    let run_id = running_run(&svc, "sess-lost-ack");
+    assert!(view(&svc, &run_id).steps[0].turn_id.is_none());
+
+    svc.fence_nonterminal_after_restart().expect("fence");
+
+    let fenced = view(&svc, &run_id);
+    assert_eq!(fenced.run.status, WorkflowRunStatus::Failed);
+    assert_eq!(fenced.steps[0].status, WorkflowStepStatus::Failed);
+    assert_eq!(
+        fenced.run.failure_code,
+        Some(WorkflowRunFailureCode::RuntimeRestarted)
+    );
+    assert_eq!(
+        fenced.steps[0].failure_code,
+        Some(WorkflowRunFailureCode::RuntimeRestarted)
+    );
+}
+
+#[test]
 fn restart_fencing_fails_nonterminal_rows_across_reopen() {
     let dir = TempDir::new();
     let interrupted;
