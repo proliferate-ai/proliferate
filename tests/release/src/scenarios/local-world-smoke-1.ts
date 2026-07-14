@@ -232,19 +232,26 @@ export const defaultLocalWorldSmokeDriver: LocalWorldSmokeDriver = {
     let triggeredInstall = false;
     let last: Awaited<ReturnType<typeof client.getAgent>> | undefined;
     let launchable = false;
-    // Wait until AnyHarness both reports the agent ready AND lists it (with
-    // models) in launch-options — the exact source Desktop's composer reads.
+    // Launchability is judged by `GET /v1/agents/launch-options` — the exact
+    // source Desktop's composer reads. That endpoint uses AnyHarness's
+    // LAUNCH-time readiness (`resolve_launch_agent`), where an enrolled gateway
+    // route supplies the credential injected at spawn. `GET /v1/agents/{kind}`
+    // readiness is deliberately the NATIVE question ("is the vendor CLI
+    // installed and logged in") and reports `login_required` for a pure
+    // gateway-route actor — on a developer machine an ambient `~/.claude` login
+    // masks that, on a fresh CI runner it never clears. Gating on native
+    // readiness here made the cell green only where a human was logged in,
+    // which is exactly the ambient-credential leak the spec forbids. `getAgent`
+    // is still polled for install triggering and failure diagnostics.
     // Claude's ACP process builds from git and can still be installing after
     // gateway state syncs, so this is generously bounded.
     while (Date.now() < deadline) {
       last = await client.getAgent(harnessKind).catch(() => undefined);
-      if (last?.readiness === "ready") {
-        const options = await client.getAgentLaunchOptions().catch(() => []);
-        const entry = options.find((agent) => agent.kind === harnessKind);
-        if (entry && entry.models.length > 0) {
-          launchable = true;
-          break;
-        }
+      const options = await client.getAgentLaunchOptions().catch(() => []);
+      const entry = options.find((agent) => agent.kind === harnessKind);
+      if (entry && entry.models.length > 0) {
+        launchable = true;
+        break;
       }
       // Trigger the install once if the agent process is not yet present and
       // nothing else is already installing it (Desktop may auto-reconcile).
