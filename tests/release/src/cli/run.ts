@@ -1,34 +1,68 @@
 import { HELP_TEXT, parseArgs } from "./args.js";
-import { resolveEnv, missingRequiredForLane, blockedReasonForMissingEnv } from "../config/env-resolution.js";
+import { resolveEnv } from "../config/env-resolution.js";
 import { envVarNames, DEFAULT_LOCAL_RUNTIME_URL } from "../config/env-manifest.js";
 import { pushGatewayAuthState } from "../fixtures/agent-auth.js";
-import { selectScenarios, allScenarioIds } from "../scenarios/registry.js";
-import { ScenarioBlockedError, ScenarioExpectedFailError } from "../scenarios/types.js";
+import { selectScenarios } from "../scenarios/registry.js";
 import {
   DEFAULT_LOCAL_DURABLE_USER_EMAIL,
   DEFAULT_LOCAL_DURABLE_USER_PASSWORD,
   ensureLocalDurableUser,
 } from "../fixtures/identity.js";
-import type { ScenarioFailure } from "../report/types.js";
-import { writeFailureReports, toFailureReport } from "../report/failure-reporter.js";
+import { toFailureReports } from "../report/failure-reporter.js";
 import { fileIssuesForFailures } from "../report/issue-filer.js";
+import { IdentityError, resolveRunIdentity } from "../runner/identity.js";
+import { executeSelectedTests, SelectionError } from "../runner/execute.js";
+import { writeReport } from "../evidence/write.js";
+import type { TestRunReportV1 } from "../evidence/schema.js";
 
+/**
+ * Thin process adapter (specs/developing/testing/qualification-runner-core.md
+ * "Ownership and file plan"): parse/validate, resolve identity, run the local
+ * setup hooks, delegate orchestration to runner/execute.ts, write the combined
+ * report, and convert the persisted intended exit into process.exitCode. No
+ * scenario policy lives here.
+ */
 async function main(): Promise<void> {
-  const args = parseArgs(process.argv.slice(2));
+  let args;
+  try {
+    args = parseArgs(process.argv.slice(2));
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 2;
+    return;
+  }
 
   if (args.help) {
     console.log(HELP_TEXT);
     return;
   }
 
+  let identity;
+  try {
+    identity = await resolveRunIdentity({
+      overrides: { runId: args.runId, shardId: args.shardId, attempt: args.attempt },
+    });
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 2;
+    return;
+  }
+
   console.log(
-    `release-e2e: lane=${args.lane} desktop=${args.desktop} agents=${formatSelector(args.agents)} ` +
-      `scenarios=${formatSelector(args.scenarios)} dryRun=${args.dryRun}`,
+    `release-e2e: behavior=${args.behavior} lane=${args.lane} desktop=${args.desktop} ` +
+      `agents=${formatSelector(args.agents)} scenarios=${formatSelector(args.scenarios)} ` +
+      `dryRun=${args.dryRun} run=${identity.run_id} shard=${identity.shard_id} attempt=${identity.attempt}`,
   );
 
-  const scenarios = selectScenarios(args.scenarios);
-  if (scenarios.length === 0) {
-    console.log(`No scenarios selected. Known scenarios: ${allScenarioIds().join(", ")}`);
+  let scenarios;
+  try {
+    scenarios = selectScenarios(args.scenarios);
+    if (scenarios.length === 0) {
+      throw new SelectionError("Selection resolved to zero scenarios.");
+    }
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 2;
     return;
   }
 
@@ -44,112 +78,75 @@ async function main(): Promise<void> {
 
   printEnvManifestReport();
 
-  const neededEnvNames = [...new Set(scenarios.flatMap((scenario) => scenario.requiredEnv))];
-  const neededEnv = resolveEnv(neededEnvNames);
-
-  const agentsSelector = args.agents;
-  const failures: ScenarioFailure[] = [];
-  const blocked: Array<{ scenarioId: string; lane: string; reason: string }> = [];
-  const expectedFail: Array<{ scenarioId: string; lane: string; diagnosis: string }> = [];
-  let greenCount = 0;
-
-  for (const scenario of scenarios) {
-    for (const runtimeLane of scenario.lanes) {
-      // A missing required credential blocks just the scenarios/lanes that need
-      // it (#1069), instead of the old run-fatal env gate. Reported as blocked
-      // — the same convention as an out-of-band gate — so the run still exits
-      // success when everything non-green is blocked/expected-fail.
-      const missingEnv = args.dryRun
-        ? []
-        : missingRequiredForLane(scenario.requiredEnv, runtimeLane, neededEnv, locallySeeded);
-      if (missingEnv.length > 0) {
-        blocked.push({
-          scenarioId: scenario.id,
-          lane: runtimeLane,
-          reason: blockedReasonForMissingEnv(scenario.id, runtimeLane, missingEnv, locallySeeded),
-        });
-        continue;
-      }
-      try {
-        await scenario.run({
-          targetLane: args.lane,
-          runtimeLane,
-          desktop: args.desktop,
-          agents: agentsSelector === "all" ? ["all"] : agentsSelector,
-          dryRun: args.dryRun,
-          env: neededEnv,
-        });
-        greenCount += 1;
-      } catch (error) {
-        if (error instanceof ScenarioBlockedError) {
-          blocked.push({ scenarioId: scenario.id, lane: runtimeLane, reason: error.reason });
-          continue;
-        }
-        if (error instanceof ScenarioExpectedFailError) {
-          expectedFail.push({ scenarioId: scenario.id, lane: runtimeLane, diagnosis: error.diagnosis });
-          continue;
-        }
-        failures.push({
-          scenarioId: scenario.id,
-          registryFlowRef: scenario.registryFlowRef,
-          lane: runtimeLane,
-          expected: `${scenario.title} completes without error`,
-          error,
-        });
-      }
+  let report: TestRunReportV1;
+  try {
+    report = await executeSelectedTests({
+      behavior: args.behavior,
+      execution: args.dryRun ? "dry_run" : "real",
+      identity,
+      inputs: { targetLane: args.lane, desktop: args.desktop, agents: args.agents, scenarios: args.scenarios },
+      scenarios,
+      locallySeeded,
+      fileIssues: args.fileIssues
+        ? async (failed) => {
+            const urls = await fileIssuesForFailures(toFailureReports(failed));
+            for (const url of urls) {
+              console.error(`Filed issue: ${url}`);
+            }
+          }
+        : undefined,
+      log: (message) => console.log(`  ${message}`),
+    });
+  } catch (error) {
+    if (error instanceof SelectionError || error instanceof IdentityError) {
+      console.error(error.message);
+    } else {
+      console.error(`runner error: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`);
     }
-  }
-
-  if (!args.dryRun) {
-    console.log(`\n${greenCount} scenario run(s) green.`);
-    if (blocked.length > 0) {
-      console.log(`${blocked.length} scenario run(s) blocked (known gate, not a fresh failure):`);
-      for (const entry of blocked) {
-        console.log(`  - [${entry.scenarioId}/${entry.lane}] ${entry.reason}`);
-      }
-    }
-    if (expectedFail.length > 0) {
-      console.log(`${expectedFail.length} scenario run(s) expected-fail (diagnosed, tracked, not blocking):`);
-      for (const entry of expectedFail) {
-        console.log(`  - [${entry.scenarioId}/${entry.lane}] ${entry.diagnosis}`);
-      }
-    }
-  }
-
-  if (failures.length > 0) {
-    const reports = failures.map(toFailureReport);
-    console.error(`\n${failures.length} scenario run(s) failed:`);
-    for (const report of reports) {
-      // First line of the observed error, inline in the log — the JSON reports
-      // are the full record, but the runner is often read straight from the CI
-      // log (where the report artifact may not be fetched), so surface the
-      // reason there too.
-      const firstLine = report.observed.split("\n")[0];
-      console.error(`  - [${report.scenario_id}/${report.lane}] ${firstLine}`);
-    }
-    const written = await writeFailureReports(failures, args.outputDir);
-    console.error("Reports written:");
-    for (const filePath of written) {
-      console.error(`  - ${filePath}`);
-    }
-    if (args.fileIssues) {
-      const urls = await fileIssuesForFailures(reports);
-      console.error("Filed issues:");
-      for (const url of urls) {
-        console.error(`  - ${url}`);
-      }
-    }
-    if (!args.dryRun) {
-      process.exitCode = 1;
-    }
+    process.exitCode = 2;
     return;
   }
 
-  if (args.dryRun) {
-    console.log(`\nAll ${countRuns(scenarios)} scenario run(s) completed with no failures.`);
-  } else {
-    console.log(`\nNo red scenario runs (${greenCount} green, ${blocked.length} blocked, ${expectedFail.length} expected-fail).`);
+  printSummary(report);
+
+  try {
+    const written = await writeReport(args.outputDir, report);
+    console.log(`Combined report written: ${written}`);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 2;
+    return;
   }
+
+  if (report.summary.intended_exit_code !== 0) {
+    process.exitCode = report.summary.intended_exit_code;
+  }
+}
+
+function printSummary(report: TestRunReportV1): void {
+  const counts = report.summary.by_status;
+  console.log(
+    `\n${counts.green} green, ${counts.failed} failed, ${counts.blocked} blocked, ` +
+      `${counts.expected_fail} expected-fail, ${counts.cancelled} cancelled, ` +
+      `${counts.not_run} not-run, ${counts.missing} missing ` +
+      `(verdict: ${report.verdict.status}, intended exit ${report.summary.intended_exit_code}).`,
+  );
+  for (const result of report.results) {
+    if (result.status !== "green") {
+      const reason = result.reason ? ` — ${firstLine(result.reason.message)}` : "";
+      console.log(`  [${result.status}] ${result.test_id}${reason}`);
+    }
+  }
+  for (const error of report.summary.integrity_errors) {
+    console.error(`  integrity error: ${error.message}`);
+  }
+  for (const error of report.summary.runner_errors) {
+    console.error(`  runner error (${error.code}): ${error.message}`);
+  }
+}
+
+function firstLine(message: string): string {
+  return message.split("\n")[0];
 }
 
 /**
@@ -244,10 +241,6 @@ function printEnvManifestReport(): void {
     const shown = entry.present && !entry.spec.secret ? ` = ${entry.value}` : "";
     console.log(`  [${status}] ${entry.spec.name}${shown}`);
   }
-}
-
-function countRuns(scenarios: ReturnType<typeof selectScenarios>): number {
-  return scenarios.reduce((total, scenario) => total + scenario.lanes.length, 0);
 }
 
 function formatSelector(selector: string[] | "all"): string {
