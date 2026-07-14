@@ -5,9 +5,10 @@ import { App } from "#product/App"
 import { ProductLifecycleRoot } from "#product/providers/ProductLifecycleRoot"
 import { ProductProviderRoot } from "#product/providers/ProductProviderRoot"
 
-// Shared product styles (xterm + @proliferate/design product CSS). The
+// Shared product styles (xterm + @proliferate/design product CSS). Imported
+// relatively (not via `#product/*`, whose runtime condition appends `.js`); the
 // surface-specific desktop stylesheet is imported by the host entry, not here.
-import "#product/index.css"
+import "./index.css"
 
 // The single host-infrastructure prop: the host's routes container. Desktop and
 // Web pass their Sentry-instrumented `InstrumentedRoutes`; the qualification
