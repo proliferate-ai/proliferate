@@ -20,6 +20,11 @@ and Cloud/AnyHarness behavior, move that product into a shared package, and
 make Desktop and Web thin hosts around it. The old Web product is deleted
 rather than reconciled with Desktop.
 
+In plain language: make Desktop use the host boundary while its files stay
+put, mechanically move that working product into ProductClient, delete the
+duplicate Web product, and make a thin Web app mount the same ProductClient.
+This is an extraction and host replacement, not a product rewrite.
+
 ```text
 Desktop host ----\
                   +--> ProductHostProvider --> ProductClient --> Cloud API
@@ -164,6 +169,10 @@ interface ProductHost {
 }
 ```
 
+`cloud.client` is the host's current Cloud client. It may make anonymous
+requests before login and authenticated requests after the host resolves an
+authority; `null` means the host cannot currently construct a usable client.
+
 There is not a provider tree for each capability. Product code normally checks
 the capability it needs, especially `host.desktop !== null`, rather than
 scattering `surface === "desktop"` checks through the product.
@@ -173,6 +182,12 @@ the Cloud client changes, the host app provides a new `ProductHost` object so
 ordinary React context consumers update. `ProductHostProvider` preserves the
 identity it is given; it does not clone a host or hide host mutations.
 
+Each thin app owns the environment infrastructure needed to mount the shared
+product: its React root, router transport, Query client, Cloud-client
+construction/provider, and `ProductHostProvider`. ProductClient owns product
+providers, product routes, stores, and product lifecycles. This distinction
+does not give either host a second copy of product behavior.
+
 ## Deployment, Cloud, and AnyHarness
 
 Both hosts use the same Cloud SDK and managed-cloud product behavior.
@@ -180,8 +195,9 @@ Both hosts use the same Cloud SDK and managed-cloud product behavior.
 - Hosted Web receives one configured API base URL.
 - Desktop may switch to another API URL for self-hosting and reset to its
   default deployment.
-- Each host supplies the authenticated Cloud client appropriate to its auth
-  transport.
+- Each host supplies the current Cloud client appropriate to its auth
+  transport, replacing the host snapshot when that client or its authority
+  changes.
 - ProductClient owns Cloud queries, mutations, billing, workspace resolution,
   gateway lookup, and managed-cloud connection behavior.
 - Both hosts use the same shared AnyHarness React providers and hooks for cloud
@@ -243,6 +259,11 @@ storage remain host-owned. ProductClient receives normalized auth state and
 operations, not those transport details. Desktop and Web may render the same
 shared callback status UI even though their entry mechanisms differ.
 
+Before the Web host replaces the legacy app, a narrow browser-auth fixture
+must prove callback cold load, repeated callback completion, provider error,
+logout, and return to the intended shared product destination. This is a
+transport contract, not a generalized callback queue or auth redesign.
+
 ## Storage, links, clipboard, and telemetry
 
 ### Storage
@@ -270,6 +291,11 @@ link transport stays outside it:
   initial and live entries through `ProductLinks`.
 - Web may provide an `openInDesktop` action for local-only work.
 
+The normalized entry must preserve every route field and query value needed by
+the shared product, including repeated query values where current behavior
+depends on them. Hosts decode transport; ProductClient owns product route
+taxonomy, destination mapping, and route/screen telemetry.
+
 The migration requires reliable initial-plus-live delivery and unsubscribe
 cleanup. “Initial + live” means the host's current location/native snapshot
 when a listener subscribes, followed by entries arriving while that listener
@@ -296,6 +322,9 @@ host constructs the telemetry implementation because release/runtime identity
 and vendor initialization differ. ProductClient imports no Sentry, PostHog,
 or Tauri telemetry SDK directly. Existing privacy, replay-masking, and payload
 rules remain in force.
+
+The host transports events to its vendor implementation; it does not define
+product event names or decide which product route is active.
 
 ## Desktop-only behavior
 
@@ -427,59 +456,86 @@ behavior regression in a migration checkpoint.
 
 ## Migration sequence
 
-### 1. Foundation and in-place Desktop adoption
+Desktop remains the working baseline throughout. Each implementation PR owns
+one coherent checkpoint, but the migration itself is this straightforward
+sequence.
 
-- Finalize the one `ProductHost` and demand-driven `DesktopBridge` contracts.
-- Construct the Desktop adapters from the current implementations.
-- Replace product-facing direct Tauri/native calls with bridge calls while
-  source paths remain in Desktop.
-- Gate Desktop-only product lifecycles on `host.desktop`.
-- Keep raw native startup and authentication transport in the Desktop app.
-- Verify Desktop behavior before any large source move.
+### 1. Establish the shared boundary — complete
 
-### 2. Move Desktop into ProductClient
+- Create the compiled ProductClient package, shared CSS boundary,
+  `ProductHost`, `DesktopBridge`, and `ProductHostProvider`.
+- Remove the embedded browser instead of carrying it into the shared product.
+- Construct and mount the real Desktop host while product files remain in
+  `apps/desktop`.
+- Prove one Desktop-only lifecycle mounts only behind `host.desktop`.
 
-- Move Desktop's product pages, routes, components, hooks, stores, providers,
-  product logic, tests, assets, and shared lifecycles into ProductClient.
-- Rewrite moved internal imports to the package-local mapping.
+### 2. Route Desktop-only product behavior through the boundary
+
+- Keep product source in `apps/desktop` while replacing product-facing direct
+  Tauri/native access with the already-mounted bridge.
+- Adopt native UI first, then local AnyHarness runtime access. Local runtime
+  adoption proves the most important optional capability: Desktop can list,
+  create, open, and resume local work while Web will mount none of it.
+- Adopt remaining bridge consumers only in coherent, demand-driven slices.
+  Do not create work merely to exercise every bridge group.
+- Keep raw Tauri startup, sidecar/process startup, native auth transport, and
+  vendor installation in the Desktop host.
+
+### 3. Prove extraction readiness
+
+Before the large source move, close only the mechanics that make that move
+safe and scriptable:
+
+- fix the final host mounting envelope described above;
+- prove the compiled ProductClient preserves dynamic imports, generated
+  inputs, CSS, fonts, and representative assets in both a Desktop build and a
+  browser-host build;
+- make any narrow route/query/auth/telemetry contract corrections required by
+  the real consumers, without starting a general lifecycle-hardening program;
+- finish the move/split/retain/delete file ledger and the `@/` to `#product/`
+  import codemod; and
+- prove a minimal browser host can mount the provider contract with
+  `desktop: null` and that migration-boundary checks fail closed.
+
+### 4. Mechanically move Desktop into ProductClient
+
+- Move Desktop's product pages, routes, components, hooks, stores, product
+  providers, product logic, tests, assets, and shared lifecycles into
+  ProductClient.
+- Rewrite moved internal imports with the verified codemod and move each
+  dependency or asset with its owner.
 - Have Desktop import and mount the compiled ProductClient completely.
 - Leave only the thin native host, native implementations, bootstrap, and
   host-specific CSS in `apps/desktop`.
-- Treat this primarily as a mechanical move; do not redesign the product.
+- Do not redesign the product or leave duplicate old/new ownership paths.
 
-### 3. Delete the old Web product
+### 5. Replace the legacy Web product
 
-- Delete its duplicate pages, chat implementation, polling, stores,
+- Delete the duplicate Web pages, chat implementation, polling, stores,
   controllers, and product-specific logic.
-- Retain a buildable minimal browser shell and the raw auth/callback/bootstrap
-  entrypoints needed by the replacement host.
+- Keep only the thin browser bootstrap and raw browser-owned auth/callback,
+  storage, link, clipboard, telemetry, deployment, and Cloud-client adapters.
+- Pass `desktop: null` and mount the same compiled ProductClient and shared
+  product CSS used by Desktop.
 
-### 4. Build the Web host
+### 6. Qualify and cut over hosted Web
 
-- Implement browser deployment, auth, Cloud-client construction, storage,
-  links, clipboard, and telemetry adapters.
-- Pass `desktop: null`.
-- Mount the same compiled ProductClient and shared product CSS.
-- Verify managed-cloud workspace and gateway AnyHarness behavior matches
-  Desktop.
+- Build and test both production hosts and prove their bundles contain the
+  expected ProductClient chunks, CSS, fonts, and assets.
+- Verify managed-cloud workspaces and gateway AnyHarness behavior through the
+  same shared implementation on Desktop and Web.
+- Verify Desktop still supports local work and Web contains no Tauri/native
+  imports and starts no local-runtime, local-workspace, or SSH behavior.
+- Verify auth start/callback/logout, inbound links, billing returns, and the
+  external URL/configuration producers used by hosted Web.
+- Enforce the recorded Web first-load performance budget before cutover.
 
-### 5. Verify deployability
-
-- Build and test both production hosts.
-- Verify their production bundles contain ProductClient CSS and assets.
-- Verify Web contains no Tauri/native imports and performs no local-runtime,
-  local-workspace, or SSH operation.
-- Verify Desktop discovers local AnyHarness and can list, create, open, and
-  resume local work while retaining cloud behavior.
-- Verify auth start/callback/logout and inbound-link flows on both hosts.
-- Update and smoke-test external Web callback/return configuration.
-
-### 6. Follow-up: self-hosted Web
+### 7. Follow up with self-hosted Web
 
 After hosted Web cleanly mounts ProductClient, add the configuration,
 deployment, and documentation needed to point Web at a self-hosted server.
-The common host contract must not prevent this, but self-hosted Web is not a
-cutover requirement.
+The common host contract must support this direction, but self-hosted Web is
+not a hosted-Web cutover requirement.
 
 ## Verification by checkpoint
 
@@ -555,12 +611,16 @@ export through one Desktop-only product-lifecycle root. The complete contract
 and acceptance record is
 [`web-desktop-client-unification-d1a.md`](web-desktop-client-unification-d1a.md).
 
-Desktop Native UI Adoption is the next provisional slice. It routes existing
-native menus, native menu commands, Dock attention, and Desktop zoom through
-the merged `host.desktop.nativeUi` boundary while product files stay under
-`apps/desktop`. It is not frozen and does not authorize implementation until
-the founder approves its reconciled flow, failure behavior, file plan, and
-acceptance proof.
+Desktop Native UI Adoption is the current implementation slice. Its revision r1
+contract routes existing native menus, native menu commands, Dock attention,
+and Desktop zoom through the merged `host.desktop.nativeUi` boundary while
+product files stay under `apps/desktop`. The complete contract is
+[`web-desktop-client-unification-d1b.md`](web-desktop-client-unification-d1b.md).
+
+Desktop Local Runtime Adoption is the expected next slice. It is queued and
+not yet specified. Its purpose is to
+route product-owned local AnyHarness discovery/restart/connection through the
+Desktop bridge while raw sidecar process ownership remains in Desktop.
 
 Related authoritative docs:
 

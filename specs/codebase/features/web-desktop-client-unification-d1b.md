@@ -1,9 +1,9 @@
 # Desktop Native UI Adoption (D1b)
 
-Status: **frozen for implementation**.
+Status: **current implementation scope**.
 
 - Revision: `D1b-r1`
-- Frozen: 2026-07-13
+- Approved starting scope: 2026-07-13
 - Exact implementation base:
   `2ec6907391f57a3e449b5b77c43c18600f64fdaa`
 - Prior implementation: PR #1157, reviewed head
@@ -16,9 +16,10 @@ Status: **frozen for implementation**.
 - Pipeline ledger:
   [`../../developing/deploying/web-desktop-unification-rollout.md`](../../developing/deploying/web-desktop-unification-rollout.md)
 
-This is the implementation contract for Desktop Native UI Adoption only. If
-implementation cannot satisfy it without changing a material decision, stop
-and return the decision to the founder. Do not silently broaden the slice.
+This is the current implementation contract for Desktop Native UI Adoption
+only. The founder and implementation agent may update it together when code
+evidence requires a material adjustment; record that decision before
+broadening the slice.
 
 ## 1. Observable outcome
 

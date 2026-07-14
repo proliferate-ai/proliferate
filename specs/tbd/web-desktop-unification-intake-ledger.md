@@ -2,10 +2,10 @@
 
 Status: historical execution snapshot, non-authoritative.
 
-This ledger is history and sweep input only. The **binding** intake and freeze
-snapshots for the migration are appended to the rollout ledger at
+This ledger is history and sweep input only. Current phase and frozen-slice
+state lives in the rollout ledger at
 [`../developing/deploying/web-desktop-unification-rollout.md`](../developing/deploying/web-desktop-unification-rollout.md)
-by the committed docs-only intake phases; the promoted contract is
+and the promoted contract is
 [`../codebase/features/web-desktop-client-unification.md`](../codebase/features/web-desktop-client-unification.md).
 Do not cite this file for code review or release readiness.
 
