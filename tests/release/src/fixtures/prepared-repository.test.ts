@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { test } from "node:test";
 
 import { preparedRepository, type PreparedRepositoryTransport } from "./prepared-repository.js";
+
+function sha8(value: string): string {
+  return createHash("sha256").update(value).digest("hex").slice(0, 8);
+}
 import type { ReadyLocalWorld } from "../worlds/local-workspace/world.js";
 import type { AuthenticatedActor } from "./authenticated-actor.js";
 
@@ -74,12 +79,16 @@ test("preparedRepository clones into a cell-scoped subdirectory of the world's r
   assert.equal(repo.repoUrl, "https://github.com/example/fixture.git");
   assert.equal(repo.commit, "deadbeef");
   assert.equal(repo.repoRootId, "repo-root-1");
-  assert.equal(repo.path, "/tmp/run-1/repositories/harness%3Dclaude");
+  // Filesystem-safe, unique clone dir: sanitized cell id + short cell-id hash
+  // (no literal `%2F`/`%3D`, which the desktop workspace-entry path mishandled).
+  const expectedDir = `/tmp/run-1/repositories/harness-claude-${sha8("harness=claude")}`;
+  assert.equal(repo.path, expectedDir);
+  assert.match(repo.path, /^\/tmp\/run-1\/repositories\/[A-Za-z0-9._-]+$/);
 
   assert.deepEqual(calls, [
-    "ensureCleanDir:/tmp/run-1/repositories/harness%3Dclaude",
-    "cloneAndCheckout:https://github.com/example/fixture.git:deadbeef:/tmp/run-1/repositories/harness%3Dclaude",
-    "resolveRepoRoot:http://127.0.0.1:9002:/tmp/run-1/repositories/harness%3Dclaude",
+    `ensureCleanDir:${expectedDir}`,
+    `cloneAndCheckout:https://github.com/example/fixture.git:deadbeef:${expectedDir}`,
+    `resolveRepoRoot:http://127.0.0.1:9002:${expectedDir}`,
   ]);
 });
 
@@ -87,7 +96,7 @@ test("preparedRepository defaults cellId so two calls without one collide on the
   const world = fakeWorld();
   const { transport } = fakeTransport();
   const repo = await preparedRepository(world, fakeActor(), undefined, transport);
-  assert.equal(repo.path, "/tmp/run-1/repositories/default");
+  assert.equal(repo.path, `/tmp/run-1/repositories/default-${sha8("default")}`);
 });
 
 test("preparedRepository propagates a clone failure without masking it", async () => {

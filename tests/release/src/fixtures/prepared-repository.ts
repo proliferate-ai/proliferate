@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 
@@ -115,7 +116,13 @@ export async function preparedRepository(
   const repoUrl = options?.repoUrl ?? defaultRepoUrl();
   const commit = options?.commit ?? DEFAULT_BASELINE_COMMIT;
   const cellId = options?.cellId ?? "default";
-  const destDir = path.join(world.paths.repositoriesDir, encodeURIComponent(cellId));
+  // Filesystem-safe, still-unique clone directory. `encodeURIComponent(cellId)`
+  // produced literal `%2F`/`%3D` in the path (cell id "…/local/harness=claude"),
+  // an unusual workspace path that the desktop workspace-entry / agent launch
+  // path can mishandle. Sanitize to `[A-Za-z0-9._-]` and append a short cellId
+  // hash so distinct cells still clone into disjoint directories.
+  const safeCellDir = `${cellId.replace(/[^A-Za-z0-9._-]+/g, "-")}-${cellIdHash(cellId)}`;
+  const destDir = path.join(world.paths.repositoriesDir, safeCellDir);
 
   await transport.ensureCleanDir(destDir);
   await transport.cloneAndCheckout(repoUrl, commit, destDir);
@@ -144,4 +151,9 @@ function runGit(args: string[], cwd: string): Promise<void> {
       resolve();
     });
   });
+}
+
+/** Short, stable hash of a cell id so distinct cells clone into disjoint dirs. */
+function cellIdHash(cellId: string): string {
+  return createHash("sha256").update(cellId).digest("hex").slice(0, 8);
 }

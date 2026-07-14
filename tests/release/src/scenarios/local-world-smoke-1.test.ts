@@ -228,18 +228,20 @@ function fakeDriver(
       return {
         context: undefined as never,
         page: undefined as never,
+        debug: { console: [], network: [] },
         close: async () => {
           calls.push("page.close");
         },
       } satisfies ProductPage;
     },
+    waitForGatewaySync: async (_world, _page, harnessKind) => {
+      calls.push(`waitForGatewaySync:${harnessKind}`);
+    },
+    ensureHarnessReady: async (_world, _page, harnessKind) => {
+      calls.push(`ensureHarnessReady:${harnessKind}`);
+    },
     selectRepoAndWorkLocally: async () => {
       calls.push("selectRepoAndWorkLocally");
-      return { workspaceId: "workspace-1" };
-    },
-    createSession: async (_page, harnessKind) => {
-      calls.push(`createSession:${harnessKind}`);
-      return { sessionId: "session-1" };
     },
     liveProbeModels: async () => {
       calls.push("liveProbeModels");
@@ -252,11 +254,11 @@ function fakeDriver(
     selectModelInUi: async (_page, modelId) => {
       calls.push(`selectModelInUi:${modelId}`);
     },
-    sendPromptAndAwaitReply: async (_page, prompt) => {
-      calls.push(`sendPromptAndAwaitReply:${prompt}`);
-      return options.reply ?? "pong";
+    sendPromptAndMaterialize: async (_world, _page, prompt) => {
+      calls.push(`sendPromptAndMaterialize:${prompt}`);
+      return { workspaceId: "workspace-1", sessionId: "session-1", reply: options.reply ?? "pong" };
     },
-    reopenAndVerify: async (_page, expectations) => {
+    reopenAndVerify: async (_world, _page, expectations) => {
       calls.push(`reopenAndVerify:${expectations.workspaceId}:${expectations.sessionId}:${expectations.modelId}`);
     },
     snapshotSpend: async () => {
@@ -301,13 +303,14 @@ test("runLocalWorldSmokeCell drives every step in order and attaches complete ev
     "createActor:true",
     "prepareRepo:LOCAL-WORLD-SMOKE-1/local/harness=claude",
     "openPage",
+    "waitForGatewaySync:claude",
+    "ensureHarnessReady:claude",
     "selectRepoAndWorkLocally",
-    "createSession:claude",
     "allowlistModels",
     "liveProbeModels",
     "selectModelInUi:claude-haiku-4-5",
     "snapshotSpend",
-    `sendPromptAndAwaitReply:${DETERMINISTIC_PROMPT}`,
+    `sendPromptAndMaterialize:${DETERMINISTIC_PROMPT}`,
     "reopenAndVerify:workspace-1:session-1:claude-haiku-4-5",
     "correlateTurn:claude-haiku-4-5",
     "closeWorld:true",

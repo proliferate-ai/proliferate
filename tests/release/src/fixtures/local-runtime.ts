@@ -160,8 +160,29 @@ export class LocalRuntimeClient {
     return response.models;
   }
 
+  /**
+   * The runtime's per-agent launch options (`GET /v1/agents/launch-options`) —
+   * the exact source Desktop's composer reads for local launch. An agent only
+   * appears here (with a non-empty `models` list) once its process is installed
+   * and its credentials resolve, so it is the authoritative "is this harness
+   * launchable in the UI yet" signal.
+   */
+  async getAgentLaunchOptions(): Promise<Array<{ kind: string; models: Array<{ id: string }> }>> {
+    const response = await this.request<{ agents: Array<{ kind: string; models: Array<{ id: string }> }> }>(
+      "GET",
+      "/v1/agents/launch-options",
+    );
+    return response.agents;
+  }
+
   async createLocalWorkspace(path: string): Promise<CreateWorkspaceResponse> {
     return this.request<CreateWorkspaceResponse>("POST", "/v1/workspaces", { path });
+  }
+
+  /** All workspaces the runtime currently knows about (diagnostic use). */
+  async listWorkspaces(): Promise<Workspace[]> {
+    const response = await this.request<{ workspaces?: Workspace[] } | Workspace[]>("GET", "/v1/workspaces");
+    return Array.isArray(response) ? response : (response.workspaces ?? []);
   }
 
   async createWorktree(params: {
@@ -199,6 +220,12 @@ export class LocalRuntimeClient {
 
   async getSession(sessionId: string): Promise<SessionSummary> {
     return this.request<SessionSummary>("GET", `/v1/sessions/${sessionId}`);
+  }
+
+  /** All sessions the runtime currently knows about (diagnostic use). */
+  async listSessions(): Promise<SessionSummary[]> {
+    const response = await this.request<{ sessions?: SessionSummary[] } | SessionSummary[]>("GET", "/v1/sessions");
+    return Array.isArray(response) ? response : (response.sessions ?? []);
   }
 
   async prompt(sessionId: string, text: string): Promise<void> {

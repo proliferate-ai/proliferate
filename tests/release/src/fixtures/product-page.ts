@@ -15,6 +15,39 @@ function captureConsole(page: Page, sink: string[]): void {
   page.on("pageerror", (error) => sink.push(`[pageerror] ${error.message}`));
 }
 
+/** Records non-2xx and failed network requests for env-gated failure diagnostics. */
+function captureNetwork(page: Page, sink: string[]): void {
+  if (!process.env.LOCAL_WORLD_SMOKE_DEBUG_DIR) {
+    return;
+  }
+  page.on("requestfailed", (request) => {
+    sink.push(`[requestfailed] ${request.method()} ${request.url()} :: ${request.failure()?.errorText ?? ""}`);
+  });
+  page.on("response", (response) => {
+    const status = response.status();
+    if (status >= 400) {
+      void response
+        .text()
+        .catch(() => "")
+        .then((body) => {
+          sink.push(`[${status}] ${response.request().method()} ${response.url()} :: ${body.slice(0, 400)}`);
+        });
+    }
+  });
+  // The AnyHarness session stream is a WebSocket; agent/runtime errors (e.g.
+  // "Workspace not found") arrive as frames, not HTTP. Record frames that look
+  // like errors so a turn/materialization failure is diagnosable.
+  page.on("websocket", (ws) => {
+    const record = (dir: string, payload: string) => {
+      if (/error|not found|fail|workspace|session/i.test(payload)) {
+        sink.push(`[ws ${dir}] ${ws.url().slice(0, 80)} :: ${payload.slice(0, 500)}`);
+      }
+    };
+    ws.on("framereceived", (frame) => record("recv", typeof frame.payload === "string" ? frame.payload : ""));
+    ws.on("framesent", (frame) => record("sent", typeof frame.payload === "string" ? frame.payload : ""));
+  });
+}
+
 /**
  * Env-gated (`LOCAL_WORLD_SMOKE_DEBUG_DIR`) dump of the rendered DOM, a
  * screenshot, and captured console output on a UI failure. A no-op unless the
@@ -62,6 +95,12 @@ async function dumpFailureArtifacts(page: Page | undefined, consoleLog: string[]
 export interface ProductPage {
   context: BrowserContext;
   page: Page;
+  /**
+   * Env-gated diagnostic sinks (populated only when LOCAL_WORLD_SMOKE_DEBUG_DIR
+   * is set): browser console output and non-2xx / failed network requests.
+   * Empty on the green path.
+   */
+  debug: { console: string[]; network: string[] };
   /** Closes the page + context; registered with the world cleanup stack. */
   close(): Promise<void>;
 }
@@ -137,10 +176,12 @@ export async function productPage(
   const context = await driver.newContext(world.renderer.browser);
   let page: Page | undefined;
   const consoleLog: string[] = [];
+  const networkLog: string[] = [];
   try {
     await driver.installSession(context, actor.session);
     page = await driver.newPage(context);
     captureConsole(page, consoleLog);
+    captureNetwork(page, networkLog);
     await driver.goto(page, world.renderer.baseUrl);
     await driver.waitForAuthenticatedReadiness(page, options.readinessTimeoutMs ?? 30_000);
   } catch (error) {
@@ -161,6 +202,7 @@ export async function productPage(
   return {
     context,
     page: openedPage,
+    debug: { console: consoleLog, network: networkLog },
     close: async () => {
       await driver.closePage(openedPage).catch(() => undefined);
       await driver.closeContext(context).catch(() => undefined);
