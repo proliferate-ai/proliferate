@@ -1,7 +1,7 @@
 import type { SessionControlIconKey } from "@proliferate/product-domain/chats/session-controls/presentation";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import type { ComponentType, SVGProps } from "react";
-import { GitBranch } from "lucide-react";
+import { GitBranchIcon } from "@proliferate/ui/icons";
 
 type IconProps = SVGProps<SVGSVGElement>;
 
@@ -11,7 +11,7 @@ interface SessionControlIconProps {
 }
 
 const SESSION_CONTROL_ICONS: Record<SessionControlIconKey, ComponentType<IconProps>> = {
-  branch: GitBranch,
+  branch: GitBranchIcon,
   build: BuildModeFilled,
   chat: MessageSquareFilled,
   claude: ClaudeProviderIcon,

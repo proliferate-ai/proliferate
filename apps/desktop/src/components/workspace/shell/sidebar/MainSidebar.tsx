@@ -13,6 +13,7 @@ import { WorkspaceCleanupAttentionSection } from "./WorkspaceCleanupAttentionSec
 import { CoworkThreadsSection } from "@/components/workspace/cowork/sidebar/CoworkThreadsSection";
 import {
   ProductSidebarBody,
+  ProductSidebarBrandRow,
   ProductSidebarFrame,
   ProductSidebarScrollableContent,
 } from "@proliferate/product-ui/sidebar/ProductSidebarLayout";
@@ -281,6 +282,7 @@ export const MainSidebar = memo(function MainSidebar() {
         </DebugProfiler>
       )}>
       <ProductSidebarBody>
+        <ProductSidebarBrandRow label="Proliferate" />
         <DebugProfiler id="workspace-sidebar-primary-nav">
           <SidebarPrimaryNavigation
             homeActive={isOnHome && !selectedWorkspaceId && !pendingWorkspaceEntry}

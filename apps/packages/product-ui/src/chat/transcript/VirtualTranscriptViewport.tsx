@@ -53,7 +53,6 @@ export function VirtualTranscriptViewport({
     >
       <div
         ref={contentRef}
-        className="mt-auto"
         data-transcript-virtualization-mode="virtual"
         data-transcript-virtualization-setting={virtualizationMode}
       >

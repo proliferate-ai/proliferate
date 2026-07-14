@@ -6,7 +6,7 @@ import {
   ArrowUp,
   CircleAlert,
   Copy,
-  GitBranch,
+  GitBranchIcon,
   GitCommit,
   GitPullRequest,
   StackedFiles,
@@ -130,7 +130,7 @@ export function WorkspaceActivityComposerCard({
               >
                 {model.git.branchName ? (
                   <ActivityActionRow
-                    icon={<GitBranch className="size-4" />}
+                    icon={<GitBranchIcon className="size-4" />}
                     label={model.git.branchName}
                     meta="Copy"
                     trailing={<Copy className="size-3.5" />}
