@@ -17,7 +17,7 @@ restating folder rules or low-level reusable contracts.
 | Pending workspace shell | Pending workspace entry, projected session shell, optimistic prompts, and workspace/session materialization handoff. | [workspaces/pending-shell.md](workspaces/pending-shell.md) |
 | Cloud access / dispatch | Web/Mobile/Desktop cloud workspace access, dispatch UX, direct/open-in-desktop flows, commandability, and cloud/local parity. | [workspaces/cloud-dispatch.md](workspaces/cloud-dispatch.md), [clients/cloud-local-parity.md](clients/cloud-local-parity.md) |
 | Chat | Chat lifecycle, composer, and transcript behavior. | [chat/README.md](chat/README.md) |
-| Workspace files, migration, and terminals | User-facing workspace file, migration, shell, dispatch, and terminal behavior. | [workspaces/README.md](workspaces/README.md) |
+| Workspace files, mobility boundary, and terminals | User-facing workspace file, shell, dispatch, and terminal behavior; current migration absence and retained runtime mobility boundary. | [workspaces/README.md](workspaces/README.md) |
 | Mobile cloud client | Mobile auth, cloud chat, sessions, automations, settings, device/mobile-web smoke, and mobile acceptance matrix. | [clients/mobile-cloud.md](clients/mobile-cloud.md) |
 | Workflows | User-owned workflow definitions, ordered stages and prompt steps, catalog-backed harness validation, revisioning, optional default repository configuration, and definition-authoring UX. | [workflows/definitions.md](workflows/definitions.md) |
 | Automations | Scheduled/manual automations and the parked Slack bot contract. | [automations/README.md](automations/README.md) |

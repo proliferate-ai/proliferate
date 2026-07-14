@@ -318,7 +318,7 @@ which guide to read and where the code belongs.
 | Plugin expansion: MCP plugin auth/definitions/tools or skill rendering for sessions | `anyharness-lib/src/domains/plugins/**` | `domains/plugins/**` | [guides/domains.md](guides/domains.md), [../../platforms/product/mcp-skills.md](../../platforms/product/mcp-skills.md) |
 | Applied runtime config for a session: MCP/skill/plugin manifest, credential values, session context | `anyharness-lib/src/domains/runtime_config/**` | `domains/runtime_config/**` | [guides/domains.md](guides/domains.md), [../../platforms/product/mcp-skills.md](../../platforms/product/mcp-skills.md) |
 | Session link graph: subagent, cowork, review-agent, fork relationships | `anyharness-lib/src/domains/sessions/links/**` | `domains/sessions/links/**` | [guides/domains.md](guides/domains.md), [specs/session-engine.md](specs/session-engine.md) |
-| Reviews, plans, mobility, or repo-root product behavior | `domains/reviews/**`, `domains/plans/**`, `domains/mobility/**`, `domains/repo_roots/**` | owning `domains/<domain>/**` | [guides/domains.md](guides/domains.md) |
+| Reviews, plans, mobility, or repo-root product behavior | `domains/reviews/**`, `domains/plans/**`, `domains/mobility/**`, `domains/repo_roots/**` | owning `domains/<domain>/**` | [guides/domains.md](guides/domains.md), [src/mobility.md](src/mobility.md) |
 | Latency tracing, request measurement, diagnostic ids | `observability/latency.rs` and scattered measurement helpers | `observability/**` | [guides/observability.md](guides/observability.md) |
 | Splitting large files, moving modules, or creating new folders | any AnyHarness path | target layer from this table | [guides/repo-shape.md](guides/repo-shape.md) |
 
