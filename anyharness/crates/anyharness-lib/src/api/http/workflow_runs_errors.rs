@@ -35,6 +35,9 @@ impl From<WorkflowPutError> for ApiError {
 impl From<WorkflowGetError> for ApiError {
     fn from(error: WorkflowGetError) -> Self {
         match error {
+            WorkflowGetError::InvalidRunId(error) => {
+                ApiError::bad_request(error.to_string(), "WORKFLOW_RUN_INVALID")
+            }
             WorkflowGetError::Store(_) | WorkflowGetError::Internal(_) => {
                 ApiError::internal("workflow run storage failure")
             }

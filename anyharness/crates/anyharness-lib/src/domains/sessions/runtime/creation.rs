@@ -24,6 +24,18 @@ pub(crate) struct InternalSessionCreateInput {
     pub origin: OriginContext,
 }
 
+/// Typed failure for the internal creation seam. Access-gate refusals stay
+/// typed (never stringified) so callers can classify a retired, mutation-
+/// blocked, or missing workspace distinctly from a creation failure.
+#[derive(Debug)]
+pub(crate) enum InternalSessionCreateError {
+    /// The supplied workspace refused mutation: missing, retired, or
+    /// mutation-blocked by its runtime access mode.
+    WorkspaceUnavailable(WorkspaceAccessError),
+    /// Durable session creation itself failed.
+    Create(CreateAndStartSessionError),
+}
+
 impl SessionRuntime {
     #[tracing::instrument(skip_all, fields(workspace_id = %workspace_id, agent_kind = %agent_kind))]
     pub async fn create_and_start_session(
@@ -132,15 +144,10 @@ impl SessionRuntime {
     pub(crate) fn create_persisted_internal_session(
         &self,
         input: InternalSessionCreateInput,
-    ) -> Result<SessionRecord, CreateAndStartSessionError> {
+    ) -> Result<SessionRecord, InternalSessionCreateError> {
         self.access_gate
             .assert_can_mutate_for_workspace(&input.workspace_id)
-            .map_err(|error| match error {
-                WorkspaceAccessError::WorkspaceNotFound(_) => {
-                    CreateAndStartSessionError::WorkspaceNotFound
-                }
-                other => CreateAndStartSessionError::Invalid(other.to_string()),
-            })?;
+            .map_err(InternalSessionCreateError::WorkspaceUnavailable)?;
         self.create_durable_session(
             &input.workspace_id,
             &input.agent_kind,
@@ -153,6 +160,7 @@ impl SessionRuntime {
             false, // subagents disabled
             input.origin,
         )
+        .map_err(InternalSessionCreateError::Create)
     }
 }
 

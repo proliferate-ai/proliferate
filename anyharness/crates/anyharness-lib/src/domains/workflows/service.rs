@@ -335,16 +335,24 @@ fn parse_invocation(json: &str) -> anyhow::Result<WorkflowRunInvocation> {
     Ok(serde_json::from_str(json)?)
 }
 
-fn validate_invocation(
-    run_id: &str,
-    input: &PutWorkflowRunInput,
-) -> Result<ValidatedInvocation, WorkflowRunValidationError> {
-    // runId: canonical lowercase hyphenated UUID, path-supplied.
+/// The canonical-UUID rule for a path-supplied `runId`, shared by PUT
+/// validation and the GET path (spec §3: an invalid ID is a coded 400 on both
+/// routes).
+pub fn validate_run_id(run_id: &str) -> Result<(), WorkflowRunValidationError> {
     let parsed =
         uuid::Uuid::parse_str(run_id).map_err(|_| WorkflowRunValidationError::InvalidRunId)?;
     if parsed.hyphenated().to_string() != run_id {
         return Err(WorkflowRunValidationError::InvalidRunId);
     }
+    Ok(())
+}
+
+fn validate_invocation(
+    run_id: &str,
+    input: &PutWorkflowRunInput,
+) -> Result<ValidatedInvocation, WorkflowRunValidationError> {
+    // runId: canonical lowercase hyphenated UUID, path-supplied.
+    validate_run_id(run_id)?;
 
     if input.schema_version != 1 {
         return Err(WorkflowRunValidationError::UnsupportedSchemaVersion(

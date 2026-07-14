@@ -3618,14 +3618,9 @@ export interface components {
          *     only and never appears in the body.
          */
         PutWorkflowRunRequest: {
-            /**
-             * @description Concrete scalar argument values keyed by declared input name. Values are
-             *     validated against declared input types after decode; the wire type is
-             *     left open so a type mismatch produces our own coded 400 rather than a
-             *     serde shape error.
-             */
+            /** @description Concrete scalar argument values keyed by declared input name. */
             arguments?: {
-                [key: string]: unknown;
+                [key: string]: components["schemas"]["WorkflowRunArgumentValue"];
             };
             definition: components["schemas"]["WorkflowRunDefinition"];
             /** Format: int64 */
@@ -4606,11 +4601,11 @@ export interface components {
         /** @description The durable run view. */
         WorkflowRun: {
             arguments: {
-                [key: string]: unknown;
+                [key: string]: components["schemas"]["WorkflowRunArgumentValue"];
             };
             createdAt: string;
             definition: components["schemas"]["WorkflowRunDefinition"];
-            failureCode?: string | null;
+            failureCode?: null | components["schemas"]["WorkflowRunFailureCode"];
             finishedAt?: string | null;
             id: string;
             /** Format: int64 */
@@ -4621,11 +4616,17 @@ export interface components {
             updatedAt: string;
             workspaceId: string;
         };
+        WorkflowRunArgumentValue: boolean | number | string;
         /** @description The frozen executable definition: inputs plus exactly one stage. */
         WorkflowRunDefinition: {
             inputs?: components["schemas"]["WorkflowRunInput"][];
             stages: components["schemas"]["WorkflowRunStage"][];
         };
+        /**
+         * @description The stable machine failure result on failed runs and steps (spec §6.1).
+         * @enum {string}
+         */
+        WorkflowRunFailureCode: "workspace_unavailable" | "session_create_failed" | "session_start_failed" | "prompt_dispatch_failed" | "session_turn_failed" | "session_turn_cancelled" | "runtime_restarted";
         /** @description Harness selection for the stage's session. */
         WorkflowRunHarnessConfig: {
             agentKind: string;
@@ -4674,7 +4675,7 @@ export interface components {
         /** @description The durable materialized step view. */
         WorkflowRunStep: {
             createdAt: string;
-            failureCode?: string | null;
+            failureCode?: null | components["schemas"]["WorkflowRunFailureCode"];
             finishedAt?: string | null;
             promptId: string;
             /** Format: int64 */
@@ -7746,6 +7747,15 @@ export interface operations {
                     "application/json": components["schemas"]["WorkflowRunResponse"];
                 };
             };
+            /** @description Non-canonical run ID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description Unknown workflow run */
             404: {
                 headers: {
@@ -7800,8 +7810,8 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
-            /** @description Referenced resource not found */
-            404: {
+            /** @description Same ID, different invocation */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7809,8 +7819,8 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
-            /** @description Same ID, different invocation */
-            409: {
+            /** @description Acceptance storage failure; no committed run or step */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

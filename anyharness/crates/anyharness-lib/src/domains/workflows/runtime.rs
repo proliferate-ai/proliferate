@@ -11,8 +11,8 @@ use std::sync::Arc;
 use tokio::runtime::Handle;
 
 use crate::domains::sessions::runtime::{
-    CreateAndStartSessionError, InternalSessionCreateInput, SendPromptError, SendPromptOutcome,
-    SessionRuntime,
+    CreateAndStartSessionError, InternalSessionCreateError, InternalSessionCreateInput,
+    SendPromptError, SendPromptOutcome, SessionRuntime,
 };
 use crate::domains::workflows::model::WorkflowRunFailureCode;
 use crate::domains::workflows::service::{
@@ -43,6 +43,8 @@ pub enum WorkflowPutError {
 /// The GET failure arm.
 #[derive(Debug)]
 pub enum WorkflowGetError {
+    /// The path `runId` is not a canonical UUID (spec §3: coded 400, like PUT).
+    InvalidRunId(WorkflowRunValidationError),
     Store(WorkflowServiceError),
     Internal(anyhow::Error),
 }
@@ -81,6 +83,13 @@ impl WorkflowRunRuntime {
 
     /// Accept a PUT. Only a fresh `Created` starts execution; replay returns the
     /// current view without any effect; conflict is a typed error.
+    ///
+    /// Cancellation safety (review C2A-REV-01): the accept + Created decision +
+    /// execution scheduling all run inside ONE task detached onto the main
+    /// runtime; this method merely awaits its JoinHandle. Dropping the HTTP
+    /// future mid-request detaches the awaiter but never cancels the
+    /// acceptance→execution handoff, so a committed `Created` can never orphan
+    /// as `accepted`.
     #[tracing::instrument(skip_all, fields(run_id = %run_id))]
     pub async fn put(
         &self,
@@ -88,40 +97,48 @@ impl WorkflowRunRuntime {
         input: crate::domains::workflows::model::PutWorkflowRunInput,
     ) -> Result<WorkflowPutSuccess, WorkflowPutError> {
         let service = self.service.clone();
-        let accept_run_id = run_id.clone();
-        let outcome = tokio::task::spawn_blocking(move || service.accept(&accept_run_id, input))
-            .await
-            .map_err(|error| WorkflowPutError::Internal(error.into()))?;
+        let session_runtime = self.session_runtime.clone();
+        let operation_gate = self.operation_gate.clone();
+        let execution_handle = self.main_handle.clone();
 
-        match outcome {
-            Ok(AcceptOutcome::Created { plan, view }) => {
-                self.spawn_execution(plan);
-                Ok(WorkflowPutSuccess::Created(view))
+        let handoff = self.main_handle.spawn(async move {
+            let accept_service = service.clone();
+            let accept_run_id = run_id.clone();
+            let outcome =
+                tokio::task::spawn_blocking(move || accept_service.accept(&accept_run_id, input))
+                    .await
+                    .map_err(|error| WorkflowPutError::Internal(error.into()))?;
+
+            match outcome {
+                Ok(AcceptOutcome::Created { plan, view }) => {
+                    execution_handle.spawn(async move {
+                        execute(service, session_runtime, operation_gate, plan).await;
+                    });
+                    Ok(WorkflowPutSuccess::Created(view))
+                }
+                Ok(AcceptOutcome::ExactReplay(view)) => Ok(WorkflowPutSuccess::Replay(view)),
+                Ok(AcceptOutcome::Conflict) => Err(WorkflowPutError::Conflict),
+                Err(WorkflowAcceptError::Invalid(error)) => Err(WorkflowPutError::Invalid(error)),
+                Err(WorkflowAcceptError::Store(error)) => Err(WorkflowPutError::Store(error)),
             }
-            Ok(AcceptOutcome::ExactReplay(view)) => Ok(WorkflowPutSuccess::Replay(view)),
-            Ok(AcceptOutcome::Conflict) => Err(WorkflowPutError::Conflict),
-            Err(WorkflowAcceptError::Invalid(error)) => Err(WorkflowPutError::Invalid(error)),
-            Err(WorkflowAcceptError::Store(error)) => Err(WorkflowPutError::Store(error)),
-        }
+        });
+
+        handoff
+            .await
+            .map_err(|error| WorkflowPutError::Internal(error.into()))?
     }
 
-    /// GET the durable view.
+    /// GET the durable view. A non-canonical `runId` is a typed 400, not a 404.
     #[tracing::instrument(skip_all, fields(run_id = %run_id))]
     pub async fn get(&self, run_id: String) -> Result<Option<WorkflowRunView>, WorkflowGetError> {
+        if let Err(error) = crate::domains::workflows::service::validate_run_id(&run_id) {
+            return Err(WorkflowGetError::InvalidRunId(error));
+        }
         let service = self.service.clone();
         tokio::task::spawn_blocking(move || service.get(&run_id))
             .await
             .map_err(|error| WorkflowGetError::Internal(error.into()))?
             .map_err(WorkflowGetError::Store)
-    }
-
-    fn spawn_execution(&self, plan: WorkflowExecutionPlan) {
-        let service = self.service.clone();
-        let session_runtime = self.session_runtime.clone();
-        let operation_gate = self.operation_gate.clone();
-        self.main_handle.spawn(async move {
-            execute(service, session_runtime, operation_gate, plan).await;
-        });
     }
 }
 
@@ -362,11 +379,16 @@ async fn guarded_fail(
     }
 }
 
-fn map_create_error(error: &CreateAndStartSessionError) -> WorkflowRunFailureCode {
+/// Classify a creation-seam failure (ruling C2A-DEC-01): "missing or
+/// unavailable supplied workspace" covers every access-gate refusal (missing,
+/// retired, mutation-blocked) plus the service-level workspace-not-found;
+/// everything else at this step is a session creation failure.
+fn map_create_error(error: &InternalSessionCreateError) -> WorkflowRunFailureCode {
     match error {
-        CreateAndStartSessionError::WorkspaceNotFound => {
+        InternalSessionCreateError::WorkspaceUnavailable(_)
+        | InternalSessionCreateError::Create(CreateAndStartSessionError::WorkspaceNotFound) => {
             WorkflowRunFailureCode::WorkspaceUnavailable
         }
-        _ => WorkflowRunFailureCode::SessionCreateFailed,
+        InternalSessionCreateError::Create(_) => WorkflowRunFailureCode::SessionCreateFailed,
     }
 }

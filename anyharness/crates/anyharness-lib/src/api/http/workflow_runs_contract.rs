@@ -6,7 +6,8 @@
 use std::collections::BTreeMap;
 
 use anyharness_contract::v1::{
-    PutWorkflowRunRequest, WorkflowRun, WorkflowRunDefinition, WorkflowRunHarnessConfig,
+    PutWorkflowRunRequest, WorkflowRun, WorkflowRunArgumentValue as WireArgumentValue,
+    WorkflowRunDefinition, WorkflowRunFailureCode as WireFailureCode, WorkflowRunHarnessConfig,
     WorkflowRunInput, WorkflowRunInputType, WorkflowRunPromptStep, WorkflowRunResponse,
     WorkflowRunStage, WorkflowRunStatus, WorkflowRunStep, WorkflowRunStepStatus,
 };
@@ -34,7 +35,11 @@ pub fn decode_put_workflow_run(
         schema_version: request.schema_version,
         workspace_id: request.workspace_id,
         definition: definition_to_domain(request.definition),
-        arguments: request.arguments,
+        arguments: request
+            .arguments
+            .into_iter()
+            .map(|(name, value)| (name, wire_argument_to_value(value)))
+            .collect(),
     })
 }
 
@@ -129,11 +134,19 @@ fn stage_to_wire(stage: WorkflowStage) -> WorkflowRunStage {
     }
 }
 
-fn argument_to_wire(value: WorkflowArgumentValue) -> serde_json::Value {
+fn wire_argument_to_value(value: WireArgumentValue) -> serde_json::Value {
     match value {
-        WorkflowArgumentValue::Bool(flag) => serde_json::Value::Bool(flag),
-        WorkflowArgumentValue::Number(number) => serde_json::Value::Number(number),
-        WorkflowArgumentValue::String(text) => serde_json::Value::String(text),
+        WireArgumentValue::Boolean(flag) => serde_json::Value::Bool(flag),
+        WireArgumentValue::Number(number) => serde_json::Value::Number(number),
+        WireArgumentValue::String(text) => serde_json::Value::String(text),
+    }
+}
+
+fn argument_to_wire(value: WorkflowArgumentValue) -> WireArgumentValue {
+    match value {
+        WorkflowArgumentValue::Bool(flag) => WireArgumentValue::Boolean(flag),
+        WorkflowArgumentValue::Number(number) => WireArgumentValue::Number(number),
+        WorkflowArgumentValue::String(text) => WireArgumentValue::String(text),
     }
 }
 
@@ -194,6 +207,14 @@ fn step_status_to_wire(status: WorkflowStepStatus) -> WorkflowRunStepStatus {
     }
 }
 
-fn failure_code_to_wire(code: WorkflowRunFailureCode) -> String {
-    code.as_str().to_string()
+fn failure_code_to_wire(code: WorkflowRunFailureCode) -> WireFailureCode {
+    match code {
+        WorkflowRunFailureCode::WorkspaceUnavailable => WireFailureCode::WorkspaceUnavailable,
+        WorkflowRunFailureCode::SessionCreateFailed => WireFailureCode::SessionCreateFailed,
+        WorkflowRunFailureCode::SessionStartFailed => WireFailureCode::SessionStartFailed,
+        WorkflowRunFailureCode::PromptDispatchFailed => WireFailureCode::PromptDispatchFailed,
+        WorkflowRunFailureCode::SessionTurnFailed => WireFailureCode::SessionTurnFailed,
+        WorkflowRunFailureCode::SessionTurnCancelled => WireFailureCode::SessionTurnCancelled,
+        WorkflowRunFailureCode::RuntimeRestarted => WireFailureCode::RuntimeRestarted,
+    }
 }

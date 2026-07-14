@@ -26,8 +26,8 @@ use crate::domains::workflows::runtime::WorkflowPutSuccess;
         (status = 201, description = "New durable acceptance", body = WorkflowRunResponse),
         (status = 200, description = "Exact replay of an identical invocation", body = WorkflowRunResponse),
         (status = 400, description = "Invalid ID, definition, arguments, or rendered prompt", body = anyharness_contract::v1::ProblemDetails),
-        (status = 404, description = "Referenced resource not found", body = anyharness_contract::v1::ProblemDetails),
         (status = 409, description = "Same ID, different invocation", body = anyharness_contract::v1::ProblemDetails),
+        (status = 500, description = "Acceptance storage failure; no committed run or step", body = anyharness_contract::v1::ProblemDetails),
     ),
     tag = "workflow-runs"
 )]
@@ -56,6 +56,7 @@ pub async fn put_workflow_run(
     params(("run_id" = String, Path, description = "Canonical UUID for the workflow run")),
     responses(
         (status = 200, description = "Durable run and step status", body = WorkflowRunResponse),
+        (status = 400, description = "Non-canonical run ID", body = anyharness_contract::v1::ProblemDetails),
         (status = 404, description = "Unknown workflow run", body = anyharness_contract::v1::ProblemDetails),
     ),
     tag = "workflow-runs"

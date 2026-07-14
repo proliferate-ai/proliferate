@@ -23,6 +23,50 @@ where
     Option::<String>::deserialize(deserializer)
 }
 
+/// A concrete scalar argument value: boolean, number, or string. Untagged, so
+/// it reads and writes as the bare JSON scalar; arrays, objects, and null are
+/// rejected at decode. Declared-type conformance (string argument for a string
+/// input, ...) is still validated after decode with a coded 400.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum WorkflowRunArgumentValue {
+    Boolean(bool),
+    Number(serde_json::Number),
+    String(String),
+}
+
+// Manual schema: the derive cannot express `serde_json::Number` in an untagged
+// enum, so render the exact wire shape — oneOf [boolean, number, string].
+impl utoipa::PartialSchema for WorkflowRunArgumentValue {
+    fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
+        use utoipa::openapi::schema::{ObjectBuilder, OneOfBuilder, Type};
+        OneOfBuilder::new()
+            .item(ObjectBuilder::new().schema_type(Type::Boolean))
+            .item(ObjectBuilder::new().schema_type(Type::Number))
+            .item(ObjectBuilder::new().schema_type(Type::String))
+            .into()
+    }
+}
+
+impl ToSchema for WorkflowRunArgumentValue {
+    fn name() -> std::borrow::Cow<'static, str> {
+        std::borrow::Cow::Borrowed("WorkflowRunArgumentValue")
+    }
+}
+
+/// The stable machine failure result on failed runs and steps (spec §6.1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowRunFailureCode {
+    WorkspaceUnavailable,
+    SessionCreateFailed,
+    SessionStartFailed,
+    PromptDispatchFailed,
+    SessionTurnFailed,
+    SessionTurnCancelled,
+    RuntimeRestarted,
+}
+
 /// `PUT /v1/workflow-runs/{runId}` request body. The `runId` lives in the path
 /// only and never appears in the body.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -31,12 +75,9 @@ pub struct PutWorkflowRunRequest {
     pub schema_version: i64,
     pub workspace_id: String,
     pub definition: WorkflowRunDefinition,
-    /// Concrete scalar argument values keyed by declared input name. Values are
-    /// validated against declared input types after decode; the wire type is
-    /// left open so a type mismatch produces our own coded 400 rather than a
-    /// serde shape error.
+    /// Concrete scalar argument values keyed by declared input name.
     #[serde(default)]
-    pub arguments: BTreeMap<String, serde_json::Value>,
+    pub arguments: BTreeMap<String, WorkflowRunArgumentValue>,
 }
 
 /// The frozen executable definition: inputs plus exactly one stage.
@@ -137,13 +178,13 @@ pub struct WorkflowRun {
     pub id: String,
     pub schema_version: i64,
     pub definition: WorkflowRunDefinition,
-    pub arguments: BTreeMap<String, serde_json::Value>,
+    pub arguments: BTreeMap<String, WorkflowRunArgumentValue>,
     pub status: WorkflowRunStatus,
     pub workspace_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub failure_code: Option<String>,
+    pub failure_code: Option<WorkflowRunFailureCode>,
     pub created_at: String,
     pub updated_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -163,7 +204,7 @@ pub struct WorkflowRunStep {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub turn_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub failure_code: Option<String>,
+    pub failure_code: Option<WorkflowRunFailureCode>,
     pub created_at: String,
     pub updated_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -270,6 +311,81 @@ mod tests {
         let mut json = valid_request_json();
         json["definition"]["inputs"][0]["surprise"] = serde_json::json!("x");
         assert!(serde_json::from_value::<PutWorkflowRunRequest>(json).is_err());
+    }
+
+    #[test]
+    fn argument_values_are_wire_identical_to_bare_scalars() {
+        // Untagged: serialization stays byte-identical to plain JSON scalars.
+        for (value, wire) in [
+            (WorkflowRunArgumentValue::Boolean(true), "true"),
+            (
+                WorkflowRunArgumentValue::Number(serde_json::Number::from(3)),
+                "3",
+            ),
+            (
+                WorkflowRunArgumentValue::Number(
+                    serde_json::Number::from_f64(3.5).expect("finite"),
+                ),
+                "3.5",
+            ),
+            (
+                WorkflowRunArgumentValue::String("PROL-123".to_string()),
+                "\"PROL-123\"",
+            ),
+        ] {
+            assert_eq!(serde_json::to_string(&value).expect("serialize"), wire);
+            let round: WorkflowRunArgumentValue = serde_json::from_str(wire).expect("deserialize");
+            assert_eq!(round, value);
+        }
+        // Null, arrays, and objects are rejected at decode.
+        for bad in ["null", "[1]", "{\"a\":1}"] {
+            assert!(
+                serde_json::from_str::<WorkflowRunArgumentValue>(bad).is_err(),
+                "{bad} must be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn failure_codes_serialize_to_stable_snake_case_strings() {
+        for (code, wire) in [
+            (
+                WorkflowRunFailureCode::WorkspaceUnavailable,
+                "workspace_unavailable",
+            ),
+            (
+                WorkflowRunFailureCode::SessionCreateFailed,
+                "session_create_failed",
+            ),
+            (
+                WorkflowRunFailureCode::SessionStartFailed,
+                "session_start_failed",
+            ),
+            (
+                WorkflowRunFailureCode::PromptDispatchFailed,
+                "prompt_dispatch_failed",
+            ),
+            (
+                WorkflowRunFailureCode::SessionTurnFailed,
+                "session_turn_failed",
+            ),
+            (
+                WorkflowRunFailureCode::SessionTurnCancelled,
+                "session_turn_cancelled",
+            ),
+            (
+                WorkflowRunFailureCode::RuntimeRestarted,
+                "runtime_restarted",
+            ),
+        ] {
+            assert_eq!(
+                serde_json::to_value(code).expect("serialize"),
+                serde_json::json!(wire)
+            );
+            let round: WorkflowRunFailureCode =
+                serde_json::from_value(serde_json::json!(wire)).expect("deserialize");
+            assert_eq!(round, code);
+        }
     }
 
     #[test]

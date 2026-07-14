@@ -3640,6 +3640,16 @@
               }
             }
           },
+          "400": {
+            "description": "Non-canonical run ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "404": {
             "description": "Unknown workflow run",
             "content": {
@@ -3709,8 +3719,8 @@
               }
             }
           },
-          "404": {
-            "description": "Referenced resource not found",
+          "409": {
+            "description": "Same ID, different invocation",
             "content": {
               "application/json": {
                 "schema": {
@@ -3719,8 +3729,8 @@
               }
             }
           },
-          "409": {
-            "description": "Same ID, different invocation",
+          "500": {
+            "description": "Acceptance storage failure; no committed run or step",
             "content": {
               "application/json": {
                 "schema": {
@@ -13566,8 +13576,10 @@
         "properties": {
           "arguments": {
             "type": "object",
-            "description": "Concrete scalar argument values keyed by declared input name. Values are\nvalidated against declared input types after decode; the wire type is\nleft open so a type mismatch produces our own coded 400 rather than a\nserde shape error.",
-            "additionalProperties": {},
+            "description": "Concrete scalar argument values keyed by declared input name.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/WorkflowRunArgumentValue"
+            },
             "propertyNames": {
               "type": "string"
             }
@@ -17756,7 +17768,9 @@
         "properties": {
           "arguments": {
             "type": "object",
-            "additionalProperties": {},
+            "additionalProperties": {
+              "$ref": "#/components/schemas/WorkflowRunArgumentValue"
+            },
             "propertyNames": {
               "type": "string"
             }
@@ -17768,9 +17782,13 @@
             "$ref": "#/components/schemas/WorkflowRunDefinition"
           },
           "failureCode": {
-            "type": [
-              "string",
-              "null"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkflowRunFailureCode"
+              }
             ]
           },
           "finishedAt": {
@@ -17809,6 +17827,19 @@
           }
         }
       },
+      "WorkflowRunArgumentValue": {
+        "oneOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "string"
+          }
+        ]
+      },
       "WorkflowRunDefinition": {
         "type": "object",
         "description": "The frozen executable definition: inputs plus exactly one stage.",
@@ -17830,6 +17861,19 @@
           }
         },
         "additionalProperties": false
+      },
+      "WorkflowRunFailureCode": {
+        "type": "string",
+        "description": "The stable machine failure result on failed runs and steps (spec §6.1).",
+        "enum": [
+          "workspace_unavailable",
+          "session_create_failed",
+          "session_start_failed",
+          "prompt_dispatch_failed",
+          "session_turn_failed",
+          "session_turn_cancelled",
+          "runtime_restarted"
+        ]
       },
       "WorkflowRunHarnessConfig": {
         "type": "object",
@@ -17972,9 +18016,13 @@
             "type": "string"
           },
           "failureCode": {
-            "type": [
-              "string",
-              "null"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkflowRunFailureCode"
+              }
             ]
           },
           "finishedAt": {
