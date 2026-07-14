@@ -61,6 +61,53 @@ class DocumentationIntegrityTest(unittest.TestCase):
         legacy_qa_root = "specs/developing/" + "qa/" + "README.md"
         self.assertNotIn(legacy_qa_root, check_docs.REQUIRED_READMES)
 
+    def test_developing_root_indexes_are_required(self) -> None:
+        expected_roots = {
+            "process",
+            "local",
+            "testing",
+            "debugging",
+            "deploying",
+            "operating",
+            "reference",
+        }
+        expected_indexes = {
+            f"specs/developing/{root}/README.md" for root in expected_roots
+        }
+
+        self.assertEqual(check_docs.DEVELOPING_ROOTS, expected_roots)
+        self.assertLessEqual(expected_indexes, set(check_docs.REQUIRED_READMES))
+        legacy_runbook_index = (
+            "specs/developing/" + "runbooks/" + "README.md"
+        )
+        self.assertNotIn(legacy_runbook_index, check_docs.REQUIRED_READMES)
+
+    def test_developing_root_check_allows_root_readme_and_allowed_root(self) -> None:
+        paths = [
+            Path("specs/developing/README.md"),
+            Path("specs/developing/operating/example.md"),
+        ]
+
+        with patch.object(check_docs, "tracked_paths", return_value=paths):
+            errors = check_docs.check_developing_roots()
+
+        self.assertEqual(errors, [])
+
+    def test_developing_root_check_rejects_unexpected_tracked_root(self) -> None:
+        paths = [
+            Path("specs/developing/README.md"),
+            Path("specs/developing/notes/example.md"),
+        ]
+
+        with patch.object(check_docs, "tracked_paths", return_value=paths):
+            errors = check_docs.check_developing_roots()
+
+        self.assertEqual(len(errors), 1)
+        self.assertIn(
+            "unexpected Developing documentation root: specs/developing/notes",
+            errors[0],
+        )
+
     def markdown_errors(self, files: dict[str, str]) -> list[str]:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()

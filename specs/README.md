@@ -34,6 +34,13 @@ specs/
 │   ├── platforms/    Reusable product, engineering, and internal capabilities
 │   └── systems/      Complete product and engineering domains
 ├── developing/       Current development and operating procedures
+│   ├── process/
+│   ├── local/
+│   ├── testing/
+│   ├── debugging/
+│   ├── deploying/
+│   ├── operating/
+│   └── reference/
 ├── generated/        Reproducible checked-in references
 └── tbd/              Non-authoritative proposals awaiting an owner
 ```

@@ -82,9 +82,9 @@ requires separately approved remediation scope and the applicable runbook.
   private support report.
 - [performance-profiling.md](performance-profiling.md): capture privacy-safe
   renderer and AnyHarness timing baselines.
-- [../runbooks/stripe-webhook-failure.md](../runbooks/stripe-webhook-failure.md):
+- [../operating/stripe-webhook-failure.md](../operating/stripe-webhook-failure.md):
   inspect and recover Stripe webhook delivery failures.
-- [../runbooks/e2b-template-rollback.md](../runbooks/e2b-template-rollback.md):
+- [../operating/e2b-template-rollback.md](../operating/e2b-template-rollback.md):
   roll back a managed-cloud E2B runtime release.
 - [../operating/analytics/sentry.md](../operating/analytics/sentry.md): inspect
   Sentry projects, releases, alerts, privacy behavior, and support tags.

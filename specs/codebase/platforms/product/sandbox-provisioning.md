@@ -162,5 +162,5 @@ The narrow contract tests are:
 - `server/tests/integration/test_cloud_sandbox_wake_billing_gate.py`
 
 For an incident, follow
-[`cloud-provisioning-failure.md`](../../../developing/runbooks/cloud-provisioning-failure.md)
+[`cloud-provisioning-failure.md`](../../../developing/operating/cloud-provisioning-failure.md)
 instead of mutating rows or destroying provider state by hand.

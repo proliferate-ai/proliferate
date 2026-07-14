@@ -91,10 +91,20 @@ any rolling tag:
 export E2B_PUBLIC_TEMPLATE_FAMILY='TEAM_SLUG/proliferate-runtime-cloud'
 export GOOD_SHA_TAG='sha-<known-good-shortsha>'
 
-E2B_API_KEY='<from-secret-store>' \
+(
+  trap 'unset E2B_API_KEY' EXIT
+  printf 'E2B API key: '
+  IFS= read -r -s E2B_API_KEY
+  printf '\n'
+  export E2B_API_KEY
   node scripts/smoke-cloud-template.mjs \
-  --template "$E2B_PUBLIC_TEMPLATE_FAMILY:$GOOD_SHA_TAG"
+    --template "$E2B_PUBLIC_TEMPLATE_FAMILY:$GOOD_SHA_TAG"
+)
 ```
+
+The subshell exports the silently entered key only to the smoke command and
+unsets it on both success and failure. Do not replace the prompt with a literal
+assignment.
 
 The smoke test creates a throwaway sandbox, verifies the AnyHarness, Worker,
 Supervisor, and Git credential-helper binaries, checks agent install
@@ -112,19 +122,31 @@ There is no dedicated staging rollback workflow today. After the source tag
 passes smoke, move the `staging` rolling tag with the repo promotion script:
 
 ```bash
-E2B_API_KEY='<from-secret-store>' \
+(
+  trap 'unset E2B_API_KEY' EXIT
+  printf 'E2B API key: '
+  IFS= read -r -s E2B_API_KEY
+  printf '\n'
+  export E2B_API_KEY
   node scripts/promote-cloud-template.mjs \
-  --name "$E2B_PUBLIC_TEMPLATE_FAMILY" \
-  --source-tag "$GOOD_SHA_TAG" \
-  --tag staging
+    --name "$E2B_PUBLIC_TEMPLATE_FAMILY" \
+    --source-tag "$GOOD_SHA_TAG" \
+    --tag staging
+)
 ```
 
 Then smoke the rolling staging ref:
 
 ```bash
-E2B_API_KEY='<from-secret-store>' \
+(
+  trap 'unset E2B_API_KEY' EXIT
+  printf 'E2B API key: '
+  IFS= read -r -s E2B_API_KEY
+  printf '\n'
+  export E2B_API_KEY
   node scripts/smoke-cloud-template.mjs \
-  --template "$E2B_PUBLIC_TEMPLATE_FAMILY:staging"
+    --template "$E2B_PUBLIC_TEMPLATE_FAMILY:staging"
+)
 ```
 
 ## Roll back production
@@ -153,9 +175,15 @@ The rollback is complete when all of these are true:
 - A post-promotion smoke test passes against the rolling ref:
 
   ```bash
-  E2B_API_KEY='<from-secret-store>' \
+  (
+    trap 'unset E2B_API_KEY' EXIT
+    printf 'E2B API key: '
+    IFS= read -r -s E2B_API_KEY
+    printf '\n'
+    export E2B_API_KEY
     node scripts/smoke-cloud-template.mjs \
-    --template "$E2B_PUBLIC_TEMPLATE_FAMILY:<staging-or-production>"
+      --template "$E2B_PUBLIC_TEMPLATE_FAMILY:<staging-or-production>"
+  )
   ```
 
 - The next managed cloud sandbox creation in the affected environment uses the

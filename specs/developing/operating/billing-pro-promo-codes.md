@@ -10,10 +10,10 @@ there is no app-side "make this account Pro" toggle.
 
 ## What exists
 
-- **Base coupon `early_2mo_free`** (live): 100% off, `duration=repeating`,
-  `duration_in_months=2`. Because the Pro seat price and the metered overage
-  price live on the same Stripe product, a redeemer gets the seat **and** any
-  usage overage free for those two months (intentional: liberal early access).
+- **Checked-in default coupon:** the script's `DEFAULT_COUPON` is
+  `early_2mo_free`. `STRIPE_PROMO_COUPON_ID` or `--coupon` can select a
+  different coupon. This default is a repository value, not evidence that the
+  coupon exists or has a particular shape in either Stripe mode.
 - **Script** [`server/scripts/mint_pro_promo_codes.py`](../../../server/scripts/mint_pro_promo_codes.py):
   mints one unique, single-use code per person off the coupon.
 - Checkout already passes `allow_promotion_codes=true`
@@ -22,22 +22,47 @@ there is no app-side "make this account Pro" toggle.
 
 ## Mint codes
 
+Before creating codes, open the intended Stripe account and explicitly select
+test or live mode. Verify that the selected coupon exists in that mode, is
+valid, and has the intended percentage, duration, and product/overage effect.
+Use a secret key or a restricted key from the same mode with coupon read and
+promotion-code read/write access; a dry run validates the coupon and previews
+codes but does not replace this mode check.
+
+Read the key silently into a subshell so it is neither written as a literal
+shell-history assignment nor retained after the command group exits. The exit
+trap clears it on both success and failure:
+
 ```bash
-# STRIPE_API_KEY = a live secret key, or a restricted key with
-# promotion_code write + coupon read. Do not paste keys into chat/commits.
-export STRIPE_API_KEY=sk_live_...
+(
+  set -e
+  trap 'unset STRIPE_API_KEY' EXIT
+  printf 'Stripe API key: '
+  IFS= read -r -s STRIPE_API_KEY
+  printf '\n'
+  export STRIPE_API_KEY
+  COUPON_ID='early_2mo_free' # Change only after verifying the target Stripe mode.
 
-# one or more people
-python server/scripts/mint_pro_promo_codes.py \
-  --person "Alice Example:alice@example.com" \
-  --person "Bob:bob@example.com"
+  # Preview the exact people and coupon without creating anything.
+  python server/scripts/mint_pro_promo_codes.py \
+    --coupon "$COUPON_ID" \
+    --csv people.csv \
+    --dry-run
 
-# from a CSV (name,email per line)
-python server/scripts/mint_pro_promo_codes.py --csv people.csv
+  printf 'Type CREATE after checking the coupon and mode: '
+  IFS= read -r CONFIRM
+  [ "$CONFIRM" = 'CREATE' ]
 
-# preview without creating anything
-python server/scripts/mint_pro_promo_codes.py --person "Cara:cara@x.com" --dry-run
+  python server/scripts/mint_pro_promo_codes.py \
+    --coupon "$COUPON_ID" \
+    --csv people.csv
+)
 ```
+
+For a small batch, replace `--csv people.csv` in both commands with one or more
+`--person "Name:email@example.com"` arguments. Keep a real CSV private and
+uncommitted; the script prints names, email addresses, and the generated codes
+for the operator to deliver through the approved outreach channel.
 
 Each code: format `EARLY-<NAME>-<rand4>`, `max_redemptions=1`, expires 30 days
 out (`--redeem-days` to change), `metadata.email` set for tracking. The script

@@ -2,8 +2,8 @@
 
 <p>
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./specs/developing/assets/readme/proliferate-wordmark-dark.svg" />
-    <img src="./specs/developing/assets/readme/proliferate-wordmark-light.svg" width="320" alt="Proliferate" />
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/readme/proliferate-wordmark-dark.svg" />
+    <img src="./assets/readme/proliferate-wordmark-light.svg" width="320" alt="Proliferate" />
   </picture>
 </p>
 
@@ -35,7 +35,7 @@ Move running sessions between your machine and the cloud. Works solo or across a
   <a href="https://discord.gg/7b5afMTqW">Discord</a>
 </p>
 
-<img width="full" alt="Proliferate" src="./specs/developing/assets/readme/hero.png" />
+<img width="full" alt="Proliferate" src="./assets/readme/hero.png" />
 
 </div>
 
@@ -70,7 +70,7 @@ Each agent runs through its native harness, so auth, tools, models, permissions,
     </td>
     <td align="center" width="120">
       <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="./specs/developing/assets/readme/cursor-dark.svg" />
+        <source media="(prefers-color-scheme: dark)" srcset="./assets/readme/cursor-dark.svg" />
         <img src="./apps/desktop/public/provider-icons/cursor.svg" width="40" height="40" alt="Cursor" />
       </picture><br />
       <strong>Cursor</strong>
