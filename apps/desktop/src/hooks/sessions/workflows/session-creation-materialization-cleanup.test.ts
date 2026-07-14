@@ -61,7 +61,7 @@ vi.mock("@/lib/access/anyharness/direct-session-create-guard", () => ({
   assertDirectSessionCreateSupported: vi.fn(),
 }));
 
-vi.mock("@/lib/access/browser/session-replacement-tombstones-storage", () => ({
+vi.mock("@/lib/access/persistence/session-replacement-tombstones-storage", () => ({
   readSessionReplacementTombstones: () => ({}),
   writeSessionReplacementTombstones: mocks.writeTombstones,
 }));

@@ -25,6 +25,7 @@ import { useAppearancePreferenceLifecycle } from "@/hooks/preferences/lifecycle/
 import { useRepoPreferencesLifecycle } from "@/hooks/preferences/lifecycle/use-repo-preferences-lifecycle"
 import { useUserPreferencesLifecycle } from "@/hooks/preferences/lifecycle/use-user-preferences-lifecycle"
 import { useWorkspaceUiLifecycle } from "@/hooks/preferences/lifecycle/use-workspace-ui-lifecycle"
+import { useProductStoragePersistenceLifecycle } from "@/hooks/persistence/lifecycle/use-product-storage-persistence-lifecycle"
 import { useSessionIntentDispatcher } from "@/hooks/sessions/lifecycle/use-session-intent-dispatcher"
 import { useSessionSelectionLifecycle } from "@/hooks/sessions/lifecycle/use-session-selection-lifecycle"
 import { useShortcutDispatcher } from "@/hooks/shortcuts/lifecycle/use-shortcut-dispatcher"
@@ -214,6 +215,9 @@ function AppRuntime() {
   recordBootDiagnosticOnce("app_runtime.render.before.use_support_report_upload_queue")
   useSupportReportUploadQueue()
   recordBootDiagnosticOnce("app_runtime.render.after.use_support_report_upload_queue")
+  recordBootDiagnosticOnce("app_runtime.render.before.use_product_storage_persistence_lifecycle")
+  useProductStoragePersistenceLifecycle()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_product_storage_persistence_lifecycle")
 
   useEffect(() => {
     recordAppRendererEvent(diagnostics, "app.bootstrap.start")
