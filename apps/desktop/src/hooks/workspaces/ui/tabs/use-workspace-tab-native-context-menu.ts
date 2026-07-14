@@ -5,7 +5,7 @@ import type {
   WorkspaceTabContextMenuCommand,
   WorkspaceTabContextMenuItem,
 } from "@/lib/domain/workspaces/tabs/context-menu";
-import type { NativeContextMenuItem } from "@/lib/access/tauri/context-menu";
+import type { NativeMenuItem } from "@proliferate/product-client/host/desktop-bridge";
 
 export function useWorkspaceTabNativeContextMenu({
   items,
@@ -22,7 +22,7 @@ export function useWorkspaceTabNativeContextMenu({
 function buildNativeWorkspaceTabContextMenuItems(
   items: readonly WorkspaceTabContextMenuItem[],
   onSelect: (command: WorkspaceTabContextMenuCommand) => void,
-): NativeContextMenuItem[] {
+): NativeMenuItem[] {
   return items.map((item) => {
     if (item.kind === "separator") {
       return { kind: "separator" };

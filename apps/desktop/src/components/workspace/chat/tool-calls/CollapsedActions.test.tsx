@@ -1,14 +1,32 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import type { PropsWithChildren, ReactElement } from "react";
+import {
+  cleanup,
+  fireEvent,
+  render as testingRender,
+  screen,
+} from "@testing-library/react";
 import { createTranscriptState } from "@anyharness/sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ProductHost } from "@proliferate/product-client/host/product-host";
+import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   parsedCommandItem,
   terminalItem,
   toolItem,
 } from "@proliferate/product-domain/chats/transcript/transcript-presentation-test-fixtures";
 import { CollapsedActions } from "./CollapsedActions";
+
+const webTestHost = { desktop: null } as ProductHost;
+
+function WebProductHostWrapper({ children }: PropsWithChildren) {
+  return <ProductHostProvider host={webTestHost}>{children}</ProductHostProvider>;
+}
+
+function render(ui: ReactElement) {
+  return testingRender(ui, { wrapper: WebProductHostWrapper });
+}
 
 vi.mock("@/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
   useFileReferenceActions: ({ rawPath }: { rawPath: string }) => ({

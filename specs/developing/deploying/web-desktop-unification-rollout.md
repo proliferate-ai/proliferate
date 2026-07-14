@@ -1,14 +1,14 @@
 # Web/Desktop Unification Rollout Ledger
 
-Status: binding stage and freeze ledger for the Web/Desktop client unification
+Status: binding stage and implementation ledger for the Web/Desktop client unification
 migration.
 
 This document records the current reviewed slice for the migration defined by
 [`../../codebase/features/web-desktop-client-unification.md`](../../codebase/features/web-desktop-client-unification.md)
-(the canonical architecture; it wins any conflict). Each implementation slice
-is reconciled against an exact base, frozen with the founder, implemented and
-reviewed, then followed by reconciliation of the next slice. Superseded phase
-names and rollout mechanics are not implicitly reusable.
+(the canonical architecture; it wins any conflict). The founder and
+implementation agent control one current slice together, keep its contract
+current as evidence changes, review it, and then select the next slice.
+Superseded phase names and rollout mechanics are not implicitly reusable.
 
 Non-authoritative history: the original migration plan and the 2026-07-13
 intake sweep remain under `specs/tbd/` as execution detail and sweep input
@@ -18,22 +18,27 @@ Ledger rules:
 
 - **No secrets in git.** Record identifiers, URLs, and non-secret
   configuration only; reference secrets by name/location, never value.
-- **Exact bases.** Every frozen slice records its exact reconciled base SHA.
+- **Exact bases.** Every current slice records its exact starting base SHA.
   If implementation starts from another base, reconcile before proceeding.
-- **One current slice.** A prior freeze does not authorize later work. Each
-  slice receives its own contract and acceptance proof.
+- **One current slice.** Work stays inside the named current PR until it is
+  reviewed. The next PR remains queued, not concurrently authorized.
+- **Living contract.** Material scope decisions are recorded with the founder
+  before implementation broadens. No separate freeze or promotion ceremony is
+  required.
 - **Facts only.** Record verified merged/reviewed state and explicit founder
   decisions, not inferred dispositions from old branches or chats.
 
 ## 1. Pipeline state
 
-The migration follows the repository PR pipeline: reconcile the next slice
-against merged code, freeze one implementation-ready contract with the
-founder, implement and review it, then reconcile the following slice. Chat is
-working context; this ledger and the canonical feature spec are the durable
-handoff.
+The migration proceeds one PR at a time. The founder and implementation agent
+shape the current scope directly, implement and review it, then update this
+ledger when moving to the next PR. Chat is working context; this ledger and the
+canonical feature spec are the durable handoff.
 
 Current handoff:
+
+- Current PR: Desktop Native UI Adoption — implementing.
+- Next PR: Desktop Local Runtime Adoption — queued.
 
 - Repository: `proliferate-ai/proliferate`.
 - Canonical contract:
@@ -48,9 +53,12 @@ Current handoff:
 - Final implementation: PR #1157, merge
   `a76ab5911e2af39593b4b31530535f0811a3558b`, from accepted head
   `90926523c3662067e02f8511db6c8e0058e119f1`.
-- Current role: reconcile Desktop Native UI Adoption against that merge with
-  the founder. The next slice remains provisional and is not authorized for
-  implementation.
+- Desktop Native UI Adoption contract:
+  `specs/codebase/features/web-desktop-client-unification-d1b.md`, revision
+  `D1b-r1`, exact implementation base
+  `2ec6907391f57a3e449b5b77c43c18600f64fdaa`.
+- Current role: implementation. Material scope changes are decided with the
+  founder and recorded before the slice broadens.
 
 | Slice | Outcome | Final evidence | State |
 | --- | --- | --- | --- |
@@ -59,8 +67,14 @@ Current handoff:
 | Preparation: embedded browser | Delete the embedded workspace browser and its native child-WebView capability. | PR #1154, merge `4f7fe6ee5` | Complete |
 | Preparation: ProductClient foundation | Add the compiled package, `ProductHost`, `DesktopBridge`, `ProductHostProvider`, tests, and enforcement. | PR #1153, merge `0b33e116d` | Complete |
 | Desktop Host Adoption | Construct the concrete Desktop host, mount the provider, replace reactive snapshots, and gate running-agent export through one Desktop-only lifecycle root while product files remain in Desktop. | [`web-desktop-client-unification-d1a.md`](../../codebase/features/web-desktop-client-unification-d1a.md), `D1a-r2`; PR #1157 merge `a76ab5911e2af39593b4b31530535f0811a3558b` | Complete |
-| Desktop Native UI Adoption | Route native menus, native commands, Dock attention, and Desktop zoom through the mounted bridge while product files remain in Desktop. | Founder draft reconciled against `a76ab5911e2af39593b4b31530535f0811a3558b`; repository spec not promoted | Provisional; founder review |
-| Later slices | Remaining in-place bridge adoption, ProductClient source movement, legacy Web deletion, thin Web host, deployability, and self-hosted Web follow-up. | Specify and reconcile one slice at a time. | Deferred |
+| Desktop Native UI Adoption | Route native menus, native commands, Dock attention, and Desktop zoom through the mounted bridge while product files remain in Desktop. | [`web-desktop-client-unification-d1b.md`](../../codebase/features/web-desktop-client-unification-d1b.md), `D1b-r1`, base `2ec6907391f57a3e449b5b77c43c18600f64fdaa` | Implementing |
+| Desktop Local Runtime Adoption | Route product-owned local AnyHarness discovery, restart, and connection through the Desktop bridge while raw sidecar/process startup remains Desktop-owned. | Shape directly with the founder after the current PR is reviewed. | Queued |
+| Remaining Desktop capability adoption | Route only real remaining product consumers through coherent bridge slices while paths remain stable. | Specify only from current consumers; no bridge-completeness work for its own sake. | Directional |
+| Shared-client extraction readiness | Prove the host mount envelope, compiled assets/builds, move ledger/codemod, minimal browser host, and fail-closed boundaries. | Shape the focused checklist together before the source move. | Directional |
+| Mechanical Desktop extraction | Move the working Desktop product into ProductClient and leave Desktop as a thin native host. | Exact file ledger, landing window, codemod, builds, and behavior proof required. | Directional |
+| Legacy Web replacement | Delete the duplicate Web product and mount the same ProductClient from a thin browser host with `desktop: null`. | Browser host/auth contract and shared-product proof required. | Directional |
+| Hosted Web qualification and cutover | Qualify both hosts, Web performance, managed-cloud flows, and every external callback/return producer. | §5 external-configuration gate applies. | Directional |
+| Self-hosted Web | Add self-hosted Web configuration, deployment, and documentation after hosted Web is clean. | Separate follow-up contract. | Deferred follow-up |
 
 The superseded auth-generation, runtime-lifecycle, PR-1 intake, and
 embedded-browser-after-D1 phases from the earlier chain are retired. They are
@@ -90,22 +104,48 @@ The accepted r2 deviations are narrow and recorded in the complete contract:
 - the exact Desktop test command has one founder-approved waiver for
   base-identical pretest violations in unchanged files.
 
-## 3. Desktop Native UI Adoption handoff
+## 3. Desktop Native UI Adoption working record
 
-The next provisional slice adopts only `DesktopBridge.nativeUi` in existing
-Desktop product consumers. It extends the already-mounted
-`DesktopProductLifecycleRoot`; it does not create a second root or move source
-into ProductClient.
+Desktop Native UI Adoption has one observable outcome: every product-owned
+native menu, native menu-command subscription, Dock attention export, and
+Desktop zoom export reaches the existing concrete
+`DesktopBridge.nativeUi`. It extends the already-mounted
+`DesktopProductLifecycleRoot`; it creates no second host, bridge, or lifecycle
+root and moves no product source into ProductClient.
 
-Before freezing it:
+Reconciliation against PR #1157 was Yellow/targeted. The merged host/provider,
+stable concrete bridge, lifecycle root, native-UI signatures, and tests all
+support the slice without a ProductClient contract change. The exact
+implementation base is
+`2ec6907391f57a3e449b5b77c43c18600f64fdaa`.
 
-1. record the exact Desktop Host Adoption merge SHA as the implementation base;
-2. reconcile the exact landed symbols and file inventory;
-3. settle browser-only Desktop context-menu fall-through behavior;
-4. disposition the two Tauri access hooks whose final consumers move; and
-5. have the founder confirm the representative control flow and failure path.
+The founder approved the goal, non-goals, material decisions, exact ownership
+plan, acceptance proof, control flow, and representative failure path on
+2026-07-13. In browser-only Desktop development, one unavailable native-menu
+attempt returns `false`, redispatches the existing DOM fallback in the next
+microtask, and disables later native attempts for that hook instance. This
+adds no availability capability, retry, persistence, queue, or nullable
+Desktop host.
 
-## 4. Later source-move and cutover gates
+The complete frozen contract is
+[`web-desktop-client-unification-d1b.md`](../../codebase/features/web-desktop-client-unification-d1b.md).
+
+## 4. Remaining migration map and gates
+
+The plain sequence after the current PR is:
+
+1. adopt local runtime and any other genuinely required Desktop-only product
+   consumers through the mounted bridge while files remain in Desktop;
+2. prove extraction mechanics: the host mount envelope, compiled assets,
+   narrow consumer-driven contract corrections, the file ledger/import
+   codemod, and a minimal browser-host conformance fixture;
+3. mechanically move the working Desktop product into ProductClient;
+4. delete the legacy Web product and mount ProductClient from a thin Web host;
+5. qualify and cut over hosted Web; then
+6. add self-hosted Web as a follow-up.
+
+Desktop is the baseline throughout. There is never an intermediate target in
+which two product implementations are maintained.
 
 The current in-place slices keep Desktop source paths stable, so they do not
 require a feature freeze or broad open-branch intake sweep. Before the later
@@ -115,7 +155,7 @@ inventory and agree on its landing window.
 The former Phase H/L/V landing mechanics, evidence branches, phase-bound
 external-configuration table, and release-record template are retired. Before
 a later Web-cutover slice, reconcile current deployment workflows and external
-configuration, then freeze a new slice-specific rollout contract with its own
+configuration, then shape a slice-specific rollout checklist with its own
 exact base and acceptance proof. The durable external-configuration evidence
 requirements in §5 remain binding. Do not reuse retired phase mechanics by
 implication.

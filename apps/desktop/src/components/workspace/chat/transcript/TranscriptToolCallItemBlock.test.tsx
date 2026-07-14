@@ -1,12 +1,35 @@
 // @vitest-environment jsdom
 
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { createElement, type PropsWithChildren, type ReactElement } from "react";
+import { renderToStaticMarkup as renderReactToStaticMarkup } from "react-dom/server";
+import {
+  cleanup,
+  fireEvent,
+  render as testingRender,
+  screen,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ProductHost } from "@proliferate/product-client/host/product-host";
+import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import { toolCallItem } from "@/lib/domain/chat/__fixtures__/playground/tool-call-item-fixture";
 import { TranscriptContextProviders } from "./TranscriptContexts";
 import { TranscriptToolCallItemBlock } from "./TranscriptToolCallItemBlock";
+
+const webTestHost = { desktop: null } as ProductHost;
+
+function WebProductHostWrapper({ children }: PropsWithChildren) {
+  return <ProductHostProvider host={webTestHost}>{children}</ProductHostProvider>;
+}
+
+function render(ui: ReactElement) {
+  return testingRender(ui, { wrapper: WebProductHostWrapper });
+}
+
+function renderToStaticMarkup(ui: ReactElement) {
+  return renderReactToStaticMarkup(
+    <ProductHostProvider host={webTestHost}>{ui}</ProductHostProvider>,
+  );
+}
 
 vi.mock("@/hooks/cowork/workflows/use-open-cowork-coding-session", () => ({
   useOpenCoworkCodingSession: () => vi.fn(),

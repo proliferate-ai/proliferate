@@ -1,5 +1,5 @@
 import { useNativeContextMenu } from "@/hooks/ui/native/use-native-context-menu";
-import type { NativeContextMenuItem } from "@/lib/access/tauri/context-menu";
+import type { NativeMenuItem } from "@proliferate/product-client/host/desktop-bridge";
 
 export function useRepoGroupNativeContextMenu({
   canOpenSettings,
@@ -32,8 +32,8 @@ export function buildRepoGroupNativeContextMenuItems({
   canRemoveRepo: boolean;
   onOpenSettings: () => void;
   onRequestRemove: () => void;
-}): NativeContextMenuItem[] {
-  const items: NativeContextMenuItem[] = [];
+}): NativeMenuItem[] {
+  const items: NativeMenuItem[] = [];
   if (canOpenSettings) {
     items.push({
       id: "settings",

@@ -157,6 +157,15 @@ Current state is the foundation only: the host contract, the Desktop bridge
 contract, and the provider. It may depend in the correct direction on
 `product-surfaces`, `product-ui`, `product-domain`, `ui`, `design`, and the
 Cloud/AnyHarness SDKs.
+
+Each thin host owns the infrastructure instances that mount the product: its
+React root, router transport, Query client, Cloud-client construction/provider,
+and `ProductHostProvider`. ProductClient owns product providers, routes, stores,
+lifecycles, and Cloud/AnyHarness product composition. The current `tsc`/`dist`
+foundation proves the host contract only; before application source moves, a
+focused build canary must prove ProductClient dynamic imports, generated
+inputs, CSS, fonts, assets, and both host builds.
+
 It must **never** import either host (`apps/desktop/**`, `apps/web/**`), any
 `@tauri-apps/**` package, raw Tauri `invoke`, or Desktop-relative `@/` aliases;
 shared product code reaches native capability only through the optional

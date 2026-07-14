@@ -14,7 +14,6 @@ import { useDesktopWorkerEnrollment } from "@/hooks/cloud/lifecycle/use-desktop-
 import { useDevDesktopHandoff } from "@/hooks/app/lifecycle/use-dev-desktop-handoff"
 import { useOrganizationJoinAuthLaunch } from "@/hooks/organizations/lifecycle/use-organization-join-auth-launch"
 import { useUpdateRestartWatcher } from "@/hooks/access/tauri/use-update-restart-watcher"
-import { useWorkspaceActivityIndicator } from "@/hooks/app/lifecycle/use-workspace-activity-indicator"
 import { useAppShortcuts } from "@/hooks/app/lifecycle/use-app-shortcuts"
 import { useAppCommandActions } from "@/hooks/app/workflows/use-app-command-actions"
 import { useAgentAutoReconcile } from "@/hooks/agents/lifecycle/use-agent-auto-reconcile"
@@ -256,7 +255,6 @@ function AppRuntime() {
         <ShortcutRevealProvider>
           <MacWindowControlsSafeArea />
           <UpdateRestartDialog />
-          <WorkspaceActivityIndicatorMount />
           <DesktopProductLifecycleRoot />
           <WorktreeCleanupPolicySyncGate />
           <InstrumentedRoutes>
@@ -351,13 +349,6 @@ function AppRuntime() {
       </AppCommandActionsProvider>
     </>
   )
-}
-
-function WorkspaceActivityIndicatorMount() {
-  recordBootDiagnosticOnce("app_runtime.render.before.use_workspace_activity_indicator")
-  useWorkspaceActivityIndicator()
-  recordBootDiagnosticOnce("app_runtime.render.after.use_workspace_activity_indicator")
-  return null
 }
 
 function WorktreeCleanupPolicySyncGate() {

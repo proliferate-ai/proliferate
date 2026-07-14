@@ -1,8 +1,18 @@
 import { readFileSync } from "node:fs";
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { createElement, type ReactElement } from "react";
+import { renderToStaticMarkup as renderReactToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import type { ProductHost } from "@proliferate/product-client/host/product-host";
+import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import { DiffViewer } from "./DiffViewer";
+
+const webTestHost = { desktop: null } as ProductHost;
+
+function renderToStaticMarkup(ui: ReactElement) {
+  return renderReactToStaticMarkup(
+    <ProductHostProvider host={webTestHost}>{ui}</ProductHostProvider>,
+  );
+}
 
 const PATCH = `diff --git a/src/example.ts b/src/example.ts
 index 1111111..2222222 100644
@@ -56,8 +66,8 @@ describe("DiffViewer chat variant", () => {
     expect(html).toContain("data-content=\"\"");
     expect(html.match(/data-gutter=\"\"/g)).toHaveLength(1);
     expect(html.match(/data-content=\"\"/g)).toHaveLength(1);
-    expect(html).toContain("grid-row:1 / span 4");
-    expect(html).toContain("grid-template-rows:repeat(4, auto)");
+    expect(html).toContain("grid-row:1 / span 5");
+    expect(html).toContain("grid-template-rows:repeat(5, auto)");
     expect(html).toContain("[grid-template-rows:subgrid]");
     expect(html).toContain("--diffs-min-number-column-width:4ch");
     expect(html).toContain("--diffs-min-number-column-width-default:3ch");

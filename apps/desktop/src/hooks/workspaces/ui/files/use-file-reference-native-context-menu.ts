@@ -1,9 +1,9 @@
 import { OPEN_TARGET_NATIVE_ICON_RESOURCE_PATHS } from "@/config/open-target-icon-assets";
 import { useNativeContextMenu } from "@/hooks/ui/native/use-native-context-menu";
 import type {
-  NativeContextMenuIcon,
-  NativeContextMenuItem,
-} from "@/lib/access/tauri/context-menu";
+  NativeMenuIcon,
+  NativeMenuItem,
+} from "@proliferate/product-client/host/desktop-bridge";
 import type { OpenTarget } from "@/lib/access/tauri/shell";
 
 interface FileReferenceNativeContextMenuActions {
@@ -32,9 +32,9 @@ export function buildFileReferenceNativeContextMenuItems({
   openDefault,
   openWithTarget,
   reveal,
-}: FileReferenceNativeContextMenuActions): NativeContextMenuItem[] {
+}: FileReferenceNativeContextMenuActions): NativeMenuItem[] {
   const targets = filterFileReferenceOpenTargets(openTargets);
-  const items: NativeContextMenuItem[] = [
+  const items: NativeMenuItem[] = [
     {
       id: "open-default",
       label: defaultOpenTarget ? `Open in ${defaultOpenTarget.label}` : "Open",
@@ -50,7 +50,7 @@ export function buildFileReferenceNativeContextMenuItems({
       submenuId: "open-with",
       label: "Open with",
       enabled: canOpenExternal,
-      items: targets.map((target): NativeContextMenuItem => ({
+      items: targets.map((target): NativeMenuItem => ({
         id: `open-with:${target.id}`,
         label: target.label,
         enabled: canOpenExternal,
@@ -84,7 +84,7 @@ function filterFileReferenceOpenTargets(targets: readonly OpenTarget[]): OpenTar
 
 function nativeMenuIconForOpenTarget(
   target: Pick<OpenTarget, "kind" | "iconId"> | null | undefined,
-): NativeContextMenuIcon | undefined {
+): NativeMenuIcon | undefined {
   if (!target) {
     return undefined;
   }

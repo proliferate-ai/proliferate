@@ -42,12 +42,6 @@ const harnessState = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@/hooks/access/tauri/dock/use-dock-actions", () => ({
-  useTauriDockActions: () => ({
-    setWorkspaceActivityIndicator: tauriMocks.setWorkspaceActivityIndicator,
-  }),
-}));
-
 vi.mock("@/hooks/workspaces/derived/use-logical-workspaces", () => ({
   useLogicalWorkspaces: () => ({
     logicalWorkspaces: harnessState.logicalWorkspaces,
@@ -133,7 +127,7 @@ describe("useWorkspaceActivityIndicator", () => {
       "review-workspace": "2026-04-13T10:05:00.000Z",
     };
 
-    const { rerender } = renderHook(() => useWorkspaceActivityIndicator());
+    const { rerender } = renderHook(() => useWorkspaceActivityIndicator(tauriMocks.setWorkspaceActivityIndicator));
 
     await waitFor(() => {
       expect(tauriMocks.setWorkspaceActivityIndicator).toHaveBeenCalledTimes(1);
@@ -185,7 +179,7 @@ describe("useWorkspaceActivityIndicator", () => {
       "deferred-workspace-materialization": "waiting_input",
     };
 
-    const { rerender } = renderHook(() => useWorkspaceActivityIndicator());
+    const { rerender } = renderHook(() => useWorkspaceActivityIndicator(tauriMocks.setWorkspaceActivityIndicator));
 
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(tauriMocks.setWorkspaceActivityIndicator).not.toHaveBeenCalled();
@@ -222,7 +216,7 @@ describe("useWorkspaceActivityIndicator", () => {
       "selected-filtered-workspace-materialization": "waiting_input",
     };
 
-    const { rerender } = renderHook(() => useWorkspaceActivityIndicator());
+    const { rerender } = renderHook(() => useWorkspaceActivityIndicator(tauriMocks.setWorkspaceActivityIndicator));
 
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(tauriMocks.setWorkspaceActivityIndicator).not.toHaveBeenCalled();
@@ -255,7 +249,7 @@ describe("useWorkspaceActivityIndicator", () => {
       "loading-workspace-materialization": "waiting_input",
     };
 
-    const { rerender } = renderHook(() => useWorkspaceActivityIndicator());
+    const { rerender } = renderHook(() => useWorkspaceActivityIndicator(tauriMocks.setWorkspaceActivityIndicator));
 
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(tauriMocks.setWorkspaceActivityIndicator).not.toHaveBeenCalled();
@@ -294,7 +288,7 @@ describe("useWorkspaceActivityIndicator", () => {
       "session-1": "2026-04-13T10:00:00.000Z",
     };
 
-    renderHook(() => useWorkspaceActivityIndicator());
+    renderHook(() => useWorkspaceActivityIndicator(tauriMocks.setWorkspaceActivityIndicator));
 
     await waitFor(() => {
       expect(tauriMocks.setWorkspaceActivityIndicator).toHaveBeenCalledTimes(1);
@@ -318,7 +312,7 @@ describe("useWorkspaceActivityIndicator", () => {
     };
     tauriMocks.setWorkspaceActivityIndicator.mockRejectedValueOnce(new Error("native failed"));
 
-    const first = renderHook(() => useWorkspaceActivityIndicator());
+    const first = renderHook(() => useWorkspaceActivityIndicator(tauriMocks.setWorkspaceActivityIndicator));
 
     await waitFor(() => {
       expect(tauriMocks.setWorkspaceActivityIndicator).toHaveBeenCalledTimes(1);
@@ -326,7 +320,7 @@ describe("useWorkspaceActivityIndicator", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     first.unmount();
 
-    renderHook(() => useWorkspaceActivityIndicator());
+    renderHook(() => useWorkspaceActivityIndicator(tauriMocks.setWorkspaceActivityIndicator));
 
     await waitFor(() => {
       expect(tauriMocks.setWorkspaceActivityIndicator).toHaveBeenCalledTimes(2);
@@ -346,14 +340,14 @@ describe("useWorkspaceActivityIndicator", () => {
       }),
     ];
 
-    const first = renderHook(() => useWorkspaceActivityIndicator());
+    const first = renderHook(() => useWorkspaceActivityIndicator(tauriMocks.setWorkspaceActivityIndicator));
 
     await waitFor(() => {
       expect(tauriMocks.setWorkspaceActivityIndicator).toHaveBeenCalledTimes(1);
     });
     first.unmount();
 
-    renderHook(() => useWorkspaceActivityIndicator());
+    renderHook(() => useWorkspaceActivityIndicator(tauriMocks.setWorkspaceActivityIndicator));
 
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(tauriMocks.setWorkspaceActivityIndicator).toHaveBeenCalledTimes(1);
