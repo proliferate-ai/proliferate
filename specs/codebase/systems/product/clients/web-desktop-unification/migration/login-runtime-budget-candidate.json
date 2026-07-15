@@ -1,7 +1,20 @@
 {
   "schema": "login-runtime-budget/v1",
-  "measuredAt": "runtime headless chromium, fresh cache, ProductClient readiness marker, document.fonts.ready, bounded network-idle + 2s settle",
-  "testedSha": "8f0482375b648a47a0e8d139fcaa593de745b012",
+  "measuredAt": "runtime headless chromium; fresh cache; fixed anonymous API fixture (https://login-budget-fixture.invalid); durable login-ready marker [data-auth-screen=\"auth\"]; document.fonts.ready; network-idle (fail-closed, not swallowed) + 2s drain",
+  "readiness": {
+    "loginReadySelector": "[data-auth-screen=\"auth\"]",
+    "markerReached": true,
+    "networkSettled": true,
+    "fixtureApiOrigin": "https://login-budget-fixture.invalid",
+    "fixtureEndpoints": [
+      "POST /auth/web/session/bootstrap -> 401 (anonymous)",
+      "GET /health -> 200",
+      "GET /auth/desktop/methods -> 200",
+      "GET /auth/desktop/github/availability -> 200",
+      "GET /auth/sso/discover -> 200 { enabled: false }"
+    ]
+  },
+  "testedSha": "d3cd7c35fad04ab41b1e4ccbb043abe82853e75d",
   "base": "/login",
   "compressionMetric": "gzip (Node zlib, level 9) for js/css/svg/other; emitted bytes for fonts/images/audio",
   "caps": {
@@ -16,29 +29,30 @@
     "note": "recorded context; the enforceable gate is the founder caps above"
   },
   "perKind": {
-    "css": 65097,
-    "js": 482329
+    "css": 65351,
+    "js": 482026
   },
-  "total": 547426,
-  "jsBytes": 482329,
-  "cssBytes": 65097,
+  "total": 547377,
+  "jsBytes": 482026,
+  "cssBytes": 65351,
   "headroom": {
-    "js": 2671,
-    "css": 903
+    "js": 2974,
+    "css": 649
   },
+  "unexpectedCrossOrigin": [],
   "pass": true,
   "violations": [],
   "files": [
     {
-      "path": "/assets/index-DO5cjKOq.css",
+      "path": "/assets/index-BEZuXXCZ.css",
       "kind": "css",
-      "bytes": 65097
+      "bytes": 65351
     },
     {
-      "path": "/assets/index-F2qG_uA4.js",
+      "path": "/assets/index-BeNGt1Xk.js",
       "kind": "js",
-      "bytes": 482329
+      "bytes": 482026
     }
   ],
-  "rerunCommand": "pnpm shared:build && pnpm web:build && node scripts/measure-login-runtime-budget.mjs --no-build"
+  "rerunCommand": "pnpm shared:build && VITE_PROLIFERATE_API_BASE_URL=https://login-budget-fixture.invalid pnpm web:build && node scripts/measure-login-runtime-budget.mjs --no-build"
 }
