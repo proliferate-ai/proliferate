@@ -70,6 +70,14 @@ export interface Tier2ScenarioConfig {
   requiredEnv: readonly string[];
   /** Financial cases need an sk_test_ Stripe key; unresolved → blocked (never green). */
   requireStripe: boolean;
+  /** When true, the ONE shared boot enables the agent gateway and wires the
+   * management-plane LiteLLM fake (`bootBillingStackWithLitellmFake`) instead of
+   * the plain `bootBillingStack`. T2-BILL needs it: the $5/seat managed-LLM pool
+   * grant, LLM exhaustion / auto-top-up, the real `run_usage_import`, and the
+   * enrollment/virtual-key path all read `settings.agent_gateway_enabled=true`
+   * and talk to the LiteLLM admin plane. The fake is closed at teardown and the
+   * published gateway env cleared. Default false (T2-AUTH-ORG boots plain). */
+  gatewayFake?: boolean;
   /** Authoritative manifest case id -> handler (e.g. "T2-BILL-2" -> fn). */
   cases: Record<string, Tier2CellHandler>;
 }

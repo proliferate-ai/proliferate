@@ -10,7 +10,7 @@ import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 
-import { REPO_ROOT, type BootedStack } from "./boot.ts";
+import { REPO_ROOT, type BootedStack, type StripeBillingEnv } from "./boot.ts";
 import { bootBillingStack, type BillingBootResult } from "./billing-boot.ts";
 import {
   databaseUrl,
@@ -27,6 +27,10 @@ export type { FakeMintedKey, FakeSpendRow, LitellmManagementFake } from "../fake
 
 export interface BillingStackWithFake {
   stack: BootedStack;
+  /** The resolved Stripe test-mode env this boot wired (from the inner
+   * `bootBillingStack`), so a single-process consumer (the `tests/release`
+   * Tier-2 harness) has the same `StripeBillingEnv` the plain boot returns. */
+  stripe: StripeBillingEnv;
   fake: LitellmManagementFake;
 }
 
@@ -116,7 +120,31 @@ export async function bootBillingStackWithLitellmFake(): Promise<BootWithFakeRes
   }
   process.env.TIER2_BILLING_LITELLM_BASE_URL = fake.baseUrl;
   process.env.TIER2_BILLING_LITELLM_MASTER_KEY = fake.masterKey;
-  return { skipped: false, stack: boot.stack, fake };
+  // Publish the gateway env into THIS process too, not just the booted server's
+  // env. The out-of-process product passes the gateway-dependent cells drive
+  // (`billing.ts::serverPass` for the top-up pass, `t2-bill.ts`'s free-credit
+  // pass) inherit `...process.env`, and the release harness's `gatewayEnabled()`
+  // guard reads `AGENT_GATEWAY_ENABLED` here — so the single-process release
+  // runner sees the gateway as enabled exactly as the server does. (The
+  // billing-usage-import passes already set these explicitly from
+  // `litellmFake*()`; publishing here keeps every inheritor consistent.)
+  process.env.AGENT_GATEWAY_ENABLED = "true";
+  process.env.AGENT_GATEWAY_LITELLM_BASE_URL = fake.baseUrl;
+  process.env.AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL = fake.baseUrl;
+  process.env.AGENT_GATEWAY_LITELLM_MASTER_KEY = fake.masterKey;
+  return { skipped: false, stack: boot.stack, stripe: boot.stripe, fake };
+}
+
+/** Clear the gateway env this module published into `process.env`, so a later
+ * scenario booted in the same runner process (e.g. T2-AUTH-ORG) does not
+ * inherit a stale `AGENT_GATEWAY_ENABLED`. Paired with the fake teardown. */
+export function clearPublishedGatewayEnv(): void {
+  delete process.env.AGENT_GATEWAY_ENABLED;
+  delete process.env.AGENT_GATEWAY_LITELLM_BASE_URL;
+  delete process.env.AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL;
+  delete process.env.AGENT_GATEWAY_LITELLM_MASTER_KEY;
+  delete process.env.TIER2_BILLING_LITELLM_BASE_URL;
+  delete process.env.TIER2_BILLING_LITELLM_MASTER_KEY;
 }
 
 /** Same out-of-process product-pass mechanism the billing harness uses

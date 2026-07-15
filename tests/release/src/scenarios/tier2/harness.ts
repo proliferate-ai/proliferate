@@ -30,6 +30,11 @@ import type { BootedStack, StripeBillingEnv } from "../../../../intent/stack/boo
 import { REPO_ROOT } from "../../../../intent/stack/boot.ts";
 import type { BillingBootOptions, BillingBootResult } from "../../../../intent/stack/billing-boot.ts";
 import { bootBillingStack } from "../../../../intent/stack/billing-boot.ts";
+import type { BootWithFakeResult } from "../../../../intent/stack/billing-usage-import.ts";
+import {
+  bootBillingStackWithLitellmFake,
+  clearPublishedGatewayEnv,
+} from "../../../../intent/stack/billing-usage-import.ts";
 import { resetBillingState } from "../../../../intent/stack/billing-seed.ts";
 import {
   buildTier2BillingEvidence,
@@ -52,6 +57,13 @@ export const TIER2_CASE_DIMENSION = "case";
  */
 export interface Tier2HarnessDeps {
   bootBillingStack: (options?: BillingBootOptions) => Promise<BillingBootResult>;
+  /** Gateway+fake boot, used when `cfg.gatewayFake` (T2-BILL). Starts the
+   * management-plane LiteLLM fake, boots gateway-enabled + skipFrontend, and
+   * publishes the gateway env into this process; the fake is closed at teardown. */
+  bootBillingStackWithLitellmFake: () => Promise<BootWithFakeResult>;
+  /** Clears the gateway env `bootBillingStackWithLitellmFake` published so a
+   * later plain-booted scenario in the same runner does not inherit it. */
+  clearPublishedGatewayEnv: () => void;
   resetBillingState: () => Promise<void>;
   createLedgerProbe: (databaseUrl: string) => LedgerProbe;
   buildEvidence: (args: BuildTier2EvidenceArgs) => Tier2BillingEvidenceV1;
@@ -61,12 +73,51 @@ export interface Tier2HarnessDeps {
 
 export const DEFAULT_TIER2_HARNESS_DEPS: Tier2HarnessDeps = {
   bootBillingStack,
+  bootBillingStackWithLitellmFake,
+  clearPublishedGatewayEnv,
   resetBillingState,
   createLedgerProbe,
   buildEvidence: buildTier2BillingEvidence,
   resolveServerVersion,
   resolveBillingMode: billingModeLiteral,
 };
+
+/** Normalized boot for one scenario: plain (`bootBillingStack`) or
+ * gateway+fake (`bootBillingStackWithLitellmFake`) per `cfg.gatewayFake`. The
+ * `teardown` folds stack teardown + (for the fake path) fake close + gateway-env
+ * cleanup, so `runCells` has one teardown regardless of boot mode. */
+type NormalizedBoot =
+  | { skipped: true; reason: string }
+  | { skipped: false; stack: BootedStack; stripe: StripeBillingEnv; teardown: () => Promise<void> };
+
+async function bootForScenario(cfg: Tier2ScenarioConfig, deps: Tier2HarnessDeps): Promise<NormalizedBoot> {
+  if (cfg.gatewayFake) {
+    const boot = await deps.bootBillingStackWithLitellmFake();
+    if (boot.skipped) {
+      return { skipped: true, reason: boot.reason };
+    }
+    return {
+      skipped: false,
+      stack: boot.stack,
+      stripe: boot.stripe,
+      teardown: async () => {
+        await boot.stack.teardown().catch(() => undefined);
+        await boot.fake.close().catch(() => undefined);
+        deps.clearPublishedGatewayEnv();
+      },
+    };
+  }
+  const boot = await deps.bootBillingStack();
+  if (boot.skipped) {
+    return { skipped: true, reason: boot.reason };
+  }
+  return {
+    skipped: false,
+    stack: boot.stack,
+    stripe: boot.stripe,
+    teardown: () => boot.stack.teardown().catch(() => undefined),
+  };
+}
 
 export function makeTier2MatrixScenario(
   cfg: Tier2ScenarioConfig,
@@ -93,7 +144,7 @@ export function makeTier2MatrixScenario(
       ];
     },
     runCells: async (_ctx: ScenarioRunContext, cells): Promise<ScenarioCellOutcome[]> => {
-      const boot = await deps.bootBillingStack();
+      const boot = await bootForScenario(cfg, deps);
       if (boot.skipped) {
         // Stripe unresolved (or boot declined): every assigned cell is BLOCKED
         // with a bounded reason — never green, never skip-as-success. A strict
@@ -113,7 +164,7 @@ export function makeTier2MatrixScenario(
           outcomes.push(await runTier2Case(cfg, cell, boot.stack, boot.stripe, deps));
         }
       } finally {
-        await boot.stack.teardown().catch(() => undefined);
+        await boot.teardown();
       }
       return outcomes;
     },

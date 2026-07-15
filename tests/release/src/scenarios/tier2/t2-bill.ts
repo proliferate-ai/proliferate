@@ -9,19 +9,17 @@
  * asserted ruled values / ledger deltas / safe Stripe ids into `tier2_billing`
  * evidence (green only).
  *
- * ── KNOWN HARNESS GAP (deviation, for the integrator) ───────────────────────
- * `harness.ts` (workstream B) boots the shared stack via plain
- * `bootBillingStack()` with no `extraServerEnv`, so `AGENT_GATEWAY_ENABLED`
- * is never set for the T2-BILL scenario's ONE shared boot. Every managed-LLM
- * guarantee that reads `settings.agent_gateway_enabled` — the $5/seat LLM
- * pool grant (stripe_webhooks.py), `run_llm_topups` (topups.py), the real
- * usage importer/exhaustion path, and `ensure_user_enrollment`'s free-credit
- * issuance route — cannot be exercised through this shared boot. Those
- * sub-guarantees return `blocked` with an explicit reason below rather than
- * being silently skipped or faked; the fix is either a second Tier-2 scenario
- * booted via `bootBillingStackWithLitellmFake()` (workstream C's helper) or
- * threading `extraServerEnv` through `Tier2ScenarioConfig`/`runCells` — both
- * outside this file's ownership (harness.ts is workstream B's).
+ * ── GATEWAY + LiteLLM FAKE (resolved) ───────────────────────────────────────
+ * The scenario config sets `gatewayFake: true`, so the ONE shared boot runs
+ * `bootBillingStackWithLitellmFake()` (harness.ts): the server boots
+ * gateway-enabled and the management-plane LiteLLM fake is wired, and the
+ * gateway env is published into this runner process. Every managed-LLM
+ * guarantee that reads `settings.agent_gateway_enabled` — the $5/seat LLM pool
+ * grant (stripe_webhooks.py), LLM exhaustion disabling the scoped key, and the
+ * real `run_usage_import` (T2-BILL-14/15) — is therefore exercised for real
+ * here, not stubbed. The importer/enrollment/exhaustion passes are the SAME
+ * out-of-process product passes the Playwright `billing-import/usage-import`
+ * suite drives (`stack/billing-usage-import.ts`), against the same fake.
  */
 
 import assert from "node:assert/strict";
@@ -34,15 +32,28 @@ import { adminContext, userIdFor } from "./fixtures.js";
 import * as b from "../../../../intent/stack/billing.ts";
 import * as seed from "../../../../intent/stack/seed.ts";
 import { REPO_ROOT } from "../../../../intent/stack/boot.ts";
+import {
+  countUsageEvents,
+  fetchFakeBlockedKeys,
+  getOrgEnrollment,
+  getUsageEvent,
+  getUserEnrollment,
+  runEnrollmentBackfillPass,
+  runUsageImportPass,
+  seedFakeSpendRows,
+  seedLlmCreditGrant,
+} from "../../../../intent/stack/billing-usage-import.ts";
 
 export const T2_BILL_ID = "T2-BILL";
 
 const HOUR = 3600;
 const PASSWORD = "Tier2Cells!Passw0rd";
 
-/** True when the shared boot happened to enable the agent gateway (it does
- * not today — see the module doc). Guards the sub-assertions that would
- * otherwise throw deep inside product code with a confusing stack trace. */
+/** True when the shared boot enabled the agent gateway + LiteLLM fake
+ * (`gatewayFake: true` → `bootBillingStackWithLitellmFake` publishes
+ * `AGENT_GATEWAY_ENABLED=true` into this process). A defensive guard: if a
+ * caller ever runs this scenario without the fake, the gateway-dependent cells
+ * fail honestly rather than throwing deep inside product code. */
 function gatewayEnabled(): boolean {
   return process.env.AGENT_GATEWAY_ENABLED === "true";
 }
@@ -52,8 +63,8 @@ function blockedResult(reason: string): Tier2CaseResult {
 }
 
 const GATEWAY_GAP_REASON =
-  "AGENT_GATEWAY_ENABLED is not wired by the shared Tier-2 boot (harness.ts, workstream B); " +
-  "this guarantee needs settings.agent_gateway_enabled=true at server boot.";
+  "AGENT_GATEWAY_ENABLED is not wired for this run (expected gatewayFake boot); " +
+  "this guarantee needs settings.agent_gateway_enabled=true + the LiteLLM fake at server boot.";
 
 /** Out-of-process pass invoking the real (unmocked) free-credit ensure
  * function directly against the booted profile DB — the same "run the
@@ -551,14 +562,35 @@ const t2Bill6: Tier2CellHandler = async (ctx: Tier2CellContext): Promise<Tier2Ca
   assert.ok(disabled === undefined || disabled.enabled === false);
 
   if (!gatewayEnabled()) {
-    // Real key-disable-on-exhaustion and the auto-top-up charge/grant path
-    // both need `settings.agent_gateway_enabled` — see the module doc.
-    return blockedResult(`LLM key exhaustion + auto top-up: ${GATEWAY_GAP_REASON}`);
+    // Real key-disable-on-exhaustion needs `settings.agent_gateway_enabled`
+    // + the LiteLLM fake — see the module doc.
+    return blockedResult(`LLM key exhaustion: ${GATEWAY_GAP_REASON}`);
   }
-  b.runTopupPass();
-  const grants = await b.listGrants(subject.id);
-  assert.ok(grants.some((g) => g.grant_type === "topup"), "successful auto top-up grants once");
-  ctx.policy.record({ topup_pack_usd: 10, topup_trigger_usd: 2, topup_margin_pct: 15 });
+
+  // Real exhaustion: enroll (mint a real virtual key against the fake), drive
+  // this subject's remaining credit negative via the REAL importer, and assert
+  // ONLY the scoped key is disabled at the gateway — the org membership's
+  // separate key is untouched (the ruled "disable the scoped gateway key, not
+  // compute, not a valid BYOK" guarantee).
+  runEnrollmentBackfillPass();
+  const personal = await getUserEnrollment(userId);
+  const orgEnrollment = await getOrgEnrollment(organizationId, userId);
+  assert.ok(personal?.virtualKeyId, "personal enrollment minted a real virtual key against the fake");
+  assert.ok(orgEnrollment?.virtualKeyId, "org membership minted a distinct virtual key");
+  await seedLlmCreditGrant({ billingSubjectId: personal!.billingSubjectId, userId, amountUsd: 1 });
+  const exhaustReq = `req-exhaust-${Date.now()}`;
+  await seedFakeSpendRows([
+    { request_id: exhaustReq, api_key: personal!.virtualKeyId!, spend: 1000, startTime: new Date().toISOString() },
+  ]);
+  runUsageImportPass();
+  const afterExhaust = await getUserEnrollment(userId);
+  assert.equal(afterExhaust!.budgetStatus, "exhausted", "exhausting a subject's credit flips budget_status");
+  const blockedKeys = await fetchFakeBlockedKeys();
+  assert.ok(blockedKeys.includes(personal!.virtualKeyId!), "the exhausted subject's own key is disabled at the gateway");
+  assert.ok(
+    !blockedKeys.includes(orgEnrollment!.virtualKeyId!),
+    "the org membership's separate key is NOT touched by personal exhaustion",
+  );
   return { status: "green" };
 };
 
@@ -841,12 +873,26 @@ const t2Bill14: Tier2CellHandler = async (): Promise<Tier2CaseResult> => {
   assert.ok(ownerFreeGrantsBefore <= 1, "activating Core never mints a second personal free entitlement for the owner");
 
   if (!gatewayEnabled()) {
-    // The subject-scoped LiteLLM virtual key / provider budget / no-raw-
-    // credential guarantees need `ensure_user_enrollment` against a real
-    // LiteLLM(-fake) admin plane, gated on the same env this shared boot
-    // lacks — see the module doc.
+    // The subject-scoped LiteLLM virtual key / provider budget guarantees need
+    // `ensure_user_enrollment` against the LiteLLM(-fake) admin plane — see the
+    // module doc.
     return blockedResult(`LiteLLM virtual-key enrollment idempotency: ${GATEWAY_GAP_REASON}`);
   }
+
+  // Enrollment idempotency: the real backfill mints exactly one virtual key per
+  // subject, and a replayed backfill reuses it (no second key minted for the
+  // same identity) — the enrollment analog of the free-credit dedup above.
+  runEnrollmentBackfillPass();
+  const firstEnrollment = await getUserEnrollment(memberId);
+  assert.ok(firstEnrollment?.virtualKeyId, "backfill mints a real virtual key for the member");
+  assert.equal(firstEnrollment!.syncStatus, "synced", "enrollment reaches synced against the fake");
+  runEnrollmentBackfillPass();
+  const secondEnrollment = await getUserEnrollment(memberId);
+  assert.equal(
+    secondEnrollment!.virtualKeyId,
+    firstEnrollment!.virtualKeyId,
+    "a replayed enrollment backfill reuses the same virtual key (idempotent)",
+  );
   return { status: "green" };
 };
 
@@ -856,10 +902,65 @@ const t2Bill15: Tier2CellHandler = async (): Promise<Tier2CaseResult> => {
   if (!gatewayEnabled()) {
     // The real importer (`run_usage_import`) only runs meaningfully with the
     // agent gateway enabled and the management-plane LiteLLM fake wired at
-    // boot (workstream C's `bootBillingStackWithLitellmFake`); the shared
-    // T2-BILL boot does neither — see the module doc.
+    // boot (`gatewayFake: true` → `bootBillingStackWithLitellmFake`).
     return blockedResult(`Real usage-import pagination/dedup/needs_review: ${GATEWAY_GAP_REASON}`);
   }
+
+  const { token, organizationId } = await adminContext();
+  const userId = await userIdFor(token);
+
+  // Enrollment mints real virtual keys (personal + a distinct org key) against
+  // the fake — the identities the importer attributes spend to.
+  runEnrollmentBackfillPass();
+  const personal = await getUserEnrollment(userId);
+  const org = await getOrgEnrollment(organizationId, userId);
+  assert.ok(personal?.virtualKeyId, "personal enrollment minted a real virtual key");
+  assert.ok(org?.virtualKeyId, "org membership minted a distinct virtual key");
+  assert.notEqual(org!.virtualKeyId, personal!.virtualKeyId, "personal and org keys are distinct");
+
+  // Seed spend across a personal key, the org key, and an UNRESOLVED key, then
+  // drive the REAL importer once: exactly-once import, payer/member
+  // attribution, and needs_review fail-closed for the unresolved key.
+  const now = new Date().toISOString();
+  const personalReq = `req-personal-${Date.now()}`;
+  const orgReq = `req-org-${Date.now()}`;
+  const unresolvedReq = `req-unresolved-${Date.now()}`;
+  await seedFakeSpendRows([
+    { request_id: personalReq, api_key: personal!.virtualKeyId!, spend: 0.1, startTime: now },
+    { request_id: orgReq, api_key: org!.virtualKeyId!, spend: 0.2, startTime: now },
+    { request_id: unresolvedReq, api_key: `tok-unresolved-${Date.now()}`, spend: 1.23, startTime: now },
+  ]);
+
+  const before = await countUsageEvents();
+  runUsageImportPass();
+  const afterFirst = await countUsageEvents();
+  assert.equal(afterFirst - before, 3, "all three seeded rows imported exactly once");
+
+  const personalEvent = await getUsageEvent(personalReq);
+  assert.equal(personalEvent?.status, "imported");
+  assert.equal(personalEvent?.userId, userId, "personal spend attributes to the payer");
+  assert.equal(personalEvent?.billingSubjectId, personal!.billingSubjectId);
+  assert.equal(personalEvent?.organizationId, null, "personal spend is not org-attributed");
+
+  const orgEvent = await getUsageEvent(orgReq);
+  assert.equal(orgEvent?.status, "imported");
+  assert.equal(orgEvent?.organizationId, organizationId, "org-enrolled spend attributes to the org");
+  assert.equal(orgEvent?.billingSubjectId, org!.billingSubjectId);
+  assert.notEqual(orgEvent?.billingSubjectId, personalEvent?.billingSubjectId, "org and personal subjects differ");
+
+  const unresolvedEvent = await getUsageEvent(unresolvedReq);
+  assert.ok(unresolvedEvent, "the unresolved-key row is still recorded, never silently dropped");
+  assert.equal(unresolvedEvent!.status, "needs_review", "an unresolved key fails closed to needs_review");
+  assert.equal(unresolvedEvent!.userId, null);
+  assert.equal(unresolvedEvent!.organizationId, null);
+  assert.equal(unresolvedEvent!.billingSubjectId, null);
+
+  // Restart / exactly-once: a repeated tick over the SAME overlap window (no new
+  // spend seeded) creates no duplicate rows — dedup on litellm_request_id.
+  runUsageImportPass();
+  const afterSecond = await countUsageEvents();
+  assert.equal(afterSecond, afterFirst, "a repeated import tick adds no duplicate rows (exactly-once)");
+
   return { status: "green" };
 };
 
@@ -889,5 +990,9 @@ export const t2Bill = makeTier2MatrixScenario({
   // returns every cell BLOCKED, so no env-manifest gate is required here.
   requiredEnv: [],
   requireStripe: true,
+  // Boot gateway-enabled with the management-plane LiteLLM fake wired, so the
+  // $5/seat LLM pool grant, LLM exhaustion, enrollment/virtual-key, and the
+  // real `run_usage_import` cells run for real (T2-BILL-2/6/14/15).
+  gatewayFake: true,
   cases,
 });

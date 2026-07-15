@@ -20,6 +20,7 @@ import type { Tier2BillingEvidenceV1 } from "../../evidence/schema.js";
 import type { ScenarioPlanContext, ScenarioRunContext } from "../types.js";
 import type { PlannedCellV1 } from "../../runner/result.js";
 import type { BillingBootResult } from "../../../../intent/stack/billing-boot.ts";
+import type { BootWithFakeResult, LitellmManagementFake } from "../../../../intent/stack/billing-usage-import.ts";
 import type { BootedStack, StripeBillingEnv } from "../../../../intent/stack/boot.ts";
 
 // The harness ignores the scenario run/plan context (its work is against the
@@ -38,6 +39,9 @@ const LEDGER_DELTA: Tier2BillingEvidenceV1["ledger"] = {
 
 interface HarnessLog {
   bootCalls: number;
+  fakeBootCalls: number;
+  fakeCloseCalls: number;
+  clearEnvCalls: number;
   teardownCalls: number;
   resetCalls: number;
   ledgerBeginCalls: number;
@@ -72,11 +76,32 @@ function fakeStack(log: HarnessLog): BootedStack {
   };
 }
 
+function fakeLitellmFake(log: HarnessLog): LitellmManagementFake {
+  return {
+    baseUrl: "http://fake-litellm.test",
+    masterKey: "sk-fake-master",
+    seedSpendRows: () => undefined,
+    blockedKeys: () => [],
+    mintedKeys: () => [],
+    close: async () => {
+      log.fakeCloseCalls += 1;
+      log.events.push("fakeClose");
+    },
+  };
+}
+
 function makeDeps(
-  opts: { boot?: (stack: BootedStack) => BillingBootResult; ledgerProbeError?: Error } = {},
+  opts: {
+    boot?: (stack: BootedStack) => BillingBootResult;
+    fakeBoot?: (stack: BootedStack) => BootWithFakeResult;
+    ledgerProbeError?: Error;
+  } = {},
 ): { deps: Tier2HarnessDeps; log: HarnessLog } {
   const log: HarnessLog = {
     bootCalls: 0,
+    fakeBootCalls: 0,
+    fakeCloseCalls: 0,
+    clearEnvCalls: 0,
     teardownCalls: 0,
     resetCalls: 0,
     ledgerBeginCalls: 0,
@@ -85,11 +110,23 @@ function makeDeps(
   };
   const stack = fakeStack(log);
   const boot: BillingBootResult = opts.boot ? opts.boot(stack) : { skipped: false, stack, stripe: fakeStripe() };
+  const fakeBoot: BootWithFakeResult = opts.fakeBoot
+    ? opts.fakeBoot(stack)
+    : { skipped: false, stack, stripe: fakeStripe(), fake: fakeLitellmFake(log) };
   const deps: Tier2HarnessDeps = {
     bootBillingStack: async () => {
       log.bootCalls += 1;
       log.events.push("boot");
       return boot;
+    },
+    bootBillingStackWithLitellmFake: async () => {
+      log.fakeBootCalls += 1;
+      log.events.push("fakeBoot");
+      return fakeBoot;
+    },
+    clearPublishedGatewayEnv: () => {
+      log.clearEnvCalls += 1;
+      log.events.push("clearEnv");
     },
     resetBillingState: async () => {
       log.resetCalls += 1;
@@ -330,7 +367,17 @@ test("runTier2Case builds evidence from the recorded policy, deltas, and safe id
   const outcome = await runTier2Case(
     fakeConfig({ "T2-BILL-1": greenHandler }),
     fakeCell("T2-BILL-1"),
-    fakeStack({ bootCalls: 0, teardownCalls: 0, resetCalls: 0, ledgerBeginCalls: 0, ledgerDeltaCalls: 0, events: [] }),
+    fakeStack({
+      bootCalls: 0,
+      fakeBootCalls: 0,
+      fakeCloseCalls: 0,
+      clearEnvCalls: 0,
+      teardownCalls: 0,
+      resetCalls: 0,
+      ledgerBeginCalls: 0,
+      ledgerDeltaCalls: 0,
+      events: [],
+    }),
     fakeStripe(),
     deps,
   );
@@ -342,6 +389,50 @@ test("runTier2Case builds evidence from the recorded policy, deltas, and safe id
 
 test("DEFAULT_TIER2_HARNESS_DEPS wires the real resolvers and the real evidence assembler", () => {
   assert.equal(typeof DEFAULT_TIER2_HARNESS_DEPS.bootBillingStack, "function");
+  assert.equal(typeof DEFAULT_TIER2_HARNESS_DEPS.bootBillingStackWithLitellmFake, "function");
+  assert.equal(typeof DEFAULT_TIER2_HARNESS_DEPS.clearPublishedGatewayEnv, "function");
   assert.equal(DEFAULT_TIER2_HARNESS_DEPS.buildEvidence, buildTier2BillingEvidence);
   assert.equal(DEFAULT_TIER2_HARNESS_DEPS.resolveServerVersion, resolveServerVersion);
+});
+
+function gatewayFakeConfig(cases: Record<string, Tier2CellHandler>): Tier2ScenarioConfig {
+  return { ...fakeConfig(cases), gatewayFake: true };
+}
+
+test("gatewayFake config boots via the LiteLLM-fake path, NOT the plain boot, and closes the fake + clears gateway env at teardown", async () => {
+  const { deps, log } = makeDeps();
+  const scenario = makeTier2MatrixScenario(gatewayFakeConfig({ "T2-BILL-1": greenHandler }), deps);
+  const [outcome] = await scenario.runCells(RUN_CTX, [fakeCell("T2-BILL-1")]);
+
+  assert.equal(outcome.status, "green");
+  // The fake boot path is taken; the plain boot is never called.
+  assert.equal(log.fakeBootCalls, 1);
+  assert.equal(log.bootCalls, 0);
+  // Teardown folds stack teardown + fake close + gateway-env cleanup.
+  assert.equal(log.teardownCalls, 1);
+  assert.equal(log.fakeCloseCalls, 1);
+  assert.equal(log.clearEnvCalls, 1);
+  assert.deepEqual(log.events, [
+    "fakeBoot",
+    "reset",
+    "ledger.begin",
+    "ledger.delta",
+    "teardown",
+    "fakeClose",
+    "clearEnv",
+  ]);
+});
+
+test("gatewayFake config with a skipped fake boot blocks every cell (never green), fake never closed", async () => {
+  const { deps, log } = makeDeps({ fakeBoot: () => ({ skipped: true, reason: "no Stripe test key resolvable" }) });
+  const scenario = makeTier2MatrixScenario(gatewayFakeConfig({ "T2-BILL-1": greenHandler }), deps);
+  const outcomes = await scenario.runCells(RUN_CTX, [fakeCell("T2-BILL-1")]);
+  assert.equal(outcomes.length, 1);
+  assert.equal(outcomes[0].status, "blocked");
+  assert.equal(outcomes[0].reason?.code, "scenario_blocked");
+  assert.match(outcomes[0].reason?.message ?? "", /no Stripe test key resolvable/);
+  assert.equal(log.fakeBootCalls, 1);
+  assert.equal(log.bootCalls, 0);
+  assert.equal(log.fakeCloseCalls, 0);
+  assert.equal(log.clearEnvCalls, 0);
 });
