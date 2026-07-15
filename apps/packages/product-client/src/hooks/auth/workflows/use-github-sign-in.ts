@@ -1,12 +1,10 @@
 import { useCallback, useState } from "react";
-import { useAuditedAuth } from "@proliferate/product-client/internal/hooks/auth/facade/use-audited-auth";
-import { CAPABILITY_COPY } from "@proliferate/product-client/internal/copy/capabilities/capability-copy";
-import { useGitHubDesktopAuthAvailability } from "@/hooks/access/cloud/auth/use-github-auth-availability";
-import { useAppCapabilities } from "@proliferate/product-client/internal/hooks/capabilities/derived/use-app-capabilities";
-import {
-  isAbortError,
-  type GitHubDesktopSignInOptions,
-} from "@/lib/integrations/auth/proliferate-auth";
+import { useAuditedAuth } from "#product/hooks/auth/facade/use-audited-auth";
+import { CAPABILITY_COPY } from "#product/copy/capabilities/capability-copy";
+import { useGitHubDesktopAuthAvailability } from "#product/hooks/access/cloud/auth/use-github-auth-availability";
+import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
+import { isAbortError } from "#product/lib/access/cloud/auth-transport";
+import type { GitHubDesktopSignInOptions } from "#product/lib/domain/auth/sign-in-options";
 
 export interface UseGitHubSignInResult {
   signIn: (options?: GitHubDesktopSignInOptions) => Promise<void>;

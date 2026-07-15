@@ -3,7 +3,7 @@ import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmp
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { AUTH_ACCOUNT_LABELS } from "#product/copy/auth/auth-copy";
 import { CAPABILITY_COPY } from "#product/copy/capabilities/capability-copy";
-import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
+import { useGitHubSignIn } from "#product/hooks/auth/workflows/use-github-sign-in";
 
 export function CloudSignInRequiredPane() {
   const {

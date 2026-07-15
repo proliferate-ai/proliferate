@@ -15,7 +15,7 @@ import {
   isLoginNotAttempted,
   isTelemetryHandled,
 } from "#product/lib/domain/telemetry/errors";
-import { isAbortError } from "@/lib/integrations/auth/proliferate-auth";
+import { isAbortError } from "#product/lib/access/cloud/auth-transport";
 
 /**
  * The failure-side `provider` a login request classifies to. On success the

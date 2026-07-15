@@ -41,7 +41,7 @@ import {
 } from "@/lib/integrations/telemetry/client";
 import { markLoginNotAttempted } from "@proliferate/product-client/internal/lib/domain/telemetry/errors";
 import { handleDesktopCallbackUrl } from "@/lib/integrations/auth/orchestration-callback";
-import { discoverDesktopSso } from "@/lib/integrations/auth/proliferate-sso-auth";
+import { discoverDesktopSso } from "@proliferate/product-client/internal/lib/access/cloud/auth-probes";
 import { DESKTOP_AUTH_REDIRECT_URI } from "@/lib/integrations/auth/proliferate-auth";
 
 // Same generic string surfaced by the existing slug SSO flow: a missing org,
@@ -205,6 +205,7 @@ export function createDesktopAuthOperations(
           });
         }
         const discovery = await discoverDesktopSso({
+          apiBaseUrl: getProliferateApiBaseUrl(),
           slug: request.slug,
           email: request.email,
           organizationId: request.organizationId,

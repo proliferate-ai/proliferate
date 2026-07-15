@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { useAuditedAuth } from "#product/hooks/auth/facade/use-audited-auth";
-import { isAbortError } from "@/lib/integrations/auth/proliferate-auth";
+import { isAbortError } from "#product/lib/access/cloud/auth-transport";
 
 export interface UseOrgSlugSsoSignInResult {
   signIn: (slug: string) => Promise<boolean>;

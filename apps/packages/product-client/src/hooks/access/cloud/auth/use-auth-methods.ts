@@ -3,9 +3,9 @@ import { useProductHost } from "@proliferate/product-client/host/ProductHostProv
 import {
   getDesktopAuthMethods,
   type DesktopAuthMethods,
-} from "@/lib/integrations/auth/proliferate-auth-password";
-import { useControlPlaneHealthFor } from "@proliferate/product-client/internal/hooks/access/cloud/use-control-plane-health";
-import { desktopAuthMethodsKey } from "@proliferate/product-client/internal/hooks/access/cloud/auth/query-keys";
+} from "#product/lib/access/cloud/auth-probes";
+import { useControlPlaneHealthFor } from "#product/hooks/access/cloud/use-control-plane-health";
+import { desktopAuthMethodsKey } from "#product/hooks/access/cloud/auth/query-keys";
 
 // Which sign-in methods the connected server offers (public probe). The login
 // surface uses this to decide whether the email/password form is the default

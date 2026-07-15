@@ -18,15 +18,18 @@ import {
   beginDesktopProviderAuth,
   beginGitHubDesktopSignIn,
   createPendingGitHubDesktopAuth,
-  getGitHubDesktopAuthAvailability,
   isPendingDesktopAuthExpired,
   pollGitHubDesktopSession,
   type DesktopIdentityProvider,
 } from "@/lib/integrations/auth/proliferate-auth";
+import { beginDesktopSsoSignIn } from "@/lib/integrations/auth/proliferate-sso-auth";
+// Public server-capability probes are product-owned; the base URL that used to
+// default host-side is now supplied explicitly from the host deployment config.
 import {
-  beginDesktopSsoSignIn,
   discoverDesktopSso,
-} from "@/lib/integrations/auth/proliferate-sso-auth";
+  getGitHubDesktopAuthAvailability,
+} from "@proliferate/product-client/internal/lib/access/cloud/auth-probes";
+import { getProliferateApiBaseUrl } from "@/lib/infra/proliferate-api";
 import { checkControlPlaneReachable } from "@proliferate/product-client/internal/lib/access/cloud/health";
 import { revokeDesktopWorkerServerSide } from "@/lib/integrations/auth/desktop-worker-revocation";
 import {
@@ -61,7 +64,9 @@ export async function signInWithGitHub(
     );
   }
 
-  const availability = await getGitHubDesktopAuthAvailability();
+  const availability = await getGitHubDesktopAuthAvailability(
+    getProliferateApiBaseUrl(),
+  );
   if (!availability.enabled) {
     throw new AuthRequestError(
       "GitHub sign-in is not configured for this environment",
@@ -259,7 +264,12 @@ export async function signInWithSso(
     );
   }
 
-  const discovery = await discoverDesktopSso(options);
+  const discovery = await discoverDesktopSso({
+    apiBaseUrl: getProliferateApiBaseUrl(),
+    email: options?.email,
+    organizationId: options?.organizationId,
+    connectionId: options?.connectionId,
+  });
   if (!discovery.enabled) {
     throw new AuthRequestError(
       discovery.reason === "not_configured"

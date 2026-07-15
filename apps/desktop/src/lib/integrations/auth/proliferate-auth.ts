@@ -28,6 +28,7 @@ import {
   sha256Base64Url,
   type DesktopAuthCallback,
 } from "./proliferate-auth-redirect"
+import type { GitHubDesktopSignInOptions } from "@proliferate/product-client/internal/lib/domain/auth/sign-in-options"
 
 export type { AuthUser }
 export {
@@ -57,23 +58,15 @@ export interface DesktopTokenResponse {
   }
 }
 
-interface OAuthAvailabilityResponse {
-  enabled: boolean
-  client_id?: string | null
-}
-
 interface StartAuthResponse {
   authorizationUrl?: string | null
 }
 
-export interface GitHubDesktopAuthAvailability {
-  enabled: boolean
-  clientId: string | null
-}
-
-export interface GitHubDesktopSignInOptions {
-  prompt?: "select_account"
-}
+// The GitHub OAuth availability probe (and its response/availability types) were
+// promoted to product-owned cloud access at
+// `@proliferate/product-client/internal/lib/access/cloud/auth-probes`. The
+// sign-in option shape is product-owned and re-exported for host callers.
+export type { GitHubDesktopSignInOptions }
 
 export interface DesktopSessionPollOptions {
   signal?: AbortSignal
@@ -90,7 +83,6 @@ export interface DesktopProviderAuthOptions {
 }
 
 const GITHUB_RECOVERY_TIMEOUT_MS = 2 * 60 * 1000
-const GITHUB_APP_SETTINGS_FALLBACK_URL = "https://github.com/settings/applications"
 
 export function buildUrl(path: string, baseUrl?: string): string {
   return buildAuthUrl(path, baseUrl)
@@ -117,58 +109,9 @@ export function isSessionExpiring(session: StoredAuthSession, skewSeconds = 60):
   return expiresAt - Date.now() <= skewSeconds * 1000
 }
 
-export function buildGitHubOAuthAppSettingsUrl(clientId?: string | null): string {
-  if (!clientId) {
-    return GITHUB_APP_SETTINGS_FALLBACK_URL
-  }
-  return `https://github.com/settings/connections/applications/${encodeURIComponent(clientId)}`
-}
-
-export async function getGitHubDesktopAuthAvailability(
-  apiBaseUrl?: string,
-): Promise<GitHubDesktopAuthAvailability> {
-  const startedAt = startStartupTimer()
-  logStartupDebug("auth.github_desktop_availability.start")
-
-  try {
-    const response = await fetchAuthResponse(buildUrl("/auth/desktop/github/availability", apiBaseUrl), {
-      headers: {
-        Accept: "application/json",
-      },
-    })
-
-    if (!response.ok) {
-      logStartupDebug("auth.github_desktop_availability.failed", {
-        elapsedMs: elapsedStartupMs(startedAt),
-        status: response.status,
-      })
-      throw await parseAuthError(response)
-    }
-
-    const payload = (await response.json()) as OAuthAvailabilityResponse
-    const availability = {
-      enabled: payload.enabled,
-      clientId: payload.client_id ?? null,
-    } satisfies GitHubDesktopAuthAvailability
-    logStartupDebug("auth.github_desktop_availability.completed", {
-      elapsedMs: elapsedStartupMs(startedAt),
-      enabled: availability.enabled,
-      hasClientId: availability.clientId !== null,
-    })
-    return availability
-  } catch (error) {
-    logStartupDebug("auth.github_desktop_availability.failed", {
-      elapsedMs: elapsedStartupMs(startedAt),
-      ...summarizeStartupError(error),
-    })
-    throw error
-  }
-}
-
-export async function isGitHubDesktopAuthAvailable(): Promise<boolean> {
-  const availability = await getGitHubDesktopAuthAvailability()
-  return availability.enabled
-}
+// `buildGitHubOAuthAppSettingsUrl` was relocated to product-owned cloud access
+// at `@proliferate/product-client/internal/lib/access/cloud/auth-probes` (its
+// only consumer is the product Account settings pane).
 
 export async function beginGitHubDesktopSignIn(
   state: string,

@@ -9,33 +9,9 @@ import {
   type DesktopTokenResponse,
 } from "./proliferate-auth"
 
-interface AuthMethodsResponse {
-  password_login: boolean
-  github: boolean
-}
-
-export interface DesktopAuthMethods {
-  passwordLogin: boolean
-  github: boolean
-}
-
-export async function getDesktopAuthMethods(apiBaseUrl?: string): Promise<DesktopAuthMethods> {
-  const response = await fetchAuthResponse(buildUrl("/auth/desktop/methods", apiBaseUrl), {
-    headers: {
-      Accept: "application/json",
-    },
-  })
-
-  if (!response.ok) {
-    throw await parseAuthError(response)
-  }
-
-  const payload = (await response.json()) as AuthMethodsResponse
-  return {
-    passwordLogin: payload.password_login === true,
-    github: payload.github === true,
-  }
-}
+// `getDesktopAuthMethods` (the public auth-methods probe) was promoted to
+// product-owned cloud access at
+// `@proliferate/product-client/internal/lib/access/cloud/auth-probes`.
 
 export async function signInWithDesktopPassword(
   email: string,

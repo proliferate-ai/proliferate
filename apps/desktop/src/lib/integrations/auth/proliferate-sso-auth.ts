@@ -9,75 +9,18 @@ import {
   fetchAuthResponse,
   parseAuthError,
 } from "./proliferate-auth-transport"
+import type { DesktopSsoSignInOptions } from "@proliferate/product-client/internal/lib/domain/auth/sign-in-options"
+
+// The SSO sign-in option shape is product-owned; the host retains only the
+// secret PKCE start transport below and re-exports the type for its callers.
+export type { DesktopSsoSignInOptions }
 
 interface StartAuthResponse {
   authorizationUrl?: string | null
 }
 
-interface SsoDiscoveryResponse {
-  enabled: boolean
-  scope?: "deployment" | "organization" | null
-  connectionId?: string | null
-  organizationId?: string | null
-  protocol?: "oidc" | "saml" | null
-  displayName?: string | null
-  reason?: string | null
-}
-
-export interface DesktopSsoDiscovery {
-  enabled: boolean
-  scope: "deployment" | "organization" | null
-  connectionId: string | null
-  organizationId: string | null
-  protocol: "oidc" | "saml" | null
-  displayName: string | null
-  reason: string | null
-}
-
-export interface DesktopSsoSignInOptions {
-  email?: string | null
-  organizationId?: string | null
-  connectionId?: string | null
-  prompt?: "select_account"
-}
-
 function buildUrl(path: string, baseUrl?: string): string {
   return buildAuthUrl(path, baseUrl)
-}
-
-export async function discoverDesktopSso(
-  options: Pick<DesktopSsoSignInOptions, "email" | "organizationId" | "connectionId">
-    & { slug?: string | null; apiBaseUrl?: string } = {},
-): Promise<DesktopSsoDiscovery> {
-  const params = new URLSearchParams()
-  if (options.email) params.set("email", options.email)
-  if (options.organizationId) params.set("organizationId", options.organizationId)
-  if (options.connectionId) params.set("connectionId", options.connectionId)
-  if (options.slug) params.set("slug", options.slug)
-  const query = params.toString()
-  const response = await fetchAuthResponse(
-    buildUrl(`/auth/sso/discover${query ? `?${query}` : ""}`, options.apiBaseUrl),
-    {
-      headers: {
-        Accept: "application/json",
-      },
-    },
-  )
-
-  if (!response.ok) {
-    throw await parseAuthError(response)
-  }
-
-  const payload = (await response.json()) as SsoDiscoveryResponse
-  return {
-    enabled: payload.enabled,
-    scope: payload.scope ?? null,
-    connectionId: payload.connectionId ?? null,
-    organizationId: payload.organizationId ?? null,
-    protocol: payload.protocol ?? null,
-    displayName: payload.displayName ?? null,
-    reason: payload.reason ?? null,
-  }
 }
 
 export async function beginDesktopSsoSignIn(

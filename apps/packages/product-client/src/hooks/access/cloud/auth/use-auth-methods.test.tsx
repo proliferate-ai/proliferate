@@ -6,16 +6,16 @@ import type { PropsWithChildren } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
-import { makeTestProductHost } from "@proliferate/product-client/internal/test/product-host-fixtures";
+import { makeTestProductHost } from "#product/test/product-host-fixtures";
 
 const authMocks = vi.hoisted(() => ({
   getDesktopAuthMethods: vi.fn(),
 }));
 
-vi.mock("@/lib/integrations/auth/proliferate-auth-password", () => authMocks);
+vi.mock("#product/lib/access/cloud/auth-probes", () => authMocks);
 // Force the control-plane probe reachable so the methods query is enabled and
 // runs its queryFn. The `*For` variant is the one the public hook composes.
-vi.mock("@proliferate/product-client/internal/hooks/access/cloud/use-control-plane-health", () => ({
+vi.mock("#product/hooks/access/cloud/use-control-plane-health", () => ({
   useControlPlaneHealthFor: () => ({ data: true }),
 }));
 

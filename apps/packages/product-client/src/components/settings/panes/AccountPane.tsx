@@ -19,7 +19,7 @@ import { AUTH_ACCOUNT_LABELS, CONNECT_SERVER_LABELS } from "#product/copy/auth/a
 import { CAPABILITY_COPY } from "#product/copy/capabilities/capability-copy";
 import { useAuthViewer } from "#product/hooks/access/cloud/auth/use-auth-viewer";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
-import { useGitHubDesktopAuthAvailability } from "@/hooks/access/cloud/auth/use-github-auth-availability";
+import { useGitHubDesktopAuthAvailability } from "#product/hooks/access/cloud/auth/use-github-auth-availability";
 import { useCurrentUserOrganizationInvitations } from "#product/hooks/access/cloud/organizations/use-current-user-organization-invitations";
 import { useOrganizationActions } from "#product/hooks/access/cloud/organizations/use-organization-actions";
 import {
@@ -35,10 +35,10 @@ import {
   useProductAuthUser,
 } from "#product/hooks/auth/facade/use-product-auth";
 import { useAuditedAuth } from "#product/hooks/auth/facade/use-audited-auth";
-import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
+import { useGitHubSignIn } from "#product/hooks/auth/workflows/use-github-sign-in";
 import { useOrganizationJoinInvitationFlow } from "@/hooks/organizations/workflows/use-organization-join-invitation-flow";
 import { useJoinedOrganizationActivation } from "#product/hooks/organizations/workflows/use-joined-organization-activation";
-import { buildGitHubOAuthAppSettingsUrl } from "@/lib/integrations/auth/proliferate-auth";
+import { buildGitHubOAuthAppSettingsUrl } from "#product/lib/access/cloud/auth-probes";
 import type { OrganizationInvitationRecord } from "#product/lib/domain/organizations/organization-records";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { buildGitHubAppUserAuthorizationServiceView } from "#product/components/settings/panes/account/GitHubAppUserAuthorizationService";

@@ -1,9 +1,9 @@
 import { useCallback, useState } from "react";
 import { useAuditedAuth } from "#product/hooks/auth/facade/use-audited-auth";
-import { useSsoDiscovery } from "@/hooks/access/cloud/auth/use-sso-discovery";
+import { useSsoDiscovery } from "#product/hooks/access/cloud/auth/use-sso-discovery";
 import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
-import { isAbortError } from "@/lib/integrations/auth/proliferate-auth";
-import type { DesktopSsoSignInOptions } from "@/lib/integrations/auth/proliferate-sso-auth";
+import { isAbortError } from "#product/lib/access/cloud/auth-transport";
+import type { DesktopSsoSignInOptions } from "#product/lib/domain/auth/sign-in-options";
 
 export interface UseSsoSignInResult {
   signIn: (options?: DesktopSsoSignInOptions) => Promise<void>;

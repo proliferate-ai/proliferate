@@ -15,9 +15,9 @@ import { useAuthBootstrap } from "@/hooks/auth/lifecycle/use-auth-bootstrap";
 import { useAuthActions } from "@/hooks/auth/workflows/use-auth-actions";
 import { useAuthOrchestrationEffects } from "@/hooks/auth/workflows/use-auth-orchestration-effects";
 import { useAppCapabilitiesFor } from "@proliferate/product-client/internal/hooks/capabilities/derived/use-app-capabilities";
-import { useDesktopAuthMethodsFor } from "@/hooks/access/cloud/auth/use-auth-methods";
-import { useGitHubDesktopAuthAvailabilityFor } from "@/hooks/access/cloud/auth/use-github-auth-availability";
-import { useSsoDiscoveryFor } from "@/hooks/access/cloud/auth/use-sso-discovery";
+import { useDesktopAuthMethodsFor } from "@proliferate/product-client/internal/hooks/access/cloud/auth/use-auth-methods";
+import { useGitHubDesktopAuthAvailabilityFor } from "@proliferate/product-client/internal/hooks/access/cloud/auth/use-github-auth-availability";
+import { useSsoDiscoveryFor } from "@proliferate/product-client/internal/hooks/access/cloud/auth/use-sso-discovery";
 
 import {
   buildAnonymousMethods,

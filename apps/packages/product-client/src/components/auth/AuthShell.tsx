@@ -1,5 +1,5 @@
 import { AuthScreenLayout } from "#product/components/auth/AuthScreenLayout";
-import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
+import { useGitHubSignIn } from "#product/hooks/auth/workflows/use-github-sign-in";
 import { usePasswordSignIn } from "#product/hooks/auth/workflows/use-password-sign-in";
 import { useSsoSignIn } from "#product/hooks/auth/workflows/use-sso-sign-in";
 
