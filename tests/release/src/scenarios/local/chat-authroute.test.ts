@@ -378,29 +378,31 @@ test("LOCAL-3: leaked managed spend on the user-key route fails the cell", async
   assert.match(outcome.reason?.message ?? "", /leaked/i);
 });
 
-test("LOCAL-3: stores + selects the user key BEFORE gating harness readiness (decision #3)", async () => {
+test("LOCAL-3: store+select, then INSTALL, then the user-key sync (fix round 4)", async () => {
   // The api_key route only surfaces launch-options models after the key is
-  // stored AND selected, so `ensureHarnessReady` (launchable gate) must come
-  // AFTER store+select and the user-key route sync. Gating readiness first is
-  // what timed out in run-1 ("never became launchable").
+  // stored AND selected (decision #3) — and launch-options list an agent only
+  // once its process is INSTALLED, which only `ensureHarnessReady` triggers on
+  // a fresh world. Polling the sync signal before the install is the run-3
+  // 120s deadlock (state.json carried the api_key source, launch-options
+  // stayed empty because claude was install_required).
   const { driver, calls } = fakeDriver();
   await collectLocal3UserKeyCells(fakeCtx(), [cell("T3-AUTHROUTE-1", { harness: "claude" })], driver);
   const store = calls.indexOf("storeAndSelectUserKeyRoute:claude");
-  const sync = calls.indexOf("waitForRouteSync:claude:user_key");
   const ready = calls.indexOf("ensureHarnessReady:claude");
+  const sync = calls.indexOf("waitForRouteSync:claude:user_key");
   assert.ok(store >= 0 && sync >= 0 && ready >= 0, `missing a step: ${calls.join(",")}`);
-  assert.ok(store < sync, "store+select must precede the user-key route sync");
-  assert.ok(sync < ready, "the user-key route sync must precede the launchable gate");
+  assert.ok(store < ready, "store+select must precede the launchable gate (it installs the agent)");
+  assert.ok(ready < sync, "the install/launchable gate must precede the user-key route sync poll");
 });
 
-test("LOCAL-6: stores + selects the user key BEFORE gating harness readiness (decision #3)", async () => {
+test("LOCAL-6: store+select, then INSTALL, then the user-key sync (fix round 4)", async () => {
   const { driver, calls } = fakeDriver();
   await collectLocal6RouteChangeCell(fakeCtx(), cell("T3-AUTHROUTE-1", { route: "change" }), driver);
   const store = calls.indexOf("storeAndSelectUserKeyRoute:claude");
-  const sync = calls.indexOf("waitForRouteSync:claude:user_key");
   const ready = calls.indexOf("ensureHarnessReady:claude");
+  const sync = calls.indexOf("waitForRouteSync:claude:user_key");
   assert.ok(store >= 0 && sync >= 0 && ready >= 0, `missing a step: ${calls.join(",")}`);
-  assert.ok(store < sync && sync < ready, "store+select → user-key sync → readiness gate order");
+  assert.ok(store < ready && ready < sync, "store+select → install/launchable gate → user-key sync order");
 });
 
 test("LOCAL-3: OpenCode user-key cell must select a DIRECT provider, not the proliferate gateway provider", async () => {

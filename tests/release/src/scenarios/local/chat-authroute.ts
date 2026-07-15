@@ -709,13 +709,26 @@ async function runLocal3UserKeyCell(
     try {
       // Store + SELECT the user key FIRST (decision #3): on the api_key route a
       // harness only surfaces models in its launch-options once the provider key
-      // is stored AND the api_key route selected, so `ensureHarnessReady`
-      // (launchable = launch-options carry models) can only pass after that.
-      // Gating readiness before selection is what timed out in run-1
-      // ("never became launchable ... credentialState=ready").
+      // is stored AND the api_key route selected. Then INSTALL before polling the
+      // sync signal: `waitForRouteSync("user_key")` reads launch-options, and an
+      // agent appears there only once its agent process is INSTALLED. On a fresh
+      // world claude is `install_required`, and only `ensureHarnessReady` triggers
+      // the install, so polling launch-options before it can never converge.
+      //
+      // NOTE on the api_key route yielding launchable models: this requires the
+      // runtime to emit a credential fact for a stored api_key source so the
+      // catalog's env-signaled auth context activates and `visible_models` is
+      // non-empty. On the frozen PR-1 base runtime it did NOT (an api_key-only
+      // source emitted no fact → empty model menu forever — the same defect a
+      // real BYOK desktop user hit, since the composer picker keys off the same
+      // launch-options `models[]`). Fixed on main by #1236 ("scope models to
+      // active auth route", `collect_enrolled_source_facts` now pushes
+      // `CredentialFact::Env` for api_key sources); this cell requires the
+      // rebased/rebuilt candidate that includes it. The ordering below is the
+      // driver's own correctness requirement, independent of that runtime fix.
       await driver.storeAndSelectUserKeyRoute(page, harness);
-      await driver.waitForRouteSync(world, page, harness, "user_key");
       await driver.ensureHarnessReady(world, page, harness);
+      await driver.waitForRouteSync(world, page, harness, "user_key");
       await driver.selectRepoAndWorkLocally(page, repo);
       const selection = await driver.resolveRouteModel(world, page, harness, "user_key");
       assertOpencodeProviderSource(harness, "user_key", selection);
@@ -777,12 +790,17 @@ async function runLocal6RouteChangeCell(
     const page = await driver.openPage(world, actor);
     try {
       // 1) Start + prove the user-key session (the original route). Store +
-      // select the user key BEFORE gating readiness (decision #3): the api_key
-      // route's launch-options only carry models after the key is stored and
-      // selected, so `ensureHarnessReady` must follow the user-key route sync.
+      // select the user key first (decision #3), then INSTALL via
+      // `ensureHarnessReady` BEFORE polling the user-key sync signal: the
+      // launch-options signal `waitForRouteSync("user_key")` lists an agent only
+      // once its process is installed, and only `ensureHarnessReady` triggers the
+      // install on a fresh world. (The api_key route only yields launchable models
+      // on a runtime carrying #1236's api_key credential fact — see the LOCAL-3
+      // note above; this route-change cell requires the same rebased/rebuilt
+      // candidate.)
       await driver.storeAndSelectUserKeyRoute(page, harness);
-      await driver.waitForRouteSync(world, page, harness, "user_key");
       await driver.ensureHarnessReady(world, page, harness);
+      await driver.waitForRouteSync(world, page, harness, "user_key");
       await driver.selectRepoAndWorkLocally(page, repo);
       const userKeySelection = await driver.resolveRouteModel(world, page, harness, "user_key");
       await driver.selectModelInUi(page, userKeySelection.modelId);
