@@ -1,8 +1,6 @@
-import "@/lib/access/cloud/client";
-
 import { useVisibleCloudWorkspaces as useSdkVisibleCloudWorkspaces } from "@proliferate/cloud-sdk-react";
 
-import { useCloudAvailabilityState } from "@proliferate/product-client/internal/hooks/cloud/derived/use-cloud-availability-state";
+import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 
 export function useCloudVisibleWorkspaces(enabled = true) {
   const { cloudActive } = useCloudAvailabilityState();

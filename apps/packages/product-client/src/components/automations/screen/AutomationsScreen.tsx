@@ -8,8 +8,8 @@ import {
   useAutomationDetail,
   useAutomationRuns,
   useAutomations,
-} from "@/hooks/access/cloud/automations/use-automations";
-import { useAgentRunConfig } from "@/hooks/access/cloud/agent-run-configs/use-agent-run-configs";
+} from "#product/hooks/access/cloud/automations/use-automations";
+import { useAgentRunConfig } from "#product/hooks/access/cloud/agent-run-configs/use-agent-run-configs";
 import { useIsAdmin } from "#product/hooks/access/cloud/organizations/use-is-admin";
 import { buildCloudRepoSettingsHref } from "#product/lib/domain/settings/navigation";
 import type {

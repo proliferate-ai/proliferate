@@ -17,7 +17,7 @@ import { ConnectServerDialog } from "#product/components/auth/ConnectServerDialo
 import { CurrentUserInvitationsSection } from "#product/components/settings/panes/organization/CurrentUserInvitationsSection";
 import { AUTH_ACCOUNT_LABELS, CONNECT_SERVER_LABELS } from "#product/copy/auth/auth-copy";
 import { CAPABILITY_COPY } from "#product/copy/capabilities/capability-copy";
-import { useAuthViewer } from "@/hooks/access/cloud/auth/use-auth-viewer";
+import { useAuthViewer } from "#product/hooks/access/cloud/auth/use-auth-viewer";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import { useGitHubDesktopAuthAvailability } from "@/hooks/access/cloud/auth/use-github-auth-availability";
 import { useCurrentUserOrganizationInvitations } from "#product/hooks/access/cloud/organizations/use-current-user-organization-invitations";

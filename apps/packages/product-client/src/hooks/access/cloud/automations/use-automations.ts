@@ -1,5 +1,3 @@
-import "@/lib/access/cloud/client";
-
 export {
   useAutomationDetail,
   useAutomationRuns,

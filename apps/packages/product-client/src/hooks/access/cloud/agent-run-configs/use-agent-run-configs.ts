@@ -1,4 +1,3 @@
-import "@/lib/access/cloud/client";
 import { useQuery } from "@tanstack/react-query";
 import {
   getAgentRunConfig,
@@ -11,13 +10,13 @@ import type {
   CloudAgentRunConfigDefaultsResponse,
   CloudAgentRunConfigListResponse,
   ListCloudAgentRunConfigsOptions,
-} from "@/lib/access/cloud/client";
-import { useCloudAvailabilityState } from "@proliferate/product-client/internal/hooks/cloud/derived/use-cloud-availability-state";
+} from "@proliferate/cloud-sdk/types";
+import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import {
   agentRunConfigDefaultsKey,
   agentRunConfigKey,
   agentRunConfigsListKey,
-} from "@proliferate/product-client/internal/hooks/access/cloud/agent-run-configs/query-keys";
+} from "#product/hooks/access/cloud/agent-run-configs/query-keys";
 
 export function useAgentRunConfigs(
   options: ListCloudAgentRunConfigsOptions = {},

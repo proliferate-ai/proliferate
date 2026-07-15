@@ -1,10 +1,8 @@
-import "@/lib/access/cloud/client";
-
 import {
   useCloudWorkspaces as useSdkCloudWorkspaces,
   type UseCloudWorkspacesOptions,
 } from "@proliferate/cloud-sdk-react";
-import { useCloudAvailabilityState } from "@proliferate/product-client/internal/hooks/cloud/derived/use-cloud-availability-state";
+import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 
 type UseCloudExposedWorkspacesOptions =
   | Omit<UseCloudWorkspacesOptions, "scope">
