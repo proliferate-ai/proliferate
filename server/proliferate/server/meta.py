@@ -102,12 +102,42 @@ class PricingCapability(BaseModel):
     url: str | None
 
 
+class GitHubRepositoryAccessCapability(BaseModel):
+    """Operator readiness of GitHub repository discovery/authority.
+
+    ``disabled`` means the operator intentionally configured no GitHub App;
+    ``operator_configuration_required`` means a partial App config that only
+    the operator can repair (clients must not offer user authorization);
+    ``ready`` means the App runtime config is complete. Independent of
+    managed-Cloud execution: an App-ready/E2B-disabled deployment can browse
+    and clone repositories without advertising Cloud workspaces.
+    """
+
+    status: str
+    provider: str | None
+    displayName: str | None
+
+
+class ManagedCloudCapability(BaseModel):
+    """Operator readiness of managed-Cloud workspace execution.
+
+    Requires both E2B provisioning and ready GitHub repository authority,
+    because workspace mutations enforce GitHub App authority server-side.
+    ``repositoryAuthority`` names the authority provider when one is
+    involved in the managed-Cloud path.
+    """
+
+    status: str
+    repositoryAuthority: str | None
+
+
 class ServerCapabilities(BaseModel):
     """Versioned, conservative declaration of what this deployment offers.
 
     Defaults are disabled: a capability is true only when the operator
     configured the underlying feature. The desktop treats an absent contract
-    (older servers) as all-off + self-managed.
+    (older servers) as all-off + self-managed. ``cloudWorkspaces`` is a v1
+    compatibility projection of ``managedCloud.status == "ready"``.
     """
 
     contractVersion: int
@@ -119,6 +149,57 @@ class ServerCapabilities(BaseModel):
     webApp: WebAppCapability
     support: SupportCapability
     pricing: PricingCapability
+    githubRepositoryAccess: GitHubRepositoryAccessCapability
+    managedCloud: ManagedCloudCapability
+
+
+CAPABILITY_DISABLED = "disabled"
+CAPABILITY_OPERATOR_CONFIGURATION_REQUIRED = "operator_configuration_required"
+CAPABILITY_READY = "ready"
+
+
+def _github_repository_access(config: Settings) -> GitHubRepositoryAccessCapability:
+    """Derive GitHub repository access readiness from the shared predicate.
+
+    Exposes only the aggregate status and a safe display name (App slug or
+    operator instance name) — never which specific field is missing.
+    """
+    if config.github_app_configured:
+        status = CAPABILITY_READY
+    elif config.github_app_partially_configured:
+        status = CAPABILITY_OPERATOR_CONFIGURATION_REQUIRED
+    else:
+        status = CAPABILITY_DISABLED
+    if status == CAPABILITY_DISABLED:
+        return GitHubRepositoryAccessCapability(status=status, provider=None, displayName=None)
+    display_name = config.github_app_slug.strip() or config.instance_name.strip() or None
+    return GitHubRepositoryAccessCapability(
+        status=status,
+        provider="github_app",
+        displayName=display_name,
+    )
+
+
+def _managed_cloud(
+    config: Settings, repository_access: GitHubRepositoryAccessCapability
+) -> ManagedCloudCapability:
+    """Derive managed-Cloud readiness from E2B plus repository authority.
+
+    E2B absent -> disabled. E2B partial, or E2B ready with incomplete GitHub
+    App authority -> operator configuration required (workspace mutations
+    would fail on ``require_github_cloud_repo_authority``). Ready only when
+    the whole path is operable.
+    """
+    e2b_ready = config.cloud_provisioning_configured
+    e2b_partial = config.cloud_provisioning_partially_configured
+    if not e2b_ready and not e2b_partial:
+        return ManagedCloudCapability(status=CAPABILITY_DISABLED, repositoryAuthority=None)
+    if e2b_partial or repository_access.status != CAPABILITY_READY:
+        return ManagedCloudCapability(
+            status=CAPABILITY_OPERATOR_CONFIGURATION_REQUIRED,
+            repositoryAuthority="github_app",
+        )
+    return ManagedCloudCapability(status=CAPABILITY_READY, repositoryAuthority="github_app")
 
 
 def build_server_capabilities(config: Settings) -> ServerCapabilities:
@@ -137,10 +218,13 @@ def build_server_capabilities(config: Settings) -> ServerCapabilities:
         BILLING_MODE_OBSERVE,
         BILLING_MODE_ENFORCE,
     }
-    # Shared with the actual provisioning gate (Settings.cloud_provisioning_configured)
-    # so the advertised capability never diverges from what the server will actually
-    # provision (e.g. a debug box with only E2B_API_KEY set).
-    cloud_workspaces = config.cloud_provisioning_configured
+    # Repository authority and managed Cloud are independent operator
+    # capabilities; `cloudWorkspaces` stays as the v1 compatibility
+    # projection so older clients fail closed unless the whole managed-Cloud
+    # path (E2B + GitHub App) is operable.
+    github_repository_access = _github_repository_access(config)
+    managed_cloud = _managed_cloud(config, github_repository_access)
+    cloud_workspaces = managed_cloud.status == CAPABILITY_READY
     agent_gateway = config.agent_gateway_enabled
 
     web_base = config.frontend_base_url.strip()
@@ -181,6 +265,8 @@ def build_server_capabilities(config: Settings) -> ServerCapabilities:
         webApp=web_app,
         support=support,
         pricing=pricing,
+        githubRepositoryAccess=github_repository_access,
+        managedCloud=managed_cloud,
     )
 
 
