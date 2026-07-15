@@ -476,6 +476,12 @@ configure() {
 
   set_env_key "$static_file" PROLIFERATE_TELEMETRY_MODE "$TELEMETRY_MODE"
   if [[ -n "$CORS_ALLOW_ORIGINS_OVERRIDE" ]]; then
+    # The API pairs allow_origins with allow_credentials=true, so a wildcard
+    # here means credentialed origin reflection — effectively open CORS for an
+    # authenticated API. Refuse it; operators must list explicit origins.
+    if [[ "$CORS_ALLOW_ORIGINS_OVERRIDE" == *"*"* ]]; then
+      die "--cors-allow-origins must list explicit origins; '*' is unsafe with a credentialed API."
+    fi
     set_env_key "$static_file" CORS_ALLOW_ORIGINS "$CORS_ALLOW_ORIGINS_OVERRIDE"
     info "CORS_ALLOW_ORIGINS set to $CORS_ALLOW_ORIGINS_OVERRIDE"
   fi

@@ -317,7 +317,7 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
   {
     name: "RELEASE_E2E_SELFHOST_PROVISION",
     description:
-      "Opt-in switch (set to `1`) authorizing the self-hosting scenarios (T3-SH-1 cold boot, " +
+      "Opt-in switch (set to `1`) authorizing the self-hosting scenarios (SELFHOST-INSTALL-1 cold boot, " +
       "T4-SH-1 operator update) to provision a throwaway EC2 box via tests/release/scripts/" +
       "selfhost-box.sh — the production compose bundle on stock Ubuntu with a sslip.io hostname + " +
       "real Caddy TLS — and terminate it in a finally. Absent -> those scenarios report blocked " +
