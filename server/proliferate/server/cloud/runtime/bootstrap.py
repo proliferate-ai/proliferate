@@ -190,6 +190,16 @@ def supervisor_update_request_dir(runtime_context: SandboxRuntimeContext) -> str
     return f"{runtime_context.home_dir}/.proliferate/supervisor/updates"
 
 
+def supervisor_staging_dir(runtime_context: SandboxRuntimeContext) -> str:
+    """Private (0700) staging dir the Supervisor downloads verified artifacts into."""
+    return f"{runtime_context.home_dir}/.proliferate/supervisor/staging"
+
+
+def supervisor_bridge_marker_dir(runtime_context: SandboxRuntimeContext) -> str:
+    """Where the D5 bridging Worker records its crash-safe bridge markers."""
+    return f"{runtime_context.home_dir}/.proliferate/worker/bridge"
+
+
 def supervisor_log_path(runtime_context: SandboxRuntimeContext) -> str:
     return f"{runtime_context.home_dir}/proliferate-supervisor.log"
 
@@ -209,12 +219,9 @@ def build_worker_config(
     enrollment_token: str,
     runtime_context: SandboxRuntimeContext,
     runtime_bearer_token: str | None = None,
+    supervisor_owned: bool = False,
+    supervisor_config_toml: str | None = None,
 ) -> str:
-    # Local import to avoid a module-load cycle (sandbox_exec imports nothing
-    # from bootstrap, but keeping the launcher-path helper's home here is
-    # cleaner than a top-level cross-import for a single call).
-    from proliferate.server.cloud.runtime.sandbox_exec import runtime_launcher_path
-
     worker_dir = f"{runtime_context.home_dir}/.proliferate/worker"
     values: dict[str, str | int | bool] = {
         "cloud_base_url": cloud_base_url,
@@ -222,22 +229,54 @@ def build_worker_config(
         "worker_db_path": f"{worker_dir}/worker.sqlite3",
         "integration_gateway_home": anyharness_runtime_home(runtime_context),
         "heartbeat_interval_seconds": 30,
+    }
+    if supervisor_owned:
+        # Make Managed Runtime Updates Supervisor-Owned, decision 7 (the
+        # fence): a supervisor-owned target's Worker never downloads,
+        # replaces, kills, or rolls back AnyHarness OR itself in place — the
+        # Supervisor verifies/stages/activates/health-gates/rolls back both.
+        # So neither self-update gate is emitted true here; instead the
+        # Worker gets the mailbox dir it writes durable update requests into
+        # (decision 2) and the D5 bridge coordinates (decision 6), which a
+        # supervisor-spawned Worker's bridge check treats as a no-op because
+        # a Supervisor is already alive and owns it.
+        values["self_update_enabled"] = False
+        values["anyharness_update_enabled"] = False
+        values["supervisor_update_request_dir"] = supervisor_update_request_dir(runtime_context)
+        values["supervisor_binary_path"] = supervisor_binary_path(runtime_context)
+        values["supervisor_config_path"] = supervisor_config_path(runtime_context)
+        values["supervisor_bridge_marker_dir"] = supervisor_bridge_marker_dir(runtime_context)
+        # Carry the Supervisor config TOML so the D5 bridge on an
+        # already-provisioned box (which has no Supervisor config on disk yet)
+        # can materialize one before spawning the Supervisor (R9-007). A
+        # Supervisor-first provision has the config on disk already; the value is
+        # just carried and only used if that Worker ever bridges.
+        if supervisor_config_toml is not None:
+            values["supervisor_config_toml"] = supervisor_config_toml
+    else:
+        # Local import to avoid a module-load cycle (sandbox_exec imports
+        # nothing from bootstrap, but keeping the launcher-path helper's home
+        # here is cleaner than a top-level cross-import for a single call).
+        from proliferate.server.cloud.runtime.sandbox_exec import runtime_launcher_path
+
         # The sandbox sidecar has no launcher that updates it (plain nohup),
         # so it converges its own binary onto the heartbeat's desiredVersions.
         # Desktop workers must never set this: the app bundle owns updates.
-        "self_update_enabled": True,
+        values["self_update_enabled"] = True
         # The sandbox worker also owns the in-place swap of the AnyHarness
         # runtime binary onto the heartbeat's desiredVersions.anyharness. This
         # gate is independent of self_update_enabled so the two tracks are
         # separately controllable; desktop leaves it off (app bundle owns it).
-        "anyharness_update_enabled": True,
+        # Fenced off entirely above once a target is supervisor-owned
+        # (decision 7); this legacy branch is unchanged, deletion deferred
+        # to the named follow-up after the bridge window.
+        values["anyharness_update_enabled"] = True
         # Paths the worker acts on for the swap (all already known here):
         # the fixed runtime binary path, the on-disk launcher to relaunch, and
         # the workdir to relaunch in.
-        "anyharness_binary_path": runtime_context.runtime_binary_path,
-        "anyharness_launcher_path": runtime_launcher_path(runtime_context),
-        "anyharness_workdir": runtime_context.runtime_workdir,
-    }
+        values["anyharness_binary_path"] = runtime_context.runtime_binary_path
+        values["anyharness_launcher_path"] = runtime_launcher_path(runtime_context)
+        values["anyharness_workdir"] = runtime_context.runtime_workdir
     if runtime_bearer_token:
         values["runtime_bearer_token"] = runtime_bearer_token
     lines = []
@@ -284,12 +323,27 @@ def build_supervisor_config(
         **_target_sentry_env(),
         **_identity_env(organization_id=organization_id, sandbox_id=sandbox_id, user_id=user_id),
     }
+    # The Supervisor spawns the Worker child with `process_env`, but that child
+    # is not a descendant of the runtime launcher, so it does not inherit
+    # PROLIFERATE_ANYHARNESS_VERSION. Carry it explicitly (in lockstep with the
+    # anyharness launch env) so the Worker's `versions::anyharness_version()`
+    # reports the runtime it runs alongside and the server row converges
+    # (R9-006). Absent on unstamped deployments, matching the absent pin.
+    anyharness_version = anyharness_env.get("PROLIFERATE_ANYHARNESS_VERSION")
+    if anyharness_version:
+        process_env["PROLIFERATE_ANYHARNESS_VERSION"] = anyharness_version
     values = {
         "anyharness_binary": runtime_context.runtime_binary_path,
         "worker_binary": worker_binary_path(runtime_context),
         "worker_config": worker_config_path(runtime_context),
         "anyharness_args": _serve_args(provider),
         "restart_delay_seconds": 5,
+        # Decisions 2-4: the mailbox dir the Supervisor drains, the health
+        # gate it polls before reporting an activation, and its private
+        # (0700) staging dir for downloaded-and-reverified artifacts.
+        "update_request_dir": supervisor_update_request_dir(runtime_context),
+        "anyharness_health_url": f"{local_anyharness_base_url(provider)}/health",
+        "staging_dir": supervisor_staging_dir(runtime_context),
     }
     lines = []
     for key, value in values.items():

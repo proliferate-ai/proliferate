@@ -76,4 +76,18 @@ pub enum WorkerError {
     AnyharnessUpdateRelaunch { path: PathBuf, detail: String },
     #[error("anyharness runtime did not report version {expected} as healthy after the swap")]
     AnyharnessUpdateHealthGate { expected: String },
+    #[error("update mailbox protocol error")]
+    Protocol(#[from] proliferate_runtime_update_protocol::ProtocolError),
+    #[error("failed to resolve update artifact coordinates: {detail}")]
+    ResolveArtifact { detail: String },
+    #[error("update artifact checksum file was empty or malformed")]
+    RequestChecksumMalformed,
+    #[error("failed to write supervisor bridge marker at {path}")]
+    BridgeMarker { path: PathBuf, source: io::Error },
+    #[error("failed to write the supervisor config during bridge at {path}")]
+    BridgeWriteConfig { path: PathBuf, source: io::Error },
+    #[error("failed to spawn the supervisor during bridge: {detail}")]
+    BridgeSpawn { detail: String },
+    #[error("supervisor did not confirm ownership after the bridge spawn")]
+    BridgeNotConfirmed,
 }

@@ -168,6 +168,8 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
         "ready_at",
         "last_health_at",
         "destroyed_at",
+        "desired_anyharness_version",
+        "desired_worker_version",
         "created_at",
         "updated_at",
     } <= cloud_sandbox_columns

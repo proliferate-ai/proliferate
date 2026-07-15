@@ -17,6 +17,38 @@ pub struct SupervisorConfig {
     pub process_env: BTreeMap<String, String>,
     #[serde(default = "default_restart_delay_seconds")]
     pub restart_delay_seconds: u64,
+    /// Mailbox directory the Worker writes update requests into and the
+    /// Supervisor consumes. Server value: `.proliferate/supervisor/updates`
+    /// (`bootstrap.supervisor_update_request_dir`).
+    #[serde(default = "default_update_request_dir")]
+    pub update_request_dir: PathBuf,
+    /// Private staging directory for downloaded, re-verified artifacts before
+    /// the atomic activate. Server value under `.proliferate/supervisor/staging`.
+    #[serde(default = "default_staging_dir")]
+    pub staging_dir: PathBuf,
+    /// AnyHarness `/health` URL the activation health-gate polls after a
+    /// restart. Server value: `http://127.0.0.1:<runtime_port>/health`.
+    #[serde(default = "default_anyharness_health_url")]
+    pub anyharness_health_url: String,
+    /// How many times the health gate polls `/health` before giving up.
+    #[serde(default = "default_health_check_attempts")]
+    pub health_check_attempts: u32,
+    /// Delay between health-gate polls, in seconds.
+    #[serde(default = "default_health_check_delay_seconds")]
+    pub health_check_delay_seconds: u64,
+    /// Upper bound on a downloaded artifact, in bytes. A larger body is
+    /// rejected mid-stream (never buffered whole).
+    #[serde(default = "default_max_artifact_bytes")]
+    pub max_artifact_bytes: u64,
+    /// Whole-download timeout for the bounded artifact fetch, in seconds.
+    #[serde(default = "default_download_timeout_seconds")]
+    pub download_timeout_seconds: u64,
+    /// How often (seconds) the run loop drains the update mailbox while both
+    /// children are healthy. Without a periodic drain the mailbox would only be
+    /// consumed on a child respawn, so a request written to a stable box would
+    /// never be actioned. Bounded cadence, not a busy loop.
+    #[serde(default = "default_update_poll_interval_seconds")]
+    pub update_poll_interval_seconds: u64,
 }
 
 fn default_anyharness_args() -> Vec<String> {
@@ -25,6 +57,44 @@ fn default_anyharness_args() -> Vec<String> {
 
 fn default_restart_delay_seconds() -> u64 {
     5
+}
+
+fn default_update_request_dir() -> PathBuf {
+    supervisor_state_dir().join("updates")
+}
+
+fn default_staging_dir() -> PathBuf {
+    supervisor_state_dir().join("staging")
+}
+
+fn default_anyharness_health_url() -> String {
+    "http://127.0.0.1:8457/health".to_string()
+}
+
+fn default_health_check_attempts() -> u32 {
+    30
+}
+
+fn default_health_check_delay_seconds() -> u64 {
+    2
+}
+
+fn default_max_artifact_bytes() -> u64 {
+    512 * 1024 * 1024
+}
+
+fn default_download_timeout_seconds() -> u64 {
+    300
+}
+
+fn default_update_poll_interval_seconds() -> u64 {
+    15
+}
+
+fn supervisor_state_dir() -> PathBuf {
+    dirs_fallback_home()
+        .join(".proliferate")
+        .join("supervisor")
 }
 
 impl SupervisorConfig {
@@ -39,10 +109,7 @@ impl SupervisorConfig {
 }
 
 fn default_config_path() -> PathBuf {
-    dirs_fallback_home()
-        .join(".proliferate")
-        .join("supervisor")
-        .join("config.toml")
+    supervisor_state_dir().join("config.toml")
 }
 
 fn dirs_fallback_home() -> PathBuf {

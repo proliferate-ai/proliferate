@@ -441,6 +441,19 @@ class Settings(BaseSettings):
         "install/proliferate-target-install.sh"
     )
     proliferate_target_artifact_base_url: str = ""
+    # Make Managed Runtime Updates Supervisor-Owned (frozen 2026-07-15, decision
+    # 5): when true, newly (re)launched cloud sandboxes boot the Supervisor
+    # first (it spawns AnyHarness + Worker) instead of the legacy direct
+    # nohup'd AnyHarness + separate worker sidecar. Also gates the D5
+    # `desiredTopology` heartbeat signal (decision 6) so already-running
+    # legacy workers can bridge. Default OFF at merge; flipped only after the
+    # post-PR2 live E2B N-1->N proof passes (an ops action, out of scope here).
+    supervisor_owned_runtime: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "PROLIFERATE_SUPERVISOR_OWNED_RUNTIME", "SUPERVISOR_OWNED_RUNTIME"
+        ),
+    )
 
     @property
     def cloud_provisioning_configured(self) -> bool:

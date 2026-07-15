@@ -43,4 +43,20 @@ pub enum SupervisorError {
     },
     #[error("update manifest does not include {component} {version}")]
     UpdateArtifactMissing { component: String, version: String },
+    #[error("failed to download update artifact from {url}: {message}")]
+    DownloadArtifact { url: String, message: String },
+    /// A transport-class download failure (connect/timeout/read reset) — as
+    /// opposed to a definitive non-2xx status. Distinguished so a transient
+    /// network blip leaves the request PENDING for the next drain to retry
+    /// (no terminal result written), while a genuine bad artifact latches.
+    #[error("transient transport failure downloading update artifact from {url}: {message}")]
+    DownloadTransport { url: String, message: String },
+    #[error("update artifact exceeded max size {max} bytes")]
+    ArtifactTooLarge { max: u64 },
+    #[error("failed to activate update for {component}")]
+    Activate { component: String, source: io::Error },
+    #[error("failed to roll back update for {component}")]
+    Rollback { component: String, source: io::Error },
+    #[error(transparent)]
+    Protocol(#[from] proliferate_runtime_update_protocol::ProtocolError),
 }

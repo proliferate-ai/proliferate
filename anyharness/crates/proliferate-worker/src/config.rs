@@ -56,6 +56,37 @@ pub struct WorkerConfig {
     /// `ANYHARNESS_BEARER_TOKEN` env at startup when not set in config.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub runtime_bearer_token: Option<String>,
+    /// The Supervisor mailbox directory this Worker writes update requests
+    /// into. Set only for supervisor-owned targets (server value:
+    /// `.proliferate/supervisor/updates`). When present the Worker becomes an
+    /// *observer + writer*: on heartbeat divergence it writes ONE durable
+    /// `UpdateRequestV1` for the Supervisor to act on instead of running the
+    /// (now-fenced) in-place swap or self-exec. Absent => the legacy
+    /// independent-launch path (self-update + in-place AnyHarness swap).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supervisor_update_request_dir: Option<PathBuf>,
+    /// D5 bridge inputs — present only on already-provisioned targets an
+    /// operator is migrating to Supervisor ownership. The one-time bridge
+    /// writes the Supervisor config to `supervisor_config_path`, starts the
+    /// Supervisor at `supervisor_binary_path` detached, confirms ownership,
+    /// records crash-safety markers under `supervisor_bridge_marker_dir`, and
+    /// exits cleanly so the Supervisor's own Worker child takes over. Any field
+    /// absent => the Worker never bridges (newly provisioned targets launch
+    /// Supervisor-first and skip this entirely).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supervisor_binary_path: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supervisor_config_path: Option<PathBuf>,
+    /// The Supervisor config TOML content the bridge writes to
+    /// `supervisor_config_path` (the server's `build_supervisor_config`
+    /// output). Carried in the Worker config so an already-provisioned sandbox
+    /// — which has no Supervisor config on disk yet — can materialize one
+    /// during the bridge. Absent => the bridge assumes the config is already on
+    /// disk and does not overwrite it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supervisor_config_toml: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supervisor_bridge_marker_dir: Option<PathBuf>,
     #[serde(skip)]
     pub config_path: Option<PathBuf>,
 }
@@ -263,5 +294,56 @@ worker_db_path = "/tmp/worker.sqlite3"
         let config: WorkerConfig = toml::from_str(&contents).expect("config with runtime url");
         assert_eq!(config.runtime_base_url, "http://10.0.0.5:9000");
         assert_eq!(config.runtime_bearer_token.as_deref(), Some("secret"));
+    }
+
+    #[test]
+    fn supervisor_owned_fields_default_absent() {
+        // Legacy (non-supervisor) configs never mention the mailbox or bridge:
+        // absent => today's independent-launch path is taken unchanged.
+        let config: WorkerConfig = toml::from_str(MINIMAL_CONFIG).expect("minimal config");
+        assert_eq!(config.supervisor_update_request_dir, None);
+        assert_eq!(config.supervisor_binary_path, None);
+        assert_eq!(config.supervisor_config_path, None);
+        assert_eq!(config.supervisor_config_toml, None);
+        assert_eq!(config.supervisor_bridge_marker_dir, None);
+    }
+
+    #[test]
+    fn supervisor_owned_fields_parse_when_present() {
+        let contents = format!(
+            "{MINIMAL_CONFIG}\
+             supervisor_update_request_dir = \"/home/user/.proliferate/supervisor/updates\"\n\
+             supervisor_binary_path = \"/home/user/.proliferate/bin/proliferate-supervisor\"\n\
+             supervisor_config_path = \"/home/user/.proliferate/supervisor/config.toml\"\n\
+             supervisor_config_toml = \"anyharness_binary = \\\"/x\\\"\\n\"\n\
+             supervisor_bridge_marker_dir = \"/home/user/.proliferate/supervisor\"\n"
+        );
+        let config: WorkerConfig = toml::from_str(&contents).expect("supervisor-owned config");
+        assert_eq!(
+            config.supervisor_update_request_dir.as_deref(),
+            Some(std::path::Path::new(
+                "/home/user/.proliferate/supervisor/updates"
+            ))
+        );
+        assert_eq!(
+            config.supervisor_binary_path.as_deref(),
+            Some(std::path::Path::new(
+                "/home/user/.proliferate/bin/proliferate-supervisor"
+            ))
+        );
+        assert_eq!(
+            config.supervisor_config_path.as_deref(),
+            Some(std::path::Path::new(
+                "/home/user/.proliferate/supervisor/config.toml"
+            ))
+        );
+        assert_eq!(
+            config.supervisor_config_toml.as_deref(),
+            Some("anyharness_binary = \"/x\"\n")
+        );
+        assert_eq!(
+            config.supervisor_bridge_marker_dir.as_deref(),
+            Some(std::path::Path::new("/home/user/.proliferate/supervisor"))
+        );
     }
 }
