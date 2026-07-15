@@ -48,7 +48,7 @@ const FILE_SUFFIX: &str = ".json";
 /// `supervisor`: the Supervisor is image-bound and never self-updates, so a
 /// request naming it is unrepresentable rather than merely rejected. Being an
 /// enum also makes the component inherently path-safe (no traversal possible).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum UpdateComponent {
     Anyharness,
@@ -177,7 +177,12 @@ fn validate_sha256_hex(value: &str) -> Result<(), ProtocolError> {
 }
 
 fn validate_artifact_url(value: &str) -> Result<(), ProtocolError> {
-    if value.starts_with("https://") || value.starts_with("http://") {
+    // Require TLS: the Supervisor fetches this exact URL over the network, so a
+    // plaintext `http://` artifact (open to a MITM swapping the binary before
+    // the sha256 re-verify even runs) is refused fail-closed. Loopback health
+    // probes are `http://` but never flow through here (that URL is the
+    // Supervisor's own config, not a mailbox field).
+    if value.starts_with("https://") {
         return Ok(());
     }
     Err(ProtocolError::InvalidField {
@@ -498,8 +503,22 @@ mod tests {
         request.artifact_url = "file:///etc/passwd".to_string();
         assert!(validate_request(&request).is_err());
 
+        // Plaintext http:// is refused — only https:// artifact URLs are admitted.
+        let mut request = sample_request();
+        request.artifact_url = "http://downloads.example.test/anyharness".to_string();
+        assert!(validate_request(&request).is_err());
+
         let mut request = sample_request();
         request.size_bytes = 0;
+        assert!(validate_request(&request).is_err());
+    }
+
+    #[test]
+    fn validate_requires_https_artifact_url() {
+        let mut request = sample_request();
+        request.artifact_url = "https://downloads.example.test/anyharness".to_string();
+        assert!(validate_request(&request).is_ok());
+        request.artifact_url = "http://downloads.example.test/anyharness".to_string();
         assert!(validate_request(&request).is_err());
     }
 
