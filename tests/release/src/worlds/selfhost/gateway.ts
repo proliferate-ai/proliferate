@@ -298,10 +298,52 @@ export async function configureAndEnableGatewayProfile(
         `cat ${remoteTmp} >> ${GATEWAY_DEPLOY_DIR}/.env.static && rm -f ${remoteTmp}'`,
       { timeoutMs: 60_000 },
     );
-    await ssh.run(`cd ${GATEWAY_DEPLOY_DIR} && sudo bash bootstrap.sh`, { timeoutMs: BOX_STEP_TIMEOUT_MS });
+    try {
+      await ssh.run(`cd ${GATEWAY_DEPLOY_DIR} && sudo bash bootstrap.sh`, { timeoutMs: BOX_STEP_TIMEOUT_MS });
+    } catch (error) {
+      // bootstrap.sh runs `up -d --wait litellm`; if litellm never reaches
+      // healthy it exits non-zero and the raw ssh error withholds the on-box
+      // cause. Capture a bounded, SECRET-FREE snapshot of the compose service
+      // states + the litellm container's status/health/exit code so the failure
+      // is diagnosable from the persisted red without a live box. Container
+      // states/health/exit codes carry no secrets; raw logs (which can echo the
+      // master key) are deliberately NOT captured here.
+      const diag = await captureGatewayBootstrapDiag(ssh).catch(() => "(diagnostic capture failed)");
+      const base = error instanceof Error ? error.message : String(error);
+      throw new Error(`SH-GATEWAY: bootstrap.sh failed to bring up the agent-gateway profile. ${diag} (${base})`);
+    }
   } finally {
     await io.removeLocalTmp(localTmp).catch(() => undefined);
   }
+}
+
+/**
+ * Bounded, secret-free on-box snapshot for a gateway bootstrap failure: the
+ * compose service states and the litellm container's status/health/exit code.
+ * States/health/exit codes carry no secrets; raw container logs (which can echo
+ * the master key) are intentionally excluded.
+ */
+async function captureGatewayBootstrapDiag(ssh: SshTransport): Promise<string> {
+  const composePs = (
+    await ssh
+      .run(
+        `cd ${GATEWAY_DEPLOY_DIR} && sudo docker compose --env-file .env.runtime ` +
+          `-f docker-compose.production.yml --profile agent-gateway ps ` +
+          `--format '{{.Service}}:{{.State}}:{{.Health}}' 2>/dev/null | tr '\\n' ' '`,
+        { timeoutMs: 60_000 },
+      )
+      .catch(() => "")
+  ).trim();
+  const litellmInspect = (
+    await ssh
+      .run(
+        "sudo docker ps -a --filter label=com.docker.compose.service=litellm " +
+          "--format '{{.Names}}:{{.Status}}' 2>/dev/null | head -n1",
+        { timeoutMs: 60_000 },
+      )
+      .catch(() => "")
+  ).trim();
+  return `compose states: [${composePs || "none"}]; litellm container: [${litellmInspect || "none"}]`;
 }
 
 /** Reads the running litellm container name on the box (empty if the profile is down). */
