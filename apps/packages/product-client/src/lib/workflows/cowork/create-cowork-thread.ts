@@ -4,6 +4,7 @@ import type {
   Session,
 } from "@anyharness/sdk";
 import { resolveCoworkDefaultSessionModeId } from "#product/lib/domain/cowork/session-mode-defaults";
+import { UNTITLED_COWORK_THREAD_TITLE } from "#product/lib/domain/cowork/threads";
 import { workspaceFileTreeStateKey } from "#product/lib/domain/workspaces/cloud/collections";
 import {
   buildPendingWorkspaceOriginTarget,
@@ -119,7 +120,7 @@ export async function createCoworkThreadWorkflow(
     attemptId: deps.createPendingWorkspaceAttemptId(),
     source: "cowork-created",
     stage: "submitting",
-    displayName: "Cowork thread",
+    displayName: UNTITLED_COWORK_THREAD_TITLE,
     repoLabel: null,
     baseBranchName: null,
     workspaceId: null,
@@ -182,6 +183,18 @@ export async function createCoworkThreadWorkflow(
       return null;
     }
 
+    // Materialization must preserve the pending projection's identity. The
+    // create mutation invalidates the real thread list immediately, while
+    // launch-default application can still be in flight. Associate the real
+    // workspace before that await so the sidebar can suppress the duplicate
+    // query row throughout the handoff.
+    const materializedEntry: PendingWorkspaceEntry = {
+      ...entry,
+      workspaceId: result.workspace.id,
+      request: { kind: "select-existing", workspaceId: result.workspace.id },
+    };
+    deps.setPendingWorkspaceEntry(materializedEntry);
+
     const launchedSession = await deps.applyLaunchDefaults({
       session: result.session,
       agentKind: input.agentKind,
@@ -211,11 +224,6 @@ export async function createCoworkThreadWorkflow(
     }
 
     const selectionStartedAt = deps.startLatencyTimer();
-    deps.setPendingWorkspaceEntry({
-      ...entry,
-      workspaceId: result.workspace.id,
-      request: { kind: "select-existing", workspaceId: result.workspace.id },
-    });
     deps.activateWorkspace({
       logicalWorkspaceId: null,
       workspaceId: result.workspace.id,

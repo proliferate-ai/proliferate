@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ArrowLeft } from "@proliferate/ui/icons";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
+import { EmptyState } from "@proliferate/ui/layout/EmptyState";
 import { useCoworkArtifactDetail } from "#product/hooks/access/anyharness/cowork/use-cowork-artifact-detail";
 import { useCoworkArtifactManifest } from "#product/hooks/access/anyharness/cowork/use-cowork-artifact-manifest";
 import { useCoworkArtifactRefresh } from "#product/hooks/cowork/lifecycle/use-cowork-artifact-refresh";
@@ -28,6 +29,17 @@ export function CoworkArtifactsPanel({
   const artifactDetailQuery = useCoworkArtifactDetail(workspaceId, selectedArtifact?.id ?? null);
   const { refresh } = useCoworkArtifactRefresh(workspaceId, selectedArtifact?.id ?? null);
   const isViewingArtifact = selectedArtifact !== null;
+  const isEmpty = artifacts.length === 0 && !isLoading;
+  const refreshButton = (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={() => { void refresh(); }}
+      loading={isFetching}
+    >
+      Refresh
+    </Button>
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-tl-lg border-l border-t border-border bg-sidebar-background">
@@ -65,10 +77,13 @@ export function CoworkArtifactsPanel({
             viewportClassName="px-3 py-3"
             contentClassName="flex flex-col gap-1"
           >
-            {artifacts.length === 0 && !isLoading ? (
-              <div className="px-2 py-8 text-center text-sm text-muted-foreground">
-                No artifacts yet.
-              </div>
+            {isEmpty ? (
+              <EmptyState
+                title="No artifacts yet"
+                description="Artifacts created by this thread will appear here."
+                action={refreshButton}
+                className="min-h-52 bg-background/40"
+              />
             ) : (
               artifacts.map((artifact) => (
                 <CoworkArtifactRow
@@ -83,16 +98,11 @@ export function CoworkArtifactsPanel({
         </div>
       )}
 
-      <div className="flex items-center justify-end border-t border-sidebar-border/70 px-3 py-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => { void refresh(); }}
-          loading={isFetching}
-        >
-          Refresh
-        </Button>
-      </div>
+      {!isEmpty && (
+        <div className="flex items-center justify-end border-t border-sidebar-border/70 px-3 py-2">
+          {refreshButton}
+        </div>
+      )}
     </div>
   );
 }

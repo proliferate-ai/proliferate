@@ -12,6 +12,8 @@ interface ToolCallSummaryProps {
   showWorkDivider?: boolean;
   /** Always-visible completion UI that remains part of the work block. */
   completionContent?: React.ReactNode;
+  /** Fade in only when a mounted live turn becomes completed history. */
+  animateCompletion?: boolean;
 }
 
 export function ToolCallSummary({
@@ -23,6 +25,7 @@ export function ToolCallSummary({
   defaultExpanded = false,
   showWorkDivider = false,
   completionContent = null,
+  animateCompletion = false,
 }: ToolCallSummaryProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const renderedChildren = expanded || (itemCount !== undefined && itemCount <= 1)
@@ -34,7 +37,10 @@ export function ToolCallSummary({
   }
 
   return (
-    <div className="min-w-0">
+    <div
+      className={`min-w-0 ${animateCompletion ? "motion-safe:animate-status-crossfade" : ""}`}
+      data-completed-work-transition={animateCompletion ? "true" : undefined}
+    >
       <TurnSeparator
         label={showWorkDivider ? _label : summary}
         interactive

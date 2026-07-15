@@ -11,7 +11,6 @@ import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/sess
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { LevelBarsButton } from "@proliferate/ui/primitives/LevelBarsButton";
-import { PendingConfigIndicator } from "#product/components/workspace/chat/input/PendingConfigIndicator";
 
 // Tier-label tint ladder. Ultra keeps the codex-convention purple (same hue
 // as --color-pr-merged); max keeps the app special blue the bars already use.
@@ -95,17 +94,6 @@ export function ComposerReasoningEffortBars({ control }: ComposerReasoningEffort
         aria-label={ariaLabel}
       />
     );
-
-  if (control.pendingState) {
-    return (
-      <Tooltip content={tooltip}>
-        <span className="inline-flex items-center gap-1">
-          {bars}
-          <PendingConfigIndicator pendingState={control.pendingState} />
-        </span>
-      </Tooltip>
-    );
-  }
 
   return <Tooltip content={tooltip}>{bars}</Tooltip>;
 }

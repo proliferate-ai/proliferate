@@ -164,6 +164,17 @@ describe("ChatInputControlRow", () => {
     expect(screen.getByText("Medium").className).toContain("sr-only");
   });
 
+  it("does not reserve a pending glyph beside reasoning", () => {
+    const controls = createControls();
+    const effortControl = controls.find((control) => control.key === "effort")!;
+    effortControl.pendingState = "queued";
+
+    renderControlRow({ sessionConfigControls: controls });
+
+    const reasoning = screen.getByRole("button", { name: "Reasoning: Medium" });
+    expect(reasoning.parentElement?.querySelector("svg")).toBeNull();
+  });
+
   it("renders working mode as text with a subtle disclosure chevron", () => {
     renderControlRow();
     const mode = screen.getByRole("button", { name: "Mode: Default" });

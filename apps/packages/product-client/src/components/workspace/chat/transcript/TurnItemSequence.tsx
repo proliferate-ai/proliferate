@@ -3,7 +3,7 @@ import type {
   TranscriptState,
   TurnRecord,
 } from "@anyharness/sdk";
-import { Fragment, type ReactNode } from "react";
+import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { CoworkArtifactTurnCard } from "#product/components/workspace/chat/tool-calls/CoworkArtifactTurnCard";
 import {
   ToolCallSummary,
@@ -61,6 +61,9 @@ export function TurnItemSequence({
   onHandOffPlanToNewSession?: PlanHandoffHandler;
 }) {
   const artifactToolCalls = collectTurnCoworkArtifactToolCalls(turn, transcript);
+  const animateCompletedHistory = useCompletedHistoryTransition(
+    isTurnComplete && presentation.completedHistorySummary !== null,
+  );
   const completedArtifactToolCalls = isTurnComplete
     ? artifactToolCalls.filter((item) => item.status === "completed")
     : [];
@@ -119,6 +122,7 @@ export function TurnItemSequence({
               summary={formatCollapsedSummary(presentation.completedHistorySummary)}
               showWorkDivider={tailAssistantProseRootId !== null}
               completionContent={completedHistoryOwnsPrelude ? frontierPrelude : null}
+              animateCompletion={animateCompletedHistory}
               renderChildren={() => (
                 <CompletedHistorySequence>
                   {presentation.displayBlocks
@@ -181,6 +185,20 @@ export function TurnItemSequence({
       {frontierBlockKey === null ? standaloneFrontierPrelude : null}
     </>
   );
+}
+
+function useCompletedHistoryTransition(eligible: boolean): boolean {
+  const wasEligibleRef = useRef(eligible);
+  const [transitionClaimed, setTransitionClaimed] = useState(false);
+
+  useLayoutEffect(() => {
+    if (eligible && !wasEligibleRef.current) {
+      setTransitionClaimed(true);
+    }
+    wasEligibleRef.current = eligible;
+  }, [eligible]);
+
+  return transitionClaimed;
 }
 
 export function shouldRenderCompletedArtifactCards({
