@@ -1,7 +1,5 @@
 # Onboarding
 
-Status: authoritative for the current product onboarding read path.
-
 Onboarding is the path from a signed-out person to a product-ready account that
 can create or join useful work. It is not one component or one server route.
 It spans product auth, provider readiness, billing/credits, agent auth, settings

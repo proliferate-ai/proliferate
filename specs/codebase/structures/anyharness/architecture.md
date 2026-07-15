@@ -1,13 +1,5 @@
 # AnyHarness — Architecture
 
-Status: consolidated architecture reference for the AnyHarness runtime —
-`anyharness/crates/{anyharness, anyharness-contract, anyharness-credential-discovery, anyharness-lib}`.
-Covers purpose/ownership, the 20k-foot model, core workflows, and per-layer best
-practices. The authoritative folder standards live in
-`specs/codebase/structures/anyharness/README.md`; the live-layer rules in
-`specs/codebase/structures/anyharness/guides/live-runtime.md`; the wire schemas in
-`specs/codebase/structures/anyharness/contract.md`.
-
 ---
 
 ## 1. Purpose / Ownership

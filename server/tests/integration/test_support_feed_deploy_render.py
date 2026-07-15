@@ -76,7 +76,16 @@ def _merge(
     merge_program, _ = _render_jq_programs()
     env_file = tmp_path / "env-updates.json"
     sec_file = tmp_path / "secret-updates.json"
-    env_file.write_text(json.dumps([{"name": "API_URL", "value": "https://new"}]))
+    # Mirror the real render: strict release identity is one of the env updates,
+    # so a merged task satisfies the strengthened fail-closed assertion.
+    env_file.write_text(
+        json.dumps(
+            [
+                {"name": "API_URL", "value": "https://new"},
+                {"name": "PROLIFERATE_REQUIRE_RELEASE_IDENTITY", "value": "1"},
+            ]
+        )
+    )
     sec_file.write_text(json.dumps(secret_updates))
     prog_file = tmp_path / "merge.jq"
     raw_file = tmp_path / "raw.json"
@@ -139,6 +148,14 @@ def test_render_projects_single_feed_secret_and_strips_inherited_plaintext(tmp_p
                 "environment": [
                     {"name": "API_URL", "value": "old"},
                     {"name": "SUPPORT_FEED_BEARER_TOKEN", "value": "LEAKED-PLAINTEXT"},
+                    # Stale runtime-identity overrides inherited from the prior
+                    # task revision; the merge must strip them.
+                    {"name": "ANYHARNESS_GIT_SHA", "value": "deadbeefcafe"},
+                    {
+                        "name": "CLOUD_RUNTIME_SENTRY_RELEASE",
+                        "value": "proliferate-server@0.1.0+abc",
+                    },
+                    {"name": "E2B_RUNTIME_SENTRY_RELEASE", "value": "stale"},
                 ],
                 "secrets": [
                     {
@@ -167,6 +184,17 @@ def test_render_projects_single_feed_secret_and_strips_inherited_plaintext(tmp_p
     assert [e for e in container["environment"] if e["name"] == "SUPPORT_FEED_BEARER_TOKEN"] == []
     # A non-feed inherited secret survives.
     assert any(s["name"] == "OTHER" for s in container["secrets"])
+    # Every inherited stale runtime-identity override is stripped.
+    env_names = {e["name"] for e in container["environment"]}
+    for forbidden in (
+        "ANYHARNESS_GIT_SHA",
+        "CLOUD_RUNTIME_SENTRY_RELEASE",
+        "E2B_RUNTIME_SENTRY_RELEASE",
+    ):
+        assert forbidden not in env_names
+    # Strict release identity flows in from the env updates.
+    strict = {"name": "PROLIFERATE_REQUIRE_RELEASE_IDENTITY", "value": "1"}
+    assert strict in container["environment"]
     # Mutable metadata is stripped before registration.
     for stripped in ("taskDefinitionArn", "revision", "status", "requiresAttributes"):
         assert stripped not in final
@@ -180,7 +208,10 @@ def test_render_assert_passes_on_well_formed_task(tmp_path: Path) -> None:
         "containerDefinitions": [
             {
                 "name": _CONTAINER,
-                "environment": [{"name": "API_URL", "value": "x"}],
+                "environment": [
+                    {"name": "API_URL", "value": "x"},
+                    {"name": "PROLIFERATE_REQUIRE_RELEASE_IDENTITY", "value": "1"},
+                ],
                 "secrets": [{"name": "SUPPORT_FEED_BEARER_TOKEN", "valueFrom": _FEED_VALUE_FROM}],
             }
         ]
@@ -245,6 +276,27 @@ def test_render_assert_passes_on_well_formed_task(tmp_path: Path) -> None:
             },
             "must reference a Secrets Manager secret ARN",
             id="not-secrets-manager-arn",
+        ),
+        pytest.param(
+            {
+                "name": _CONTAINER,
+                "environment": [
+                    {"name": "PROLIFERATE_REQUIRE_RELEASE_IDENTITY", "value": "1"},
+                    {"name": "ANYHARNESS_GIT_SHA", "value": "deadbeefcafe"},
+                ],
+                "secrets": [{"name": "SUPPORT_FEED_BEARER_TOKEN", "valueFrom": _FEED_VALUE_FROM}],
+            },
+            "stale runtime-identity variables must not remain",
+            id="stale-runtime-identity-remains",
+        ),
+        pytest.param(
+            {
+                "name": _CONTAINER,
+                "environment": [{"name": "API_URL", "value": "x"}],
+                "secrets": [{"name": "SUPPORT_FEED_BEARER_TOKEN", "valueFrom": _FEED_VALUE_FROM}],
+            },
+            "PROLIFERATE_REQUIRE_RELEASE_IDENTITY=1 must be set",
+            id="strict-identity-absent",
         ),
     ],
 )

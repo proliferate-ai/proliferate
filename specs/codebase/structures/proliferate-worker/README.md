@@ -1,7 +1,5 @@
 # Proliferate Worker
 
-Status: authoritative for `anyharness/crates/proliferate-worker/**`.
-
 Proliferate Worker is an optional process beside AnyHarness. It enrolls with
 Cloud once, sends heartbeats, and converges the local catalog, Worker binary,
 and AnyHarness binary when its launch configuration enables those paths.

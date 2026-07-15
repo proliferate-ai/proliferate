@@ -1,7 +1,5 @@
 # AnyHarness API Layer
 
-Status: authoritative for `anyharness-lib/src/api/**`.
-
 ## Purpose
 
 `api/` is the transport boundary. It owns how clients reach the runtime, not

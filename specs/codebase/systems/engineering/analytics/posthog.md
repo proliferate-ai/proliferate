@@ -1,7 +1,5 @@
 # PostHog
 
-Status: current system contract
-
 PostHog is the hosted-product vendor path for client analytics and optional
 session replay. It is separate from first-party anonymous telemetry and is not
 initialized by the Server API.

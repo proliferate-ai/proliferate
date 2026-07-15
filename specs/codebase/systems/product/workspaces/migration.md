@@ -1,7 +1,5 @@
 # Workspace Migration And Mobility
 
-Status: authoritative for the current product boundary.
-
 There is no current user-facing local-to-cloud, cloud-to-local, or
 cloud-to-cloud workspace move workflow. The old Cloud mobility tables, Desktop
 move UI, handoff state machine, cleanup tracker, and cross-runtime cutover

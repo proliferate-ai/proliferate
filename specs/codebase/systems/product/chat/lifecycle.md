@@ -1,7 +1,5 @@
 # Chat Lifecycle
 
-Status: authoritative for user-visible chat creation and identity transitions.
-
 This document answers whether a model selection creates, preserves, or
 replaces the visible chat identity. It does not own tab ordering, runtime
 process mechanics, model availability, or source organization.

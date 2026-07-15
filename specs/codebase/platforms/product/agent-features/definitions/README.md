@@ -1,7 +1,5 @@
 # Product MCP Definitions
 
-Status: authoritative index for product MCP definitions.
-
 Read [servers.md](../servers.md) first. That spec
 defines the source layout and implementation rules. Files in this folder define
 the initial product MCPs we are standardizing.

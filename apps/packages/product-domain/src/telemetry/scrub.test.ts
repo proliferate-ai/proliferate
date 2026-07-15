@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { scrubTelemetryData, scrubTelemetryText, scrubTelemetryUrl } from "./scrub";
+import {
+  scrubTelemetryData,
+  scrubTelemetryEvent,
+  scrubTelemetryText,
+  scrubTelemetryUrl,
+} from "./scrub";
 
 describe("scrubTelemetryData", () => {
   it("redacts sensitive keys recursively", () => {
@@ -56,6 +61,28 @@ describe("scrubTelemetryData", () => {
         "ios /private/var/mobile/Containers/Data/app/file android /data/user/0/app/file win C:/Users/pablo/app/file",
       ),
     ).toBe("ios [redacted-path] android [redacted-path] win [redacted-path]");
+  });
+
+  it("preserves the top-level deployment environment while redacting nested env data", () => {
+    expect(
+      scrubTelemetryEvent({
+        environment: "production",
+        tags: { environment: "prod", runtime_env: "e2b" },
+        contexts: { app: { env: { SECRET: "x" } } },
+      }),
+    ).toEqual({
+      environment: "production",
+      // Nested `environment`/`env`/`runtime_env` keys all match the sensitive
+      // key pattern and stay redacted; only the top-level string survives.
+      tags: { environment: "[redacted]", runtime_env: "[redacted]" },
+      contexts: { app: { env: "[redacted]" } },
+    });
+  });
+
+  it("scrubs the preserved top-level environment string as text", () => {
+    expect(
+      scrubTelemetryEvent({ environment: "Bearer secret /Users/pablo/app" }).environment,
+    ).toBe("[redacted-token] [redacted-path]");
   });
 
   it("can preserve PostHog internal envelope keys while scrubbing user data", () => {

@@ -1,7 +1,5 @@
 # Grok Harness
 
-Status: authoritative for Grok-specific AnyHarness adapter behavior.
-
 Grok (xAI Grok Build) speaks the Agent Client Protocol natively, so it is
 launched through the upstream ACP registry rather than a Proliferate-owned
 adapter: `agentProcess.install.kind = registry_backed`, `registryId =

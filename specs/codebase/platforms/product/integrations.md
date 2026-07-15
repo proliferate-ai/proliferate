@@ -1,7 +1,5 @@
 # Integrations And Runtime Worker Authentication
 
-Status: current
-
 This platform owns connected third-party integration accounts, the Cloud-hosted
 integration MCP gateway, and the Worker identity that gives AnyHarness scoped
 access to that gateway. Provider credentials remain encrypted in Cloud;

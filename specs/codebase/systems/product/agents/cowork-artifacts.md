@@ -1,7 +1,5 @@
 # Cowork Artifacts
 
-Status: authoritative for cowork artifact lifecycle in AnyHarness.
-
 Scope:
 
 - `anyharness/crates/anyharness-contract/**` for cowork artifact wire shapes

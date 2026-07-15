@@ -1,12 +1,5 @@
 # Server Architecture
 
-Status: consolidated architecture reference for the Proliferate backend /
-control-plane (`server/**`). The focused Server guides, managed-cloud platform
-docs, and Proliferate Worker structure docs remain the detailed current owners;
-this doc is the single structured overview — purpose, the 20k-foot model, core
-workflows, per-folder best practices, and detailed sections for the **managed
-runtime path**, the optional **runtime Worker**, and the **DB models**.
-
 ---
 
 ## 1. Purpose / Ownership

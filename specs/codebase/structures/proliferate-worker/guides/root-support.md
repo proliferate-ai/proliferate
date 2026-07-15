@@ -1,8 +1,5 @@
 # Worker Root Support Files
 
-Status: authoritative for cross-cutting files at
-`anyharness/crates/proliferate-worker/src/*.rs`.
-
 Root support modules are small process-wide dependencies. The focused root
 workflow modules—`catalog_sync.rs`, `integration_gateway.rs`,
 `self_update.rs`, and `anyharness_update.rs`—are covered by the identity,

@@ -1,8 +1,5 @@
 # Worker Runtime
 
-Status: authoritative for `anyharness/crates/proliferate-worker/src/main.rs`
-and `runtime.rs`.
-
 `main.rs` initializes telemetry, parses `--config` and `--once`, loads
 `WorkerConfig`, and calls `runtime::run`. It captures a terminal error for
 Sentry but does not own Worker behavior.

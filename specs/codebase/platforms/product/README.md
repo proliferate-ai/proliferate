@@ -1,7 +1,5 @@
 # Product Platforms
 
-Status: authoritative index for reusable product platforms.
-
 Product platform specs own capabilities that multiple systems or structures
 depend on:
 provisioning, auth materialization, billing gates, MCP/skills runtime

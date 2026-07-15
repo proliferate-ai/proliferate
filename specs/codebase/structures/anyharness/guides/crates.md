@@ -1,7 +1,5 @@
 # AnyHarness Crates
 
-Status: authoritative for crate ownership under `anyharness/crates/**`.
-
 ## Ownership
 
 ```text

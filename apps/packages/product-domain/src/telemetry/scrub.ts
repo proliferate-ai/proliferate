@@ -10,8 +10,11 @@ const RELATIVE_URL_WITH_QUERY_PATTERN =
   /(^|[\s("'=])((?:\/|\.\/|\.\.\/)[^\s<>"')?#]+)\?([^\s<>"')#]+)(#[^\s<>"')]*)?/g;
 const QUERY_SECRET_PATTERN =
   /([?&](?:code|state|access_token|refresh_token|id_token|token|auth|key|secret|password)=)[^&#\s]+/gi;
+// The path group must start with `/` so it cannot overlap with the authority
+// group's character class; an ambiguous split is polynomial-backtracking bait
+// (CodeQL js/polynomial-redos) on adversarial `scheme://"""...` inputs.
 const ABSOLUTE_URL_PARTS_PATTERN =
-  /^([a-z][a-z0-9+.-]*:\/\/[^/?#]+)([^?#]*)(?:[?#].*)?$/i;
+  /^([a-z][a-z0-9+.-]*:\/\/[^/?#]+)(\/[^?#]*)?(?:[?#].*)?$/i;
 
 export type Scrubbable =
   | string
@@ -99,4 +102,24 @@ function scrubValue(
 
 export function scrubTelemetryData<T>(value: T, options: ScrubTelemetryOptions = {}): T {
   return scrubValue(value as Scrubbable, undefined, options) as T;
+}
+
+/**
+ * Recursively scrub a Sentry event while preserving its top-level
+ * `environment` field as bounded deployment identity.
+ *
+ * The generic recursive scrubber redacts any `environment`/`env` key, which
+ * would drop the deployment environment name (e.g. `production`) that support
+ * investigation depends on. This wrapper snapshots only the top-level
+ * `environment` string, runs the recursive scrubber, then restores the snapshot
+ * scrubbed as text. Nested `env`/`environment` fields, raw process-environment
+ * maps, and every other sensitive key stay redacted.
+ */
+export function scrubTelemetryEvent<T>(value: T, options: ScrubTelemetryOptions = {}): T {
+  const originalEnvironment = (value as { environment?: unknown } | null | undefined)?.environment;
+  const scrubbed = scrubTelemetryData(value, options);
+  if (typeof originalEnvironment === "string") {
+    (scrubbed as { environment?: unknown }).environment = scrubTelemetryText(originalEnvironment);
+  }
+  return scrubbed;
 }

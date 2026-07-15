@@ -1,13 +1,5 @@
 # AnyHarness Mental Model
 
-Status: orientation primer for the AnyHarness runtime structure. The per-layer
-guides in this folder are authoritative; this doc is the lens that makes them
-cohere. Read [../README.md](../README.md) first, then this, then the focused
-guide for the layer you are changing. It is the backend twin of
-[frontend mental-model.md](../../frontend/guides/mental-model.md): same
-generating rules, adapted to a Rust runtime with durable state and live
-processes.
-
 ## The Core Idea
 
 Three rules generate the entire structure. Everything else is a consequence.

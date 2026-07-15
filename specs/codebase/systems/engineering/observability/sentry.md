@@ -74,6 +74,21 @@ authorization headers, tokens, secrets, environment values, or provider
 responses. Correlation identifiers are diagnostic metadata, not permission to
 copy user content into Sentry.
 
+Two exact, bounded fields are deliberately preserved through the scrubbers
+because they are deployment identity, not a raw process-environment map:
+
+- The top-level Sentry `environment` field (for example `production`). Server
+  `_scrub_event` and the shared product-domain `scrubTelemetryEvent` envelope
+  wrapper (used by the Web, Desktop, and Mobile adapters) snapshot only that
+  top-level string, run the recursive scrubber, then restore the snapshot
+  scrubbed as text. Nested `environment`/`env` keys and raw environment maps
+  stay redacted.
+- The `runtime_env` tag on Worker and Supervisor events, whose only allowed
+  live value is `e2b`. Every other env-like tag key stays redacted.
+
+Nothing beyond user ID, sandbox ID, bounded runtime environment, deployment
+environment, release version, and source revision is added to any event.
+
 Replay defaults are deliberately narrow:
 
 - Web and Mobile set normal and error replay rates to zero. Mobile also

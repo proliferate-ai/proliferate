@@ -1,7 +1,5 @@
 # Web/Desktop Client Unification
 
-Status: authoritative for the Web/Desktop client unification migration.
-
 This spec defines the product boundary, host boundary, migration sequence, and
 acceptance criteria. It intentionally does not redefine authentication,
 billing, chat, workspace, workflow, or other feature behavior; the focused
@@ -602,76 +600,23 @@ enforcement. Shared `product.css`, Desktop-only CSS, and ProductClient Tailwind
 scanning are established separately. The embedded workspace browser and its
 native child-WebView capability have been removed.
 
-Desktop Host Adoption revision r2 is complete at PR #1157 merge
-`a76ab5911e2af39593b4b31530535f0811a3558b`. It constructs the real
-Desktop-owned host and complete inventoried bridge, mounts the existing
-Desktop product beneath `ProductHostProvider`, replaces the immutable host
-snapshot when its documented reactive inputs change, and gates running-agent
-export through one Desktop-only product-lifecycle root. The complete contract
-and acceptance record is
-[`web-desktop-client-unification-d1a.md`](migration/d1a.md).
+Desktop now mounts the product through the typed host boundary. Native UI,
+local runtime, files, credentials, SSH, updater, support, shared identity,
+navigation, storage, and telemetry all route through that boundary while the
+product source still lives under `apps/desktop`.
 
-Desktop Native UI Adoption is complete at PR #1165 merge
-`736d181575e4d81389d19ba7a78afd14566e1fda`. It routes existing native menus,
-native menu commands, Dock attention, and Desktop zoom through the merged
-`host.desktop.nativeUi` boundary while product files stay under
-`apps/desktop`. The complete contract is
-[`web-desktop-client-unification-d1b.md`](migration/d1b.md).
+The extraction mechanics have also landed: the package entry shape is proven
+from Desktop and a minimal browser host, the source move has a checked ledger,
+and the import codemod is deterministic and idempotent. The durable inputs to
+the mechanical extraction are:
 
-Desktop Local Runtime Adoption is complete at PR #1167 merge
-`36e96e7bea1c409dfde1797b3a691003f82d8f5a`. It routes product-owned local
-AnyHarness discovery, restart, readiness, and connection through
-`host.desktop.runtime`, moves initial bootstrap under the existing Desktop-only
-product-lifecycle root, and leaves raw sidecar process ownership in Desktop.
-The complete contract is
-[`web-desktop-client-unification-d1c.md`](migration/d1c.md).
+- [landed extraction proof](migration/d1g.md);
+- [application-entry contract](entry-contract.md); and
+- [source move ledger](move-ledger.md).
 
-Finish the Desktop Capability Boundary is complete at PR #1168 merge
-`de249faf06c629e094c20e33f94f33d4e6c4c8f2`. It routes active product-owned
-files, credentials, SSH, scratch, updater, worker, diagnostics, support, links,
-and clipboard behavior through the mounted host while product source remains in
-Desktop. The complete contract is
-[`web-desktop-client-unification-d1d.md`](migration/d1d.md).
-
-Route Shared Identity and Navigation Through ProductHost is complete at PR #1180
-merge `06bf880a1b98c6694bcf029badcc9fe5823111de`. It reads normalized auth
-identity/operations, `host.deployment.apiBaseUrl`, and the single
-`host.cloud.client` through `useProductHost()`, closes the ordered-query-pairs
-and fragment/callback contract gaps in ProductClient, and makes one
-product-owned lifecycle route each inbound deep link decoded once into a
-lossless `ProductEntry` (the legacy parallel navigation decoder is deleted).
-Product source remains in Desktop. The complete contract is
-[`web-desktop-client-unification-d1e.md`](migration/d1e.md).
-
-Route Shared Persistence and Telemetry Through ProductHost is complete at PR
-#1182 merge `f93afce8190bba943277d588c9bfb0d051c615c9`. It re-backs
-`desktopProductStorage` onto the existing
-Tauri preferences store and routes movable product persistence through
-`host.storage` with zero migration of existing values, routes product telemetry
-identity/tags/route-classification/exception-capture and the single
-`screen_viewed` through a product-owned `useProductTelemetry` facade backed by
-`host.telemetry`, makes the Query client product-owned with injected exception
-capture, and splits the mount into a host-owned `DesktopHostProviders`, a
-product `ProductProviderRoot`, and a product `ProductLifecycleRoot`. Product
-source remains in Desktop. The complete contract is
-[`web-desktop-client-unification-d1f.md`](migration/d1f.md).
-
-Prove ProductClient Extraction Mechanics is the current implementation slice
-(base `f93afce8190bba943277d588c9bfb0d051c615c9`). Without moving any Desktop
-product source, it records and qualifies the ProductClient application-entry
-contract (public `ProductClient({ RoutesComponent })`, `#product/*` package
-imports, lazy public-shell/authenticated split) via a build-only canary,
-compiles that canary through a Desktop qualification build and a minimal browser
-host (`desktop: null`) with every emitted resource URL served at HTTP 200,
-checks the complete 2220-file `move`/`split`/`retain`/`delete` ledger, proves a
-deterministic idempotent import codemod on a disposable copy, and lands the
-deterministic legacy-Web bundle collector with a provisional baseline. The
-reserved real files are not created. The complete living contract is
-[`web-desktop-client-unification-d1g.md`](migration/d1g.md);
-the recorded entry contract is
-[`web-desktop-product-client-entry-contract.md`](entry-contract.md)
-and the move ledger is
-[`web-desktop-product-client-move-ledger.md`](move-ledger.md).
+The next step is to perform that mechanical extraction and leave Desktop as a
+thin native host. The remaining order and Web cutover gates live in the
+[rollout procedure](../../../../../developing/deploying/web-desktop-unification-rollout.md).
 
 Related authoritative docs:
 

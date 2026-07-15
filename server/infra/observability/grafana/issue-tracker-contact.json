@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "phase": "e1-phase1-template-only",
+  "description": "Non-secret template for the dedicated, dark issue-tracker webhook contact point. E1 creates this contact point and proves it exists, but no notification policy references it, so it cannot deliver a business alert or health canary to the tracker until E2 activates it. This template names the Bearer credential only by its canonical secret reference and never contains the value; the operator script resolves the reference at execution time.",
+  "target": {
+    "awsAccount": "157466816238",
+    "awsRegion": "us-east-1",
+    "grafanaWorkspaceId": "g-e532d030d8",
+    "grafanaWorkspaceName": "proliferate-ops",
+    "grafanaVersion": "10.4"
+  },
+  "contactPoint": {
+    "name": "issue-tracker-webhook",
+    "type": "webhook",
+    "disableResolveMessage": false,
+    "settings": {
+      "url": "https://issues.proliferate.com/v1/ingest/grafana",
+      "httpMethod": "POST",
+      "maxAlerts": 0,
+      "authorization_scheme": "Bearer"
+    },
+    "secureSettings": {
+      "authorization_credentials": {
+        "secretRef": "issue-tracker/app.grafanaWebhookSecret"
+      }
+    }
+  },
+  "delivery": {
+    "sendResolved": true,
+    "hmac": "not-supported-on-grafana-10.4; native HMAC signing is a later hardening change coupled to an independently tested Grafana upgrade. Trusted TLS protects transport and E2 occurrence identities make delivery replay idempotent."
+  }
+}

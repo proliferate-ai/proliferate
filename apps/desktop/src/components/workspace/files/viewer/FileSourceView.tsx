@@ -153,7 +153,6 @@ export function FileSourceView({
     registerContentSearchUnit({
       unitId: contentSearchUnitId,
       surface: "file",
-      scope: "diffs",
       query: contentSearchQuery,
       matchIds: contentSearchMatchIds,
     });
