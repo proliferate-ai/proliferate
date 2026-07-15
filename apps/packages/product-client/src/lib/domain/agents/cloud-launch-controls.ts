@@ -2,6 +2,7 @@ import type {
   CloudAgentCatalogControlInput,
   CloudAgentCatalogModelInput,
   DesktopAgentLaunchControl,
+  DesktopModelTuningControlValues,
   DesktopSessionDefaultControl,
 } from "#product/lib/domain/agents/cloud-launch-catalog-types";
 
@@ -49,6 +50,31 @@ export function projectSessionDefaultControls(
     }
     return [];
   });
+}
+
+/**
+ * The model's own tuning-control vocabulary (`model.controls`), with NO
+ * agent-level fallback — absence of a key means the model does not support
+ * that control. Every probed model carries a controls matrix, so `null`
+ * (no matrix at all) only happens for unprobed catalog entries.
+ */
+export function projectModelTuningControlValues(
+  model: CloudAgentCatalogModelInput,
+): DesktopModelTuningControlValues | null {
+  if (!model.controls) {
+    return null;
+  }
+  const projected: DesktopModelTuningControlValues = {};
+  for (const { key, catalogKeys } of SESSION_DEFAULT_CONTROL_KEYS) {
+    for (const catalogKey of catalogKeys) {
+      const values = model.controls[catalogKey]?.values;
+      if (values && values.length > 0) {
+        projected[key] = [...values];
+        break;
+      }
+    }
+  }
+  return projected;
 }
 
 /**

@@ -74,16 +74,19 @@ vi.mock("@proliferate/product-ui/sidebar/ProductSidebarThreads", () => ({
     active,
     label,
     status,
+    trailingStatus,
     trailingLabel,
   }: {
     active?: boolean;
     label: ReactNode;
     status?: ReactNode;
+    trailingStatus?: ReactNode;
     trailingLabel?: string | null;
   }) => (
     <div data-testid="thread-row" data-active={String(!!active)}>
       {status}
       <span>{label}</span>
+      {trailingStatus}
       {trailingLabel ? <span>{trailingLabel}</span> : null}
     </div>
   ),

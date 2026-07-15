@@ -36,9 +36,11 @@ export function CoworkThreadRow({
     <ProductSidebarThreadRow
       active={active}
       onSelect={onSelect}
-      status={(
+      // Activity lives in the trailing slot, matching the workspace rows'
+      // right-side convention — the leading well stays free of stacked glyphs.
+      trailingStatus={activityIndicator ? (
         <SidebarStatusIndicatorView indicator={activityIndicator} />
-      )}
+      ) : null}
       label={coworkThreadTitle(thread)}
       trailingLabel={formatSidebarRelativeTime(thread.updatedAt)}
       expandControl={canExpand ? (

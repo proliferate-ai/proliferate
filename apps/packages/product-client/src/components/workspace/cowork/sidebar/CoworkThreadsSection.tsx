@@ -123,7 +123,7 @@ export function CoworkThreadsSection() {
           {showPendingCoworkThread && pendingCoworkEntry && (
             <ProductSidebarThreadRow
               active={pendingCoworkThreadActive}
-              status={(
+              trailingStatus={(
                 <SidebarStatusIndicatorView
                   indicator={{ kind: "iterating", tooltip: "Creating chat" }}
                 />

@@ -1,4 +1,11 @@
-import { useCallback, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import { CHAT_MODEL_SELECTOR_LABELS } from "#product/copy/chat/chat-copy";
 import { buildSettingsHref } from "#product/lib/domain/settings/navigation";
@@ -150,6 +157,100 @@ function ComposerModelPickerPopover({
       .filter((group): group is ModelSelectorGroup => group !== null);
   }, [orderedGroups, search]);
 
+  // Keyboard navigation: focus stays in the search field; ArrowUp/ArrowDown
+  // move a roving highlight over the flattened model rows and Enter selects
+  // it (mirrors the slash-command menu's single-focus-owner pattern). Rows are
+  // keyed `${kind}:${modelId}` so the highlight survives refiltering.
+  const flatModelKeys = useMemo(
+    () => filteredGroups.flatMap((group) =>
+      group.models.map((model) => modelRowKey(group.kind, model.modelId))
+    ),
+    [filteredGroups],
+  );
+  const selectionByKey = useMemo(() => {
+    const byKey = new Map<string, ModelSelectorSelection>();
+    for (const group of filteredGroups) {
+      for (const model of group.models) {
+        byKey.set(modelRowKey(group.kind, model.modelId), {
+          kind: group.kind,
+          modelId: model.modelId,
+        });
+      }
+    }
+    return byKey;
+  }, [filteredGroups]);
+  const initialHighlightKey = useMemo(() => {
+    for (const group of filteredGroups) {
+      const selected = group.models.find((model) => model.isSelected);
+      if (selected) {
+        return modelRowKey(group.kind, selected.modelId);
+      }
+    }
+    return flatModelKeys[0] ?? null;
+  }, [filteredGroups, flatModelKeys]);
+  const [highlightedKey, setHighlightedKey] = useState<string | null>(initialHighlightKey);
+  const rowRefs = useRef(new Map<string, HTMLButtonElement>());
+  const effectiveHighlightedKey =
+    highlightedKey && flatModelKeys.includes(highlightedKey)
+      ? highlightedKey
+      : initialHighlightKey;
+
+  const setRowRef = useCallback((key: string, element: HTMLButtonElement | null) => {
+    if (element) {
+      rowRefs.current.set(key, element);
+    } else {
+      rowRefs.current.delete(key);
+    }
+  }, []);
+
+  const moveHighlight = useCallback((delta: number) => {
+    if (flatModelKeys.length === 0) {
+      return;
+    }
+    const currentIndex = effectiveHighlightedKey
+      ? flatModelKeys.indexOf(effectiveHighlightedKey)
+      : -1;
+    const nextIndex = Math.min(
+      flatModelKeys.length - 1,
+      Math.max(0, (currentIndex < 0 ? (delta > 0 ? -1 : 0) : currentIndex) + delta),
+    );
+    const nextKey = flatModelKeys[nextIndex];
+    if (nextKey !== undefined) {
+      setHighlightedKey(nextKey);
+      rowRefs.current.get(nextKey)?.scrollIntoView({ block: "nearest" });
+    }
+  }, [effectiveHighlightedKey, flatModelKeys]);
+
+  // Refiltering can leave the effective highlight on a row that just scrolled
+  // out of the visible window; keep it in view.
+  useEffect(() => {
+    if (effectiveHighlightedKey) {
+      rowRefs.current.get(effectiveHighlightedKey)?.scrollIntoView({ block: "nearest" });
+    }
+  }, [effectiveHighlightedKey]);
+
+  const handleSearchKeyDown = useCallback((event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      moveHighlight(1);
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      moveHighlight(-1);
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const selection = effectiveHighlightedKey
+        ? selectionByKey.get(effectiveHighlightedKey)
+        : undefined;
+      if (selection) {
+        onSelect(selection);
+      }
+    }
+  }, [effectiveHighlightedKey, moveHighlight, onSelect, selectionByKey]);
+
   return (
     <ComposerPopoverSurface className="flex w-72 flex-col p-0">
       <div className="shrink-0 border-b border-border">
@@ -158,6 +259,7 @@ function ComposerModelPickerPopover({
           onChange={setSearch}
           placeholder="Search models"
           autoFocus
+          onKeyDown={handleSearchKeyDown}
         />
       </div>
 
@@ -169,6 +271,9 @@ function ComposerModelPickerPopover({
             currentKind={currentKind}
             showSeparator={index > 0}
             onSelect={onSelect}
+            highlightedKey={effectiveHighlightedKey}
+            onHighlight={setHighlightedKey}
+            setRowRef={setRowRef}
           />
         ))}
 
@@ -205,16 +310,26 @@ function ComposerModelPickerPopover({
   );
 }
 
+function modelRowKey(kind: string, modelId: string): string {
+  return `${kind}:${modelId}`;
+}
+
 function ModelPickerGroup({
   group,
   currentKind,
   showSeparator,
   onSelect,
+  highlightedKey,
+  onHighlight,
+  setRowRef,
 }: {
   group: ModelSelectorGroup;
   currentKind: string | null;
   showSeparator: boolean;
   onSelect: (selection: ModelSelectorSelection) => void;
+  highlightedKey: string | null;
+  onHighlight: (key: string) => void;
+  setRowRef: (key: string, element: HTMLButtonElement | null) => void;
 }) {
   const hasSelectedModel = group.models.some((model) => model.isSelected);
 
@@ -241,12 +356,17 @@ function ModelPickerGroup({
           && group.kind !== currentKind;
 
         const nameParts = splitProviderDisplayName(model.displayName);
+        const rowKey = modelRowKey(group.kind, model.modelId);
+        const isHighlighted = highlightedKey === rowKey;
 
         return (
           <PopoverMenuItem
             key={model.modelId}
+            ref={(element: HTMLButtonElement | null) => setRowRef(rowKey, element)}
             data-model-option={model.modelId}
             data-model-selected={model.isSelected ? "true" : "false"}
+            aria-selected={isHighlighted}
+            onMouseEnter={() => onHighlight(rowKey)}
             icon={<ProviderIcon kind={group.kind} className="size-3 shrink-0 text-muted-foreground" />}
             label={(
               <span className="flex items-center gap-1.5">
@@ -266,7 +386,13 @@ function ModelPickerGroup({
               </span>
             )}
             labelClassName="text-composer"
-            className={`px-2.5 py-2 ${model.isSelected ? "bg-popover-accent" : ""}`}
+            className={`px-2.5 py-2 ${
+              model.isSelected
+                ? "bg-popover-accent"
+                : isHighlighted
+                  ? "bg-list-hover"
+                  : ""
+            }`}
             onClick={() => onSelect({ kind: group.kind, modelId: model.modelId })}
           />
         );

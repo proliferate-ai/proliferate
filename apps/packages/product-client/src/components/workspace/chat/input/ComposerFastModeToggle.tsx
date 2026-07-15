@@ -22,34 +22,46 @@ export function ComposerFastModeToggle({ control }: ComposerFastModeToggleProps)
     selectedOption?.description,
   );
 
-  return (
-    <Tooltip content={tooltip}>
-      <ComposerControlButton
-        iconOnly
-        disabled={!control.settable || !nextValue}
-        active={!!control.isEnabled}
-        className={control.isEnabled ? "bg-[var(--color-composer-control-hover)]" : ""}
-        icon={
-          <Zap
-            className={`size-3.5 transition-[color,fill,opacity] ${
-              control.isEnabled
-                ? "fill-current stroke-none opacity-100"
-                : "fill-none stroke-current stroke-[1.5] text-[color:var(--color-composer-control-muted-foreground)] opacity-100"
-            }`}
-          />
+  // The pending indicator renders as a sibling, never inside the fixed-width
+  // icon-only button: a trailing node in that box fights `justify-center` and
+  // visibly shoves the zap glyph sideways while a change is queued (the
+  // reasoning bars already follow this sibling pattern).
+  const toggle = (
+    <ComposerControlButton
+      iconOnly
+      disabled={!control.settable || !nextValue}
+      active={!!control.isEnabled}
+      className={control.isEnabled ? "bg-[var(--color-composer-control-hover)]" : ""}
+      icon={
+        <Zap
+          className={`size-3.5 transition-[color,fill,opacity] ${
+            control.isEnabled
+              ? "fill-current stroke-none opacity-100"
+              : "fill-none stroke-current stroke-[1.5] text-[color:var(--color-composer-control-muted-foreground)] opacity-100"
+          }`}
+        />
+      }
+      label="Fast"
+      aria-label={tooltip}
+      title={tooltip}
+      onClick={() => {
+        if (nextValue) {
+          control.onSelect(nextValue);
         }
-        label="Fast"
-        trailing={control.pendingState
-          ? <PendingConfigIndicator pendingState={control.pendingState} />
-          : null}
-        aria-label={tooltip}
-        title={tooltip}
-        onClick={() => {
-          if (nextValue) {
-            control.onSelect(nextValue);
-          }
-        }}
-      />
-    </Tooltip>
+      }}
+    />
   );
+
+  if (control.pendingState) {
+    return (
+      <Tooltip content={tooltip}>
+        <span className="inline-flex items-center gap-1">
+          {toggle}
+          <PendingConfigIndicator pendingState={control.pendingState} />
+        </span>
+      </Tooltip>
+    );
+  }
+
+  return <Tooltip content={tooltip}>{toggle}</Tooltip>;
 }

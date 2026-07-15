@@ -124,6 +124,92 @@ describe("buildLaunchControlDescriptors mode scoping", () => {
   });
 });
 
+describe("buildLaunchControlDescriptors tuning-control scoping", () => {
+  const preferences = {
+    defaultSessionModeByAgentKind: {},
+    defaultLiveSessionControlValuesByAgentKind: {},
+  };
+
+  it("drops fast_mode when the selected model's controls matrix has no fast_mode entry", () => {
+    // Regression: sonnet carries no `fast_mode` in its per-model matrix, but
+    // the agent-level claude launch controls list one. Rendering it produced a
+    // clickable toggle the session could never honour.
+    const controls = buildLaunchControlDescriptors({
+      selection: { kind: "claude", modelId: "sonnet" },
+      launchAgents: [
+        {
+          kind: "claude",
+          launchControls: [
+            control("effort", "Effort", "medium"),
+            control("fast_mode", "Fast Mode", "off"),
+          ],
+          models: [
+            {
+              id: "sonnet",
+              tuningControlValues: { effort: ["medium", "high"] },
+            },
+          ],
+        },
+      ],
+      preferences,
+      pendingConfigChanges: null,
+      onSelect: () => {},
+    });
+
+    expect(controls.map((candidate) => candidate.key)).toEqual(["effort"]);
+  });
+
+  it("scopes effort values to the model's vocabulary and ignores an unsupported persisted preference", () => {
+    const [effort] = buildLaunchControlDescriptors({
+      selection: { kind: "claude", modelId: "sonnet" },
+      launchAgents: [
+        {
+          kind: "claude",
+          launchControls: [control("effort", "Effort", "medium")],
+          models: [
+            {
+              id: "sonnet",
+              tuningControlValues: { effort: ["medium", "high"], fast_mode: ["off", "on"] },
+            },
+          ],
+        },
+      ],
+      preferences: {
+        defaultSessionModeByAgentKind: {},
+        // `off` exists in the agent-level vocabulary but not in the model's
+        // scoped effort list — it must not be selected.
+        defaultLiveSessionControlValuesByAgentKind: { claude: { effort: "off" } },
+      },
+      pendingConfigChanges: null,
+      onSelect: () => {},
+    });
+
+    expect(effort?.options.map((option) => option.value)).toEqual(["medium", "high"]);
+    expect(effort?.options.find((option) => option.selected)?.value).toBe("medium");
+  });
+
+  it("keeps agent-level tuning controls unscoped when the model has no controls matrix", () => {
+    const controls = buildLaunchControlDescriptors({
+      selection: { kind: "claude", modelId: "sonnet" },
+      launchAgents: [
+        {
+          kind: "claude",
+          launchControls: [
+            control("effort", "Effort", "medium"),
+            control("fast_mode", "Fast Mode", "off"),
+          ],
+          models: [{ id: "sonnet", tuningControlValues: null }],
+        },
+      ],
+      preferences,
+      pendingConfigChanges: null,
+      onSelect: () => {},
+    });
+
+    expect(controls.map((candidate) => candidate.key)).toEqual(["effort", "fast_mode"]);
+  });
+});
+
 describe("buildLaunchControlDescriptors", () => {
   it("builds descriptors from agent launch controls", () => {
     const controls = buildLaunchControlDescriptors({
