@@ -106,6 +106,49 @@ describe("resolveChatInputAvailability", () => {
     });
   });
 
+  it("keeps a ready workspace composer queueable when its projected session launch fails", () => {
+    expect(resolveChatInputAvailability({
+      selectedWorkspaceId: "cloud:workspace-1",
+      isCloudWorkspaceSelected: true,
+      connectionState: "healthy",
+      selectedCloudWorkspaceStatus: "ready",
+      selectedCloudWorkspaceActionBlockReason: null,
+      selectedCloudRuntimePhase: "ready",
+      selectedCloudRuntimeActionBlockReason: null,
+      activeSessionId: "client-session:claude:1",
+      isConfiguredLaunchLoading: false,
+      hasReadyConfiguredLaunch: false,
+      configuredLaunchDisabledReason: "agent 'claude' is not ready (status: LoginRequired)",
+      pendingWorkspaceEntry: null,
+    })).toEqual({
+      isDisabled: false,
+      disabledReason: null,
+      areRuntimeControlsDisabled: false,
+      selectedWorkspaceKind: "cloud",
+    });
+  });
+
+  it("still blocks a new session when no configured launch is ready", () => {
+    expect(resolveChatInputAvailability({
+      selectedWorkspaceId: "cloud:workspace-1",
+      isCloudWorkspaceSelected: true,
+      connectionState: "healthy",
+      selectedCloudWorkspaceStatus: "ready",
+      selectedCloudWorkspaceActionBlockReason: null,
+      selectedCloudRuntimePhase: "ready",
+      selectedCloudRuntimeActionBlockReason: null,
+      activeSessionId: null,
+      isConfiguredLaunchLoading: false,
+      hasReadyConfiguredLaunch: false,
+      configuredLaunchDisabledReason: "Choose a ready agent.",
+      pendingWorkspaceEntry: null,
+    })).toMatchObject({
+      isDisabled: true,
+      disabledReason: "Choose a ready agent.",
+      areRuntimeControlsDisabled: false,
+    });
+  });
+
   it("keeps pending approval, user-input, and MCP elicitation as chat blockers", () => {
     const base = {
       selectedWorkspaceId: "workspace-1",
