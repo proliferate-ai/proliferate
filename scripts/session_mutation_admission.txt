@@ -116,3 +116,4 @@ http_auth::push_revoked_jtis workspace-scoped auth revocation push
 # ── workflow-plane (the controller side itself, not a foreign mutation) ──
 workflow_runs::put_workflow_run workflow-plane workflow acceptance/execution
 workflow_runs::cancel_workflow_run workflow-plane workflow cancel; acquires the session permit internally
+workflow_workspaces::put_workflow_run_workspace workflow-plane workflow workspace materialization; creates an isolated workspace, no session controller exists yet

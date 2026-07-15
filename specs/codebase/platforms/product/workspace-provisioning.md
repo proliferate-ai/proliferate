@@ -4,6 +4,11 @@ This platform is the current read path for configuring a cloud repository and
 creating a Cloud product workspace backed by an AnyHarness worktree. Cloud
 owns the product row; AnyHarness owns runtime workspace and session truth.
 
+Workflow runs do not use this Cloud provisioning flow. Deterministic,
+idempotent placement of an isolated AnyHarness workspace for a Workflow run UUID
+is a separate purpose-built API — see
+[`../../systems/product/workflows/workspace-placement.md`](../../systems/product/workflows/workspace-placement.md).
+
 ## Mental Model
 
 ```text

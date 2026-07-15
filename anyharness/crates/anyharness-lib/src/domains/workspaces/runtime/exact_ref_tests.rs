@@ -3,8 +3,8 @@
 
 use std::path::Path;
 
-use super::exact_ref::ExactRefOutcome;
-use super::test_support::{git_stdout, init_repo, make_runtime, TempDirGuard};
+use super::exact_ref::{resolve_requested_commit, ExactRefOutcome};
+use super::test_support::{git_stdout, init_repo, make_runtime, run_git, TempDirGuard};
 use crate::persistence::Db;
 
 /// A repo root registered from a real on-disk main checkout, with `home` chosen
@@ -44,6 +44,19 @@ fn setup(prefix: &str) -> Fixture {
         repo_root_id: resolution.repo_root.id,
         head_sha,
     }
+}
+
+#[test]
+fn resolves_dash_prefixed_ref_without_option_injection() {
+    let fx = setup("exact-ref-option-boundary");
+    run_git(
+        fx._source.path(),
+        ["update-ref", "refs/heads/--workflow-base", &fx.head_sha],
+    );
+
+    let resolved = resolve_requested_commit(fx._source.path(), "--workflow-base")
+        .expect("dash-prefixed ref must be treated as a revision, not an option");
+    assert_eq!(resolved, fx.head_sha);
 }
 
 #[test]

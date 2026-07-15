@@ -30,7 +30,7 @@ use crate::domains::workflows::runtime::WorkflowPutSuccess;
         (status = 400, description = "Invalid ID, definition, arguments, or rendered prompt", body = anyharness_contract::v1::ProblemDetails),
         (status = 403, description = "Direct-attach token is outside its workspace scope", body = anyharness_contract::v1::ProblemDetails),
         (status = 404, description = "Workspace not found", body = anyharness_contract::v1::ProblemDetails),
-        (status = 409, description = "Same ID with different invocation, or workspace mutation blocked", body = anyharness_contract::v1::ProblemDetails),
+        (status = 409, description = "Same ID with different invocation, workspace mutation blocked, or a schema-v2 workflow-workspace binding conflict (workflow_workspace_not_ready when this run's materialization is not ready; workflow_workspace_mismatch when the ready materialization's workspace differs from the request)", body = anyharness_contract::v1::ProblemDetails),
         (status = 422, description = "Portable target cannot be resolved", body = anyharness_contract::v1::ProblemDetails),
         (status = 500, description = "Acceptance storage failure; no committed run or step", body = anyharness_contract::v1::ProblemDetails),
     ),

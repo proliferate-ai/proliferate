@@ -79,9 +79,17 @@ Acceptance requires one real prompt to complete while proving:
 
 ### 2.2 Explicit non-goals
 
+Workspace creation and scratch/worktree placement are non-goals *of this run
+document*. They are now owned by a separate, purpose-built API described in
+[`workspace-placement.md`](workspace-placement.md): placement materializes an
+isolated workspace for a run UUID before the run, and schema-version-2 run
+acceptance carries a narrow guard binding the shared UUID to that workspace.
+Run execution itself still creates no workspace.
+
 - creating, initializing, registering, renaming, deleting, or claiming a
-  workspace;
-- scratch workspaces, cloning, repository selection, or worktrees;
+  workspace (owned by placement, not run execution);
+- scratch workspaces, cloning, repository selection, or worktrees (owned by
+  placement, not run execution);
 - existing-session takeover or exclusive workspace access;
 - more than one stage or prompt step;
 - goals, cancellation APIs, or cancellation recovery;
@@ -463,7 +471,10 @@ pending  | running step -> failed(runtime_restarted)
   workflows.
 - The created session and transcript use existing retention behavior.
 - Stored correlation identifiers remain on workflow rows.
-- There is no scratch or cleanup behavior.
+- Run execution performs no scratch or cleanup behavior. Deterministic scratch
+  and repository-worktree *placement* (before the run) is owned separately by
+  [`workspace-placement.md`](workspace-placement.md); it also adds no cleanup or
+  automatic deletion.
 
 ## 7. Engineering structure
 

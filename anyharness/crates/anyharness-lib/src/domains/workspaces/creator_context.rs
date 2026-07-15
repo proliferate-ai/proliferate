@@ -37,6 +37,29 @@ pub enum WorkspaceCreatorContext {
         #[serde(skip_serializing_if = "Option::is_none")]
         label: Option<String>,
     },
+    /// An isolated workspace materialized for one Workflow run. Machine
+    /// provenance: it both names the owning run and excludes the workspace from
+    /// generic worktree retention (spec `workflow-workspace-placement`).
+    Workflow {
+        #[serde(rename = "runId")]
+        run_id: String,
+    },
+}
+
+impl WorkspaceCreatorContext {
+    /// Whether this workspace was created for a Workflow run. Generic worktree
+    /// retention excludes these until a Workflow cleanup policy is approved.
+    pub fn is_workflow(&self) -> bool {
+        matches!(self, Self::Workflow { .. })
+    }
+
+    /// The owning Workflow run id, when this is Workflow provenance.
+    pub fn workflow_run_id(&self) -> Option<&str> {
+        match self {
+            Self::Workflow { run_id } => Some(run_id.as_str()),
+            _ => None,
+        }
+    }
 }
 
 impl WorkspaceCreatorContext {
@@ -65,6 +88,7 @@ impl WorkspaceCreatorContext {
                 source_workspace_id,
                 label,
             },
+            v1::WorkspaceCreatorContext::Workflow { run_id } => Self::Workflow { run_id },
         }
     }
 
@@ -94,6 +118,9 @@ impl WorkspaceCreatorContext {
                 session_link_id: session_link_id.clone(),
                 source_workspace_id: source_workspace_id.clone(),
                 label: label.clone(),
+            },
+            Self::Workflow { run_id } => v1::WorkspaceCreatorContext::Workflow {
+                run_id: run_id.clone(),
             },
         }
     }

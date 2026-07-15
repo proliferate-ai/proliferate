@@ -8,6 +8,7 @@ pub mod diff_files;
 mod diff_support;
 pub mod push;
 pub mod revert_patches;
+pub mod scratch;
 pub mod staging;
 pub mod status;
 mod status_operation;

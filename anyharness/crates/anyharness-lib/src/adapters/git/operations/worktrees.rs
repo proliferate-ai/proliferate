@@ -63,6 +63,68 @@ pub fn create_worktree(
     Ok(())
 }
 
+/// Create a linked worktree on a new branch at an exact base OID for a Workflow
+/// placement. This is the secret-safe seam required by the frozen placement
+/// failure contract: on failure it logs and returns a correlation-only message
+/// (`git worktree add failed at <target>`) — never raw Git stderr, which the
+/// contract excludes from stored/logged failure detail. Command output is still
+/// available on the operator's terminal for interactive debugging but never
+/// crosses into an error string, the materialization row, or the HTTP surface.
+pub fn create_workflow_worktree(
+    source_repo_root: &str,
+    target_path: &str,
+    new_branch: &str,
+    base_oid: &str,
+) -> anyhow::Result<()> {
+    let started = Instant::now();
+    tracing::info!(
+        target_path = %target_path,
+        new_branch = %new_branch,
+        "workflow.worktree.create.start"
+    );
+    let output = Command::new("git")
+        .args([
+            "worktree",
+            "add",
+            "-b",
+            new_branch,
+            "--end-of-options",
+            target_path,
+            base_oid,
+        ])
+        .current_dir(source_repo_root)
+        .output()
+        .map_err(|_error| {
+            tracing::warn!(
+                target_path = %target_path,
+                new_branch = %new_branch,
+                elapsed_ms = started.elapsed().as_millis(),
+                "workflow.worktree.create.failed_to_spawn"
+            );
+            anyhow::anyhow!("git worktree add could not be spawned")
+        })?;
+
+    if !output.status.success() {
+        // Deliberately DO NOT surface stderr: the frozen contract excludes raw
+        // Git stderr from stored/logged failure detail.
+        tracing::warn!(
+            target_path = %target_path,
+            new_branch = %new_branch,
+            elapsed_ms = started.elapsed().as_millis(),
+            exit_code = output.status.code(),
+            "workflow.worktree.create.failed"
+        );
+        anyhow::bail!("git worktree add failed at {target_path}");
+    }
+    tracing::info!(
+        target_path = %target_path,
+        new_branch = %new_branch,
+        elapsed_ms = started.elapsed().as_millis(),
+        "workflow.worktree.create.success"
+    );
+    Ok(())
+}
+
 pub fn create_detached_worktree(
     source_repo_root: &str,
     target_path: &str,

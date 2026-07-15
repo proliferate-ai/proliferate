@@ -15,8 +15,9 @@ use super::http::{
     agent_gateway_catalog, agents, auth as http_auth, catalogs, cowork, files, git, goals, health,
     hosting, loops, mobility, plans, processes, product_mcp, replay, repo_roots, reviews, sessions,
     sessions_config, sessions_events, sessions_fork, sessions_interactions, sessions_lifecycle,
-    sessions_prompt, sessions_resume, subagents, terminals, workflow_runs, workspaces,
-    workspaces_lifecycle, workspaces_purge, workspaces_setup, workspaces_worktrees, worktrees,
+    sessions_prompt, sessions_resume, subagents, terminals, workflow_runs, workflow_workspaces,
+    workspaces, workspaces_lifecycle, workspaces_purge, workspaces_setup, workspaces_worktrees,
+    worktrees,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::activity as ws_activity;
@@ -458,6 +459,12 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/workflow-runs/{run_id}/cancel",
             post(workflow_runs::cancel_workflow_run),
+        )
+        // Isolated Workflow workspace placement (materialization plane)
+        .route(
+            "/workflow-run-workspaces/{run_id}",
+            put(workflow_workspaces::put_workflow_run_workspace)
+                .get(workflow_workspaces::get_workflow_run_workspace),
         )
         // Loops (native crons + emulated scheduler)
         .route(

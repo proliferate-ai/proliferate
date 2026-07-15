@@ -44,7 +44,12 @@ pub struct ExactRefWorkspace {
 pub(crate) fn resolve_requested_commit(repo_root: &Path, base_sha: &str) -> anyhow::Result<String> {
     GitService::stdout_result(
         repo_root,
-        &["rev-parse", "--verify", &format!("{base_sha}^{{commit}}")],
+        &[
+            "rev-parse",
+            "--verify",
+            "--end-of-options",
+            &format!("{base_sha}^{{commit}}"),
+        ],
     )
 }
 

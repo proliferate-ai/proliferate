@@ -8,7 +8,7 @@
 mod runs;
 mod steps;
 
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension};
 
 use crate::domains::workflows::model::{
     WorkflowInterruptionCode, WorkflowRunFailureCode, WorkflowRunRecord, WorkflowRunStepRecord,
@@ -29,6 +29,22 @@ pub enum StoreAcceptOutcome {
     },
     /// The run existed with a different `invocation_json`; nothing changed.
     Conflict,
+}
+
+/// Schema-v2 acceptance also atomically binds the run's `workspace_id` to any
+/// same-ID workflow materialization. Both tables share this store's `Db`; its
+/// transaction mutex is held through commit, so the reciprocal placement
+/// acceptance check cannot race this decision.
+#[derive(Debug)]
+pub enum StoreAcceptV2Outcome {
+    Created,
+    ExactReplay {
+        run: WorkflowRunRecord,
+        steps: Vec<WorkflowRunStepRecord>,
+    },
+    Conflict,
+    WorkspaceNotReady,
+    WorkspaceMismatch,
 }
 
 /// Result of the atomic cancel-intent transaction (spec
@@ -118,6 +134,55 @@ impl WorkflowRunStore {
                 }
                 Some(_) => Ok(StoreAcceptOutcome::Conflict),
             })
+    }
+
+    /// Accept a schema-v2 run and its pending step only when any same-ID
+    /// workflow materialization is durably ready and bound to the exact same
+    /// workspace. The check and both inserts are one serialized SQLite
+    /// transaction; the HTTP preflight is only an early typed-error seam.
+    pub fn accept_v2(
+        &self,
+        run: &WorkflowRunRecord,
+        step: &WorkflowRunStepRecord,
+    ) -> anyhow::Result<StoreAcceptV2Outcome> {
+        self.db.with_tx(|conn| {
+            match runs::find_run(conn, &run.id)? {
+                Some(existing)
+                    if existing.schema_version == run.schema_version
+                        && existing.invocation_json == run.invocation_json =>
+                {
+                    let steps = steps::find_steps_for_run(conn, &existing.id)?;
+                    return Ok(StoreAcceptV2Outcome::ExactReplay {
+                        run: existing,
+                        steps,
+                    });
+                }
+                Some(_) => return Ok(StoreAcceptV2Outcome::Conflict),
+                None => {}
+            }
+
+            let materialization = conn
+                .query_row(
+                    "SELECT status, workspace_id
+                     FROM workflow_workspace_materializations
+                     WHERE run_id = ?1",
+                    [&run.id],
+                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?)),
+                )
+                .optional()?;
+            if let Some((status, workspace_id)) = materialization {
+                if status != "ready" {
+                    return Ok(StoreAcceptV2Outcome::WorkspaceNotReady);
+                }
+                if workspace_id.as_deref() != Some(run.workspace_id.as_str()) {
+                    return Ok(StoreAcceptV2Outcome::WorkspaceMismatch);
+                }
+            }
+
+            runs::insert_run(conn, run)?;
+            steps::insert_step(conn, step)?;
+            Ok(StoreAcceptV2Outcome::Created)
+        })
     }
 
     /// The durable run and its steps, or `None` when the run is unknown.
