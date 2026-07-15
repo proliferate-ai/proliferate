@@ -39,7 +39,13 @@ const PANE_WIDTHS = [320, 380, 480, 640] as const;
 // never backdrop-blur (blur across many sticky headers starves the WKWebView
 // compositor).
 const SECTION_STYLE = {
-  backgroundColor: "var(--color-diff-surface)",
+  // Unchanged lines sit on the plain pane background — only +/- rows carry a
+  // tint (Pablo ruling, diverges from Codex's 94% context mix). In mono dark
+  // --color-diff-surface is itself the light context mix; the dominant dark
+  // everything else uses is --color-background.
+  backgroundColor: "var(--color-background)",
+  "--diffs-bg-context-override": "var(--color-background)",
+  "--codex-diffs-context-number": "var(--color-background)",
 } as CSSProperties;
 const STICKY_HEADER_CLASS =
   "sticky top-0 z-10 cursor-pointer select-none bg-[color-mix(in_srgb,var(--color-diff-sidebar-file-header-surface)_97%,transparent)]";
@@ -367,24 +373,31 @@ function ReviewFileSection({
         className={STICKY_HEADER_CLASS}
       >
         <div className="group/diff-header @container/diff-header flex min-h-8 items-center gap-2 px-3 py-1 text-chat leading-[var(--text-chat--line-height)] hover:bg-[var(--color-diff-sidebar-file-header-hover-surface)]">
-          <FileTreeEntryIcon
-            name={name}
-            path={file.path}
-            kind="file"
-            className="size-4 shrink-0"
-          />
-          <span
-            className="min-w-0 flex-1 truncate [direction:rtl]"
-            title={file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}
-          >
-            <span className="min-w-0 truncate [direction:ltr] [unicode-bidi:plaintext] @xs/diff-header:hidden">
-              {name}
+          {/* Codex path recipe (mirrors FileDiffCard): the GROWING flex item
+              is this container; the name span inside is content-sized, so
+              every row's name is left-anchored beside the icon. The name's
+              [direction:rtl] front-truncates overflow so the basename (the
+              tail) always stays visible. */}
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <FileTreeEntryIcon
+              name={name}
+              path={file.path}
+              kind="file"
+              className="size-4 shrink-0"
+            />
+            <span
+              className="min-w-0 truncate [direction:rtl]"
+              title={file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}
+            >
+              <span className="min-w-0 truncate [direction:ltr] [unicode-bidi:plaintext] @xs/diff-header:hidden">
+                {name}
+              </span>
+              <span className="hidden min-w-0 truncate [direction:ltr] [unicode-bidi:plaintext] @xs/diff-header:inline">
+                <span className="text-sidebar-muted-foreground">{dir}</span>
+                <span className="text-sidebar-foreground">{name}</span>
+              </span>
             </span>
-            <span className="hidden min-w-0 truncate [direction:ltr] [unicode-bidi:plaintext] @xs/diff-header:inline">
-              <span className="text-sidebar-muted-foreground">{dir}</span>
-              <span className="text-sidebar-foreground">{name}</span>
-            </span>
-          </span>
+          </div>
           <span className="flex shrink-0 items-center gap-1.5">
             {(file.status === "deleted" || file.status === "renamed") && (
               <span className="rounded bg-sidebar-accent px-1 py-px text-[length:var(--text-ui-sm)] leading-[var(--text-ui-sm--line-height)] text-sidebar-muted-foreground">
@@ -443,6 +456,7 @@ function ReviewFileSection({
               patch={file.patch}
               filePath={file.path}
               variant="chat"
+              chainVerticalWheel
             />
           ) : (
             <p className="px-3 py-2 text-[length:var(--text-ui)] text-sidebar-muted-foreground">
