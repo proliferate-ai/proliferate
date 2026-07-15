@@ -2346,6 +2346,49 @@ test/product-host-test-utils.tsx	move	apps/packages/product-client/src/test/prod
 test/product-storage-test-utils.ts	move	apps/packages/product-client/src/test/product-storage-test-utils.ts	product module; default move per ledger rules; no host-retained runtime import
 ```
 
+## Amendments (ratified during the move)
+
+The rows above are the binding classification and are **not** rewritten. This
+section records reclassifications the implementation owner ratified during the
+move (round-3 ruling **G6**), each with the evidence that made the original
+`retain` unsafe or stale. `check-product-client-move-ledger-postmove.py` reads
+the `` ```ledger-amendments `` block below and applies each `src -> new_class`
+override before checking, so the completion proof tracks these owner-blessed
+relocations without silently editing the binding rows.
+
+Every amendment below is `retain -> move`. The evidence is uniform: post-#1168
+each of these modules is a **pure `host.desktop.*` / product-facade consumer**
+(local agent credentials, native shell/editors, workspace scratch, the updater
+cluster, and macOS window chrome), not a raw-Tauri or host-transport importer.
+Their original `retain` was the coarse `hooks/access/tauri/**` bucket default
+from the D1g brief; the actual runtime access is a typed bridge port, so the
+product tree owns them and Desktop keeps only the thin bridge adapter. The
+updater cluster additionally routes its module-level scheduler telemetry and
+its `lastCheckedAt` persistence through injected product facades (round-3 **G1**)
+with byte-identical event names, payloads, intervals, and storage keys;
+`use-window-actions` calls the new `nativeUi.applyMacosWindowChrome` bridge port
+(round-3 **G5**). Their tests move with them and run under the package vitest
+lane. The raw-Tauri `use-update-restart-watcher` (854/855) stays `retain`.
+
+```ledger-amendments
+hooks/access/tauri/app/query-keys.ts	move	G1 updater cluster: app-version query key; consumed only by the moved use-app-version
+hooks/access/tauri/app/use-app-version.ts	move	G1 updater cluster: reads host.desktop.updater.getVersion via bridge + product telemetry facade
+hooks/access/tauri/credentials/query-keys.ts	move	pure host.desktop.localCredentials consumer (F3 relocation); retain was a stale bucket default
+hooks/access/tauri/credentials/use-local-agent-credentials.test.tsx	move	test of the relocated localCredentials hook; runs in the package vitest lane
+hooks/access/tauri/credentials/use-local-agent-credentials.ts	move	pure host.desktop.localCredentials consumer (F3 relocation); retain was a stale bucket default
+hooks/access/tauri/shell/query-keys.ts	move	pure host.desktop.files consumer (F3 relocation); retain was a stale bucket default
+hooks/access/tauri/shell/use-available-editors.ts	move	pure host.desktop.files consumer (F3 relocation); retain was a stale bucket default
+hooks/access/tauri/updater-dev-mock.test.ts	move	G1 updater cluster: dev-only mock test; runs in the package vitest lane
+hooks/access/tauri/updater-dev-mock.ts	move	G1 updater cluster: dev-only localStorage/import.meta.env mock, no host transport
+hooks/access/tauri/use-updater.test.ts	move	G1 updater cluster: use-updater test; runs in the package vitest lane
+hooks/access/tauri/use-updater.ts	move	G1 updater cluster: host.desktop.updater bridge consumer + injected telemetry/storage facades
+hooks/access/tauri/use-window-actions.ts	move	G5 window chrome: calls the new nativeUi.applyMacosWindowChrome bridge port
+hooks/access/tauri/workspace-scratch/query-keys.ts	move	pure host.desktop.scratch consumer (F3 relocation); retain was a stale bucket default
+hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad-mutations.ts	move	pure host.desktop.scratch consumer (F3 relocation); retain was a stale bucket default
+hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad.test.tsx	move	test of the relocated scratch hook; runs in the package vitest lane
+hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad.ts	move	pure host.desktop.scratch consumer (F3 relocation); retain was a stale bucket default
+```
+
 ## Codemod evidence (S5)
 
 `scripts/migrate-desktop-product-client.mjs` is the ledger-driven import codemod.
