@@ -33,6 +33,7 @@ import {
   type PublicIpResolver,
 } from "./ec2.js";
 import { runSubdomainLabel, upsertRoute53ARecord, type Route53Exec } from "./dns.js";
+import { SELFHOST_DEPLOY_DIR } from "./install.js";
 import {
   SelfHostCleanupStack,
   type SelfHostCleanupResourceKind,
@@ -198,8 +199,14 @@ export interface SelfHostWorldDeps {
   ledgerMirror?: CleanupLedgerMirror;
 }
 
-/** Remote layout the shipped deploy bundle extracts into (matches selfhost-box.sh). */
-const REMOTE_DEPLOY_DIR = "~/proliferate/deploy";
+/**
+ * Where the shipped `install.sh` installs the deploy dir on the box
+ * (`$INSTALL_ROOT/server/deploy`, default `/opt/proliferate/server/deploy`).
+ * Single-sourced from `install.ts` so the control handle (setup-token read,
+ * restart, on-box digest assertion) targets the exact directory the installer
+ * created — a `~/proliferate/deploy` guess does not exist on the box.
+ */
+const REMOTE_DEPLOY_DIR = SELFHOST_DEPLOY_DIR;
 /**
  * The compose invocation the deploy scripts use, run over SSH. Both
  * `PROLIFERATE_ENV_FILE` and `--env-file` are needed because the production
