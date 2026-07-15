@@ -1,4 +1,7 @@
 import { useState, type ReactNode } from "react";
+import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
+import { Label } from "@proliferate/ui/primitives/Label";
+import { Select } from "@proliferate/ui/primitives/Select";
 import {
   ProductSidebarBrandRow,
   ProductSidebarSectionHeader,
@@ -292,26 +295,27 @@ function FullSidebarPane() {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-4 text-ui-sm text-muted-foreground">
-        <label className="flex items-center gap-1.5">
+        <Label className="mb-0 flex items-center gap-1.5 text-ui-sm">
           Width
-          <select
-            className="rounded border border-border bg-card px-1 py-0.5 text-ui-sm text-foreground"
-            value={width}
-            onChange={(event) => setWidth(Number(event.target.value))}
-          >
-            {SIDEBAR_WIDTHS.map((value) => (
-              <option key={value} value={value}>{value}px</option>
-            ))}
-          </select>
-        </label>
-        <label className="flex items-center gap-1.5">
-          <input
-            type="checkbox"
+          <span className="w-24">
+            <Select
+              className="h-6 px-1 py-0 pr-7 text-ui-sm"
+              value={width}
+              onChange={(event) => setWidth(Number(event.target.value))}
+            >
+              {SIDEBAR_WIDTHS.map((value) => (
+                <option key={value} value={value}>{value}px</option>
+              ))}
+            </Select>
+          </span>
+        </Label>
+        <Label className="mb-0 flex items-center gap-1.5 text-ui-sm">
+          <Checkbox
             checked={shortcutReveal}
-            onChange={(event) => setShortcutReveal(event.target.checked)}
+            onCheckedChange={(checked) => setShortcutReveal(checked === true)}
           />
           Shortcut reveal
-        </label>
+        </Label>
       </div>
 
       <div

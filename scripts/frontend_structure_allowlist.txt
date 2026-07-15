@@ -26,3 +26,6 @@ apps/packages/product-domain/src/chats/transcript/transcript-row-model.ts 946 tr
 apps/desktop/src/hooks/sessions/workflows/session-creation-materialization.ts 415 injected typed telemetry deps threaded from the calling hook; split deferred
 apps/desktop/src/hooks/sessions/workflows/session-replacement-tombstones.ts 408 async ProductStorage hydration added to the in-memory tombstone model
 apps/desktop/src/hooks/sessions/workflows/use-session-creation-actions.ts 406 product telemetry facade threading into session-creation workflows; split deferred
+apps/desktop/src/components/playground/WorkspaceStatusPlayground.tsx 450 status-card playground fixtures pending scenario-module split (#1202 debt repair)
+apps/desktop/src/lib/domain/preferences/appearance.ts 437 appearance preset model pending preset-catalog split (#1202 growth recorded in debt repair)
+apps/packages/product-ui/src/chat/transcript/VirtualizedTranscriptRowList.tsx 416 virtualized transcript list pending row-window split (recorded in debt repair)
