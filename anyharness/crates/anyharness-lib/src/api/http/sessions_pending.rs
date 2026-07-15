@@ -1,3 +1,5 @@
+use crate::api::http::access::admit_session_mutation;
+use crate::domains::sessions::admission::SessionMutationKind;
 use anyharness_contract::v1::{
     EditPendingPromptRequest, PromptInputBlock, ReorderPendingPromptsRequest, Session,
 };
@@ -25,6 +27,7 @@ use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
     ),
     request_body = anyharness_contract::v1::EditPendingPromptRequest,
     responses(
+        (status = 409, description = "Session execution is controlled by an active workflow run", body = anyharness_contract::v1::ProblemDetails),
         (status = 200, description = "Pending prompt updated", body = Session),
         (status = 404, description = "Session or pending prompt not found", body = anyharness_contract::v1::ProblemDetails),
     ),
@@ -37,6 +40,9 @@ pub async fn edit_pending_prompt(
     Json(req): Json<EditPendingPromptRequest>,
 ) -> Result<Json<Session>, ApiError> {
     assert_session_auth_scope(&state, &auth, &session_id)?;
+    let _admission_permit =
+        admit_session_mutation(&state, &session_id, SessionMutationKind::PendingPromptQueue)
+            .await?;
     let blocks = req.blocks.unwrap_or_else(|| {
         vec![PromptInputBlock::Text {
             text: req.text.unwrap_or_default(),
@@ -61,6 +67,7 @@ pub async fn edit_pending_prompt(
         ("seq" = i64, Path, description = "Stable queue-entry sequence identity"),
     ),
     responses(
+        (status = 409, description = "Session execution is controlled by an active workflow run", body = anyharness_contract::v1::ProblemDetails),
         (status = 200, description = "Pending prompt deleted", body = Session),
         (status = 404, description = "Session or pending prompt not found", body = anyharness_contract::v1::ProblemDetails),
     ),
@@ -72,6 +79,9 @@ pub async fn delete_pending_prompt(
     Path((session_id, seq)): Path<(String, i64)>,
 ) -> Result<Json<Session>, ApiError> {
     assert_session_auth_scope(&state, &auth, &session_id)?;
+    let _admission_permit =
+        admit_session_mutation(&state, &session_id, SessionMutationKind::PendingPromptQueue)
+            .await?;
     let _lease =
         acquire_session_operation_lease(&state, &session_id, WorkspaceOperationKind::SessionPrompt)
             .await?;
@@ -105,6 +115,9 @@ pub async fn reorder_pending_prompts(
     Json(req): Json<ReorderPendingPromptsRequest>,
 ) -> Result<Json<Session>, ApiError> {
     assert_session_auth_scope(&state, &auth, &session_id)?;
+    let _admission_permit =
+        admit_session_mutation(&state, &session_id, SessionMutationKind::PendingPromptQueue)
+            .await?;
     let _lease =
         acquire_session_operation_lease(&state, &session_id, WorkspaceOperationKind::SessionPrompt)
             .await?;
@@ -124,6 +137,7 @@ pub async fn reorder_pending_prompts(
         ("seq" = i64, Path, description = "Stable queue-entry sequence identity"),
     ),
     responses(
+        (status = 409, description = "Session execution is controlled by an active workflow run", body = anyharness_contract::v1::ProblemDetails),
         (status = 200, description = "Pending prompt promoted to run next", body = Session),
         (status = 404, description = "Session or pending prompt not found", body = anyharness_contract::v1::ProblemDetails),
     ),
@@ -135,6 +149,9 @@ pub async fn steer_pending_prompt(
     Path((session_id, seq)): Path<(String, i64)>,
 ) -> Result<Json<Session>, ApiError> {
     assert_session_auth_scope(&state, &auth, &session_id)?;
+    let _admission_permit =
+        admit_session_mutation(&state, &session_id, SessionMutationKind::PendingPromptQueue)
+            .await?;
     let _lease =
         acquire_session_operation_lease(&state, &session_id, WorkspaceOperationKind::SessionPrompt)
             .await?;

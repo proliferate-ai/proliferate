@@ -30,7 +30,26 @@ pub(super) const CUSTOM_FOREIGN_KEY_MIGRATIONS: &[(
         "0062_workflow_run_control",
         super::workflow_run_control_migration::migrate_workflow_run_control,
     ),
+    // Index-only, but registered here (ordered AFTER the 0062 rebuild) so a
+    // fresh database creates it on the rebuilt table instead of losing it to
+    // the rename-and-drop rebuild.
+    (
+        "0063_workflow_session_controller_uniqueness",
+        migrate_workflow_session_controller_uniqueness,
+    ),
 ];
+
+/// Spec 2b: at most one NONTERMINAL workflow run controls one session;
+/// historical terminal reuse stays allowed, so uniqueness is partial over the
+/// active statuses only.
+fn migrate_workflow_session_controller_uniqueness(tx: &Transaction<'_>) -> rusqlite::Result<()> {
+    tx.execute_batch(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_workflow_runs_active_session_controller
+         ON workflow_runs(session_id)
+         WHERE session_id IS NOT NULL
+           AND status NOT IN ('completed', 'failed', 'cancelled', 'interrupted')",
+    )
+}
 
 fn migrate_session_background_work_timestamps(tx: &Transaction<'_>) -> rusqlite::Result<()> {
     let columns = table_columns(tx, "session_background_work")?;

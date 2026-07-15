@@ -1,0 +1,113 @@
+# Session mutation admission classification (spec 2b, founder ruling 2).
+#
+# Format: module::fn class reason
+# Classes: fenced | derived-safe | read-like | cosmetic | creation |
+#          workspace-scoped | workflow-plane
+#
+# 'fenced' handlers must call an admit_* helper before their first side
+# effect (verified by check_session_mutation_admission.py). Every NEW
+# mutating route must be added here with a decided class — an unclassified
+# mutation path fails CI.
+
+# ── fenced: session execution mutations ──
+sessions_prompt::prompt_session fenced foreign prompt submission
+sessions_pending::edit_pending_prompt fenced pending prompt queue mutation
+sessions_pending::delete_pending_prompt fenced pending prompt queue mutation
+sessions_pending::reorder_pending_prompts fenced pending prompt queue mutation
+sessions_pending::steer_pending_prompt fenced pending prompt queue mutation
+sessions_config::set_session_config_option fenced model/mode/live config mutation
+sessions_lifecycle::cancel_session fenced public cancel; fence sits ABOVE the trusted workflow live-cancel seam (ruling 3)
+sessions_lifecycle::close_session fenced session close
+sessions_lifecycle::dismiss_session fenced session dismiss
+sessions_resume::resume_session fenced session resume
+sessions_fork::fork_session fenced session fork
+sessions_interactions::resolve_interaction fenced interaction resolution
+goals::set_session_goal fenced goal set
+goals::clear_session_goal fenced goal clear
+loops::set_session_loop fenced loop set
+loops::edit_session_loop fenced loop edit
+loops::clear_session_loops fenced loop clear (all)
+loops::clear_session_loop fenced loop clear (one)
+subagents::schedule_subagent_wake fenced subagent wake targeting the parent session
+replay::advance_replay_session fenced replay advance (replay sessions cannot be controlled; fenced per inventory)
+plans::approve_plan fenced plan decision mutates the owning session projection
+plans::reject_plan fenced plan decision mutates the owning session projection
+plans::handoff_plan fenced plan handoff before projection/file writes
+reviews::start_plan_review fenced review creation targeting the plan's parent session
+reviews::start_code_review fenced review creation targeting the request parent session
+reviews::retry_review_assignment fenced review mutation against the run's parent session
+reviews::stop_review fenced review mutation against the run's parent session
+reviews::send_review_feedback fenced review mutation against the run's parent session
+reviews::mark_review_revision_ready fenced review mutation against the run's parent session
+workspaces_purge::purge_workspace fenced fail-closed: holds sorted permits for every workspace session
+mobility::export_workspace_mobility_archive fenced fail-closed removal/detach: holds sorted permits for every workspace session
+
+# ── cosmetic (ruling 2: store-only, cannot affect actor execution) ──
+sessions_config::update_session_title cosmetic store-only title column write via service/title.rs
+
+# ── derived-safe (structurally unreachable for controlled sessions; see
+#    admission:derived-safe comments at the sites) ──
+sessions_lifecycle::restore_dismissed_session derived-safe controlled sessions cannot be dismissed, so restore cannot target one
+product_mcp::post_product_mcp_endpoint derived-safe workflow sessions are InternalOnly: product MCP is never provisioned for them (spec 2b)
+
+# ── creation (a controller cannot exist for a not-yet-created resource) ──
+sessions::create_session creation ordinary session creation (preselected-id seam is crate-internal)
+replay::create_replay_session creation replay session creation
+cowork::create_cowork_thread creation new cowork thread + fresh session
+workspaces::create_workspace creation new workspace
+workspaces_worktrees::create_worktree creation new worktree workspace
+terminals::create_terminal creation workspace terminal, not session execution
+
+# ── read-like (mutating verb, no session-execution effect) ──
+replay::export_replay_recording read-like exports a recording artifact
+mobility::preflight_workspace_mobility read-like preflight computation only
+sessions_interactions::reveal_mcp_elicitation_url read-like inspection action per spec allowed list
+repo_roots::resolve_repo_root read-like resolves/registers a repo root record
+workspaces::resolve_workspace read-like resolves a workspace record
+
+# ── workspace-scoped (workspace/infra mutations outside session execution) ──
+git::commit workspace-scoped workspace git operation
+git::push workspace-scoped workspace git operation
+git::rename_branch workspace-scoped workspace git operation
+git::revert_patches workspace-scoped workspace git operation
+git::stage_patch workspace-scoped workspace git operation
+git::stage_paths workspace-scoped workspace git operation
+git::unstage_patch workspace-scoped workspace git operation
+git::unstage_paths workspace-scoped workspace git operation
+files::create_entry workspace-scoped workspace file operation
+files::delete_entry workspace-scoped workspace file operation
+files::rename_entry workspace-scoped workspace file operation
+files::write_file workspace-scoped workspace file operation
+processes::run_command workspace-scoped workspace process execution
+hosting::create_pull_request workspace-scoped hosting PR creation
+terminals::delete_terminal workspace-scoped workspace terminal lifecycle
+terminals::resize_terminal workspace-scoped workspace terminal lifecycle
+terminals::start_terminal_command workspace-scoped workspace terminal lifecycle
+terminals::update_terminal_title workspace-scoped workspace terminal cosmetic
+workspaces::update_workspace_display_name workspace-scoped workspace cosmetic rename
+workspaces_lifecycle::retire_workspace workspace-scoped workspace retirement (existing retire preflight owns session checks)
+workspaces_lifecycle::retry_retire_cleanup workspace-scoped retirement cleanup retry
+workspaces_purge::retry_purge_workspace workspace-scoped purge retry of an already-admitted purge
+workspaces_setup::start_setup workspace-scoped workspace setup script
+workspaces_setup::rerun_setup workspace-scoped workspace setup script
+worktrees::prune_orphan_worktree workspace-scoped worktree hygiene
+worktrees::run_worktree_retention workspace-scoped worktree hygiene
+worktrees::update_worktree_retention_policy workspace-scoped worktree hygiene
+mobility::update_workspace_mobility_runtime_state workspace-scoped mobility state toggle, no session removal
+mobility::install_workspace_mobility_archive workspace-scoped installs NEW sessions from an archive
+mobility::destroy_workspace_mobility_source workspace-scoped post-install source cleanup
+repo_roots::prepare_repo_root_mobility_destination workspace-scoped mobility destination preparation
+cowork::enable_cowork workspace-scoped cowork enablement
+agents::install_agent workspace-scoped agent installer
+agents::reconcile_agents workspace-scoped agent installer
+agents::start_agent_login workspace-scoped agent auth flow
+agents::start_agent_login_terminal workspace-scoped agent auth flow
+agents::close_agent_login_terminal workspace-scoped agent auth flow
+agent_auth::put_agent_auth_state workspace-scoped agent auth state
+agent_gateway_catalog::refresh_gateway_models workspace-scoped catalog refresh
+catalogs::apply_agent_catalog workspace-scoped catalog apply
+http_auth::push_revoked_jtis workspace-scoped auth revocation push
+
+# ── workflow-plane (the controller side itself, not a foreign mutation) ──
+workflow_runs::put_workflow_run workflow-plane workflow acceptance/execution
+workflow_runs::cancel_workflow_run workflow-plane workflow cancel; acquires the session permit internally

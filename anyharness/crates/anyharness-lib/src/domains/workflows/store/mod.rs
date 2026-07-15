@@ -400,3 +400,24 @@ impl WorkflowRunStore {
         })
     }
 }
+
+impl WorkflowRunStore {
+    /// The id of the NONTERMINAL run bound to `session_id`, if any — the
+    /// durable controller truth for session mutation admission (spec 2b). The
+    /// partial unique index (`0063`) guarantees at most one.
+    pub fn find_active_controller_run(&self, session_id: &str) -> anyhow::Result<Option<String>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT id FROM workflow_runs
+                 WHERE session_id = ?1
+                   AND status NOT IN ('completed', 'failed', 'cancelled', 'interrupted')
+                 LIMIT 1",
+            )?;
+            let mut rows = stmt.query([session_id])?;
+            Ok(match rows.next()? {
+                Some(row) => Some(row.get(0)?),
+                None => None,
+            })
+        })
+    }
+}

@@ -1,3 +1,5 @@
+use crate::api::http::workspaces_purge::admit_all_workspace_sessions;
+use crate::domains::sessions::admission::SessionMutationKind;
 use anyharness_contract::v1::{
     DestroyWorkspaceMobilitySourceRequest, DestroyWorkspaceMobilitySourceResponse,
     ExportWorkspaceMobilityArchiveRequest, InstallWorkspaceMobilityArchiveRequest,
@@ -117,6 +119,7 @@ pub async fn update_workspace_mobility_runtime_state(
     params(("workspace_id" = String, Path, description = "Workspace ID")),
     request_body = ExportWorkspaceMobilityArchiveRequest,
     responses(
+        (status = 409, description = "Session execution is controlled by an active workflow run", body = anyharness_contract::v1::ProblemDetails),
         (status = 200, description = "Workspace mobility archive", body = WorkspaceMobilityArchive),
         (status = 404, description = "Workspace not found", body = anyharness_contract::v1::ProblemDetails),
     ),
@@ -127,6 +130,8 @@ pub async fn export_workspace_mobility_archive(
     Path(workspace_id): Path<String>,
     Json(req): Json<ExportWorkspaceMobilityArchiveRequest>,
 ) -> Result<Json<WorkspaceMobilityArchive>, ApiError> {
+    let _admission_permits =
+        admit_all_workspace_sessions(&state, &workspace_id, SessionMutationKind::Mobility).await?;
     let _operation = state
         .workspace_operation_gate
         .acquire_shared(&workspace_id, WorkspaceOperationKind::MobilityWrite)

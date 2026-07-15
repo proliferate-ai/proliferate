@@ -1,3 +1,5 @@
+use crate::api::http::access::admit_session_mutation;
+use crate::domains::sessions::admission::SessionMutationKind;
 use anyharness_contract::v1::{
     GetSessionLiveConfigResponse, Session, SetSessionConfigOptionRequest,
     SetSessionConfigOptionResponse, UpdateSessionTitleRequest,
@@ -76,6 +78,7 @@ pub async fn get_live_session_config(
     params(("session_id" = String, Path, description = "Session ID")),
     request_body = SetSessionConfigOptionRequest,
     responses(
+        (status = 409, description = "Session execution is controlled by an active workflow run", body = anyharness_contract::v1::ProblemDetails),
         (status = 200, description = "Session config option applied or queued", body = SetSessionConfigOptionResponse),
         (status = 400, description = "Invalid config option", body = anyharness_contract::v1::ProblemDetails),
         (status = 404, description = "Session not found", body = anyharness_contract::v1::ProblemDetails),
@@ -89,6 +92,8 @@ pub async fn set_session_config_option(
     Json(req): Json<SetSessionConfigOptionRequest>,
 ) -> Result<Json<SetSessionConfigOptionResponse>, ApiError> {
     assert_session_auth_scope(&state, &auth, &session_id)?;
+    let _admission_permit =
+        admit_session_mutation(&state, &session_id, SessionMutationKind::Config).await?;
     tracing::debug!(
         session_id = %session_id,
         config_id = %req.config_id,

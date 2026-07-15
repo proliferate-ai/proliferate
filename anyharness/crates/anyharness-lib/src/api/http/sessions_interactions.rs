@@ -1,3 +1,5 @@
+use crate::api::http::access::admit_session_mutation;
+use crate::domains::sessions::admission::SessionMutationKind;
 use anyharness_contract::v1::{InteractionDecision, ResolveInteractionRequest};
 use axum::{
     extract::{Path, State},
@@ -21,6 +23,7 @@ use crate::domains::sessions::runtime::{InteractionPermissionDecision, Resolutio
     ),
     request_body = anyharness_contract::v1::ResolveInteractionRequest,
     responses(
+        (status = 409, description = "Session execution is controlled by an active workflow run", body = anyharness_contract::v1::ProblemDetails),
         (status = 200, description = "Interaction resolved"),
         (status = 400, description = "Invalid interaction resolution", body = anyharness_contract::v1::ProblemDetails),
         (status = 404, description = "Not found", body = anyharness_contract::v1::ProblemDetails),
@@ -34,6 +37,12 @@ pub async fn resolve_interaction(
     Json(req): Json<ResolveInteractionRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     assert_session_auth_scope(&state, &auth, &session_id)?;
+    let _admission_permit = admit_session_mutation(
+        &state,
+        &session_id,
+        SessionMutationKind::InteractionResolution,
+    )
+    .await?;
     let resolution = resolve_interaction_input(req);
 
     state

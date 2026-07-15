@@ -522,6 +522,7 @@ impl CoworkRuntime {
         let durable_session = match self.session_runtime.create_durable_session(
             &worktree.workspace.id,
             agent_kind,
+            None,
             model_id,
             mode_id,
             None,
@@ -1391,6 +1392,7 @@ impl CoworkRuntime {
         self.session_runtime.create_durable_session(
             workspace_id,
             resolved_agent_kind,
+            None,
             normalize_optional_ref(model_id).or(parent_thread.requested_model_id.as_deref()),
             resolved_mode_id,
             None,

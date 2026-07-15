@@ -5,6 +5,7 @@
 
 use std::sync::Arc;
 
+use crate::domains::sessions::admission::SessionMutationAdmission;
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::workflows::service::{
     VersionedWorkflowRunView, WorkflowCancelOutcome, WorkflowRunService,
@@ -32,6 +33,7 @@ pub(in crate::domains::workflows) async fn cancel_workflow_run(
     service: Arc<WorkflowRunService>,
     session_runtime: Arc<SessionRuntime>,
     gates: Arc<WorkflowRunGates>,
+    admission: Arc<SessionMutationAdmission>,
     run_id: String,
 ) -> Result<VersionedWorkflowRunView, WorkflowCancelError> {
     if let Err(error) = crate::domains::workflows::service::validate_run_id(&run_id) {
@@ -46,6 +48,16 @@ pub(in crate::domains::workflows) async fn cancel_workflow_run(
     #[cfg(test)]
     crate::domains::workflows::test_barriers::at_cancel_gate(&run_id);
     let guard = gate.clone().lock_owned().await;
+
+    // Spec 2b: with a bound session, the cancel-intent CAS (which may
+    // terminalize pending -> cancelled) and the live-cancel request run under
+    // that session's mutation permit (canonical order run gate -> permit);
+    // pre-binding cancellation has no controlled session and proceeds under
+    // the run gate alone.
+    let _session_permit = crate::domains::workflows::execution::acquire_bound_session_permit(
+        &service, &admission, &run_id,
+    )
+    .await;
 
     let intent_service = service.clone();
     let intent_run_id = run_id.clone();

@@ -1,3 +1,5 @@
+use crate::api::http::access::admit_session_mutation;
+use crate::domains::sessions::admission::{SessionMutationKind, SessionMutationPermit};
 use anyharness_contract::v1::{
     WorkspacePurgeOutcome, WorkspacePurgePreflightResponse, WorkspacePurgeResponse,
 };
@@ -32,11 +34,37 @@ pub async fn purge_workspace_preflight(
     Ok(Json(build_purge_preflight(&state, &workspace_id).await?))
 }
 
+/// Spec 2b fail-closed rule: purge (and mobility removal) never overrides an
+/// active workflow controller. Every session of the workspace is admitted —
+/// in sorted id order so concurrent multi-session holders cannot deadlock —
+/// and ALL permits are held across the destructive operation.
+pub(super) async fn admit_all_workspace_sessions(
+    state: &AppState,
+    workspace_id: &str,
+    kind: SessionMutationKind,
+) -> Result<Vec<SessionMutationPermit>, ApiError> {
+    let mut sessions = state
+        .session_service
+        .store()
+        .list_with_dismissed_by_workspace(workspace_id)
+        .map_err(|error| {
+            tracing::error!(workspace_id = %workspace_id, error = %error, "session list failed");
+            ApiError::internal("session list failed")
+        })?;
+    sessions.sort_by(|a, b| a.id.cmp(&b.id));
+    let mut permits = Vec::with_capacity(sessions.len());
+    for session in &sessions {
+        permits.push(admit_session_mutation(state, &session.id, kind).await?);
+    }
+    Ok(permits)
+}
+
 #[utoipa::path(
     delete,
     path = "/v1/workspaces/{workspace_id}",
     params(("workspace_id" = String, Path, description = "Workspace ID")),
     responses(
+        (status = 409, description = "Session execution is controlled by an active workflow run", body = anyharness_contract::v1::ProblemDetails),
         (status = 200, description = "Purge workspace result", body = WorkspacePurgeResponse),
     ),
     tag = "workspaces"
@@ -45,6 +73,9 @@ pub async fn purge_workspace(
     State(state): State<AppState>,
     Path(workspace_id): Path<String>,
 ) -> Result<Json<WorkspacePurgeResponse>, ApiError> {
+    let _admission_permits =
+        admit_all_workspace_sessions(&state, &workspace_id, SessionMutationKind::WorkspacePurge)
+            .await?;
     purge_response_from_service_outcome(
         &state,
         None,

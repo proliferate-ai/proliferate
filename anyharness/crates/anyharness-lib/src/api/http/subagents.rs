@@ -1,3 +1,5 @@
+use crate::api::http::access::admit_session_mutation;
+use crate::domains::sessions::admission::SessionMutationKind;
 use anyharness_contract::v1::{
     ChildSubagentSummary, ParentSubagentLinkSummary, ProblemDetails, ScheduleSubagentWakeRequest,
     ScheduleSubagentWakeResponse, SessionStatus, SessionSubagentsResponse,
@@ -66,6 +68,8 @@ pub async fn schedule_subagent_wake(
     Json(_body): Json<ScheduleSubagentWakeRequest>,
 ) -> Result<Json<ScheduleSubagentWakeResponse>, ApiError> {
     assert_session_auth_scope(&state, &auth, &session_id)?;
+    let _admission_permit =
+        admit_session_mutation(&state, &session_id, SessionMutationKind::SubagentWake).await?;
     let parent = state
         .session_service
         .get_session(&session_id)

@@ -48,6 +48,9 @@ jobs:
       - name: Check AnyHarness layer boundaries
         run: python3 scripts/check_anyharness_boundaries.py
 
+      - name: Check session mutation admission
+        run: python3 scripts/check_session_mutation_admission.py
+
       - name: Check documentation integrity
         run: |
           python3 -m unittest scripts/test_check_docs.py

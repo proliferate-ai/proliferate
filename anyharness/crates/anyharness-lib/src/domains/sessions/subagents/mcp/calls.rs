@@ -252,6 +252,7 @@ async fn create_subagent(
         .create_durable_session(
             &parent.workspace_id,
             &agent_kind,
+            None,
             model_id.as_deref(),
             mode_id.as_deref(),
             None,

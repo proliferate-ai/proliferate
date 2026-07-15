@@ -1,4 +1,5 @@
 pub mod active_activity_roster;
+pub mod admission;
 pub mod active_goals;
 pub mod active_loops;
 pub mod attachment_storage;

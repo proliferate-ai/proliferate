@@ -8,8 +8,9 @@ use std::sync::Arc;
 
 use tokio::runtime::Handle;
 
+use crate::domains::sessions::admission::SessionMutationAdmission;
 use crate::domains::sessions::runtime::SessionRuntime;
-use crate::domains::workflows::control::WorkflowRunGates;
+use crate::domains::workflows::control::{WorkflowRunGates, WorkflowSessionControllerPolicy};
 use crate::domains::workflows::runtime::WorkflowRunRuntime;
 use crate::domains::workflows::service::WorkflowRunService;
 use crate::domains::workflows::session_extension::WorkflowRunSessionExtension;
@@ -25,6 +26,10 @@ pub(super) struct WorkflowWiringPhaseOne {
     pub service: Arc<WorkflowRunService>,
     pub session_extension: Arc<WorkflowRunSessionExtension>,
     pub gates: Arc<WorkflowRunGates>,
+    /// Session mutation admission (spec 2b): sessions own the mechanics; the
+    /// injected policy is the Workflows controller lookup, so this is built
+    /// here and shared with every mutation owner via AppState.
+    pub admission: Arc<SessionMutationAdmission>,
     pub main_handle: Handle,
 }
 
@@ -43,15 +48,20 @@ pub(super) fn wire_workflows_before_sessions(
     // One shared per-run gate set (spec workflow-run-control §6.1): injected
     // into BOTH the workflow runtime and the completion extension.
     let gates = Arc::new(WorkflowRunGates::new());
+    let admission = Arc::new(SessionMutationAdmission::new(Arc::new(
+        WorkflowSessionControllerPolicy::new(WorkflowRunStore::new(db.clone())),
+    )));
     let session_extension = Arc::new(WorkflowRunSessionExtension::new(
         service.clone(),
         gates.clone(),
+        admission.clone(),
         main_handle.clone(),
     ));
     Ok(WorkflowWiringPhaseOne {
         service,
         session_extension,
         gates,
+        admission,
         main_handle,
     })
 }
@@ -70,6 +80,7 @@ pub(super) fn wire_workflow_runtime(
         operation_gate,
         access_gate,
         phase_one.gates,
+        phase_one.admission,
         phase_one.main_handle,
     ))
 }

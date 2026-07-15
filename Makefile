@@ -1378,6 +1378,7 @@ check:
 
 check-max-lines:
 	python3 scripts/check_max_lines.py
+	python3 scripts/check_session_mutation_admission.py
 
 check-server-boundaries:
 	cd server && uv run python ../scripts/check_server_boundaries.py

@@ -1,3 +1,6 @@
+use crate::api::http::access::admit_session_mutation;
+use crate::domains::sessions::admission::SessionMutationKind;
+use crate::domains::sessions::admission::SessionMutationPermit;
 use anyharness_contract::v1::{
     HandoffPlanRequest, HandoffPlanResponse, ListProposedPlansResponse, PlanDecisionRequest,
     PlanDecisionResponse, ProposedPlanDetail, ProposedPlanDocumentResponse,
@@ -105,6 +108,24 @@ pub async fn get_plan_document(
         .map_err(map_get_plan_error)
 }
 
+/// Spec 2b: plan decisions mutate the plan's owning session projection, so
+/// they admit against that session before any durable plan write.
+async fn admit_plan_session(
+    state: &AppState,
+    plan_id: &str,
+) -> Result<Option<SessionMutationPermit>, ApiError> {
+    let plan = state.plan_service.get(plan_id).map_err(|error| {
+        tracing::error!(plan_id = %plan_id, error = %error, "plan lookup failed");
+        ApiError::internal("plan lookup failed")
+    })?;
+    match plan {
+        None => Ok(None),
+        Some(plan) => Ok(Some(
+            admit_session_mutation(state, &plan.session_id, SessionMutationKind::Plan).await?,
+        )),
+    }
+}
+
 #[utoipa::path(
     post,
     path = "/v1/workspaces/{workspace_id}/plans/{plan_id}/approve",
@@ -113,7 +134,10 @@ pub async fn get_plan_document(
         ("plan_id" = String, Path, description = "Plan ID")
     ),
     request_body = PlanDecisionRequest,
-    responses((status = 200, description = "Approved proposed plan", body = PlanDecisionResponse)),
+    responses(
+        (status = 200, description = "Approved proposed plan", body = PlanDecisionResponse),
+        (status = 409, description = "Session execution is controlled by an active workflow run", body = anyharness_contract::v1::ProblemDetails),
+    ),
     tag = "plans"
 )]
 pub async fn approve_plan(
@@ -126,6 +150,7 @@ pub async fn approve_plan(
         .acquire_shared(&workspace_id, WorkspaceOperationKind::PlanWrite)
         .await;
     assert_workspace_mutable(&state, &workspace_id)?;
+    let _admission_permit = admit_plan_session(&state, &plan_id).await?;
     state
         .plan_runtime
         .approve(&workspace_id, &plan_id, req.expected_decision_version)
@@ -142,7 +167,10 @@ pub async fn approve_plan(
         ("plan_id" = String, Path, description = "Plan ID")
     ),
     request_body = PlanDecisionRequest,
-    responses((status = 200, description = "Rejected proposed plan", body = PlanDecisionResponse)),
+    responses(
+        (status = 200, description = "Rejected proposed plan", body = PlanDecisionResponse),
+        (status = 409, description = "Session execution is controlled by an active workflow run", body = anyharness_contract::v1::ProblemDetails),
+    ),
     tag = "plans"
 )]
 pub async fn reject_plan(
@@ -155,6 +183,7 @@ pub async fn reject_plan(
         .acquire_shared(&workspace_id, WorkspaceOperationKind::PlanWrite)
         .await;
     assert_workspace_mutable(&state, &workspace_id)?;
+    let _admission_permit = admit_plan_session(&state, &plan_id).await?;
     state
         .plan_runtime
         .reject(&workspace_id, &plan_id, req.expected_decision_version)
@@ -171,7 +200,10 @@ pub async fn reject_plan(
         ("plan_id" = String, Path, description = "Plan ID")
     ),
     request_body = HandoffPlanRequest,
-    responses((status = 200, description = "Handed off proposed plan", body = HandoffPlanResponse)),
+    responses(
+        (status = 200, description = "Handed off proposed plan", body = HandoffPlanResponse),
+        (status = 409, description = "Session execution is controlled by an active workflow run", body = anyharness_contract::v1::ProblemDetails),
+    ),
     tag = "plans"
 )]
 pub async fn handoff_plan(
@@ -184,6 +216,7 @@ pub async fn handoff_plan(
         .acquire_shared(&workspace_id, WorkspaceOperationKind::PlanWrite)
         .await;
     assert_workspace_mutable(&state, &workspace_id)?;
+    let _admission_permit = admit_plan_session(&state, &plan_id).await?;
     state
         .plan_runtime
         .handoff(&workspace_id, &plan_id, handoff_plan_input(req))

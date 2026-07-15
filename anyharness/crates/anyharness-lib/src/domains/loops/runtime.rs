@@ -23,12 +23,8 @@ use async_trait::async_trait;
 use tokio::sync::broadcast;
 
 use super::model::LoopRecord;
-use super::scheduler::{
-    LoopFireExecutor, LoopFireReport, LoopScheduler, LoopSessionLiveness,
-};
-use super::service::{
-    EmulatedLoopSpec, LoopEventContext, LoopService, MAX_LOOP_PROMPT_BYTES,
-};
+use super::scheduler::{LoopFireExecutor, LoopFireReport, LoopScheduler, LoopSessionLiveness};
+use super::service::{EmulatedLoopSpec, LoopEventContext, LoopService, MAX_LOOP_PROMPT_BYTES};
 use super::wire::{
     LoopClearedWireResult, LoopListWireResult, LOOP_CLEAR_EXT_METHOD, LOOP_LIST_EXT_METHOD,
     LOOP_SET_EXT_METHOD,
@@ -274,9 +270,9 @@ impl LoopRuntime {
             .run_domain_op(op)
             .await
             .map_err(map_domain_op_error)?;
-        let output = reply
-            .downcast::<LoopArmOpOutput>()
-            .map_err(|_| LoopOpError::Store(anyhow::anyhow!("loop arm op returned unexpected reply")))?;
+        let output = reply.downcast::<LoopArmOpOutput>().map_err(|_| {
+            LoopOpError::Store(anyhow::anyhow!("loop arm op returned unexpected reply"))
+        })?;
         let record = output.result.map_err(LoopOpError::Store)?;
         self.scheduler
             .arm(session_id, &loop_id, next_fire_at_ms)
@@ -297,9 +293,7 @@ impl LoopRuntime {
                 self.clear_native_loop(&handle, native_session_id, loop_id)
                     .await
             }
-            LoopSupport::Emulated => {
-                self.clear_emulated_loop(session_id, &handle, loop_id).await
-            }
+            LoopSupport::Emulated => self.clear_emulated_loop(session_id, &handle, loop_id).await,
         }
     }
 
@@ -420,15 +414,18 @@ impl LoopRuntime {
             loop_service: self.loop_service.clone(),
             wires: list.loops,
         });
-        let reply = handle.run_domain_op(op).await.map_err(|error| match error {
-            LiveSessionCommandError::ActorUnavailable => {
-                anyhow::anyhow!("session actor unavailable for loop reconcile")
-            }
-            LiveSessionCommandError::ResponseDropped => {
-                anyhow::anyhow!("session actor dropped loop reconcile response")
-            }
-            LiveSessionCommandError::Rejected(infallible) => match infallible {},
-        })?;
+        let reply = handle
+            .run_domain_op(op)
+            .await
+            .map_err(|error| match error {
+                LiveSessionCommandError::ActorUnavailable => {
+                    anyhow::anyhow!("session actor unavailable for loop reconcile")
+                }
+                LiveSessionCommandError::ResponseDropped => {
+                    anyhow::anyhow!("session actor dropped loop reconcile response")
+                }
+                LiveSessionCommandError::Rejected(infallible) => match infallible {},
+            })?;
         let output = reply
             .downcast::<LoopReconcileOpOutput>()
             .map_err(|_| anyhow::anyhow!("loop reconcile op returned unexpected reply"))?;
@@ -442,8 +439,13 @@ impl LoopRuntime {
             // A loop armed before the process died may have a past (or missing)
             // next-fire; fire it promptly on the next pass rather than skipping
             // the whole missed window.
-            let next_fire = record.next_fire_at_ms.filter(|next| *next > now).unwrap_or(now);
-            self.scheduler.arm(session_id, &record.loop_id, next_fire).await;
+            let next_fire = record
+                .next_fire_at_ms
+                .filter(|next| *next > now)
+                .unwrap_or(now);
+            self.scheduler
+                .arm(session_id, &record.loop_id, next_fire)
+                .await;
         }
         Ok(())
     }
@@ -518,6 +520,11 @@ impl LoopFireExecutor for SessionLoopFireExecutor {
         }
     }
 
+    // Spec 2b classification (admission:derived-safe): an ACTIVE loop row can
+    // never exist on a workflow-controlled session — control binds at
+    // creation, and every loop acquisition route (set/edit) is fenced 409
+    // before insert — so the emulated fire cannot target a controlled
+    // session and takes no admission permit.
     async fn fire(&self, session_id: &str, loop_id: &str) -> Option<LoopFireReport> {
         let handle = self.acp_manager.get_handle(session_id).await?;
         let record = self
@@ -531,11 +538,10 @@ impl LoopFireExecutor for SessionLoopFireExecutor {
         }
         // Enqueue the loop's prompt as an ordinary user turn — faithful
         // mirroring of a human retyping it, never a synthetic wake.
-        let payload = PromptPayload::text(record.prompt.clone()).with_provenance(
-            PromptProvenance::System {
+        let payload =
+            PromptPayload::text(record.prompt.clone()).with_provenance(PromptProvenance::System {
                 label: Some(LOOP_FIRED_PROVENANCE_LABEL.to_string()),
-            },
-        );
+            });
         if handle.send_prompt(payload, None).await.is_err() {
             return None;
         }
