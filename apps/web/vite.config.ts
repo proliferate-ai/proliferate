@@ -61,6 +61,11 @@ export default defineConfig({
       : []),
   ],
   clearScreen: false,
+  // Force a single React instance across the product-client package boundary so
+  // host components rendered in the jsdom test lane share ProductClient's React.
+  resolve: {
+    dedupe: ["react", "react-dom"],
+  },
   build: {
     sourcemap: sentryUploadEnabled ? "hidden" : false,
     ...(bundleBaselineManifest ? { manifest: true } : {}),

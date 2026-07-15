@@ -7,35 +7,53 @@ This document owns only the remaining execution order and cutover gates.
 ## Current handoff
 
 The ProductClient foundation, Desktop host boundary, shared identity,
-navigation, persistence, telemetry, extraction mechanics, and the mechanical
-Desktop extraction have landed. Desktop's product source now lives in
-`@proliferate/product-client`; Desktop is a thin native host. The completed
-move, its seam architecture, and the post-merge reconciliation against
-`origin/main` are recorded in
-[`d1h.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1h.md)
-— PR #1215, merge `c6e094b41`.
+navigation, persistence, telemetry, extraction mechanics, the mechanical
+Desktop extraction, and the legacy Web replacement have all landed. Desktop is a
+thin native host and `apps/web` is a thin browser host that mounts the same
+compiled ProductClient with `desktop: null`.
 
-The current migration step is the legacy Web replacement:
+- Desktop product move (thin native host):
+  [`d1h.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1h.md).
+- Legacy Web replacement (thin browser host, `desktop: null`) — **complete,
+  pending review; cutover next**:
+  [`d1i.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1i.md).
 
-1. Delete the duplicate Web pages, chat implementation, polling, stores,
-   controllers, and product-specific logic.
-2. Mount the same compiled ProductClient from a thin browser host with
-   `desktop: null`.
-3. Run the ProductClient package build, Desktop build, browser-host build,
-   structure checks, and focused behavior tests before review.
-
-The landed extraction proof is recorded in
-[`d1g.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1g.md).
+The current migration step is to **qualify and cut over hosted Web**. Before
+mutating any external producer, complete the cutover gate below against the
+binding legacy-Web bundle baseline recorded here.
 
 ## Remaining sequence
 
-After the legacy Web replacement:
-
-1. Qualify Desktop and hosted Web, then cut over hosted Web.
+1. Qualify Desktop and hosted Web against the shared implementation, enforce the
+   recorded first-load budget against the binding baseline below, then cut over
+   hosted Web one external producer at a time.
 2. Add self-hosted Web configuration, deployment, and documentation.
 
 Desktop remains the behavioral baseline throughout. There is no intermediate
 state in which two product implementations are maintained.
+
+## Binding legacy-Web bundle baseline (phase 6 cutover gate)
+
+This is the **binding** cutover baseline required before hosted Web cutover
+(phase 6). It supersedes the provisional d1g baseline (base `f93afce81`): it was
+captured with the same deterministic collector
+(`scripts/collect-web-bundle-baseline.mjs`, `gzip` via Node `zlib` level 9) on
+the **exact Legacy-Web-replacement base** `c6e094b41` immediately before the
+Web deletions, per the contract's ordered mechanics step 2. The committed
+artifact is
+[`web-bundle-baseline-c6e094b41.json`](../../codebase/systems/product/clients/web-desktop-unification/migration/web-bundle-baseline-c6e094b41.json).
+
+| Segment | gzip | raw | Composition |
+| --- | --- | --- | --- |
+| Unauthenticated `/login` entry | 495,438 B (483.8 KiB) | 1,730,429 B | 1 JS chunk 471,212 B gzip + 1 CSS chunk 24,226 B gzip; 0 fonts, 0 images |
+| Per-route lazy chunks | — | — | none (route splitting: `none`) |
+| Authenticated total | 495,438 B (483.8 KiB) | 1,730,429 B | identical to entry |
+
+Legacy Web still performs **no route-level code splitting** (`apps/web/src/App.tsx`
+statically imports every page, so `/login` eagerly loads the whole authenticated
+product) and emits **no separate font/image assets** (`index.css` imports only
+`@proliferate/design/dom.css`). These are the numbers phase 6 compares the
+replacement browser-host build against.
 
 ## Hosted Web cutover gate
 
