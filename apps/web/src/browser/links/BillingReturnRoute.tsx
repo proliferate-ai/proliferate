@@ -70,9 +70,9 @@ export function BillingReturnRoute() {
       }}
     >
       <p>If Proliferate didn't open, retry the handoff or continue in your browser.</p>
-      <button type="button" onClick={() => window.location.replace(deepLink)}>
-        Open Proliferate
-      </button>
+      {/* The host route owns no product UI; the retry is a plain anchor to the
+          same Desktop deep link (equivalent to re-triggering the handoff). */}
+      <a href={deepLink}>Open Proliferate</a>
       <a href={browserFallback}>Open billing in browser</a>
     </div>
   );

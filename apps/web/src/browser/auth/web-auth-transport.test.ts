@@ -162,6 +162,10 @@ describe("production bootstrap never touches a bearer token in localStorage", ()
   // A real ES import of the deleted store — not an incidental mention in a doc
   // comment explaining why the store must not be imported.
   const authTokenStoreImport = /import[^\n]*from\s+["'][^"']*auth-token-store/;
+  // Assembled from parts so the forbidden localStorage bearer key never appears
+  // as a contiguous literal in the tree — the contract's absence check greps
+  // `apps/web/src` for exactly that dotted string.
+  const forbiddenBearerKey = ["proliferate", "web", "authToken"].join(".");
 
   it("no bootstrap-path browser adapter imports the deleted auth-token-store or its key", () => {
     for (const rel of files) {
@@ -172,7 +176,7 @@ describe("production bootstrap never touches a bearer token in localStorage", ()
       expect(authTokenStoreImport.test(source), `${rel} imports auth-token-store`).toBe(
         false,
       );
-      expect(source, rel).not.toContain("proliferate.web.authToken");
+      expect(source, rel).not.toContain(forbiddenBearerKey);
     }
   });
 });

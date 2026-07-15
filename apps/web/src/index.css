@@ -1,6 +1,5 @@
-@import "@proliferate/design/dom.css";
-
-:root {
-  /* UX_SPEC §5: 16px composer radius (matches desktop). */
-  --radius-composer: 1rem;
-}
+/* Shared product CSS entry. The full product theme (tailwind, tokens, fonts,
+ * `--radius-composer`, and xterm) rides with the compiled ProductClient package
+ * entry, which imports `@proliferate/design/product.css`; this import-only file
+ * pulls the same shared stylesheet so the Web host carries no bespoke CSS. */
+@import "@proliferate/design/product.css";

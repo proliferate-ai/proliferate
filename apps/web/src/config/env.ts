@@ -1,8 +1,6 @@
+// Browser deployment/build configuration for the Web host. The single hosted
+// deployment's API base URL is the only value the thin host needs; product
+// defaults (repo selection, dev token login) now live in ProductClient.
 export const webEnv = {
   apiBaseUrl: import.meta.env.VITE_PROLIFERATE_API_BASE_URL ?? "http://localhost:8000",
-  defaultCloudRepo:
-    import.meta.env.VITE_PROLIFERATE_DEFAULT_CLOUD_REPO
-    ?? (import.meta.env.DEV ? "proliferate-ai/proliferate" : null),
-  devAccessTokenLogin:
-    import.meta.env.DEV && import.meta.env.VITE_PROLIFERATE_DEV_TOKEN_LOGIN === "true",
 } as const;
