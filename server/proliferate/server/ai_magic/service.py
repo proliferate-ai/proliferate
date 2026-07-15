@@ -9,8 +9,6 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
-from proliferate.constants.cloud import GitProvider
-from proliferate.db.store.repositories import get_repo_config_for_user
 from proliferate.constants.ai_magic import (
     COMMIT_MESSAGE_MAX_DIFF_CHARS,
     COMMIT_MESSAGE_MAX_MESSAGE_CHARS,
@@ -25,6 +23,8 @@ from proliferate.constants.ai_magic import (
     WORKSPACE_NAME_RATE_LIMIT_REQUESTS,
     WORKSPACE_NAME_RATE_LIMIT_WINDOW_SECONDS,
 )
+from proliferate.constants.cloud import GitProvider
+from proliferate.db.store.repositories import get_repo_config_for_user
 from proliferate.integrations.anthropic import (
     AnthropicIntegrationError,
     generate_message_text,
