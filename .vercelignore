@@ -42,4 +42,5 @@ tmp
 /docs
 /scripts
 /install
-/catalogs
+# NOTE: /catalogs intentionally NOT ignored — product-client bundles
+# catalogs/agents/catalog.json (?raw) and the Web build needs it.

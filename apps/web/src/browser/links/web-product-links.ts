@@ -20,10 +20,13 @@ import {
  *   callback URL handed to Cloud mutations (the Web analogue of Desktop's
  *   `proliferate://` deep link).
  * - `observeInboundEntries` is the delivery channel for the host callback/return
- *   decoders. Web has no launch deep link, so there is no initial snapshot to
- *   replay: a subscriber receives only entries emitted after it subscribes. The
- *   host entry-route components call {@link emitWebInboundEntry} after decoding a
- *   browser return; there is no queue, replay, or persistence.
+ *   decoders. Web's analogue of Desktop's launch deep link is the cold-load
+ *   browser return: the host entry routes decode it and call
+ *   {@link emitWebInboundEntry} during bootstrap, before the lazily loaded
+ *   ProductClient subscribes. Mirroring Desktop's per-subscriber
+ *   initial-snapshot semantics, the single entry decoded for the current
+ *   document is delivered once to each new subscriber; there is no queue,
+ *   durable replay, or persistence beyond that one in-memory value.
  *
  * The pure decode helpers below are shared by the entry-route components and are
  * unit-tested directly. Query and fragment location state is preserved
@@ -32,14 +35,28 @@ import {
 
 const inboundListeners = new Set<(entry: ProductEntry) => void>();
 
-/** Deliver a host-decoded inbound entry to every current subscriber. Best-effort
- * notification; the entry-route component also navigates to the entry's shared
- * route, so a subscriber that mounts after this call still reaches the
- * destination through the URL. */
+// The one entry decoded from the current document's cold-load URL, delivered as
+// an initial snapshot to subscribers that mount after the emit (ProductClient's
+// authenticated root is a lazy chunk, so it always subscribes late). Cleared on
+// delivery per subscriber via the delivered set below, never persisted.
+let initialInboundEntry: ProductEntry | null = null;
+const initialDelivered = new WeakSet<(entry: ProductEntry) => void>();
+
+/** Deliver a host-decoded inbound entry to every current subscriber, and retain
+ * it as the current document's initial snapshot for subscribers that mount
+ * later (the lazily loaded product root). The entry-route component also
+ * navigates to the entry's shared route, so the URL remains the fallback. */
 export function emitWebInboundEntry(entry: ProductEntry): void {
+  initialInboundEntry = entry;
   for (const listener of [...inboundListeners]) {
+    initialDelivered.add(listener);
     listener(entry);
   }
+}
+
+/** Test-only: drop the retained initial entry between cases. */
+export function __resetWebInboundEntriesForTest(): void {
+  initialInboundEntry = null;
 }
 
 export const webProductLinks: ProductLinks = {
@@ -51,6 +68,10 @@ export const webProductLinks: ProductLinks = {
   },
   observeInboundEntries(listener: (entry: ProductEntry) => void): () => void {
     inboundListeners.add(listener);
+    if (initialInboundEntry !== null && !initialDelivered.has(listener)) {
+      initialDelivered.add(listener);
+      listener(initialInboundEntry);
+    }
     return () => {
       inboundListeners.delete(listener);
     };

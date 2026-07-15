@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
   buildDesktopDeepLink,
@@ -8,6 +8,9 @@ import {
   decodeWebGithubAppSettingsReturn,
   decodeWebIntegrationComplete,
   desktopDeepLinkScheme,
+  emitWebInboundEntry,
+  webProductLinks,
+  __resetWebInboundEntriesForTest,
 } from "./web-product-links";
 
 const ORIGIN = "https://app.proliferate.com";
@@ -158,5 +161,37 @@ describe("desktopDeepLinkScheme / buildDesktopDeepLink", () => {
       "proliferate://join/o1",
     );
     expect(typeof buildDesktopDeepLink).toBe("function");
+  });
+});
+
+describe("initial-entry delivery to late subscribers", () => {
+  afterEach(() => {
+    __resetWebInboundEntriesForTest();
+  });
+
+  it("delivers the cold-load entry once to a subscriber that mounts after the emit", () => {
+    const entry = { kind: "settings", section: "account" } as const;
+    emitWebInboundEntry(entry);
+    const seen: unknown[] = [];
+    const unsubscribe = webProductLinks.observeInboundEntries((e) => seen.push(e));
+    expect(seen).toEqual([entry]);
+    unsubscribe();
+    const again: unknown[] = [];
+    const unsubscribe2 = webProductLinks.observeInboundEntries((e) => again.push(e));
+    expect(again).toEqual([entry]);
+    unsubscribe2();
+  });
+
+  it("does not double-deliver to a subscriber that already received the live emit", () => {
+    const seen: unknown[] = [];
+    const unsubscribe = webProductLinks.observeInboundEntries((e) => seen.push(e));
+    const entry = { kind: "settings", section: "account" } as const;
+    emitWebInboundEntry(entry);
+    unsubscribe();
+    const resubSeen: unknown[] = [];
+    const unsub3 = webProductLinks.observeInboundEntries((e) => resubSeen.push(e));
+    expect(seen).toEqual([entry]);
+    expect(resubSeen).toEqual([entry]);
+    unsub3();
   });
 });
