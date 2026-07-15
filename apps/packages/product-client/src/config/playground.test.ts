@@ -80,23 +80,23 @@ function renderComposerSurfaceMarkup(scenario: ScenarioKey): string {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+  // ProductHostProvider and AnyHarnessRuntime declare `children` as a required
+  // prop, so createElement needs it inside the props object to typecheck.
   return renderToStaticMarkup(
     createElement(
       QueryClientProvider,
       { client: queryClient },
-      createElement(
-        ProductHostProvider,
-        { host: makeTestProductHost() },
-        createElement(
-          AnyHarnessRuntime,
-          { runtimeUrl: null },
-          createElement(
+      createElement(ProductHostProvider, {
+        host: makeTestProductHost(),
+        children: createElement(AnyHarnessRuntime, {
+          runtimeUrl: null,
+          children: createElement(
             MemoryRouter,
             null,
             renderComposerSurfaceForScenario(scenario) as ReactElement,
           ),
-        ),
-      ),
+        }),
+      }),
     ),
   );
 }
