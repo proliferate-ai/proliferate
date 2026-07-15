@@ -191,7 +191,20 @@ export async function connectServerTrustFlow(
     throw new ConnectServerRejectedError(`connectServerTrustFlow: ${normalized.error} (${url})`);
   }
 
-  const { status, body } = await probe.fetchMeta(page, normalized.origin, options.timeoutMs ?? DEFAULT_META_TIMEOUT_MS);
+  let status: number;
+  let body: unknown;
+  try {
+    ({ status, body } = await probe.fetchMeta(page, normalized.origin, options.timeoutMs ?? DEFAULT_META_TIMEOUT_MS));
+  } catch (error) {
+    // A `/meta` that cannot even be fetched — unreachable host, TLS failure, or
+    // a server that does not answer the cross-origin discovery probe (no CORS) —
+    // is "not a Proliferate server," exactly as the product treats a failed
+    // connect probe. Reject cleanly rather than surfacing a raw fetch TypeError.
+    throw new ConnectServerRejectedError(
+      `connectServerTrustFlow: ${normalized.host} is not a reachable Proliferate server ` +
+        `(/meta probe failed: ${error instanceof Error ? error.message : String(error)}).`,
+    );
+  }
   if (status !== 200) {
     throw new ConnectServerRejectedError(
       `connectServerTrustFlow: ${normalized.host} is not a Proliferate server (/meta returned ${status}).`,

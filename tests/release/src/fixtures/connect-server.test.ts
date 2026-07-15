@@ -123,6 +123,19 @@ test("assertRejectsNonProliferateHost fails when a non-Proliferate host is accep
   );
 });
 
+test("assertRejectsNonProliferateHost treats an unreachable/CORS-blocked /meta as a rejection", async () => {
+  // A real non-Proliferate host (e.g. example.com) has no permissive CORS on
+  // /meta, so the browser fetch throws "Failed to fetch". That is a rejection
+  // (not a reachable Proliferate server), not an unhandled error.
+  const probe = {
+    fetchMeta: async () => {
+      throw new TypeError("Failed to fetch");
+    },
+    requestsToOrigin: () => [],
+  };
+  await assert.doesNotReject(() => assertRejectsNonProliferateHost(PAGE, "https://blocked.example.com", probe));
+});
+
 test("assertOnlyMetaFetchedBeforeTrust passes when the only request to the origin is GET /meta", async () => {
   const { probe } = fakeProbe({ status: 200, body: meta(), requests: [{ method: "GET", path: "/meta" }] });
   await assert.doesNotReject(() =>
