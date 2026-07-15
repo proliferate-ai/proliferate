@@ -93,8 +93,8 @@ function fakeTransport(overrides: Partial<AuthenticatedActorTransport> = {}): {
         updatedAt: "2026-01-01T00:00:00Z",
       };
     },
-    putGatewaySelection: async (_api, harnessKind) => {
-      calls.push(`putGatewaySelection:${harnessKind}`);
+    putGatewaySelection: async (_api, harnessKind, surface) => {
+      calls.push(`putGatewaySelection:${harnessKind}:${surface}`);
     },
     ...overrides,
   };
@@ -141,8 +141,18 @@ test("authenticatedActor drives claim -> login -> org lookup -> enrollment poll 
     "listOrganizations",
     "getEnrollment:1",
     "getEnrollment:2",
-    "putGatewaySelection:claude",
+    "putGatewaySelection:claude:local",
   ]);
+});
+
+test("authenticatedActor writes the gateway selection to the requested surface (cloud) when overridden", async () => {
+  const world = fakeWorld();
+  const { transport, calls } = fakeTransport();
+  await authenticatedActor(world, "owner", { gatewaySurface: "cloud" }, transport);
+  assert.ok(
+    calls.includes("putGatewaySelection:claude:cloud"),
+    "the managed-cloud scenario must select the gateway route on the cloud surface",
+  );
 });
 
 test("authenticatedActor rejects non-owner roles", async () => {

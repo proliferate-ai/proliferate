@@ -288,10 +288,23 @@ export class QualificationLiteLlmController {
   async preflight(): Promise<QualificationPreflightResult> {
     this.requireNonEmptyInputs();
     // Liveness first — an unauthenticated probe distinguishes "proxy down" from
-    // "master key wrong" without echoing the credential.
-    await this.adminGet("/health/liveliness", { authenticated: false }).catch(() => {
+    // "master key wrong" without echoing the credential. The shared staging
+    // proxy blips transiently (observed ~1-in-10 runs), so retry bounded before
+    // failing closed: three attempts, 10s apart — still strict, not masking a
+    // genuinely down proxy.
+    let live = false;
+    for (let attempt = 1; attempt <= 3 && !live; attempt += 1) {
+      live = await this.adminGet("/health/liveliness", { authenticated: false }).then(
+        () => true,
+        () => false,
+      );
+      if (!live && attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, 10_000));
+      }
+    }
+    if (!live) {
       throw new QualificationLiteLlmError("Qualification LiteLLM proxy is not reachable (liveness).");
-    });
+    }
     // Authenticated admin reachability + the configured allowlist in one call.
     const allowlistModels = await this.listAdminModels();
     const eligibleClaudeModels = orderClaudeModelsCheapestFirst(

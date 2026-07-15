@@ -94,17 +94,35 @@ def cmd_pause(provider_sandbox_id: str) -> dict[str, object]:
     return {"paused": bool(result)}
 
 
-def cmd_exec(provider_sandbox_id: str, command: list[str]) -> dict[str, object]:
+def cmd_kill(provider_sandbox_id: str) -> dict[str, object]:
+    """Idempotent provider-sandbox kill for run cleanup (absent counts as killed)."""
     from e2b import Sandbox
+    from e2b.exceptions import NotFoundException
+
+    api_key = _api_key()
+    try:
+        result = Sandbox.kill(provider_sandbox_id, api_key=api_key)
+    except NotFoundException:
+        return {"killed": True, "already_gone": True}
+    return {"killed": bool(result), "already_gone": False}
+
+
+def cmd_exec(provider_sandbox_id: str, command: list[str]) -> dict[str, object]:
+    import shlex
+
+    from e2b import CommandExitException, Sandbox
 
     api_key = _api_key()
     sbx = Sandbox.connect(provider_sandbox_id, api_key=api_key)
-    result = sbx.commands.run(" ".join(command))
-    return {
-        "stdout": result.stdout,
-        "stderr": result.stderr,
-        "exitCode": result.exit_code,
-    }
+    try:
+        # shlex.join preserves the caller's argv quoting (a plain " ".join
+        # mangles `sh -c "ps -o pid,ppid,comm -A"` into nested-shell soup).
+        result = sbx.commands.run(shlex.join(command))
+        return {"stdout": result.stdout, "stderr": result.stderr, "exitCode": result.exit_code}
+    except CommandExitException as exc:
+        # A non-zero exit is a REPORTABLE OUTCOME for the caller's assertions,
+        # not a probe crash.
+        return {"stdout": exc.stdout, "stderr": exc.stderr, "exitCode": exc.exit_code}
 
 
 def cmd_write(provider_sandbox_id: str, path: str, content: str) -> dict[str, object]:
@@ -144,6 +162,9 @@ def main() -> None:
     p_pause = sub.add_parser("pause")
     p_pause.add_argument("provider_sandbox_id")
 
+    p_kill = sub.add_parser("kill")
+    p_kill.add_argument("provider_sandbox_id")
+
     p_exec = sub.add_parser("exec")
     p_exec.add_argument("provider_sandbox_id")
     p_exec.add_argument("command", nargs="+")
@@ -170,6 +191,8 @@ def main() -> None:
         result = cmd_state(args.provider_sandbox_id)
     elif args.action == "pause":
         result = cmd_pause(args.provider_sandbox_id)
+    elif args.action == "kill":
+        result = cmd_kill(args.provider_sandbox_id)
     elif args.action == "exec":
         result = cmd_exec(args.provider_sandbox_id, args.command)
     elif args.action == "write":

@@ -602,3 +602,99 @@ jobs:
             tests/release/.output/selfhost-world/*/*/logs/
           retention-days: 7
           if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # Managed-cloud smoke — "Prove One Real Managed-Cloud Workspace": builds the
+  # six exact managed-cloud candidates (Server linux/amd64, the three musl
+  # runtime binaries, the git-credential-helper, the Desktop renderer targeted
+  # at the run's public candidate-API origin), provisions the run-scoped
+  # EC2+Route53 ingress and the immutable E2B template, and drives one real
+  # cheap managed-gateway turn inside a genuine E2B sandbox through the actual
+  # product UI (the CLOUD-PROVISION-1 cell). One new job per world (extension
+  # contract) — the local-world-smoke job above is untouched.
+  #
+  # `workflow_dispatch` only, same posture as local-world-smoke-1: NOT
+  # `continue-on-error` (a red command stays red with its real exit code), the
+  # `Qualification` environment supplies every secret/var (never routed to
+  # arbitrary pull-request code), and the evidence/log upload runs `if:
+  # always()`. Until the D2 bot-login seed exists, the GitHub OAuth serial
+  # step inside the scenario reports blocked honestly (never skip-as-success)
+  # — this job is still expected to run and upload evidence for every other
+  # step.
+  release-e2e-managed-cloud:
+    name: cloud-provision-1 (manual, strict)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: Qualification
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "."
+
+      - name: Install MUSL target
+        run: rustup target add x86_64-unknown-linux-musl
+      - name: Setup Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.13.0
+      - name: Install cargo-zigbuild
+        run: cargo install cargo-zigbuild --locked
+      - name: Install E2B CLI
+        # Only used by the world's `e2b_template` cleanup releaser
+        # (`template.ts`'s `E2bTemplateBuilder.deleteTemplate`); the build
+        # itself goes through the `e2b` SDK dependency already in the
+        # workspace lockfile.
+        run: npm install -g @e2b/cli
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the six exact candidates and run CLOUD-PROVISION-1 (strict)
+        env:
+          # Mapped directly from the protected `Qualification` environment,
+          # same LiteLLM inputs as local-world-smoke-1 plus the cloud-only
+          # inputs (tests/release/src/config/env-manifest.ts). Arbitrary PR
+          # code never runs this job or sees these.
+          AGENT_GATEWAY_LITELLM_BASE_URL: ${{ vars.AGENT_GATEWAY_LITELLM_BASE_URL }}
+          AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL: ${{ vars.AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL }}
+          AGENT_GATEWAY_LITELLM_MASTER_KEY: ${{ secrets.AGENT_GATEWAY_LITELLM_MASTER_KEY }}
+          RELEASE_E2E_E2B_API_KEY: ${{ secrets.RELEASE_E2E_E2B_API_KEY }}
+          RELEASE_E2E_E2B_TEAM_ID: ${{ vars.RELEASE_E2E_E2B_TEAM_ID }}
+          RELEASE_E2E_CLOUD_AWS_REGION: ${{ vars.RELEASE_E2E_CLOUD_AWS_REGION }}
+          RELEASE_E2E_CLOUD_ROUTE53_ZONE_ID: ${{ vars.RELEASE_E2E_CLOUD_ROUTE53_ZONE_ID }}
+          RELEASE_E2E_CLOUD_GITHUB_APP_ID: ${{ vars.RELEASE_E2E_CLOUD_GITHUB_APP_ID }}
+          RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_ID: ${{ vars.RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_ID }}
+          RELEASE_E2E_CLOUD_GITHUB_APP_INSTALLATION_ID: ${{ vars.RELEASE_E2E_CLOUD_GITHUB_APP_INSTALLATION_ID }}
+          RELEASE_E2E_CLOUD_GITHUB_APP_PRIVATE_KEY: ${{ secrets.RELEASE_E2E_CLOUD_GITHUB_APP_PRIVATE_KEY }}
+          RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET: ${{ secrets.RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET }}
+          # AWS credentials stay ambient (the `aws` CLI reads them directly),
+          # never a manifest var — matching the self-host precedent.
+          AWS_ACCESS_KEY_ID: ${{ secrets.RELEASE_E2E_CLOUD_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.RELEASE_E2E_CLOUD_AWS_SECRET_ACCESS_KEY }}
+          # Same bounded, secret-free diagnostics convention as local-world-smoke-1.
+          MANAGED_CLOUD_SMOKE_DEBUG_DIR: ${{ github.workspace }}/tests/release/.output/managed-cloud-world/qlc-ci-${{ github.run_id }}-${{ github.run_attempt }}/debug/logs
+        run: |
+          set -euo pipefail
+          make qualification-managed-cloud \
+            PROFILE="ci-${{ github.run_id }}-${{ github.run_attempt }}" \
+            BEHAVIOR=strict
+
+      - name: Upload V4 report and bounded diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloud-provision-1-evidence
+          path: |
+            tests/release/.output/managed-cloud-world/*/*/evidence/
+            tests/release/.output/managed-cloud-world/*/*/logs/
+          retention-days: 7
+          if-no-files-found: ignore

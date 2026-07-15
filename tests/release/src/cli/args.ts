@@ -203,7 +203,8 @@ Usage: pnpm exec tsx src/cli/run.ts --behavior <diagnostic|strict> [flags]
 
 Flags:
   --behavior <diagnostic|strict>  Required. Diagnostic tolerates blocked/expected-fail; strict is a fail-closed gate.
-  --lane <local|staging>     Which target server the runtime lanes talk to (default: local)
+  --lane <local|staging|cloud>  Which target server the runtime lanes talk to (default: local); "cloud" is the
+                             run-scoped managed-cloud candidate API (CLOUD-PROVISION-1)
   --desktop <web|native>     Desktop lane to drive (default: web)
   --agents <list|all>        Comma-separated harness kinds, or "all" (default: all)
   --scenarios <list|all>     Comma-separated scenario ids, or "all" (default: all)

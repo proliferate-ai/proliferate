@@ -24,8 +24,11 @@ import type { ActorKeyIdentity } from "../services/qualification-litellm.js";
  *   - never persists the generated password or raw virtual key in evidence.
  *
  * It MAY use the authenticated gateway-selection API
- * (`PUT {api_prefix}/v1/cloud/agent-gateway/selections/{harness_kind}`) to
- * select `gateway` for the representative harness — prerequisite state only.
+ * (`PUT {api_prefix}/v1/cloud/agent-gateway/selections/{harness_kind}?surface=…`)
+ * to select `gateway` for the representative harness — prerequisite state only.
+ * The surface defaults to `local` (what the desktop pushes to a local runtime);
+ * the managed-cloud scenario overrides it to `cloud` via `gatewaySurface` so the
+ * cloud sandbox's materialized state.json carries the gateway source.
  * It MUST NOT call `PUT /v1/agent-auth/state` itself; Desktop pushes that.
  *
  * Verified against `origin/main` `0eab251fd`:
@@ -110,6 +113,17 @@ export interface AuthenticatedActorOptions {
   harnessKind?: string;
   /** Set false to skip the gateway-selection PUT (default true). */
   selectGatewayRoute?: boolean;
+  /**
+   * Which agent-auth SURFACE to write the gateway selection to (default
+   * "local"). The local runtime (local-workspace world) reads the `local`
+   * surface the desktop pushes; a CLOUD sandbox is materialized from the
+   * `cloud` surface only (`materialize_agent_auth` →
+   * `build_agent_auth_state(..., surface="cloud")`), and only a `cloud`-surface
+   * PUT triggers `schedule_materialize_agent_auth`
+   * (`agent_gateway/service.py`), so the managed-cloud scenario MUST select
+   * "cloud" or the sandbox's state.json carries no gateway source to probe.
+   */
+  gatewaySurface?: "local" | "cloud";
 }
 
 interface DesktopTokenResponse {
@@ -160,7 +174,7 @@ export interface AuthenticatedActorTransport {
   loginWithPassword(apiBaseUrl: string, email: string, password: string): Promise<DesktopTokenResponse>;
   listOrganizations(api: ApiClient): Promise<OrganizationsListResponse>;
   getEnrollment(api: ApiClient): Promise<EnrollmentResponse>;
-  putGatewaySelection(api: ApiClient, harnessKind: string): Promise<void>;
+  putGatewaySelection(api: ApiClient, harnessKind: string, surface: "local" | "cloud"): Promise<void>;
 }
 
 export const defaultAuthenticatedActorTransport: AuthenticatedActorTransport = {
@@ -202,10 +216,11 @@ export const defaultAuthenticatedActorTransport: AuthenticatedActorTransport = {
   async getEnrollment(api) {
     return api.get<EnrollmentResponse>("/v1/cloud/agent-gateway/enrollment");
   },
-  async putGatewaySelection(api, harnessKind) {
-    await api.put(`/v1/cloud/agent-gateway/selections/${encodeURIComponent(harnessKind)}?surface=local`, {
-      sources: [{ sourceKind: "gateway", enabled: true }],
-    });
+  async putGatewaySelection(api, harnessKind, surface) {
+    await api.put(
+      `/v1/cloud/agent-gateway/selections/${encodeURIComponent(harnessKind)}?surface=${encodeURIComponent(surface)}`,
+      { sources: [{ sourceKind: "gateway", enabled: true }] },
+    );
   },
 };
 
@@ -280,7 +295,7 @@ export async function authenticatedActor(
   });
 
   if (options.selectGatewayRoute !== false) {
-    await transport.putGatewaySelection(api, harnessKind);
+    await transport.putGatewaySelection(api, harnessKind, options.gatewaySurface ?? "local");
   }
 
   const gatewayKey = await world.gateway.resolveActorKey({
