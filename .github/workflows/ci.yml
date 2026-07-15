@@ -262,6 +262,40 @@ jobs:
       - name: Build web
         run: pnpm web:build
 
+  # Fail-closed phase-6 /login first-load budget gate (WDU-1247-B1). Builds the
+  # Web host against a fixed anonymous API fixture, loads /login in headless
+  # Chromium with that fixture intercepted, waits for the durable login-ready
+  # marker + settled network, and enforces the founder-approved gzip-9 ceilings
+  # (JS 485000 B, CSS 66000 B; zero eager fonts/images/audio) FAIL-CLOSED. No
+  # continue-on-error: a regression fails CI on PRs and main, which also gates
+  # the Deploy Staging workflow_run spine.
+  login-budget:
+    name: Login first-load budget (phase-6)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.11.0
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Install Playwright chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build shared packages
+        run: pnpm shared:build
+
+      - name: Enforce /login runtime budget
+        run: node scripts/measure-login-runtime-budget.mjs
+
   shared-frontend-packages:
     name: Shared frontend packages
     runs-on: ubuntu-latest

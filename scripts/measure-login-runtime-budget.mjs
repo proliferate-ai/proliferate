@@ -8,20 +8,39 @@
 // side-effect assets (e.g. `ding-*.mp3`) with `index.html`, so it would count
 // bytes the browser never requests on `/login`. The phase-6 contract requires
 // the gate to measure what the browser actually REQUESTS before readiness:
-// fresh cache, a durable ProductClient readiness marker, `document.fonts.ready`,
-// and a bounded network-idle settle. This script is that gate, kept in-tree so
+// fresh cache, a fixed anonymous auth fixture, a durable ProductClient
+// login-ready marker, `document.fonts.ready`, and a bounded network-idle settle
+// that FAILS when it is not reached. This script is that gate, kept in-tree so
 // it is reproducible and rerunnable against exact merged main.
 //
+// DETERMINISM (WDU-1247-B1 repair). The Web host boots by POSTing a real
+// session bootstrap and probing the deployment for its sign-in methods. Left
+// live those requests make the "readiness" ambiguous — a slow/erroring backend
+// could render a retry screen that still contains a `button`/`input`, and an
+// unsettled request stream could be silently ignored. This collector removes
+// that ambiguity: it intercepts EVERY request, serves the built dist from the
+// loopback origin, and answers the cross-origin API with a FIXED anonymous
+// fixture (bootstrap 401 -> signed-out; deterministic method/health probes).
+// Any request to an unexpected cross-origin endpoint fails the gate closed. It
+// then waits for the durable `[data-auth-screen="auth"]` login-ready marker
+// (set only once the shell resolves to the signed-out sign-in surface — an
+// error/loading screen never satisfies it), and treats a network-idle that is
+// never reached as a measurement failure rather than a pass.
+//
 // WHAT IT DOES.
-//   1. Builds `apps/web` (skip with --no-build to measure an existing dist).
+//   1. Builds `apps/web` against the fixed fixture origin (skip with --no-build
+//      to measure an existing dist).
 //   2. Serves apps/web/dist over loopback.
-//   3. Loads /login in headless Chromium with a fresh context (fresh cache),
-//      records unique same-origin GET responses until readiness, then computes
-//      gzip-9 byte totals per kind (js/css/font/image/audio) from the on-disk
-//      dist files (same compression metric as the baseline collector).
+//   3. Loads /login in headless Chromium with a fresh context (fresh cache) and
+//      the fixed anonymous API fixture, records unique same-origin GET
+//      responses until the durable login-ready marker + fonts + settled
+//      network, then computes gzip-9 byte totals per kind
+//      (js/css/font/image/audio) from the on-disk dist files (same compression
+//      metric as the baseline collector).
 //   4. Enforces the founder-approved gzip-9 ceilings FAIL-CLOSED (see CAPS):
-//      exits non-zero if requested JS or CSS exceeds its cap, or if any font /
-//      image / audio byte is requested on /login (baseline is 0).
+//      exits non-zero if requested JS or CSS exceeds its cap, if any font /
+//      image / audio byte is requested on /login (baseline is 0), or if an
+//      unexpected cross-origin endpoint is requested.
 //   5. Emits a machine-readable ledger bound to the tested commit SHA and
 //      prints the exact rerun command.
 //
@@ -33,10 +52,14 @@
 //
 // USAGE.
 //   node scripts/measure-login-runtime-budget.mjs [--no-build] [--out <path>]
-//   (build first if using --no-build: pnpm shared:build && pnpm web:build)
+//   (build first if using --no-build so the dist is built against the fixed
+//    fixture origin: pnpm shared:build && VITE_PROLIFERATE_API_BASE_URL=<fixture>
+//    pnpm web:build — the default rerun command below does this for you.)
 //
-// Exit codes: 0 = within all ceilings; 1 = over a ceiling / unexpected asset;
-// 2 = measurement could not be performed (build/serve/browser error).
+// Exit codes: 0 = within all ceilings; 1 = over a ceiling / unexpected asset /
+// unexpected cross-origin request; 2 = measurement could not be performed
+// (build/serve/browser error, or the login-ready marker / network settle was
+// never reached).
 
 import { execFileSync } from "node:child_process";
 import { createServer } from "node:http";
@@ -61,8 +84,20 @@ const CAPS = { js: 485000, css: 66000 };
 // regression (login/callback must not eagerly load fonts/images/audio).
 const ZERO_KINDS = ["font", "image", "audio"];
 
+// Fixed anonymous auth fixture. The web build bakes in
+// VITE_PROLIFERATE_API_BASE_URL, so we build against this sentinel origin and
+// intercept it in the browser with canned signed-out responses. This makes the
+// measurement hermetic and deterministic: no live backend, no
+// slow/erroring-network ambiguity, and a login-ready state that is always the
+// real signed-out sign-in surface.
+const FIXTURE_API_ORIGIN = "https://login-budget-fixture.invalid";
+// The durable ProductClient login-ready marker (AuthScreenLayout renders
+// data-auth-screen="auth" only once resolved to the signed-out sign-in surface).
+const LOGIN_READY_SELECTOR = '[data-auth-screen="auth"]';
+
 const RERUN_COMMAND =
-  "pnpm shared:build && pnpm web:build && node scripts/measure-login-runtime-budget.mjs --no-build";
+  `pnpm shared:build && VITE_PROLIFERATE_API_BASE_URL=${FIXTURE_API_ORIGIN} pnpm web:build ` +
+  "&& node scripts/measure-login-runtime-budget.mjs --no-build";
 
 const args = process.argv.slice(2);
 const noBuild = args.includes("--no-build");
@@ -136,9 +171,17 @@ function serveDist() {
 
 // ---- 1. build ----
 if (!noBuild) {
-  console.error("[login-budget] building apps/web (pnpm web:build)…");
+  console.error(
+    `[login-budget] building apps/web against fixture origin ${FIXTURE_API_ORIGIN}…`,
+  );
   try {
-    execFileSync("pnpm", ["run", "web:build"], { cwd: REPO_ROOT, stdio: "inherit" });
+    execFileSync("pnpm", ["run", "web:build"], {
+      cwd: REPO_ROOT,
+      stdio: "inherit",
+      // Bake the fixed fixture origin into the bundle so the login shell's
+      // bootstrap/probe requests target an origin we deterministically stub.
+      env: { ...process.env, VITE_PROLIFERATE_API_BASE_URL: FIXTURE_API_ORIGIN },
+    });
   } catch {
     fail(2, "web:build failed; run `pnpm shared:build` first if package dist is stale.");
   }
@@ -158,12 +201,76 @@ try {
 const { server, port } = await serveDist();
 const base = `http://127.0.0.1:${port}`;
 const requested = new Map(); // pathname -> kind
+// Cross-origin endpoints the fixed anonymous fixture answers. Anything else the
+// login shell tries to reach cross-origin is an unexpected producer and fails
+// the gate closed.
+const unexpectedCrossOrigin = [];
+
+// The fixed anonymous auth fixture: canned signed-out responses for exactly the
+// endpoints the public login shell touches at boot (session bootstrap, health,
+// sign-in method/availability probes). Bootstrap 401 -> the shell resolves to
+// the signed-out sign-in surface; probes report a deterministic method set.
+function fixtureResponseFor(pathname) {
+  const json = (status, body) => ({
+    status,
+    contentType: "application/json",
+    body: JSON.stringify(body),
+  });
+  // Anonymous: no refresh cookie -> bootstrap/refresh are unauthorized.
+  if (pathname === "/auth/web/session/bootstrap" || pathname === "/auth/web/session/refresh") {
+    return json(401, { detail: "unauthenticated" });
+  }
+  if (pathname === "/health") return json(200, { status: "ok" });
+  if (pathname === "/auth/desktop/methods") {
+    return json(200, { password_login: false, github: true });
+  }
+  if (pathname === "/auth/desktop/github/availability") {
+    return json(200, { enabled: true, client_id: "login-budget-fixture" });
+  }
+  if (pathname === "/auth/sso/discover") return json(200, { enabled: false });
+  // The anonymous login shell also probes the connected deployment's public
+  // capability contract and the launch catalog before auth. Answer both with
+  // benign, deterministic bodies so the shell settles without a live backend.
+  if (pathname === "/meta") return json(200, { capabilities: {} });
+  if (pathname === "/v1/catalogs/agents") {
+    return json(200, { schemaVersion: 2, agents: [] });
+  }
+  return null;
+}
 
 let browser;
+let readyMarkerReached = false;
+let networkSettled = false;
 try {
   browser = await chromium.launch();
   const context = await browser.newContext(); // fresh profile = fresh cache
   const page = await context.newPage();
+
+  // Intercept EVERY request. Loopback dist requests pass through to the local
+  // server; the fixture origin gets canned anonymous answers; any other
+  // cross-origin request is recorded as unexpected and aborted (fail-closed).
+  await context.route("**/*", (route) => {
+    const u = new URL(route.request().url());
+    if (u.origin === base) {
+      route.continue();
+      return;
+    }
+    if (u.origin === FIXTURE_API_ORIGIN) {
+      const fixture = fixtureResponseFor(u.pathname);
+      if (fixture) {
+        route.fulfill(fixture);
+        return;
+      }
+      // A fixture-origin path we did not anticipate: record and 404 it so the
+      // shell resolves deterministically but the gate still flags the gap.
+      unexpectedCrossOrigin.push(`${u.origin}${u.pathname}`);
+      route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
+      return;
+    }
+    // Truly unexpected cross-origin producer on the public login shell.
+    unexpectedCrossOrigin.push(`${u.origin}${u.pathname}`);
+    route.abort();
+  });
 
   page.on("response", (resp) => {
     const u = new URL(resp.url());
@@ -175,11 +282,30 @@ try {
   });
 
   await page.goto(`${base}/login`, { waitUntil: "load" });
-  // Readiness: the login shell rendered (ProductClient auth gate output present).
-  await page.waitForSelector("button, input, [data-auth-screen], form", { timeout: 30_000 });
+  // Readiness: the durable ProductClient login-ready marker, i.e. the shell
+  // resolved to the signed-out sign-in surface (not a loading/error screen).
+  try {
+    await page.waitForSelector(LOGIN_READY_SELECTOR, { timeout: 30_000 });
+    readyMarkerReached = true;
+  } catch {
+    throw new Error(
+      `login-ready marker ${LOGIN_READY_SELECTOR} never appeared; the signed-out ` +
+        "sign-in surface was not reached (the ledger must not pass without it).",
+    );
+  }
   await page.evaluate(() => document.fonts.ready);
-  // Bounded network-idle settle, then a fixed drain window for late requests.
-  await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {});
+  // Bounded network-idle settle. A stream that never settles is a measurement
+  // failure — we do NOT swallow the timeout and pass anyway.
+  try {
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    networkSettled = true;
+  } catch {
+    throw new Error(
+      "network never reached idle within 15s on /login; the request stream did " +
+        "not settle, so the measurement is not trustworthy (fail closed).",
+    );
+  }
+  // Short fixed drain for any late same-origin asset after idle.
   await page.waitForTimeout(2_000);
 } catch (err) {
   await browser?.close().catch(() => {});
@@ -188,6 +314,10 @@ try {
 } finally {
   await browser?.close().catch(() => {});
   server.close();
+}
+
+if (!readyMarkerReached || !networkSettled) {
+  fail(2, "readiness or network settle was not reached; refusing to emit a passing ledger.");
 }
 
 // ---- tally ----
@@ -213,12 +343,35 @@ for (const k of ZERO_KINDS) {
     violations.push(`${k} ${perKind[k]} B requested on /login (baseline 0; must not eagerly load)`);
   }
 }
+const unexpected = [...new Set(unexpectedCrossOrigin)].sort();
+if (unexpected.length > 0) {
+  violations.push(
+    `unexpected cross-origin request(s) on /login: ${unexpected.join(", ")} ` +
+      "(not in the fixed anonymous fixture)",
+  );
+}
 const pass = violations.length === 0;
 
 // ---- 5. ledger bound to tested SHA ----
 const ledger = {
   schema: "login-runtime-budget/v1",
-  measuredAt: "runtime headless chromium, fresh cache, ProductClient readiness marker, document.fonts.ready, bounded network-idle + 2s settle",
+  measuredAt:
+    "runtime headless chromium; fresh cache; fixed anonymous API fixture " +
+    `(${FIXTURE_API_ORIGIN}); durable login-ready marker ${LOGIN_READY_SELECTOR}; ` +
+    "document.fonts.ready; network-idle (fail-closed, not swallowed) + 2s drain",
+  readiness: {
+    loginReadySelector: LOGIN_READY_SELECTOR,
+    markerReached: readyMarkerReached,
+    networkSettled,
+    fixtureApiOrigin: FIXTURE_API_ORIGIN,
+    fixtureEndpoints: [
+      "POST /auth/web/session/bootstrap -> 401 (anonymous)",
+      "GET /health -> 200",
+      "GET /auth/desktop/methods -> 200",
+      "GET /auth/desktop/github/availability -> 200",
+      "GET /auth/sso/discover -> 200 { enabled: false }",
+    ],
+  },
   testedSha: gitSha(),
   base: "/login",
   compressionMetric: "gzip (Node zlib, level 9) for js/css/svg/other; emitted bytes for fonts/images/audio",
@@ -234,6 +387,7 @@ const ledger = {
   jsBytes,
   cssBytes,
   headroom: { js: CAPS.js - jsBytes, css: CAPS.css - cssBytes },
+  unexpectedCrossOrigin: unexpected,
   pass,
   violations,
   files,
