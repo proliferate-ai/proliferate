@@ -421,6 +421,58 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     secret: true,
   },
   {
+    name: "RELEASE_E2E_BYOK_ANTHROPIC_A",
+    description:
+      "Dedicated bounded BYOK (bring-your-own-key) Anthropic provider key for the LOCAL-3 user-API-key " +
+      "route of the CLAUDE harness (and the LOCAL-6 route-change actor). Stored + selected through the " +
+      "product Settings UI as a user-owned credential; the user-key route must consume ZERO managed LLM " +
+      "credit and leave the managed balance unchanged. Distinct from RELEASE_E2E_BYOK_ANTHROPIC_B so the two " +
+      "Anthropic-consuming harnesses (claude, opencode) stay isolated. Never enters logs or evidence.",
+    whereItLives:
+      "A rate/spend-bounded Anthropic API key reserved for qualification BYOK. Local: " +
+      "~/.proliferate-local/dev/qualification-infra.env (mode 0600). CI: the `Qualification` environment secret.",
+    secret: true,
+    lanes: ["local"],
+  },
+  {
+    name: "RELEASE_E2E_BYOK_ANTHROPIC_B",
+    description:
+      "Second bounded BYOK Anthropic provider key, for the LOCAL-3 user-API-key route of the OPENCODE harness " +
+      "(its matching DIRECT provider, distinct from the injected `proliferate` gateway provider). Kept " +
+      "separate from RELEASE_E2E_BYOK_ANTHROPIC_A so concurrent claude/opencode user-key cells do not share a " +
+      "key. Zero managed spend / zero balance change asserted. Never enters logs or evidence.",
+    whereItLives:
+      "A second rate/spend-bounded Anthropic API key. Local: ~/.proliferate-local/dev/qualification-infra.env " +
+      "(mode 0600). CI: the `Qualification` environment secret.",
+    secret: true,
+    lanes: ["local"],
+  },
+  {
+    name: "RELEASE_E2E_BYOK_OPENAI",
+    description:
+      "Bounded BYOK OpenAI provider key for the LOCAL-3 user-API-key route of the CODEX harness (codex's own " +
+      "provider family). Stored + selected through the product Settings UI; the user-key route must consume " +
+      "zero managed LLM credit. Never enters logs or evidence.",
+    whereItLives:
+      "A rate/spend-bounded OpenAI API key reserved for qualification BYOK. Local: " +
+      "~/.proliferate-local/dev/qualification-infra.env (mode 0600). CI: the `Qualification` environment secret.",
+    secret: true,
+    lanes: ["local"],
+  },
+  {
+    name: "RELEASE_E2E_BYOK_XAI",
+    description:
+      "Bounded BYOK xAI provider key for the LOCAL-3 user-API-key route of the GROK harness. Stored + selected " +
+      "through the product Settings UI; the user-key route must consume zero managed LLM credit. Never enters " +
+      "logs or evidence. (Cursor is EXCLUDED from the user-key matrix: its CURSOR_API_KEY is an account key, " +
+      "not a provider key — no BYOK var is declared for it.)",
+    whereItLives:
+      "A rate/spend-bounded xAI API key reserved for qualification BYOK. Local: " +
+      "~/.proliferate-local/dev/qualification-infra.env (mode 0600). CI: the `Qualification` environment secret.",
+    secret: true,
+    lanes: ["local"],
+  },
+  {
     name: "RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY",
     description:
       "Bounded, run-scoped Anthropic provider key used by SELFHOST-INSTALL-1's SH-BASE-TURN cell: the owner " +

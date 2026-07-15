@@ -8,6 +8,8 @@ import type {
   ScenarioCellSpec,
 } from "./types.js";
 import { ScenarioExpectedFailError } from "./types.js";
+import { collectLocal2GatewayCells } from "./local/chat-authroute.js";
+import { isWorldBackedRun } from "./local/world-boot.js";
 import { DEFAULT_GITHUB_TEST_REPO, DEFAULT_LOCAL_RUNTIME_URL } from "../config/env-manifest.js";
 import { ensureLocalClone } from "../fixtures/git.js";
 import { LocalRuntimeClient, findErrorEvent, findLastAssistantReply, findTurnEndedEvent } from "../fixtures/local-runtime.js";
@@ -83,6 +85,12 @@ export const t3Chat1: MatrixScenarioDefinition = {
           "/v1/gateway/cloud-sandbox/anyharness/* proxy is not yet implemented — it needs a running " +
           "durable sandbox and a publicly reachable RELEASE_E2E_SERVER_URL. Tracked test TODO (#1042).",
       );
+    }
+    // World-backed local run (functional entrypoint, candidate map supplied) =
+    // the canonical LOCAL-2 managed-gateway journey per harness (chat-authroute).
+    // A diagnostic local run with no candidate world keeps the legacy behaviour.
+    if (isWorldBackedRun(ctx)) {
+      return collectLocal2GatewayCells(ctx, cells);
     }
     return runLocalLane(cells);
   },

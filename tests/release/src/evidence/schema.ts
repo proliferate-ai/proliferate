@@ -91,14 +91,22 @@ export interface TestRunReportV3 {
 /**
  * One result's optional bounded evidence. Append-only union (see "Parallel
  * Tracks - Extension Contract"): each track adds exactly its own kind(s).
- * `local_workspace_turn` is the Tier-3 local-world proof; `tier2_billing`
- * (PR 4) binds, per Tier-2 cell, the asserted ruled policy values, safe Stripe
+ * `local_workspace_turn` is the Tier-3 local-world proof (its `harness` widens
+ * to the closed shipped harness-kind set); the four `local_*` variants (PR 5f,
+ * audit ruling #3) cover the functional local journeys; `tier2_billing` (PR 4)
+ * binds, per Tier-2 cell, the asserted ruled policy values, safe Stripe
  * object/test-clock ids, and ledger deltas; PR 3 adds the four self-host
  * journey-cell kinds. Each kind is validated by its own kind-scoped function;
  * a kind never touches another kind's validation (extension-contract rule).
+ * Green-requires-complete-clean-evidence is preserved for every kind that
+ * demands it.
  */
 export type CellEvidenceV1 =
   | LocalWorkspaceTurnEvidenceV1
+  | LocalRouteTurnEvidenceV1
+  | LocalConfigMatrixEvidenceV1
+  | LocalSessionTabsEvidenceV1
+  | LocalMcpIntegrationEvidenceV1
   | Tier2BillingEvidenceV1
   | SelfHostInstallClaimEvidenceV1
   | SelfHostDesktopOwnerEvidenceV1
@@ -149,6 +157,35 @@ export interface Tier2BillingEvidenceV1 {
     webhook_receipts_delta: number;
     holds_delta: number;
   };
+}
+
+/** The closed set of shipped catalog harness kinds (audit ruling #3). Kept as a
+ * literal union + runtime array so both the type system and the kind-scoped
+ * validators reference one source. If the catalog gains a harness kind, extend
+ * both here (append-only). */
+export type LocalHarnessKind = "claude" | "codex" | "cursor" | "grok" | "opencode";
+export const LOCAL_HARNESS_KINDS: readonly LocalHarnessKind[] = [
+  "claude",
+  "codex",
+  "cursor",
+  "grok",
+  "opencode",
+];
+
+/** Which route a local-functional turn launched on. */
+export type LocalRoute = "gateway" | "user_key";
+
+/** The correlated per-turn LiteLLM spend block, shared by the new route-turn and
+ * (structurally) identical to `LocalWorkspaceTurnEvidenceV1.litellm`. */
+export interface LocalLitellmSpendV1 {
+  token_id_hash: string;
+  request_ids: string[];
+  window_started_at: string;
+  window_finished_at: string;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  spend_usd: number;
 }
 
 /**
@@ -249,12 +286,28 @@ export interface SelfHostInviteeEvidenceV1 extends SelfHostEvidenceBaseV1 {
 /** The scenario id whose green cells require complete self-host evidence. */
 export const SELFHOST_INSTALL_1_SCENARIO_ID = "SELFHOST-INSTALL-1";
 
+/** The reverse-order cleanup reconciliation block, shared by the new local
+ * functional kinds and (structurally) identical to
+ * `LocalWorkspaceTurnEvidenceV1.cleanup`. */
+export interface LocalCleanupV1 {
+  ledger_id_hash: string;
+  registered: number;
+  reconciled: number;
+  failed: number;
+  virtual_key_deleted: boolean;
+  litellm_subjects_deleted: boolean;
+  browser_closed: boolean;
+  processes_stopped: boolean;
+  containers_removed: boolean;
+  local_paths_removed: boolean;
+}
+
 export interface LocalWorkspaceTurnEvidenceV1 {
   kind: "local_workspace_turn";
   artifact_ids: string[];
   server_version: string;
   anyharness_version: string;
-  harness: "claude";
+  harness: LocalHarnessKind;
   model_id: string;
   workspace_id_hash: string;
   session_id_hash: string;
@@ -281,6 +334,93 @@ export interface LocalWorkspaceTurnEvidenceV1 {
     containers_removed: boolean;
     local_paths_removed: boolean;
   };
+}
+
+/**
+ * LOCAL-2 / LOCAL-3 / LOCAL-6 route turn. Exactly one of `gateway_spend`
+ * (route=gateway) / `user_key_isolation` (route=user_key) is non-null; a
+ * `route_change` block is present only for LOCAL-6. `billing_reconcile_deferred`
+ * is always true here (audit ruling #1: the product usage-import/balance/debit
+ * reconcile is DEFERRED to PR 4's billing half; no T3-BILL-1 claim is made).
+ */
+export interface LocalRouteTurnEvidenceV1 {
+  kind: "local_route_turn";
+  journey: "LOCAL-2" | "LOCAL-3" | "LOCAL-6";
+  artifact_ids: string[];
+  server_version: string;
+  anyharness_version: string;
+  harness: LocalHarnessKind;
+  route: LocalRoute;
+  model_id: string;
+  workspace_id_hash: string;
+  session_id_hash: string;
+  transcript_reopened: true;
+  /** Non-null iff route === "gateway": correlated LiteLLM spend for the actor key. */
+  gateway_spend: LocalLitellmSpendV1 | null;
+  /** Non-null iff route === "user_key": zero managed spend + zero balance move. */
+  user_key_isolation: { litellm_spend_rows: 0; managed_balance_delta_usd: 0 } | null;
+  /** LOCAL-6 only: the retained user-key session and the switched-to gateway session. */
+  route_change: {
+    original_route: "user_key";
+    original_session_id_hash: string;
+    new_route: "gateway";
+    new_session_id_hash: string;
+  } | null;
+  billing_reconcile_deferred: true;
+  cleanup: LocalCleanupV1;
+}
+
+/** LOCAL-4 live configuration matrix. Each control records the last-accepted
+ * value read back from the UI and whether the applied value was rejected (which
+ * must have restored the last-accepted value). #1063 rejections are tracked
+ * `known_1063_expected_fail`, never green. */
+export interface LocalConfigMatrixEvidenceV1 {
+  kind: "local_config_matrix";
+  artifact_ids: string[];
+  server_version: string;
+  anyharness_version: string;
+  harness: LocalHarnessKind;
+  model_id: string;
+  workspace_id_hash: string;
+  session_id_hash: string;
+  controls: Array<{ control_key: string; accepted_value: string; rejected: boolean }>;
+  known_1063_expected_fail: boolean;
+  cleanup: LocalCleanupV1;
+}
+
+/** LOCAL-5 session and tab semantics (single cell). Each boolean records one of
+ * the four proofs; `session_id_hashes` are the distinct session ids observed. */
+export interface LocalSessionTabsEvidenceV1 {
+  kind: "local_session_tabs";
+  artifact_ids: string[];
+  server_version: string;
+  anyharness_version: string;
+  harness: LocalHarnessKind;
+  workspace_id_hash: string;
+  empty_switch_session_replaced: true;
+  messaged_switch_new_tab: true;
+  same_harness_model_change_in_session: true;
+  reload_preserved: true;
+  session_id_hashes: string[];
+  cleanup: LocalCleanupV1;
+}
+
+/** LOCAL-7 Product MCP integration (per harness). Correlates the agent's tool
+ * call through the Proliferate integrations MCP to its audit row. */
+export interface LocalMcpIntegrationEvidenceV1 {
+  kind: "local_mcp_integration";
+  artifact_ids: string[];
+  server_version: string;
+  anyharness_version: string;
+  harness: LocalHarnessKind;
+  model_id: string;
+  workspace_id_hash: string;
+  session_id_hash: string;
+  integration_namespace: string;
+  tool_name: string;
+  audit_event_id_hash: string;
+  audit_ok: true;
+  cleanup: LocalCleanupV1;
 }
 
 /** V4 result: a V3 result plus one bounded optional evidence attachment. */
@@ -463,10 +603,30 @@ export function validateReportV4(report: TestRunReportV4): void {
     throw new ReportValidationError("Report must be schema_version 4, kind proliferate.test-run.");
   }
   validateReportCore(report);
+  // A world-backed report (non-null candidate_build) is the functional local
+  // qualification path; the legacy diagnostic path omits the map and never
+  // requires kind-scoped evidence for its green cells. See BRIEF §"Evidence".
+  const worldBacked = report.candidate_build !== null;
   for (const result of report.results) {
-    validateCellEvidence(result);
+    validateCellEvidence(result, worldBacked);
   }
 }
+
+/**
+ * Green cells of these local-functional scenarios must carry complete
+ * kind-scoped evidence WHEN the run is world-backed (BRIEF §"Evidence"). The
+ * legacy diagnostic path (candidate_build null) is exempt. `LOCAL-WORLD-SMOKE-1`
+ * is required unconditionally (handled separately). `T3-WT-1` (LOCAL-1) is
+ * intentionally ABSENT: it runs no LLM turn and the four new kinds do not cover
+ * it, so its green cell carries `evidence: null`.
+ */
+export const LOCAL_FUNCTIONAL_EVIDENCE_SCENARIOS: readonly string[] = [
+  "T3-CHAT-1", // LOCAL-2 gateway turn → local_route_turn
+  "T3-AUTHROUTE-1", // LOCAL-3 user-key + LOCAL-6 route-change → local_route_turn
+  "T3-CFG-1", // LOCAL-4 config matrix → local_config_matrix
+  "T3-SESSION-1", // LOCAL-5 tabs → local_session_tabs
+  "T3-INT-1", // LOCAL-7 MCP → local_mcp_integration
+];
 
 /** The invariant walk shared by `validateReport` (V3) and `validateReportV4`. */
 function validateReportCore(report: ValidatableReportCore): void {
@@ -834,7 +994,7 @@ function requireBoolean(where: string, value: unknown): void {
  * representable except on a GREEN `LOCAL-WORLD-SMOKE-1` result, which must
  * carry complete evidence (spec "Aggregate evidence" / BRIEF §6.3).
  */
-function validateCellEvidence(result: FinalCellResultV2): void {
+function validateCellEvidence(result: FinalCellResultV2, worldBacked = true): void {
   // `evidence` is a required field of FinalCellResultV2, but the report
   // ultimately comes from parsed JSON (`writeReportV4`'s caller may pass an
   // externally-constructed object at runtime), so a missing key is still
@@ -844,7 +1004,10 @@ function validateCellEvidence(result: FinalCellResultV2): void {
   }
   const evidence = result.evidence;
   if (evidence === null) {
-    if (result.status === "green" && scenarioRequiresGreenEvidence(result.scenario_id)) {
+    if (
+      (result.status === "green" && scenarioRequiresGreenEvidence(result.scenario_id)) ||
+      requiresCompleteLocalEvidence(result, worldBacked)
+    ) {
       throw new ReportValidationError(
         `Green result "${result.cell_id}" for ${result.scenario_id} requires complete evidence.`,
       );
@@ -855,29 +1018,65 @@ function validateCellEvidence(result: FinalCellResultV2): void {
     throw new ReportValidationError(`Result "${result.cell_id}" evidence must be an object or null.`);
   }
   const where = `Result "${result.cell_id}" evidence`;
-  // Kind-scoped dispatch: each kind validates in its own function and never
-  // touches another kind's rules (extension-contract). Tier-2 billing evidence
-  // is validated by workstream D's `validateTier2BillingEvidence`.
+  // Kind-scoped dispatch (audit ruling #3 + extension contract). Each kind owns
+  // its own validator so no kind can weaken another's checks. The self-host
+  // slice owns the whole `selfhost_*` namespace (its green cells require a
+  // complete, clean cleanup block exactly like local_workspace_turn); route the
+  // family to its kind-scoped validator, which reports an unknown selfhost kind
+  // rather than mis-validating it. Unknown kinds otherwise fail closed.
   const evidenceKind = (evidence as { kind?: unknown }).kind;
-  if (evidenceKind === "tier2_billing") {
-    validateTier2BillingEvidence(where, evidence as Tier2BillingEvidenceV1, result.status);
-    return;
-  }
-  // Self-host journey kinds are validated by the PR 3 kind-scoped validators
-  // (scenario+evidence+cli workstream). Their green cells require a complete,
-  // clean cleanup block exactly like local_workspace_turn; do not weaken that.
-  // The self-host slice owns the `selfhost_` kind namespace; route the whole
-  // family (known kinds and any unrecognized `selfhost_*`) to its kind-scoped
-  // validator, which reports an unknown kind rather than mis-validating a
-  // self-host-shaped object against the local_workspace_turn key set.
   if (typeof evidenceKind === "string" && evidenceKind.startsWith("selfhost_")) {
     validateSelfHostCellEvidence(where, evidence as CellEvidenceV1, result.status);
     return;
   }
-  requireExactKeys(evidence, LOCAL_WORKSPACE_TURN_EVIDENCE_KEYS, where);
-  if (evidence.kind !== "local_workspace_turn") {
-    throw new ReportValidationError(`${where}.kind is unknown.`);
+  switch (evidence.kind) {
+    case "local_workspace_turn":
+      validateLocalWorkspaceTurnEvidence(evidence, where, result.status);
+      return;
+    case "local_route_turn":
+      validateLocalRouteTurnEvidence(evidence, where, result.status);
+      return;
+    case "local_config_matrix":
+      validateLocalConfigMatrixEvidence(evidence, where, result.status);
+      return;
+    case "local_session_tabs":
+      validateLocalSessionTabsEvidence(evidence, where, result.status);
+      return;
+    case "local_mcp_integration":
+      validateLocalMcpIntegrationEvidence(evidence, where, result.status);
+      return;
+    case "tier2_billing":
+      validateTier2BillingEvidence(where, evidence as Tier2BillingEvidenceV1, result.status);
+      return;
+    default:
+      throw new ReportValidationError(`${where}.kind is unknown.`);
   }
+}
+
+/** Whether a green result MUST carry complete evidence (see
+ * `LOCAL_FUNCTIONAL_EVIDENCE_SCENARIOS` + BRIEF §"Evidence"). */
+function requiresCompleteLocalEvidence(result: FinalCellResultV2, worldBacked: boolean): boolean {
+  if (result.status !== "green") {
+    return false;
+  }
+  if (result.scenario_id === "LOCAL-WORLD-SMOKE-1") {
+    return true;
+  }
+  return (
+    worldBacked &&
+    result.runtime_lane === "local" &&
+    LOCAL_FUNCTIONAL_EVIDENCE_SCENARIOS.includes(result.scenario_id)
+  );
+}
+
+/** The unchanged `local_workspace_turn` validator, extracted verbatim from the
+ * pre-dispatch `validateCellEvidence` (still claude-only; the smoke's kind). */
+function validateLocalWorkspaceTurnEvidence(
+  evidence: LocalWorkspaceTurnEvidenceV1,
+  where: string,
+  status: FinalTestStatus,
+): void {
+  requireExactKeys(evidence, LOCAL_WORKSPACE_TURN_EVIDENCE_KEYS, where);
   if (!Array.isArray(evidence.artifact_ids) || evidence.artifact_ids.length === 0) {
     throw new ReportValidationError(`${where}.artifact_ids must be a non-empty array.`);
   }
@@ -896,7 +1095,267 @@ function validateCellEvidence(result: FinalCellResultV2): void {
     throw new ReportValidationError(`${where}.transcript_reopened must be true.`);
   }
   validateLitellmEvidence(where, evidence.litellm);
-  validateCleanupEvidence(where, evidence.cleanup, result.status);
+  validateCleanupEvidence(where, evidence.cleanup, status);
+}
+
+// ── Kind-scoped validators for the four new local-functional evidence kinds ──
+// Owned by the evidence-runner workstream (BRIEF §"Evidence workstream"). The
+// contracts stage provides the exact key arrays + dispatch; the workstream
+// fills these bodies with the same safe-token/hash/positive-count/complete-clean
+// rigor the `local_workspace_turn` validator uses (reuse `validateLitellmEvidence`
+// for `gateway_spend` and `validateCleanupEvidence` for `cleanup`). Green
+// requires complete, clean evidence of the matching kind; cursor typed-unsupported
+// cells are `blocked`, not green, and carry `evidence: null`.
+
+export const LOCAL_ROUTE_TURN_EVIDENCE_KEYS = [
+  "kind",
+  "journey",
+  "artifact_ids",
+  "server_version",
+  "anyharness_version",
+  "harness",
+  "route",
+  "model_id",
+  "workspace_id_hash",
+  "session_id_hash",
+  "transcript_reopened",
+  "gateway_spend",
+  "user_key_isolation",
+  "route_change",
+  "billing_reconcile_deferred",
+  "cleanup",
+] as const;
+
+export const LOCAL_CONFIG_MATRIX_EVIDENCE_KEYS = [
+  "kind",
+  "artifact_ids",
+  "server_version",
+  "anyharness_version",
+  "harness",
+  "model_id",
+  "workspace_id_hash",
+  "session_id_hash",
+  "controls",
+  "known_1063_expected_fail",
+  "cleanup",
+] as const;
+
+export const LOCAL_SESSION_TABS_EVIDENCE_KEYS = [
+  "kind",
+  "artifact_ids",
+  "server_version",
+  "anyharness_version",
+  "harness",
+  "workspace_id_hash",
+  "empty_switch_session_replaced",
+  "messaged_switch_new_tab",
+  "same_harness_model_change_in_session",
+  "reload_preserved",
+  "session_id_hashes",
+  "cleanup",
+] as const;
+
+export const LOCAL_MCP_INTEGRATION_EVIDENCE_KEYS = [
+  "kind",
+  "artifact_ids",
+  "server_version",
+  "anyharness_version",
+  "harness",
+  "model_id",
+  "workspace_id_hash",
+  "session_id_hash",
+  "integration_namespace",
+  "tool_name",
+  "audit_event_id_hash",
+  "audit_ok",
+  "cleanup",
+] as const;
+
+/** Common front matter shared by every local-functional evidence kind:
+ * bounded artifact ids + version tokens + the widened harness field. */
+function validateLocalEvidenceCommon(
+  where: string,
+  evidence: {
+    artifact_ids: unknown;
+    server_version: unknown;
+    anyharness_version: unknown;
+    harness: unknown;
+  },
+): void {
+  if (!Array.isArray(evidence.artifact_ids) || evidence.artifact_ids.length === 0) {
+    throw new ReportValidationError(`${where}.artifact_ids must be a non-empty array.`);
+  }
+  for (const [index, id] of evidence.artifact_ids.entries()) {
+    requireSafeEvidenceToken(`${where}.artifact_ids[${index}]`, id);
+  }
+  requireSafeEvidenceToken(`${where}.server_version`, evidence.server_version);
+  requireSafeEvidenceToken(`${where}.anyharness_version`, evidence.anyharness_version);
+  if (!LOCAL_HARNESS_KINDS.includes(evidence.harness as LocalHarnessKind)) {
+    throw new ReportValidationError(`${where}.harness must be one of ${LOCAL_HARNESS_KINDS.join(", ")}.`);
+  }
+}
+
+const LOCAL_ROUTE_TURN_JOURNEYS = ["LOCAL-2", "LOCAL-3", "LOCAL-6"] as const;
+const LOCAL_ROUTES = ["gateway", "user_key"] as const;
+const USER_KEY_ISOLATION_KEYS = ["litellm_spend_rows", "managed_balance_delta_usd"] as const;
+const ROUTE_CHANGE_KEYS = ["original_route", "original_session_id_hash", "new_route", "new_session_id_hash"] as const;
+
+/**
+ * LOCAL-2/LOCAL-3/LOCAL-6 route turn (BRIEF §3.3). Cross-field rules: exactly
+ * one of `gateway_spend`/`user_key_isolation` matching `route`, and
+ * `route_change` present iff `journey === "LOCAL-6"`.
+ */
+function validateLocalRouteTurnEvidence(
+  evidence: LocalRouteTurnEvidenceV1,
+  where: string,
+  status: FinalTestStatus,
+): void {
+  requireExactKeys(evidence, LOCAL_ROUTE_TURN_EVIDENCE_KEYS, where);
+  validateLocalEvidenceCommon(where, evidence);
+  if (!LOCAL_ROUTE_TURN_JOURNEYS.includes(evidence.journey as (typeof LOCAL_ROUTE_TURN_JOURNEYS)[number])) {
+    throw new ReportValidationError(`${where}.journey must be one of ${LOCAL_ROUTE_TURN_JOURNEYS.join(", ")}.`);
+  }
+  if (!LOCAL_ROUTES.includes(evidence.route as (typeof LOCAL_ROUTES)[number])) {
+    throw new ReportValidationError(`${where}.route must be one of ${LOCAL_ROUTES.join(", ")}.`);
+  }
+  requireSafeEvidenceToken(`${where}.model_id`, evidence.model_id);
+  requireEvidenceHash(`${where}.workspace_id_hash`, evidence.workspace_id_hash);
+  requireEvidenceHash(`${where}.session_id_hash`, evidence.session_id_hash);
+  if (evidence.transcript_reopened !== true) {
+    throw new ReportValidationError(`${where}.transcript_reopened must be true.`);
+  }
+  if (evidence.route === "gateway") {
+    if (evidence.gateway_spend === null) {
+      throw new ReportValidationError(`${where}.gateway_spend must be non-null when route is "gateway".`);
+    }
+    if (evidence.user_key_isolation !== null) {
+      throw new ReportValidationError(`${where}.user_key_isolation must be null when route is "gateway".`);
+    }
+    validateLitellmEvidence(where, evidence.gateway_spend);
+  } else {
+    if (evidence.gateway_spend !== null) {
+      throw new ReportValidationError(`${where}.gateway_spend must be null when route is "user_key".`);
+    }
+    if (evidence.user_key_isolation === null) {
+      throw new ReportValidationError(`${where}.user_key_isolation must be non-null when route is "user_key".`);
+    }
+    requireExactKeys(evidence.user_key_isolation, USER_KEY_ISOLATION_KEYS, `${where}.user_key_isolation`);
+    if (evidence.user_key_isolation.litellm_spend_rows !== 0) {
+      throw new ReportValidationError(`${where}.user_key_isolation.litellm_spend_rows must be 0.`);
+    }
+    if (evidence.user_key_isolation.managed_balance_delta_usd !== 0) {
+      throw new ReportValidationError(`${where}.user_key_isolation.managed_balance_delta_usd must be 0.`);
+    }
+  }
+  if (evidence.journey === "LOCAL-6") {
+    if (evidence.route_change === null) {
+      throw new ReportValidationError(`${where}.route_change must be non-null for journey "LOCAL-6".`);
+    }
+    requireExactKeys(evidence.route_change, ROUTE_CHANGE_KEYS, `${where}.route_change`);
+    if (evidence.route_change.original_route !== "user_key") {
+      throw new ReportValidationError(`${where}.route_change.original_route must be "user_key".`);
+    }
+    if (evidence.route_change.new_route !== "gateway") {
+      throw new ReportValidationError(`${where}.route_change.new_route must be "gateway".`);
+    }
+    requireEvidenceHash(`${where}.route_change.original_session_id_hash`, evidence.route_change.original_session_id_hash);
+    requireEvidenceHash(`${where}.route_change.new_session_id_hash`, evidence.route_change.new_session_id_hash);
+  } else if (evidence.route_change !== null) {
+    throw new ReportValidationError(`${where}.route_change must be null outside journey "LOCAL-6".`);
+  }
+  if (evidence.billing_reconcile_deferred !== true) {
+    throw new ReportValidationError(`${where}.billing_reconcile_deferred must be true.`);
+  }
+  validateCleanupEvidence(where, evidence.cleanup, status);
+}
+
+const CONFIG_CONTROL_KEYS = ["control_key", "accepted_value", "rejected"] as const;
+
+/** LOCAL-4 live configuration matrix (BRIEF §3.3). */
+function validateLocalConfigMatrixEvidence(
+  evidence: LocalConfigMatrixEvidenceV1,
+  where: string,
+  status: FinalTestStatus,
+): void {
+  requireExactKeys(evidence, LOCAL_CONFIG_MATRIX_EVIDENCE_KEYS, where);
+  validateLocalEvidenceCommon(where, evidence);
+  requireSafeEvidenceToken(`${where}.model_id`, evidence.model_id);
+  requireEvidenceHash(`${where}.workspace_id_hash`, evidence.workspace_id_hash);
+  requireEvidenceHash(`${where}.session_id_hash`, evidence.session_id_hash);
+  if (!Array.isArray(evidence.controls) || evidence.controls.length === 0) {
+    throw new ReportValidationError(`${where}.controls must be a non-empty array.`);
+  }
+  for (const [index, control] of evidence.controls.entries()) {
+    const controlWhere = `${where}.controls[${index}]`;
+    if (typeof control !== "object" || control === null || Array.isArray(control)) {
+      throw new ReportValidationError(`${controlWhere} must be an object.`);
+    }
+    requireExactKeys(control, CONFIG_CONTROL_KEYS, controlWhere);
+    requireSafeEvidenceToken(`${controlWhere}.control_key`, control.control_key);
+    requireSafeEvidenceToken(`${controlWhere}.accepted_value`, control.accepted_value);
+    requireBoolean(`${controlWhere}.rejected`, control.rejected);
+  }
+  requireBoolean(`${where}.known_1063_expected_fail`, evidence.known_1063_expected_fail);
+  // A known #1063 rejection is never green (BRIEF §3.3: "never green").
+  if (status === "green" && evidence.known_1063_expected_fail === true) {
+    throw new ReportValidationError(`${where}.known_1063_expected_fail cannot be true on a green result.`);
+  }
+  validateCleanupEvidence(where, evidence.cleanup, status);
+}
+
+/** LOCAL-5 session and tab semantics (BRIEF §3.3). */
+function validateLocalSessionTabsEvidence(
+  evidence: LocalSessionTabsEvidenceV1,
+  where: string,
+  status: FinalTestStatus,
+): void {
+  requireExactKeys(evidence, LOCAL_SESSION_TABS_EVIDENCE_KEYS, where);
+  validateLocalEvidenceCommon(where, evidence);
+  requireEvidenceHash(`${where}.workspace_id_hash`, evidence.workspace_id_hash);
+  if (evidence.empty_switch_session_replaced !== true) {
+    throw new ReportValidationError(`${where}.empty_switch_session_replaced must be true.`);
+  }
+  if (evidence.messaged_switch_new_tab !== true) {
+    throw new ReportValidationError(`${where}.messaged_switch_new_tab must be true.`);
+  }
+  if (evidence.same_harness_model_change_in_session !== true) {
+    throw new ReportValidationError(`${where}.same_harness_model_change_in_session must be true.`);
+  }
+  if (evidence.reload_preserved !== true) {
+    throw new ReportValidationError(`${where}.reload_preserved must be true.`);
+  }
+  if (!Array.isArray(evidence.session_id_hashes) || evidence.session_id_hashes.length === 0) {
+    throw new ReportValidationError(`${where}.session_id_hashes must be a non-empty array.`);
+  }
+  const seenSessionHashes = new Set<string>();
+  for (const [index, hash] of evidence.session_id_hashes.entries()) {
+    requireEvidenceHash(`${where}.session_id_hashes[${index}]`, hash);
+    if (seenSessionHashes.has(hash)) {
+      throw new ReportValidationError(`${where}.session_id_hashes has a duplicate entry.`);
+    }
+    seenSessionHashes.add(hash);
+  }
+  validateCleanupEvidence(where, evidence.cleanup, status);
+}
+
+/** LOCAL-7 Product MCP integration (BRIEF §3.3). */
+function validateLocalMcpIntegrationEvidence(
+  evidence: LocalMcpIntegrationEvidenceV1,
+  where: string,
+  status: FinalTestStatus,
+): void {
+  requireExactKeys(evidence, LOCAL_MCP_INTEGRATION_EVIDENCE_KEYS, where);
+  validateLocalEvidenceCommon(where, evidence);
+  requireSafeEvidenceToken(`${where}.model_id`, evidence.model_id);
+  requireEvidenceHash(`${where}.workspace_id_hash`, evidence.workspace_id_hash);
+  requireEvidenceHash(`${where}.session_id_hash`, evidence.session_id_hash);
+  requireSafeEvidenceToken(`${where}.integration_namespace`, evidence.integration_namespace);
+  requireSafeEvidenceToken(`${where}.tool_name`, evidence.tool_name);
+  requireEvidenceHash(`${where}.audit_event_id_hash`, evidence.audit_event_id_hash);
+  if (evidence.audit_ok !== true) {
+    throw new ReportValidationError(`${where}.audit_ok must be true.`);
+  }
+  validateCleanupEvidence(where, evidence.cleanup, status);
 }
 
 const SELFHOST_BASE_EVIDENCE_KEYS = [
@@ -1370,38 +1829,112 @@ export function sanitizeCellEvidence(
     return sanitizeSelfHostCellEvidence(evidence, secretValues);
   }
   const clean = (value: string): string => boundMessage(redactUrlCredentials(redactSecrets(value, secretValues)));
-  if (evidence.kind === "tier2_billing") {
-    // All string fields are safe tokens by construction; clean them as a
-    // fail-closed backstop (numbers pass through untouched).
-    return {
-      ...evidence,
-      manifest_id: clean(evidence.manifest_id),
-      server_version: clean(evidence.server_version),
-      stripe: {
-        ...evidence.stripe,
-        test_clock_ids: evidence.stripe.test_clock_ids.map(clean),
-        object_ids: evidence.stripe.object_ids.map(clean),
-      },
-    };
+  const cleanSpend = (spend: LocalLitellmSpendV1): LocalLitellmSpendV1 => ({
+    ...spend,
+    token_id_hash: clean(spend.token_id_hash),
+    request_ids: spend.request_ids.map(clean),
+  });
+  const cleanCleanup = (cleanup: LocalCleanupV1): LocalCleanupV1 => ({
+    ...cleanup,
+    ledger_id_hash: clean(cleanup.ledger_id_hash),
+  });
+  // Kind-scoped sanitization mirrors the kind-scoped validators (audit ruling
+  // #3): each variant cleans exactly its own string-bearing fields.
+  switch (evidence.kind) {
+    case "local_workspace_turn":
+      return {
+        ...evidence,
+        artifact_ids: evidence.artifact_ids.map(clean),
+        server_version: clean(evidence.server_version),
+        anyharness_version: clean(evidence.anyharness_version),
+        model_id: clean(evidence.model_id),
+        workspace_id_hash: clean(evidence.workspace_id_hash),
+        session_id_hash: clean(evidence.session_id_hash),
+        litellm: {
+          ...evidence.litellm,
+          token_id_hash: clean(evidence.litellm.token_id_hash),
+          request_ids: evidence.litellm.request_ids.map(clean),
+        },
+        cleanup: {
+          ...evidence.cleanup,
+          ledger_id_hash: clean(evidence.cleanup.ledger_id_hash),
+        },
+      };
+    case "local_route_turn":
+      return {
+        ...evidence,
+        artifact_ids: evidence.artifact_ids.map(clean),
+        server_version: clean(evidence.server_version),
+        anyharness_version: clean(evidence.anyharness_version),
+        model_id: clean(evidence.model_id),
+        workspace_id_hash: clean(evidence.workspace_id_hash),
+        session_id_hash: clean(evidence.session_id_hash),
+        gateway_spend: evidence.gateway_spend ? cleanSpend(evidence.gateway_spend) : null,
+        route_change: evidence.route_change
+          ? {
+              ...evidence.route_change,
+              original_session_id_hash: clean(evidence.route_change.original_session_id_hash),
+              new_session_id_hash: clean(evidence.route_change.new_session_id_hash),
+            }
+          : null,
+        cleanup: cleanCleanup(evidence.cleanup),
+      };
+    case "local_config_matrix":
+      return {
+        ...evidence,
+        artifact_ids: evidence.artifact_ids.map(clean),
+        server_version: clean(evidence.server_version),
+        anyharness_version: clean(evidence.anyharness_version),
+        model_id: clean(evidence.model_id),
+        workspace_id_hash: clean(evidence.workspace_id_hash),
+        session_id_hash: clean(evidence.session_id_hash),
+        controls: evidence.controls.map((control) => ({
+          ...control,
+          control_key: clean(control.control_key),
+          accepted_value: clean(control.accepted_value),
+        })),
+        cleanup: cleanCleanup(evidence.cleanup),
+      };
+    case "local_session_tabs":
+      return {
+        ...evidence,
+        artifact_ids: evidence.artifact_ids.map(clean),
+        server_version: clean(evidence.server_version),
+        anyharness_version: clean(evidence.anyharness_version),
+        workspace_id_hash: clean(evidence.workspace_id_hash),
+        session_id_hashes: evidence.session_id_hashes.map(clean),
+        cleanup: cleanCleanup(evidence.cleanup),
+      };
+    case "local_mcp_integration":
+      return {
+        ...evidence,
+        artifact_ids: evidence.artifact_ids.map(clean),
+        server_version: clean(evidence.server_version),
+        anyharness_version: clean(evidence.anyharness_version),
+        model_id: clean(evidence.model_id),
+        workspace_id_hash: clean(evidence.workspace_id_hash),
+        session_id_hash: clean(evidence.session_id_hash),
+        integration_namespace: clean(evidence.integration_namespace),
+        tool_name: clean(evidence.tool_name),
+        audit_event_id_hash: clean(evidence.audit_event_id_hash),
+        cleanup: cleanCleanup(evidence.cleanup),
+      };
+    case "tier2_billing":
+      // All string fields are safe tokens by construction; clean them as a
+      // fail-closed backstop (numbers pass through untouched).
+      return {
+        ...evidence,
+        manifest_id: clean(evidence.manifest_id),
+        server_version: clean(evidence.server_version),
+        stripe: {
+          ...evidence.stripe,
+          test_clock_ids: evidence.stripe.test_clock_ids.map(clean),
+          object_ids: evidence.stripe.object_ids.map(clean),
+        },
+      };
+    default:
+      return evidence;
   }
-  return {
-    ...evidence,
-    artifact_ids: evidence.artifact_ids.map(clean),
-    server_version: clean(evidence.server_version),
-    anyharness_version: clean(evidence.anyharness_version),
-    model_id: clean(evidence.model_id),
-    workspace_id_hash: clean(evidence.workspace_id_hash),
-    session_id_hash: clean(evidence.session_id_hash),
-    litellm: {
-      ...evidence.litellm,
-      token_id_hash: clean(evidence.litellm.token_id_hash),
-      request_ids: evidence.litellm.request_ids.map(clean),
-    },
-    cleanup: {
-      ...evidence.cleanup,
-      ledger_id_hash: clean(evidence.cleanup.ledger_id_hash),
-    },
-  };
 }
 
 /**
