@@ -80,22 +80,12 @@ describe("deriveGoalBarState", () => {
       .toMatchObject({ kind: "live", phase: "paused" });
   });
 
-  it("maps met to a sticky result carrying the evaluator reason", () => {
+  it("hides the bar for a met goal — the transcript owns the success story", () => {
     const state = deriveGoalBarState(goal({
       status: "met",
       metReason: "DONE.txt exists and contains done",
     }));
-    expect(state).toMatchObject({
-      kind: "result",
-      outcome: "met",
-      headline: "Goal met",
-      detail: "DONE.txt exists and contains done",
-    });
-  });
-
-  it("keeps a null met detail when the harness gives no reason", () => {
-    expect(deriveGoalBarState(goal({ status: "met" })))
-      .toMatchObject({ kind: "result", outcome: "met", detail: null });
+    expect(state).toEqual({ kind: "hidden" });
   });
 
   it("maps blocked to the needs-you result", () => {

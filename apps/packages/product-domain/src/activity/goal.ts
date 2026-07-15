@@ -140,11 +140,14 @@ export type GoalBarState =
 
 /**
  * The one status derivation the goal bar renders from: live states keep the
- * bar ever-present with controls; terminal states become the sticky result
- * until dismissed or replaced; cleared/absent means no bar at all.
+ * bar ever-present with controls; attention-needing terminal states (blocked/
+ * failed) become the sticky result until dismissed or replaced; met and
+ * cleared mean no bar at all — a met goal's story lives in the transcript
+ * (the goal rows + "Goal achieved" turn chrome), so a sticky success card
+ * above the composer would just duplicate it.
  */
 export function deriveGoalBarState(goal: GoalWire | null): GoalBarState {
-  if (!goal || goal.status === "cleared") {
+  if (!goal || goal.status === "cleared" || goal.status === "met") {
     return { kind: "hidden" };
   }
   switch (goal.status) {
@@ -152,8 +155,6 @@ export function deriveGoalBarState(goal: GoalWire | null): GoalBarState {
       return { kind: "live", phase: "pursuing", goal };
     case "paused":
       return { kind: "live", phase: "paused", goal };
-    case "met":
-      return { kind: "result", outcome: "met", headline: "Goal met", detail: goal.metReason, goal };
     case "blocked":
       return {
         kind: "result",

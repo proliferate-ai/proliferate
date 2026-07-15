@@ -590,3 +590,4 @@ fn async_launch_completion_preserves_background_metadata_on_completed_item() {
         Some("/tmp/agent.output")
     );
 }
+mod engine_turns;

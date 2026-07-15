@@ -37,11 +37,14 @@ function baseProps() {
   };
 }
 
-function metGoal(overrides: Partial<GoalWire> = {}): GoalWire {
+// Sticky results only render for attention-needing outcomes now (blocked/
+// failed) — a met goal hides the bar because the transcript owns the success
+// story. The sticky-result behaviors are covered via a blocked goal.
+function blockedGoal(overrides: Partial<GoalWire> = {}): GoalWire {
   return {
     objective: "Get the payments integration test suite green",
-    status: "met",
-    nativeStatus: "complete",
+    status: "blocked",
+    nativeStatus: "blocked",
     tokenBudget: null,
     tokensUsed: null,
     timeUsedSeconds: null,
@@ -111,8 +114,8 @@ describe("GoalBar chips", () => {
 
 describe("GoalBar sticky result", () => {
   it("shows the OBJECTIVE on the collapsed line, never the raw met/blocked reason", () => {
-    render(<GoalBar {...baseProps()} capabilities={SUPPORTED} goal={metGoal()} />);
-    expect(screen.getByText("Goal met")).toBeTruthy();
+    render(<GoalBar {...baseProps()} capabilities={SUPPORTED} goal={blockedGoal()} />);
+    expect(screen.getByText("Blocked")).toBeTruthy();
     expect(screen.getByText(/Get the payments integration test suite green/)).toBeTruthy();
     // The raw evaluator reason (quoting tool output) must not appear on the
     // collapsed row — that's exactly the bug this redesign fixes.
@@ -120,15 +123,15 @@ describe("GoalBar sticky result", () => {
   });
 
   it("exposes an expand trigger covering the row content, distinct from the dismiss button", () => {
-    render(<GoalBar {...baseProps()} capabilities={SUPPORTED} goal={metGoal()} />);
-    expect(screen.getByRole("button", { name: "Goal met — show details" })).toBeTruthy();
+    render(<GoalBar {...baseProps()} capabilities={SUPPORTED} goal={blockedGoal()} />);
+    expect(screen.getByRole("button", { name: "Blocked — show details" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Dismiss goal result" })).toBeTruthy();
   });
 
   it("dismisses the result via the dismiss button without needing the popover open", () => {
     const onDismiss = vi.fn();
     render(
-      <GoalBar {...baseProps()} capabilities={SUPPORTED} goal={metGoal()} onDismiss={onDismiss} />,
+      <GoalBar {...baseProps()} capabilities={SUPPORTED} goal={blockedGoal()} onDismiss={onDismiss} />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Dismiss goal result" }));
     expect(onDismiss).toHaveBeenCalledTimes(1);
@@ -139,7 +142,7 @@ describe("GoalBar sticky result", () => {
       <GoalBar
         {...baseProps()}
         capabilities={SUPPORTED}
-        goal={metGoal({ status: "blocked", nativeStatus: "blocked", metReason: "needs you" })}
+        goal={blockedGoal({ status: "blocked", nativeStatus: "blocked", metReason: "needs you" })}
       />,
     );
     expect(screen.getByText("Blocked")).toBeTruthy();
@@ -153,7 +156,7 @@ describe("GoalBar sticky result", () => {
     // a result goal with composing=true renders the blank editor, not the
     // sticky result.
     render(
-      <GoalBar {...baseProps()} capabilities={SUPPORTED} goal={metGoal()} composing />,
+      <GoalBar {...baseProps()} capabilities={SUPPORTED} goal={blockedGoal()} composing />,
     );
     expect(screen.getByLabelText("Goal objective")).toBeTruthy();
     expect(screen.queryByText("Goal met")).toBeNull();
@@ -164,7 +167,7 @@ describe("GoalBar sticky result", () => {
       <GoalBar
         {...baseProps()}
         capabilities={SUPPORTED}
-        goal={metGoal({ status: "active", nativeStatus: "active", metReason: null })}
+        goal={blockedGoal({ status: "active", nativeStatus: "active", metReason: null })}
         composing
       />,
     );

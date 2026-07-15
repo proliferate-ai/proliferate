@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": "2026-07-11.2",
+  "catalogVersion": "2026-07-14.1",
   "probedAgainst": {
-    "registryVersion": "2026-07-10.1"
+    "registryVersion": "2026-07-14.1"
   },
   "generatedAt": "2026-07-11T00:36:38.653Z",
   "defaultAgentKind": "claude",
@@ -16,7 +16,7 @@
           "source": {
             "kind": "git",
             "repo": "https://github.com/proliferate-ai/claude-agent-acp.git",
-            "gitRef": "3ff484e671de5fe9275d2e7596d683df06b99e14",
+            "gitRef": "d933c614497b88eb86200920003ab82d220252ca",
             "executableRelpath": "node_modules/.bin/claude-agent-acp"
           }
         },
@@ -1198,11 +1198,11 @@
       "displayName": "Codex",
       "harness": {
         "agentProcess": {
-          "version": "0.17.0-proliferate.1",
+          "version": "0.18.1-proliferate.1",
           "source": {
             "kind": "git",
             "repo": "https://github.com/proliferate-ai/codex-acp.git",
-            "gitRef": "8baae51210acd4912f5aab9054b124a43287030e",
+            "gitRef": "938065e69331d91df0de3bbf1dcaae6e6dc6e2eb",
             "packageSubdir": "npm",
             "executableRelpath": "node_modules/.bin/codex-acp"
           }
@@ -2130,7 +2130,7 @@
         "probedAt": "2026-07-11T00:36:25.416008+00:00",
         "attestation": {
           "name": "codex-acp",
-          "version": "0.17.0-proliferate.1",
+          "version": "0.18.1-proliferate.1",
           "title": "Codex"
         },
         "runs": [

@@ -20,6 +20,10 @@ impl SessionEventSink {
         if text.is_empty() {
             return None;
         }
+        // Engine-initiated turns (goal continuation) stream content with no
+        // prompt turn open — give them their own turn instead of gluing onto
+        // the previous one.
+        self.ensure_open_turn();
         let parent_tool_call_id = self.meta_parent_tool_call_id(payload.meta.as_ref());
         let message_id = payload.message_id.clone();
 

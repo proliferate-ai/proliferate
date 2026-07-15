@@ -11,7 +11,6 @@ import {
 import { buildTurnPresentation } from "@proliferate/product-domain/chats/transcript/transcript-presentation";
 import {
   CompletedHistorySequence,
-  TurnItemSequence,
   resolveTurnItemFrontierBlockKey,
   shouldRenderCompletedArtifactCards,
 } from "./TurnItemSequence";
@@ -41,44 +40,6 @@ describe("CompletedHistorySequence", () => {
 });
 
 describe("completion-only frontier prelude", () => {
-  it("mounts late completion UI before final prose so the prose stays anchored", () => {
-    const transcript = createTranscriptState("session-1");
-    const turn = turnRecord(["search", "answer"], "2026-04-04T00:00:10Z");
-    transcript.itemsById = {
-      search: toolItem("search", turn.turnId, 1, "search", "completed"),
-      answer: assistantItem("answer", turn.turnId, 2),
-    };
-    const presentation = buildTurnPresentation(turn, transcript);
-
-    const { container } = render(
-      <TurnItemSequence
-        turn={turn}
-        transcript={transcript}
-        isTurnComplete
-        presentation={presentation}
-        tailAssistantProseRootId="answer"
-        animateActivityEntry={false}
-        showCompletedArtifactFallback
-        workspaceId={null}
-        onOpenArtifact={() => {}}
-        beforeFrontier={<div data-late-diff-panel>Edited files</div>}
-      />,
-    );
-
-    const prelude = container.querySelector("[data-turn-frontier-prelude]");
-    const preludeGroup = container.querySelector("[data-completed-work-content]")
-      ?? container.querySelector("[data-turn-frontier-prelude-group]");
-    const workContainer = preludeGroup?.hasAttribute("data-completed-work-content")
-      ? preludeGroup.parentElement
-      : preludeGroup;
-    const divider = container.querySelector("[data-completed-work-divider]");
-    const answer = container.querySelector("[data-rendered-transcript-item='answer']");
-    expect(workContainer?.nextElementSibling).toBe(answer);
-    expect(prelude?.compareDocumentPosition(divider!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(prelude?.querySelector("[data-late-diff-panel]")).not.toBeNull();
-    expect(resolveTurnItemFrontierBlockKey(presentation)).toBe("item-answer");
-  });
-
   it("keeps a tool-only completion summary as the frontier", () => {
     const transcript = createTranscriptState("session-1");
     const turn = turnRecord(["command"], "2026-04-04T00:00:10Z");

@@ -13,6 +13,8 @@ impl SessionEventSink {
         if text.is_empty() {
             return;
         }
+        // See agent_message_chunk: engine-initiated turns need their own turn.
+        self.ensure_open_turn();
         let is_transient = is_transient_status_marker(payload.meta.as_ref());
         let parent_tool_call_id = self.meta_parent_tool_call_id(payload.meta.as_ref());
         let message_id = payload.message_id.clone();
