@@ -18,14 +18,14 @@ const hostMocks = vi.hoisted(() => ({
   writeText: vi.fn(async () => undefined),
 }));
 
-vi.mock("@/hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad", () => ({
+vi.mock("#product/hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad", () => ({
   useWorkspaceScratchPad: () => ({
     data: scratchQueryMocks.record,
     isLoading: scratchQueryMocks.isLoading,
   }),
 }));
 
-vi.mock("@/hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad-mutations", () => ({
+vi.mock("#product/hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad-mutations", () => ({
   useWorkspaceScratchPadMutations: () => ({
     writeScratchPad: scratchQueryMocks.writeScratchPad,
     writeScratchPadState: {

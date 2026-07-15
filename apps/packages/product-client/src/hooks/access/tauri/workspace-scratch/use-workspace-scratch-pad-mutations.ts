@@ -5,7 +5,7 @@ import type {
   ScratchWriteResult,
 } from "@proliferate/product-client/host/desktop-bridge";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { workspaceScratchPadKey } from "@/hooks/access/tauri/workspace-scratch/query-keys";
+import { workspaceScratchPadKey } from "#product/hooks/access/tauri/workspace-scratch/query-keys";
 
 interface WorkspaceScratchPadWriteInput {
   workspaceKey: string;

@@ -21,8 +21,8 @@ import {
   PaneOptionsMenu,
   PaneOptionsMenuSeparator,
 } from "#product/components/workspace/pane/PaneOptionsMenu";
-import { useWorkspaceScratchPad } from "@/hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad";
-import { useWorkspaceScratchPadMutations } from "@/hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad-mutations";
+import { useWorkspaceScratchPad } from "#product/hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad";
+import { useWorkspaceScratchPadMutations } from "#product/hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad-mutations";
 
 const SAVE_DEBOUNCE_MS = 500;
 const SCRATCH_PLACEHOLDER = "Write notes here";

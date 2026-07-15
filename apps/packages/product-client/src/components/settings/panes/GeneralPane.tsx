@@ -7,7 +7,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import { OpenTargetIcon } from "#product/components/workspace/open-target/OpenTargetIcon";
-import { useAvailableEditors } from "@/hooks/access/tauri/shell/use-available-editors";
+import { useAvailableEditors } from "#product/hooks/access/tauri/shell/use-available-editors";
 import { resolvePreferredOpenTarget } from "#product/lib/domain/chat/composer/preference-resolvers";
 import { emitTurnEnd } from "#product/lib/infra/events/turn-end-events";
 import type { DefaultNewWorkspaceMode } from "#product/lib/domain/preferences/user/model";

@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DesktopCredentialsBridge } from "@proliferate/product-client/host/desktop-bridge";
 
-import { useAgentCredentialsStore } from "@proliferate/product-client/internal/stores/agents/agent-credentials-store";
+import { useAgentCredentialsStore } from "#product/stores/agents/agent-credentials-store";
 import { useLocalAgentCredentials } from "./use-local-agent-credentials";
 
 const hostState = vi.hoisted(() => ({

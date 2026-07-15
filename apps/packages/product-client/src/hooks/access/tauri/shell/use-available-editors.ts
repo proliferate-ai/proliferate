@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { EditorInfo } from "@proliferate/product-client/host/desktop-bridge";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { useProductTelemetry } from "@proliferate/product-client/internal/hooks/telemetry/facade/use-product-telemetry";
+import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
 import { availableEditorsKey } from "./query-keys";
 
 const EMPTY_EDITORS: EditorInfo[] = [];
