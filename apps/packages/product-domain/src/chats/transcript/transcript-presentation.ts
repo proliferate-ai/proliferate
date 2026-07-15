@@ -4,7 +4,6 @@ import type {
   TurnRecord,
 } from "@anyharness/sdk";
 import { isSubagentCreationAction } from "../subagents/subagent-tool-presentation";
-import { isSubagentWorkComplete } from "../subagents/subagent-launch";
 import { isKnownModeSwitchToolCall } from "../tools/mode-switch-display";
 
 export type TurnDisplayBlock =
@@ -73,21 +72,10 @@ export function buildTranscriptDisplayBlocks({
     const item = transcript.itemsById[itemId];
     if (!item) continue;
 
-    // Route finished subagents (both MCP create_subagent and native Agent) to
-    // subagent_creations blocks. Running native subagents are hidden by the
-    // renderer (TranscriptAgentGroupBlock returns null), so they never reach
-    // this classification path.
+    // Provisioning receipts stay compact. Native Agent calls remain normal
+    // transcript items for their whole lifecycle so their nested work is
+    // visible during streaming and after durable replay.
     if (item.kind === "tool_call" && isSubagentCreationAction(item)) {
-      flushActions();
-      pendingSubagentCreationIds.push(itemId);
-      continue;
-    }
-
-    if (
-      item.kind === "tool_call"
-      && isFinishedNativeAgentSubagent(item)
-      && isSubagentWorkComplete(item)
-    ) {
       flushActions();
       pendingSubagentCreationIds.push(itemId);
       continue;
@@ -307,14 +295,4 @@ function isCollapsibleAction(
     && item.semanticKind !== "cowork_artifact_create"
     && item.semanticKind !== "cowork_artifact_update"
     && item.nativeToolName !== "Agent";
-}
-
-function isFinishedNativeAgentSubagent(
-  item: Extract<TranscriptItem, { kind: "tool_call" }>,
-): boolean {
-  // Only native Agent tool calls. MCP subagent communication tools
-  // (send_subagent_message, get_subagent_status, etc.) have semanticKind
-  // "subagent" but are NOT creation actions — they render via their own
-  // blocks (TranscriptMcpSubagentActionBlock).
-  return item.nativeToolName === "Agent";
 }

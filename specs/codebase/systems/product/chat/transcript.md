@@ -168,6 +168,21 @@ Communication receipts:
 - When a valid child target exists, the whole wake/completion receipt chip and
   not a separate visible action or hover card, opens the child session.
 
+Native harness subagents use the same durable item stream as the parent turn:
+
+- The native `Agent`/spawn operation is one stable tool item from start through
+  completion or failure. It remains visible while running and after replay.
+- Child prose, reasoning, and tool activity carry
+  `parentToolCallId = <native Agent tool id>` and render inside that parent in
+  runtime sequence order.
+- Provider adapters emit `_meta.anyharness.parentToolCallId`; the sink accepts
+  Claude's older `_meta.claudeCode.parentToolUseId` only as a compatibility
+  fallback.
+- Session activity roster upserts are summary state, not transcript content.
+  They must never synthesize a second copy of native subagent work.
+- Live reduction and persisted replay consume the same normalized item events;
+  identity, nesting, ordering, and terminal status must therefore match.
+
 ## Layout Invariants
 
 Some layout dimensions are load-bearing. They are tuned together so specific

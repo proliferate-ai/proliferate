@@ -25,7 +25,7 @@
       "agentProcess": {
         "install": {
           "kind": "managed_npm_package",
-          "package": "git+https://github.com/proliferate-ai/claude-agent-acp.git#d933c614497b88eb86200920003ab82d220252ca",
+          "package": "git+https://github.com/proliferate-ai/claude-agent-acp.git#b5f9db80fcf71d7b54b76ab18c1e2df1be7def04",
           "packageSubdir": null,
           "sourceBuildBinaryName": null,
           "executableRelpath": "node_modules/.bin/claude-agent-acp"
@@ -133,7 +133,7 @@
       "agentProcess": {
         "install": {
           "kind": "managed_npm_package",
-          "package": "git+https://github.com/proliferate-ai/codex-acp.git#938065e69331d91df0de3bbf1dcaae6e6dc6e2eb",
+          "package": "git+https://github.com/proliferate-ai/codex-acp.git#20b4cff942b671cc1dabb9e4cfa61b5a783c436c",
           "packageSubdir": "npm",
           "sourceBuildBinaryName": null,
           "executableRelpath": "node_modules/.bin/codex-acp"

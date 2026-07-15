@@ -12,3 +12,10 @@ not by building the Rust repo at runtime.
 The Codex ACP session config surface also exposes `fast_mode` as a live control.
 That maps to Codex `service_tier = fast` for the current session, but it is not
 persisted across reload/resume by the current Codex rollout replay path.
+
+Native collaboration events are normalized by the ACP adapter before they
+reach AnyHarness. `CollabAgentSpawn*` owns the stable parent `Agent` tool item;
+interaction, wait, resume, close, and `SubAgentActivity` events become ordered
+tool items nested with `_meta.anyharness.parentToolCallId`. Terminal agent
+statuses update the original parent item rather than creating a second receipt.
+The same normalization runs for live events and Codex rollout replay.

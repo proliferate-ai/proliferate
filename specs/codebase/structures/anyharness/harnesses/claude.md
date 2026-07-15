@@ -18,6 +18,11 @@ override supplies a local adapter executable.
   assistant transcript item.
 - Transient progress uses the AnyHarness `transient_status` marker and is
   converted at the ACP boundary into typed normalized state.
+- Native Agent/Task child messages and tools retain Claude's
+  `parent_tool_use_id` as `_meta.anyharness.parentToolCallId`. The adapter uses
+  each Anthropic API message id as the stable live/replay message identity,
+  deduplicates assembled blocks already streamed as deltas, and forwards
+  assembled-only child content instead of dropping it.
 
 ## Extension Capabilities
 

@@ -8,6 +8,7 @@
 // sha-verified, with no latest-fetch at install time.
 //
 //   node scripts/agent-catalog/resolve-pins.mjs [--agent claude,codex]
+//       [--agent-process-only]
 //       [--no-download]   resolve URLs only, leave sha256 empty (inspection)
 //       [--catalog PATH] [--registry PATH]
 //
@@ -25,6 +26,7 @@ const catalogPath = resolve(args.catalog ?? join(REPO_ROOT, "catalogs/agents/cat
 const registryPath = resolve(args.registry ?? join(REPO_ROOT, "catalogs/agents/registry.json"));
 const onlyAgents = args.agent ? new Set(args.agent.split(",")) : null;
 const noDownload = Boolean(args.noDownload);
+const agentProcessOnly = Boolean(args.agentProcessOnly);
 // Platforms we actually ship today: desktop (macOS arm64/x64) + cloud E2B
 // (linux x64). Override with --platforms to resolve the full matrix in CI.
 const DEFAULT_PLATFORMS = ["macos_arm64", "macos_x64", "linux_x64"];
@@ -85,12 +87,12 @@ for (const agent of catalog.agents) {
   }
   console.log(`\n── ${agent.kind}`);
 
-  if (reg.native && agent.harness.native) {
+  if (!agentProcessOnly && reg.native && agent.harness.native) {
     const { version, source } = await resolveNative(agent.kind, reg.native.install);
     agent.harness.native.version = version;
     agent.harness.native.source = source;
     console.log(`   native        ${version}  (${source.kind})`);
-  } else if (agent.harness.native) {
+  } else if (!agentProcessOnly && agent.harness.native) {
     // The probe's nativeCli attestation can leak a foreign launcher (e.g. the
     // bundled `claude` binary reported as the nativeCli for cursor/opencode)
     // onto agents that have no native artifact in the registry. Such a pin can
@@ -269,6 +271,7 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === "--no-download") out.noDownload = true;
+    else if (a === "--agent-process-only") out.agentProcessOnly = true;
     else if (a === "--agent") out.agent = argv[++i];
     else if (a === "--platforms") out.platforms = argv[++i];
     else if (a === "--catalog") out.catalog = argv[++i];
