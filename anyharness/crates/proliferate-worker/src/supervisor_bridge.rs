@@ -32,7 +32,8 @@ use tokio::time::sleep;
 use tracing::{info, warn};
 
 use proliferate_runtime_update_protocol::{
-    read_result, result_exists, write_request, UpdateComponent, UpdateRequestV1, UpdateResultV1,
+    read_result, request_file_name, result_exists, result_file_name, write_request,
+    UpdateComponent, UpdateOutcome, UpdateRequestV1, UpdateResultV1,
 };
 
 use crate::{
@@ -83,18 +84,79 @@ pub async fn converge_via_mailbox(
     dry_run: bool,
 ) {
     let desired = response.desired_versions.as_ref();
+    let anyharness_desired = desired.and_then(|versions| versions.anyharness.as_deref());
+    let worker_desired = desired.and_then(|versions| versions.worker.as_deref());
+
+    // Reconcile a completed activation FIRST: record what actually runs so the
+    // next heartbeat reports the converged version (R9-006), and GC the
+    // request+result pair so a later re-pin to the same version re-applies
+    // instead of being suppressed by the stale result (R9-003). Dry runs never
+    // mutate the store or the mailbox.
+    if !dry_run {
+        if let Some(version) = anyharness_desired {
+            reconcile_converged_result(config, store, UpdateComponent::Anyharness, version);
+        }
+        if let Some(version) = worker_desired {
+            reconcile_converged_result(config, store, UpdateComponent::Worker, version);
+        }
+    }
 
     let anyharness_running = anyharness_update::running_anyharness_version(store);
-    let anyharness_desired = desired.and_then(|versions| versions.anyharness.as_deref());
     if let Some(version) = plan_component(anyharness_running.as_deref(), anyharness_desired) {
         emit_request(config, cloud, UpdateComponent::Anyharness, &version, dry_run).await;
     }
 
     let worker_running = versions::worker_version();
-    let worker_desired = desired.and_then(|versions| versions.worker.as_deref());
     if let Some(version) = plan_component(worker_running.as_deref(), worker_desired) {
         emit_request(config, cloud, UpdateComponent::Worker, &version, dry_run).await;
     }
+}
+
+/// Reconcile the Supervisor's terminal result for `component`@`version` back
+/// into the Worker. On a successful activation this records what actually runs
+/// — for AnyHarness into the Worker store so the next heartbeat reports the
+/// converged version (R9-006); the Worker binary reports its own stamped
+/// version natively after the Supervisor restarts it — and then GCs the
+/// request+result pair so a re-pin back to this version re-applies rather than
+/// being suppressed by the stale `Activated` result (R9-003). A terminal
+/// failure (`Invalid`/`RolledBack`) is left in place: that is the legacy
+/// lagging-artifact latch, cleared only when the desired version changes.
+fn reconcile_converged_result(
+    config: &WorkerConfig,
+    store: &crate::store::WorkerStore,
+    component: UpdateComponent,
+    version: &str,
+) {
+    let request_id = request_id_for(component, version);
+    let Some(result) = read_bridge_result(config, &request_id) else {
+        return;
+    };
+    if result.outcome != UpdateOutcome::Activated {
+        return;
+    }
+    if component == UpdateComponent::Anyharness {
+        let observed = result.observed_version.as_deref().unwrap_or(version);
+        if let Err(error) = store.record_anyharness_converged(observed) {
+            warn!(
+                ?error,
+                component = component.as_str(),
+                observed,
+                "failed to record converged anyharness version from supervisor result"
+            );
+        }
+    }
+    gc_request_result_pair(config, component, version);
+}
+
+/// Delete the request + result files for `component`@`version` from the mailbox
+/// (best-effort). Called once the Worker has observed convergence, so a later
+/// re-pin mints a fresh, actionable request instead of hitting the stale result.
+fn gc_request_result_pair(config: &WorkerConfig, component: UpdateComponent, version: &str) {
+    let Some(dir) = config.supervisor_update_request_dir.as_deref() else {
+        return;
+    };
+    let _ = std::fs::remove_file(dir.join(request_file_name(component, version)));
+    let _ = std::fs::remove_file(dir.join(result_file_name(&request_id_for(component, version))));
 }
 
 async fn emit_request(
@@ -954,6 +1016,130 @@ mod tests {
         // `started` is left so the next tick resumes; `done` is not written.
         assert!(marker_path(&dir.0, MARKER_STARTED).is_file());
         assert!(!marker_path(&dir.0, MARKER_DONE).is_file());
+    }
+
+    #[tokio::test]
+    async fn legacy_config_with_bridge_inputs_reaches_the_bridge_and_is_idempotent() {
+        // R9-007: a legacy independent-launch Worker (NO mailbox dir, so
+        // `is_supervisor_owned` is false) that an operator equipped with bridge
+        // inputs must still reach the bridge — the bridge is gated on bridge
+        // inputs, not on the mailbox that flips the supervisor-owned path.
+        let dir = temp_dir();
+        let config_path = dir.0.join("config.toml");
+        let mut legacy = legacy_config();
+        legacy.supervisor_binary_path =
+            Some(PathBuf::from("/home/user/.proliferate/bin/proliferate-supervisor"));
+        legacy.supervisor_config_path = Some(config_path.clone());
+        legacy.supervisor_bridge_marker_dir = Some(dir.0.clone());
+        assert!(!is_supervisor_owned(&legacy), "no mailbox -> not supervisor-owned");
+        assert!(
+            bridge_inputs(&legacy).is_some(),
+            "bridge inputs are derivable from a legacy config"
+        );
+
+        // A dead Supervisor that the spawn brings up -> the legacy Worker bridges.
+        let host = FakeHost::new(vec![false], true);
+        let first = bridge_with_host(&inputs(&dir.0, &config_path, None), &host)
+            .await
+            .expect("bridge");
+        assert_eq!(first, BridgeOutcome::Bridged);
+        assert_eq!(host.spawns.get(), 1);
+
+        // Replay while the Supervisor is live -> AlreadyBridged, never a second spawn.
+        let live = FakeHost::already_live();
+        let second = bridge_with_host(&inputs(&dir.0, &config_path, None), &live)
+            .await
+            .expect("replay");
+        assert_eq!(second, BridgeOutcome::AlreadyBridged);
+        assert_eq!(live.spawns.get(), 0, "idempotent: no double supervisor on replay");
+    }
+
+    #[test]
+    fn reconcile_records_converged_anyharness_and_gcs_the_pair() {
+        // R9-006: an Activated result records the observed version into the store
+        // (so the next heartbeat reports it). R9-003: the request+result pair is
+        // GC'd so a re-pin back to this version re-applies instead of being
+        // suppressed by the stale Activated result.
+        use crate::store::WorkerStore;
+
+        let dir = temp_dir();
+        let updates = dir.0.join("updates");
+        let mut config = legacy_config();
+        config.supervisor_update_request_dir = Some(updates.clone());
+        config.worker_db_path = dir.0.join("worker.sqlite3");
+        let store = WorkerStore::open(config.worker_db_path.clone()).expect("open store");
+
+        let (url, sha, size) = sample_coords();
+        let request = build_update_request(
+            UpdateComponent::Anyharness,
+            "0.2.16",
+            "linux-x86_64",
+            &url,
+            &sha,
+            size,
+            "2026-07-15T00:00:00Z".to_string(),
+        );
+        write_request(&updates, &request).expect("write request");
+        let result = UpdateResultV1 {
+            request_id: request_id_for(UpdateComponent::Anyharness, "0.2.16"),
+            outcome: UpdateOutcome::Activated,
+            observed_version: Some("0.2.16".to_string()),
+            error: None,
+        };
+        proliferate_runtime_update_protocol::write_result(&updates, &result).expect("write result");
+
+        reconcile_converged_result(&config, &store, UpdateComponent::Anyharness, "0.2.16");
+
+        assert_eq!(
+            store.anyharness_converged_version().unwrap().as_deref(),
+            Some("0.2.16"),
+            "the converged version surfaces to the heartbeat via the store"
+        );
+        assert!(
+            !result_exists(&updates, &result.request_id),
+            "the result is GC'd so a re-pin re-applies"
+        );
+        assert!(
+            !updates
+                .join(request_file_name(UpdateComponent::Anyharness, "0.2.16"))
+                .exists(),
+            "the request file is GC'd too"
+        );
+    }
+
+    #[test]
+    fn reconcile_leaves_a_terminal_failure_latched() {
+        // A RolledBack/Invalid result is the lagging-artifact latch: reconcile
+        // must NOT record convergence or GC it (that would re-emit and loop).
+        use crate::store::WorkerStore;
+
+        let dir = temp_dir();
+        let updates = dir.0.join("updates");
+        let mut config = legacy_config();
+        config.supervisor_update_request_dir = Some(updates.clone());
+        config.worker_db_path = dir.0.join("worker.sqlite3");
+        let store = WorkerStore::open(config.worker_db_path.clone()).expect("open store");
+
+        let request_id = request_id_for(UpdateComponent::Anyharness, "0.2.16");
+        let result = UpdateResultV1 {
+            request_id: request_id.clone(),
+            outcome: UpdateOutcome::RolledBack,
+            observed_version: None,
+            error: Some("unhealthy after activation".to_string()),
+        };
+        proliferate_runtime_update_protocol::write_result(&updates, &result).expect("write result");
+
+        reconcile_converged_result(&config, &store, UpdateComponent::Anyharness, "0.2.16");
+
+        assert_eq!(
+            store.anyharness_converged_version().unwrap(),
+            None,
+            "a failed result never records convergence"
+        );
+        assert!(
+            result_exists(&updates, &request_id),
+            "the latch is preserved so it is not retried until the pin changes"
+        );
     }
 
     #[test]

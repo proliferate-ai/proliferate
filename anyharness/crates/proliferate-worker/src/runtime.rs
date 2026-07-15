@@ -94,13 +94,23 @@ async fn heartbeat_and_converge(
     )
     .await;
 
+    // D5 bridge (decision 6) is reachable from BOTH the supervisor-owned and the
+    // legacy branch: an already-provisioned *legacy* Worker that receives the
+    // `desired_topology = supervisor_owned` signal must perform the one-time
+    // bridge too — otherwise a genuinely legacy box never migrates (R9-007). The
+    // attempt is idempotent + crash-safe (marker files); a bare legacy config
+    // with no bridge inputs is a no-op and continues below.
+    match maybe_run_bridge(config, &response, dry_run).await {
+        TickControl::Exit => return TickControl::Exit,
+        TickControl::Continue => {}
+    }
+
     // Supervisor-owned target: the Worker is only an observer + writer. It never
     // runs the legacy in-place AnyHarness swap or the self-exec worker swap here;
-    // version divergence is routed through the Supervisor mailbox and the
-    // one-time D5 bridge migrates an already-provisioned sandbox to Supervisor
-    // ownership (exiting cleanly once the Supervisor owns the box).
+    // version divergence is routed through the Supervisor mailbox.
     if supervisor_bridge::is_supervisor_owned(config) {
-        return converge_supervisor_owned(config, cloud, store, &response, dry_run).await;
+        supervisor_bridge::converge_via_mailbox(config, cloud, store, &response, dry_run).await;
+        return TickControl::Continue;
     }
 
     // Legacy independent-launch path (fenced during the bridge window): the
@@ -134,45 +144,37 @@ async fn heartbeat_and_converge(
     TickControl::Continue
 }
 
-/// Supervisor-owned convergence (decision 2 write side + decision 6 bridge).
-/// Runs the one-time D5 bridge when the ack requests it — exiting cleanly once a
-/// freshly-started Supervisor owns the box — then routes any version divergence
-/// through the Supervisor mailbox. The Worker never downloads, replaces, kills,
-/// or rolls back AnyHarness or itself in this path.
-async fn converge_supervisor_owned(
+/// Run the one-time D5 bridge when the ack requests supervisor-owned topology.
+/// Reachable from both the supervisor-owned and the legacy branch so an
+/// already-provisioned legacy Worker migrates too (R9-007). Returns
+/// `TickControl::Exit` only when THIS Worker handed the box to a freshly-started
+/// Supervisor and should exit so the Supervisor's own Worker child takes over;
+/// every other outcome (already bridged, not requested, no bridge inputs, or a
+/// non-confirming attempt) continues the loop. The Worker never downloads,
+/// replaces, kills, or rolls back AnyHarness or itself here.
+async fn maybe_run_bridge(
     config: &WorkerConfig,
-    cloud: &CloudClient,
-    store: &WorkerStore,
     response: &crate::cloud_client::HeartbeatResponse,
     dry_run: bool,
 ) -> TickControl {
-    if dry_run {
-        // Dry run: never spawn a Supervisor or write a request. Only report.
-        if response.desired_topology.as_deref()
-            == Some(supervisor_bridge::SUPERVISOR_OWNED_TOPOLOGY)
-        {
-            info!("supervisor bridge pending; skipped in --once mode");
-        }
-        supervisor_bridge::converge_via_mailbox(config, cloud, store, response, true).await;
+    if response.desired_topology.as_deref() != Some(supervisor_bridge::SUPERVISOR_OWNED_TOPOLOGY) {
         return TickControl::Continue;
     }
-
+    if dry_run {
+        // Dry run: never spawn a Supervisor. Only report.
+        info!("supervisor bridge pending; skipped in --once mode");
+        return TickControl::Continue;
+    }
     match supervisor_bridge::maybe_bridge_to_supervisor(config, response).await {
-        Ok(supervisor_bridge::BridgeOutcome::Bridged) => {
-            // Handed the box to a freshly-started Supervisor; exit cleanly so its
-            // own Worker child takes over as the mailbox writer.
-            return TickControl::Exit;
-        }
-        Ok(_) => {}
+        Ok(supervisor_bridge::BridgeOutcome::Bridged) => TickControl::Exit,
+        Ok(_) => TickControl::Continue,
         Err(error) => {
             // The bridge did not confirm this tick; the current runtime keeps
             // serving and the next heartbeat resumes it (crash-safe via markers).
             warn!(?error, "supervisor bridge attempt did not complete; retrying next heartbeat");
+            TickControl::Continue
         }
     }
-
-    supervisor_bridge::converge_via_mailbox(config, cloud, store, response, false).await;
-    TickControl::Continue
 }
 
 async fn converge_anyharness_runtime(
