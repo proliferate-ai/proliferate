@@ -303,7 +303,11 @@ export const defaultSelfHostInstallDriver: SelfHostInstallDriver = {
     }
     const page = await openIsolatedPage(world);
     try {
-      await assertRejectsInvalidUrl(page, "not-a-valid-url");
+      // A genuinely unparseable address: a bare token like "not-a-valid-url"
+      // normalizes to a valid host (https://not-a-valid-url) exactly as the
+      // product's normalizeServerUrl intends, so it is NOT rejected. "http://"
+      // has a scheme but no host and fails URL parsing — a real invalid entry.
+      await assertRejectsInvalidUrl(page, "http://");
       await assertRejectsNonProliferateHost(page, NON_PROLIFERATE_PROBE_URL);
       await assertOnlyMetaFetchedBeforeTrust(page, world.api.baseUrl);
       const trust = await connectServerTrustFlow(page, world.api.baseUrl);
