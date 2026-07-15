@@ -24,7 +24,10 @@ export function StreamingIndicator({
 
   return (
     <DebugProfiler id="streaming-indicator">
-      <div className="flex min-h-5 items-end gap-1.5 py-1 text-muted-foreground">
+      {/* items-baseline, not items-end: the label (20px line box) and the
+          smaller suffix (14px line box) must share a text baseline — bottom-
+          aligning the boxes leaves the suffix visually sunk below the label. */}
+      <div className="flex min-h-5 items-baseline gap-1.5 py-1 text-muted-foreground">
         <ThinkingText
           text={label}
           motionOriginMs={startedMs}

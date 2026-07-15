@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { createElement, isValidElement } from "react";
+import { createElement, isValidElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { AnyHarnessRuntime } from "@anyharness/sdk-react";
+import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
+import { makeTestProductHost } from "#product/test/product-host-fixtures";
 import { ChatComposerDock } from "#product/components/workspace/chat/input/ChatComposerDock";
 import { SCENARIOS, type ScenarioKey } from "#product/config/playground";
 import { renderDelegationSlot } from "#product/components/playground/delegation/PlaygroundComposerDelegation";
@@ -68,6 +73,34 @@ const QUEUE_COMPOSER_SCENARIOS: ScenarioKey[] = [
   "subagents-queued-wake-with-approval",
 ];
 
+// The composer surface renders ComposerModelSelectorControl, which calls
+// useNavigate(), useProductHost(), and react-query hooks; static-render it
+// inside the same provider stack the app mounts so those hooks have context.
+function renderComposerSurfaceMarkup(scenario: ScenarioKey): string {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  // ProductHostProvider and AnyHarnessRuntime declare `children` as a required
+  // prop, so createElement needs it inside the props object to typecheck.
+  return renderToStaticMarkup(
+    createElement(
+      QueryClientProvider,
+      { client: queryClient },
+      createElement(ProductHostProvider, {
+        host: makeTestProductHost(),
+        children: createElement(AnyHarnessRuntime, {
+          runtimeUrl: null,
+          children: createElement(
+            MemoryRouter,
+            null,
+            renderComposerSurfaceForScenario(scenario) as ReactElement,
+          ),
+        }),
+      }),
+    ),
+  );
+}
+
 describe("playground scenarios", () => {
   it("includes user-input card scenarios for visual iteration", () => {
     expect(Object.keys(SCENARIOS)).toEqual(expect.arrayContaining(USER_INPUT_SCENARIOS));
@@ -86,7 +119,7 @@ describe("playground scenarios", () => {
     expect(html).toContain("Thinking timing lab");
     expect(html).toContain("Sweep duration");
     expect(html).toContain(
-      "--thinking-text-duration: 2200ms; --thinking-text-easing: linear;",
+      "--thinking-text-duration: 2400ms; --thinking-text-easing: linear;",
     );
     expect(html).toContain("Restoring session");
     expect(html).not.toContain("data-jank-canary=\"braille\"");
@@ -198,17 +231,17 @@ describe("playground scenarios", () => {
     expect(Object.keys(SCENARIOS)).toContain("slash-command-empty");
     expect(PLAYGROUND_SLASH_COMMANDS.some((command) => command.group === "MCP")).toBe(true);
 
-    const groupedHtml = renderToStaticMarkup(renderComposerSurfaceForScenario("slash-command-search"));
+    const groupedHtml = renderComposerSurfaceMarkup("slash-command-search");
     expect(groupedHtml).toContain("/compact");
     expect(groupedHtml).toContain("MCP");
 
-    const emptyHtml = renderToStaticMarkup(renderComposerSurfaceForScenario("slash-command-empty"));
+    const emptyHtml = renderComposerSurfaceMarkup("slash-command-empty");
     expect(emptyHtml).toContain("No matching slash commands.");
   });
 
   it("renders a long composer input scenario through the shared editor surface", () => {
     expect(Object.keys(SCENARIOS)).toContain("composer-long-input");
-    const html = renderToStaticMarkup(renderComposerSurfaceForScenario("composer-long-input"));
+    const html = renderComposerSurfaceMarkup("composer-long-input");
     expect(html).toContain("data-chat-composer-editor");
     expect(html).toContain("data-telemetry-mask");
   });

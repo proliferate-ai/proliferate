@@ -14,6 +14,7 @@ import {
 import {
   ComposerOptionKeyBadge,
   ComposerOptionRow,
+  useComposerOptionArrowKeys,
   useComposerOptionNumberKeys,
 } from "#product/components/workspace/chat/input/ComposerOptionRow";
 
@@ -164,6 +165,11 @@ export function UserInputCard({
     chooseOption,
     !!currentQuestion,
   );
+  const { highlightedIndex, highlight } = useComposerOptionArrowKeys(
+    options.length,
+    chooseOption,
+    { enabled: !!currentQuestion, resetKey: questionIndex },
+  );
 
   if (!currentQuestion) {
     return (
@@ -212,6 +218,8 @@ export function UserInputCard({
               label={option.label}
               description={option.description}
               selected={draft.selectedOptionLabel === option.label}
+              highlighted={highlightedIndex === index}
+              onHover={() => highlight(index)}
               onSelect={() => chooseOption(index)}
             />
           ))}
@@ -221,6 +229,8 @@ export function UserInputCard({
               index={syntheticIndex}
               hasAgentOptions={agentOptionCount > 0}
               selected={draft.selectedOptionLabel === OTHER_OPTION_LABEL}
+              highlighted={highlightedIndex === syntheticIndex}
+              onHover={() => highlight(syntheticIndex)}
               onSelect={() => chooseOption(syntheticIndex)}
             />
           )}
@@ -303,12 +313,16 @@ function SyntheticOptionRow({
   index,
   hasAgentOptions,
   selected,
+  highlighted = false,
   onSelect,
+  onHover,
 }: {
   index: number;
   hasAgentOptions: boolean;
   selected: boolean;
+  highlighted?: boolean;
   onSelect: () => void;
+  onHover?: () => void;
 }) {
   return (
     <div className={hasAgentOptions ? "mt-1 border-t border-border/60 pt-1" : ""}>
@@ -317,9 +331,11 @@ function SyntheticOptionRow({
         variant="unstyled"
         size="unstyled"
         onClick={onSelect}
+        onMouseEnter={onHover}
+        aria-selected={highlighted || undefined}
         className={twMerge(
           "group/option flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-accent",
-          selected ? "bg-accent" : "",
+          selected || highlighted ? "bg-accent" : "",
         )}
       >
         <ComposerOptionKeyBadge>{index + 1}</ComposerOptionKeyBadge>
@@ -327,7 +343,7 @@ function SyntheticOptionRow({
           <span
             className={twMerge(
               "text-ui transition-colors",
-              selected
+              selected || highlighted
                 ? "text-muted-foreground"
                 : "text-faint group-hover/option:text-muted-foreground",
             )}

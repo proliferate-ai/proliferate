@@ -31,6 +31,32 @@ export function reasoningLadderTopsOutAtUltra(
   return options[options.length - 1]?.value.toLowerCase() === "ultra";
 }
 
+export type ReasoningEffortTierTone =
+  | "muted"
+  | "secondary"
+  | "foreground"
+  | "special"
+  | "ultra";
+
+// Tint ladder for the tier-label chip (ultra-capable ladders show the tier
+// by name instead of bars): quiet grays through the working range, the app
+// special blue at max, and the codex-convention purple for ultra.
+const TIER_TONES: Readonly<Record<string, ReasoningEffortTierTone>> = {
+  minimal: "muted",
+  low: "muted",
+  medium: "secondary",
+  high: "foreground",
+  xhigh: "foreground",
+  max: "special",
+  ultra: "ultra",
+};
+
+export function resolveReasoningEffortTierTone(
+  value: string | null,
+): ReasoningEffortTierTone {
+  return TIER_TONES[value?.toLowerCase() ?? ""] ?? "secondary";
+}
+
 const TITLE_CASE_SPLIT = /[^a-z0-9]+/i;
 
 export function resolveReasoningEffortPresentation(

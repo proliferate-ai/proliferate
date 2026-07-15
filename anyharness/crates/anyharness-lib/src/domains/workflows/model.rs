@@ -23,6 +23,8 @@ pub enum WorkflowRunStatus {
     Running,
     Completed,
     Failed,
+    Cancelled,
+    Interrupted,
 }
 
 impl WorkflowRunStatus {
@@ -32,6 +34,8 @@ impl WorkflowRunStatus {
             Self::Running => "running",
             Self::Completed => "completed",
             Self::Failed => "failed",
+            Self::Cancelled => "cancelled",
+            Self::Interrupted => "interrupted",
         }
     }
 
@@ -41,12 +45,17 @@ impl WorkflowRunStatus {
             "running" => Some(Self::Running),
             "completed" => Some(Self::Completed),
             "failed" => Some(Self::Failed),
+            "cancelled" => Some(Self::Cancelled),
+            "interrupted" => Some(Self::Interrupted),
             _ => None,
         }
     }
 
     pub fn is_terminal(self) -> bool {
-        matches!(self, Self::Completed | Self::Failed)
+        matches!(
+            self,
+            Self::Completed | Self::Failed | Self::Cancelled | Self::Interrupted
+        )
     }
 }
 
@@ -57,6 +66,8 @@ pub enum WorkflowStepStatus {
     Running,
     Completed,
     Failed,
+    Cancelled,
+    Interrupted,
 }
 
 impl WorkflowStepStatus {
@@ -66,6 +77,8 @@ impl WorkflowStepStatus {
             Self::Running => "running",
             Self::Completed => "completed",
             Self::Failed => "failed",
+            Self::Cancelled => "cancelled",
+            Self::Interrupted => "interrupted",
         }
     }
 
@@ -75,12 +88,17 @@ impl WorkflowStepStatus {
             "running" => Some(Self::Running),
             "completed" => Some(Self::Completed),
             "failed" => Some(Self::Failed),
+            "cancelled" => Some(Self::Cancelled),
+            "interrupted" => Some(Self::Interrupted),
             _ => None,
         }
     }
 
     pub fn is_terminal(self) -> bool {
-        matches!(self, Self::Completed | Self::Failed)
+        matches!(
+            self,
+            Self::Completed | Self::Failed | Self::Cancelled | Self::Interrupted
+        )
     }
 }
 
@@ -127,6 +145,28 @@ impl WorkflowRunFailureCode {
     }
 }
 
+/// The closed run interruption code (spec workflow-run-control §4): present
+/// if and only if the run status is `interrupted`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorkflowInterruptionCode {
+    RuntimeRestarted,
+}
+
+impl WorkflowInterruptionCode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::RuntimeRestarted => "runtime_restarted",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "runtime_restarted" => Some(Self::RuntimeRestarted),
+            _ => None,
+        }
+    }
+}
+
 /// The terminal turn result observed for the workflow's single prompt. This is
 /// the workflow domain's own twin of the sessions `SessionTurnOutcome`; the
 /// session extension maps into it so the store never imports sessions types.
@@ -158,10 +198,12 @@ impl WorkflowTurnOutcome {
                 WorkflowStepStatus::Failed,
                 Some(WorkflowRunFailureCode::SessionTurnFailed),
             ),
+            // A correlated cancelled turn is truthful `cancelled`, not a
+            // failure (spec workflow-run-control §4).
             Self::Cancelled => (
-                WorkflowRunStatus::Failed,
-                WorkflowStepStatus::Failed,
-                Some(WorkflowRunFailureCode::SessionTurnCancelled),
+                WorkflowRunStatus::Cancelled,
+                WorkflowStepStatus::Cancelled,
+                None,
             ),
         }
     }
@@ -178,6 +220,13 @@ pub struct WorkflowRunRecord {
     pub workspace_id: String,
     pub session_id: Option<String>,
     pub failure_code: Option<WorkflowRunFailureCode>,
+    /// Monotonic run snapshot version: starts at 1 on acceptance and
+    /// increments exactly once per externally visible snapshot transaction.
+    pub state_version: i64,
+    /// First durable cancellation intent; never cleared once set.
+    pub cancel_requested_at: Option<String>,
+    /// Present if and only if the run status is `interrupted`.
+    pub interruption_code: Option<WorkflowInterruptionCode>,
     pub created_at: String,
     pub updated_at: String,
     pub started_at: Option<String>,

@@ -1,3 +1,4 @@
+import type { KeyboardEventHandler } from "react";
 import { Search } from "../icons/core";
 import { Input } from "./Input";
 
@@ -8,6 +9,11 @@ export interface PopoverSearchFieldProps {
   autoFocus?: boolean;
   /** Accessible name when the placeholder alone is not descriptive enough. */
   ariaLabel?: string;
+  /**
+   * List-navigation hook: the search input keeps focus while the picker's
+   * rows are navigated, so ArrowUp/ArrowDown/Enter handling belongs here.
+   */
+  onKeyDown?: KeyboardEventHandler<HTMLInputElement>;
 }
 
 /**
@@ -23,6 +29,7 @@ export function PopoverSearchField({
   placeholder = "Search",
   autoFocus,
   ariaLabel,
+  onKeyDown,
 }: PopoverSearchFieldProps) {
   return (
     <div className="flex items-center gap-2 px-2.5 py-[7px]">
@@ -33,6 +40,7 @@ export function PopoverSearchField({
         placeholder={placeholder}
         autoFocus={autoFocus}
         aria-label={ariaLabel}
+        onKeyDown={onKeyDown}
         className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-ui shadow-none focus:ring-0"
       />
     </div>

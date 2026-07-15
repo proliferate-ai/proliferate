@@ -1166,7 +1166,7 @@ async def test_org_pro_subscription_sync_reconciles_active_seats_before_period_g
     )
     assert updates == [2]
     assert len(grants) == 1
-    assert grants[0].hours_granted == 40.0
+    assert grants[0].hours_granted == 10.0  # 2 seats * 5 h/seat ($15 at $3/hr, ruled)
 
     db_session.add(
         OrganizationMembership(
@@ -1206,7 +1206,7 @@ async def test_org_pro_subscription_sync_reconciles_active_seats_before_period_g
     assert updates == [2, 3]
     assert subscription.seat_quantity == 3
     assert len(grants) == 1
-    assert grants[0].hours_granted == 60.0
+    assert grants[0].hours_granted == 15.0  # 3 seats * 5 h/seat
 
 
 @pytest.mark.asyncio

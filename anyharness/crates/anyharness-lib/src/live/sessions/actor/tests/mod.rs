@@ -47,6 +47,7 @@ use anyharness_contract::v1::{
 };
 use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
 
+mod conditional_cancel;
 mod config;
 mod config_variants;
 mod domain_ops;

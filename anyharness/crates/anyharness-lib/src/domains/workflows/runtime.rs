@@ -6,19 +6,15 @@
 //! blocking pool; no lease, transaction, or connection ever survives an
 //! unrelated await.
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex as StdMutex, Weak};
-use std::time::Duration;
+use std::sync::Arc;
 
 use tokio::runtime::Handle;
-use tokio::sync::Mutex as AsyncMutex;
 
-use anyharness_contract::v1::ConfigApplyState;
-
-use crate::domains::sessions::runtime::{InternalSessionCreateInput, SessionRuntime};
-use crate::domains::workflows::dispatch::{
-    apply_prompt_dispatch_outcome, blocking_bool, guarded_fail, map_create_error, ExecutionAbort,
+use crate::domains::sessions::runtime::SessionRuntime;
+use crate::domains::workflows::control::{
+    cancel_workflow_run, WorkflowCancelError, WorkflowRunGates,
 };
+use crate::domains::workflows::execution::execute;
 use crate::domains::workflows::model::{
     VersionedPutWorkflowRunInput, WorkflowResolvedPlanV2, WorkflowRunFailureCode,
 };
@@ -66,32 +62,9 @@ pub struct WorkflowRunRuntime {
     session_runtime: Arc<SessionRuntime>,
     operation_gate: Arc<WorkspaceOperationGate>,
     access_gate: Arc<WorkspaceAccessGate>,
-    accept_gates: Arc<StdMutex<HashMap<String, Weak<AsyncMutex<()>>>>>,
+    gates: Arc<WorkflowRunGates>,
     main_handle: Handle,
 }
-
-fn workflow_accept_gate_slot(
-    gates: &StdMutex<HashMap<String, Weak<AsyncMutex<()>>>>,
-    run_id: &str,
-) -> Result<Arc<AsyncMutex<()>>, WorkflowPutError> {
-    let mut gates = gates.lock().map_err(|_| {
-        WorkflowPutError::Internal(anyhow::anyhow!("workflow run gate lock poisoned"))
-    })?;
-    gates.retain(|_, gate| gate.strong_count() > 0);
-    if let Some(gate) = gates.get(run_id).and_then(Weak::upgrade) {
-        return Ok(gate);
-    }
-
-    let gate = Arc::new(AsyncMutex::new(()));
-    gates.insert(run_id.to_string(), Arc::downgrade(&gate));
-    Ok(gate)
-}
-
-fn effort_apply_allows_step(state: Option<&ConfigApplyState>) -> bool {
-    matches!(state, Some(ConfigApplyState::Applied))
-}
-
-const WORKFLOW_EFFORT_APPLY_TIMEOUT: Duration = Duration::from_secs(45);
 
 impl WorkflowRunRuntime {
     pub fn new(
@@ -99,6 +72,7 @@ impl WorkflowRunRuntime {
         session_runtime: Arc<SessionRuntime>,
         operation_gate: Arc<WorkspaceOperationGate>,
         access_gate: Arc<WorkspaceAccessGate>,
+        gates: Arc<WorkflowRunGates>,
         main_handle: Handle,
     ) -> Self {
         Self {
@@ -106,9 +80,16 @@ impl WorkflowRunRuntime {
             session_runtime,
             operation_gate,
             access_gate,
-            accept_gates: Arc::new(StdMutex::new(HashMap::new())),
+            gates,
             main_handle,
         }
+    }
+
+    /// Merge-gated seam: the shared per-run gates, so tests can hold the exact
+    /// production gate to sequence dispatch-versus-cancel deterministically.
+    #[cfg(test)]
+    pub(crate) fn gates_for_test(&self) -> Arc<WorkflowRunGates> {
+        self.gates.clone()
     }
 
     /// Accept a PUT. Only a fresh `Created` starts execution; replay returns the
@@ -130,13 +111,13 @@ impl WorkflowRunRuntime {
         let session_runtime = self.session_runtime.clone();
         let operation_gate = self.operation_gate.clone();
         let access_gate = self.access_gate.clone();
-        let accept_gates = self.accept_gates.clone();
+        let gates = self.gates.clone();
         let execution_handle = self.main_handle.clone();
 
         let handoff = self.main_handle.spawn(async move {
             match input {
                 VersionedPutWorkflowRunInput::V1(input) => {
-                    let run_gate = workflow_accept_gate_slot(&accept_gates, &run_id)?;
+                    let run_gate = gates.slot(&run_id).map_err(WorkflowPutError::Internal)?;
                     let _run_guard = run_gate.lock_owned().await;
                     let accept_service = service.clone();
                     let accept_run_id = run_id.clone();
@@ -148,8 +129,16 @@ impl WorkflowRunRuntime {
 
                     match outcome {
                         Ok(AcceptOutcome::Created { plan, view }) => {
+                            let gates_for_execute = gates.clone();
                             execution_handle.spawn(async move {
-                                execute(service, session_runtime, operation_gate, plan).await;
+                                execute(
+                                    service,
+                                    session_runtime,
+                                    operation_gate,
+                                    gates_for_execute,
+                                    plan,
+                                )
+                                .await;
                             });
                             Ok(WorkflowPutSuccess::Created(VersionedWorkflowRunView::V1(
                                 view,
@@ -181,7 +170,7 @@ impl WorkflowRunRuntime {
                     // gate only prevents same-process racers from both
                     // performing target lookup before one durable winner is
                     // visible to the other.
-                    let run_gate = workflow_accept_gate_slot(&accept_gates, &run_id)?;
+                    let run_gate = gates.slot(&run_id).map_err(WorkflowPutError::Internal)?;
                     let _run_guard = run_gate.lock_owned().await;
 
                     let inspect_service = service.clone();
@@ -266,9 +255,16 @@ impl WorkflowRunRuntime {
                                 rendered_prompt: plan.rendered_prompt.clone(),
                                 prompt_id: plan.prompt_id.clone(),
                             };
+                            let gates_for_execute = gates.clone();
                             execution_handle.spawn(async move {
-                                execute(service, session_runtime, operation_gate, execution_plan)
-                                    .await;
+                                execute(
+                                    service,
+                                    session_runtime,
+                                    operation_gate,
+                                    gates_for_execute,
+                                    execution_plan,
+                                )
+                                .await;
                             });
                             Ok(WorkflowPutSuccess::Created(VersionedWorkflowRunView::V2(
                                 view,
@@ -303,171 +299,27 @@ impl WorkflowRunRuntime {
             .map_err(|error| WorkflowGetError::Internal(error.into()))?
             .map_err(WorkflowGetError::Store)
     }
-}
 
-/// The one execution task: one outer `Result` boundary, one guarded failure
-/// write. No `unwrap`/`expect`.
-#[tracing::instrument(skip_all, fields(run_id = %plan.run_id, workspace_id = %plan.workspace_id))]
-async fn execute(
-    service: Arc<WorkflowRunService>,
-    session_runtime: Arc<SessionRuntime>,
-    operation_gate: Arc<WorkspaceOperationGate>,
-    plan: WorkflowExecutionPlan,
-) {
-    let run_id = plan.run_id.clone();
-    match run_execution(&service, &session_runtime, &operation_gate, plan).await {
-        Ok(()) => {}
-        Err(ExecutionAbort::Fail(code)) => {
-            guarded_fail(&service, &run_id, code).await;
-        }
-        Err(ExecutionAbort::Infra) => {
-            // Already logged with correlation IDs only. Rows stay nonterminal;
-            // the next startup fence resolves them. Never claim completion.
-        }
-    }
-}
-
-async fn run_execution(
-    service: &Arc<WorkflowRunService>,
-    session_runtime: &Arc<SessionRuntime>,
-    operation_gate: &Arc<WorkspaceOperationGate>,
-    plan: WorkflowExecutionPlan,
-) -> Result<(), ExecutionAbort> {
-    let run_id = plan.run_id.clone();
-
-    // 1. accepted -> running.
-    if !blocking_bool(&run_id, "begin_run", {
-        let service = service.clone();
-        let run_id = run_id.clone();
-        move || service.begin_run(&run_id)
-    })
-    .await?
+    /// Durable cancellation (spec workflow-run-control §5): delegates to the
+    /// control module inside the same detached main-runtime handoff as PUT, so
+    /// a dropped HTTP future can never cancel the intent-CAS -> live-request
+    /// -> final-snapshot sequence.
+    #[tracing::instrument(skip_all, fields(run_id = %run_id))]
+    pub async fn cancel(
+        &self,
+        run_id: String,
+    ) -> Result<crate::domains::workflows::service::VersionedWorkflowRunView, WorkflowCancelError>
     {
-        // The run is no longer accepted (concurrently fenced/failed); this task
-        // does not own the transition.
-        return Ok(());
+        let service = self.service.clone();
+        let session_runtime = self.session_runtime.clone();
+        let gates = self.gates.clone();
+        let handoff = self.main_handle.spawn(async move {
+            cancel_workflow_run(service, session_runtime, gates, run_id).await
+        });
+        handoff
+            .await
+            .map_err(|error| WorkflowCancelError::Internal(error.into()))?
     }
-
-    // 2. Hold the shared SessionStart lease through prompt acceptance. It lives
-    // on this async task stack and is never moved into blocking work.
-    let _lease = operation_gate
-        .acquire_shared(&plan.workspace_id, WorkspaceOperationKind::SessionStart)
-        .await;
-
-    // 3. Create the durable internal session (created, not started).
-    let create_input = InternalSessionCreateInput {
-        workspace_id: plan.workspace_id.clone(),
-        agent_kind: plan.agent_kind.clone(),
-        model_id: plan.model_id.clone(),
-        mode_id: plan.mode_id.clone(),
-        origin: OriginContext::system_local_runtime(),
-    };
-    let session = {
-        let session_runtime = session_runtime.clone();
-        let run_id_for_log = run_id.clone();
-        let joined = tokio::task::spawn_blocking(move || {
-            session_runtime.create_persisted_internal_session(create_input)
-        })
-        .await;
-        match joined {
-            Ok(Ok(record)) => record,
-            Ok(Err(error)) => return Err(ExecutionAbort::Fail(map_create_error(&error))),
-            Err(join_error) => {
-                tracing::error!(
-                    run_id = %run_id_for_log,
-                    error = %join_error,
-                    "workflow session creation task join failed"
-                );
-                return Err(ExecutionAbort::Fail(
-                    WorkflowRunFailureCode::SessionCreateFailed,
-                ));
-            }
-        }
-    };
-    let session_id = session.id.clone();
-
-    // 4. Persist session_id BEFORE startup.
-    if !blocking_bool(&run_id, "bind_session", {
-        let service = service.clone();
-        let run_id = run_id.clone();
-        let session_id = session_id.clone();
-        move || service.bind_session(&run_id, &session_id)
-    })
-    .await?
-    {
-        return Ok(());
-    }
-
-    // 5. Start the persisted session.
-    if let Err(error) = session_runtime.start_persisted_session(&session).await {
-        tracing::warn!(
-            run_id = %run_id,
-            session_id = %session_id,
-            "workflow session startup failed"
-        );
-        let _ = error;
-        return Err(ExecutionAbort::Fail(
-            WorkflowRunFailureCode::SessionStartFailed,
-        ));
-    }
-
-    // 6. Apply schema-v2 effort after startup and before the step can begin.
-    if let Some(effort) = &plan.effort_config {
-        let applied = tokio::time::timeout(
-            WORKFLOW_EFFORT_APPLY_TIMEOUT,
-            session_runtime.set_live_session_config_option(
-                &session_id,
-                &effort.config_id,
-                &effort.value,
-            ),
-        )
-        .await;
-        let apply_state = applied
-            .as_ref()
-            .ok()
-            .and_then(|result| result.as_ref().ok())
-            .map(|(_, _, state)| state);
-        if !effort_apply_allows_step(apply_state) {
-            tracing::warn!(
-                run_id = %run_id,
-                session_id = %session_id,
-                timed_out = applied.is_err(),
-                "workflow session effort configuration was not applied"
-            );
-            return Err(ExecutionAbort::Fail(
-                WorkflowRunFailureCode::SessionConfigApplyFailed,
-            ));
-        }
-    }
-
-    // 7. Step pending -> running immediately before dispatch.
-    if !blocking_bool(&run_id, "begin_step", {
-        let service = service.clone();
-        let run_id = run_id.clone();
-        move || service.begin_step(&run_id)
-    })
-    .await?
-    {
-        return Ok(());
-    }
-
-    // 8. Dispatch the one rendered prompt with the deterministic prompt id.
-    // Ambiguity rule (spec §6.1, symmetric): a LOST acknowledgement is never a
-    // failure claim — the actor may be running the turn. The step stays
-    // running with a null turn id; the extension terminalizes it if the turn
-    // ran, and the startup fence resolves it if not. Only a verifiably failed
-    // dispatch persists `prompt_dispatch_failed`.
-    let acceptance = session_runtime
-        .send_text_prompt_with_id(
-            &session_id,
-            plan.rendered_prompt.clone(),
-            plan.prompt_id.clone(),
-        )
-        .await;
-    apply_prompt_dispatch_outcome(service, &run_id, &session_id, acceptance).await?;
-
-    // 9. Drop the lease (on scope exit) — completion arrives via the extension.
-    Ok(())
 }
 
 #[cfg(test)]

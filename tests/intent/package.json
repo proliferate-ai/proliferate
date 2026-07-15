@@ -12,7 +12,9 @@
     "test:secrets": "playwright test specs/secrets.spec.ts",
     "test:cloud-workspace": "playwright test specs/cloud-workspace.spec.ts",
     "test:billing": "playwright test --config playwright.billing.config.ts",
-    "test:sso": "playwright test specs/sso.spec.ts"
+    "test:billing-import": "playwright test --config playwright.billing-import.config.ts",
+    "test:sso": "playwright test specs/sso.spec.ts",
+    "test:unit": "tsx --test \"fakes/**/*.test.ts\""
   },
   "dependencies": {
     "pg": "^8.13.1"
@@ -22,6 +24,7 @@
     "@types/node": "^24.13.2",
     "@types/pg": "^8.11.10",
     "oauth2-mock-server": "^9.1.0",
+    "tsx": "^4.22.4",
     "typescript": "^5.7.0"
   }
 }

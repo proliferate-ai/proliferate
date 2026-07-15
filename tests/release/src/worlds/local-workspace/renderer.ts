@@ -7,6 +7,15 @@ import type { Exec } from "./docker.js";
 import { launchRendererServer, type LaunchedProcess, type ReadinessFetch, type SpawnLike } from "./processes.js";
 
 /**
+ * Re-exported from the static-server module: the fixed path `serveRenderer`'s
+ * static file server answers with a bare, same-origin document (no app bundle).
+ * The self-host Connect-Server trust probe navigates here before trust so its
+ * `/meta` fetches carry a real renderer Origin without booting the product SPA
+ * (SHR-007). Additive to the SPA fallback, so local-world serving is unchanged.
+ */
+export { CONNECT_PROBE_PATH } from "./processes.js";
+
+/**
  * Extracts and serves the exact Desktop renderer archive and launches the
  * shared Chromium browser via Playwright (spec "World startup" steps 8–9,
  * "productPage"). The renderer was built with THIS run's allocated

@@ -18,6 +18,10 @@ import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
 import { PendingConfigIndicator } from "#product/components/workspace/chat/input/PendingConfigIndicator";
+import {
+  modelRowKey,
+  useModelPickerKeyboardNav,
+} from "#product/hooks/chat/ui/use-model-picker-keyboard-nav";
 
 interface ComposerModelSelectorControlProps {
   modelSelectorProps: ModelSelectorProps;
@@ -150,6 +154,13 @@ function ComposerModelPickerPopover({
       .filter((group): group is ModelSelectorGroup => group !== null);
   }, [orderedGroups, search]);
 
+  const {
+    highlightedKey: effectiveHighlightedKey,
+    setHighlightedKey,
+    setRowRef,
+    handleSearchKeyDown,
+  } = useModelPickerKeyboardNav(filteredGroups, onSelect);
+
   return (
     <ComposerPopoverSurface className="flex w-72 flex-col p-0">
       <div className="shrink-0 border-b border-border">
@@ -158,6 +169,7 @@ function ComposerModelPickerPopover({
           onChange={setSearch}
           placeholder="Search models"
           autoFocus
+          onKeyDown={handleSearchKeyDown}
         />
       </div>
 
@@ -169,6 +181,9 @@ function ComposerModelPickerPopover({
             currentKind={currentKind}
             showSeparator={index > 0}
             onSelect={onSelect}
+            highlightedKey={effectiveHighlightedKey}
+            onHighlight={setHighlightedKey}
+            setRowRef={setRowRef}
           />
         ))}
 
@@ -210,11 +225,17 @@ function ModelPickerGroup({
   currentKind,
   showSeparator,
   onSelect,
+  highlightedKey,
+  onHighlight,
+  setRowRef,
 }: {
   group: ModelSelectorGroup;
   currentKind: string | null;
   showSeparator: boolean;
   onSelect: (selection: ModelSelectorSelection) => void;
+  highlightedKey: string | null;
+  onHighlight: (key: string) => void;
+  setRowRef: (key: string, element: HTMLButtonElement | null) => void;
 }) {
   const hasSelectedModel = group.models.some((model) => model.isSelected);
 
@@ -241,12 +262,17 @@ function ModelPickerGroup({
           && group.kind !== currentKind;
 
         const nameParts = splitProviderDisplayName(model.displayName);
+        const rowKey = modelRowKey(group.kind, model.modelId);
+        const isHighlighted = highlightedKey === rowKey;
 
         return (
           <PopoverMenuItem
             key={model.modelId}
+            ref={(element: HTMLButtonElement | null) => setRowRef(rowKey, element)}
             data-model-option={model.modelId}
             data-model-selected={model.isSelected ? "true" : "false"}
+            aria-selected={isHighlighted}
+            onMouseEnter={() => onHighlight(rowKey)}
             icon={<ProviderIcon kind={group.kind} className="size-3 shrink-0 text-muted-foreground" />}
             label={(
               <span className="flex items-center gap-1.5">
@@ -266,7 +292,13 @@ function ModelPickerGroup({
               </span>
             )}
             labelClassName="text-composer"
-            className={`px-2.5 py-2 ${model.isSelected ? "bg-popover-accent" : ""}`}
+            className={`px-2.5 py-2 ${
+              model.isSelected
+                ? "bg-popover-accent"
+                : isHighlighted
+                  ? "bg-list-hover"
+                  : ""
+            }`}
             onClick={() => onSelect({ kind: group.kind, modelId: model.modelId })}
           />
         );

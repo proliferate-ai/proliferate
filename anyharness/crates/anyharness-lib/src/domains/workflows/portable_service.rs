@@ -120,6 +120,9 @@ impl WorkflowRunService {
             workspace_id: prepared.source.workspace_id.clone(),
             session_id: None,
             failure_code: None,
+            state_version: 1,
+            cancel_requested_at: None,
+            interruption_code: None,
             created_at: created_at.clone(),
             updated_at: created_at.clone(),
             started_at: None,
@@ -167,24 +170,30 @@ impl WorkflowRunService {
         let Some((run, steps)) = self.store.get(run_id)? else {
             return Ok(None);
         };
-        match run.schema_version {
-            1 => {
-                let invocation =
-                    serde_json::from_str::<WorkflowRunInvocation>(&run.invocation_json)
-                        .map_err(|error| WorkflowServiceError::Store(error.into()))?;
-                Ok(Some(VersionedWorkflowRunView::V1(WorkflowRunView {
-                    run,
-                    invocation,
-                    steps,
-                })))
-            }
-            2 => Ok(Some(VersionedWorkflowRunView::V2(parse_v2_view(
-                run, steps,
-            )?))),
-            version => Err(WorkflowServiceError::Store(anyhow::anyhow!(
-                "unsupported stored workflow schema version {version}"
-            ))),
+        Ok(Some(compose_versioned_view(run, steps)?))
+    }
+}
+
+/// Compose the version-dispatched read view from durable rows. Shared by GET
+/// and the cancel snapshot paths.
+pub(super) fn compose_versioned_view(
+    run: WorkflowRunRecord,
+    steps: Vec<WorkflowRunStepRecord>,
+) -> Result<VersionedWorkflowRunView, WorkflowServiceError> {
+    match run.schema_version {
+        1 => {
+            let invocation = serde_json::from_str::<WorkflowRunInvocation>(&run.invocation_json)
+                .map_err(|error| WorkflowServiceError::Store(error.into()))?;
+            Ok(VersionedWorkflowRunView::V1(WorkflowRunView {
+                run,
+                invocation,
+                steps,
+            }))
         }
+        2 => Ok(VersionedWorkflowRunView::V2(parse_v2_view(run, steps)?)),
+        version => Err(WorkflowServiceError::Store(anyhow::anyhow!(
+            "unsupported stored workflow schema version {version}"
+        ))),
     }
 }
 

@@ -47,9 +47,18 @@ VERSION_EXPLICIT=0
 EVAL_MODE=0
 TELEMETRY_MODE="self_managed"
 IMAGE_REPO="ghcr.io/proliferate-ai/proliferate-server"
+# Optional extra browser origins allowed to call the API (CORS). Operator origins
+# EXTEND the shipped localhost + Tauri desktop defaults (they are merged and
+# deduped, never replaced). Empty leaves the shipped defaults untouched.
+CORS_ALLOW_ORIGINS_OVERRIDE=""
 ASSUME_YES=0
 DRY_RUN=0
 NO_START=0
+# Local (air-gapped / candidate) bundle: install from an already-downloaded,
+# checksum-verified proliferate-deploy.tar.gz instead of fetching a GitHub
+# release. BUNDLE_SUMS_PATH defaults to a sibling self-hosted-assets.SHA256SUMS.
+BUNDLE_PATH=""
+BUNDLE_SUMS_PATH=""
 
 # Overridable download endpoints (also honored by common.sh) for tests/forks.
 REPO_SLUG="${PROLIFERATE_REPO:-proliferate-ai/proliferate}"
@@ -70,6 +79,19 @@ Options:
                            rerun.
       --telemetry-mode M   PROLIFERATE_TELEMETRY_MODE (default: self_managed).
       --image-repo REPO    Server image repository (default GHCR).
+      --cors-allow-origins CSV
+                           Extra browser origins allowed to call the API
+                           (CORS_ALLOW_ORIGINS). Set this when a browser-based
+                           client on a non-default origin must reach the API.
+                           These EXTEND the shipped localhost + Tauri desktop
+                           origins (merged and deduped, never replaced).
+      --bundle PATH        Install from a local, checksum-verified deploy bundle
+                           (proliferate-deploy.tar.gz) instead of downloading a
+                           GitHub release. For air-gapped installs and for
+                           installing pre-built candidate bytes.
+      --bundle-sha256sums PATH
+                           Checksum file for --bundle (default: a sibling
+                           self-hosted-assets.SHA256SUMS next to the bundle).
       --install-root DIR   Durable install root (default: /opt/proliferate).
       --no-start           Fetch and configure only; do not bootstrap the stack.
       --dry-run            Print the resolved plan and exit without changing
@@ -117,6 +139,18 @@ while [[ $# -gt 0 ]]; do
       ;;
     --image-repo)
       IMAGE_REPO="${2:-}"
+      shift 2
+      ;;
+    --cors-allow-origins)
+      CORS_ALLOW_ORIGINS_OVERRIDE="${2:-}"
+      shift 2
+      ;;
+    --bundle)
+      BUNDLE_PATH="${2:-}"
+      shift 2
+      ;;
+    --bundle-sha256sums)
+      BUNDLE_SUMS_PATH="${2:-}"
       shift 2
       ;;
     --install-root)
@@ -303,6 +337,22 @@ FETCH_TMP=""
 cleanup_fetch() { [[ -n "$FETCH_TMP" && -d "$FETCH_TMP" ]] && rm -rf "$FETCH_TMP"; }
 trap cleanup_fetch EXIT
 
+# verify_bundle_checksum <dir> <sums-desc>: verify proliferate-deploy.tar.gz in
+# <dir> against its adjacent self-hosted-assets.SHA256SUMS. --ignore-missing lets
+# the SUMS legitimately cover other assets (runtime tarballs, AWS template) that
+# are not present here — but that same flag makes `sha256sum -c` exit 0 even when
+# NO listed file was actually checked (e.g. a SUMS that only names a versioned
+# filename), which would silently let unverified bytes through. So we ALSO require
+# the bundle's own line to have verified OK. Dies on any failure. Never prints
+# file contents.
+verify_bundle_checksum() {
+  local dir="$1" sums_desc="$2" out
+  out="$(cd "$dir" && sha256sum -c --ignore-missing self-hosted-assets.SHA256SUMS 2>&1)" \
+    || die "checksum verification FAILED for proliferate-deploy.tar.gz ($sums_desc). The file is corrupt or does not match its checksums; not extracting."
+  grep -qF 'proliferate-deploy.tar.gz: OK' <<<"$out" \
+    || die "checksum file did not cover proliferate-deploy.tar.gz ($sums_desc): no 'proliferate-deploy.tar.gz: OK' line in the verification output. Refusing to extract an unverified bundle."
+}
+
 download_and_verify_bundle() {
   local base="${DOWNLOAD_BASE}/server-v${VERSION}"
   local bundle_url="$base/proliferate-deploy.tar.gz"
@@ -318,15 +368,42 @@ download_and_verify_bundle() {
     || die "failed to download the checksum file from $sums_url."
 
   log "Verifying checksum before extraction"
-  (
-    cd "$FETCH_TMP"
-    # --ignore-missing: the sums file also covers the runtime tarballs and AWS
-    # template, which we did not download here.
-    sha256sum -c --ignore-missing self-hosted-assets.SHA256SUMS
-  ) || die "checksum verification FAILED for proliferate-deploy.tar.gz. The download is corrupt or tampered; not extracting."
+  # --ignore-missing: the sums file also covers the runtime tarballs and AWS
+  # template, which we did not download here. verify_bundle_checksum additionally
+  # requires the bundle's own line to have verified (guards the empty-match pass).
+  verify_bundle_checksum "$FETCH_TMP" "$sums_url"
   info "Checksum OK"
 
   log "Extracting bundle"
+  tar xzf "$FETCH_TMP/proliferate-deploy.tar.gz" -C "$FETCH_TMP"
+  [[ -d "$FETCH_TMP/proliferate-deploy" ]] \
+    || die "bundle did not extract to a proliferate-deploy/ directory."
+}
+
+# Install from a local --bundle instead of a GitHub release. Verifies the
+# provided checksum with the SAME `sha256sum -c --ignore-missing` guard the
+# download path uses (never extract unverified bytes), then extracts. No
+# network, no release resolution.
+verify_and_extract_local_bundle() {
+  [[ -f "$BUNDLE_PATH" ]] || die "--bundle path not found: $BUNDLE_PATH"
+  local sums="$BUNDLE_SUMS_PATH"
+  if [[ -z "$sums" ]]; then
+    sums="$(cd "$(dirname "$BUNDLE_PATH")" && pwd)/self-hosted-assets.SHA256SUMS"
+  fi
+  [[ -f "$sums" ]] || die "checksum file not found for --bundle (looked for '$sums'); pass --bundle-sha256sums PATH."
+
+  FETCH_TMP="$(mktemp -d "${TMPDIR:-/tmp}/proliferate-install.XXXXXX")"
+  cp "$BUNDLE_PATH" "$FETCH_TMP/proliferate-deploy.tar.gz"
+  cp "$sums" "$FETCH_TMP/self-hosted-assets.SHA256SUMS"
+
+  log "Verifying checksum of the local bundle before extraction"
+  # --ignore-missing: the sums file may also cover runtime tarballs / the AWS
+  # template that a local bundle does not carry. verify_bundle_checksum additionally
+  # requires the bundle's own line to have verified (guards the empty-match pass).
+  verify_bundle_checksum "$FETCH_TMP" "$sums"
+  info "Checksum OK"
+
+  log "Extracting local bundle"
   tar xzf "$FETCH_TMP/proliferate-deploy.tar.gz" -C "$FETCH_TMP"
   [[ -d "$FETCH_TMP/proliferate-deploy" ]] \
     || die "bundle did not extract to a proliferate-deploy/ directory."
@@ -368,11 +445,38 @@ set_env_key() {
   rm -f "$tmp"
 }
 
+# merge_csv_dedup <csv-a> <csv-b>: concatenate two comma-separated origin lists
+# and print a comma-separated list with duplicates removed, preserving first-seen
+# order. Empty/whitespace-only fields are dropped. Used so operator-provided CORS
+# origins EXTEND the shipped defaults instead of replacing them.
+merge_csv_dedup() {
+  awk -v a="$1" -v b="$2" '
+    BEGIN {
+      n = split(a "," b, parts, ",")
+      out = ""
+      for (i = 1; i <= n; i++) {
+        v = parts[i]
+        gsub(/^[ \t]+|[ \t]+$/, "", v)
+        if (v == "" || (v in seen)) continue
+        seen[v] = 1
+        out = (out == "" ? v : out "," v)
+      }
+      print out
+    }'
+}
+
 configure() {
   local static_file="$DEPLOY_DIR/.env.static"
   local example_file="$DEPLOY_DIR/.env.production.example"
 
   if [[ -f "$static_file" ]]; then
+    # --cors-allow-origins only applies on a FRESH install (it is merged into the
+    # generated .env.static then). On a rerun the existing config is preserved, so
+    # silently accepting the flag would be a no-op that misleads the operator into
+    # thinking CORS changed. Reject it explicitly and point at the manual edit.
+    if [[ -n "$CORS_ALLOW_ORIGINS_OVERRIDE" ]]; then
+      die "--cors-allow-origins only applies on a fresh install; $static_file already exists. To change CORS on an existing install, edit CORS_ALLOW_ORIGINS in $static_file (or .env.local) and rerun update.sh."
+    fi
     log "Existing configuration found; preserving $static_file"
     # Only re-pin the image tag on an explicit --version rerun (the installer
     # upgrade path). Everything else the operator set is left untouched.
@@ -413,6 +517,23 @@ configure() {
   fi
 
   set_env_key "$static_file" PROLIFERATE_TELEMETRY_MODE "$TELEMETRY_MODE"
+  if [[ -n "$CORS_ALLOW_ORIGINS_OVERRIDE" ]]; then
+    # The API pairs allow_origins with allow_credentials=true, so a wildcard
+    # here means credentialed origin reflection — effectively open CORS for an
+    # authenticated API. Refuse it; operators must list explicit origins.
+    if [[ "$CORS_ALLOW_ORIGINS_OVERRIDE" == *"*"* ]]; then
+      die "--cors-allow-origins must list explicit origins; '*' is unsafe with a credentialed API."
+    fi
+    # Operator origins EXTEND the shipped defaults, never replace them: the
+    # product's normal Tauri/localhost desktop origins must keep working. The
+    # example we just copied into .env.static already carries the shipped default
+    # CORS_ALLOW_ORIGINS; merge the operator list into it and dedupe.
+    local shipped_default merged
+    shipped_default="$(read_env "$static_file" CORS_ALLOW_ORIGINS)"
+    merged="$(merge_csv_dedup "$shipped_default" "$CORS_ALLOW_ORIGINS_OVERRIDE")"
+    set_env_key "$static_file" CORS_ALLOW_ORIGINS "$merged"
+    info "CORS_ALLOW_ORIGINS extended with operator origins (shipped defaults preserved): $merged"
+  fi
   set_env_key "$static_file" PROLIFERATE_SERVER_IMAGE "$IMAGE_REPO"
   # Pin the image tag to the resolved release for controlled, reproducible
   # upgrades (the spec's recommended strategy over the rolling :stable tag).
@@ -500,19 +621,45 @@ EOF
 
 main() {
   check_host
-  resolve_version
 
-  if [[ "$DRY_RUN" -eq 1 ]]; then
+  if [[ -n "$BUNDLE_PATH" ]]; then
+    # Local-bundle install: extract first so VERSION can come from the bundle
+    # when --version was not pinned, then reuse the identical install path.
+    verify_and_extract_local_bundle
+    if [[ -n "$VERSION" ]]; then
+      VERSION="${VERSION#server-v}"
+      VERSION="${VERSION#v}"
+      info "Using pinned image tag: $VERSION"
+    else
+      VERSION="$(tr -d '[:space:]' <"$FETCH_TMP/proliferate-deploy/VERSION" 2>/dev/null || true)"
+      [[ -n "$VERSION" ]] || die "--bundle has no VERSION file; pass --version X.Y.Z to pin the image tag."
+      info "Using bundle VERSION: $VERSION"
+    fi
+
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+      print_plan
+      log "Dry run: no changes made."
+      exit 0
+    fi
+
     print_plan
-    log "Dry run: no changes made."
-    exit 0
+    confirm
+    install_bundle_files
+  else
+    resolve_version
+
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+      print_plan
+      log "Dry run: no changes made."
+      exit 0
+    fi
+
+    print_plan
+    confirm
+
+    download_and_verify_bundle
+    install_bundle_files
   fi
-
-  print_plan
-  confirm
-
-  download_and_verify_bundle
-  install_bundle_files
 
   configure
   record_version

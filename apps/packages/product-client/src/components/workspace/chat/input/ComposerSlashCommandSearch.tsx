@@ -31,7 +31,9 @@ export function ComposerSlashCommandSearch({
       data-composer-overlay-floating-ui
       data-telemetry-mask
       className={twMerge(
-        "mb-2 overflow-hidden rounded-2xl border border-border bg-popover/90 p-1 text-popover-foreground shadow-popover backdrop-blur-sm",
+        // One step darker than the standard popover surface (Pablo: the pane
+        // should sit visually below the composer, not float brighter than it).
+        "mb-2 overflow-hidden rounded-2xl border border-border bg-surface-elevated/95 p-1 text-popover-foreground shadow-popover backdrop-blur-sm",
         className,
       )}
     >
@@ -55,7 +57,7 @@ export function ComposerSlashCommandSearch({
               />
             ))
           ) : (
-            <div className="px-2 py-4 text-center text-xs text-muted-foreground">
+            <div className="px-2 py-4 text-center text-ui-sm text-muted-foreground">
               No matching slash commands.
             </div>
           )}
@@ -87,13 +89,19 @@ function SlashCommandRow({
   const tooltipContent = [command.displayName, command.description, command.inputHint]
     .filter(Boolean)
     .join("\n");
+  // The leading slash renders as its own, slightly larger glyph so the
+  // command name reads as name-after-slash instead of one undifferentiated
+  // token (composer-size slash + ui-size name share a baseline).
+  const commandName = command.displayName.startsWith("/")
+    ? command.displayName.slice(1)
+    : command.displayName;
 
   return (
     <>
       {showGroupLabel ? (
         <>
           <div data-slash-command-group-label-marker="" />
-          <div className="px-2.5 py-1 text-xs text-muted-foreground">
+          <div className="px-2.5 py-1 text-ui-sm text-muted-foreground">
             {command.group}
           </div>
         </>
@@ -114,20 +122,21 @@ function SlashCommandRow({
           className={twMerge(
             // Color-token hover promotion, not row opacity — opacity flips
             // re-rasterize the glyphs and read as shimmer (styling.md).
-            "flex w-full shrink-0 cursor-pointer items-baseline gap-2 overflow-hidden whitespace-normal rounded-lg px-2.5 py-[5px] text-left text-composer outline-none hover:bg-accent focus:bg-accent",
+            "flex w-full shrink-0 cursor-pointer items-baseline gap-2 overflow-hidden whitespace-normal rounded-lg px-2.5 py-1 text-left text-ui outline-none hover:bg-accent focus:bg-accent",
             selected && "bg-accent",
           )}
         >
           <span className="flex-none truncate text-popover-foreground">
-            {command.displayName}
+            <span className="text-composer">/</span>
+            {commandName}
           </span>
           {detail ? (
-            <span className="min-w-0 flex-1 truncate text-muted-foreground">
+            <span className="min-w-0 flex-1 truncate text-ui-sm text-muted-foreground">
               {detail}
             </span>
           ) : null}
           {command.inputHint && command.description ? (
-            <span className="ml-auto shrink-0 truncate text-xs text-muted-foreground">
+            <span className="ml-auto shrink-0 truncate text-ui-sm text-muted-foreground">
               {command.inputHint}
             </span>
           ) : null}

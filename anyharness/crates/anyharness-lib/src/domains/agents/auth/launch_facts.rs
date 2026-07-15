@@ -47,41 +47,60 @@ pub fn collect_launch_env_facts(
 ) -> Vec<CredentialFact> {
     let ambient: BTreeMap<String, String> = std::env::vars().collect();
     let mut facts = collect_launch_env_facts_with_ambient(agent_kind, readiness_env, &ambient);
-    facts.extend(collect_route_facts(agent_kind, runtime_home));
+    facts.extend(collect_enrolled_source_facts(agent_kind, runtime_home));
     facts
 }
 
-/// Route facts from workspace-scoped `agent-auth/state.json`. Reuses
-/// `route_auth::resolve_profile` — one reader, two consumers (this collector
-/// and the launch-time renderer) — so a classification-visible gateway context
-/// exactly tracks a gateway source the launcher would inject. A malformed
-/// state file is tolerated as "no route" (stale in the SAFE direction: the
-/// gateway context stays gated until the file heals), never an error here.
-fn collect_route_facts(agent_kind: &str, runtime_home: &Path) -> Vec<CredentialFact> {
+/// Facts derived from the enrolled credential sources in workspace-scoped
+/// `agent-auth/state.json`. Reuses `route_auth::resolve_profile` — one reader,
+/// two consumers (this collector and the launch-time renderer) — so a
+/// classification-visible context exactly tracks a source the launcher would
+/// inject. A malformed state file is tolerated as "no facts" (stale in the SAFE
+/// direction: contexts stay gated until the file heals), never an error here.
+///
+/// Per source kind:
+/// - `gateway` → a single [`CredentialFact::Route`] for the gateway route
+///   (`anthropic-api`-style native contexts must NOT match; the gateway context
+///   matches its `Route` signal). No api_key route fact is ever emitted.
+/// - `api_key` → a presence-only [`CredentialFact::Env`] for the source's
+///   `env_var_name`. This is the BYOK path: on the local surface the raw key is
+///   enrolled in state.json (not the composed workspace env), so without this
+///   the catalog's api_key-route context (e.g. claude `anthropic-api`, gated on
+///   `Env(ANTHROPIC_API_KEY)`) never activates and the model menu comes back
+///   empty. The Env fact carries presence only; the raw value is still rendered
+///   into the launch env by the existing `render_profile` path at spawn time.
+fn collect_enrolled_source_facts(agent_kind: &str, runtime_home: &Path) -> Vec<CredentialFact> {
     let state = match load_state_file(runtime_home) {
         Ok(state) => state,
         Err(error) => {
-            tracing::debug!(agent_kind, %error, "route state unreadable; no route facts");
+            tracing::debug!(agent_kind, %error, "route state unreadable; no source facts");
             return Vec::new();
         }
     };
     match resolve_profile(state.as_ref(), agent_kind) {
         Ok(AgentRuntimeAuthProfile::Sources(sources)) => {
-            let has_gateway = sources
-                .sources
-                .iter()
-                .any(|source| matches!(source, ResolvedSource::Gateway(_)));
-            if has_gateway {
-                vec![CredentialFact::Route {
-                    kind: route_kinds::GATEWAY.to_string(),
-                }]
-            } else {
-                Vec::new()
+            let mut facts = Vec::new();
+            let mut has_gateway = false;
+            for source in &sources.sources {
+                match source {
+                    ResolvedSource::Gateway(_) => has_gateway = true,
+                    ResolvedSource::ApiKey(api_key) => facts.push(CredentialFact::Env {
+                        var: api_key.env_var_name.clone(),
+                    }),
+                }
             }
+            // At most one gateway Route fact regardless of gateway source count;
+            // never an api_key route fact (invariant preserved by construction).
+            if has_gateway {
+                facts.push(CredentialFact::Route {
+                    kind: route_kinds::GATEWAY.to_string(),
+                });
+            }
+            facts
         }
         Ok(AgentRuntimeAuthProfile::Native) => Vec::new(),
         Err(error) => {
-            tracing::debug!(agent_kind, %error, "route profile unresolved; no route facts");
+            tracing::debug!(agent_kind, %error, "route profile unresolved; no source facts");
             Vec::new()
         }
     }
@@ -325,7 +344,8 @@ mod tests {
     }
 
     /// An api_key-only source (no gateway) resolves to Sources without a
-    /// gateway → no route fact.
+    /// gateway → no route fact. INVARIANT: api_key sources must NEVER get a
+    /// route fact / route_kind (that is reserved for the gateway route).
     #[test]
     fn api_key_only_source_emits_no_route_fact() {
         let home = temp_home();
@@ -342,6 +362,93 @@ mod tests {
                 .iter()
                 .any(|fact| matches!(fact, CredentialFact::Route { .. })),
             "api_key-only source must not emit a route fact; got: {facts:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// BYOK fix: an enrolled api_key source surfaces a presence-only `Env` fact
+    /// for its `env_var_name`, so the catalog's api_key-route context (e.g.
+    /// claude `anthropic-api`, gated on `Env(ANTHROPIC_API_KEY)`) activates on
+    /// the local surface even though the raw key lives in state.json, never the
+    /// composed workspace env. The fact is presence-only — never an `EnvFlag`
+    /// carrying the value — and the source still emits NO route fact.
+    #[test]
+    fn api_key_source_in_state_emits_env_fact() {
+        let home = temp_home();
+        write_state(
+            &home,
+            r#"{"version":2,"revision":1,"harnesses":[
+                {"harness_kind":"claude","sources":[
+                    {"kind":"api_key","env_var_name":"ANTHROPIC_API_KEY","value":"sk-ant-raw"}]}]}"#,
+        );
+
+        let facts = collect_launch_env_facts("claude", &BTreeMap::new(), &home);
+        assert!(
+            facts.contains(&CredentialFact::Env {
+                var: "ANTHROPIC_API_KEY".to_string(),
+            }),
+            "enrolled api_key source should emit a presence-only Env fact for its \
+             env_var_name; got: {facts:?}"
+        );
+        // Presence only: the raw value must never ride along as an EnvFlag.
+        assert!(
+            !facts.iter().any(|fact| matches!(
+                fact,
+                CredentialFact::EnvFlag { var, .. } if var == "ANTHROPIC_API_KEY"
+            )),
+            "api_key Env fact must be presence-only, never an EnvFlag; got: {facts:?}"
+        );
+        // Invariant still holds: no route fact for an api_key source.
+        assert!(
+            !facts
+                .iter()
+                .any(|fact| matches!(fact, CredentialFact::Route { .. })),
+            "api_key source must not emit a route fact; got: {facts:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// Surface scoping / no-leak: an api_key source enrolled for one harness
+    /// does NOT surface its env fact for a different (unconfigured) harness, and
+    /// a gateway-only harness surfaces no api_key Env fact. State-source
+    /// selection is keyed on harness_kind exactly like the launch-time renderer.
+    #[test]
+    fn api_key_env_fact_is_scoped_to_its_harness() {
+        let home = temp_home();
+        write_state(
+            &home,
+            r#"{"version":2,"revision":1,"harnesses":[
+                {"harness_kind":"codex","sources":[
+                    {"kind":"api_key","env_var_name":"OPENAI_API_KEY","value":"sk-raw"}]},
+                {"harness_kind":"claude","sources":[
+                    {"kind":"gateway","base_url":"https://gw","key":"sk-vk"}]}]}"#,
+        );
+
+        // codex's api_key surfaces its own env fact.
+        let codex_facts = collect_launch_env_facts("codex", &BTreeMap::new(), &home);
+        assert!(
+            codex_facts.contains(&CredentialFact::Env {
+                var: "OPENAI_API_KEY".to_string(),
+            }),
+            "codex's enrolled api_key must surface OPENAI_API_KEY; got: {codex_facts:?}"
+        );
+
+        // claude (gateway-only, no api_key) must NOT inherit codex's env fact.
+        let claude_facts = collect_launch_env_facts("claude", &BTreeMap::new(), &home);
+        assert!(
+            !claude_facts.contains(&CredentialFact::Env {
+                var: "OPENAI_API_KEY".to_string(),
+            }),
+            "another harness's api_key env fact must not leak; got: {claude_facts:?}"
+        );
+        // Gateway-only harness surfaces a Route fact but no api_key Env fact.
+        assert!(
+            claude_facts
+                .iter()
+                .any(|fact| matches!(fact, CredentialFact::Route { kind } if kind == "gateway")),
+            "gateway-only harness should still emit its Route fact; got: {claude_facts:?}"
         );
 
         let _ = std::fs::remove_dir_all(&home);
@@ -417,6 +524,64 @@ mod tests {
             "the workspace-env workaround unions native+gateway (the bug the \
              readiness fix removes); got {:?}",
             workaround.ids()
+        );
+    }
+
+    /// End-to-end proof of the BYOK fix: an enrolled api_key source's `Env`
+    /// fact activates the catalog's `anthropic-api` context and populates the
+    /// model menu — the exact path that returned ZERO models before the fix
+    /// (self-host/local BYOK users saw an empty menu and could not launch).
+    #[test]
+    fn api_key_env_fact_activates_anthropic_api_and_unlocks_models() {
+        use crate::domains::agents::auth::context::classify;
+        use crate::domains::agents::catalog::bundled::bundled_agent_catalog_document;
+        use crate::domains::agents::catalog::service::ActiveCatalog;
+        use crate::domains::agents::model::AgentKind;
+        use crate::domains::agents::registry::built_in_registry;
+        use std::sync::Arc;
+
+        let document = Arc::new(bundled_agent_catalog_document().clone());
+        let contexts = document
+            .agents
+            .iter()
+            .find(|agent| agent.kind == "claude")
+            .map(|agent| agent.auth_contexts.as_slice())
+            .expect("claude auth contexts in bundled catalog");
+        let descriptor = built_in_registry()
+            .into_iter()
+            .find(|descriptor| descriptor.kind == AgentKind::Claude)
+            .expect("claude descriptor");
+
+        // The fact the fix surfaces for an enrolled ANTHROPIC_API_KEY api_key
+        // source (presence only).
+        let api_key_fact = CredentialFact::Env {
+            var: "ANTHROPIC_API_KEY".to_string(),
+        };
+
+        let active = classify(&descriptor, contexts, std::slice::from_ref(&api_key_fact));
+        assert!(
+            active.is_active("anthropic-api"),
+            "api_key Env fact must activate the anthropic-api context; got {:?}",
+            active.ids()
+        );
+
+        let catalog = ActiveCatalog::new(Arc::clone(&document));
+        let visible = catalog.visible_models("claude", &active);
+        assert!(
+            !visible.is_empty(),
+            "the BYOK model menu must be non-empty once anthropic-api is active"
+        );
+
+        // And the empty-fact baseline still yields no api_key-gated menu, so the
+        // fact is doing the unlocking (guards against a vacuous assertion).
+        let baseline = classify(&descriptor, contexts, &[]);
+        let baseline_visible = catalog.visible_models("claude", &baseline);
+        assert!(
+            baseline_visible.len() < visible.len(),
+            "the api_key fact must unlock strictly more models than baseline; \
+             baseline={:?} active={:?}",
+            baseline_visible.iter().map(|m| &m.id).collect::<Vec<_>>(),
+            visible.iter().map(|m| &m.id).collect::<Vec<_>>()
         );
     }
 }

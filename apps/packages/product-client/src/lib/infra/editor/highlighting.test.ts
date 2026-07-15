@@ -16,30 +16,30 @@ describe("highlightMarkdownDiffLines", () => {
       "dark",
     );
 
-    expect(tokens[0]).toEqual([{ content: "## Development", color: "#FF678D" }]);
+    expect(tokens[0]).toEqual([{ content: "## Development", color: "#F22C3D" }]);
     expect(tokens[2]).toEqual([
-      { content: "```", color: "#79797F" },
-      { content: "bash", color: "#FBFBFB" },
+      { content: "```", color: "#FFFFFF80" },
+      { content: "bash", color: "#FFFFFF" },
     ]);
     expect(tokens[3]).toEqual([
-      { content: "make test             # Rust workspace tests", color: "#FBFBFB" },
+      { content: "make test             # Rust workspace tests", color: "#FFFFFF" },
     ]);
     expect(tokens[5]).toEqual([
-      { content: "-", color: "#FF678D" },
-      { content: " Run ", color: "#FBFBFB" },
-      { content: "`", color: "#79797F" },
-      { content: "make dev", color: "#5ECC71" },
-      { content: "`", color: "#79797F" },
-      { content: " now", color: "#FBFBFB" },
+      { content: "-", color: "#F22C3D" },
+      { content: " Run ", color: "#FFFFFF" },
+      { content: "`", color: "#FFFFFF80" },
+      { content: "make dev", color: "#00A67D" },
+      { content: "`", color: "#FFFFFF80" },
+      { content: " now", color: "#FFFFFF" },
     ]);
     expect(tokens[6]).toEqual([
-      { content: "See ", color: "#FBFBFB" },
-      { content: "[", color: "#79797F" },
-      { content: "`", color: "#79797F" },
-      { content: "specs/developing/local/dev-profiles.md", color: "#5ECC71" },
-      { content: "`", color: "#79797F" },
-      { content: "]", color: "#79797F" },
-      { content: "(specs/developing/local/dev-profiles.md)", color: "#FF678D" },
+      { content: "See ", color: "#FFFFFF" },
+      { content: "[", color: "#FFFFFF80" },
+      { content: "`", color: "#FFFFFF80" },
+      { content: "specs/developing/local/dev-profiles.md", color: "#00A67D" },
+      { content: "`", color: "#FFFFFF80" },
+      { content: "]", color: "#FFFFFF80" },
+      { content: "(specs/developing/local/dev-profiles.md)", color: "#F22C3D" },
     ]);
   });
 });

@@ -285,7 +285,7 @@ test("runLocalWorldSmokeCell drives every step in order and attaches complete ev
   assert.ok(outcome.evidence);
   assert.equal(outcome.evidence!.kind, "local_workspace_turn");
   assert.equal(outcome.evidence!.harness, "claude");
-  assert.equal(outcome.evidence!.model_id, "claude-haiku-4-5");
+  assert.equal((outcome.evidence as { model_id: string }).model_id, "claude-haiku-4-5");
   assert.equal(outcome.evidence!.transcript_reopened, true);
   assert.equal(outcome.evidence!.server_version, "1.2.3");
   assert.equal(outcome.evidence!.anyharness_version, "4.5.6");
@@ -336,7 +336,8 @@ test("model choice: prefers haiku over sonnet and excludes the fable tier", asyn
   });
   const outcome = await runLocalWorldSmokeCell(fakeCell(), fakeCtx(), driver);
   assert.equal(outcome.status, "green");
-  assert.equal(outcome.evidence!.model_id, "claude-haiku-4-5");
+  assert.equal(outcome.evidence!.kind, "local_workspace_turn");
+  assert.equal((outcome.evidence as { model_id: string }).model_id, "claude-haiku-4-5");
 });
 
 test("model choice: a fable-only intersection is blocked, never selected", async () => {

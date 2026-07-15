@@ -4,7 +4,14 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use serde_json::json;
 
 use super::*;
+use anyharness_contract::v1::ConfigApplyState;
+
 use crate::domains::sessions::runtime::{SendPromptError, TextPromptDispatchError};
+use crate::domains::workflows::control::WorkflowRunGates;
+use crate::domains::workflows::dispatch::{
+    apply_prompt_dispatch_outcome, guarded_fail, ExecutionAbort,
+};
+use crate::domains::workflows::execution::effort_apply_allows_step;
 use crate::domains::workflows::model::{
     workflow_prompt_id, PutWorkflowRunInput, PutWorkflowRunInputV2, WorkflowDefinition,
     WorkflowDefinitionV2, WorkflowHarnessConfig, WorkflowHarnessConfigV2, WorkflowInput,
@@ -12,7 +19,7 @@ use crate::domains::workflows::model::{
     WorkflowStage, WorkflowStageV2,
 };
 use crate::domains::workflows::model::{
-    WorkflowRunStatus, WorkflowStepStatus, WorkflowTurnOutcome,
+    WorkflowInterruptionCode, WorkflowRunStatus, WorkflowStepStatus, WorkflowTurnOutcome,
 };
 use crate::domains::workflows::store::{FinishTurnStoreOutcome, WorkflowRunStore};
 use crate::persistence::Db;
@@ -85,7 +92,7 @@ async fn v2_run_gate_allows_one_lookup_and_schedule_then_replays_stored_plan() {
     let service = Arc::new(WorkflowRunService::new(WorkflowRunStore::new(
         Db::open_in_memory().expect("in-memory db"),
     )));
-    let gates = Arc::new(StdMutex::new(HashMap::new()));
+    let gates = Arc::new(WorkflowRunGates::new());
     let lookup_available = Arc::new(AtomicBool::new(true));
     let lookup_count = Arc::new(AtomicUsize::new(0));
     let schedule_count = Arc::new(AtomicUsize::new(0));
@@ -103,7 +110,7 @@ async fn v2_run_gate_allows_one_lookup_and_schedule_then_replays_stored_plan() {
             let prepared = service
                 .prepare_v2(&run_id, portable_input(WORKSPACE_ID))
                 .expect("prepare");
-            let gate = workflow_accept_gate_slot(&gates, &run_id).expect("gate");
+            let gate = gates.slot(&run_id).expect("gate");
             let _guard = gate.lock_owned().await;
             match service.inspect_v2(prepared.clone()).expect("inspect") {
                 InspectV2Outcome::ExactReplay(view) => {
@@ -154,7 +161,7 @@ async fn shared_run_gate_makes_v1_winner_conflict_v2_without_lookup() {
     let service = Arc::new(WorkflowRunService::new(WorkflowRunStore::new(
         Db::open_in_memory().expect("in-memory db"),
     )));
-    let gates = Arc::new(StdMutex::new(HashMap::new()));
+    let gates = Arc::new(WorkflowRunGates::new());
     let lookup_count = Arc::new(AtomicUsize::new(0));
     let schedule_count = Arc::new(AtomicUsize::new(0));
     let run_id = uuid::Uuid::new_v4().to_string();
@@ -168,7 +175,7 @@ async fn shared_run_gate_makes_v1_winner_conflict_v2_without_lookup() {
         let run_id = run_id.clone();
         let release_v1 = release_v1.clone();
         tokio::spawn(async move {
-            let gate = workflow_accept_gate_slot(&gates, &run_id).expect("v1 gate");
+            let gate = gates.slot(&run_id).expect("v1 gate");
             let _guard = gate.lock_owned().await;
             v1_locked_tx.send(()).expect("signal v1 lock");
             release_v1.notified().await;
@@ -195,7 +202,7 @@ async fn shared_run_gate_makes_v1_winner_conflict_v2_without_lookup() {
             let prepared = service
                 .prepare_v2(&run_id, portable_input(WORKSPACE_ID))
                 .expect("prepare v2");
-            let gate = workflow_accept_gate_slot(&gates, &run_id).expect("v2 gate");
+            let gate = gates.slot(&run_id).expect("v2 gate");
             let _guard = gate.lock_owned().await;
             match service.inspect_v2(prepared).expect("inspect v2") {
                 InspectV2Outcome::Conflict => true,
@@ -302,17 +309,20 @@ async fn lost_acknowledgement_without_completion_is_fenced_as_runtime_restarted(
     .await
     .expect("lost acknowledgement must not abort");
 
-    // No completion ever arrived: the startup fence owns the ambiguous row.
+    // No completion ever arrived: the startup fence owns the ambiguous row,
+    // and under run control it resolves to interrupted/runtime_restarted
+    // (spec run-control §7) rather than a failure claim.
     service
         .fence_nonterminal_after_restart()
         .expect("fence after restart");
     let fenced = view(&service, &run_id);
-    assert_eq!(fenced.run.status, WorkflowRunStatus::Failed);
+    assert_eq!(fenced.run.status, WorkflowRunStatus::Interrupted);
+    assert_eq!(fenced.run.failure_code, None);
     assert_eq!(
-        fenced.run.failure_code,
-        Some(WorkflowRunFailureCode::RuntimeRestarted)
+        fenced.run.interruption_code,
+        Some(WorkflowInterruptionCode::RuntimeRestarted)
     );
-    assert_eq!(fenced.steps[0].status, WorkflowStepStatus::Failed);
+    assert_eq!(fenced.steps[0].status, WorkflowStepStatus::Interrupted);
 }
 
 #[tokio::test]

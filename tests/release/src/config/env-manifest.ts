@@ -317,7 +317,7 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
   {
     name: "RELEASE_E2E_SELFHOST_PROVISION",
     description:
-      "Opt-in switch (set to `1`) authorizing the self-hosting scenarios (T3-SH-1 cold boot, " +
+      "Opt-in switch (set to `1`) authorizing the self-hosting scenarios (SELFHOST-INSTALL-1 cold boot, " +
       "T4-SH-1 operator update) to provision a throwaway EC2 box via tests/release/scripts/" +
       "selfhost-box.sh — the production compose bundle on stock Ubuntu with a sslip.io hostname + " +
       "real Caddy TLS — and terminate it in a finally. Absent -> those scenarios report blocked " +
@@ -396,6 +396,99 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
       "and provisioning DB seams (all local-lane only).",
     secret: false,
     lanes: ["local"],
+  },
+  {
+    name: "TIER2_BILLING_STRIPE_SECRET_KEY",
+    description:
+      "Stripe TEST secret key (sk_test_…) the Tier-2 billing scenarios' financial cells use via the real " +
+      "Stripe test-mode API (customers, subscriptions, invoices, test clocks). Resolved at boot by " +
+      "bootBillingStack (this env, then STRIPE_SECRET_KEY/STRIPE_TEST_SECRET_KEY, then `stripe config " +
+      "--list`); an unresolved key returns every financial cell BLOCKED (never green). Declared here so " +
+      "its value is redacted from the persisted report; NOT a scenario requiredEnv (the local `stripe " +
+      "config` fallback must keep working). Never live mode.",
+    whereItLives:
+      "Local: the developer's Stripe CLI test-mode config, or ~/.proliferate-local/dev/*.env. " +
+      "CI: the GitHub `Qualification` environment's Stripe test secret.",
+    secret: true,
+  },
+  {
+    name: "TIER2_BILLING_STRIPE_WEBHOOK_SECRET",
+    description:
+      "The webhook signing secret (whsec_…) the Tier-2 billing harness self-signs deliveries with and the " +
+      "booted server verifies against. Generated per boot by bootBillingStack and exported to process.env; " +
+      "declared here so it is redacted from the persisted report. Not a scenario requiredEnv.",
+    whereItLives: "Generated per run by tests/intent/stack/billing-boot.ts; never committed.",
+    secret: true,
+  },
+  {
+    name: "RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY",
+    description:
+      "Bounded, run-scoped Anthropic provider key used by SELFHOST-INSTALL-1's SH-BASE-TURN cell: the owner " +
+      "stores it through the product (POST /v1/cloud/agent-gateway/keys) and selects it for the local surface " +
+      "(sourceKind=api_key); the controller-local candidate AnyHarness spawns the harness with this raw key — " +
+      "no LiteLLM/E2B is involved. `preflightByokKey` runs before storing/selecting; a rejected key fails the " +
+      "cell closed (never blocked/skipped). Never stored in evidence (only a hash of the created key id is).",
+    whereItLives:
+      "Local: `~/.proliferate-local/dev/qualification-infra.env` (mode 0600). CI: the `Qualification` " +
+      "environment's `RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY` secret.",
+    secret: true,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY",
+    description:
+      "Second bounded, run-scoped Anthropic provider key, reserved for a future two-key self-host scenario " +
+      "(e.g. asserting key rotation/replacement). Not consumed by SELFHOST-INSTALL-1's single-key SH-BASE-TURN " +
+      "cell today. Never stored in evidence.",
+    whereItLives:
+      "Local: `~/.proliferate-local/dev/qualification-infra.env` (mode 0600). CI: the `Qualification` " +
+      "environment's `RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY` secret.",
+    secret: true,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_REGION",
+    description:
+      "AWS region SELFHOST-INSTALL-1 provisions its run-scoped EC2 box, security group, key pair, and Route53 " +
+      "A record in (qualification.proliferate.com zone).",
+    whereItLives:
+      "Local: `~/.proliferate-local/dev/qualification-infra.env` (mode 0600). CI: the `Qualification` " +
+      "environment's `RELEASE_E2E_SELFHOST_REGION` variable.",
+    secret: false,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_HOSTED_ZONE_ID",
+    description:
+      "Route53 hosted-zone id for `qualification.proliferate.com`, the owned zone SELFHOST-INSTALL-1 upserts a " +
+      "collision-free run-subdomain A record into (Caddy then issues real Let's Encrypt TLS for that FQDN).",
+    whereItLives:
+      "Local: `~/.proliferate-local/dev/qualification-infra.env` (mode 0600). CI: the `Qualification` " +
+      "environment's `RELEASE_E2E_SELFHOST_HOSTED_ZONE_ID` variable.",
+    secret: false,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_INSTANCE_TYPE",
+    description:
+      "EC2 instance type SELFHOST-INSTALL-1 provisions for the run-scoped self-host box (a cheap, throwaway " +
+      "size; the shipped installer runs the full compose bundle on it).",
+    whereItLives:
+      "Local: `~/.proliferate-local/dev/qualification-infra.env` (mode 0600). CI: the `Qualification` " +
+      "environment's `RELEASE_E2E_SELFHOST_INSTANCE_TYPE` variable.",
+    secret: false,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_SSH_USER",
+    description:
+      "SSH login user on the box's Ubuntu AMI. Optional; defaults to \"ubuntu\" when unset (the standard " +
+      "Ubuntu 24.04 cloud-image user, matching selfhost-box.sh's convention).",
+    whereItLives:
+      "Local: `~/.proliferate-local/dev/qualification-infra.env` (mode 0600), if overridden. CI: the " +
+      "`Qualification` environment's `RELEASE_E2E_SELFHOST_SSH_USER` variable, if overridden.",
+    secret: false,
+    lanes: ["selfhost"],
   },
 ] as const;
 

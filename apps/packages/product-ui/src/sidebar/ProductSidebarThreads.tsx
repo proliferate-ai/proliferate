@@ -4,11 +4,23 @@ import { SidebarRowSurface } from "@proliferate/ui/layout/SidebarRowSurface";
 
 export interface ProductSidebarThreadRowProps extends Omit<HTMLAttributes<HTMLElement>, "children" | "onClick" | "onSelect"> {
   active?: boolean;
+  /**
+   * Legacy LEADING-well indicator slot (web row-view consumers). Desktop
+   * thread rows put live activity in `trailingStatus` instead, matching the
+   * workspace rows' right-slot convention.
+   */
   status?: ReactNode;
   label: ReactNode;
   subtitle?: string | null;
   detail?: ReactNode;
   trailingLabel?: string | null;
+  /**
+   * Activity indicator (spinner / waiting / error) in the TRAILING cell,
+   * same precedence as ProductSidebarWorkspaceRow: it wins over
+   * `trailingLabel` and fades out on hover/focus like the other trailing
+   * content.
+   */
+  trailingStatus?: ReactNode;
   hoverAction?: ReactNode;
   expandControl?: ReactNode;
   onSelect?: () => void;
@@ -21,6 +33,7 @@ export function ProductSidebarThreadRow({
   subtitle = null,
   detail = null,
   trailingLabel = null,
+  trailingStatus = null,
   hoverAction = null,
   expandControl = null,
   onSelect,
@@ -65,7 +78,11 @@ export function ProductSidebarThreadRow({
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
-          {trailingLabel && !active && !expandControl ? (
+          {trailingStatus ? (
+            <div className="flex size-5 items-center justify-center transition-opacity duration-150 group-focus-within:opacity-0 group-hover:opacity-0">
+              {trailingStatus}
+            </div>
+          ) : trailingLabel && !active && !expandControl ? (
             <div className="truncate text-right text-ui tabular-nums text-sidebar-muted-foreground group-focus-within:opacity-0 group-hover:opacity-0">
               {trailingLabel}
             </div>

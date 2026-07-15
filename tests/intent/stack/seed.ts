@@ -559,7 +559,7 @@ export async function uploadPersonalSecretFile(
 ): Promise<ApiResult<CloudSecretsResponse>> {
   const form = new FormData();
   form.append("path", path);
-  form.append("file", new Blob([content]), filename);
+  form.append("file", new Blob([content as unknown as ArrayBuffer]), filename);
   const response = await fetch(`${apiBaseUrl()}/v1/cloud/secrets/personal/files/upload`, {
     method: "PUT",
     headers: { Authorization: `Bearer ${token}` },

@@ -74,16 +74,19 @@ vi.mock("@proliferate/product-ui/sidebar/ProductSidebarThreads", () => ({
     active,
     label,
     status,
+    trailingStatus,
     trailingLabel,
   }: {
     active?: boolean;
     label: ReactNode;
     status?: ReactNode;
+    trailingStatus?: ReactNode;
     trailingLabel?: string | null;
   }) => (
     <div data-testid="thread-row" data-active={String(!!active)}>
       {status}
       <span>{label}</span>
+      {trailingStatus}
       {trailingLabel ? <span>{trailingLabel}</span> : null}
     </div>
   ),
@@ -176,7 +179,8 @@ describe("CoworkThreadsSection", () => {
     render(<CoworkThreadsSection />);
 
     expect(screen.getByText("Cowork thread")).not.toBeNull();
-    expect(screen.getByText("Setting up")).not.toBeNull();
+    // The trailing spinner alone marks the pending row (trailingStatus wins
+    // over any trailing label, so the row no longer carries "Setting up").
     expect(screen.getByTestId("status-iterating")).not.toBeNull();
     expect(screen.getByTestId("thread-row").getAttribute("data-active")).toBe("true");
     expect(screen.queryByText("No chats yet")).toBeNull();

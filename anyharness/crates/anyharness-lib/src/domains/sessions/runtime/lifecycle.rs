@@ -12,6 +12,8 @@ use crate::domains::sessions::runtime_event::{
 
 use super::{SessionLifecycleError, SessionRuntime};
 
+use crate::live::sessions::ConditionalCancelOutcome;
+
 impl SessionRuntime {
     pub async fn cancel_live_session(
         &self,
@@ -306,4 +308,38 @@ impl SessionRuntime {
             .store()
             .update_status(session_id, "errored", &now);
     }
+
+    /// Narrow crate-private exact-active-turn cancel request (spec
+    /// workflow-run-control §5.2). Targets the already-bound live session; it
+    /// does NOT re-run caller/workspace mutation admission — the workflow
+    /// route already established authority from its durable run — and changes
+    /// no session row. `Requested` proves only that the matching-turn cancel
+    /// command was accepted, never provider cancellation.
+    pub(crate) async fn request_live_turn_cancel(
+        &self,
+        session_id: &str,
+        expected_turn_id: &str,
+    ) -> LiveTurnCancelOutcome {
+        let Some(handle) = self.acp_manager.get_handle(session_id).await else {
+            return LiveTurnCancelOutcome::NotLive;
+        };
+        match handle
+            .cancel_turn_if_active(expected_turn_id.to_string())
+            .await
+        {
+            Some(ConditionalCancelOutcome::Requested) => LiveTurnCancelOutcome::Requested,
+            Some(ConditionalCancelOutcome::NotActive) => LiveTurnCancelOutcome::NotActive,
+            None => LiveTurnCancelOutcome::ActorUnavailable,
+        }
+    }
+}
+
+/// Result of [`SessionRuntime::request_live_turn_cancel`]. No variant
+/// terminalizes a workflow: only the exact correlated callback can.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LiveTurnCancelOutcome {
+    Requested,
+    NotActive,
+    NotLive,
+    ActorUnavailable,
 }

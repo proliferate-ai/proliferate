@@ -600,6 +600,7 @@ enforcement. Shared `product.css`, Desktop-only CSS, and ProductClient Tailwind
 scanning are established separately. The embedded workspace browser and its
 native child-WebView capability have been removed.
 
+<<<<<<< HEAD
 Desktop now mounts the product through the typed host boundary and, after the
 mechanical extraction, is a thin native host: the working product source moved
 into `@proliferate/product-client` while native UI, local runtime, files,
@@ -623,6 +624,26 @@ durable inputs and proofs across the extraction and replacement are:
 
 The next step is to qualify Desktop and hosted Web against the shared
 implementation and cut over hosted Web. The remaining order and cutover gates
+=======
+Desktop mounts the product through the typed host boundary. Native UI, local
+runtime, files, credentials, SSH, updater, support, shared identity,
+navigation, storage, and telemetry all route through that boundary.
+
+The extraction mechanics landed, and the mechanical move has since completed:
+the package entry shape was proven from Desktop and a minimal browser host,
+the source move ran against a checked ledger with a deterministic and
+idempotent import codemod, and Desktop's product source now lives in
+`@proliferate/product-client` — Desktop is a thin native host. The durable
+records are:
+
+- [extraction-mechanics proof](migration/d1g.md);
+- [completed Desktop move](migration/d1h.md) — PR #1215, merge `c6e094b41`;
+- [application-entry contract](entry-contract.md); and
+- [source move ledger](move-ledger.md).
+
+The next step is to replace the legacy Web product with a thin browser host
+mounting the same ProductClient. The remaining order and Web cutover gates
+>>>>>>> origin/main
 live in the
 [rollout procedure](../../../../../developing/deploying/web-desktop-unification-rollout.md).
 

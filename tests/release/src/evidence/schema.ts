@@ -88,8 +88,166 @@ export interface TestRunReportV3 {
  *     evidence recording its own cleanup failure).
  */
 
-/** One result's optional bounded evidence; today only the local-workspace turn. */
-export type CellEvidenceV1 = LocalWorkspaceTurnEvidenceV1;
+/**
+ * One result's optional bounded evidence. Append-only union (see "Parallel
+ * Tracks - Extension Contract"): each track adds exactly its own kind(s).
+ * `local_workspace_turn` is the Tier-3 local-world proof; `tier2_billing`
+ * (PR 4) binds, per Tier-2 cell, the asserted ruled policy values, safe Stripe
+ * object/test-clock ids, and ledger deltas; PR 3 adds the four self-host
+ * journey-cell kinds. Each kind is validated by its own kind-scoped function;
+ * a kind never touches another kind's validation (extension-contract rule).
+ */
+export type CellEvidenceV1 =
+  | LocalWorkspaceTurnEvidenceV1
+  | Tier2BillingEvidenceV1
+  | SelfHostInstallClaimEvidenceV1
+  | SelfHostDesktopOwnerEvidenceV1
+  | SelfHostBaseTurnEvidenceV1
+  | SelfHostInviteeEvidenceV1;
+
+/**
+ * ── Tier-2 billing evidence (PR 4) ─────────────────────────────────────────
+ *
+ * Bounded and secret-free BY CONSTRUCTION: asserted ruled policy values as
+ * finite non-negative numbers, safe Stripe test-mode object/test-clock ids as
+ * safe tokens, integer ledger row-count deltas. No free text, no credentials,
+ * no local paths. Full validator/sanitizer contract in BRIEF §2 — the validator
+ * body is owned by workstream D (`validateTier2BillingEvidence` below is the
+ * kind-scoped seam).
+ */
+export interface Tier2BillingEvidenceV1 {
+  kind: "tier2_billing";
+  /** The authoritative manifest case id, e.g. "T2-BILL-2" (safe token). */
+  manifest_id: string;
+  /** The Server under test's VERSION (safe token). */
+  server_version: string;
+  billing_mode: "enforce" | "observe" | "off";
+  /** Ruled policy values THIS case asserted; every present value is finite >= 0. */
+  asserted_policy: {
+    free_grant_usd?: number;
+    llm_per_seat_usd?: number;
+    compute_per_seat_usd?: number;
+    compute_margin_multiplier?: number;
+    topup_pack_usd?: number;
+    topup_margin_pct?: number;
+    topup_trigger_usd?: number;
+    overage_cap_usd_per_org_month?: number;
+  };
+  /** Safe Stripe test-mode identifiers this case created (never secrets). */
+  stripe: {
+    /** tc_… ; sorted ascending, unique, bounded. */
+    test_clock_ids: string[];
+    /** sub_/cus_/in_/evt_/pi_… ; sorted ascending, unique, bounded. */
+    object_ids: string[];
+  };
+  /** Billing-ledger row-count deltas this case produced (non-negative integers). */
+  ledger: {
+    grants_delta: number;
+    seat_adjustments_delta: number;
+    usage_exports_delta: number;
+    llm_events_delta: number;
+    webhook_receipts_delta: number;
+    holds_delta: number;
+  };
+}
+
+/**
+ * ── PR 3 self-host evidence types (contracts stage) ───────────────────────
+ *
+ * The four `SELFHOST-INSTALL-1` journey cells attach one of these. Only the
+ * TYPES live here now; the kind-scoped validators (`validateSelfHostEvidence`
+ * and friends) are stubbed below and owned by the scenario+evidence+cli
+ * workstream. Every member binds the candidate artifact ids + versions, records
+ * the EC2 **API origin** and the controller-local **runtime origin**
+ * SEPARATELY (evidence never implies AnyHarness ran on the box), carries only
+ * safe hashes (setup token, BYOK key, invitation token are NEVER stored raw),
+ * and carries the shared world cleanup block. Green requires complete evidence
+ * AND a clean cleanup block (failed === 0, every deletion boolean true).
+ */
+export interface SelfHostCleanupEvidenceBlock {
+  ledger_id_hash: string;
+  registered: number;
+  reconciled: number;
+  failed: number;
+  ec2_terminated: boolean;
+  security_group_deleted: boolean;
+  key_pair_deleted: boolean;
+  route53_record_deleted: boolean;
+  browser_closed: boolean;
+  processes_stopped: boolean;
+  local_paths_removed: boolean;
+}
+
+/** Fields common to every self-host journey cell's evidence. */
+export interface SelfHostEvidenceBaseV1 {
+  artifact_ids: string[];
+  server_version: string;
+  anyharness_version: string;
+  harness: "claude";
+  /** EC2 self-host public API origin hostname (safe; never the raw public IP). */
+  api_origin: string;
+  /** Controller-local candidate AnyHarness origin (safe; recorded separately). */
+  controller_runtime_origin: string;
+  cleanup: SelfHostCleanupEvidenceBlock;
+}
+
+export interface SelfHostInstallClaimEvidenceV1 extends SelfHostEvidenceBaseV1 {
+  kind: "selfhost_install_claim";
+  /**
+   * The candidate map's server artifact version. `server_version` (base) is the
+   * OBSERVED running version read from `/meta`; the two must be equal, witnessed
+   * by `server_version_matches_candidate`.
+   */
+  candidate_server_version: string;
+  /** The observed running server version equalled the candidate map version. */
+  server_version_matches_candidate: true;
+  /** Running container image digest asserted on the box == candidate receipt. */
+  running_image_digest: string;
+  /** SHA-256 of the exact deploy bundle bytes the shipped installer verified. */
+  bundle_sha256: string;
+  setup_token_hash: string;
+  owner_user_id_hash: string;
+  org_id_hash: string;
+  tls_verified: true;
+  second_claim_rejected: true;
+  restart_persisted: true;
+}
+
+export interface SelfHostDesktopOwnerEvidenceV1 extends SelfHostEvidenceBaseV1 {
+  kind: "selfhost_desktop_owner";
+  owner_user_id_hash: string;
+  org_id_hash: string;
+  connect_rejected_invalid_url: true;
+  connect_rejected_non_proliferate_host: true;
+  only_meta_before_trust: true;
+  owner_login_verified: true;
+  single_org: true;
+}
+
+export interface SelfHostBaseTurnEvidenceV1 extends SelfHostEvidenceBaseV1 {
+  kind: "selfhost_base_turn";
+  model_id: string;
+  workspace_id_hash: string;
+  session_id_hash: string;
+  transcript_reopened: true;
+  /** BYOK is a direct-provider call — never a gateway/LiteLLM correlation. */
+  byok_route: "api_key";
+  byok_key_id_hash: string;
+  no_litellm_spend: true;
+  no_e2b: true;
+}
+
+export interface SelfHostInviteeEvidenceV1 extends SelfHostEvidenceBaseV1 {
+  kind: "selfhost_invitee";
+  invitee_user_id_hash: string;
+  invitation_id_hash: string;
+  member_role: "member";
+  second_page_isolated: true;
+  authenticated_member_action: true;
+}
+
+/** The scenario id whose green cells require complete self-host evidence. */
+export const SELFHOST_INSTALL_1_SCENARIO_ID = "SELFHOST-INSTALL-1";
 
 export interface LocalWorkspaceTurnEvidenceV1 {
   kind: "local_workspace_turn";
@@ -351,7 +509,11 @@ function validateReportCore(report: ValidatableReportCore): void {
   // planner uses — a coordinated edit of cell_id and dimensions together
   // still cannot validate.
   for (const cell of report.selected_cells) {
-    if (cell.runtime_lane !== "local" && cell.runtime_lane !== "sandbox") {
+    if (
+      cell.runtime_lane !== "local" &&
+      cell.runtime_lane !== "sandbox" &&
+      cell.runtime_lane !== "selfhost"
+    ) {
       throw new ReportValidationError(`Unknown runtime lane on "${cell.cell_id}".`);
     }
     if (
@@ -682,9 +844,9 @@ function validateCellEvidence(result: FinalCellResultV2): void {
   }
   const evidence = result.evidence;
   if (evidence === null) {
-    if (result.status === "green" && result.scenario_id === "LOCAL-WORLD-SMOKE-1") {
+    if (result.status === "green" && scenarioRequiresGreenEvidence(result.scenario_id)) {
       throw new ReportValidationError(
-        `Green result "${result.cell_id}" for LOCAL-WORLD-SMOKE-1 requires complete evidence.`,
+        `Green result "${result.cell_id}" for ${result.scenario_id} requires complete evidence.`,
       );
     }
     return;
@@ -693,6 +855,25 @@ function validateCellEvidence(result: FinalCellResultV2): void {
     throw new ReportValidationError(`Result "${result.cell_id}" evidence must be an object or null.`);
   }
   const where = `Result "${result.cell_id}" evidence`;
+  // Kind-scoped dispatch: each kind validates in its own function and never
+  // touches another kind's rules (extension-contract). Tier-2 billing evidence
+  // is validated by workstream D's `validateTier2BillingEvidence`.
+  const evidenceKind = (evidence as { kind?: unknown }).kind;
+  if (evidenceKind === "tier2_billing") {
+    validateTier2BillingEvidence(where, evidence as Tier2BillingEvidenceV1, result.status);
+    return;
+  }
+  // Self-host journey kinds are validated by the PR 3 kind-scoped validators
+  // (scenario+evidence+cli workstream). Their green cells require a complete,
+  // clean cleanup block exactly like local_workspace_turn; do not weaken that.
+  // The self-host slice owns the `selfhost_` kind namespace; route the whole
+  // family (known kinds and any unrecognized `selfhost_*`) to its kind-scoped
+  // validator, which reports an unknown kind rather than mis-validating a
+  // self-host-shaped object against the local_workspace_turn key set.
+  if (typeof evidenceKind === "string" && evidenceKind.startsWith("selfhost_")) {
+    validateSelfHostCellEvidence(where, evidence as CellEvidenceV1, result.status);
+    return;
+  }
   requireExactKeys(evidence, LOCAL_WORKSPACE_TURN_EVIDENCE_KEYS, where);
   if (evidence.kind !== "local_workspace_turn") {
     throw new ReportValidationError(`${where}.kind is unknown.`);
@@ -716,6 +897,231 @@ function validateCellEvidence(result: FinalCellResultV2): void {
   }
   validateLitellmEvidence(where, evidence.litellm);
   validateCleanupEvidence(where, evidence.cleanup, result.status);
+}
+
+const SELFHOST_BASE_EVIDENCE_KEYS = [
+  "kind",
+  "artifact_ids",
+  "server_version",
+  "anyharness_version",
+  "harness",
+  "api_origin",
+  "controller_runtime_origin",
+  "cleanup",
+] as const;
+
+const SELFHOST_INSTALL_CLAIM_EVIDENCE_KEYS = [
+  ...SELFHOST_BASE_EVIDENCE_KEYS,
+  "candidate_server_version",
+  "server_version_matches_candidate",
+  "running_image_digest",
+  "bundle_sha256",
+  "setup_token_hash",
+  "owner_user_id_hash",
+  "org_id_hash",
+  "tls_verified",
+  "second_claim_rejected",
+  "restart_persisted",
+] as const;
+
+const SELFHOST_DESKTOP_OWNER_EVIDENCE_KEYS = [
+  ...SELFHOST_BASE_EVIDENCE_KEYS,
+  "owner_user_id_hash",
+  "org_id_hash",
+  "connect_rejected_invalid_url",
+  "connect_rejected_non_proliferate_host",
+  "only_meta_before_trust",
+  "owner_login_verified",
+  "single_org",
+] as const;
+
+const SELFHOST_BASE_TURN_EVIDENCE_KEYS = [
+  ...SELFHOST_BASE_EVIDENCE_KEYS,
+  "model_id",
+  "workspace_id_hash",
+  "session_id_hash",
+  "transcript_reopened",
+  "byok_route",
+  "byok_key_id_hash",
+  "no_litellm_spend",
+  "no_e2b",
+] as const;
+
+const SELFHOST_INVITEE_EVIDENCE_KEYS = [
+  ...SELFHOST_BASE_EVIDENCE_KEYS,
+  "invitee_user_id_hash",
+  "invitation_id_hash",
+  "member_role",
+  "second_page_isolated",
+  "authenticated_member_action",
+] as const;
+
+const SELFHOST_CLEANUP_EVIDENCE_KEYS = [
+  "ledger_id_hash",
+  "registered",
+  "reconciled",
+  "failed",
+  "ec2_terminated",
+  "security_group_deleted",
+  "key_pair_deleted",
+  "route53_record_deleted",
+  "browser_closed",
+  "processes_stopped",
+  "local_paths_removed",
+] as const;
+
+const SELFHOST_CLEANUP_DELETION_FIELDS = [
+  "ec2_terminated",
+  "security_group_deleted",
+  "key_pair_deleted",
+  "route53_record_deleted",
+  "browser_closed",
+  "processes_stopped",
+  "local_paths_removed",
+] as const;
+
+function requireTrue(where: string, value: unknown): void {
+  if (value !== true) {
+    throw new ReportValidationError(`${where} must be true.`);
+  }
+}
+
+/**
+ * Validates one self-host journey cell's evidence (BRIEF §"Evidence
+ * workstream"): exact keys per kind; every string field passes the same
+ * `requireSafeEvidenceToken`/`requireEvidenceHash` checks the local_workspace_turn
+ * kind uses; `api_origin` and `controller_runtime_origin` are distinct safe
+ * hostnames (evidence never implies AnyHarness ran on the box); the literal-`true`
+ * witness booleans are exactly `true`; the `cleanup` block validates through the
+ * shared green-requires-clean rule (failed === 0 and every deletion boolean true
+ * on a GREEN cell; a non-green cell may record its own cleanup failure).
+ */
+function validateSelfHostCellEvidence(
+  where: string,
+  evidence: CellEvidenceV1,
+  status: FinalTestStatus,
+): void {
+  const kind = (evidence as { kind?: unknown }).kind;
+  const keysByKind: Record<string, readonly string[]> = {
+    selfhost_install_claim: SELFHOST_INSTALL_CLAIM_EVIDENCE_KEYS,
+    selfhost_desktop_owner: SELFHOST_DESKTOP_OWNER_EVIDENCE_KEYS,
+    selfhost_base_turn: SELFHOST_BASE_TURN_EVIDENCE_KEYS,
+    selfhost_invitee: SELFHOST_INVITEE_EVIDENCE_KEYS,
+  };
+  const expectedKeys = typeof kind === "string" ? keysByKind[kind] : undefined;
+  if (!expectedKeys) {
+    throw new ReportValidationError(`${where}.kind is unknown.`);
+  }
+  requireExactKeys(evidence, expectedKeys, where);
+
+  const base = evidence as unknown as SelfHostEvidenceBaseV1 & { kind: string };
+  if (!Array.isArray(base.artifact_ids) || base.artifact_ids.length === 0) {
+    throw new ReportValidationError(`${where}.artifact_ids must be a non-empty array.`);
+  }
+  for (const [index, id] of base.artifact_ids.entries()) {
+    requireSafeEvidenceToken(`${where}.artifact_ids[${index}]`, id);
+  }
+  requireSafeEvidenceToken(`${where}.server_version`, base.server_version);
+  requireSafeEvidenceToken(`${where}.anyharness_version`, base.anyharness_version);
+  if (base.harness !== "claude") {
+    throw new ReportValidationError(`${where}.harness must be "claude".`);
+  }
+  requireSafeEvidenceToken(`${where}.api_origin`, base.api_origin);
+  requireSafeEvidenceToken(`${where}.controller_runtime_origin`, base.controller_runtime_origin);
+  if (base.api_origin === base.controller_runtime_origin) {
+    throw new ReportValidationError(
+      `${where}.api_origin and controller_runtime_origin must be distinct (AnyHarness did not run on the box).`,
+    );
+  }
+  validateSelfHostCleanupEvidence(where, base.cleanup, status);
+
+  switch (kind) {
+    case "selfhost_install_claim": {
+      const e = evidence as SelfHostInstallClaimEvidenceV1;
+      requireSafeEvidenceToken(`${where}.candidate_server_version`, e.candidate_server_version);
+      requireTrue(`${where}.server_version_matches_candidate`, e.server_version_matches_candidate);
+      requireSafeEvidenceToken(`${where}.running_image_digest`, e.running_image_digest);
+      requireEvidenceHash(`${where}.bundle_sha256`, e.bundle_sha256);
+      requireEvidenceHash(`${where}.setup_token_hash`, e.setup_token_hash);
+      requireEvidenceHash(`${where}.owner_user_id_hash`, e.owner_user_id_hash);
+      requireEvidenceHash(`${where}.org_id_hash`, e.org_id_hash);
+      requireTrue(`${where}.tls_verified`, e.tls_verified);
+      requireTrue(`${where}.second_claim_rejected`, e.second_claim_rejected);
+      requireTrue(`${where}.restart_persisted`, e.restart_persisted);
+      return;
+    }
+    case "selfhost_desktop_owner": {
+      const e = evidence as SelfHostDesktopOwnerEvidenceV1;
+      requireEvidenceHash(`${where}.owner_user_id_hash`, e.owner_user_id_hash);
+      requireEvidenceHash(`${where}.org_id_hash`, e.org_id_hash);
+      requireTrue(`${where}.connect_rejected_invalid_url`, e.connect_rejected_invalid_url);
+      requireTrue(`${where}.connect_rejected_non_proliferate_host`, e.connect_rejected_non_proliferate_host);
+      requireTrue(`${where}.only_meta_before_trust`, e.only_meta_before_trust);
+      requireTrue(`${where}.owner_login_verified`, e.owner_login_verified);
+      requireTrue(`${where}.single_org`, e.single_org);
+      return;
+    }
+    case "selfhost_base_turn": {
+      const e = evidence as SelfHostBaseTurnEvidenceV1;
+      requireSafeEvidenceToken(`${where}.model_id`, e.model_id);
+      requireEvidenceHash(`${where}.workspace_id_hash`, e.workspace_id_hash);
+      requireEvidenceHash(`${where}.session_id_hash`, e.session_id_hash);
+      requireTrue(`${where}.transcript_reopened`, e.transcript_reopened);
+      if (e.byok_route !== "api_key") {
+        throw new ReportValidationError(`${where}.byok_route must be "api_key".`);
+      }
+      requireEvidenceHash(`${where}.byok_key_id_hash`, e.byok_key_id_hash);
+      requireTrue(`${where}.no_litellm_spend`, e.no_litellm_spend);
+      requireTrue(`${where}.no_e2b`, e.no_e2b);
+      return;
+    }
+    case "selfhost_invitee": {
+      const e = evidence as SelfHostInviteeEvidenceV1;
+      requireEvidenceHash(`${where}.invitee_user_id_hash`, e.invitee_user_id_hash);
+      requireEvidenceHash(`${where}.invitation_id_hash`, e.invitation_id_hash);
+      if (e.member_role !== "member") {
+        throw new ReportValidationError(`${where}.member_role must be "member".`);
+      }
+      requireTrue(`${where}.second_page_isolated`, e.second_page_isolated);
+      requireTrue(`${where}.authenticated_member_action`, e.authenticated_member_action);
+      return;
+    }
+    default:
+      throw new ReportValidationError(`${where}.kind is unknown.`);
+  }
+}
+
+/**
+ * Validates the self-host cleanup block: exact keys, a safe ledger hash,
+ * non-negative counts, and boolean deletion flags — a GREEN cell requires
+ * `failed === 0` and every deletion boolean `true` (mirrors
+ * `validateCleanupEvidence`'s green-requires-clean rule; a non-green cell may
+ * still carry evidence recording its own cleanup failure).
+ */
+function validateSelfHostCleanupEvidence(
+  where: string,
+  cleanup: SelfHostCleanupEvidenceBlock,
+  status: FinalTestStatus,
+): void {
+  if (typeof cleanup !== "object" || cleanup === null || Array.isArray(cleanup)) {
+    throw new ReportValidationError(`${where}.cleanup must be an object.`);
+  }
+  requireExactKeys(cleanup, SELFHOST_CLEANUP_EVIDENCE_KEYS, `${where}.cleanup`);
+  requireEvidenceHash(`${where}.cleanup.ledger_id_hash`, cleanup.ledger_id_hash);
+  requireNonNegativeInteger(`${where}.cleanup.registered`, cleanup.registered);
+  requireNonNegativeInteger(`${where}.cleanup.reconciled`, cleanup.reconciled);
+  requireNonNegativeInteger(`${where}.cleanup.failed`, cleanup.failed);
+  for (const field of SELFHOST_CLEANUP_DELETION_FIELDS) {
+    requireBoolean(`${where}.cleanup.${field}`, cleanup[field]);
+  }
+  if (status === "green") {
+    if (cleanup.failed > 0) {
+      throw new ReportValidationError(`${where}.cleanup.failed must be 0 for a green result.`);
+    }
+    if (SELFHOST_CLEANUP_DELETION_FIELDS.some((field) => cleanup[field] !== true)) {
+      throw new ReportValidationError(`${where}.cleanup is incomplete on a green result.`);
+    }
+  }
 }
 
 function validateLitellmEvidence(where: string, litellm: LocalWorkspaceTurnEvidenceV1["litellm"]): void {
@@ -809,6 +1215,142 @@ function validateCleanupEvidence(
  * `[REDACTED]`-bearing string here, which the safe-token/hash patterns above
  * then reject rather than silently persisting.
  */
+/**
+ * Scenario ids whose GREEN cells must carry complete evidence (a green cell
+ * with `evidence: null` is rejected). Kind/id-scoped allowlist — LOCAL-WORLD
+ * proof, the PR-4 Tier-2 scenarios, and the PR-3 self-host journey scenario
+ * (BRIEF §2/§7). Extend here, not by touching another kind's validation.
+ */
+const GREEN_EVIDENCE_REQUIRED_SCENARIOS: ReadonlySet<string> = new Set([
+  "LOCAL-WORLD-SMOKE-1",
+  "T2-BILL",
+  "T2-AUTH-ORG",
+  SELFHOST_INSTALL_1_SCENARIO_ID,
+]);
+
+function scenarioRequiresGreenEvidence(scenarioId: string): boolean {
+  return GREEN_EVIDENCE_REQUIRED_SCENARIOS.has(scenarioId);
+}
+
+const TIER2_BILLING_EVIDENCE_KEYS = [
+  "kind",
+  "manifest_id",
+  "server_version",
+  "billing_mode",
+  "asserted_policy",
+  "stripe",
+  "ledger",
+] as const;
+
+const TIER2_ASSERTED_POLICY_KEYS = [
+  "free_grant_usd",
+  "llm_per_seat_usd",
+  "compute_per_seat_usd",
+  "compute_margin_multiplier",
+  "topup_pack_usd",
+  "topup_margin_pct",
+  "topup_trigger_usd",
+  "overage_cap_usd_per_org_month",
+] as const;
+
+const TIER2_LEDGER_KEYS = [
+  "grants_delta",
+  "seat_adjustments_delta",
+  "usage_exports_delta",
+  "llm_events_delta",
+  "webhook_receipts_delta",
+  "holds_delta",
+] as const;
+
+const MAX_TIER2_TEST_CLOCK_IDS = 20;
+const MAX_TIER2_OBJECT_IDS = 50;
+
+/**
+ * Kind-scoped validator for `Tier2BillingEvidenceV1`:
+ *   - `requireExactKeys` at top / `asserted_policy` / `stripe` / `ledger`;
+ *   - `manifest_id` + `server_version` via `requireSafeEvidenceToken`;
+ *   - `billing_mode` in {enforce,observe,off};
+ *   - every present `asserted_policy` value: finite number >= 0 (the exact
+ *     ruled number is asserted by the cell against the product, not here);
+ *   - `stripe.test_clock_ids` (<= MAX_TIER2_TEST_CLOCK_IDS) and
+ *     `stripe.object_ids` (<= MAX_TIER2_OBJECT_IDS): safe tokens, sorted
+ *     ascending, unique, secret-free;
+ *   - every `ledger.*` delta: `requireNonNegativeInteger`.
+ * Green completeness is enforced upstream (a green Tier-2 cell with null
+ * evidence is already rejected via `scenarioRequiresGreenEvidence`).
+ */
+function validateTier2BillingEvidence(
+  where: string,
+  evidence: Tier2BillingEvidenceV1,
+  _status: FinalTestStatus,
+): void {
+  requireExactKeys(evidence, TIER2_BILLING_EVIDENCE_KEYS, where);
+  if (evidence.kind !== "tier2_billing") {
+    throw new ReportValidationError(`${where}.kind is unknown.`);
+  }
+  requireSafeEvidenceToken(`${where}.manifest_id`, evidence.manifest_id);
+  requireSafeEvidenceToken(`${where}.server_version`, evidence.server_version);
+  if (evidence.billing_mode !== "enforce" && evidence.billing_mode !== "observe" && evidence.billing_mode !== "off") {
+    throw new ReportValidationError(`${where}.billing_mode must be one of enforce|observe|off.`);
+  }
+
+  const policy = evidence.asserted_policy;
+  if (typeof policy !== "object" || policy === null || Array.isArray(policy)) {
+    throw new ReportValidationError(`${where}.asserted_policy must be an object.`);
+  }
+  const presentPolicyKeys = Object.keys(policy);
+  for (const key of presentPolicyKeys) {
+    if (!(TIER2_ASSERTED_POLICY_KEYS as readonly string[]).includes(key)) {
+      throw new ReportValidationError(`${where}.asserted_policy has an undeclared field "${key}".`);
+    }
+  }
+  for (const key of presentPolicyKeys as (keyof typeof policy)[]) {
+    const value = policy[key];
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+      throw new ReportValidationError(`${where}.asserted_policy.${key} must be a finite number >= 0.`);
+    }
+  }
+
+  const stripe = evidence.stripe;
+  if (typeof stripe !== "object" || stripe === null || Array.isArray(stripe)) {
+    throw new ReportValidationError(`${where}.stripe must be an object.`);
+  }
+  requireExactKeys(stripe, ["test_clock_ids", "object_ids"], `${where}.stripe`);
+  validateSortedUniqueSafeTokenArray(`${where}.stripe.test_clock_ids`, stripe.test_clock_ids, MAX_TIER2_TEST_CLOCK_IDS);
+  validateSortedUniqueSafeTokenArray(`${where}.stripe.object_ids`, stripe.object_ids, MAX_TIER2_OBJECT_IDS);
+
+  const ledger = evidence.ledger;
+  if (typeof ledger !== "object" || ledger === null || Array.isArray(ledger)) {
+    throw new ReportValidationError(`${where}.ledger must be an object.`);
+  }
+  requireExactKeys(ledger, TIER2_LEDGER_KEYS, `${where}.ledger`);
+  for (const key of TIER2_LEDGER_KEYS) {
+    requireNonNegativeInteger(`${where}.ledger.${key}`, ledger[key]);
+  }
+}
+
+function validateSortedUniqueSafeTokenArray(where: string, value: unknown, cap: number): void {
+  if (!Array.isArray(value)) {
+    throw new ReportValidationError(`${where} must be an array.`);
+  }
+  if (value.length > cap) {
+    throw new ReportValidationError(`${where} exceeds the bounded cap of ${cap}.`);
+  }
+  const seen = new Set<string>();
+  let previous: string | undefined;
+  for (const [index, id] of value.entries()) {
+    requireSafeEvidenceToken(`${where}[${index}]`, id);
+    if (seen.has(id)) {
+      throw new ReportValidationError(`${where} has a duplicate entry.`);
+    }
+    seen.add(id);
+    if (previous !== undefined && id < previous) {
+      throw new ReportValidationError(`${where} must be sorted ascending.`);
+    }
+    previous = id;
+  }
+}
+
 export function sanitizeCellEvidence(
   evidence: CellEvidenceV1 | null,
   secretValues: readonly string[],
@@ -816,7 +1358,32 @@ export function sanitizeCellEvidence(
   if (evidence === null) {
     return null;
   }
+  // Self-host kinds have a different string-field set; the scenario+evidence+cli
+  // workstream owns their sanitizer (BRIEF §"Evidence workstream"). Applying the
+  // local_workspace_turn field map below to them would read undefined fields.
+  if (
+    evidence.kind === "selfhost_install_claim" ||
+    evidence.kind === "selfhost_desktop_owner" ||
+    evidence.kind === "selfhost_base_turn" ||
+    evidence.kind === "selfhost_invitee"
+  ) {
+    return sanitizeSelfHostCellEvidence(evidence, secretValues);
+  }
   const clean = (value: string): string => boundMessage(redactUrlCredentials(redactSecrets(value, secretValues)));
+  if (evidence.kind === "tier2_billing") {
+    // All string fields are safe tokens by construction; clean them as a
+    // fail-closed backstop (numbers pass through untouched).
+    return {
+      ...evidence,
+      manifest_id: clean(evidence.manifest_id),
+      server_version: clean(evidence.server_version),
+      stripe: {
+        ...evidence.stripe,
+        test_clock_ids: evidence.stripe.test_clock_ids.map(clean),
+        object_ids: evidence.stripe.object_ids.map(clean),
+      },
+    };
+  }
   return {
     ...evidence,
     artifact_ids: evidence.artifact_ids.map(clean),
@@ -835,6 +1402,80 @@ export function sanitizeCellEvidence(
       ledger_id_hash: clean(evidence.cleanup.ledger_id_hash),
     },
   };
+}
+
+/**
+ * Applies the same redaction pipeline (`redactSecrets`/`redactUrlCredentials`/
+ * `boundMessage`) to every string-bearing field of a self-host evidence object
+ * (origins, versions, model id, and every `*_hash`/digest), so a raw secret or
+ * local path that somehow reached evidence becomes a `[REDACTED]`-bearing
+ * string the kind-scoped validator then rejects.
+ */
+function sanitizeSelfHostCellEvidence(
+  evidence: CellEvidenceV1,
+  secretValues: readonly string[],
+): CellEvidenceV1 {
+  const clean = (value: string): string => boundMessage(redactUrlCredentials(redactSecrets(value, secretValues)));
+  const base = evidence as unknown as SelfHostEvidenceBaseV1 & { kind: string };
+  const cleanedBase = {
+    ...base,
+    artifact_ids: base.artifact_ids.map(clean),
+    server_version: clean(base.server_version),
+    anyharness_version: clean(base.anyharness_version),
+    api_origin: clean(base.api_origin),
+    controller_runtime_origin: clean(base.controller_runtime_origin),
+    cleanup: { ...base.cleanup, ledger_id_hash: clean(base.cleanup.ledger_id_hash) },
+  };
+
+  switch (base.kind) {
+    case "selfhost_install_claim": {
+      const e = evidence as SelfHostInstallClaimEvidenceV1;
+      return {
+        ...cleanedBase,
+        kind: "selfhost_install_claim",
+        candidate_server_version: clean(e.candidate_server_version),
+        running_image_digest: clean(e.running_image_digest),
+        bundle_sha256: clean(e.bundle_sha256),
+        setup_token_hash: clean(e.setup_token_hash),
+        owner_user_id_hash: clean(e.owner_user_id_hash),
+        org_id_hash: clean(e.org_id_hash),
+      } as SelfHostInstallClaimEvidenceV1;
+    }
+    case "selfhost_desktop_owner": {
+      const e = evidence as SelfHostDesktopOwnerEvidenceV1;
+      return {
+        ...cleanedBase,
+        kind: "selfhost_desktop_owner",
+        owner_user_id_hash: clean(e.owner_user_id_hash),
+        org_id_hash: clean(e.org_id_hash),
+      } as SelfHostDesktopOwnerEvidenceV1;
+    }
+    case "selfhost_base_turn": {
+      const e = evidence as SelfHostBaseTurnEvidenceV1;
+      return {
+        ...cleanedBase,
+        kind: "selfhost_base_turn",
+        model_id: clean(e.model_id),
+        workspace_id_hash: clean(e.workspace_id_hash),
+        session_id_hash: clean(e.session_id_hash),
+        byok_key_id_hash: clean(e.byok_key_id_hash),
+      } as SelfHostBaseTurnEvidenceV1;
+    }
+    case "selfhost_invitee": {
+      const e = evidence as SelfHostInviteeEvidenceV1;
+      return {
+        ...cleanedBase,
+        kind: "selfhost_invitee",
+        invitee_user_id_hash: clean(e.invitee_user_id_hash),
+        invitation_id_hash: clean(e.invitation_id_hash),
+      } as SelfHostInviteeEvidenceV1;
+    }
+    default:
+      // Unreachable given the CellEvidenceV1 union; fall back to the base
+      // sanitization rather than throwing so an unknown future kind still
+      // gets its common fields redacted (the validator rejects it either way).
+      return cleanedBase as unknown as CellEvidenceV1;
+  }
 }
 
 /** Applies `sanitizeCellEvidence` to every result in a V4 report. */

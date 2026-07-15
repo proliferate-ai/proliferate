@@ -17,8 +17,7 @@ from proliferate.constants.billing import (
     BILLING_USAGE_EXPORT_STATUS_OBSERVED,
     BILLING_USAGE_EXPORT_STATUS_PENDING,
     BILLING_USAGE_EXPORT_STATUS_SUCCEEDED,
-    BILLING_USAGE_EXPORT_STATUS_WRITTEN_OFF,
-    PRO_DEFAULT_OVERAGE_CAP_CENTS_PER_SEAT,
+    PRO_DEFAULT_OVERAGE_CAP_CENTS_PER_ORG_MONTH,
     PRO_SEAT_PRORATION_GRANT_TYPE,
 )
 from proliferate.db import session_ops as db_session
@@ -57,7 +56,11 @@ from proliferate.server.billing.domain.accounting import (
     usage_export_identifier,
 )
 from proliferate.server.billing.models import coerce_utc, utcnow
-from proliferate.server.billing.pricing import configured_managed_cloud_meter_event_name
+from proliferate.server.billing.pricing import (
+    compute_hours_per_seat,
+    compute_price_per_hour_cents,
+    configured_managed_cloud_meter_event_name,
+)
 from proliferate.server.billing.seats import (
     prorated_seat_grant_hours,
     seat_proration_grant_source_ref,
@@ -129,6 +132,7 @@ async def account_usage_for_billing_subject(
             (period_start_utc,) if is_paid_cloud and period_start_utc is not None else ()
         )
         cap_used_cents = 0
+        overage_rate_cents = compute_price_per_hour_cents()
         overage_remainder = None
         if can_export_overage and period_start_utc is not None:
             cap_used_cents = await sum_meter_quantity_cents_for_subject(
@@ -191,17 +195,15 @@ async def account_usage_for_billing_subject(
                     period_start_utc is None or accounted_from >= period_start_utc
                 )
                 if uncovered_seconds > 0 and can_export_overage and slice_is_in_paid_period:
-                    remainder_cents = (
-                        float(overage_remainder.fractional_cents)
-                        if overage_remainder is not None
-                        else 0.0
-                    )
-                    meter_cents, fractional_cents = overage_seconds_to_cents(
+                    # Ruled 2026-07-14: round up whole cents per closed segment,
+                    # no fractional remainder carried across segments (the
+                    # segment is the rounding unit).
+                    meter_cents = overage_seconds_to_cents(
                         uncovered_seconds,
-                        fractional_cents=remainder_cents,
+                        rate_cents_per_hour=overage_rate_cents,
                     )
                     if overage_remainder is not None:
-                        overage_remainder.fractional_cents = fractional_cents
+                        overage_remainder.fractional_cents = 0.0
                         overage_remainder.updated_at = now
 
                     if meter_cents > 0:
@@ -211,7 +213,6 @@ async def account_usage_for_billing_subject(
                             else meter_cents
                         )
                         billable_cents = min(meter_cents, cap_remaining_cents)
-                        writeoff_cents = max(meter_cents - billable_cents, 0)
                         base_idempotency_key = usage_export_idempotency_key(
                             billing_subject_id=billing_subject_id,
                             usage_segment_id=segment.id,
@@ -223,7 +224,6 @@ async def account_usage_for_billing_subject(
                             if billable_cents > 0
                             else 0.0
                         )
-                        writeoff_seconds = max(uncovered_seconds - billable_seconds, 0.0)
                         if billable_cents > 0:
                             await create_usage_export(
                                 db,
@@ -244,25 +244,20 @@ async def account_usage_for_billing_subject(
                             cap_used_cents += billable_cents
                             export_seconds += billable_seconds
                             export_count += 1
-                        if writeoff_cents > 0:
-                            await create_usage_export(
-                                db,
-                                billing_subject_id=billing_subject_id,
-                                billing_subscription_id=billing_subscription_id,
-                                usage_segment_id=segment.id,
-                                period_start=period_start,
-                                period_end=period_end,
-                                accounted_from=accounted_from,
-                                accounted_until=accounted_until,
-                                quantity_seconds=writeoff_seconds,
-                                meter_quantity_cents=0,
-                                cap_cents_snapshot=overage_cap_cents,
-                                cap_used_cents_snapshot=cap_used_cents,
-                                writeoff_reason="overage_cap_exhausted",
-                                idempotency_key=f"{base_idempotency_key}:writeoff",
-                                status=BILLING_USAGE_EXPORT_STATUS_WRITTEN_OFF,
+                        if meter_cents > billable_cents:
+                            # At the org-month cap: pause compute rather than
+                            # auto-writing-off the excess. The over-cap seconds
+                            # are not exported (and not billed); the snapshot
+                            # emits WORKSPACE_ACTION_BLOCK_KIND_CAP_EXHAUSTED so
+                            # compute stops. Write-offs are operator-only.
+                            logger.info(
+                                "Compute overage reached org cap; pausing (no auto write-off)",
+                                extra={
+                                    "billing_subject_id": str(billing_subject_id),
+                                    "over_cap_cents": meter_cents - billable_cents,
+                                    "cap_cents": overage_cap_cents,
+                                },
                             )
-                            export_count += 1
 
                 await upsert_usage_cursor(
                     db,
@@ -299,12 +294,14 @@ async def account_usage_for_snapshot_state(
         period_start=subscription.current_period_start if subscription is not None else None,
         period_end=subscription.current_period_end if subscription is not None else None,
         overage_enabled=state.subject.overage_enabled if subscription is not None else False,
+        # Flat org/month cap (ruled 2026-07-14): default $50/org, not scaled by
+        # seats. A per-subject ``overage_cap_cents_per_seat`` override, when set,
+        # is reinterpreted as the org-level cap value.
         overage_cap_cents=(
-            max(state.active_seat_count, 1)
-            * int(
+            int(
                 state.subject.overage_cap_cents_per_seat
                 if state.subject.overage_cap_cents_per_seat is not None
-                else PRO_DEFAULT_OVERAGE_CAP_CENTS_PER_SEAT
+                else PRO_DEFAULT_OVERAGE_CAP_CENTS_PER_ORG_MONTH
             )
             if subscription is not None and settings.pro_billing_enabled
             else None
@@ -352,6 +349,7 @@ async def process_pending_seat_adjustments(*, limit: int = 100) -> None:
                     period_start=adjustment.period_start,
                     period_end=adjustment.period_end,
                     effective_at=adjustment.effective_at,
+                    hours_per_seat=compute_hours_per_seat(),
                 )
                 async with db_session.open_async_transaction() as db:
                     await ensure_billing_grant_record(

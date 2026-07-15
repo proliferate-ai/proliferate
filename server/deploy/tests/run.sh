@@ -284,6 +284,55 @@ fi
 grep -qi "checksum" "$SCRATCH/bad.log" && ok "checksum failure is reported" || no "checksum failure not reported"
 
 # ---------------------------------------------------------------------------
+group "6b. Installer: --bundle checksum requires the bundle line actually verified"
+# ---------------------------------------------------------------------------
+# `sha256sum -c --ignore-missing` exits 0 even when NO listed file was checked
+# (e.g. a SUMS that only names a versioned filename), which used to let unverified
+# bytes through silently. The installer must additionally require the bundle's own
+# `proliferate-deploy.tar.gz: OK` line. Build a real local bundle and prove:
+#   (a) a SUMS covering the real proliferate-deploy.tar.gz filename -> install passes;
+#   (b) a SUMS naming only a versioned/other filename (bundle line absent) -> DIES.
+BUNDLE_DIR="$SCRATCH/localbundle"
+mkdir -p "$BUNDLE_DIR"
+BSTAGE="$SCRATCH/bstage"
+mkdir -p "$BSTAGE/proliferate-deploy"
+cp -R "$DEPLOY_DIR/." "$BSTAGE/proliferate-deploy/"
+rm -rf "$BSTAGE/proliferate-deploy/smoke" "$BSTAGE/proliferate-deploy/tests"
+printf '0.3.18\n' >"$BSTAGE/proliferate-deploy/VERSION"
+tar czf "$BUNDLE_DIR/proliferate-deploy.tar.gz" -C "$BSTAGE" proliferate-deploy
+rm -rf "$BSTAGE"
+
+# (a) correct SUMS covering the REAL proliferate-deploy.tar.gz filename -> passes.
+( cd "$BUNDLE_DIR" && sha256sum proliferate-deploy.tar.gz >self-hosted-assets.SHA256SUMS )
+GOODBUNDLE="$SCRATCH/goodbundle"
+if PATH="$FAKE_BIN:$PATH" PROLIFERATE_INSTALL_ROOT="$GOODBUNDLE" \
+  bash "$DEPLOY_DIR/install.sh" --bundle "$BUNDLE_DIR/proliferate-deploy.tar.gz" \
+  --domain api.test --no-start --yes >"$SCRATCH/goodbundle.log" 2>&1; then
+  ok "--bundle install passes with a SUMS covering proliferate-deploy.tar.gz"
+else
+  no "--bundle install should pass with a correct SUMS"
+  sed 's/^/      /' "$SCRATCH/goodbundle.log" | tail -20
+fi
+
+# (b) SUMS names only a versioned/other filename (bundle line ABSENT) -> die, do
+# not extract. Uses the bundle's real hash so the ONLY difference is the filename.
+realsha="$(cd "$BUNDLE_DIR" && sha256sum proliferate-deploy.tar.gz | cut -d' ' -f1)"
+VERSIONED_SUMS="$BUNDLE_DIR/versioned.SHA256SUMS"
+printf '%s  proliferate-deploy-0.3.18.tar.gz\n' "$realsha" >"$VERSIONED_SUMS"
+BADBUNDLE="$SCRATCH/badbundle"
+if PATH="$FAKE_BIN:$PATH" PROLIFERATE_INSTALL_ROOT="$BADBUNDLE" \
+  bash "$DEPLOY_DIR/install.sh" --bundle "$BUNDLE_DIR/proliferate-deploy.tar.gz" \
+  --bundle-sha256sums "$VERSIONED_SUMS" --domain api.test --no-start --yes >"$SCRATCH/badbundle.log" 2>&1; then
+  no "--bundle install should DIE when the SUMS omits the bundle line (silent-pass guard)"
+else
+  ok "--bundle install dies when the SUMS omits the bundle line"
+fi
+grep -qi "did not cover proliferate-deploy.tar.gz" "$SCRATCH/badbundle.log" \
+  && ok "missing-bundle-line failure is reported" || no "missing-bundle-line failure not reported"
+[[ ! -f "$BADBUNDLE/server/deploy/bootstrap.sh" ]] \
+  && ok "no files extracted when the bundle line is absent" || no "files were extracted despite an unverified bundle"
+
+# ---------------------------------------------------------------------------
 group "7. Installer: unsupported system + partial-config guard"
 # ---------------------------------------------------------------------------
 # Fake a non-Linux OS.
@@ -317,6 +366,49 @@ if run_installer "$PARTIAL" "$REL" "0.3.18" --domain api.test --yes >"$SCRATCH/p
 else
   grep -qi "preflight" "$SCRATCH/partial.log" && ok "installer blocks partial config before start" || no "partial config not blocked by preflight"
 fi
+
+# ---------------------------------------------------------------------------
+group "7b. Installer: --cors-allow-origins extends the shipped defaults"
+# ---------------------------------------------------------------------------
+# Operator origins must EXTEND (merge + dedupe), never replace, the shipped
+# localhost + Tauri desktop defaults. Install fresh with an operator origin plus
+# one that overlaps a shipped default; assert the shipped defaults survive, the
+# operator origin is added, and the overlap is deduped to a single entry.
+CORSROOT="$SCRATCH/cors"
+run_installer "$CORSROOT" "$REL" "0.3.18" --domain api.test --no-start --yes \
+  --cors-allow-origins "https://app.corp.example,tauri://localhost" >/dev/null 2>&1
+cors_line="$(grep -m1 '^CORS_ALLOW_ORIGINS=' "$CORSROOT/server/deploy/.env.static" | cut -d= -f2-)"
+cors_items="$(printf '%s' "$cors_line" | tr ',' '\n')"
+echo "$cors_items" | grep -qx "tauri://localhost" && ok "CORS merge keeps a shipped default (tauri://localhost)" || no "CORS merge dropped the shipped tauri default: $cors_line"
+echo "$cors_items" | grep -qx "http://localhost:1420" && ok "CORS merge keeps another shipped default (localhost:1420)" || no "CORS merge dropped a shipped default: $cors_line"
+echo "$cors_items" | grep -qx "https://app.corp.example" && ok "CORS merge adds the operator origin" || no "CORS merge missing the operator origin: $cors_line"
+[[ "$(echo "$cors_items" | grep -cx "tauri://localhost")" -eq 1 ]] && ok "CORS merge dedupes the overlapping default" || no "CORS merge duplicated tauri://localhost: $cors_line"
+
+# A wildcard is refused: the API pairs allow_origins with allow_credentials=true,
+# so '*' would reflect any credentialed origin (open CORS on an authed API).
+if run_installer "$SCRATCH/cors-wild" "$REL" "0.3.18" --domain api.test --no-start --yes \
+  --cors-allow-origins "https://ok.example,*" >"$SCRATCH/cors-wild.log" 2>&1; then
+  no "installer should refuse a wildcard CORS origin"
+else
+  grep -qi "cors-allow-origins must list explicit origins" "$SCRATCH/cors-wild.log" \
+    && ok "installer refuses a wildcard CORS origin" || no "wrong error for wildcard CORS origin"
+fi
+
+# --cors-allow-origins on a RERUN (an .env.static already exists) is REJECTED,
+# not silently ignored: it only merges on a fresh install, so accepting it on a
+# rerun would be a misleading no-op (SHR-F03). CORSROOT was installed fresh above.
+if run_installer "$CORSROOT" "$REL" "0.3.18" --domain api.test --no-start --yes \
+  --cors-allow-origins "https://late.example" >"$SCRATCH/cors-rerun.log" 2>&1; then
+  no "installer should reject --cors-allow-origins on a rerun"
+else
+  grep -qi "cors-allow-origins only applies on a fresh install" "$SCRATCH/cors-rerun.log" \
+    && ok "installer rejects --cors-allow-origins on rerun" || no "wrong error for --cors-allow-origins on rerun"
+fi
+# The rejected rerun must NOT have mutated the preserved CORS config.
+rerun_cors="$(grep -m1 '^CORS_ALLOW_ORIGINS=' "$CORSROOT/server/deploy/.env.static" | cut -d= -f2-)"
+printf '%s' "$rerun_cors" | tr ',' '\n' | grep -qx "https://late.example" \
+  && no "rerun reject must not add the new origin to the preserved config" \
+  || ok "rerun reject leaves the preserved CORS config unchanged"
 
 # ---------------------------------------------------------------------------
 group "8. Release bundle shape + checksum round-trip"

@@ -6,7 +6,8 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::domains::sessions::prompt::PromptPayload;
 use crate::live::sessions::actor::command::{
-    ForkSessionCommandError, PromptAcceptError, PromptAcceptance, Resolution, SessionCommand,
+    ConditionalCancelOutcome, ForkSessionCommandError, PromptAcceptError, PromptAcceptance,
+    Resolution, SessionCommand,
 };
 use crate::live::sessions::actor::fork::handle::reject_busy_close_native_child_session;
 use crate::live::sessions::actor::shutdown::types::ActorExitDisposition;
@@ -169,6 +170,20 @@ impl SessionActor {
                                 self.resolve_pending_interactions(Resolution::Cancelled).await;
                                 let _ = self.conn
                                     .send_notification(acp::schema::CancelNotification::new(self.native_session_id.clone()));
+                            }
+                            Some(SessionCommand::CancelTurnIfActive { expected_turn_id, respond_to }) => {
+                                // Serial exact-turn comparison: forward ACP
+                                // cancellation only for the current active
+                                // turn; a stale stored id never cancels newer
+                                // foreign work.
+                                if expected_turn_id == turn_id {
+                                    self.resolve_pending_interactions(Resolution::Cancelled).await;
+                                    let _ = self.conn
+                                        .send_notification(acp::schema::CancelNotification::new(self.native_session_id.clone()));
+                                    let _ = respond_to.send(ConditionalCancelOutcome::Requested);
+                                } else {
+                                    let _ = respond_to.send(ConditionalCancelOutcome::NotActive);
+                                }
                             }
                             Some(SessionCommand::Dismiss { respond_to }) => {
                                 self.resolve_pending_interactions(Resolution::Dismissed).await;

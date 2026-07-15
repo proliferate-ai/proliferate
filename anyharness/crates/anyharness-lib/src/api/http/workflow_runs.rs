@@ -80,3 +80,25 @@ pub async fn get_workflow_run(
     assert_workspace_auth_scope(&auth, view_workspace_id(&view))?;
     Ok(Json(view_to_response(view)?))
 }
+
+#[utoipa::path(
+    post,
+    path = "/v1/workflow-runs/{run_id}/cancel",
+    params(("run_id" = String, Path, description = "Canonical UUID for the workflow run")),
+    responses(
+        (status = 200, description = "Durable cancellation intent acknowledged; current truthful versioned snapshot", body = VersionedWorkflowRunResponse),
+        (status = 400, description = "Non-canonical run ID", body = anyharness_contract::v1::ProblemDetails),
+        (status = 404, description = "Unknown workflow run", body = anyharness_contract::v1::ProblemDetails),
+        (status = 500, description = "Cancel-intent storage failure; nothing changed, or a post-commit snapshot read failed with intent preserved", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "workflow-runs"
+)]
+pub async fn cancel_workflow_run(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
+    Path(run_id): Path<String>,
+) -> Result<Json<VersionedWorkflowRunResponse>, ApiError> {
+    let view = state.workflow_run_runtime.cancel(run_id).await?;
+    assert_workspace_auth_scope(&auth, view_workspace_id(&view))?;
+    Ok(Json(view_to_response(view)?))
+}

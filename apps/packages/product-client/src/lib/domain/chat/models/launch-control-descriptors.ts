@@ -7,7 +7,10 @@ import {
   getPendingSessionConfigChange,
   type PendingSessionConfigChanges,
 } from "@proliferate/product-domain/sessions/pending-config";
-import type { DesktopAgentLaunchControl } from "#product/lib/domain/agents/cloud-launch-catalog";
+import type {
+  DesktopAgentLaunchControl,
+  DesktopModelTuningControlValues,
+} from "#product/lib/domain/agents/cloud-launch-catalog";
 
 export interface LaunchControlPreferences {
   defaultSessionModeByAgentKind: Record<string, string>;
@@ -23,6 +26,7 @@ export interface BuildLaunchControlDescriptorsInput {
       id: string;
       aliases?: string[];
       modeValues?: string[] | null;
+      tuningControlValues?: DesktopModelTuningControlValues | null;
     }>;
   }>;
   preferences: LaunchControlPreferences;
@@ -51,22 +55,31 @@ export function buildLaunchControlDescriptors(
   const selectedModel = agent.models.find((candidate) =>
     candidate.id === selectedModelId || (candidate.aliases ?? []).includes(selectedModelId));
   const selectedModelModeValues = selectedModel?.modeValues ?? null;
+  const selectedModelTuningControlValues = selectedModel?.tuningControlValues ?? null;
 
   return (agent.launchControls ?? [])
     .flatMap((control) => launchControlToDescriptor({
       agentKind: agent.kind,
       control,
       modelModeValues: selectedModelModeValues,
+      modelTuningControlValues: selectedModelTuningControlValues,
       pendingConfigChanges: input.pendingConfigChanges,
       preferences: input.preferences,
       onSelect: input.onSelect,
     }));
 }
 
+const MODEL_SCOPED_TUNING_KEYS = new Set<SupportedLiveControlKey>([
+  "reasoning",
+  "effort",
+  "fast_mode",
+]);
+
 function launchControlToDescriptor(input: {
   agentKind: string;
   control: DesktopAgentLaunchControl;
   modelModeValues?: string[] | null;
+  modelTuningControlValues?: DesktopModelTuningControlValues | null;
   pendingConfigChanges: PendingSessionConfigChanges | null;
   preferences: LaunchControlPreferences;
   onSelect: (
@@ -80,14 +93,30 @@ function launchControlToDescriptor(input: {
   if (!key || input.control.values.length === 0) {
     return [];
   }
+  // Tuning controls (effort/reasoning/fast_mode) are gated by the selected
+  // model's own controls matrix: a model without a matrix entry does not
+  // support the control at all (sonnet has no fast_mode), so the agent-level
+  // launch control must not render for it.
+  const modelTuningValues = MODEL_SCOPED_TUNING_KEYS.has(key) && input.modelTuningControlValues
+    ? input.modelTuningControlValues[key as keyof DesktopModelTuningControlValues] ?? null
+    : null;
+  if (
+    MODEL_SCOPED_TUNING_KEYS.has(key)
+    && input.modelTuningControlValues
+    && (!modelTuningValues || modelTuningValues.length === 0)
+  ) {
+    return [];
+  }
   const rawConfigId = input.control.createField === "modeId" ? "mode" : input.control.key;
-  // Scope the `mode` control to the modes the selected model actually supports
-  // (the agent-level vocabulary is a superset — e.g. gateway/bedrock models
-  // reject `auto`). Fall back to the full list if scoping would empty it.
-  const controlValues = key === "mode" && input.modelModeValues && input.modelModeValues.length > 0
+  // Scope control values to what the selected model actually supports (the
+  // agent-level vocabulary is a superset — e.g. gateway/bedrock models reject
+  // `auto`; sonnet's effort caps at `max` while opus adds `xhigh`). Fall back
+  // to the full list if scoping would empty it.
+  const modelScopedValues = key === "mode" ? input.modelModeValues : modelTuningValues;
+  const controlValues = modelScopedValues && modelScopedValues.length > 0
     ? (() => {
       const scoped = input.control.values.filter(
-        (value) => input.modelModeValues!.includes(value.value),
+        (value) => modelScopedValues.includes(value.value),
       );
       return scoped.length > 0 ? scoped : input.control.values;
     })()
@@ -97,26 +126,21 @@ function launchControlToDescriptor(input: {
     rawConfigId,
   );
 
-  // For `mode`, only honour a stored/default preference if the selected model
-  // still supports it, so a persisted `auto` doesn't survive onto a model that
-  // rejects it. Non-mode controls keep their existing resolution.
-  const modeSupports = (value: string | null | undefined): boolean =>
+  // Only honour a stored/default preference if the selected model still
+  // supports it, so a persisted `auto` mode or `xhigh` effort doesn't survive
+  // onto a model whose scoped vocabulary rejects it.
+  const supports = (value: string | null | undefined): boolean =>
     !!value && controlValues.some((candidate) => candidate.value === value);
-  const selectedValue = key === "mode"
-    ? (modeSupports(pendingChange?.value) ? pendingChange?.value : null)
-      || (modeSupports(input.preferences.defaultSessionModeByAgentKind[input.agentKind])
-        ? input.preferences.defaultSessionModeByAgentKind[input.agentKind]
-        : null)
-      || (modeSupports(input.control.defaultValue) ? input.control.defaultValue : null)
-      || controlValues.find((value) => value.isDefault)?.value
-      || controlValues[0]?.value
-      || null
-    : pendingChange?.value
-      || input.preferences.defaultLiveSessionControlValuesByAgentKind[input.agentKind]?.[key]
-      || input.control.defaultValue
-      || input.control.values.find((value) => value.isDefault)?.value
-      || input.control.values[0]?.value
-      || null;
+  const preferredValue = key === "mode"
+    ? input.preferences.defaultSessionModeByAgentKind[input.agentKind]
+    : input.preferences.defaultLiveSessionControlValuesByAgentKind[input.agentKind]?.[key];
+  const selectedValue =
+    (supports(pendingChange?.value) ? pendingChange?.value : null)
+    || (supports(preferredValue) ? preferredValue : null)
+    || (supports(input.control.defaultValue) ? input.control.defaultValue : null)
+    || controlValues.find((value) => value.isDefault)?.value
+    || controlValues[0]?.value
+    || null;
   const detail =
     controlValues.find((value) => value.value === selectedValue)?.label
     ?? selectedValue;

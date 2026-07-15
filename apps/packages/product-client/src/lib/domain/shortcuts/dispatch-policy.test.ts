@@ -1,8 +1,15 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import { shouldDispatchKeyboardShortcut } from "#product/lib/domain/shortcuts/dispatch-policy";
 
 describe("shortcut dispatch policy", () => {
+  // These cases use Cmd (metaKey) as the primary modifier, so the binding match
+  // is platform-sensitive. In Node the test navigator reflects the host OS; pin
+  // macOS so dispatch decisions are deterministic across dev machines and CI.
+  beforeEach(() => {
+    vi.stubGlobal("navigator", { platform: "MacIntel", userAgent: "Mac OS X" });
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
   });

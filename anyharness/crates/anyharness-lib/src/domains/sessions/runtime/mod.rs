@@ -39,6 +39,7 @@ mod tests;
 pub(crate) mod view;
 
 pub(crate) use creation::{InternalSessionCreateError, InternalSessionCreateInput};
+pub(crate) use lifecycle::LiveTurnCancelOutcome;
 pub(crate) use prompt::TextPromptDispatchError;
 
 pub struct SessionRuntime {
@@ -64,6 +65,13 @@ pub struct SessionRuntime {
 impl SessionRuntime {
     pub(crate) fn runtime_home(&self) -> &Path {
         &self.runtime_home
+    }
+
+    /// Merge-gated seam: the live-session manager, for registering scripted
+    /// handles that drive the cancellation seams deterministically.
+    #[cfg(test)]
+    pub(crate) fn acp_manager_for_test(&self) -> &LiveSessionManager {
+        &self.acp_manager
     }
 }
 

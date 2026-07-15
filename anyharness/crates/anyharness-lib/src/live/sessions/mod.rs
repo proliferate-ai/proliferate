@@ -12,12 +12,14 @@ mod sink;
 pub use actor::spawn::ActorReadyResult;
 pub use actor::turn::types::SessionTurnFinishResult;
 pub use handle::{
-    AgentExtMethodError, ForkSessionCommandError, ForkSessionCommandResult,
-    LiveSessionCommandError, LiveSessionExecutionSnapshot, LiveSessionHandle, PromptAcceptError,
-    PromptAcceptance, QueueMutationError, Resolution, ResolveInteractionCommandError,
-    SetConfigOptionCommandError,
+    AgentExtMethodError, ConditionalCancelOutcome, ForkSessionCommandError,
+    ForkSessionCommandResult, LiveSessionCommandError, LiveSessionExecutionSnapshot,
+    LiveSessionHandle, PromptAcceptError, PromptAcceptance, QueueMutationError, Resolution,
+    ResolveInteractionCommandError, SetConfigOptionCommandError,
 };
 pub use manager::LiveSessionManager;
 pub(crate) use manager::RevealMcpElicitationUrlError;
+#[cfg(test)]
+pub(crate) use manager::{ScriptedSessionEvent, ScriptedSessionSpec};
 pub use model::SessionStartupStrategy;
 pub use rendezvous::broker::PermissionDecision;

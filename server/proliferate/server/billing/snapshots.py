@@ -13,7 +13,6 @@ from proliferate.constants.billing import (
     ACTIVE_SANDBOX_STATUSES,
     BILLING_PLAN_FREE,
     BILLING_PLAN_PRO,
-    PRO_OVERAGE_PRICE_PER_HOUR_CENTS,
     WORKSPACE_ACTION_BLOCK_KIND_CAP_EXHAUSTED,
     WORKSPACE_ACTION_BLOCK_KIND_CONCURRENCY_LIMIT,
     WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED,
@@ -51,7 +50,10 @@ from proliferate.server.billing.models import (
     utcnow,
 )
 from proliferate.server.billing.policy import free_v2_policy, pro_policy, unlimited_numeric_policy
-from proliferate.server.billing.pricing import billing_price_ids_from_settings
+from proliferate.server.billing.pricing import (
+    billing_price_ids_from_settings,
+    compute_price_per_hour_cents,
+)
 from proliferate.server.billing.snapshot_state import BillingSnapshotState
 
 
@@ -386,7 +388,7 @@ def build_billing_snapshot(state: BillingSnapshotState) -> BillingSnapshot:
         managed_cloud_overage_used_cents=(
             0 if has_unlimited_cloud_hours else state.managed_cloud_overage_used_cents
         ),
-        overage_price_per_hour_cents=PRO_OVERAGE_PRICE_PER_HOUR_CENTS,
+        overage_price_per_hour_cents=compute_price_per_hour_cents(),
         active_environment_limit=active_environment_limit,
         repo_environment_limit=repo_environment_limit,
         byo_runtime_allowed=byo_runtime_allowed,

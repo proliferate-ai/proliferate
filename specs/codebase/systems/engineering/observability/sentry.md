@@ -142,6 +142,15 @@ following up with reporters. Observability does not own tracker state.
   success condition.
 - Local file or structured logs remain the primary fallback when Sentry is
   absent or unavailable.
+- The Rust workspace's `sentry`, `sentry-anyhow`, and `sentry-tracing`
+  dependencies must resolve to a single `sentry-core` instance. A version
+  split links two `sentry-core` crates, the tracing layer then captures into a
+  clientless Hub, and every runtime ERROR event is silently dropped while
+  local logs still show the error (production incident 2026-06-14 to
+  2026-07-15: a `sentry`-only bump left `sentry-tracing` behind; discovered by
+  slice C's canary against the B2-deployed runtime and repaired as a B2
+  amendment). The `tracing_error_reaches_the_sentry_client` tests in
+  AnyHarness, Worker, and Supervisor fail on any new divergence.
 
 Use the [Sentry operating procedure](../../../../developing/operating/analytics/sentry.md)
 to discover current provider state and verify delivery without exposing

@@ -913,6 +913,119 @@ qualification-local-workspace:
 		--run-id "$$run_id" --shard-id "$$shard_id" \
 		--output-dir "$$run_dir/evidence"
 
+# Tier-2 strict billing/auth qualification (PR 4). Boots the shared BootedStack
+# (real Server + Postgres + Redis + real Stripe test mode; AnyHarness runtime
+# skipped) ONCE and runs the authoritative T2-BILL-1..15 + representative
+# T2-AUTH-ORG cells through the SAME tests/release aggregate command as tier 3.
+# No candidate build (Tier-2 boots from source) — `--source-candidate`
+# synthesizes the Server identity for the strict report. Selected financial
+# cells require a Stripe `sk_test_` key (env or `stripe config`); a missing key
+# in trusted CI is a FAILURE (fail-closed), never skip-as-success.
+#
+# PROFILE=<unique-name>       Names this run.
+# BEHAVIOR=diagnostic|strict
+QUALIFICATION_TIER2_BASE_DIR ?= $(CURDIR)/tests/release/.output/tier2
+qualification-tier2:
+	@test -n "$(BEHAVIOR)" || { echo "BEHAVIOR=<diagnostic|strict> is required."; exit 1; }
+	pnpm install --silent
+	pnpm exec playwright install --with-deps chromium
+	@run_id="qt2-$${PROFILE:-$$(whoami)}"; \
+	shard_id="1"; \
+	run_dir="$(QUALIFICATION_TIER2_BASE_DIR)/$$run_id/$$shard_id"; \
+	mkdir -p "$$run_dir/evidence"; \
+	cd tests/release && TIER2_INTENT_SKIP_RUNTIME=1 pnpm exec tsx src/cli/run.ts \
+		--behavior $(BEHAVIOR) \
+		--lane local \
+		--desktop web \
+		--agents claude \
+		--scenarios T2-BILL,T2-AUTH-ORG \
+		--source-candidate \
+		--run-id "$$run_id" --shard-id "$$shard_id" \
+		--output-dir "$$run_dir/evidence"
+
+# "Prove One Real Self-Hosted Installation": build the exact self-host
+# candidate (Server image archive for the box arch + release-shaped
+# proliferate-deploy.tar.gz + controller AnyHarness + renderer), hand it to the
+# qualification runner, provision a run-scoped EC2 box behind Route53+Caddy TLS,
+# run the SHIPPED install.sh on the candidate bytes, and drive the four
+# SELFHOST-INSTALL-1 cells. This is the ONE entrypoint; the release-e2e selfhost
+# job invokes this same target. One target per world; never reuse the
+# local-workspace target.
+#
+# PROFILE=<unique-name>   Names this run (becomes its run id). Never reuse a
+#                         PROFILE for two concurrent invocations (each run owns
+#                         its EC2 instance, SG, key pair, and DNS record).
+# BEHAVIOR=diagnostic|strict
+#
+# Locally, AWS/SSH/BYOK inputs come from the ignored, mode-0600 qualification
+# env file (never committed, never printed): RELEASE_E2E_SELFHOST_REGION,
+# RELEASE_E2E_SELFHOST_HOSTED_ZONE_ID, RELEASE_E2E_SELFHOST_INSTANCE_TYPE,
+# RELEASE_E2E_SELFHOST_SSH_USER, and the bounded BYOK provider key
+# RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY (plus ambient AWS credentials). In GitHub
+# Actions the same inputs are supplied by the protected `Qualification`
+# environment and configured AWS credentials; this target does not read the
+# local file there.
+QUALIFICATION_SELFHOST_BASE_DIR ?= $(CURDIR)/tests/release/.output/selfhost-world
+qualification-selfhost:
+	@test -n "$(PROFILE)" || { \
+		echo "PROFILE=<unique-name> is required, e.g. make qualification-selfhost PROFILE=$$(whoami)-1 BEHAVIOR=diagnostic"; \
+		exit 1; \
+	}
+	@test -n "$(BEHAVIOR)" || { \
+		echo "BEHAVIOR=<diagnostic|strict> is required."; \
+		exit 1; \
+	}
+	@if [ "$$GITHUB_ACTIONS" != "true" ]; then \
+		test -f "$(QUALIFICATION_INFRA_ENV)" || { \
+			echo "Missing qualification secret profile at $(QUALIFICATION_INFRA_ENV)."; \
+			echo "It must define the RELEASE_E2E_SELFHOST_* inputs and RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY (mode 0600, never committed)."; \
+			exit 1; \
+		}; \
+		perm=$$(stat -f '%Lp' "$(QUALIFICATION_INFRA_ENV)" 2>/dev/null || stat -c '%a' "$(QUALIFICATION_INFRA_ENV)"); \
+		test "$$perm" = "600" || { \
+			echo "$(QUALIFICATION_INFRA_ENV) must be mode 0600 (got $$perm). Run: chmod 600 $(QUALIFICATION_INFRA_ENV)"; \
+			exit 1; \
+		}; \
+	fi
+	pnpm install --silent
+	pnpm exec playwright install --with-deps chromium
+	@if [ "$$GITHUB_ACTIONS" != "true" ]; then \
+		set -a; \
+		. "$(QUALIFICATION_INFRA_ENV)"; \
+		set +a; \
+	fi; \
+	test -n "$$RELEASE_E2E_SELFHOST_REGION" || { \
+		echo "RELEASE_E2E_SELFHOST_REGION is required (local: $(QUALIFICATION_INFRA_ENV); Actions: Qualification environment vars)."; \
+		exit 1; \
+	}; \
+	test -n "$$RELEASE_E2E_SELFHOST_HOSTED_ZONE_ID" || { \
+		echo "RELEASE_E2E_SELFHOST_HOSTED_ZONE_ID is required (local: $(QUALIFICATION_INFRA_ENV); Actions: Qualification environment vars)."; \
+		exit 1; \
+	}; \
+	test -n "$$RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY" || { \
+		echo "RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY is required (local: $(QUALIFICATION_INFRA_ENV); Actions: Qualification environment secrets)."; \
+		exit 1; \
+	}; \
+	run_id="qs-$(PROFILE)"; \
+	shard_id="1"; \
+	run_dir="$(QUALIFICATION_SELFHOST_BASE_DIR)/$$run_id/$$shard_id"; \
+	mkdir -p "$$run_dir"; \
+	api_base_url=$$(cd tests/release && pnpm exec tsx src/cli/print-selfhost-run-api-base-url.ts "$$run_id" "$$shard_id") || exit $$?; \
+	build_summary=$$(node scripts/ci-cd/build-selfhost-qualification-candidates.mjs \
+		--run-id "$$run_id" --shard-id "$$shard_id" --run-dir "$$run_dir" \
+		--api-base-url "$$api_base_url") || exit $$?; \
+	echo "$$build_summary"; \
+	candidate_map=$$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).candidate_build_map)' "$$build_summary"); \
+	cd tests/release && pnpm exec tsx src/cli/run.ts \
+		--behavior $(BEHAVIOR) \
+		--lane local \
+		--desktop web \
+		--agents claude \
+		--scenarios SELFHOST-INSTALL-1 \
+		--candidate-build-map "$$candidate_map" \
+		--run-id "$$run_id" --shard-id "$$shard_id" \
+		--output-dir "$$run_dir/evidence"
+
 test-cloud-ssh-worker:
 	@test -n "$(SSH_TARGET)" || { \
 		echo "SSH_TARGET is required, for example:"; \

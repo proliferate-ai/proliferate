@@ -18,7 +18,13 @@ import type { Dirent } from "node:fs";
 import { readFile, readdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-/** The resource kinds this first local-world consumer registers. */
+/**
+ * The resource kinds the local-world and self-host consumers register. This is
+ * an append-only shared registry (see "Parallel Tracks - Extension Contract"):
+ * new worlds add their kinds here; registered-before-create and
+ * reverse-order-reconcile semantics are non-negotiable and unchanged. The
+ * self-host block (PR 3) adds the four AWS resource kinds its world provisions.
+ */
 export type CleanupResourceKind =
   | "litellm_virtual_key"
   | "litellm_user"
@@ -36,7 +42,14 @@ export type CleanupResourceKind =
   | "extracted_artifacts"
   | "secret_env_file"
   | "run_directory"
-  | "port_registration";
+  | "port_registration"
+  // Self-host world (PR 3 — append-only). Registered-before-create in
+  // tests/release/src/worlds/selfhost/; released in reverse ledger order by the
+  // self-host cleanup stack.
+  | "ec2_instance"
+  | "security_group"
+  | "key_pair"
+  | "route53_record";
 
 export type CleanupPhase = "intent" | "acquired" | "reconciled";
 

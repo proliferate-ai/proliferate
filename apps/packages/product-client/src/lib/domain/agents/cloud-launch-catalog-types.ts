@@ -81,7 +81,21 @@ export interface DesktopLaunchModelRegistryModel {
    * selected model would reject at session creation.
    */
   modeValues?: string[] | null;
+  /**
+   * Per-model tuning-control vocabulary from the catalog matrix, keyed by
+   * desktop control key (`reasoning_effort` folds into `effort`). Unlike
+   * `sessionDefaultControls` this does NOT fall back to the agent-level
+   * vocabulary: a key absent here is a control the model does not support
+   * (e.g. sonnet carries no `fast_mode`, gpt-5.5 caps effort at `xhigh`).
+   * `null` when the model has no per-model controls matrix at all, in which
+   * case the agent-level launch controls apply unscoped.
+   */
+  tuningControlValues?: DesktopModelTuningControlValues | null;
 }
+
+export type DesktopModelTuningControlValues = Partial<
+  Record<"reasoning" | "effort" | "fast_mode", string[]>
+>;
 
 export interface DesktopAgentLaunchModel extends DesktopLaunchModelRegistryModel {
   aliases: string[];

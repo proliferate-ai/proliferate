@@ -10,8 +10,9 @@ use serde_json::{json, Value};
 
 use super::model::{
     workflow_prompt_id, PutWorkflowRunInput, WorkflowDefinition, WorkflowHarnessConfig,
-    WorkflowInput, WorkflowInputType, WorkflowPromptStep, WorkflowRunFailureCode,
-    WorkflowRunStatus, WorkflowStage, WorkflowStepStatus, WorkflowTurnOutcome,
+    WorkflowInput, WorkflowInputType, WorkflowInterruptionCode, WorkflowPromptStep,
+    WorkflowRunFailureCode, WorkflowRunStatus, WorkflowStage, WorkflowStepStatus,
+    WorkflowTurnOutcome,
 };
 use super::service::{
     AcceptOutcome, WorkflowAcceptError, WorkflowExecutionPlan, WorkflowRunService,
@@ -638,11 +639,13 @@ fn failed_and_cancelled_turns_carry_failure_codes() {
         WorkflowTurnOutcome::Cancelled,
     )
     .expect("finish cancelled");
+    // A correlated cancelled turn is truthful `cancelled`, not a failure
+    // (spec workflow-run-control §4).
     let cancelled = view(&svc, &cancelled_run);
-    assert_eq!(
-        cancelled.run.failure_code,
-        Some(WorkflowRunFailureCode::SessionTurnCancelled)
-    );
+    assert_eq!(cancelled.run.status, WorkflowRunStatus::Cancelled);
+    assert_eq!(cancelled.steps[0].status, WorkflowStepStatus::Cancelled);
+    assert!(cancelled.run.failure_code.is_none());
+    assert!(cancelled.steps[0].failure_code.is_none());
 }
 
 #[test]
@@ -884,15 +887,13 @@ fn fence_resolves_a_lost_acknowledgement_step() {
     svc.fence_nonterminal_after_restart().expect("fence");
 
     let fenced = view(&svc, &run_id);
-    assert_eq!(fenced.run.status, WorkflowRunStatus::Failed);
-    assert_eq!(fenced.steps[0].status, WorkflowStepStatus::Failed);
+    assert_eq!(fenced.run.status, WorkflowRunStatus::Interrupted);
+    assert_eq!(fenced.steps[0].status, WorkflowStepStatus::Interrupted);
+    assert!(fenced.run.failure_code.is_none());
+    assert!(fenced.steps[0].failure_code.is_none());
     assert_eq!(
-        fenced.run.failure_code,
-        Some(WorkflowRunFailureCode::RuntimeRestarted)
-    );
-    assert_eq!(
-        fenced.steps[0].failure_code,
-        Some(WorkflowRunFailureCode::RuntimeRestarted)
+        fenced.run.interruption_code,
+        Some(WorkflowInterruptionCode::RuntimeRestarted)
     );
 }
 
@@ -933,18 +934,374 @@ fn restart_fencing_fails_nonterminal_rows_across_reopen() {
     svc.fence_nonterminal_after_restart().expect("fence");
 
     let interrupted_view = view(&svc, &interrupted);
-    assert_eq!(interrupted_view.run.status, WorkflowRunStatus::Failed);
-    assert_eq!(interrupted_view.steps[0].status, WorkflowStepStatus::Failed);
+    assert_eq!(interrupted_view.run.status, WorkflowRunStatus::Interrupted);
     assert_eq!(
-        interrupted_view.run.failure_code,
-        Some(WorkflowRunFailureCode::RuntimeRestarted)
+        interrupted_view.steps[0].status,
+        WorkflowStepStatus::Interrupted
     );
+    assert!(interrupted_view.run.failure_code.is_none());
+    assert!(interrupted_view.steps[0].failure_code.is_none());
     assert_eq!(
-        interrupted_view.steps[0].failure_code,
-        Some(WorkflowRunFailureCode::RuntimeRestarted)
+        interrupted_view.run.interruption_code,
+        Some(WorkflowInterruptionCode::RuntimeRestarted)
     );
 
     let completed_view = view(&svc, &completed);
     assert_eq!(completed_view.run.status, WorkflowRunStatus::Completed);
     assert!(completed_view.run.failure_code.is_none());
+}
+
+// ---------------------------------------------------------------------------
+// Run-control tests (spec workflow-run-control §4/§5/§8, proof §11.2):
+// stateVersion progression, the four-outcome cancel intent at every durable
+// boundary, first-terminal-wins, and interrupted fencing — real SQLite.
+// ---------------------------------------------------------------------------
+
+use super::service::WorkflowCancelOutcome;
+
+fn run_view(view: &super::service::VersionedWorkflowRunView) -> &super::service::WorkflowRunView {
+    match view {
+        super::service::VersionedWorkflowRunView::V1(view) => view,
+        super::service::VersionedWorkflowRunView::V2(_) => panic!("expected a v1 view"),
+    }
+}
+
+#[test]
+fn state_version_progression_is_exact_and_no_ops_do_not_increment() {
+    let svc = service();
+    let run_id = new_run_id();
+
+    // Accept starts at 1.
+    svc.accept(&run_id, valid_input()).expect("accept");
+    assert_eq!(view(&svc, &run_id).run.state_version, 1);
+
+    // Exact replay does not increment.
+    svc.accept(&run_id, valid_input()).expect("replay");
+    assert_eq!(view(&svc, &run_id).run.state_version, 1);
+
+    // begin_run -> 2; guarded repeat is a no-op.
+    assert!(svc.begin_run(&run_id).expect("begin_run"));
+    assert_eq!(view(&svc, &run_id).run.state_version, 2);
+    assert!(!svc.begin_run(&run_id).expect("begin_run repeat"));
+    assert_eq!(view(&svc, &run_id).run.state_version, 2);
+
+    // bind_session -> 3; guarded repeat no-op.
+    assert!(svc.bind_session(&run_id, "sess-v").expect("bind"));
+    assert_eq!(view(&svc, &run_id).run.state_version, 3);
+    assert!(!svc.bind_session(&run_id, "sess-other").expect("rebind"));
+    assert_eq!(view(&svc, &run_id).run.state_version, 3);
+
+    // begin_step (coupled run+step change) -> 4, exactly once.
+    assert!(svc.begin_step(&run_id).expect("begin_step"));
+    assert_eq!(view(&svc, &run_id).run.state_version, 4);
+    assert!(!svc.begin_step(&run_id).expect("begin_step repeat"));
+    assert_eq!(view(&svc, &run_id).run.state_version, 4);
+
+    // record_turn -> 5; a duplicate same-turn record is a no-op.
+    assert!(svc.record_turn(&run_id, "turn-v").expect("record"));
+    assert_eq!(view(&svc, &run_id).run.state_version, 5);
+    assert!(!svc.record_turn(&run_id, "turn-v").expect("record repeat"));
+    assert_eq!(view(&svc, &run_id).run.state_version, 5);
+
+    // Terminal completion (coupled) -> 6; duplicate/late callbacks no-op.
+    svc.finish_turn(
+        "sess-v",
+        &workflow_prompt_id(&run_id),
+        Some("turn-v"),
+        WorkflowTurnOutcome::Completed,
+    )
+    .expect("finish");
+    let terminal = view(&svc, &run_id);
+    assert_eq!(terminal.run.state_version, 6);
+    assert_eq!(terminal.run.status, WorkflowRunStatus::Completed);
+    svc.finish_turn(
+        "sess-v",
+        &workflow_prompt_id(&run_id),
+        Some("turn-v"),
+        WorkflowTurnOutcome::Completed,
+    )
+    .expect("duplicate finish");
+    svc.finish_turn(
+        "sess-v",
+        &workflow_prompt_id(&run_id),
+        Some("turn-late"),
+        WorkflowTurnOutcome::Failed,
+    )
+    .expect("late finish");
+    let after = view(&svc, &run_id);
+    assert_eq!(after.run.state_version, 6);
+    assert_eq!(after.run.updated_at, terminal.run.updated_at);
+}
+
+#[test]
+fn cancel_before_executor_terminalizes_run_and_step_atomically() {
+    let svc = service();
+    let run_id = new_run_id();
+    svc.accept(&run_id, valid_input()).expect("accept");
+
+    let outcome = svc.cancel_intent(&run_id).expect("cancel");
+    let WorkflowCancelOutcome::CancelledBeforeDispatch(snapshot) = outcome else {
+        panic!("expected CancelledBeforeDispatch, got {outcome:?}");
+    };
+    let snapshot = run_view(&snapshot);
+    assert_eq!(snapshot.run.status, WorkflowRunStatus::Cancelled);
+    assert_eq!(snapshot.steps[0].status, WorkflowStepStatus::Cancelled);
+    assert!(snapshot.run.cancel_requested_at.is_some());
+    assert!(snapshot.run.failure_code.is_none());
+    assert!(snapshot.steps[0].failure_code.is_none());
+    assert!(snapshot.run.interruption_code.is_none());
+    assert!(snapshot.run.finished_at.is_some());
+    assert!(snapshot.steps[0].finished_at.is_some());
+    // One coupled increment: accept(1) + cancel(2).
+    assert_eq!(snapshot.run.state_version, 2);
+
+    // Repeat on the terminal run: Terminal, byte-stable version/timestamp.
+    let repeat = svc.cancel_intent(&run_id).expect("repeat cancel");
+    let WorkflowCancelOutcome::Terminal(repeat_view) = repeat else {
+        panic!(
+            "expected Terminal, got {repeat_view:?}",
+            repeat_view = repeat
+        );
+    };
+    let repeat_view = run_view(&repeat_view);
+    assert_eq!(repeat_view.run.state_version, 2);
+    assert_eq!(
+        repeat_view.run.cancel_requested_at,
+        snapshot.run.cancel_requested_at
+    );
+    assert_eq!(repeat_view.run.updated_at, snapshot.run.updated_at);
+}
+
+#[test]
+fn cancel_at_every_pre_dispatch_boundary_terminalizes_without_a_session_effect() {
+    let svc = service();
+
+    // Running run, still-pending step (post-begin_run boundary).
+    let run_a = new_run_id();
+    svc.accept(&run_a, valid_input()).expect("accept");
+    assert!(svc.begin_run(&run_a).expect("begin_run"));
+    let outcome = svc.cancel_intent(&run_a).expect("cancel");
+    assert!(matches!(
+        outcome,
+        WorkflowCancelOutcome::CancelledBeforeDispatch(_)
+    ));
+    let cancelled = view(&svc, &run_a);
+    assert_eq!(cancelled.run.status, WorkflowRunStatus::Cancelled);
+    assert_eq!(cancelled.run.state_version, 3);
+
+    // Bound session, still-pending step (post-bind boundary): the created
+    // session is retained as correlation evidence.
+    let run_b = new_run_id();
+    svc.accept(&run_b, valid_input()).expect("accept");
+    assert!(svc.begin_run(&run_b).expect("begin_run"));
+    assert!(svc.bind_session(&run_b, "sess-kept").expect("bind"));
+    let outcome = svc.cancel_intent(&run_b).expect("cancel");
+    assert!(matches!(
+        outcome,
+        WorkflowCancelOutcome::CancelledBeforeDispatch(_)
+    ));
+    let cancelled = view(&svc, &run_b);
+    assert_eq!(cancelled.run.status, WorkflowRunStatus::Cancelled);
+    assert_eq!(cancelled.run.session_id.as_deref(), Some("sess-kept"));
+
+    // Execution rechecks observe the terminal state: no step begins after.
+    assert!(!svc.run_in_flight(&run_b).expect("recheck"));
+    assert!(!svc.begin_step(&run_b).expect("begin_step after cancel"));
+}
+
+#[test]
+fn cancel_of_a_running_turn_records_intent_and_waits_for_correlated_evidence() {
+    let svc = service();
+    let session_id = "sess-pending-cancel";
+    let run_id = running_run(&svc, session_id);
+    assert!(svc.record_turn(&run_id, "turn-live").expect("record"));
+    let versions_before = view(&svc, &run_id).run.state_version;
+
+    // First intent: +1, pending outcome carrying exact correlation.
+    let outcome = svc.cancel_intent(&run_id).expect("cancel");
+    let WorkflowCancelOutcome::CancellationPending {
+        view: snapshot,
+        session_id: pending_session,
+        turn_id: pending_turn,
+    } = outcome
+    else {
+        panic!("expected CancellationPending, got {outcome:?}");
+    };
+    assert_eq!(pending_session.as_deref(), Some(session_id));
+    assert_eq!(pending_turn.as_deref(), Some("turn-live"));
+    let snapshot = run_view(&snapshot);
+    assert_eq!(snapshot.run.status, WorkflowRunStatus::Running);
+    assert_eq!(snapshot.steps[0].status, WorkflowStepStatus::Running);
+    let requested_at = snapshot.run.cancel_requested_at.clone().expect("intent");
+    assert_eq!(snapshot.run.state_version, versions_before + 1);
+
+    // Repeated intent: same timestamp and version.
+    let repeat = svc.cancel_intent(&run_id).expect("repeat");
+    let WorkflowCancelOutcome::CancellationPending {
+        view: repeat_view, ..
+    } = repeat
+    else {
+        panic!("expected pending on repeat");
+    };
+    let repeat_view = run_view(&repeat_view);
+    assert_eq!(
+        repeat_view.run.cancel_requested_at.as_deref(),
+        Some(requested_at.as_str())
+    );
+    assert_eq!(repeat_view.run.state_version, versions_before + 1);
+
+    // The correlated cancelled turn terminalizes truthfully; intent retained.
+    svc.finish_turn(
+        session_id,
+        &workflow_prompt_id(&run_id),
+        Some("turn-live"),
+        WorkflowTurnOutcome::Cancelled,
+    )
+    .expect("correlated cancellation");
+    let terminal = view(&svc, &run_id);
+    assert_eq!(terminal.run.status, WorkflowRunStatus::Cancelled);
+    assert_eq!(
+        terminal.run.cancel_requested_at.as_deref(),
+        Some(requested_at.as_str())
+    );
+}
+
+#[test]
+fn truthful_terminal_outcomes_win_after_cancel_intent() {
+    let svc = service();
+
+    // Completion wins after intent: completed retains cancelRequestedAt.
+    let run_a = new_run_id();
+    let session_a = "sess-complete-wins";
+    let run_a = {
+        let _ = run_a;
+        running_run(&svc, session_a)
+    };
+    assert!(svc.record_turn(&run_a, "turn-a").expect("record"));
+    svc.cancel_intent(&run_a).expect("intent");
+    svc.finish_turn(
+        session_a,
+        &workflow_prompt_id(&run_a),
+        Some("turn-a"),
+        WorkflowTurnOutcome::Completed,
+    )
+    .expect("completion wins");
+    let completed = view(&svc, &run_a);
+    assert_eq!(completed.run.status, WorkflowRunStatus::Completed);
+    assert!(completed.run.cancel_requested_at.is_some());
+    assert!(completed.run.failure_code.is_none());
+
+    // Failure wins after intent: failed retains cancelRequestedAt + code.
+    let session_b = "sess-failed-wins";
+    let run_b = running_run(&svc, session_b);
+    assert!(svc.record_turn(&run_b, "turn-b").expect("record"));
+    svc.cancel_intent(&run_b).expect("intent");
+    svc.finish_turn(
+        session_b,
+        &workflow_prompt_id(&run_b),
+        Some("turn-b"),
+        WorkflowTurnOutcome::Failed,
+    )
+    .expect("failure wins");
+    let failed = view(&svc, &run_b);
+    assert_eq!(failed.run.status, WorkflowRunStatus::Failed);
+    assert_eq!(
+        failed.run.failure_code,
+        Some(WorkflowRunFailureCode::SessionTurnFailed)
+    );
+    assert!(failed.run.cancel_requested_at.is_some());
+}
+
+#[test]
+fn queued_or_lost_ack_step_cancel_is_intent_only_and_fence_resolves_it() {
+    // A running step with a null stored turn (queued, or lost
+    // acknowledgement): cancellation records intent only — there is no exact
+    // turn to target — and startup fencing resolves the run.
+    let svc = service();
+    let run_id = running_run(&svc, "sess-null-turn");
+
+    let outcome = svc.cancel_intent(&run_id).expect("cancel");
+    let WorkflowCancelOutcome::CancellationPending { turn_id, .. } = outcome else {
+        panic!("expected pending, got {outcome:?}");
+    };
+    assert!(turn_id.is_none(), "no stored turn to target");
+    let pending = view(&svc, &run_id);
+    assert_eq!(pending.run.status, WorkflowRunStatus::Running);
+    assert!(pending.run.cancel_requested_at.is_some());
+    let version_after_intent = pending.run.state_version;
+
+    svc.fence_nonterminal_after_restart().expect("fence");
+    let fenced = view(&svc, &run_id);
+    assert_eq!(fenced.run.status, WorkflowRunStatus::Interrupted);
+    assert_eq!(
+        fenced.run.interruption_code,
+        Some(WorkflowInterruptionCode::RuntimeRestarted)
+    );
+    assert!(fenced.run.cancel_requested_at.is_some(), "intent retained");
+    // Fencing increments each run exactly once.
+    assert_eq!(fenced.run.state_version, version_after_intent + 1);
+}
+
+#[test]
+fn cancel_intent_outcomes_for_missing_and_terminal_runs() {
+    let svc = service();
+    assert!(matches!(
+        svc.cancel_intent(&new_run_id()).expect("missing"),
+        WorkflowCancelOutcome::Missing
+    ));
+
+    // A completed run returns Terminal unchanged and never gains intent.
+    let session_id = "sess-done-first";
+    let run_id = running_run(&svc, session_id);
+    svc.finish_turn(
+        session_id,
+        &workflow_prompt_id(&run_id),
+        Some("t"),
+        WorkflowTurnOutcome::Completed,
+    )
+    .expect("complete");
+    let before = view(&svc, &run_id);
+    let outcome = svc.cancel_intent(&run_id).expect("terminal cancel");
+    let WorkflowCancelOutcome::Terminal(snapshot) = outcome else {
+        panic!("expected Terminal, got {outcome:?}");
+    };
+    let snapshot = run_view(&snapshot);
+    assert_eq!(snapshot.run.status, WorkflowRunStatus::Completed);
+    assert!(snapshot.run.cancel_requested_at.is_none());
+    assert_eq!(snapshot.run.state_version, before.run.state_version);
+}
+
+#[test]
+fn intent_write_failure_performs_no_durable_change() {
+    // Break the steps table so the cancel-intent transaction fails mid-way;
+    // the run row must remain byte-identical (transactional no-change).
+    let svc = service();
+    let run_id = new_run_id();
+    svc.accept(&run_id, valid_input()).expect("accept");
+    let before = view(&svc, &run_id);
+
+    svc.store_db_for_tests()
+        .with_conn(|conn| {
+            conn.execute(
+                "ALTER TABLE workflow_run_steps RENAME TO workflow_run_steps_broken",
+                [],
+            )
+        })
+        .expect("break steps table");
+    assert!(
+        svc.cancel_intent(&run_id).is_err(),
+        "intent write must fail"
+    );
+    svc.store_db_for_tests()
+        .with_conn(|conn| {
+            conn.execute(
+                "ALTER TABLE workflow_run_steps_broken RENAME TO workflow_run_steps",
+                [],
+            )
+        })
+        .expect("restore steps table");
+
+    let after = view(&svc, &run_id);
+    assert_eq!(after.run, before.run, "no durable change on intent failure");
+    assert!(after.run.cancel_requested_at.is_none());
 }

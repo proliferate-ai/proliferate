@@ -59,7 +59,7 @@ async def _backfill_loop() -> None:
 
 
 async def start_agent_gateway_enrollment_backfill() -> asyncio.Task[None] | None:
-    if not settings.agent_gateway_enabled:
+    if not settings.agent_gateway_enabled or not settings.run_background_workers:
         return None
     return asyncio.create_task(
         _backfill_loop(),
@@ -103,7 +103,7 @@ async def _usage_import_loop() -> None:
 
 
 async def start_agent_gateway_usage_import() -> asyncio.Task[None] | None:
-    if not settings.agent_gateway_enabled:
+    if not settings.agent_gateway_enabled or not settings.run_background_workers:
         return None
     return asyncio.create_task(
         _usage_import_loop(),
@@ -149,6 +149,8 @@ async def _topup_loop() -> None:
 
 async def start_agent_gateway_llm_topups() -> asyncio.Task[None] | None:
     if not settings.agent_gateway_enabled or not topups_enabled():
+        return None
+    if not settings.run_background_workers:
         return None
     return asyncio.create_task(
         _topup_loop(),

@@ -486,6 +486,23 @@ mod tests {
     }
 
     #[test]
+    fn tracing_error_reaches_the_sentry_client() {
+        // Regression (B2 amendment): a `sentry` / `sentry-tracing` version split
+        // links two `sentry-core` instances, so the tracing layer captures into
+        // a clientless Hub and every ERROR event is silently dropped (observed
+        // live in production from 2026-06-14). Fails with 0 events on any
+        // future divergence.
+        use tracing_subscriber::layer::SubscriberExt;
+        let subscriber = tracing_subscriber::registry().with(sentry_tracing::layer());
+        let events = sentry::test::with_captured_events(|| {
+            tracing::subscriber::with_default(subscriber, || {
+                tracing::error!("sentry emission regression probe");
+            });
+        });
+        assert_eq!(events.len(), 1, "tracing ERROR must reach the Sentry client");
+    }
+
+    #[test]
     fn runtime_env_tag_survives_while_other_env_tags_are_redacted() {
         let mut event = Event::new();
         event.tags.insert("runtime_env".to_string(), "e2b".to_string());

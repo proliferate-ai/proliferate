@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { ComposerAttachedPanel } from "#product/components/workspace/chat/input/ComposerAttachedPanel";
 import {
   ComposerOptionRow,
+  useComposerOptionArrowKeys,
   useComposerOptionNumberKeys,
 } from "#product/components/workspace/chat/input/ComposerOptionRow";
 import { useActivePendingApproval } from "#product/hooks/chat/derived/use-active-pending-session-interactions";
@@ -67,6 +68,12 @@ export function ApprovalCard({
   useComposerOptionNumberKeys(options.length, (index) => {
     options[index]?.onSelect();
   });
+  const { highlightedIndex, highlight } = useComposerOptionArrowKeys(
+    options.length,
+    (index) => {
+      options[index]?.onSelect();
+    },
+  );
 
   return (
     <ComposerAttachedPanel title="Permission request">
@@ -81,6 +88,8 @@ export function ApprovalCard({
               index={index}
               label={option.label}
               destructive={option.destructive}
+              highlighted={highlightedIndex === index}
+              onHover={() => highlight(index)}
               onSelect={option.onSelect}
             />
           ))}

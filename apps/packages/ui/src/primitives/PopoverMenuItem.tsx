@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, MouseEvent, ReactNode } from "react";
+import type { ButtonHTMLAttributes, MouseEvent, ReactNode, Ref } from "react";
 import { twMerge } from "../utils/tw-merge";
 
 export type PopoverMenuItemVariant = "default" | "sidebar";
@@ -13,6 +13,8 @@ export interface PopoverMenuItemProps extends ButtonHTMLAttributes<HTMLButtonEle
   iconClassName?: string;
   labelClassName?: string;
   trailingClassName?: string;
+  /** React 19 ref-as-prop; lands on the underlying button element. */
+  ref?: Ref<HTMLButtonElement>;
 }
 
 export function PopoverMenuItem({

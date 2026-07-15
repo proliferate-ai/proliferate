@@ -228,8 +228,10 @@ async def test_importer_is_idempotent_across_overlapping_windows(
 
     subject_id = enrollment.billing_subject_id
     balance = await store.get_remaining_credit_usd(db_session, subject_id)
-    assert balance.used_usd == Decimal("0.10")
-    assert balance.remaining_usd == Decimal("4.90")
+    # Ruled 2026-07-14: managed LLM is metered at provider list + 15%, so a
+    # $0.10 provider spend debits $0.115 against the credit ledger.
+    assert balance.used_usd == Decimal("0.115")
+    assert balance.remaining_usd == Decimal("4.885")
 
 
 @pytest.mark.asyncio

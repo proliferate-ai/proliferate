@@ -8,7 +8,9 @@ export default defineConfig({
   testDir: "./specs",
   // The billing specs live under ./specs/billing but boot a different stack
   // (Stripe + enforce mode) via their own config; keep them out of this suite.
-  testIgnore: "**/billing/**",
+  // billing/ and billing-import/ have their own configs + global setups
+  // (Stripe stack / LiteLLM-fake stack); the default suite must not collect them.
+  testIgnore: ["**/billing/**", "**/billing-import/**"],
   globalSetup: "./stack/global-setup.ts",
   workers: 1,
   fullyParallel: false,

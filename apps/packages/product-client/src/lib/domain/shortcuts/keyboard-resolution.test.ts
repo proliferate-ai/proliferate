@@ -56,6 +56,7 @@ describe("resolveKeyboardShortcut", () => {
       trigger: expect.objectContaining({ source: "keyboard" }),
     });
 
+    // Plain Ctrl+N is the "New workspace" default binding (workspace.new-default).
     expect(resolveKeyboardShortcut({
       key: "n",
       code: "KeyN",
@@ -63,7 +64,11 @@ describe("resolveKeyboardShortcut", () => {
       ctrlKey: true,
       shiftKey: false,
       altKey: false,
-    } as KeyboardEvent)).toBeNull();
+    } as KeyboardEvent)).toEqual({
+      id: "workspace.new-default",
+      shortcut: expect.objectContaining({ id: "workspace.new-default" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
   });
 
   it("opens top-level app shortcuts on mac", () => {
@@ -98,6 +103,8 @@ describe("resolveKeyboardShortcut", () => {
       trigger: expect.objectContaining({ source: "keyboard" }),
     });
 
+    // Cmd+P is unbound: the plugins page (app.go-plugins) was removed in #823,
+    // replaced by workflows (app.go-automations, Cmd+U, asserted below).
     expect(resolveKeyboardShortcut({
       key: "p",
       code: "KeyP",
@@ -105,11 +112,7 @@ describe("resolveKeyboardShortcut", () => {
       ctrlKey: false,
       shiftKey: false,
       altKey: false,
-    } as KeyboardEvent)).toEqual({
-      id: "app.go-plugins",
-      shortcut: expect.objectContaining({ id: "app.go-plugins" }),
-      trigger: expect.objectContaining({ source: "keyboard" }),
-    });
+    } as KeyboardEvent)).toBeNull();
 
     expect(resolveKeyboardShortcut({
       key: "u",
@@ -214,6 +217,7 @@ describe("resolveKeyboardShortcut", () => {
       trigger: expect.objectContaining({ source: "keyboard" }),
     });
 
+    // Plain Cmd+N is the "New workspace" default binding (workspace.new-default).
     expect(resolveKeyboardShortcut({
       key: "n",
       code: "KeyN",
@@ -221,7 +225,11 @@ describe("resolveKeyboardShortcut", () => {
       ctrlKey: false,
       shiftKey: false,
       altKey: false,
-    } as KeyboardEvent)).toBeNull();
+    } as KeyboardEvent)).toEqual({
+      id: "workspace.new-default",
+      shortcut: expect.objectContaining({ id: "workspace.new-default" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
   });
 
   it("resolves new workspace shortcuts by physical KeyN on mac", () => {
@@ -334,6 +342,7 @@ describe("resolveKeyboardShortcut", () => {
       trigger: expect.objectContaining({ source: "keyboard" }),
     });
 
+    // Cmd+Opt+digit jumps to a chat by index (workspace.tab-by-index).
     expect(resolveKeyboardShortcut({
       key: "1",
       code: "Digit1",
@@ -342,11 +351,13 @@ describe("resolveKeyboardShortcut", () => {
       shiftKey: false,
       altKey: true,
     } as KeyboardEvent)).toEqual({
-      id: "workspace.by-index",
-      shortcut: expect.objectContaining({ id: "workspace.by-index" }),
+      id: "workspace.tab-by-index",
+      shortcut: expect.objectContaining({ id: "workspace.tab-by-index" }),
       trigger: expect.objectContaining({ source: "keyboard", digit: 1 }),
     });
 
+    // Cmd+digit (no alt) overlaps the settings-section and workspace-by-index
+    // bindings; the settings overlay is declared first so it wins while open.
     expect(resolveKeyboardShortcuts({
       key: "1",
       code: "Digit1",
@@ -355,8 +366,8 @@ describe("resolveKeyboardShortcut", () => {
       shiftKey: false,
       altKey: false,
     } as KeyboardEvent).map((resolved) => resolved.id)).toEqual([
-      "workspace.tab-by-index",
       "settings.section-by-index",
+      "workspace.by-index",
     ]);
 
     expect(resolveKeyboardShortcut({
