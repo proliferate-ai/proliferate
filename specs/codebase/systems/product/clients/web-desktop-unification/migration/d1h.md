@@ -781,18 +781,20 @@ Forward-seam breakdown (272 forbidden `@/` imports, 267 lines / 181 files):
 `@/lib/integrations` 10, `@/hooks/auth` 7, `@/stores/auth` 3, and one each of
 `DesktopProductLifecycleRoot` / `hooks/organizations` / `hooks/app`.
 
-## Inherited pre-existing test failures (do not attribute to the move)
+## Inherited pre-existing test failures (F1-era note — SUPERSEDED)
+
+> **HISTORICAL.** This F1-era note misattributed `AutomationRunLocationSelector`
+> as move-induced test-infra. Round 3 root-caused it as base-identical (see
+> "AutomationRunLocationSelector — final resolution" above). The authoritative
+> inherited-failures list (12 tests / 6 files, all base-proven at `1d0043756`) is
+> in "Round 3 (G1–G7) + green — final".
 
 The retained Desktop host tests carry the same base-identical failures the prior
 slices waived under the founder-approved `pretest` waiver. The S4 repair pass
 confirmed against a clean base worktree that `keyboard-resolution` (4) and
-`navigation` (2) fail byte-identically at base `1d0043756`. One move-induced
-**test-infra** failure exists (`AutomationRunLocationSelector` — jsdom render
-duplication, passes at base; likely a second React instance across the package
-boundary, resolvable with `resolve.dedupe: ["react","react-dom"]` in the package
-vitest) — **not** a product-logic regression. (D1g recorded 15 failures / 8
-files at its earlier base `f93afce81`; the set differs because the base moved to
-`1d0043756`.)
+`navigation` (2) fail byte-identically at base `1d0043756`. (D1g recorded 15
+failures / 8 files at its earlier base `f93afce81`; the set differs because the
+base moved to `1d0043756`.)
 
 ## Move-caused reference fixes (this slice)
 
