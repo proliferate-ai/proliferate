@@ -11,7 +11,9 @@ import {
   attachCleanupEvidence,
   browserOriginsForBox,
   resolveSelfHostWorldInputs,
+  runBaseTurnCell,
   runSelfHostInstallCells,
+  type BaseTurnCellOps,
   type CellEvidenceNoCleanup,
   type SelfHostCellResult,
   type SelfHostInstallDriver,
@@ -20,6 +22,8 @@ import type { ScenarioRunContext } from "./types.js";
 import type { CandidateBuildMapV1 } from "../artifacts/build-map.js";
 import type { EnvResolution } from "../config/env-resolution.js";
 import type { PlannedCellV1 } from "../runner/result.js";
+import type { ProductPage } from "../fixtures/product-page.js";
+import type { SelfHostOwnerActor } from "../fixtures/selfhost-actor.js";
 import type { ReadySelfHostWorld } from "../worlds/selfhost/world.js";
 import type { SelfHostWorldCleanupEvidence } from "../worlds/selfhost/cleanup-kinds.js";
 
@@ -382,4 +386,175 @@ test("browserOriginsForBox always emits both 127.0.0.1 and localhost forms (grep
 
   // A non-loopback renderer origin is passed through unchanged (single entry).
   assert.deepEqual(forBase("https://renderer.internal.example:8443/"), ["https://renderer.internal.example:8443"]);
+});
+
+// ── SH-BASE-TURN cell logic (fake ops; UI-real flow, offline) ────────────────
+
+function baseTurnWorld(): ReadySelfHostWorld {
+  return {
+    kind: "selfhost",
+    artifacts: {
+      serverImage: { artifact_id: "server/linux-amd64", version: "1.2.3" },
+      bundle: { artifact_id: "selfhost-bundle/linux-amd64", version: "1.2.3" },
+      anyharness: { artifact_id: "anyharness/x86_64-unknown-linux-gnu", version: "4.5.6" },
+      desktopRenderer: { artifact_id: "desktop-renderer/browser", version: "1" },
+    },
+    api: { baseUrl: "https://run-1.qualification.proliferate.com" },
+    runtime: { baseUrl: "http://127.0.0.1:4" },
+  } as unknown as ReadySelfHostWorld;
+}
+
+const FAKE_OWNER: SelfHostOwnerActor = {
+  role: "owner",
+  userId: "owner-user-1",
+  organizationId: "org-1",
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  api: {} as any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  session: {} as any,
+};
+
+/** A ProductPage whose close() is tracked so the finally-close path is provable. */
+function fakePage(closed: { value: boolean }): ProductPage {
+  return {
+    context: undefined as never,
+    page: undefined as never,
+    debug: { console: [], network: [] },
+    close: async () => {
+      closed.value = true;
+    },
+  };
+}
+
+/**
+ * Green ops: BYOK ok, Desktop sync lands, the UI-real turn materializes a
+ * workspace/session and renders "pong", the runtime reopen stays commandable,
+ * the product-native reload restores the transcript, and no LiteLLM/E2B is seen.
+ */
+function greenBaseTurnOps(closed: { value: boolean }, overrides: Partial<BaseTurnCellOps> = {}): BaseTurnCellOps {
+  return {
+    resolveByokRawKey: () => "sk-ant-test-key",
+    preflightByok: async () => ({ ok: true }),
+    storeAndSelectByok: async () => ({ apiKeyId: "byok-key-1", harnessKind: "claude", envVarName: "ANTHROPIC_API_KEY" }),
+    openOwnerPage: async () => fakePage(closed),
+    waitForByokSync: async () => undefined,
+    summarizeAuthState: () => "[diag: state.json present]",
+    resolveModel: async () => "claude-haiku-4-5",
+    createWorkspaceTurnThroughUi: async () => ({ workspaceId: "ws-1", sessionId: "sess-1", reply: "pong" }),
+    reopenSession: async () => ({ workspaceId: "ws-1" }),
+    reloadTranscript: async () => ({ ok: true, text: "pong" }),
+    fetchCapabilities: async () => ({ agentGateway: false, cloudWorkspaces: false }),
+    readAuthSourceKinds: () => ["api_key"],
+    detectGatewayEnvVar: () => undefined,
+    detectE2bEnvKey: () => undefined,
+    ...overrides,
+  };
+}
+
+test("runBaseTurnCell: green through UI create → turn → runtime reopen → product-native reload", async () => {
+  const closed = { value: false };
+  const result = await runBaseTurnCell(baseTurnWorld(), FAKE_OWNER, greenBaseTurnOps(closed));
+  assert.equal(result.status, "green", JSON.stringify(result));
+  assert.equal(result.evidence?.kind, "selfhost_base_turn");
+  const evidence = result.evidence as {
+    model_id: string;
+    transcript_reopened: boolean;
+    byok_route: string;
+    no_litellm_spend: boolean;
+    no_e2b: boolean;
+  };
+  assert.equal(evidence.model_id, "claude-haiku-4-5");
+  assert.equal(evidence.transcript_reopened, true);
+  assert.equal(evidence.byok_route, "api_key");
+  assert.equal(evidence.no_litellm_spend, true);
+  assert.equal(evidence.no_e2b, true);
+  // The owner page is always closed in the finally.
+  assert.equal(closed.value, true);
+});
+
+test("runBaseTurnCell: a failed BYOK preflight is a fail-closed red, never blocked", async () => {
+  const closed = { value: false };
+  const ops = greenBaseTurnOps(closed, { preflightByok: async () => ({ ok: false, reason: "provider returned 401 on /models" }) });
+  const result = await runBaseTurnCell(baseTurnWorld(), FAKE_OWNER, ops);
+  assert.equal(result.status, "failed");
+  assert.match(result.reason?.message ?? "", /BYOK preflight rejected the key \(provider returned 401/);
+});
+
+test("runBaseTurnCell: no launchable model is blocked, not failed", async () => {
+  const closed = { value: false };
+  const ops = greenBaseTurnOps(closed, { resolveModel: async () => undefined });
+  const result = await runBaseTurnCell(baseTurnWorld(), FAKE_OWNER, ops);
+  assert.equal(result.status, "blocked");
+  assert.match(result.reason?.message ?? "", /no launchable claude model/);
+  assert.equal(closed.value, true);
+});
+
+test("runBaseTurnCell: a UI create/turn failure fails the cell with a bounded reason", async () => {
+  const closed = { value: false };
+  const ops = greenBaseTurnOps(closed, {
+    createWorkspaceTurnThroughUi: async () => {
+      throw new Error('could not find home Project picker trigger (role=button, name=/^Project:/)');
+    },
+  });
+  const result = await runBaseTurnCell(baseTurnWorld(), FAKE_OWNER, ops);
+  assert.equal(result.status, "failed");
+  assert.match(result.reason?.message ?? "", /creating the local workspace and running the turn through the renderer failed/);
+  assert.match(result.reason?.message ?? "", /Project:/);
+  assert.equal(closed.value, true);
+});
+
+test("runBaseTurnCell: a turn that never renders a reply (timeout) fails the cell", async () => {
+  const closed = { value: false };
+  const ops = greenBaseTurnOps(closed, {
+    createWorkspaceTurnThroughUi: async () => ({ workspaceId: "ws-1", sessionId: "sess-1", reply: "" }),
+  });
+  const result = await runBaseTurnCell(baseTurnWorld(), FAKE_OWNER, ops);
+  assert.equal(result.status, "failed");
+  assert.match(result.reason?.message ?? "", /transcript did not render the turn's reply/);
+});
+
+test("runBaseTurnCell: the runtime session must remain commandable after the turn", async () => {
+  const closed = { value: false };
+  const ops = greenBaseTurnOps(closed, { reopenSession: async () => undefined });
+  const result = await runBaseTurnCell(baseTurnWorld(), FAKE_OWNER, ops);
+  assert.equal(result.status, "failed");
+  assert.match(result.reason?.message ?? "", /did not remain commandable after reopen/);
+});
+
+test("runBaseTurnCell: a post-reload restore failure is a diagnosable product red", async () => {
+  const closed = { value: false };
+  const ops = greenBaseTurnOps(closed, {
+    reloadTranscript: async () => ({
+      ok: false,
+      diagnostic: 'the reload landed on the home/list view without re-opening workspace "ws-1…"',
+    }),
+  });
+  const result = await runBaseTurnCell(baseTurnWorld(), FAKE_OWNER, ops);
+  assert.equal(result.status, "failed");
+  assert.match(result.reason?.message ?? "", /product-native page reload the renderer did not restore/);
+  assert.match(result.reason?.message ?? "", /home\/list view without re-opening/);
+});
+
+test("runBaseTurnCell: an agentGateway=true capability advertisement fails no_litellm_spend", async () => {
+  const closed = { value: false };
+  const ops = greenBaseTurnOps(closed, { fetchCapabilities: async () => ({ agentGateway: true, cloudWorkspaces: false }) });
+  const result = await runBaseTurnCell(baseTurnWorld(), FAKE_OWNER, ops);
+  assert.equal(result.status, "failed");
+  assert.match(result.reason?.message ?? "", /capabilities\.agentGateway=true/);
+});
+
+test("runBaseTurnCell: a 'gateway' auth source (LiteLLM route) on a BYOK-direct turn fails", async () => {
+  const closed = { value: false };
+  const ops = greenBaseTurnOps(closed, { readAuthSourceKinds: () => ["api_key", "gateway"] });
+  const result = await runBaseTurnCell(baseTurnWorld(), FAKE_OWNER, ops);
+  assert.equal(result.status, "failed");
+  assert.match(result.reason?.message ?? "", /carries a "gateway"/);
+});
+
+test("runBaseTurnCell: a leaked E2B key in the scrubbed child env fails no_e2b", async () => {
+  const closed = { value: false };
+  const ops = greenBaseTurnOps(closed, { detectE2bEnvKey: () => "E2B_API_KEY" });
+  const result = await runBaseTurnCell(baseTurnWorld(), FAKE_OWNER, ops);
+  assert.equal(result.status, "failed");
+  assert.match(result.reason?.message ?? "", /carries an E2B key \("E2B_API_KEY"\)/);
 });

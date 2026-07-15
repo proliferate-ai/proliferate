@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { mkdirSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -35,10 +34,10 @@ import {
 // SH-GATEWAY cell's gateway-routed turn.
 import {
   browserOriginsForBox,
+  createLocalWorkspaceTurnThroughUi,
   openAuthenticatedPage,
   resolveBaseTurnModel,
   resolveSelfHostWorldInputs,
-  waitForTurnCompletion,
   type SelfHostWorldConstructionInputs,
 } from "./selfhost-install-1.js";
 import {
@@ -108,8 +107,6 @@ export const FIXED_SUBDOMAIN_LABEL = "selfhost-fixed";
 /** Bounded prompt for the SH-GATEWAY cell's one gateway-routed turn. */
 export const GATEWAY_TURN_PROMPT = "Reply with exactly the word: pong";
 const RESTART_HEALTH_TIMEOUT_MS = 180_000;
-/** Bounded ceiling for the one gateway-routed turn (mirrors SH-BASE-TURN's turn budget). */
-const GATEWAY_TURN_TIMEOUT_MS = 300_000;
 
 /**
  * The world-level env the shared self-host world needs (AWS/SSH provisioning
@@ -677,18 +674,19 @@ export async function enrollActorAndRunGatewayTurn(
       };
     }
 
-    // 6. One bounded cheap turn through the controller-local runtime. Because the
-    //    pushed source is the gateway route, the turn rides the INSTANCE LiteLLM.
-    const workspacePath = path.join(world.paths.runDir, "selfhost-gateway-turn-workspace");
-    mkdirSync(workspacePath, { recursive: true });
-    const created = await world.runtime.client.createLocalWorkspace(workspacePath);
-    const session = await world.runtime.client.createSession({
-      workspaceId: created.workspace.id,
-      agentKind: REPRESENTATIVE_HARNESS,
-      modelId,
-    });
-    await world.runtime.client.prompt(session.id, GATEWAY_TURN_PROMPT);
-    const completion = await waitForTurnCompletion(world, session.id, GATEWAY_TURN_TIMEOUT_MS);
+    // 6. One bounded cheap turn — created ENTIRELY through the real renderer
+    //    composer against the controller-local runtime (the UI-real path
+    //    SH-BASE-TURN proves, reused verbatim). Because the pushed source is the
+    //    gateway route, the turn rides the INSTANCE LiteLLM. The helper throws
+    //    (bounded) on a create/turn failure; catch it as a fail-closed turn error.
+    let turnEnded = false;
+    let turnError: string | undefined;
+    try {
+      await createLocalWorkspaceTurnThroughUi(world, page, modelId, GATEWAY_TURN_PROMPT, "selfhost-gateway-turn-workspace");
+      turnEnded = true;
+    } catch (error) {
+      turnError = describe(error);
+    }
 
     // 7. Resolve the actor's PERSONAL virtual-key token on the instance LiteLLM
     //    (the `api_key` its spend rows carry) — the key the gateway agent-auth
@@ -706,8 +704,8 @@ export async function enrollActorAndRunGatewayTurn(
       actorUserId: actor.userId,
       virtualKeyTokenId,
       turn: {
-        ended: completion.ended,
-        error: completion.error ?? tokenError,
+        ended: turnEnded,
+        error: turnError ?? tokenError,
         modelId,
       },
     };
