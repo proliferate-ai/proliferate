@@ -200,6 +200,31 @@ fn branch_base_ref_does_not_let_tag_named_main_win() {
 }
 
 #[test]
+fn branch_diff_files_carry_real_numstat_counts() {
+    let repo = init_repo();
+    commit_file(repo.path(), "tracked.txt", "one\ntwo\nthree\n", "initial");
+    run_git_cmd(repo.path(), ["checkout", "-b", "feature"]);
+    commit_file(
+        repo.path(),
+        "tracked.txt",
+        "one\nchanged\nthree\nfour\n",
+        "edit",
+    );
+
+    let response = branch_diff_files(repo.path(), Some("main")).expect("files");
+    let tracked = response
+        .files
+        .iter()
+        .find(|file| file.path == "tracked.txt")
+        .expect("tracked file");
+
+    assert_eq!(tracked.status, GitFileStatus::Modified);
+    assert_eq!(tracked.additions, 2);
+    assert_eq!(tracked.deletions, 1);
+    assert!(!tracked.binary);
+}
+
+#[test]
 fn branch_renamed_file_diff_uses_old_path_to_preserve_rename_patch() {
     let repo = init_repo();
     commit_file(repo.path(), "old.txt", "one\n", "initial");

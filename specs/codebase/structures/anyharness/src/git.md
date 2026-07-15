@@ -52,7 +52,11 @@ These are runtime-owned normalized summaries built from git CLI output.
 2. runs `git status --porcelain=v2 --branch -z`
 3. parses the raw output into normalized file and branch state
 4. detects current repository operation such as merge or rebase
-5. enriches file stats with additions/deletions
+5. enriches file stats with additions/deletions from `git diff --numstat -z`
+   (unstaged) and `git diff --cached --numstat -z` (staged), keyed by each
+   file's current path so renamed entries resolve correctly; untracked files
+   are outside `git diff`, so their additions come from a direct line count
+   of the file on disk (capped at 5MB; binary or unreadable files stay at 0)
 6. computes action availability for commit, push, PR, and worktree creation
 
 This is the main “what state is the repo in?” path.
