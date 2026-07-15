@@ -428,6 +428,12 @@ export const defaultSelfHostInstallDriver: SelfHostInstallDriver = {
       await world.runtime.client.prompt(session.id, SELFHOST_TURN_PROMPT);
       const completion = await waitForTurnCompletion(world, session.id, TURN_TIMEOUT_MS);
       if (completion.error) {
+        // Env-gated raw diagnostic (never on the green path; provider bodies are
+        // redacted out of persisted evidence). Local diagnostic runs set
+        // LOCAL_WORLD_SMOKE_DEBUG_DIR to see the unredacted provider error.
+        if (process.env.LOCAL_WORLD_SMOKE_DEBUG_DIR) {
+          console.error(`[SH-BASE-TURN raw diag] model="${modelId}" turn error: ${completion.error}`);
+        }
         return {
           status: "failed",
           reason: { code: "scenario_failure", message: `SH-BASE-TURN: assistant turn errored: ${completion.error}` },
@@ -897,11 +903,35 @@ function wrapPage(context: BrowserContext, page: Page): ProductPage {
   };
 }
 
-/** ASSUMPTION (disclosed): the controller-local runtime's launch-options order is cheapest-first, per catalog convention. */
+/**
+ * Picks the cheapest eligible non-premium model for the BYOK turn from the
+ * controller-local runtime's launch options.
+ *
+ * NOT `models[0]`: the catalog's first anthropic-api entry is the synthetic
+ * "default" sentinel ("use the default model") — it is not a directly launchable
+ * provider model, so a BYOK-DIRECT turn forwards the literal id "default" to
+ * Anthropic, which 404s (`not_found_error`, `model: default`). The gateway path
+ * hides this because LiteLLM resolves it; BYOK-direct has no such layer. Prefer
+ * the cheapest real tier the harness resolves (haiku, then sonnet — the latter
+ * is the anthropic-api curation default, so it is guaranteed launchable), then
+ * any remaining real model, skipping the "default" sentinel and costly [1m]
+ * long-context variants.
+ */
 async function resolveBaseTurnModel(world: ReadySelfHostWorld): Promise<string | undefined> {
   const options = await world.runtime.client.getAgentLaunchOptions();
   const entry = options.find((agent) => agent.kind === REPRESENTATIVE_HARNESS);
-  return entry?.models[0]?.id;
+  const ids = (entry?.models ?? []).map((model) => model.id);
+  const isSentinel = (id: string) => id === "default";
+  for (const preferred of ["haiku", "sonnet"]) {
+    if (ids.includes(preferred)) {
+      return preferred;
+    }
+  }
+  return (
+    ids.find((id) => !isSentinel(id) && !id.includes("[1m]") && !/opus|fable/i.test(id)) ??
+    ids.find((id) => !isSentinel(id)) ??
+    ids[0]
+  );
 }
 
 /** Polls AnyHarness's session event stream until the turn ends or errors. */
