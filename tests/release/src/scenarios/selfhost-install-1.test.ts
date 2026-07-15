@@ -503,6 +503,27 @@ test("runBaseTurnCell: a UI create/turn failure fails the cell with a bounded re
   assert.equal(closed.value, true);
 });
 
+test("runBaseTurnCell: a ui-turn step (uiTurnStep) is rendered BEFORE the redaction boundary", async () => {
+  const closed = { value: false };
+  const ops = greenBaseTurnOps(closed, {
+    createWorkspaceTurnThroughUi: async () => {
+      const err = new Error("assistant turn errored: provider returned 500") as Error & { uiTurnStep?: string };
+      err.uiTurnStep = "wait for turn completion";
+      throw err;
+    },
+  });
+  const result = await runBaseTurnCell(baseTurnWorld(), FAKE_OWNER, ops);
+  assert.equal(result.status, "failed");
+  const message = result.reason?.message ?? "";
+  // The step must precede " failed:" so evidence redaction (which withholds
+  // everything after that colon) cannot strip it.
+  const stepIdx = message.indexOf('step "wait for turn completion"');
+  const failedIdx = message.indexOf(" failed:");
+  assert.ok(stepIdx >= 0, `expected the step label in: ${message}`);
+  assert.ok(failedIdx >= 0 && stepIdx < failedIdx, `expected the step before " failed:" in: ${message}`);
+  assert.equal(closed.value, true);
+});
+
 test("runBaseTurnCell: a turn that never renders a reply (timeout) fails the cell", async () => {
   const closed = { value: false };
   const ops = greenBaseTurnOps(closed, {

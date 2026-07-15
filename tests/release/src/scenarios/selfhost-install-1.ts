@@ -595,8 +595,12 @@ export async function runBaseTurnCell(
     try {
       turn = await ops.createWorkspaceTurnThroughUi(world, page, modelId, SELFHOST_TURN_PROMPT);
     } catch (error) {
+      // Render the ui-turn step BEFORE the "failed:" boundary so it survives
+      // evidence redaction (which withholds everything after that colon).
+      const step = (error as { uiTurnStep?: string })?.uiTurnStep;
+      const at = step ? ` at step "${step}"` : "";
       return failedBaseTurn(
-        `SH-BASE-TURN: creating the local workspace and running the turn through the renderer failed: ${describe(error)}`,
+        `SH-BASE-TURN: creating the local workspace and running the turn through the renderer${at} failed: ${describe(error)}`,
       );
     }
     if (!EXPECTED_TURN_REPLY_PATTERN.test(turn.reply)) {
@@ -1290,10 +1294,38 @@ export async function createLocalWorkspaceTurnThroughUi(
       step = s;
     });
   } catch (error) {
-    const shot = path.join(world.paths.runDir, "logs", `ui-turn-failure-${workspaceDirName}.png`);
-    await p.screenshot({ path: shot, fullPage: true }).catch(() => undefined);
+    // Durable screenshot: runDir/logs is reconciled away at teardown, so a
+    // failed run's screenshot only survives if a durable debug dir is set
+    // (local diagnostic runs export LOCAL_WORLD_SMOKE_DEBUG_DIR). Also drop the
+    // per-run copy for Actions log upload while the run dir still exists.
+    const shotName = `ui-turn-failure-${workspaceDirName}.png`;
+    const debugDir = process.env.LOCAL_WORLD_SMOKE_DEBUG_DIR;
+    const shotPaths = [path.join(world.paths.runDir, "logs", shotName)];
+    if (debugDir) {
+      shotPaths.push(path.join(debugDir, `${world.run.run_id}-${world.run.shard_id}-${shotName}`));
+    }
+    for (const shot of shotPaths) {
+      try {
+        mkdirSync(path.dirname(shot), { recursive: true });
+      } catch {
+        // best-effort diagnostic path
+      }
+      await p.screenshot({ path: shot, fullPage: true }).catch(() => undefined);
+    }
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`[ui-turn step: ${step}] ${message}`);
+    // Raw diagnostic to the console only (never persisted evidence): the full
+    // message + stack survive in the run log even though evidence redaction
+    // withholds the payload after the "failed:" boundary.
+    console.error(`[ui-turn raw diag] step="${step}" workspace="${workspaceDirName}"\n${message}`);
+    if (error instanceof Error && error.stack) {
+      console.error(error.stack);
+    }
+    // Carry the step in a property so the cell-level catch can render it
+    // BEFORE the "failed:" redaction boundary (the label after that colon is
+    // stripped by evidence redaction).
+    const wrapped = new Error(message) as Error & { uiTurnStep?: string };
+    wrapped.uiTurnStep = step;
+    throw wrapped;
   }
 }
 
