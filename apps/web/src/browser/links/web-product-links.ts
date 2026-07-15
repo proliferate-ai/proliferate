@@ -54,9 +54,11 @@ export function emitWebInboundEntry(entry: ProductEntry): void {
   }
 }
 
-/** Test-only: drop the retained initial entry between cases. */
+/** Test-only: drop the retained initial entry and any leftover subscribers
+ * between cases so module state cannot leak across tests. */
 export function __resetWebInboundEntriesForTest(): void {
   initialInboundEntry = null;
+  inboundListeners.clear();
 }
 
 export const webProductLinks: ProductLinks = {

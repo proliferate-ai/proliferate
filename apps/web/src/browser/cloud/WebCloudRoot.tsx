@@ -83,6 +83,7 @@ export function WebCloudRoot({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<WebSessionStatus>("loading");
   const [issue, setIssue] = useState<ProductAuthIssue | null>(null);
   const authEpochRef = useRef(0);
+  const activeBootstrapCleanupRef = useRef<(() => void) | null>(null);
 
   const client = useMemo(
     () => createWebCloudClient(webEnv.apiBaseUrl, token),
@@ -174,13 +175,24 @@ export function WebCloudRoot({ children }: { children: ReactNode }) {
     };
   }, [setSession, publishIssue, goAnonymous]);
 
+  useEffect(() => {
+    return () => {
+      activeBootstrapCleanupRef.current?.();
+      activeBootstrapCleanupRef.current = null;
+    };
+  }, []);
+
   const restoreSession = useCallback(async (): Promise<void> => {
     authEpochRef.current += 1;
     applyToken(null);
     setUser(null);
     setIssue(null);
     setStatus("loading");
-    runBootstrap();
+    // Cancel any in-flight bootstrap (clears the dev-only timeout and abort
+    // signal) before starting the replacement run; the epoch bump above
+    // already invalidates its commit.
+    activeBootstrapCleanupRef.current?.();
+    activeBootstrapCleanupRef.current = runBootstrap();
   }, [applyToken, runBootstrap]);
 
   const logout = useCallback(async (): Promise<void> => {
