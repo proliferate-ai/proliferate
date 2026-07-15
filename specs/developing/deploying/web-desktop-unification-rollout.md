@@ -7,33 +7,27 @@ This document owns only the remaining execution order and cutover gates.
 ## Current handoff
 
 The ProductClient foundation, Desktop host boundary, shared identity,
-navigation, persistence, telemetry, and extraction mechanics have landed. The
-current migration step is the mechanical Desktop extraction:
+navigation, persistence, telemetry, extraction mechanics, the mechanical
+Desktop extraction, and the legacy Web replacement have all landed. Desktop is a
+thin native host and `apps/web` is a thin browser host that mounts the same
+compiled ProductClient with `desktop: null`.
 
-1. Move the working Desktop product into ProductClient according to the
-   checked [move ledger](../../codebase/systems/product/clients/web-desktop-unification/move-ledger.md).
-2. Apply the proven import codemod and create the real application entry from
-   the [entry contract](../../codebase/systems/product/clients/web-desktop-unification/entry-contract.md).
-3. Delete the temporary qualification canary and every superseded Desktop
-   product path; do not leave parallel implementations.
-4. Leave Desktop as the thin native host while preserving its current visual
-   and behavioral baseline.
-5. Run the ProductClient package build, Desktop build, browser-host build,
-   structure checks, and focused behavior tests before review.
+- Desktop product move (thin native host):
+  [`d1h.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1h.md).
+- Legacy Web replacement (thin browser host, `desktop: null`) — **complete,
+  pending review; cutover next**:
+  [`d1i.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1i.md).
 
-The landed extraction proof and known follow-ups are recorded in
-[`d1g.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1g.md).
-Refresh the live branch/worktree conflict inventory immediately before the
-large source move and agree on its landing window.
+The current migration step is to **qualify and cut over hosted Web**. Before
+mutating any external producer, complete the cutover gate below against the
+binding legacy-Web bundle baseline recorded here.
 
 ## Remaining sequence
 
-After the Desktop extraction:
-
-1. Delete the duplicate Web product and mount the same ProductClient from a
-   thin browser host with `desktop: null`.
-2. Qualify Desktop and hosted Web, then cut over hosted Web.
-3. Add self-hosted Web configuration, deployment, and documentation.
+1. Qualify Desktop and hosted Web against the shared implementation, enforce the
+   recorded first-load budget against the binding baseline below, then cut over
+   hosted Web one external producer at a time.
+2. Add self-hosted Web configuration, deployment, and documentation.
 
 Desktop remains the behavioral baseline throughout. There is no intermediate
 state in which two product implementations are maintained.
