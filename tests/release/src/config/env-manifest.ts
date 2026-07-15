@@ -568,6 +568,97 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     lanes: ["selfhost"],
   },
   {
+    name: "RELEASE_E2E_SELFHOST_GITHUB_OAUTH_CLIENT_ID",
+    description:
+      "GitHub OAuth application client id SELFHOST-QUAL-1's SH-GITHUB-AUTH cell configures on the instance " +
+      "(written to .env.static as GITHUB_OAUTH_CLIENT_ID, then bootstrap.sh re-resolves + restarts the api). " +
+      "The OAuth app has a single fixed registered callback " +
+      "(https://selfhost-fixed.qualification.proliferate.com/auth/github/callback), which is why the cell " +
+      "provisions the box on the FIXED serial-lane origin. Absent -> the cell fails closed (never skipped).",
+    whereItLives:
+      "The qualification GitHub OAuth app (registered once against the fixed serial origin). Local: " +
+      "`~/.proliferate-local/dev/qualification-infra.env` (mode 0600). CI: the `Qualification` environment's " +
+      "`RELEASE_E2E_SELFHOST_GITHUB_OAUTH_CLIENT_ID` variable.",
+    secret: false,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_GITHUB_OAUTH_SECRET",
+    description:
+      "GitHub OAuth application client SECRET paired with RELEASE_E2E_SELFHOST_GITHUB_OAUTH_CLIENT_ID " +
+      "(written to .env.static as GITHUB_OAUTH_CLIENT_SECRET over the SSH control handle, never on argv). " +
+      "SH-GITHUB-AUTH fails closed when it is absent. Never stored in evidence.",
+    whereItLives:
+      "The qualification GitHub OAuth app. Local: `~/.proliferate-local/dev/qualification-infra.env` (mode " +
+      "0600). CI: the `Qualification` environment's `RELEASE_E2E_SELFHOST_GITHUB_OAUTH_SECRET` secret.",
+    secret: true,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_A_STATE",
+    description:
+      "Filesystem path to a Playwright storage-state JSON seeding a logged-in github.com session for identity " +
+      "A (the verified GitHub identity whose email matches the password-claimed owner). SH-GITHUB-AUTH drives " +
+      "the product's real Authorize-GitHub flow from a browser context loaded with this state so no interactive " +
+      "github.com login is needed. The path (not the cookies) is the env value; the file itself is the secret " +
+      "and is never printed. Absent -> the cell fails closed.",
+    whereItLives:
+      "Captured once from a real github.com sign-in of identity A. Local: out-of-band 0600 JSON; path passed " +
+      "to the runner. CI: written from the `Qualification` environment's storage-state secret before the run.",
+    secret: false,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_B_STATE",
+    description:
+      "Playwright storage-state JSON path for a logged-in github.com session for identity B (a SECOND, distinct " +
+      "GitHub identity). SH-GITHUB-AUTH signs B in UNINVITED first (must be denied), then admits B through a " +
+      "product-UI invitation. See RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_A_STATE for the path/secret convention. " +
+      "Absent -> the cell fails closed.",
+    whereItLives:
+      "Captured once from a real github.com sign-in of identity B. Local: out-of-band 0600 JSON; path passed " +
+      "to the runner. CI: written from the `Qualification` environment's storage-state secret before the run.",
+    secret: false,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_A_EMAIL",
+    description:
+      "Identity A's verified GitHub email. SH-GITHUB-AUTH claims the owner via password with THIS email so " +
+      "A's later GitHub sign-in links to the existing owner (no duplicate user). Absent -> the cell fails closed.",
+    whereItLives:
+      "The verified primary email on identity A's GitHub account. Local: " +
+      "`~/.proliferate-local/dev/qualification-infra.env`. CI: the `Qualification` environment variable.",
+    secret: false,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_B_EMAIL",
+    description:
+      "Identity B's verified GitHub email. SH-GITHUB-AUTH invites THIS email through the product UI so B's " +
+      "GitHub sign-in consumes the pending invitation and receives its role. Absent -> the cell fails closed.",
+    whereItLives:
+      "The verified primary email on identity B's GitHub account. Local: " +
+      "`~/.proliferate-local/dev/qualification-infra.env`. CI: the `Qualification` environment variable.",
+    secret: false,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_LITELLM_IMAGE_TAG",
+    description:
+      "The exact LiteLLM image tag SELFHOST-QUAL-1's SH-GATEWAY cell pins the operator agent-gateway profile to " +
+      "(written as PROLIFERATE_LITELLM_IMAGE_TAG into the instance env before bootstrap brings the profile up). " +
+      "Defaults to \"stable\" when unset; CI SHOULD pin a specific immutable tag/digest here. The cell records " +
+      "the OBSERVED image digest (docker inspect over SSH) into evidence regardless, so evidence stays honest " +
+      "even under a rolling default.",
+    whereItLives:
+      "The published proliferate-litellm image tag under test. Local: " +
+      "`~/.proliferate-local/dev/qualification-infra.env`. CI: the `Qualification` environment's " +
+      "`RELEASE_E2E_SELFHOST_LITELLM_IMAGE_TAG` variable (pin to the release's LiteLLM tag).",
+    secret: false,
+    lanes: ["selfhost"],
+  },
+  {
     name: "RELEASE_E2E_SELFHOST_SSH_USER",
     description:
       "SSH login user on the box's Ubuntu AMI. Optional; defaults to \"ubuntu\" when unset (the standard " +

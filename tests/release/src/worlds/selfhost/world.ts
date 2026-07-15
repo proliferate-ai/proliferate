@@ -175,6 +175,18 @@ export interface ConstructSelfHostWorldOptions {
   ssh: SelfHostSshInputs;
   timeoutMs?: number;
   log?: (message: string) => void;
+  /**
+   * A FIXED DNS subdomain label to upsert the A record under (e.g.
+   * `selfhost-fixed`) instead of the default run-scoped
+   * {@link runSubdomainLabel}. Used only by the serial `SELFHOST-QUAL-1`
+   * SH-GITHUB-AUTH lane, whose GitHub OAuth application has a single fixed
+   * registered callback URL and therefore needs a deterministic public origin.
+   * The EC2 box / security group / key pair stay run-scoped; only the DNS name
+   * (and thus `api.baseUrl`) is fixed. A serial lane guarantees no two runs
+   * upsert this same record concurrently. When absent, the origin is the normal
+   * run-scoped subdomain (every other self-host scenario).
+   */
+  fixedSubdomain?: string;
   /** Injectable seams; all default to the real world (no real AWS/SSH/browser in unit tests). */
   deps?: SelfHostWorldDeps;
 }
@@ -314,7 +326,10 @@ export async function constructSelfHostWorld(
       registerCleanup: register,
     });
 
-    const subdomain = runSubdomainLabel(options.run.run_id, options.run.shard_id);
+    // A serial-lane scenario may pin a FIXED subdomain (see `fixedSubdomain`'s
+    // doc) so the box's public origin matches a pre-registered OAuth callback;
+    // every other scenario uses the collision-free run-scoped label.
+    const subdomain = options.fixedSubdomain?.trim() || runSubdomainLabel(options.run.run_id, options.run.shard_id);
     const record = await upsertRoute53ARecord({
       hostedZoneId: options.aws.hostedZoneId,
       subdomain,
