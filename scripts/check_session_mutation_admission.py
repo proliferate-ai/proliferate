@@ -59,15 +59,39 @@ EFFECT_TOKENS = (
     ".session_service.",
 )
 HANDLER_REF_RE = re.compile(r"\b(post|put|patch|delete)\(\s*([a-z_0-9]+)::([a-z_0-9]+)\s*[),]")
+# Routes may also reference directly-imported handler names (e.g.
+# `put(put_agent_auth_state)`); resolve those through the router's own use
+# imports so no mutating handler can escape enumeration.
+BARE_HANDLER_REF_RE = re.compile(r"\b(post|put|patch|delete)\(\s*([a-z_0-9]+)\s*[),]")
+IMPORT_GROUP_RE = re.compile(r"([a-z_0-9]+)::\{([^{}]*)\}", re.S)
 CLASS_LINE_RE = re.compile(r"^([a-z_0-9]+::[a-z_0-9]+)\s+(fenced|derived-safe|read-like|cosmetic|creation|workspace-scoped|workflow-plane)\s+(.+)$")
 
 
 def collect_mutating_handlers() -> set[str]:
     handlers: set[str] = set()
+    unresolved: list[str] = []
     for router in ROUTER_FILES:
         text = router.read_text()
+        qualified: set[str] = set()
         for _method, module, fn in HANDLER_REF_RE.findall(text):
             handlers.add(f"{module}::{fn}")
+            qualified.add(fn)
+        import_map: dict[str, str] = {}
+        for module, group in IMPORT_GROUP_RE.findall(text):
+            for name in group.split(","):
+                name = name.strip()
+                if name:
+                    import_map[name] = module
+        for _method, fn in BARE_HANDLER_REF_RE.findall(text):
+            if fn in qualified:
+                continue
+            module = import_map.get(fn)
+            if module is None:
+                unresolved.append(f"{router.name}: bare handler '{fn}' not resolvable via imports")
+            else:
+                handlers.add(f"{module}::{fn}")
+    if unresolved:
+        raise SystemExit("Unresolvable bare route handlers:\n  " + "\n  ".join(unresolved))
     return handlers
 
 

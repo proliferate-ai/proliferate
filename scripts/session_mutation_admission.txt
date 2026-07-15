@@ -106,6 +106,7 @@ agents::start_agent_login workspace-scoped agent auth flow
 agents::start_agent_login_terminal workspace-scoped agent auth flow
 agents::close_agent_login_terminal workspace-scoped agent auth flow
 agent_auth::put_agent_auth_state workspace-scoped agent auth state
+agent_auth::delete_agent_auth_state workspace-scoped agent auth state removal
 agent_gateway_catalog::refresh_gateway_models workspace-scoped catalog refresh
 catalogs::apply_agent_catalog workspace-scoped catalog apply
 http_auth::push_revoked_jtis workspace-scoped auth revocation push
