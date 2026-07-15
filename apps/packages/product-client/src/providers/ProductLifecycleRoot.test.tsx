@@ -48,12 +48,12 @@ vi.mock("#product/hooks/support/lifecycle/use-support-report-upload-queue", () =
 vi.mock("#product/hooks/sessions/lifecycle/use-turn-end-sound", () => ({ useTurnEndSound: vi.fn() }));
 vi.mock("#product/hooks/workspaces/lifecycle/use-workspace-git-status-persistence", () => ({ useWorkspaceGitStatusPersistence: vi.fn() }));
 vi.mock("#product/hooks/auth/facade/use-product-auth", () => ({ useProductAuthStatus: () => "loading" }));
-vi.mock("@/lib/infra/measurement/debug-startup", () => ({
+vi.mock("#product/lib/infra/measurement/measurement-port", () => ({
   elapsedStartupMs: () => 0,
   logStartupDebug: vi.fn(),
   startStartupTimer: () => 0,
 }));
-vi.mock("@/lib/infra/measurement/boot-stall-diagnostics", () => ({
+vi.mock("#product/lib/infra/measurement/measurement-port", () => ({
   recordBootDiagnostic: vi.fn(),
   recordBootDiagnosticOnce: vi.fn(),
 }));

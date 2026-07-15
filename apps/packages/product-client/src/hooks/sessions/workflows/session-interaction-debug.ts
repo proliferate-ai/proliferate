@@ -1,4 +1,4 @@
-import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import type { SessionRuntimeRecord } from "#product/stores/sessions/session-types";
 
 export type InteractionAction = "permission" | "user_input" | "mcp_elicitation";

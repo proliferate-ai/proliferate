@@ -15,7 +15,7 @@ import {
   elapsedSince,
   logLatency,
   startLatencyTimer,
-} from "@/lib/infra/measurement/debug-latency";
+} from "#product/lib/infra/measurement/measurement-port";
 import { useWorkspaceCollectionsMutationCache } from "#product/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
 import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
 import { useWorkspaceFileActions } from "#product/hooks/workspaces/facade/files/use-workspace-file-actions";

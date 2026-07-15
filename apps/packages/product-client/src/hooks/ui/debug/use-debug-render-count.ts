@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
-import { recordMeasurementMetric } from "@/lib/infra/measurement/debug-measurement";
-import { isMainThreadMeasurementEnabled } from "@/lib/infra/measurement/debug-measurement-env";
+import { recordMeasurementMetric } from "#product/lib/infra/measurement/measurement-port";
+import { isMainThreadMeasurementEnabled } from "#product/lib/infra/measurement/measurement-port";
 import type { MeasurementSurface } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 
 export function useDebugRenderCount(surface: MeasurementSurface): void {

@@ -30,7 +30,7 @@ import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-st
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useDeferredHomeLaunchStore } from "#product/stores/home/deferred-home-launch-store";
-import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
+import { measureDebugComputation } from "#product/lib/infra/measurement/measurement-port";
 import { useComputeTargetOptions } from "#product/hooks/compute/derived/use-compute-target-options";
 
 interface UseWorkspaceSidebarStateArgs {

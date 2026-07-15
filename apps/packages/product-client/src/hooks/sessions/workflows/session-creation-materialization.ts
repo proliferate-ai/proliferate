@@ -47,8 +47,8 @@ import { useSessionIntentStore } from "#product/stores/sessions/session-intent-s
 import { buildDesktopLaunchModelRegistries } from "#product/lib/domain/agents/cloud-launch-catalog";
 import type { CreateSessionWithResolvedConfigOptions } from "#product/hooks/sessions/workflows/session-creation-types";
 import { resolveDesktopRuntimeUrlForWorkspace } from "#product/hooks/sessions/workflows/session-creation-runtime";
-import { annotateLatencyFlow } from "@/lib/infra/measurement/latency-flow";
-import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { annotateLatencyFlow } from "#product/lib/infra/measurement/measurement-port";
+import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import {
   shouldDiscardSupersededSessionCreation,
 } from "#product/hooks/sessions/workflows/session-creation-supersession";

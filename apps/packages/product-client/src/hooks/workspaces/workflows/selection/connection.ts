@@ -3,7 +3,7 @@ import {
   elapsedMs,
   logLatency,
   startLatencyTimer,
-} from "@/lib/infra/measurement/debug-latency";
+} from "#product/lib/infra/measurement/measurement-port";
 import { ensureRuntimeReady } from "#product/hooks/workspaces/workflows/runtime-ready";
 import { parseTargetWorkspaceSyntheticId } from "#product/lib/domain/compute/target-workspace-id";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";

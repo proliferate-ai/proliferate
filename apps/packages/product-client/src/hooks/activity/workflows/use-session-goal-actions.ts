@@ -2,7 +2,7 @@ import { useCallback, useMemo } from "react";
 import type { GoalArmState } from "@anyharness/sdk";
 import { useClearSessionGoalMutation, useSetSessionGoalMutation } from "@anyharness/sdk-react";
 import type { GoalWire } from "@proliferate/product-domain/activity/goal";
-import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import { useActiveSessionId } from "#product/hooks/chat/derived/use-active-session-identity";
 import { goalResultDismissKey, useGoalBarStore } from "#product/stores/activity/goal-bar-store";
 import { getSessionRecord } from "#product/stores/sessions/session-records";

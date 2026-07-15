@@ -1,9 +1,9 @@
 import {
   configureCloudRequestMeasurement,
 } from "@proliferate/cloud-sdk/client/timing";
-import { recordMeasurementMetric } from "@/lib/infra/measurement/debug-measurement";
-import type { MeasurementOperationId } from "@/lib/infra/measurement/debug-measurement-catalog-types";
-import { isAnyHarnessTimingEnabled } from "@/lib/infra/measurement/debug-measurement-env";
+import { recordMeasurementMetric } from "#product/lib/infra/measurement/measurement-port";
+import type { MeasurementOperationId } from "#product/lib/infra/measurement/measurement-port";
+import { isAnyHarnessTimingEnabled } from "#product/lib/infra/measurement/measurement-port";
 
 configureCloudRequestMeasurement({
   isEnabled: isAnyHarnessTimingEnabled,

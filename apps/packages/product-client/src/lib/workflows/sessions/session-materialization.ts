@@ -1,4 +1,4 @@
-import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 
 const SESSION_MATERIALIZATION_ERROR = "Session is still starting. Try again in a moment.";
 

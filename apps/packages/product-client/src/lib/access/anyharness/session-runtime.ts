@@ -7,8 +7,8 @@ import type {
   SessionEventEnvelope,
   SessionStreamHandle,
 } from "@anyharness/sdk";
-import { recordMeasurementWorkflowStep } from "@/lib/infra/measurement/debug-measurement";
-import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
+import { recordMeasurementWorkflowStep } from "#product/lib/infra/measurement/measurement-port";
+import { getMeasurementRequestOptions } from "#product/lib/infra/measurement/measurement-port";
 import type {
   MeasurementOperationId,
   MeasurementWorkflowStep,

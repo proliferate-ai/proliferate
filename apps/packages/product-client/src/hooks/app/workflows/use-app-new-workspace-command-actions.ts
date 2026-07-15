@@ -24,7 +24,7 @@ import {
 import {
   failLatencyFlow,
   startLatencyFlow,
-} from "@/lib/infra/measurement/latency-flow";
+} from "#product/lib/infra/measurement/measurement-port";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { useNewWorkspaceCommandScopeStore } from "#product/stores/workspaces/new-workspace-command-scope-store";

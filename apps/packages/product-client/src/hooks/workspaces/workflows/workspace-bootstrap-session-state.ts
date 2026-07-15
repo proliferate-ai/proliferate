@@ -1,5 +1,5 @@
 import type { WorkspaceSession } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
-import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import {
   isOptimisticWorkspaceSessionPlaceholder,
 } from "#product/lib/domain/workspaces/selection/optimistic-session-shell";

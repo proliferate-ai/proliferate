@@ -17,7 +17,7 @@ import {
 import {
   elapsedSince,
   logLatency,
-} from "@/lib/infra/measurement/debug-latency";
+} from "#product/lib/infra/measurement/measurement-port";
 import {
   usePendingWorkspaceSessionMaterialization,
 } from "#product/hooks/workspaces/workflows/use-pending-workspace-session-materialization";

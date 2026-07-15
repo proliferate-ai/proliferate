@@ -86,7 +86,7 @@ vi.mock("#product/stores/toast/toast-store", () => ({
   }),
 }));
 
-vi.mock("@/lib/infra/measurement/latency-flow", () => ({
+vi.mock("#product/lib/infra/measurement/measurement-port", () => ({
   failLatencyFlow: mocks.failLatencyFlow,
   startLatencyFlow: mocks.startLatencyFlow,
 }));

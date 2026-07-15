@@ -3,8 +3,8 @@ import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug
 import {
   elapsedMs,
   logLatency,
-} from "@/lib/infra/measurement/debug-latency";
-import { recordMeasurementWorkflowStep } from "@/lib/infra/measurement/debug-measurement";
+} from "#product/lib/infra/measurement/measurement-port";
+import { recordMeasurementWorkflowStep } from "#product/lib/infra/measurement/measurement-port";
 import { scheduleAfterNextPaint } from "#product/lib/infra/scheduling/schedule-after-next-paint";
 
 interface PrefetchWorkspaceDirectoriesInput {

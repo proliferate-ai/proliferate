@@ -32,13 +32,13 @@ import { writeChatShellIntentForSession } from "#product/hooks/workspaces/workfl
 import { createPromptId } from "#product/lib/domain/chat/composer/prompt-id";
 import { hasPromptContent } from "#product/lib/domain/chat/composer/prompt-input";
 import type { PromptAttachmentSnapshot } from "@proliferate/product-domain/chats/composer/prompt-attachment-snapshot";
-import { finishOrCancelMeasurementOperation } from "@/lib/infra/measurement/debug-measurement";
+import { finishOrCancelMeasurementOperation } from "#product/lib/infra/measurement/measurement-port";
 import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
-import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import {
   failLatencyFlow,
   startLatencyFlow,
-} from "@/lib/infra/measurement/latency-flow";
+} from "#product/lib/infra/measurement/measurement-port";
 import { useGitPromptSnapshotEffects } from "#product/hooks/workspaces/workflows/use-git-prompt-snapshot-effects";
 import { completeChatPromptSubmitSideEffects } from "#product/lib/workflows/chat/complete-chat-prompt-submit-side-effects";
 

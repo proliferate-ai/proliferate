@@ -23,6 +23,10 @@
       "types": "./dist/host/ProductHostProvider.d.ts",
       "import": "./dist/host/ProductHostProvider.js"
     },
+    "./infra/measurement": {
+      "types": "./dist/lib/infra/measurement/measurement-port.d.ts",
+      "import": "./dist/lib/infra/measurement/measurement-port.js"
+    },
     "./ProductClient": {
       "types": "./dist/ProductClient.d.ts",
       "import": "./dist/ProductClient.js"

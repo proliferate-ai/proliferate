@@ -1,7 +1,7 @@
 import type {
   LatencyFlowRecord,
   LatencyFlowStage,
-} from "@/lib/infra/measurement/latency-flow";
+} from "#product/lib/infra/measurement/measurement-port";
 
 function isSurfaceReady(modeKind: string): boolean {
   return modeKind !== "no-workspace" && modeKind !== "session-loading";

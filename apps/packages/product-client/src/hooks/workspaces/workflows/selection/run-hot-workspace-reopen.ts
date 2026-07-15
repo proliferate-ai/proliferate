@@ -22,7 +22,7 @@ import {
   markOperationForNextCommit,
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
-} from "@/lib/infra/measurement/debug-measurement";
+} from "#product/lib/infra/measurement/measurement-port";
 import { HOT_PAINT_MEASUREMENT_SUMMARY_BUDGET } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import { scheduleAfterNextPaint } from "#product/lib/infra/scheduling/schedule-after-next-paint";
 import { resolveCloudWorkspaceReadiness } from "#product/hooks/workspaces/workflows/selection/cloud-readiness";

@@ -1,5 +1,5 @@
 import type { ErrorContext } from "@proliferate/product-client/host/product-host";
-import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import {

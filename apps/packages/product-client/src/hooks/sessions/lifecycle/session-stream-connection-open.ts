@@ -7,14 +7,14 @@ import {
   setSessionStreamHandle,
 } from "#product/lib/access/anyharness/session-stream-handles";
 import { resetSessionReconnectBackoff } from "#product/lib/workflows/sessions/session-reconnect-state";
-import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import {
   finishOrCancelMeasurementOperation,
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
-} from "@/lib/infra/measurement/debug-measurement";
+} from "#product/lib/infra/measurement/measurement-port";
 import { logDevSessionRuntimeEvent } from "#product/lib/infra/debug/dev-session-runtime-log";
-import { markLatencyFlowLiveAttached } from "@/lib/infra/measurement/latency-flow";
+import { markLatencyFlowLiveAttached } from "#product/lib/infra/measurement/measurement-port";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useSessionIngestStore } from "#product/stores/sessions/session-ingest-store";

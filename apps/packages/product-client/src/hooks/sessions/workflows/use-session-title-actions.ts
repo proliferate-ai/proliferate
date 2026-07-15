@@ -7,8 +7,8 @@ import {
   finishMeasurementOperation,
   recordMeasurementMetric,
   startMeasurementOperation,
-} from "@/lib/infra/measurement/debug-measurement";
-import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
+} from "#product/lib/infra/measurement/measurement-port";
+import { getMeasurementRequestOptions } from "#product/lib/infra/measurement/measurement-port";
 import { useSessionSummaryActions } from "#product/hooks/sessions/workflows/use-session-summary-actions";
 import { useWorkspaceSessionCache } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth";

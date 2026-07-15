@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
 import type { WorkspaceRenderSurface } from "#product/lib/domain/workspaces/tabs/shell-activation";
-import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 
 export function useWorkspaceHeaderTabsDebugLogging({

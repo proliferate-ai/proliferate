@@ -22,7 +22,7 @@ import { useToastStore } from "#product/stores/toast/toast-store";
 import {
   failLatencyFlow,
   startLatencyFlow,
-} from "@/lib/infra/measurement/latency-flow";
+} from "#product/lib/infra/measurement/measurement-port";
 
 export interface WorkspaceTabActionsContext {
   workspaceUiKey: string | null;

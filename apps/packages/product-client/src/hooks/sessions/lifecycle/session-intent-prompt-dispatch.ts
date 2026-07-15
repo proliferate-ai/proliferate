@@ -9,8 +9,8 @@ import {
   failLatencyFlow,
   finishLatencyFlow,
   getLatencyFlowRequestHeaders,
-} from "@/lib/infra/measurement/latency-flow";
-import { logLatency } from "@/lib/infra/measurement/debug-latency";
+} from "#product/lib/infra/measurement/measurement-port";
+import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import {
   classifyPromptDispatchFailure,
 } from "@proliferate/product-domain/sessions/intents/prompt-dispatch-failure";

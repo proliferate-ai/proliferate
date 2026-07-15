@@ -1,11 +1,11 @@
 import { Profiler, type ProfilerOnRenderCallback, type ReactNode } from "react";
-import { recordMeasurementMetric } from "@/lib/infra/measurement/debug-measurement";
-import { isMainThreadMeasurementEnabled } from "@/lib/infra/measurement/debug-measurement-env";
+import { recordMeasurementMetric } from "#product/lib/infra/measurement/measurement-port";
+import { isMainThreadMeasurementEnabled } from "#product/lib/infra/measurement/measurement-port";
 import {
   isBootDiagnosticsBrowserFlagEnabled,
   recordBootDiagnostic,
-} from "@/lib/infra/measurement/boot-stall-diagnostics";
-import { envFlagEnabled, round } from "@/lib/infra/measurement/debug-measurement-utils";
+} from "#product/lib/infra/measurement/measurement-port";
+import { envFlagEnabled, round } from "#product/lib/infra/measurement/measurement-port";
 import type { MeasurementSurface } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 
 interface DebugProfilerProps {

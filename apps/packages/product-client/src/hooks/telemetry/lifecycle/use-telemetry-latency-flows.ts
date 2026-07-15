@@ -4,7 +4,7 @@ import { useChatSurfaceState } from "#product/hooks/chat/derived/use-chat-surfac
 import {
   finishLatencyFlow,
   listActiveLatencyFlows,
-} from "@/lib/infra/measurement/latency-flow";
+} from "#product/lib/infra/measurement/measurement-port";
 import { collectTelemetryLatencyFlowCompletions } from "#product/lib/domain/telemetry/latency-flow-completion";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 

@@ -2,7 +2,7 @@ import { useEffect, type RefObject } from "react";
 import {
   hashMeasurementScope,
   isMainThreadMeasurementEnabled,
-} from "@/lib/infra/measurement/debug-measurement-env";
+} from "#product/lib/infra/measurement/measurement-port";
 
 const BLANK_VIEWPORT_MIN_SCROLLABLE_PX = 32;
 

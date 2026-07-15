@@ -23,8 +23,8 @@ import { getLatestWorkspaceInteractionTimestamp } from "#product/lib/domain/work
 import {
   logLatency,
   startLatencyTimer,
-} from "@/lib/infra/measurement/debug-latency";
-import { cancelLatencyFlow } from "@/lib/infra/measurement/latency-flow";
+} from "#product/lib/infra/measurement/measurement-port";
+import { cancelLatencyFlow } from "#product/lib/infra/measurement/measurement-port";
 import { isCloudWorkspaceNotReadyError } from "#product/hooks/access/cloud/use-cloud-workspace-connection";
 import { resolveCloudWorkspaceReadiness } from "#product/hooks/workspaces/workflows/selection/cloud-readiness";
 import { resolveSelectionConnection } from "#product/hooks/workspaces/workflows/selection/connection";

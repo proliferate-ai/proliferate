@@ -18,7 +18,7 @@ import { useChatLaunchCatalog } from "#product/hooks/chat/derived/use-chat-launc
 import { useChatLaunchControlActions } from "#product/hooks/chat/workflows/use-chat-launch-control-actions";
 import { buildLaunchControlDescriptors } from "#product/lib/domain/chat/models/launch-control-descriptors";
 import { resolveCurrentModelDisplayName } from "#product/lib/domain/chat/models/model-selector-current";
-import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 // Facade for the composer model selector: derived catalog/readiness state plus

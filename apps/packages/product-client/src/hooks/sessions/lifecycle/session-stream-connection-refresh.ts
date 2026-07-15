@@ -1,7 +1,7 @@
 import { resolveSessionViewState } from "@proliferate/product-domain/sessions/activity";
 import { activitySnapshotFromDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-activity";
 import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
-import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import type {
   RefreshSessionSlotMeta,

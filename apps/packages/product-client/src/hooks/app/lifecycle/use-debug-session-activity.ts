@@ -10,7 +10,7 @@ import {
   forgetSessionActivityDebugState,
   isSessionActivityDebugLoggingEnabled,
   logSessionActivityTransition,
-} from "@/lib/infra/measurement/debug-session-activity";
+} from "#product/lib/infra/measurement/measurement-port";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 
 type SessionEntries = ReturnType<typeof useSessionDirectoryStore.getState>["entriesById"];

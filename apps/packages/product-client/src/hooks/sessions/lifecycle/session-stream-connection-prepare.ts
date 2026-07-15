@@ -2,7 +2,7 @@ import { shouldSkipColdIdleSessionStream } from "@proliferate/product-domain/ses
 import {
   recordMeasurementMetric,
   recordMeasurementWorkflowStep,
-} from "@/lib/infra/measurement/debug-measurement";
+} from "#product/lib/infra/measurement/measurement-port";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { getSessionRecord } from "#product/stores/sessions/session-records";
 import type {

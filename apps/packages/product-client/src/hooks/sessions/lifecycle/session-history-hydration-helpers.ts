@@ -7,7 +7,7 @@ import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,
   recordMeasurementMetric,
-} from "@/lib/infra/measurement/debug-measurement";
+} from "#product/lib/infra/measurement/measurement-port";
 import type {
   MeasurementOperationId,
   MeasurementOperationKind,

@@ -17,7 +17,7 @@ import {
 } from "@proliferate/product-domain/chats/transcript/transcript-open-target";
 import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import type { GoalTranscriptEvent } from "@proliferate/product-domain/activity/goal-transcript-events";
-import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import {
   ensureSessionTranscriptEntry,
   getSessionRecord,

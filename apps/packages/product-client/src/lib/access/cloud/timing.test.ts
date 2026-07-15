@@ -4,7 +4,7 @@ import {
   finishMeasurementOperation,
   resetDebugMeasurementForTest,
   startMeasurementOperation,
-} from "@/lib/infra/measurement/debug-measurement";
+} from "#product/lib/infra/measurement/measurement-port";
 import { measureCloudRequest } from "#product/lib/access/cloud/timing";
 
 describe("cloud timing", () => {

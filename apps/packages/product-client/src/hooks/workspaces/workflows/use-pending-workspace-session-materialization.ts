@@ -12,7 +12,7 @@ import type { SessionRuntimeRecord } from "#product/stores/sessions/session-type
 import type {
   CreateEmptySessionWithResolvedConfigOptions,
 } from "#product/hooks/sessions/workflows/session-creation-types";
-import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 
 interface PendingWorkspaceSessionMaterializationOptions {
   eventPrefix?: string;

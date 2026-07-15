@@ -27,11 +27,11 @@ vi.mock("#product/lib/access/anyharness/session-runtime", () => ({
   getSessionClientAndWorkspace: mocks.getSessionClientAndWorkspace,
 }));
 
-vi.mock("@/lib/infra/measurement/debug-latency", () => ({
+vi.mock("#product/lib/infra/measurement/measurement-port", () => ({
   logLatency: mocks.logLatency,
 }));
 
-vi.mock("@/lib/infra/measurement/latency-flow", () => ({
+vi.mock("#product/lib/infra/measurement/measurement-port", () => ({
   failLatencyFlow: mocks.failLatencyFlow,
   finishLatencyFlow: mocks.finishLatencyFlow,
   getLatencyFlowRequestHeaders: mocks.getLatencyFlowRequestHeaders,

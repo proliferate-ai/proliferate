@@ -30,11 +30,11 @@ import {
   elapsedStartupMs,
   logStartupDebug,
   startStartupTimer,
-} from "@/lib/infra/measurement/debug-startup"
+} from "#product/lib/infra/measurement/measurement-port"
 import {
   recordBootDiagnostic,
   recordBootDiagnosticOnce,
-} from "@/lib/infra/measurement/boot-stall-diagnostics"
+} from "#product/lib/infra/measurement/measurement-port"
 import { AppCommandActionsProvider } from "#product/providers/AppCommandActionsProvider"
 import { DesktopProductLifecycleRoot } from "@/providers/DesktopProductLifecycleRoot"
 import { AppErrorBoundary } from "#product/components/app/AppErrorBoundary"

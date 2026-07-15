@@ -4,7 +4,7 @@ import {
   logStartupDebug,
   startStartupTimer,
   summarizeStartupError,
-} from "@/lib/infra/measurement/debug-startup";
+} from "#product/lib/infra/measurement/measurement-port";
 
 let lastKnownControlPlaneReachable: boolean | null = null;
 const CONTROL_PLANE_HEALTH_TIMEOUT_MS = 2_500;

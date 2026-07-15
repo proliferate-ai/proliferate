@@ -3,8 +3,8 @@ import type {
   MeasurementFinishReason as InfraMeasurementFinishReason,
   MeasurementOperationId as InfraMeasurementOperationId,
   MeasurementWorkflowOutcome as InfraMeasurementWorkflowOutcome,
-} from "@/lib/infra/measurement/debug-measurement-catalog-types";
-import type { MeasurementSummaryBudget } from "@/lib/infra/measurement/debug-measurement-registry-types";
+} from "#product/lib/infra/measurement/measurement-port";
+import type { MeasurementSummaryBudget } from "#product/lib/infra/measurement/measurement-port";
 
 export type MeasurementOperationId = InfraMeasurementOperationId;
 

@@ -44,7 +44,7 @@ import {
   finishOrCancelMeasurementOperation,
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
-} from "@/lib/infra/measurement/debug-measurement";
+} from "#product/lib/infra/measurement/measurement-port";
 import { clearTypingActivity } from "#product/lib/infra/interaction/typing-activity-store";
 import {
   PROMPT_SUBMIT_MEASUREMENT_MAX_DURATION_MS,

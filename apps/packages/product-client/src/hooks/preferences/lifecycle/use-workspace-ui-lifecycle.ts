@@ -10,8 +10,8 @@ import {
   isNonPersistedWorkspaceUiStateKey,
   selectPersistedWorkspaceUiState,
 } from "#product/lib/domain/preferences/workspace-ui/persistence";
-import { recordMeasurementDiagnostic } from "@/lib/infra/measurement/debug-measurement";
-import { isDebugMeasurementEnabled } from "@/lib/infra/measurement/debug-measurement-env";
+import { recordMeasurementDiagnostic } from "#product/lib/infra/measurement/measurement-port";
+import { isDebugMeasurementEnabled } from "#product/lib/infra/measurement/measurement-port";
 import {
   readPersistedJsonValue,
   writePersistedJson,

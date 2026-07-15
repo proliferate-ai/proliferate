@@ -13,7 +13,7 @@ import {
   elapsedMs,
   logLatency,
   startLatencyTimer,
-} from "@/lib/infra/measurement/debug-latency";
+} from "#product/lib/infra/measurement/measurement-port";
 import {
   listRepoRoots,
   listRuntimeWorkspaces,
@@ -25,9 +25,9 @@ import {
   recordMeasurementMetric,
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
-} from "@/lib/infra/measurement/debug-measurement";
-import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
-import { hashMeasurementScope } from "@/lib/infra/measurement/debug-measurement-env";
+} from "#product/lib/infra/measurement/measurement-port";
+import { getMeasurementRequestOptions } from "#product/lib/infra/measurement/measurement-port";
+import { hashMeasurementScope } from "#product/lib/infra/measurement/measurement-port";
 
 const WORKSPACE_COLLECTIONS_STALE_MS = 30_000;
 

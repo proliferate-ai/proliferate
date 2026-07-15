@@ -17,7 +17,7 @@ import {
   listActiveLatencyFlows,
   resetLatencyFlowsForTest,
   startLatencyFlow,
-} from "@/lib/infra/measurement/latency-flow";
+} from "#product/lib/infra/measurement/measurement-port";
 import { ProliferateClientError } from "@/lib/access/cloud/client";
 import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
 import { buildLocalSlotLogicalWorkspaceId } from "#product/lib/domain/workspaces/cloud/logical-workspace-id";

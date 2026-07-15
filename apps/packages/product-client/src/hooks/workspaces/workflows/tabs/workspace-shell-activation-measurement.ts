@@ -1,7 +1,7 @@
 import {
   finishOrCancelMeasurementOperation,
   startMeasurementOperation,
-} from "@/lib/infra/measurement/debug-measurement";
+} from "#product/lib/infra/measurement/measurement-port";
 import {
   HOT_PAINT_MEASUREMENT_SUMMARY_BUDGET,
   type MeasurementOperationId,

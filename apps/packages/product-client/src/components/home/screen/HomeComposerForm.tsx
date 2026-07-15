@@ -11,8 +11,8 @@ import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,
   startMeasurementOperation,
-} from "@/lib/infra/measurement/debug-measurement";
-import { recordTypingKeystrokeLatency } from "@/lib/infra/measurement/typing-latency-probe";
+} from "#product/lib/infra/measurement/measurement-port";
+import { recordTypingKeystrokeLatency } from "#product/lib/infra/measurement/measurement-port";
 import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import type {
   HomeLaunchTarget,

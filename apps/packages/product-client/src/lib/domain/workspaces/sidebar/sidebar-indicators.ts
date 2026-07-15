@@ -1,6 +1,6 @@
 import type { Workspace } from "@anyharness/sdk";
-import { recordMeasurementMetric } from "@/lib/infra/measurement/debug-measurement";
-import { isMainThreadMeasurementEnabled } from "@/lib/infra/measurement/debug-measurement-env";
+import { recordMeasurementMetric } from "#product/lib/infra/measurement/measurement-port";
+import { isMainThreadMeasurementEnabled } from "#product/lib/infra/measurement/measurement-port";
 import type { SidebarSessionActivityState } from "@proliferate/product-domain/sessions/activity";
 import { resolveWorkspaceExecutionSidebarActivityState } from "@proliferate/product-domain/sessions/activity";
 import type { ComputeTargetAppearance } from "#product/lib/domain/compute/target-appearance";

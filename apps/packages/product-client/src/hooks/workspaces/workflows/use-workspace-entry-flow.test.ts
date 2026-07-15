@@ -82,7 +82,7 @@ vi.mock("#product/hooks/chat/derived/use-active-session-config-state", () => ({
   }),
 }));
 
-vi.mock("@/lib/infra/measurement/debug-latency", () => ({
+vi.mock("#product/lib/infra/measurement/measurement-port", () => ({
   elapsedSince: () => 0,
   logLatency: vi.fn(),
 }));

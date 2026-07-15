@@ -38,7 +38,7 @@ import { useHeaderTabsUrgentHighlight } from "#product/hooks/workspaces/ui/use-h
 import type { ManualChatGroupId } from "#product/lib/domain/workspaces/tabs/manual-groups";
 import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
-import { startMeasurementOperation } from "@/lib/infra/measurement/debug-measurement";
+import { startMeasurementOperation } from "#product/lib/infra/measurement/measurement-port";
 import { useShortcutRevealVisible } from "#product/providers/ShortcutRevealProvider";
 
 type HeaderTabsViewModel = NonNullable<

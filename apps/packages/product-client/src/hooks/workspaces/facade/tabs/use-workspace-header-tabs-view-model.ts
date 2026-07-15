@@ -26,7 +26,7 @@ import {
   useWorkspaceShellTabsState,
 } from "#product/hooks/workspaces/ui/tabs/use-workspace-shell-tabs-state";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
-import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
+import { measureDebugComputation } from "#product/lib/infra/measurement/measurement-port";
 import { useWorkspaceHeaderTabsPreferenceEffects } from "#product/hooks/workspaces/lifecycle/use-workspace-header-tabs-preference-effects";
 import {
   shouldUseLocalRuntimeWorkspaceSessionsQuery,

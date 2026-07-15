@@ -21,8 +21,8 @@ import {
   finishMeasurementOperation,
   recordMeasurementMetric,
   startMeasurementOperation,
-} from "@/lib/infra/measurement/debug-measurement";
-import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
+} from "#product/lib/infra/measurement/measurement-port";
+import { getMeasurementRequestOptions } from "#product/lib/infra/measurement/measurement-port";
 import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import {
   type CloudSandboxGatewayUrlSource,

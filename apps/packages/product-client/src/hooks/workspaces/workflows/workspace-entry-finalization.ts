@@ -7,13 +7,13 @@ import {
 } from "#product/lib/domain/workspaces/creation/pending-entry";
 import {
   annotateLatencyFlow,
-} from "@/lib/infra/measurement/latency-flow";
+} from "#product/lib/infra/measurement/measurement-port";
 import {
   elapsedMs,
   elapsedSince,
   logLatency,
   startLatencyTimer,
-} from "@/lib/infra/measurement/debug-latency";
+} from "#product/lib/infra/measurement/measurement-port";
 import type { SessionRuntimeRecord } from "#product/stores/sessions/session-types";
 
 export interface WorkspaceEntrySelectionDeps {

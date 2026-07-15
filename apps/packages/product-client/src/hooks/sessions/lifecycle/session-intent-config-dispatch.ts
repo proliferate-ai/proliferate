@@ -23,7 +23,7 @@ import {
   patchSessionRecord,
 } from "#product/stores/sessions/session-records";
 import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
-import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 
 type SetSessionConfigOptionMutation = ReturnType<typeof useSetSessionConfigOptionMutation>;
 

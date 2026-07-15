@@ -15,11 +15,11 @@ import {
   elapsedMs,
   logLatency,
   startLatencyTimer,
-} from "@/lib/infra/measurement/debug-latency";
+} from "#product/lib/infra/measurement/measurement-port";
 import {
   annotateLatencyFlow,
   cancelLatencyFlow,
-} from "@/lib/infra/measurement/latency-flow";
+} from "#product/lib/infra/measurement/measurement-port";
 import { getWorkspaceClientAndId } from "#product/lib/access/anyharness/session-runtime";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useToastStore } from "#product/stores/toast/toast-store";

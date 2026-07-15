@@ -21,11 +21,11 @@ import {
   elapsedSince,
   logLatency,
   startLatencyTimer,
-} from "@/lib/infra/measurement/debug-latency";
+} from "#product/lib/infra/measurement/measurement-port";
 import {
   annotateLatencyFlow,
   failLatencyFlow,
-} from "@/lib/infra/measurement/latency-flow";
+} from "#product/lib/infra/measurement/measurement-port";
 import {
   buildMaterializedWorktreePendingEntry,
   normalizeWorktreeInput,

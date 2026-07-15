@@ -56,7 +56,7 @@ vi.mock("#product/hooks/workspaces/workflows/use-pending-workspace-session-mater
   usePendingWorkspaceSessionMaterialization: () => mocks.materializePendingWorkspaceSessions,
 }));
 
-vi.mock("@/lib/infra/measurement/debug-latency", () => ({
+vi.mock("#product/lib/infra/measurement/measurement-port", () => ({
   elapsedMs: () => 0,
   elapsedSince: () => 0,
   logLatency: vi.fn(),

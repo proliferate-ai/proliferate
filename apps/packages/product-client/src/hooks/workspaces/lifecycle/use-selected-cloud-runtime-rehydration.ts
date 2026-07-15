@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { buildWorkspaceArrivalEvent } from "#product/lib/domain/workspaces/creation/arrival";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
-import { logLatency, startLatencyTimer } from "@/lib/infra/measurement/debug-latency";
+import { logLatency, startLatencyTimer } from "#product/lib/infra/measurement/measurement-port";
 import { useWorkspaceBootstrapActions } from "#product/hooks/workspaces/workflows/use-workspace-bootstrap-actions";
 import {
   usePendingWorkspaceSessionMaterialization,

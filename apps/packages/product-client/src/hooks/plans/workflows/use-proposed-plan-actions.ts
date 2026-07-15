@@ -31,8 +31,8 @@ import {
   failLatencyFlow as failPromptLatencyFlow,
   startLatencyFlow as startPromptLatencyFlow,
   type StartLatencyFlowInput,
-} from "@/lib/infra/measurement/latency-flow";
-import { logLatency } from "@/lib/infra/measurement/debug-latency";
+} from "#product/lib/infra/measurement/measurement-port";
+import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import { completeChatPromptSubmitSideEffects } from "#product/lib/workflows/chat/complete-chat-prompt-submit-side-effects";
 import { getSessionRecords } from "#product/stores/sessions/session-records";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";

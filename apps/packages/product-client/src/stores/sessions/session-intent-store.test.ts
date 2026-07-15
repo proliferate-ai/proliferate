@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getDebugMeasurementDump } from "@/lib/infra/measurement/debug-measurement-dump";
-import { resetDebugMeasurementForTest } from "@/lib/infra/measurement/debug-measurement";
+import { getDebugMeasurementDump } from "#product/lib/infra/measurement/measurement-port";
+import { resetDebugMeasurementForTest } from "#product/lib/infra/measurement/measurement-port";
 import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
 
 describe("session intent store", () => {

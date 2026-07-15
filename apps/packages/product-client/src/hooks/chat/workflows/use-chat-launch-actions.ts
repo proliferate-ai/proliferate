@@ -21,7 +21,7 @@ import { resolveWorkspaceUiKey } from "#product/lib/domain/workspaces/selection/
 import {
   failLatencyFlow,
   startLatencyFlow,
-} from "@/lib/infra/measurement/latency-flow";
+} from "#product/lib/infra/measurement/measurement-port";
 import { withUpdatedDefaultModelIdByAgentKind } from "#product/lib/domain/agents/model-options";
 
 const EMPTY_WORKSPACES: Workspace[] = [];

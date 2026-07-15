@@ -18,10 +18,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock("#product/lib/access/anyharness/runtime-bootstrap", () => ({
   bootstrapHarnessRuntime: mocks.bootstrapHarnessRuntime,
 }));
-vi.mock("@/lib/infra/measurement/boot-stall-diagnostics", () => ({
+vi.mock("#product/lib/infra/measurement/measurement-port", () => ({
   recordBootDiagnostic: mocks.recordBootDiagnostic,
 }));
-vi.mock("@/lib/infra/measurement/debug-startup", () => ({
+vi.mock("#product/lib/infra/measurement/measurement-port", () => ({
   elapsedStartupMs: () => 10,
   logStartupDebug: mocks.logStartupDebug,
   startStartupTimer: () => 1,

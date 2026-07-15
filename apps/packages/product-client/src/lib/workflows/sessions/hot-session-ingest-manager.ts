@@ -1,5 +1,5 @@
 import type { HotSessionTarget } from "#product/lib/domain/sessions/hot-session-policy";
-import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import { useSessionIngestStore } from "#product/stores/sessions/session-ingest-store";
 
 interface EnsureSessionStreamOptions {

@@ -17,7 +17,7 @@ import {
   markOperationForNextCommit,
   recordMeasurementMetric,
   startMeasurementOperation,
-} from "@/lib/infra/measurement/debug-measurement";
+} from "#product/lib/infra/measurement/measurement-port";
 import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import type { PromptOutboxEntry } from "@proliferate/product-domain/sessions/intents/session-intent-model";
 import { usePromptOutboxActions } from "#product/hooks/chat/workflows/use-prompt-outbox-actions";

@@ -9,8 +9,8 @@ import {
 import {
   materializeSessionRecord,
 } from "#product/hooks/sessions/workflows/session-creation-local-state";
-import { annotateLatencyFlow } from "@/lib/infra/measurement/latency-flow";
-import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { annotateLatencyFlow } from "#product/lib/infra/measurement/measurement-port";
+import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import { rememberLastViewedSession } from "#product/stores/preferences/workspace-ui-store";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import {

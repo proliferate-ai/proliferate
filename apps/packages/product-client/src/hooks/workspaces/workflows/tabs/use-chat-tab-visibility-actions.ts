@@ -10,7 +10,7 @@ import { resolveSessionErrorAttentionKey } from "@proliferate/product-domain/ses
 import {
   failLatencyFlow,
   startLatencyFlow,
-} from "@/lib/infra/measurement/latency-flow";
+} from "#product/lib/infra/measurement/measurement-port";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { getSessionRecord } from "#product/stores/sessions/session-records";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";

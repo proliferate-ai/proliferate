@@ -7,7 +7,7 @@ import {
   isPendingSessionId,
 } from "#product/stores/sessions/session-records";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
-import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import { canPromptSessionSlot } from "#product/lib/domain/sessions/prompt-readiness";
 
 export function useSessionPromptActions() {

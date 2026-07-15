@@ -6,7 +6,7 @@ import {
 } from "#product/hooks/plans/workflows/use-proposed-plan-actions";
 import { PLAN_IMPLEMENT_HERE_PROMPT } from "#product/copy/plans/plan-prompts";
 import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
-import type { StartLatencyFlowInput } from "@/lib/infra/measurement/latency-flow";
+import type { StartLatencyFlowInput } from "#product/lib/infra/measurement/measurement-port";
 
 type TestSessionRecord = {
   workspaceId: string | null;

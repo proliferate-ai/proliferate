@@ -8,16 +8,16 @@ import {
   appendHistoryTail,
   replaySessionHistory,
 } from "#product/lib/domain/sessions/stream/stream-state";
-import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import {
   recordMeasurementMetric,
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
-} from "@/lib/infra/measurement/debug-measurement";
+} from "#product/lib/infra/measurement/measurement-port";
 import type {
   MeasurementOperationId,
 } from "#product/lib/domain/telemetry/debug-measurement-catalog";
-import { uniqueMeasurementOperationIds } from "@/lib/infra/measurement/operation-ids";
+import { uniqueMeasurementOperationIds } from "#product/lib/infra/measurement/measurement-port";
 import { fetchSessionHistory } from "#product/lib/access/anyharness/session-runtime";
 import { useLinkedSessionMounting } from "#product/hooks/chat/workflows/subagents/use-linked-session-mounting";
 import { getSessionRecord } from "#product/stores/sessions/session-records";

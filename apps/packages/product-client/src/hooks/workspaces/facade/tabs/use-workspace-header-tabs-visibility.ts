@@ -17,7 +17,7 @@ import {
   type ChatVisibilityCandidate,
 } from "#product/lib/domain/workspaces/tabs/visibility";
 import type { WorkspaceHeaderSubagentHierarchy } from "#product/lib/domain/workspaces/tabs/workspace-header-subagent-hierarchy";
-import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
+import { measureDebugComputation } from "#product/lib/infra/measurement/measurement-port";
 import { useStableStringArray } from "#product/hooks/workspaces/facade/tabs/use-stable-string-array";
 
 export function useWorkspaceHeaderTabsVisibility({

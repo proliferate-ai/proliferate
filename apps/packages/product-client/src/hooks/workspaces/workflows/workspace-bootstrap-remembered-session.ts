@@ -9,10 +9,10 @@ import {
   elapsedMs,
   logLatency,
   startLatencyTimer,
-} from "@/lib/infra/measurement/debug-latency";
+} from "#product/lib/infra/measurement/measurement-port";
 import {
   recordMeasurementWorkflowStep,
-} from "@/lib/infra/measurement/debug-measurement";
+} from "#product/lib/infra/measurement/measurement-port";
 import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import {
   resolveLastViewedSessionForWorkspace,

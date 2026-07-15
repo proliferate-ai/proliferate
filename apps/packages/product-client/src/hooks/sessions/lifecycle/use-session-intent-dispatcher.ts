@@ -21,7 +21,7 @@ import { useWorkspaceSurfaceLookup } from "#product/hooks/workspaces/derived/use
 import { useWorkspaceSessionCache } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { getSessionRecord } from "#product/stores/sessions/session-records";
 import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
-import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import {
   dispatchConfigIntent,
 } from "#product/hooks/sessions/lifecycle/session-intent-config-dispatch";

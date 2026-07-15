@@ -11,18 +11,18 @@ import {
   logDevSSEEvent,
 } from "#product/lib/infra/debug/dev-sse-event-log";
 import { logDevSessionRuntimeEvent } from "#product/lib/infra/debug/dev-session-runtime-log";
-import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,
   recordMeasurementMetric,
   startMeasurementOperation,
-} from "@/lib/infra/measurement/debug-measurement";
+} from "#product/lib/infra/measurement/measurement-port";
 import type {
   MeasurementOperationId,
   MeasurementSurface,
 } from "#product/lib/domain/telemetry/debug-measurement-catalog";
-import { uniqueMeasurementOperationIds } from "@/lib/infra/measurement/operation-ids";
+import { uniqueMeasurementOperationIds } from "#product/lib/infra/measurement/measurement-port";
 import { markWorkspaceViewedAt } from "#product/stores/preferences/workspace-ui-store";
 import { isDocumentVisibleAndFocused } from "#product/hooks/ui/document/use-document-focus-visibility";
 import {

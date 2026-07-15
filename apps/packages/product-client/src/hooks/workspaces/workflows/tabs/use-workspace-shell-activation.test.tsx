@@ -49,7 +49,7 @@ vi.mock("#product/lib/infra/scheduling/schedule-after-next-paint", () => ({
   }),
 }));
 
-vi.mock("@/lib/infra/measurement/debug-measurement", () => ({
+vi.mock("#product/lib/infra/measurement/measurement-port", () => ({
   finishOrCancelMeasurementOperation:
     measurementMocks.finishOrCancelMeasurementOperation,
   isDebugMeasurementEnabled: () => false,

@@ -14,7 +14,7 @@ import {
   elapsedMs,
   logLatency,
   startLatencyTimer,
-} from "@/lib/infra/measurement/debug-latency";
+} from "#product/lib/infra/measurement/measurement-port";
 import {
   finishOrCancelMeasurementOperation,
   finishMeasurementOperation,
@@ -22,9 +22,9 @@ import {
   recordMeasurementMetric,
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
-} from "@/lib/infra/measurement/debug-measurement";
+} from "#product/lib/infra/measurement/measurement-port";
 import { HOT_PAINT_MEASUREMENT_SUMMARY_BUDGET } from "#product/lib/domain/telemetry/debug-measurement-catalog";
-import { annotateLatencyFlow } from "@/lib/infra/measurement/latency-flow";
+import { annotateLatencyFlow } from "#product/lib/infra/measurement/measurement-port";
 import { scheduleAfterNextPaint } from "#product/lib/infra/scheduling/schedule-after-next-paint";
 import { rememberLastViewedSession } from "#product/stores/preferences/workspace-ui-store";
 import {

@@ -11,7 +11,7 @@ import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-inten
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useActiveSessionSurfaceSnapshot } from "#product/hooks/chat/derived/use-active-session-transcript-state";
 import type { WorkspaceRenderSurface } from "#product/lib/domain/workspaces/tabs/shell-activation";
-import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
+import { measureDebugComputation } from "#product/lib/infra/measurement/measurement-port";
 
 export type { ChatSurfaceState };
 

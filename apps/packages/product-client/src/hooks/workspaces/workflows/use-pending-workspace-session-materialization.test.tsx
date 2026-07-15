@@ -31,7 +31,7 @@ vi.mock("#product/hooks/sessions/workflows/use-session-creation-actions", () => 
   }),
 }));
 
-vi.mock("@/lib/infra/measurement/debug-latency", () => ({
+vi.mock("#product/lib/infra/measurement/measurement-port", () => ({
   logLatency: vi.fn(),
 }));
 

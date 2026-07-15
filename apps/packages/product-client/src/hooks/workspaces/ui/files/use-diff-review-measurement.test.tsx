@@ -5,8 +5,8 @@ import { act, cleanup, render, renderHook } from "@testing-library/react";
 import type { AnyHarnessQueryTimingOptions } from "@anyharness/sdk-react";
 import { StrictMode, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { resetDebugMeasurementForTest } from "@/lib/infra/measurement/debug-measurement";
-import { getDebugMeasurementDump } from "@/lib/infra/measurement/debug-measurement-dump";
+import { resetDebugMeasurementForTest } from "#product/lib/infra/measurement/measurement-port";
+import { getDebugMeasurementDump } from "#product/lib/infra/measurement/measurement-port";
 import { useDiffReviewMeasurement } from "#product/hooks/workspaces/ui/files/use-diff-review-measurement";
 
 describe("useDiffReviewMeasurement", () => {

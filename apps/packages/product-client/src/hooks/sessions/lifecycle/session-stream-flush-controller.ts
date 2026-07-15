@@ -3,7 +3,7 @@ import {
   createFrameStreamBatchScheduler,
 } from "@proliferate/product-domain/chats/transcript/stream-batcher";
 import { logDevSessionRuntimeEvent } from "#product/lib/infra/debug/dev-session-runtime-log";
-import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import { getSessionRecord } from "#product/stores/sessions/session-records";
 import { applySessionStreamFlushBatch } from "#product/hooks/sessions/lifecycle/session-stream-flush-apply";
 import type {

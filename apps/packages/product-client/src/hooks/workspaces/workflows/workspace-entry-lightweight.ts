@@ -8,7 +8,7 @@ import { sidebarRepoGroupKeyForWorkspace } from "#product/lib/domain/workspaces/
 import {
   annotateLatencyFlow,
   failLatencyFlow,
-} from "@/lib/infra/measurement/latency-flow";
+} from "#product/lib/infra/measurement/measurement-port";
 import type { WorkspaceEntryResult } from "#product/hooks/workspaces/workflows/workspace-entry-types";
 
 export async function runLightweightLocalWorkspaceEntry(

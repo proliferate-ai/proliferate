@@ -158,7 +158,7 @@ vi.mock("#product/stores/workspaces/new-workspace-command-scope-store", () => ({
   ) => selector({ activeScope: hookMocks.activeNewWorkspaceScope }),
 }));
 
-vi.mock("@/lib/infra/measurement/latency-flow", () => ({
+vi.mock("#product/lib/infra/measurement/measurement-port", () => ({
   failLatencyFlow: vi.fn(),
   startLatencyFlow: vi.fn(() => "latency-flow-1"),
 }));

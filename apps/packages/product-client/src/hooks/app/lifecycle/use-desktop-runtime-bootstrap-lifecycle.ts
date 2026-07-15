@@ -10,12 +10,12 @@ import type {
 import { bootstrapHarnessRuntime } from "#product/lib/access/anyharness/runtime-bootstrap";
 import {
   recordBootDiagnostic,
-} from "@/lib/infra/measurement/boot-stall-diagnostics";
+} from "#product/lib/infra/measurement/measurement-port";
 import {
   elapsedStartupMs,
   logStartupDebug,
   startStartupTimer,
-} from "@/lib/infra/measurement/debug-startup";
+} from "#product/lib/infra/measurement/measurement-port";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
 export function useDesktopRuntimeBootstrapLifecycle(

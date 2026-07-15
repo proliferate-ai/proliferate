@@ -31,8 +31,8 @@ import { useWorkspaceSessionCache } from "#product/hooks/access/anyharness/sessi
 import {
   annotateLatencyFlow,
   cancelLatencyFlow,
-} from "@/lib/infra/measurement/latency-flow";
-import { logLatency } from "@/lib/infra/measurement/debug-latency";
+} from "#product/lib/infra/measurement/measurement-port";
+import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import { writeChatShellIntentForSession } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
 import type { WorkspaceShellIntentKey } from "#product/lib/domain/workspaces/tabs/shell-tabs";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";

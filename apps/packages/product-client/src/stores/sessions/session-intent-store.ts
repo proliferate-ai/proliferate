@@ -31,9 +31,9 @@ import {
   upsertSessionIntent,
   type SessionIntentStateShape,
 } from "@proliferate/product-domain/sessions/intents/session-intent-state";
-import { recordStoreActionDebugActivity } from "@/lib/infra/measurement/debug-jank-activity";
-import { isDebugMeasurementEnabled } from "@/lib/infra/measurement/debug-measurement-env";
-import { now as measurementNow } from "@/lib/infra/measurement/debug-measurement-utils";
+import { recordStoreActionDebugActivity } from "#product/lib/infra/measurement/measurement-port";
+import { isDebugMeasurementEnabled } from "#product/lib/infra/measurement/measurement-port";
+import { now as measurementNow } from "#product/lib/infra/measurement/measurement-port";
 
 interface SessionIntentStoreState extends SessionIntentStateShape {
   dispatchVersion: number;

@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { useClearSessionLoopMutation, useSetSessionLoopMutation } from "@anyharness/sdk-react";
 import type { LoopArmInput } from "@proliferate/product-ui/activity/LoopsPanel";
-import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import { useActiveSessionId } from "#product/hooks/chat/derived/use-active-session-identity";
 import { getSessionRecord } from "#product/stores/sessions/session-records";
 import { useToastStore } from "#product/stores/toast/toast-store";

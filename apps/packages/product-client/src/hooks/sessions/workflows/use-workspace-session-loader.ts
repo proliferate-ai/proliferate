@@ -8,8 +8,8 @@ import {
   fetchWorkspaceSessions,
 } from "#product/hooks/sessions/workflows/session-selection-runtime";
 import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
-import { getLatencyFlowRequestHeaders } from "@/lib/infra/measurement/latency-flow";
-import { recordMeasurementMetric } from "@/lib/infra/measurement/debug-measurement";
+import { getLatencyFlowRequestHeaders } from "#product/lib/infra/measurement/measurement-port";
+import { recordMeasurementMetric } from "#product/lib/infra/measurement/measurement-port";
 import { parseTargetWorkspaceSyntheticId } from "#product/lib/domain/compute/target-workspace-id";
 import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";

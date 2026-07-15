@@ -11,17 +11,17 @@ import type {
 } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import {
   startLatencyTimer,
-} from "@/lib/infra/measurement/debug-latency";
+} from "#product/lib/infra/measurement/measurement-port";
 import {
   bindMeasurementCategories,
   finishOrCancelMeasurementOperation,
   recordMeasurementMetric,
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
-} from "@/lib/infra/measurement/debug-measurement";
-import { hashMeasurementScope } from "@/lib/infra/measurement/debug-measurement-env";
-import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
-import { getLatencyFlowRequestHeaders } from "@/lib/infra/measurement/latency-flow";
+} from "#product/lib/infra/measurement/measurement-port";
+import { hashMeasurementScope } from "#product/lib/infra/measurement/measurement-port";
+import { getMeasurementRequestOptions } from "#product/lib/infra/measurement/measurement-port";
+import { getLatencyFlowRequestHeaders } from "#product/lib/infra/measurement/measurement-port";
 import type { DeferredWorkspaceFileTreePrefetchInput } from "#product/hooks/workspaces/lifecycle/files/use-deferred-workspace-file-tree-prefetch";
 import { markWorkspaceBootstrappedInSession } from "#product/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
 import {

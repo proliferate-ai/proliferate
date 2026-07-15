@@ -8,7 +8,7 @@ import type { PendingChatActivation } from "#product/lib/domain/workspaces/tabs/
 import {
   finishOrCancelMeasurementOperation,
   recordMeasurementWorkflowStep,
-} from "@/lib/infra/measurement/debug-measurement";
+} from "#product/lib/infra/measurement/measurement-port";
 import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import { clearPendingHotSwitchMeasurement } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-activation-measurement";
 import type {

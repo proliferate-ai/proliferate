@@ -1,13 +1,13 @@
 import {
   getLatencyFlowRequestHeaders,
-} from "@/lib/infra/measurement/latency-flow";
+} from "#product/lib/infra/measurement/measurement-port";
 import type {
   DesktopRuntimeBridge,
   DesktopSshBridge,
 } from "@proliferate/product-client/host/desktop-bridge";
 import { parseTargetWorkspaceSyntheticId } from "#product/lib/domain/compute/target-workspace-id";
 import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
-import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
+import { getMeasurementRequestOptions } from "#product/lib/infra/measurement/measurement-port";
 import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import { bootstrapHarnessRuntime } from "#product/lib/access/anyharness/runtime-bootstrap";
 import { fetchWorkspaceSessionSummaries } from "#product/lib/access/anyharness/session-runtime";

@@ -9,7 +9,7 @@ import { logicalWorkspaceMatchesId } from "#product/lib/domain/workspaces/cloud/
 import {
   failLatencyFlow,
   startLatencyFlow,
-} from "@/lib/infra/measurement/latency-flow";
+} from "#product/lib/infra/measurement/measurement-port";
 import { resetWorkspaceEditorState } from "#product/stores/editor/workspace-editor-state";
 import { markWorkspaceViewed } from "#product/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";

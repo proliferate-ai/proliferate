@@ -16,8 +16,8 @@ import {
   elapsedMs,
   logLatency,
   startLatencyTimer,
-} from "@/lib/infra/measurement/debug-latency";
-import { getLatencyFlowRequestHeaders } from "@/lib/infra/measurement/latency-flow";
+} from "#product/lib/infra/measurement/measurement-port";
+import { getLatencyFlowRequestHeaders } from "#product/lib/infra/measurement/measurement-port";
 import {
   bindMeasurementCategories,
   finishOrCancelMeasurementOperation,
@@ -25,9 +25,9 @@ import {
   recordMeasurementMetric,
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
-} from "@/lib/infra/measurement/debug-measurement";
-import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
-import { hashMeasurementScope } from "@/lib/infra/measurement/debug-measurement-env";
+} from "#product/lib/infra/measurement/measurement-port";
+import { getMeasurementRequestOptions } from "#product/lib/infra/measurement/measurement-port";
+import { hashMeasurementScope } from "#product/lib/infra/measurement/measurement-port";
 import type {
   MeasurementFinishReason,
 } from "#product/lib/domain/telemetry/debug-measurement-catalog";

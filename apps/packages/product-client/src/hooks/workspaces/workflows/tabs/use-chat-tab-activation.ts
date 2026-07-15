@@ -9,7 +9,7 @@ import { chatWorkspaceShellTabKey } from "#product/lib/domain/workspaces/tabs/sh
 import {
   markOperationForNextCommit,
   recordMeasurementWorkflowStep,
-} from "@/lib/infra/measurement/debug-measurement";
+} from "#product/lib/infra/measurement/measurement-port";
 import { scheduleAfterNextPaint } from "#product/lib/infra/scheduling/schedule-after-next-paint";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import {

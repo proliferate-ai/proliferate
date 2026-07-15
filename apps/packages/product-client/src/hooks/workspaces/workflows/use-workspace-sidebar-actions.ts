@@ -12,7 +12,7 @@ import { useWorkspaceEntryActions } from "#product/hooks/workspaces/workflows/us
 import {
   failLatencyFlow,
   startLatencyFlow,
-} from "@/lib/infra/measurement/latency-flow";
+} from "#product/lib/infra/measurement/measurement-port";
 import { useWorkspaceRetireActions } from "#product/hooks/workspaces/workflows/use-workspace-retire-actions";
 import { useWorkspaceNavigationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-navigation-workflow";
 

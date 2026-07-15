@@ -6,7 +6,7 @@ import {
   elapsedMs,
   logLatency,
   startLatencyTimer,
-} from "@/lib/infra/measurement/debug-latency";
+} from "#product/lib/infra/measurement/measurement-port";
 import { resetWorkspaceEditorState } from "#product/stores/editor/workspace-editor-state";
 import { markWorkspaceViewed } from "#product/stores/preferences/workspace-ui-store";
 import { isWorkspaceSelectionCurrent } from "#product/hooks/workspaces/workflows/selection/guards";

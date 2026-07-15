@@ -25,7 +25,7 @@ import {
 } from "@proliferate/product-domain/chats/subagents/session-relationship-hints";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
-import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
+import { measureDebugComputation } from "#product/lib/infra/measurement/measurement-port";
 import {
   resolveHierarchyMaterializedSessionId,
 } from "#product/lib/domain/workspaces/tabs/workspace-header-tabs-model-helpers";

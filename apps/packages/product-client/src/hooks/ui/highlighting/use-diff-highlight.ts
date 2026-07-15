@@ -3,8 +3,8 @@ import { parsePatch, type ParsedPatch } from "#product/lib/domain/files/diff-par
 import {
   measureDebugComputation,
   recordMeasurementDiagnostic,
-} from "@/lib/infra/measurement/debug-measurement";
-import { isDebugMeasurementEnabled } from "@/lib/infra/measurement/debug-measurement-env";
+} from "#product/lib/infra/measurement/measurement-port";
+import { isDebugMeasurementEnabled } from "#product/lib/infra/measurement/measurement-port";
 import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import {
   highlightLines,

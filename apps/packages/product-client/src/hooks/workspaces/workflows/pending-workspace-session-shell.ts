@@ -4,7 +4,7 @@ import {
   type PendingWorkspaceInitialSession,
 } from "#product/lib/domain/workspaces/creation/pending-entry";
 import { createPendingSessionId } from "#product/lib/workflows/sessions/session-runtime";
-import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import {
   createEmptySessionRecord,
   getWorkspaceSessionRecords,

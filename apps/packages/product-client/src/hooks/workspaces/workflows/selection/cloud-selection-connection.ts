@@ -1,5 +1,5 @@
 import type { isCloudWorkspaceNotReadyError } from "#product/hooks/access/cloud/use-cloud-workspace-connection";
-import { cancelLatencyFlow } from "@/lib/infra/measurement/latency-flow";
+import { cancelLatencyFlow } from "#product/lib/infra/measurement/measurement-port";
 import { resolveSelectionConnection } from "#product/hooks/workspaces/workflows/selection/connection";
 import type {
   ReadyCloudReadinessResult,

@@ -11,12 +11,12 @@ import {
   onMeasurementOperationFinish,
   recordMeasurementMetric,
   startMeasurementOperation,
-} from "@/lib/infra/measurement/debug-measurement";
-import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
+} from "#product/lib/infra/measurement/measurement-port";
+import { getMeasurementRequestOptions } from "#product/lib/infra/measurement/measurement-port";
 import {
   hashMeasurementScope,
   isDebugMeasurementEnabled,
-} from "@/lib/infra/measurement/debug-measurement-env";
+} from "#product/lib/infra/measurement/measurement-port";
 import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 
 const DIFF_REVIEW_IDLE_TIMEOUT_MS = 1_000;
