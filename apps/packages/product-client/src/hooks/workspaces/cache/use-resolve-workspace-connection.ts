@@ -5,7 +5,7 @@ import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
 import type { QueryClient } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import type { CloudMobilityWorkspaceSummary } from "@/lib/access/cloud/client";
+import type { CloudMobilityWorkspaceSummary } from "@proliferate/cloud-sdk/types";
 import { cloudWorkspaceConnectionQueryOptions } from "#product/hooks/access/cloud/use-cloud-workspace-connection";
 import { resolveWorkspaceConnection } from "#product/lib/access/anyharness/resolve-workspace-connection";
 import { buildLogicalWorkspaces } from "#product/lib/domain/workspaces/cloud/logical-workspaces";

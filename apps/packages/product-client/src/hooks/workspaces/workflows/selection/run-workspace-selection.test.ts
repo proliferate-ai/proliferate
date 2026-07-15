@@ -18,7 +18,7 @@ import {
   resetLatencyFlowsForTest,
   startLatencyFlow,
 } from "#product/lib/infra/measurement/measurement-port";
-import { ProliferateClientError } from "@/lib/access/cloud/client";
+import { ProliferateClientError } from "@proliferate/cloud-sdk";
 import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
 import { buildLocalSlotLogicalWorkspaceId } from "#product/lib/domain/workspaces/cloud/logical-workspace-id";
 import { runWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/run-workspace-selection";

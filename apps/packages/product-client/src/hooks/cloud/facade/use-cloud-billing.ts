@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import type { BillingUrlResponse } from "@/lib/access/cloud/client";
+import type { BillingUrlResponse } from "@proliferate/cloud-sdk/types";
 import type { CloudOwnerSelection } from "#product/lib/domain/cloud/billing";
 import {
   useCloudBillingMutations,

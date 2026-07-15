@@ -6,7 +6,7 @@ import {
 } from "@anyharness/sdk-react";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { getAgentLaunchOptions } from "#product/lib/access/anyharness/agents";
-import type { CloudConnectionInfo } from "@/lib/access/cloud/client";
+import type { CloudConnectionInfo } from "@proliferate/cloud-sdk/types";
 import { withFreshCloudSandboxGatewayAccessToken } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 
 export function useWorkspaceAgentLaunchOptionsQuery({

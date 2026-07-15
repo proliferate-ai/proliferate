@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import type { Workspace } from "@anyharness/sdk";
-import type { CloudWorkspaceDetail } from "@/lib/access/cloud/client";
+import type { CloudWorkspaceDetail } from "@proliferate/cloud-sdk/types";
 import {
   buildWorkspaceCollections,
 } from "#product/lib/domain/workspaces/cloud/collections";

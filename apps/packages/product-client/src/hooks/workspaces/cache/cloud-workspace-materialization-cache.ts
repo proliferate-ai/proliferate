@@ -3,7 +3,7 @@ import {
   anyHarnessWorkspaceKey,
 } from "@anyharness/sdk-react";
 import type { QueryClient } from "@tanstack/react-query";
-import type { CloudConnectionInfo } from "@/lib/access/cloud/client";
+import type { CloudConnectionInfo } from "@proliferate/cloud-sdk/types";
 import { cloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 
 export interface CloudWorkspaceMaterializationIdentity {

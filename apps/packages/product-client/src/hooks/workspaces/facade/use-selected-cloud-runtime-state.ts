@@ -1,7 +1,4 @@
-import type {
-  CloudConnectionInfo,
-  CloudWorkspaceStatus,
-} from "@/lib/access/cloud/client";
+import type { CloudConnectionInfo, CloudWorkspaceStatus } from "@proliferate/cloud-sdk/types";
 import type { TerminalWebSocketAuthTransport } from "@anyharness/sdk";
 import { useMemo } from "react";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";

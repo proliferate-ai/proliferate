@@ -1,4 +1,4 @@
-import type { CloudAgentKind, CloudWorkspaceDetail } from "@/lib/access/cloud/client";
+import type { CloudAgentKind, CloudWorkspaceDetail } from "@proliferate/cloud-sdk/types";
 import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
 import type { TerminalWebSocketAuthTransport } from "@anyharness/sdk";
 import {

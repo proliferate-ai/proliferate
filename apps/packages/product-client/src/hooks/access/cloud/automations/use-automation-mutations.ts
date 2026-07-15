@@ -1,11 +1,6 @@
 import { useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type {
-  AutomationResponse,
-  AutomationRunResponse,
-  CreateAutomationRequest,
-  UpdateAutomationRequest,
-} from "@/lib/access/cloud/client";
+import type { AutomationResponse, AutomationRunResponse, CreateAutomationRequest, UpdateAutomationRequest } from "@proliferate/cloud-sdk/types";
 import {
   createAutomation,
   pauseAutomation,

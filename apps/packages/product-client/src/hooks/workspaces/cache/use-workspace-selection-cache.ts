@@ -8,7 +8,7 @@ import {
 } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import type { CloudMobilityWorkspaceSummary } from "@/lib/access/cloud/client";
+import type { CloudMobilityWorkspaceSummary } from "@proliferate/cloud-sdk/types";
 import { cloudBillingKey, cloudMobilityWorkspacesKey } from "#product/hooks/access/cloud/query-keys";
 import {
   useProductAuthStatus,

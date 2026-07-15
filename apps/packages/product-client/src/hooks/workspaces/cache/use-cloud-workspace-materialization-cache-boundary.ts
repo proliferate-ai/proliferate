@@ -1,7 +1,7 @@
 import { useAnyHarnessCacheScopeKey } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
-import type { CloudConnectionInfo } from "@/lib/access/cloud/client";
+import type { CloudConnectionInfo } from "@proliferate/cloud-sdk/types";
 import { isCloudWorkspaceConnectionQueryKey } from "#product/hooks/access/cloud/query-keys";
 import { createCloudWorkspaceMaterializationCacheTracker } from "#product/hooks/workspaces/cache/cloud-workspace-materialization-cache";
 

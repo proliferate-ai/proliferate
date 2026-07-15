@@ -1,7 +1,4 @@
-import type {
-  CloudAgentRunConfigDefaultOwnerSelection,
-  ListCloudAgentRunConfigsOptions,
-} from "@/lib/access/cloud/client";
+import type { CloudAgentRunConfigDefaultOwnerSelection, ListCloudAgentRunConfigsOptions } from "@proliferate/cloud-sdk/types";
 
 export function agentRunConfigsRootKey() {
   return ["cloud", "agent-run-configs"] as const;

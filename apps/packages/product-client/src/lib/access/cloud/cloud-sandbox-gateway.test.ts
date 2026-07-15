@@ -1,9 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  getDesktopCloudAccessToken,
-  isCloudAgentKind,
-  type CloudWorkspaceDetail,
-} from "@/lib/access/cloud/client";
+import type { CloudWorkspaceDetail } from "@proliferate/cloud-sdk/types";
+import { isCloudAgentKind } from "@proliferate/cloud-sdk";
+import { getDesktopCloudAccessToken } from "@/lib/access/cloud/client";
 import {
   type CloudSandboxGatewayUrlSource,
   resolveCloudSandboxGatewayConnectionForWorkspace,

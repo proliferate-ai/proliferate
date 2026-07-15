@@ -1,13 +1,7 @@
 import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
-import type {
-  CloudConnectionInfo,
-  CloudWorkspaceDetail,
-} from "@/lib/access/cloud/client";
-import {
-  getDesktopCloudAccessToken,
-  isCloudAgentKind,
-  ProliferateClientError,
-} from "@/lib/access/cloud/client";
+import type { CloudConnectionInfo, CloudWorkspaceDetail } from "@proliferate/cloud-sdk/types";
+import { isCloudAgentKind, ProliferateClientError } from "@proliferate/cloud-sdk";
+import { getDesktopCloudAccessToken } from "@/lib/access/cloud/client";
 
 /**
  * The gateway URL builder this module depends on — satisfied by the single

@@ -1,10 +1,5 @@
-import type {
-  CloudConnectionInfo,
-  CloudWorkspaceDetail,
-} from "@/lib/access/cloud/client";
-import {
-  ProliferateClientError,
-} from "@/lib/access/cloud/client";
+import type { CloudConnectionInfo, CloudWorkspaceDetail } from "@proliferate/cloud-sdk/types";
+import { ProliferateClientError } from "@proliferate/cloud-sdk";
 import {
   getCloudWorkspace,
 } from "@proliferate/cloud-sdk/client/workspaces";

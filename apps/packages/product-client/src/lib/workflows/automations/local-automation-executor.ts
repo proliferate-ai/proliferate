@@ -1,7 +1,4 @@
-import type {
-  LocalAutomationRunClaimResponse,
-  LocalAutomationMutationResponse,
-} from "@/lib/access/cloud/client";
+import type { LocalAutomationRunClaimResponse, LocalAutomationMutationResponse } from "@proliferate/cloud-sdk/types";
 import type { AnyHarnessClient, GetSetupStatusResponse, Session, Workspace } from "@anyharness/sdk";
 import { AnyHarnessError } from "@anyharness/sdk";
 import {

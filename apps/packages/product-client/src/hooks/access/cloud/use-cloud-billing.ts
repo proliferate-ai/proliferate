@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { BillingPlanInfo } from "@/lib/access/cloud/client";
-import { ProliferateClientError } from "@/lib/access/cloud/client";
+import type { BillingPlanInfo } from "@proliferate/cloud-sdk/types";
+import { ProliferateClientError } from "@proliferate/cloud-sdk";
 import {
   type CloudOwnerSelection,
   createBillingPortalSession,

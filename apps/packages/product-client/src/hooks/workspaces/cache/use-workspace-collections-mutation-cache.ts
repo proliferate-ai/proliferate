@@ -1,10 +1,7 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import type {
-  CloudMobilityWorkspaceSummary,
-  CloudWorkspaceDetail,
-} from "@/lib/access/cloud/client";
+import type { CloudMobilityWorkspaceSummary, CloudWorkspaceDetail } from "@proliferate/cloud-sdk/types";
 import { cloudMobilityWorkspacesKey } from "#product/hooks/access/cloud/query-keys";
 import {
   buildWorkspaceCollections,

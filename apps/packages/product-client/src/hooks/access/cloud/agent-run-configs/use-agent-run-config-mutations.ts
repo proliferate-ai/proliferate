@@ -6,14 +6,7 @@ import {
   setAgentRunConfigDefault,
   updateAgentRunConfig,
 } from "@proliferate/cloud-sdk/client/agent-run-configs";
-import type {
-  CloudAgentRunConfig,
-  CloudAgentRunConfigDefault,
-  CloudAgentRunConfigDefaultOwnerSelection,
-  CreateCloudAgentRunConfigRequest,
-  SetCloudAgentRunConfigDefaultRequest,
-  UpdateCloudAgentRunConfigRequest,
-} from "@/lib/access/cloud/client";
+import type { CloudAgentRunConfig, CloudAgentRunConfigDefault, CloudAgentRunConfigDefaultOwnerSelection, CreateCloudAgentRunConfigRequest, SetCloudAgentRunConfigDefaultRequest, UpdateCloudAgentRunConfigRequest } from "@proliferate/cloud-sdk/types";
 import {
   agentRunConfigKey,
   agentRunConfigsRootKey,

@@ -1,8 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type {
-  CloudWorktreeRetentionPolicyRequest,
-  CloudWorktreeRetentionPolicyResponse,
-} from "@/lib/access/cloud/client";
+import type { CloudWorktreeRetentionPolicyRequest, CloudWorktreeRetentionPolicyResponse } from "@proliferate/cloud-sdk/types";
 import {
   getCloudWorktreeRetentionPolicy,
   putCloudWorktreeRetentionPolicy,

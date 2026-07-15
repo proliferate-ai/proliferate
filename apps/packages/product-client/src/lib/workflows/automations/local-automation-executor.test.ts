@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AnyHarnessClient, Workspace } from "@anyharness/sdk";
-import type {
-  LocalAutomationMutationResponse,
-  LocalAutomationRunClaimResponse,
-} from "@/lib/access/cloud/client";
+import type { LocalAutomationMutationResponse, LocalAutomationRunClaimResponse } from "@proliferate/cloud-sdk/types";
 import type {
   LocalAutomationRepoCandidate,
   LocalAutomationWorktreePlan,

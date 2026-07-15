@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import type {
-  LocalAutomationRunClaimResponse,
-} from "@/lib/access/cloud/client";
+import type { LocalAutomationRunClaimResponse } from "@proliferate/cloud-sdk/types";
 import { useLocalAutomationRunClaims } from "#product/hooks/access/cloud/automations/use-local-automation-run-claims";
 import { useLocalAutomationRuntimeClientFactory } from "#product/hooks/access/anyharness/automations/use-local-automation-runtime-client";
 import { useLocalAutomationExecutorCache } from "#product/hooks/automations/cache/use-local-automation-executor-cache";

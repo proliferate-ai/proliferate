@@ -5,7 +5,7 @@ import {
   setAdminIntegrationEnabled,
   type CreateAdminIntegrationDefinitionRequest,
 } from "@proliferate/cloud-sdk/client/integrations";
-import { ProliferateClientError } from "@/lib/access/cloud/client";
+import { ProliferateClientError } from "@proliferate/cloud-sdk";
 import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth";
 import { cloudIntegrationAdminDefinitionsKey } from "#product/hooks/access/cloud/integrations/query-keys";
 import { useInvalidateCloudIntegrations } from "#product/hooks/access/cloud/integrations/use-integration-health";

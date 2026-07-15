@@ -9,11 +9,7 @@ import {
   updateOrganization,
   updateOrganizationMembership,
 } from "@proliferate/cloud-sdk/client/organizations";
-import type {
-  OrganizationInviteRequest,
-  OrganizationMembershipUpdateRequest,
-  OrganizationUpdateRequest,
-} from "@/lib/access/cloud/client";
+import type { OrganizationInviteRequest, OrganizationMembershipUpdateRequest, OrganizationUpdateRequest } from "@proliferate/cloud-sdk/types";
 import {
   currentUserOrganizationInvitationsKey,
   organizationInvitationsKey,

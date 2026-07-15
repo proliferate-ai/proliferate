@@ -1,9 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
-import type {
-  CloudWorkspaceDetail,
-  CreateCloudWorkspaceRequest,
-} from "@/lib/access/cloud/client";
+import type { CloudWorkspaceDetail, CreateCloudWorkspaceRequest } from "@proliferate/cloud-sdk/types";
 import { createCloudWorkspace } from "@proliferate/cloud-sdk/client/workspaces";
 import { cloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import { resolveCloudWorkspaceStatus } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";

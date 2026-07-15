@@ -1,6 +1,6 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import type { CloudConnectionInfo } from "@/lib/access/cloud/client";
+import type { CloudConnectionInfo } from "@proliferate/cloud-sdk/types";
 import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 import { cloudWorkspaceConnectionKey } from "#product/hooks/access/cloud/query-keys";
 import {

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type { OrganizationListResponse } from "@/lib/access/cloud/client";
+import type { OrganizationListResponse } from "@proliferate/cloud-sdk/types";
 import { listOrganizations } from "@proliferate/cloud-sdk/client/organizations";
 import {
   useProductAuthStatus,

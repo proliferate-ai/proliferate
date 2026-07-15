@@ -1,7 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import type {
-  CloudWorkspaceDetail,
-} from "@/lib/access/cloud/client";
+import type { CloudWorkspaceDetail } from "@proliferate/cloud-sdk/types";
 import {
   archiveCloudWorkspace,
   deleteCloudWorkspace,

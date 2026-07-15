@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { listCurrentUserOrganizationInvitations } from "@proliferate/cloud-sdk/client/organizations";
-import type { OrganizationInvitationsResponse } from "@/lib/access/cloud/client";
+import type { OrganizationInvitationsResponse } from "@proliferate/cloud-sdk/types";
 import {
   useProductAuthStatus,
   useProductAuthUserId,

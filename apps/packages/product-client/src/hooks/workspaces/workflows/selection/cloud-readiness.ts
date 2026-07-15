@@ -1,4 +1,4 @@
-import type { CloudWorkspaceDetail } from "@/lib/access/cloud/client";
+import type { CloudWorkspaceDetail } from "@proliferate/cloud-sdk/types";
 import { getCloudWorkspace } from "@proliferate/cloud-sdk/client/workspaces";
 import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import { resolveCloudWorkspaceStatus } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
