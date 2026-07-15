@@ -656,22 +656,36 @@ product `ProductProviderRoot`, and a product `ProductLifecycleRoot`. Product
 source remains in Desktop. The complete contract is
 [`web-desktop-client-unification-d1f.md`](migration/d1f.md).
 
-Prove ProductClient Extraction Mechanics is the current implementation slice
-(base `f93afce8190bba943277d588c9bfb0d051c615c9`). Without moving any Desktop
-product source, it records and qualifies the ProductClient application-entry
-contract (public `ProductClient({ RoutesComponent })`, `#product/*` package
-imports, lazy public-shell/authenticated split) via a build-only canary,
-compiles that canary through a Desktop qualification build and a minimal browser
-host (`desktop: null`) with every emitted resource URL served at HTTP 200,
-checks the complete 2220-file `move`/`split`/`retain`/`delete` ledger, proves a
-deterministic idempotent import codemod on a disposable copy, and lands the
-deterministic legacy-Web bundle collector with a provisional baseline. The
-reserved real files are not created. The complete living contract is
+Prove ProductClient Extraction Mechanics is complete (base
+`f93afce8190bba943277d588c9bfb0d051c615c9`; PR #1195 merge `9757e86de`). Without
+moving any Desktop product source, it recorded and qualified the ProductClient
+application-entry contract (public `ProductClient({ RoutesComponent })`,
+`#product/*` package imports, lazy public-shell/authenticated split) via a
+build-only canary, compiled that canary through a Desktop qualification build and
+a minimal browser host (`desktop: null`) with every emitted resource URL served
+at HTTP 200, checked the complete 2220-file `move`/`split`/`retain`/`delete`
+ledger, proved a deterministic idempotent import codemod on a disposable copy,
+and landed the deterministic legacy-Web bundle collector with a provisional
+baseline. The complete living contract is
 [`web-desktop-client-unification-d1g.md`](migration/d1g.md);
 the recorded entry contract is
 [`web-desktop-product-client-entry-contract.md`](entry-contract.md)
 and the move ledger is
 [`web-desktop-product-client-move-ledger.md`](move-ledger.md).
+
+Move the Desktop Product into ProductClient is the current implementation slice
+(base `1d00437565d4cdce47cf4dc41f2ea19eb2f31f28`). Executing the D1g ledger and
+codemod, it has landed and proven the pure mechanical move — all 2069 `move`
+rows relocated to `apps/packages/product-client/src` exactly once, the 130
+`retain` host modules intact, the one `delete` removed, the codemod's second run
+empty, and `apps/desktop/src` reduced to a host-only tree — plus the thin Desktop
+host that mounts the real `ProductClient` entry and the deletion of the temporary
+qualification canary. It is **blocked at the seam architecture**: 18 `split` rows
+remain, and three items are contract stop conditions requiring an owner ruling —
+the host-supplied measurement facade mechanism, new DesktopBridge ports for the
+`connect-server` and `window` probes, and the package's host-facing public export
+surface for the reverse seam. The complete living record is
+[`web-desktop-client-unification-d1h.md`](migration/d1h.md).
 
 Related authoritative docs:
 
