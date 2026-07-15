@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
 import type { ChildProcess, SpawnOptions } from "node:child_process";
 import { EventEmitter } from "node:events";
+import { createServer } from "node:net";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 
 import {
+  CONNECT_PROBE_PATH,
   launchAnyharness,
   launchRendererServer,
   terminateProcess,
@@ -11,6 +16,19 @@ import {
   type ReadinessFetch,
   type SpawnLike,
 } from "./processes.js";
+
+/** Grabs an ephemeral free loopback port for a real static-server spawn. */
+async function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const srv = createServer();
+    srv.on("error", reject);
+    srv.listen(0, "127.0.0.1", () => {
+      const address = srv.address();
+      const port = typeof address === "object" && address ? address.port : 0;
+      srv.close(() => resolve(port));
+    });
+  });
+}
 
 interface FakeChild extends EventEmitter {
   pid: number;
@@ -144,4 +162,36 @@ test("launchRendererServer serves and reports readiness with a hermetic child en
     );
   }
   await served.process.terminate();
+});
+
+test("the real static server serves a bare connect-probe page and preserves SPA fallback", async () => {
+  const rootDir = await mkdtemp(path.join(os.tmpdir(), "renderer-serve-"));
+  try {
+    const spaMarker = "<html><body id='spa-index'>self-host renderer</body></html>";
+    await writeFile(path.join(rootDir, "index.html"), spaMarker, "utf8");
+    const port = await freePort();
+    // Real spawn + real fetch (no fakes): exercises STATIC_SERVER_SOURCE itself.
+    const served = await launchRendererServer({ rootDir, host: "127.0.0.1", port });
+    try {
+      // The bare probe page: a minimal document, NOT the SPA index (so the
+      // product app never boots and fires startup traffic before trust).
+      const probe = await fetch(`${served.baseUrl}${CONNECT_PROBE_PATH}`);
+      const probeBody = await probe.text();
+      assert.equal(probe.status, 200);
+      assert.match(probe.headers.get("content-type") ?? "", /text\/html/);
+      assert.equal(probeBody, "<!doctype html><title>probe</title>");
+      assert.ok(!probeBody.includes("spa-index"), "probe page must not serve the SPA index");
+
+      // SPA fallback is unchanged: an arbitrary deep route still returns the
+      // renderer index (local-world PR 1 behavior preserved).
+      const spa = await fetch(`${served.baseUrl}/some/deep/app/route`);
+      const spaBody = await spa.text();
+      assert.equal(spa.status, 200);
+      assert.ok(spaBody.includes("spa-index"), "non-probe routes must fall back to the SPA index");
+    } finally {
+      await served.process.terminate();
+    }
+  } finally {
+    await rm(rootDir, { recursive: true, force: true });
+  }
 });

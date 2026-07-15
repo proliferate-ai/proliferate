@@ -1,14 +1,19 @@
 import type { Page } from "playwright";
 
+import { CONNECT_PROBE_PATH } from "../worlds/local-workspace/processes.js";
 import type { ProductPage } from "./product-page.js";
 
 /**
  * The Connect-Server trust-flow driver (frozen spec cell `SH-DESKTOP-OWNER`).
- * Through an ISOLATED Desktop-renderer page it drives the real Connect-Server
- * flow: it rejects an invalid URL and a healthy but NON-Proliferate host,
- * asserts that ONLY the public `/meta` metadata is fetched before trust, then
- * points the renderer at the run's instance. Owner password login happens after
- * trust (`selfhost-actor.ts`). No credentials cross this driver.
+ * Through an ISOLATED, bare same-origin renderer page (`connectProbePageUrl`)
+ * it drives the real Connect-Server flow: it rejects an invalid URL and a
+ * healthy but NON-Proliferate host, asserts that ONLY the public `/meta`
+ * metadata is fetched before trust, then points the renderer at the run's
+ * instance. The pre-trust page is a minimal document on the renderer origin (no
+ * app bundle), so the `/meta` probes carry a real, CORS-admitted renderer Origin
+ * (no `null` origin — SHR-007) without the product SPA firing its own startup
+ * traffic at the box. Owner password login happens after trust
+ * (`selfhost-actor.ts`). No credentials cross this driver.
  *
  * The trust decision mirrors the product's own rules (verified against
  * `apps/desktop/src/lib/domain/auth/connect-server.ts` and
@@ -174,6 +179,18 @@ export const defaultConnectServerProbe: ConnectServerProbe = {
       .map((entry) => ({ method: entry.method, path: new URL(entry.url).pathname }));
   },
 };
+
+/**
+ * The URL the pre-trust Connect-Server flow navigates to: the bare, same-origin
+ * probe page served BY the renderer static server at `CONNECT_PROBE_PATH`. It
+ * lives on the renderer origin (already admitted by the box's CORS) but loads no
+ * app bundle, so the `/meta` probes issued from it carry a real renderer Origin
+ * (never a `null` origin — SHR-007) without booting the product SPA (whose
+ * startup traffic would break "only GET /meta before trust").
+ */
+export function connectProbePageUrl(rendererBaseUrl: string): string {
+  return `${rendererBaseUrl.replace(/\/$/, "")}${CONNECT_PROBE_PATH}`;
+}
 
 /**
  * Points the isolated renderer page at `url` through the Connect-Server flow and

@@ -43,6 +43,7 @@ import {
   assertOnlyMetaFetchedBeforeTrust,
   assertRejectsInvalidUrl,
   assertRejectsNonProliferateHost,
+  connectProbePageUrl,
   connectServerTrustFlow,
 } from "../fixtures/connect-server.js";
 import { AUTHENTICATED_READINESS_SELECTOR, BROWSER_AUTH_SESSION_KEY, type ProductPage } from "../fixtures/product-page.js";
@@ -866,19 +867,23 @@ function splitCandidateImageRef(serverImage: { version: string }): { repo: strin
 
 /**
  * Opens a fresh, unauthenticated isolated page (Connect-Server trust flow,
- * pre-login) and navigates it to the renderer's OWN served origin. The pre-trust
- * `/meta` probes are `fetch`es issued from this page's document context, so
- * loading a real renderer-origin document (instead of leaving it on
+ * pre-login) and navigates it to the BARE, same-origin connect-probe page served
+ * by the renderer static server (`connectProbePageUrl`), NOT the full SPA. The
+ * pre-trust `/meta` probes are `fetch`es issued from this page's document
+ * context, so loading a real renderer-origin document (instead of leaving it on
  * `about:blank`) means those cross-origin fetches carry the renderer Origin — a
  * real browser origin already admitted by the box's CORS — rather than an opaque
- * `null` Origin. That is why the box no longer needs a `null` CORS entry. The
- * page is unauthenticated (no session in storage), so it sits on the connect
- * screen and issues no request to the instance origin before the trust probes.
+ * `null` Origin. That is why the box no longer needs a `null` CORS entry
+ * (SHR-007). Crucially, the probe page loads NO app bundle, so the product SPA
+ * never boots and never fires its own startup traffic (`/health`, telemetry,
+ * auth discovery) at the instance before trust — the `assertOnlyMetaFetched-
+ * BeforeTrust` invariant holds. The page is unauthenticated (no session in
+ * storage) and issues no request to the instance origin before the trust probes.
  */
 async function openIsolatedPage(world: ReadySelfHostWorld): Promise<ProductPage> {
   const context = await world.renderer.browser.newContext();
   const page = await context.newPage();
-  await page.goto(world.renderer.baseUrl, { waitUntil: "domcontentloaded" });
+  await page.goto(connectProbePageUrl(world.renderer.baseUrl), { waitUntil: "domcontentloaded" });
   return wrapPage(context, page);
 }
 
@@ -902,11 +907,12 @@ async function openAuthenticatedPage(
 
 /**
  * Installs a session into an already-open (trusted, pre-login) isolated page and
- * boots it authenticated. `openIsolatedPage` already loaded the page on the
+ * boots it authenticated. `openIsolatedPage` already loaded a bare page on the
  * renderer origin (that is where the pre-trust `/meta` probes ran from), but with
- * no session in storage. An `addInitScript` only takes effect on the NEXT
- * navigation, so this installs the session then re-navigates to the renderer to
- * boot it authenticated, and waits for authenticated readiness.
+ * no session in storage and no app bundle. An `addInitScript` only takes effect
+ * on the NEXT navigation, so this installs the session then navigates to the FULL
+ * renderer SPA (post-trust, boot traffic is fine here) to boot it authenticated,
+ * and waits for authenticated readiness.
  */
 async function installSessionAndReload(
   page: ProductPage,

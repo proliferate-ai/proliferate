@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import {
   connectServerTrustFlow,
+  connectProbePageUrl,
   assertRejectsInvalidUrl,
   assertRejectsNonProliferateHost,
   assertOnlyMetaFetchedBeforeTrust,
@@ -12,6 +13,7 @@ import {
   type ConnectServerProbe,
   type ServerMetaShape,
 } from "./connect-server.js";
+import { CONNECT_PROBE_PATH } from "../worlds/local-workspace/processes.js";
 import type { ProductPage } from "./product-page.js";
 
 const PAGE = {} as ProductPage;
@@ -57,6 +59,20 @@ test("normalizeConnectUrl defaults https, strips trailing slash, and rejects bla
   // exercising the same parse-error branch the product's normalizeServerUrl has.
   assert.equal(normalizeConnectUrl("not a url at all").ok, false);
   assert.equal(normalizeConnectUrl("ftp://host.example.com").ok, false);
+});
+
+test("connectProbePageUrl points at the bare same-origin probe path on the renderer origin", () => {
+  assert.equal(
+    connectProbePageUrl("http://127.0.0.1:6100"),
+    `http://127.0.0.1:6100${CONNECT_PROBE_PATH}`,
+  );
+  // A trailing slash on the renderer base URL never produces a doubled slash.
+  assert.equal(
+    connectProbePageUrl("http://127.0.0.1:6100/"),
+    `http://127.0.0.1:6100${CONNECT_PROBE_PATH}`,
+  );
+  // The probe path is a bare .html document path, not the SPA index/root.
+  assert.match(CONNECT_PROBE_PATH, /^\/[^/]+\.html$/);
 });
 
 test("isServerMetaShape only accepts a full MetaResponse", () => {
