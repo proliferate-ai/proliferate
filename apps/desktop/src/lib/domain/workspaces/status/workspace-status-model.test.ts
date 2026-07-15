@@ -67,6 +67,7 @@ describe("buildWorkspaceStatusModel", () => {
       reviewChangesLabel: "Review 12 changes",
       commitOrPushLabel: "Commit or push",
       commitOrPushMeta: "2 ahead",
+      commitOrPushDisabled: false,
       compareLabel: "Compare branch",
       compareMeta: "PR #1042",
       checks: {
@@ -107,6 +108,7 @@ describe("buildWorkspaceStatusModel", () => {
 
     expect(model?.environment?.reviewChangesLabel).toBe("No changes");
     expect(model?.environment?.commitOrPushMeta).toBeNull();
+    expect(model?.environment?.commitOrPushDisabled).toBe(true);
   });
 
   it("buckets our agents by working state and keeps session targets", () => {

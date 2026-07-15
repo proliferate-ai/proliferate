@@ -88,6 +88,9 @@ function buildEnvironment({
       : `Review ${changedFiles} ${changedFiles === 1 ? "change" : "changes"}`,
     commitOrPushLabel: "Commit or push",
     commitOrPushMeta: syncParts.join(" · ") || null,
+    // Clean tree with nothing ahead: the row has no work to offer — dim it
+    // in the card instead of letting the modal deliver the bad news.
+    commitOrPushDisabled: changedFiles === 0 && gitStatus.ahead === 0,
     compareLabel: "Compare branch",
     compareMeta: hasExistingPullRequest && pullRequest?.number != null
       ? `PR #${pullRequest.number}`

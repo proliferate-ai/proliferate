@@ -73,6 +73,7 @@ export interface WorkspaceStatusModel {
     reviewChangesLabel: string;
     commitOrPushLabel: string;
     commitOrPushMeta: string | null;
+    commitOrPushDisabled: boolean;
     compareLabel: string;
     compareMeta: string | null;
     checks: {
@@ -165,6 +166,7 @@ export function WorkspaceStatusCard({
               icon={<GitCommit className="size-4" />}
               label={model.environment.commitOrPushLabel}
               meta={model.environment.commitOrPushMeta ?? undefined}
+              disabled={model.environment.commitOrPushDisabled}
               onSelect={run(actions.onCommitOrPush)}
             />
             <StatusRow
@@ -281,6 +283,7 @@ function StatusRow({
   trailing,
   hoverItems,
   onSelect,
+  disabled = false,
   title,
 }: {
   icon?: ReactNode;
@@ -291,6 +294,8 @@ function StatusRow({
   trailing?: ReactNode;
   hoverItems?: WorkspaceStatusDetailItem[];
   onSelect?: () => void;
+  /** Codex cmdk disabled recipe: dimmed, no hover paint, no action. */
+  disabled?: boolean;
   title?: string;
 }) {
   const body = (
@@ -305,6 +310,10 @@ function StatusRow({
       {trailing}
     </>
   );
+
+  if (disabled) {
+    return <div className={`${STATUS_ROW_CLASS} opacity-25`}>{body}</div>;
+  }
 
   const interactive = !!onSelect || !!trailing;
   const row = interactive

@@ -10,6 +10,7 @@ export function createPlaygroundWorkspaceStatusModel(): WorkspaceStatusModel {
       reviewChangesLabel: "Review 12 changes",
       commitOrPushLabel: "Commit or push",
       commitOrPushMeta: "2 ahead",
+      commitOrPushDisabled: false,
       compareLabel: "Compare branch",
       compareMeta: "PR #1042",
       checks: {
