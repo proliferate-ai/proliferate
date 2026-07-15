@@ -26,7 +26,7 @@ import type { LocalWorldPorts } from "../worlds/local-workspace/ports.js";
 import type { SelfHostAwsInputs, SelfHostSshInputs, ReadySelfHostWorld } from "../worlds/selfhost/world.js";
 import { constructSelfHostWorld } from "../worlds/selfhost/world.js";
 import type { SelfHostWorldCleanupEvidence } from "../worlds/selfhost/cleanup-kinds.js";
-import { runShippedInstaller } from "../worlds/selfhost/install.js";
+import { runShippedInstaller, waitForHealth } from "../worlds/selfhost/install.js";
 import {
   claimSelfHostOwner,
   assertSecondClaimRejected,
@@ -81,6 +81,8 @@ export type SelfHostCellName = (typeof SELFHOST_CELL_ORDER)[number];
 /** Bounded prompt for the SH-BASE-TURN cell's one turn. */
 export const SELFHOST_TURN_PROMPT = "Reply with exactly the word: pong";
 const TURN_TIMEOUT_MS = 300_000;
+/** Bounded wait for the stack to serve again after a `docker compose restart`. */
+const RESTART_HEALTH_TIMEOUT_MS = 180_000;
 /** A real, healthy, reachable host that is definitely not a Proliferate control plane. */
 const NON_PROLIFERATE_PROBE_URL = "https://example.com";
 
@@ -243,6 +245,7 @@ export const defaultSelfHostInstallDriver: SelfHostInstallDriver = {
       siteAddress: originOf(world.api.baseUrl),
       candidateImageRepo,
       candidateImageTag,
+      corsAllowOrigins: browserOriginsForBox(world),
     });
 
     const setupToken = await world.control.readSetupToken();
@@ -250,6 +253,10 @@ export const defaultSelfHostInstallDriver: SelfHostInstallDriver = {
     driverState(world).owner = owner;
     await assertSecondClaimRejected(world);
     await world.control.restartStack();
+    // `docker compose restart` returns before the api container is serving again;
+    // wait for the public HTTPS stack to report healthy so the persistence check
+    // does not race a still-booting api (a 502 through Caddy) before asserting.
+    await waitForHealth(world.api.baseUrl, { timeoutMs: RESTART_HEALTH_TIMEOUT_MS });
     // Persistence: the owner's session must still resolve exactly one org
     // after the restart — the on-box DB/auth/config survived the stack cycle.
     const orgsAfterRestart = await owner.api.get<{ organizations: Array<{ id: string }> }>("/v1/organizations");
@@ -746,6 +753,33 @@ function describe(error: unknown): string {
 }
 
 /** The safe hostname (never the raw URL/path/credentials) evidence records for an origin. */
+/**
+ * The browser origins the box's API must admit via CORS so the candidate Desktop
+ * renderer and the Connect-Server trust probe can drive the API from a browser:
+ * the served renderer origin (127.0.0.1 + localhost forms) plus `null` for the
+ * pre-trust connect page, which runs an isolated `about:blank` context whose
+ * cross-origin `/meta` fetch carries an opaque (`null`) Origin. Comma-joined, no
+ * spaces, so it is a single `--cors-allow-origins` argv token.
+ */
+function browserOriginsForBox(world: ReadySelfHostWorld): string {
+  const rendererOrigin = originUrl(world.renderer.baseUrl);
+  const origins = new Set<string>([
+    rendererOrigin,
+    rendererOrigin.replace("127.0.0.1", "localhost"),
+    "null",
+  ]);
+  return [...origins].join(",");
+}
+
+/** The scheme://host[:port] origin of a URL (no path), stable for CORS matching. */
+function originUrl(url: string): string {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return url.replace(/\/$/, "");
+  }
+}
+
 function originOf(url: string): string {
   try {
     return new URL(url).host;
