@@ -216,7 +216,14 @@ function fakeActor(suffix = "a"): AuthenticatedActor {
 }
 
 function fakeConvergence(): SandboxConvergence {
-  return { cloudSandboxId: "sandbox-a", providerSandboxId: "provider-sandbox-a" };
+  return {
+    cloudSandboxId: "sandbox-a",
+    providerSandboxId: "provider-sandbox-a",
+    providerSandboxCount: 1,
+    logicalSandboxCount: 1,
+    observedTemplateId: "tmpl_123",
+    observedStartedAt: new Date().toISOString(),
+  };
 }
 
 function fakeTemplateVerification(): TemplateVerification {
@@ -230,15 +237,24 @@ function fakeWorkerVerification(): WorkerSupervisorVerification {
     anyharnessVersion: "1.2.3",
     supervisorIsParent: false,
     heartbeatRecent: true,
+    anyharnessHashMatchesReceipt: true,
+    workerHashMatchesReceipt: true,
+    supervisorHashMatchesReceipt: true,
   };
 }
 
 function fakeCoveredRepo(): CoveredRepoVerification {
-  return { name: "proliferate-e2e/e2e-fixture", commit: "a".repeat(40), noCredentialInRemote: true };
+  return { name: "proliferate-e2e/e2e-fixture", commit: "a".repeat(40), noCredentialInRemote: true, commitMatchesPinned: true };
 }
 
 function fakeIsolation(): IsolationVerification {
-  return { runtimeRejectsMissing: true, runtimeRejectsActorB: true };
+  return {
+    actorBCannotDiscover: true,
+    runtimeRejectsMissing: true,
+    runtimeRejectsActorB: true,
+    missingCredentialStatus: 401,
+    actorBCredentialStatus: 401,
+  };
 }
 
 /** A fully-wired fake driver for the happy path; individual tests override methods. */
@@ -248,7 +264,7 @@ function fakeDriver(overrides: Partial<CloudProvision1Driver> = {}): CloudProvis
   const driver: CloudProvision1Driver & { closeCalls: number } = {
     buildWorld: async () => world,
     createActor: async () => fakeActor("a"),
-    createSecondActor: async () => fakeActor("b"),
+    createSecondActor: async (_world, _actorA) => fakeActor("b"),
     fundCore: async (): Promise<CoreFundingResult> => ({
       billingSubjectId: "sub-a",
       method: "stripe_checkout",
@@ -428,29 +444,66 @@ test("runCloudProvision1Cell sends the deterministic bounded prompt", async () =
   assert.equal(seenPrompt, DETERMINISTIC_PROMPT);
 });
 
-test("resolveBotSeedForAutomation returns null when the staging App OAuth creds are absent", () => {
-  const resolved = resolveBotSeedForAutomation({ RELEASE_E2E_CLOUD_GITHUB_BOT_REFRESH_TOKEN: "ghr_x" });
+/** An SSM getter stub so these tests never shell out to real `aws`. */
+const ssmUnavailable = async (name: string) => ({ refreshToken: null as null, reason: `no SSM parameter ${name}` });
+
+test("resolveBotSeedForAutomation returns null when the staging App OAuth creds are absent", async () => {
+  const resolved = await resolveBotSeedForAutomation({ RELEASE_E2E_CLOUD_GITHUB_BOT_REFRESH_TOKEN: "ghr_x" }, ssmUnavailable);
   assert.equal(resolved, null);
 });
 
-test("resolveBotSeedForAutomation resolves from the env refresh token when present", () => {
-  const resolved = resolveBotSeedForAutomation({
-    RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_ID: "Iv23xxxx",
-    RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET: "secret",
-    RELEASE_E2E_CLOUD_GITHUB_BOT_REFRESH_TOKEN: "ghr_env",
-    RELEASE_E2E_CLOUD_GITHUB_BOT_SEED_STATE: "/nonexistent/seed.json",
-  });
+test("resolveBotSeedForAutomation resolves from the env refresh token when present (source=env)", async () => {
+  const resolved = await resolveBotSeedForAutomation(
+    {
+      RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_ID: "Iv23xxxx",
+      RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET: "secret",
+      RELEASE_E2E_CLOUD_GITHUB_BOT_REFRESH_TOKEN: "ghr_env",
+      RELEASE_E2E_CLOUD_GITHUB_BOT_SEED_STATE: "/nonexistent/seed.json",
+    },
+    ssmUnavailable,
+  );
   assert.ok(resolved);
   assert.equal(resolved!.refreshToken, "ghr_env");
   assert.equal(resolved!.clientId, "Iv23xxxx");
+  assert.equal(resolved!.source, "env");
 });
 
-test("resolveBotSeedForAutomation returns null when creds exist but no refresh token is available", () => {
-  const resolved = resolveBotSeedForAutomation({
-    RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_ID: "Iv23xxxx",
-    RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET: "secret",
-    RELEASE_E2E_CLOUD_GITHUB_BOT_SEED_STATE: "/nonexistent/seed.json",
-  });
+test("resolveBotSeedForAutomation falls back to the durable SSM lane when env + file are absent (source=ssm)", async () => {
+  let queried: string | undefined;
+  let queriedRegion: string | undefined;
+  const resolved = await resolveBotSeedForAutomation(
+    {
+      RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_ID: "Iv23xxxx",
+      RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET: "secret",
+      RELEASE_E2E_CLOUD_GITHUB_BOT_SEED_STATE: "/nonexistent/seed.json",
+      RELEASE_E2E_CLOUD_GITHUB_BOT_SEED_SSM_PARAMETER: "/proliferate/qualification/github-bot-refresh-token",
+      RELEASE_E2E_CLOUD_AWS_REGION: "us-east-1",
+    },
+    async (name, _exec, region) => {
+      queried = name;
+      queriedRegion = region;
+      return { refreshToken: "ghr_from_ssm" };
+    },
+  );
+  assert.ok(resolved);
+  assert.equal(resolved!.refreshToken, "ghr_from_ssm");
+  assert.equal(resolved!.source, "ssm");
+  assert.equal(resolved!.ssmParameterName, "/proliferate/qualification/github-bot-refresh-token");
+  assert.equal(queried, "/proliferate/qualification/github-bot-refresh-token");
+  // The region is threaded through to the SSM read (CI maps RELEASE_E2E_CLOUD_AWS_REGION, not AWS_REGION).
+  assert.equal(queriedRegion, "us-east-1");
+  assert.equal(resolved!.region, "us-east-1");
+});
+
+test("resolveBotSeedForAutomation returns null when creds exist but no refresh token is available anywhere", async () => {
+  const resolved = await resolveBotSeedForAutomation(
+    {
+      RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_ID: "Iv23xxxx",
+      RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET: "secret",
+      RELEASE_E2E_CLOUD_GITHUB_BOT_SEED_STATE: "/nonexistent/seed.json",
+    },
+    ssmUnavailable,
+  );
   assert.equal(resolved, null);
 });
 
@@ -556,6 +609,12 @@ function fakeExecInProviderSandbox(
       }
       return { stdout: "", stderr: "", exitCode: 0, ...result };
     }
+    // A `sha256sum <path>` exec (MCW-003 binary-hash check): answer with the
+    // fake world's receipt hash (`fakeArtifact` uses "a".repeat(64)) so the
+    // observed-vs-receipt comparison passes. `sha256sum` prints `<hex>  <path>`.
+    if (command[0] === "sha256sum") {
+      return { stdout: `${"a".repeat(64)}  ${command[1]}`, stderr: "", exitCode: 0 };
+    }
     // A binary `--version` exec.
     return { stdout: "1.4.0", stderr: "", exitCode: 0 };
   };
@@ -563,7 +622,14 @@ function fakeExecInProviderSandbox(
 }
 
 function fakeConvergenceForDriver(): SandboxConvergence {
-  return { cloudSandboxId: "11111111-1111-1111-1111-111111111111", providerSandboxId: "provider-sandbox-a" };
+  return {
+    cloudSandboxId: "11111111-1111-1111-1111-111111111111",
+    providerSandboxId: "provider-sandbox-a",
+    providerSandboxCount: 1,
+    logicalSandboxCount: 1,
+    observedTemplateId: "tmpl_123",
+    observedStartedAt: new Date().toISOString(),
+  };
 }
 
 test("createCloudProvision1Driver().verifyWorkerSupervisor asserts worker enrollment via the server DB, not ps", async () => {
@@ -577,10 +643,34 @@ test("createCloudProvision1Driver().verifyWorkerSupervisor asserts worker enroll
   assert.equal(result.anyharnessVersion, "1.4.0");
   assert.equal(result.supervisorIsParent, false, "supervisor-parentage stays deferred to PR 9");
   assert.equal(result.heartbeatRecent, true);
+  // The binary hashes were compared against the candidate receipts (MCW-003).
+  assert.equal(result.anyharnessHashMatchesReceipt, true);
+  assert.equal(result.workerHashMatchesReceipt, true);
+  assert.equal(result.supervisorHashMatchesReceipt, true);
   // No `ps` invocation anywhere in the captured execInProviderSandbox calls.
   assert.ok(calls.every((c) => !c.command.join(" ").includes("ps -A")));
-  // Exactly the three binary --version execs (worker/supervisor/anyharness).
-  assert.equal(calls.length, 3);
+  // Three binary --version execs + three sha256sum execs (worker/supervisor/anyharness).
+  assert.equal(calls.filter((c) => c.command.at(-1) === "--version").length, 3);
+  assert.equal(calls.filter((c) => c.command[0] === "sha256sum").length, 3);
+  assert.equal(calls.length, 6);
+});
+
+test("createCloudProvision1Driver().verifyWorkerSupervisor fails when a baked binary hash does not match its receipt", async () => {
+  const box = fakeBoxExec();
+  const { fn: exec } = fakeExecInProviderSandbox(() => "[]");
+  // Return a DIFFERENT digest for sha256sum than the fake receipts ("a"*64).
+  const wrongHashExec = async (providerSandboxId: string, command: readonly string[]) => {
+    if (command[0] === "sha256sum") {
+      return { stdout: `${"b".repeat(64)}  ${command[1]}`, stderr: "", exitCode: 0 };
+    }
+    return exec(providerSandboxId, command);
+  };
+  const driver = createCloudProvision1Driver({ execInProviderSandbox: wrongHashExec });
+  const world: ManagedCloudWorld = { ...fakeWorld(), box };
+  await assert.rejects(
+    () => driver.verifyWorkerSupervisor(world, fakeConvergenceForDriver()),
+    /does not match its candidate receipt/,
+  );
 });
 
 test("createCloudProvision1Driver().verifyWorkerSupervisor throws when the world exposes no box-exec seam", async () => {
@@ -904,4 +994,93 @@ test("createCloudProvision1Driver() never writes the resolved bearer token to th
     process.stderr.write = originalWrite;
   }
   assert.ok(!writes.some((line) => line.includes(FAKE_BEARER_TOKEN)));
+});
+
+// ---------------------------------------------------------------------------
+// verifyActorBIsolation (MCW-001): every isolation boolean is derived from an
+// OBSERVED response — actor B's product listing + two direct-runtime probes —
+// never hard-coded. Exercised against a fake actor-B api client + fake exec.
+// ---------------------------------------------------------------------------
+
+/** An actor B whose `api.get` returns `listing` (or throws `{status}` if set). */
+function fakeActorB(opts: { listing?: unknown; listingStatus?: number } = {}): AuthenticatedActor {
+  const base = fakeActor("b");
+  return {
+    ...base,
+    api: {
+      get: async () => {
+        if (opts.listingStatus !== undefined) {
+          throw Object.assign(new Error(`GET -> ${opts.listingStatus}`), { status: opts.listingStatus });
+        }
+        return opts.listing ?? null;
+      },
+    } as never,
+  };
+}
+
+/** A fake exec that answers the isolation status-capture curls by URL+auth. */
+function fakeIsolationExec(missingStatus: number, actorBStatus: number) {
+  return async (_id: string, command: readonly string[]): Promise<E2BExecResult> => {
+    const script = command[1] === "-c" ? String(command[2]) : "";
+    const hasAuth = script.includes("Authorization: Bearer");
+    const status = hasAuth ? actorBStatus : missingStatus;
+    // Mirror curl -w '\n%{http_code}' output: `<body>\n<status>`.
+    return { stdout: `unauthorized\n${status}`, stderr: "", exitCode: 0 };
+  };
+}
+
+test("verifyActorBIsolation derives all booleans from observed responses on the happy path (401/401, no leak)", async () => {
+  const driver = createCloudProvision1Driver({ execInProviderSandbox: fakeIsolationExec(401, 401) });
+  const world: ManagedCloudWorld = { ...fakeWorld(), box: fakeBoxExec() };
+  const result = await driver.verifyActorBIsolation(world, fakeActorB({ listingStatus: 404 }), fakeConvergenceForDriver());
+  assert.equal(result.actorBCannotDiscover, true);
+  assert.equal(result.runtimeRejectsMissing, true);
+  assert.equal(result.runtimeRejectsActorB, true);
+  assert.equal(result.missingCredentialStatus, 401);
+  assert.equal(result.actorBCredentialStatus, 401);
+});
+
+test("verifyActorBIsolation throws when actor B's listing surfaces actor A's sandbox id (leak)", async () => {
+  const driver = createCloudProvision1Driver({ execInProviderSandbox: fakeIsolationExec(401, 401) });
+  const world: ManagedCloudWorld = { ...fakeWorld(), box: fakeBoxExec() };
+  const convergence = fakeConvergenceForDriver();
+  await assert.rejects(
+    () => driver.verifyActorBIsolation(world, fakeActorB({ listing: { id: convergence.cloudSandboxId } }), convergence),
+    /cross-tenant isolation is broken/,
+  );
+});
+
+test("verifyActorBIsolation throws when the runtime accepts actor B's product credential (200)", async () => {
+  const driver = createCloudProvision1Driver({ execInProviderSandbox: fakeIsolationExec(401, 200) });
+  const world: ManagedCloudWorld = { ...fakeWorld(), box: fakeBoxExec() };
+  await assert.rejects(
+    () => driver.verifyActorBIsolation(world, fakeActorB({ listingStatus: 404 }), fakeConvergenceForDriver()),
+    /did not reject actor B's product credential with 401/,
+  );
+});
+
+test("verifyActorBIsolation throws when the runtime answers an unauthenticated request (missing-credential not rejected)", async () => {
+  const driver = createCloudProvision1Driver({ execInProviderSandbox: fakeIsolationExec(200, 401) });
+  const world: ManagedCloudWorld = { ...fakeWorld(), box: fakeBoxExec() };
+  await assert.rejects(
+    () => driver.verifyActorBIsolation(world, fakeActorB({ listingStatus: 404 }), fakeConvergenceForDriver()),
+    /did not reject an unauthenticated request with 401/,
+  );
+});
+
+test("verifyActorBIsolation never leaks actor B's product token into the exec argv script text", async () => {
+  const seenScripts: string[] = [];
+  const exec = async (_id: string, command: readonly string[]): Promise<E2BExecResult> => {
+    if (command[1] === "-c") seenScripts.push(String(command[2]));
+    const script = command[1] === "-c" ? String(command[2]) : "";
+    const status = script.includes("Authorization: Bearer") ? 401 : 401;
+    return { stdout: `x\n${status}`, stderr: "", exitCode: 0 };
+  };
+  const driver = createCloudProvision1Driver({ execInProviderSandbox: exec });
+  const world: ManagedCloudWorld = { ...fakeWorld(), box: fakeBoxExec() };
+  const actorB = fakeActorB({ listingStatus: 404 });
+  await driver.verifyActorBIsolation(world, actorB, fakeConvergenceForDriver());
+  // The token rides as its own argv element ($1), never interpolated into the script.
+  assert.ok(seenScripts.length > 0);
+  assert.ok(!seenScripts.some((s) => s.includes(actorB.session.access_token)));
 });

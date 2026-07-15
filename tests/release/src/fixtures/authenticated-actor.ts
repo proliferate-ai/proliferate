@@ -64,7 +64,7 @@ import type { ActorKeyIdentity } from "../services/qualification-litellm.js";
  *     `RELEASE_E2E_DURABLE_ORG_ID` documents for the durable-user fixtures.
  */
 
-export type ActorRole = "owner";
+export type ActorRole = "owner" | "member";
 
 /**
  * The stored-session shape the Desktop client persists under

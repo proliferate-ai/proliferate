@@ -57,6 +57,14 @@ def _state_name(value: object) -> str:
     return str(getattr(value, "value", value))
 
 
+def _started_at_iso(value: object) -> str | None:
+    started_at = getattr(value, "started_at", None)
+    if started_at is None:
+        return None
+    isoformat = getattr(started_at, "isoformat", None)
+    return isoformat() if callable(isoformat) else str(started_at)
+
+
 def cmd_find(cloud_sandbox_id: str) -> dict[str, object]:
     from e2b import Sandbox
     from e2b.api.client.models.sandbox_state import SandboxState
@@ -70,12 +78,35 @@ def cmd_find(cloud_sandbox_id: str) -> dict[str, object]:
         ),
         api_key=api_key,
     )
-    items = paginator.next_items()
-    if not items:
-        return {"providerSandboxId": None, "state": None}
-    # One cloud_sandbox row maps to at most one live provider sandbox at a time.
-    info = items[0]
-    return {"providerSandboxId": info.sandbox_id, "state": _state_name(info.state)}
+    # Drain EVERY page: the caller (CLOUD-PROVISION-1 step 3) must be able to
+    # detect a duplicate/orphan provider sandbox, so returning only the first
+    # page's first item would hide exactly the anomaly this proves the product
+    # does not produce. Each match carries the OBSERVED template id + start time
+    # so the caller can compare them against the candidate receipt (MCW-003)
+    # rather than trusting the receipt blindly.
+    matches: list[dict[str, object]] = []
+    while True:
+        for info in paginator.next_items():
+            matches.append(
+                {
+                    "providerSandboxId": info.sandbox_id,
+                    "state": _state_name(info.state),
+                    "templateId": getattr(info, "template_id", None),
+                    "startedAt": _started_at_iso(info),
+                }
+            )
+        if not paginator.has_next:
+            break
+    first = matches[0] if matches else None
+    return {
+        # Back-compatible first-match fields (existing T3-PROV-2 / T3-SEC-MAT-1
+        # callers read only these two).
+        "providerSandboxId": first["providerSandboxId"] if first else None,
+        "state": first["state"] if first else None,
+        # New: every live provider sandbox tagged with this cloud_sandbox_id.
+        "matches": matches,
+        "count": len(matches),
+    }
 
 
 def cmd_state(provider_sandbox_id: str) -> dict[str, object]:

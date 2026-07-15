@@ -15,6 +15,7 @@ import { ScenarioBlockedError } from "./types.js";
 import type { CandidateBuildMapV1 } from "../artifacts/build-map.js";
 import type { CellEvidenceV1, CloudProvisionTurnEvidenceV1 } from "../evidence/schema.js";
 import { authenticatedActor, type AuthenticatedActor } from "../fixtures/authenticated-actor.js";
+import { invitedActor } from "../fixtures/invited-actor.js";
 import { coreFunding, defaultCoreFundingTransport, type CoreFundingResult } from "../fixtures/core-funding.js";
 import {
   execInProviderSandbox,
@@ -26,10 +27,13 @@ import { githubAuthorization, type GithubAuthorizationBoundary } from "../fixtur
 import { productPage, type ProductPage } from "../fixtures/product-page.js";
 import type { BoxExec } from "../worlds/managed-cloud/box-exec.js";
 import {
+  DEFAULT_BOT_SEED_SSM_PARAMETER,
+  getBotRefreshTokenFromSsm,
   parseLastJsonLine,
-  persistRotatedBotSeed,
+  persistRotatedBotSeedDurable,
   seedGithubAuthorizationOnBox,
   seedUnlimitedCloudEntitlementOnBox,
+  type BotSeedSource,
 } from "../worlds/managed-cloud/box-seeds.js";
 import type { RunIdentityV1 } from "../runner/identity.js";
 import type { PlannedCellV1 } from "../runner/result.js";
@@ -90,6 +94,16 @@ export const REPRESENTATIVE_HARNESS = "claude";
 export const DETERMINISTIC_PROMPT = "Reply with exactly the word: pong";
 /** The fixture GitHub identity the staging App authorization must belong to. */
 export const EXPECTED_BOT_LOGIN = "proliferate-e2e-bot";
+/** The covered repository the staging App is installed on (spec "Fixtures"). */
+export const COVERED_REPO_OWNER = "proliferate-e2e";
+export const COVERED_REPO_NAME = "e2e-fixture";
+/**
+ * Where the product materializes cloud repo checkouts:
+ * `SANDBOX_REPOS_ROOT = /home/user/workspace/repos`
+ * (server materialization/paths.py). The covered repo lands at
+ * `<root>/<owner>/<repo>`.
+ */
+export const COVERED_REPO_CHECKOUT_ROOT = "/home/user/workspace/repos";
 /** Default local seed-file path for the D2 bot refresh token (names only in docs). */
 const DEFAULT_BOT_SEED_PATH = path.join(
   homedir(),
@@ -112,11 +126,13 @@ const TURN_TIMEOUT_MS = 300_000;
  * refetch interval (plain `useQuery`, no `refetchInterval`). If the workspace
  * opened before the gateway route finished materializing / the runtime finished
  * reporting the harness launch-ready, the cached menu is stale — so a bounded
- * retry that reloads once (forcing a fresh fetch) is required, exactly like
- * `local-world-smoke-1`'s reload-after-sync. Generous because a fresh cloud
- * reconnect + launch-options fetch can take a beat.
+ * retry that PERIODICALLY reloads (forcing a fresh fetch each cycle) is
+ * required, exactly like `local-world-smoke-1`'s reload-after-sync. Generous
+ * (and longer than the sandbox-side launch-options poll) because the browser's
+ * cloud catalog+launch-options MERGE can lag the sandbox reporting the harness
+ * launchable by a few reconnect+refetch cycles.
  */
-const MODEL_PICKER_TIMEOUT_MS = 120_000;
+const MODEL_PICKER_TIMEOUT_MS = 240_000;
 
 /**
  * The AnyHarness runtime's in-sandbox loopback port. NOT 8542 — that value is
@@ -237,6 +253,14 @@ export interface CloudProvision1ConstructionInputs {
 export interface SandboxConvergence {
   cloudSandboxId: string;
   providerSandboxId: string;
+  /** Observed provider count for this cloud_sandbox_id (spec step 3: exactly one, no orphan). */
+  providerSandboxCount: number;
+  /** Observed logical `cloud_sandbox` rows for the owner (spec step 3: exactly one). */
+  logicalSandboxCount: number;
+  /** The template id E2B reports the running sandbox was spawned from (observed, for MCW-003). */
+  observedTemplateId: string | null;
+  /** The provider-reported start time — the running-interval source (spec step 4). */
+  observedStartedAt: string | null;
 }
 
 export interface TemplateVerification {
@@ -254,17 +278,39 @@ export interface WorkerSupervisorVerification {
   anyharnessVersion: string;
   supervisorIsParent: boolean;
   heartbeatRecent: true;
+  /**
+   * The in-sandbox binaries' observed sha256s each matched their candidate-map
+   * receipt (spec step 5 "…+hashes match the candidate receipts" / MCW-003).
+   * `true` is the only value this returns — a mismatch throws.
+   */
+  anyharnessHashMatchesReceipt: true;
+  workerHashMatchesReceipt: true;
+  supervisorHashMatchesReceipt: true;
 }
 
 export interface CoveredRepoVerification {
   name: string;
   commit: string;
   noCredentialInRemote: true;
+  /**
+   * The materialized checkout's HEAD equalled the covered repo's pinned commit —
+   * the branch tip `git ls-remote` reports for the same repo the product cloned
+   * (spec step 7 "materializes at the pinned commit" / MCW-003). A mismatch throws.
+   */
+  commitMatchesPinned: true;
 }
 
 export interface IsolationVerification {
-  runtimeRejectsMissing: true;
-  runtimeRejectsActorB: true;
+  /** Actor B's product listing did NOT reveal actor A's sandbox/workspace/session (observed). */
+  actorBCannotDiscover: boolean;
+  /** The direct runtime rejected an UNAUTHENTICATED request with the expected status (observed). */
+  runtimeRejectsMissing: boolean;
+  /** The direct runtime rejected a request bearing actor B's product credential (observed). */
+  runtimeRejectsActorB: boolean;
+  /** HTTP status the runtime returned for the missing-credential probe (evidence/diagnostic). */
+  missingCredentialStatus: number;
+  /** HTTP status the runtime returned for actor B's credential (evidence/diagnostic). */
+  actorBCredentialStatus: number;
 }
 
 /**
@@ -276,8 +322,13 @@ export interface IsolationVerification {
 export interface CloudProvision1Driver {
   buildWorld(inputs: CloudProvision1ConstructionInputs): Promise<ManagedCloudWorld>;
   createActor(world: ManagedCloudWorld): Promise<AuthenticatedActor>;
-  /** Actor B — a second, unrelated fresh actor for the isolation check (spec step 9). */
-  createSecondActor(world: ManagedCloudWorld): Promise<AuthenticatedActor>;
+  /**
+   * Actor B — a REAL second product identity for the isolation check (spec
+   * step 9). Created through the supported invite→register→login seam (actor A,
+   * an org admin, mints the invitation), NOT by reusing the one-time `/setup`
+   * claim actor A already consumed (MCW-001).
+   */
+  createSecondActor(world: ManagedCloudWorld, actorA: AuthenticatedActor): Promise<AuthenticatedActor>;
   fundCore(world: ManagedCloudWorld, actor: AuthenticatedActor): Promise<CoreFundingResult>;
   trackActorSubjects(world: ManagedCloudWorld, actor: AuthenticatedActor): Promise<void>;
   authorizeGithub(world: ManagedCloudWorld, actor: AuthenticatedActor): Promise<GithubAuthorizationBoundary>;
@@ -379,6 +430,52 @@ async function resolveRuntimeBearerToken(box: BoxExec, cloudSandboxId: string): 
     );
   }
   return parsed.token;
+}
+
+/**
+ * Counts the owner's non-destroyed logical `cloud_sandbox` rows (spec step 3:
+ * exactly one). `load_personal_cloud_sandbox` returns at most one via
+ * `scalar_one_or_none`, so a raw COUNT is used here to make a duplicate (more
+ * than one row) OBSERVABLE rather than silently collapsed to the first.
+ */
+const COUNT_LOGICAL_SANDBOXES_PY = `import asyncio, json, os
+from uuid import UUID
+from sqlalchemy import func, select
+from proliferate.db.engine import async_session_factory
+from proliferate.db.models.cloud.sandboxes import CloudSandbox
+
+OWNER_USER_ID = UUID(os.environ["OWNER_USER_ID"])
+
+async def main():
+    async with async_session_factory() as db:
+        count = (
+            await db.execute(
+                select(func.count())
+                .select_from(CloudSandbox)
+                .where(
+                    CloudSandbox.owner_user_id == OWNER_USER_ID,
+                    CloudSandbox.destroyed_at.is_(None),
+                )
+            )
+        ).scalar_one()
+        print(json.dumps({"count": int(count)}))
+
+asyncio.run(main())
+`;
+
+/** Counts the owner's live logical cloud_sandbox rows via the box-exec seam. */
+async function countLogicalSandboxes(box: BoxExec, ownerUserId: string): Promise<number> {
+  const result = await box.serverPython(COUNT_LOGICAL_SANDBOXES_PY, {
+    env: { OWNER_USER_ID: ownerUserId },
+    scriptName: "count-logical-sandboxes.py",
+  });
+  const parsed = parseLastJsonLine(result.stdout) as { count?: unknown };
+  if (typeof parsed.count !== "number") {
+    throw new Error(
+      `countLogicalSandboxes: the candidate box did not report a numeric cloud_sandbox count (stdout: ${result.stdout.trim()}).`,
+    );
+  }
+  return parsed.count;
 }
 
 interface CloudRuntimeWorkerRow {
@@ -522,6 +619,32 @@ function curlPostCaptureArgs(token: string, url: string): string[] {
     "sh",
     "-c",
     `TOK="$1"; curl -sS -X POST -H "Authorization: Bearer $TOK" ${posixSingleQuote(url)} -w '\\n%{http_code}'`,
+    "sh",
+    token,
+  ];
+}
+
+/**
+ * A GET that CAPTURES the numeric HTTP status even on a 4xx/5xx (drops `-f`,
+ * appends `-w '\n%{http_code}'`) and carries NO Authorization header — used by
+ * the isolation check to prove the runtime rejects an UNAUTHENTICATED request
+ * (spec step 9). Output is `<body>\n<status>`.
+ */
+function curlGetStatusNoAuthArgs(url: string): string[] {
+  return ["sh", "-c", `curl -sS ${posixSingleQuote(url)} -w '\\n%{http_code}'`];
+}
+
+/**
+ * A GET that captures the numeric HTTP status even on a 4xx/5xx and carries the
+ * supplied bearer as its own argv element (`$1`) — used by the isolation check
+ * to prove the runtime rejects ACTOR B's product credential (spec step 9). The
+ * token never appears in the command string; this module never logs the argv.
+ */
+function curlGetStatusWithBearerArgs(token: string, url: string): string[] {
+  return [
+    "sh",
+    "-c",
+    `TOK="$1"; curl -sS -H "Authorization: Bearer $TOK" ${posixSingleQuote(url)} -w '\\n%{http_code}'`,
     "sh",
     token,
   ];
@@ -771,11 +894,15 @@ export function createCloudProvision1Driver(
   // probe finds zero models.
   createActor: (world) =>
     authenticatedActor(asAuthenticatedActorWorld(world), "owner", { gatewaySurface: "cloud" }),
-  createSecondActor: (world) =>
-    authenticatedActor(asAuthenticatedActorWorld(world), "owner", {
+  // Actor B is a REAL invited second user (MCW-001): actor A mints an org
+  // invitation, actor B registers against it and logs in. Reusing the one-time
+  // `/setup` claim (as the prior version did) is not a viable second identity —
+  // actor A already consumed it.
+  createSecondActor: (world, actorA) =>
+    invitedActor(asAuthenticatedActorWorld(world), {
+      inviter: actorA,
       gatewaySurface: "cloud",
       email: `qual-actor-b-${world.run.run_id}-${world.run.shard_id}@example.com`,
-      organizationName: `cloud-provision-1-actor-b-${world.run.run_id}`,
     }),
   fundCore: (world, actor) =>
     // Founder ruling (option B): the candidate box carries no Stripe/billing
@@ -806,7 +933,7 @@ export function createCloudProvision1Driver(
     // boundary via the 2026-07-09-ruled refresh-seed on the box rather than the
     // browser code-exchange (deferred to PR 6's serial lane). Falls back to the
     // fixture's manual-assist / blocked-honest lanes when no seed is present.
-    const botSeed = resolveBotSeedForAutomation();
+    const botSeed = await resolveBotSeedForAutomation();
     if (world.box && botSeed) {
       const seeded = await seedGithubAuthorizationOnBox({
         box: world.box,
@@ -814,7 +941,23 @@ export function createCloudProvision1Driver(
         clientId: botSeed.clientId,
         clientSecret: botSeed.clientSecret,
         refreshToken: botSeed.refreshToken,
-        persistRotatedRefreshToken: (next) => persistRotatedBotSeed(botSeed.seedFilePath, next),
+        coveredRepoOwner: COVERED_REPO_OWNER,
+        coveredRepoName: COVERED_REPO_NAME,
+        // MCW-004: persist the ROTATED token to whichever of {local file, SSM}
+        // are durable for this lane — SSM unconditionally in Actions (the only
+        // durable store on an ephemeral runner), the local file otherwise.
+        // Throws loudly on a failed durable write (GitHub has already rotated
+        // the token server-side, so a lost replacement bricks the seed).
+        persistRotatedRefreshToken: (next) =>
+          persistRotatedBotSeedDurable(
+            {
+              localSeedFilePath: botSeed.seedFilePath,
+              source: botSeed.source,
+              ssmParameterName: botSeed.ssmParameterName,
+              region: botSeed.region,
+            },
+            next,
+          ),
       });
       if (seeded.githubLogin !== EXPECTED_BOT_LOGIN) {
         throw new Error(
@@ -894,40 +1037,108 @@ export function createCloudProvision1Driver(
     // materializer after /ensure returns the row — poll bounded instead of a
     // single immediate lookup (a one-shot check here is exactly what leaked
     // orphan sandboxes: the spawn completed after failed runs tore down).
+    // `findProviderSandbox` now drains EVERY page and returns ALL matches, so a
+    // duplicate/orphan provider sandbox is observable (MCW-002) rather than
+    // hidden behind `items[0]`.
     const providerDeadline = Date.now() + SANDBOX_READY_TIMEOUT_MS;
-    let providerSandboxId: string | null = null;
+    let matches: NonNullable<Awaited<ReturnType<typeof findProviderSandbox>>["matches"]> = [];
     while (Date.now() < providerDeadline) {
       const found = await findProviderSandbox(cloudSandboxId);
-      if (found.providerSandboxId) {
-        providerSandboxId = found.providerSandboxId;
+      matches = found.matches ?? (found.providerSandboxId
+        ? [{ providerSandboxId: found.providerSandboxId, state: found.state as "running" | "paused", templateId: null, startedAt: null }]
+        : []);
+      if (matches.length > 0) {
         break;
       }
       await sleep(5_000);
     }
-    if (!providerSandboxId) {
+    if (matches.length === 0) {
       throw new Error(
         `completeAndConverge: no provider sandbox found for the materialized cloud sandbox within ${SANDBOX_READY_TIMEOUT_MS}ms.`,
       );
     }
-    // Register the kill the moment the provider sandbox is known, so a failure
-    // in ANY later step still reclaims it (idempotent; absent counts as killed).
-    await world.registerCleanup?.("e2b_sandbox", providerSandboxId, async () => {
-      await killProviderSandbox(providerSandboxId!);
-    });
-    return { cloudSandboxId, providerSandboxId };
+    // Register the kill for EVERY discovered provider sandbox BEFORE any
+    // convergence assertion, so the negative case (a duplicate/orphan) can never
+    // leave a provider sandbox running (idempotent; absent counts as killed).
+    for (const match of matches) {
+      const id = match.providerSandboxId;
+      await world.registerCleanup?.("e2b_sandbox", id, async () => {
+        await killProviderSandbox(id);
+      });
+    }
+    if (matches.length > 1) {
+      throw new Error(
+        `completeAndConverge: found ${matches.length} provider sandboxes tagged with cloud_sandbox ${cloudSandboxId} ` +
+          "(spec step 3 requires exactly one — a duplicate/orphan provider sandbox). All were registered for cleanup.",
+      );
+    }
+
+    // Exactly one LOGICAL row too (spec step 3): the concurrent/replayed
+    // completion must converge on one `cloud_sandbox`, not two.
+    if (!world.box) {
+      throw new Error(
+        "completeAndConverge: the managed-cloud world exposes no box-exec seam; the logical-row convergence check " +
+          "must query the candidate box's own cloud_sandbox table.",
+      );
+    }
+    const logicalSandboxCount = await countLogicalSandboxes(world.box, actor.userId);
+    if (logicalSandboxCount !== 1) {
+      throw new Error(
+        `completeAndConverge: the owner has ${logicalSandboxCount} live cloud_sandbox rows after replayed completion ` +
+          "(spec step 3 requires exactly one logical row).",
+      );
+    }
+
+    const only = matches[0]!;
+    return {
+      cloudSandboxId,
+      providerSandboxId: only.providerSandboxId,
+      providerSandboxCount: matches.length,
+      logicalSandboxCount,
+      observedTemplateId: only.templateId,
+      observedStartedAt: only.startedAt,
+    };
   },
   async verifyTemplateAndRunning(world, convergence) {
+    // Re-observe the provider sandbox directly (its template id + start time),
+    // and COMPARE the observed template id against the candidate template
+    // receipt (MCW-003) — do not copy the receipt id into evidence blindly.
+    const found = await findProviderSandbox(convergence.cloudSandboxId);
+    const observed = (found.matches ?? []).find((m) => m.providerSandboxId === convergence.providerSandboxId)
+      ?? (found.providerSandboxId === convergence.providerSandboxId
+        ? { providerSandboxId: convergence.providerSandboxId, state: found.state as "running" | "paused", templateId: convergence.observedTemplateId, startedAt: convergence.observedStartedAt }
+        : undefined);
     const state = await getProviderSandboxState(convergence.providerSandboxId);
     if (state.state !== "running") {
       throw new Error(`verifyTemplateAndRunning: provider sandbox state is "${state.state}", expected "running".`);
     }
     const templateReceipt = world.artifacts.template;
+    const observedTemplateId = observed?.templateId ?? convergence.observedTemplateId;
+    if (!observedTemplateId) {
+      throw new Error(
+        "verifyTemplateAndRunning: E2B reported no template id for the provider sandbox, so the sandbox's actual " +
+          "template identity cannot be compared with the candidate receipt (spec step 4 requires provider-verified ids).",
+      );
+    }
+    if (observedTemplateId !== templateReceipt.templateId) {
+      throw new Error(
+        `verifyTemplateAndRunning: the provider sandbox was spawned from template "${observedTemplateId}", not the ` +
+          `candidate template "${templateReceipt.templateId}" (spec step 4: exact immutable template). A stale ` +
+          "template alias would otherwise go green.",
+      );
+    }
+    const runningSince = observed?.startedAt ?? convergence.observedStartedAt;
     return {
-      templateId: templateReceipt.templateId,
+      templateId: observedTemplateId,
       buildId: templateReceipt.buildId,
       inputHash: templateReceipt.inputHash,
-      runningSince: new Date().toISOString(),
-      timingSource: "e2b provider sandbox state (direct verification)",
+      // The genuine running interval comes from the provider's own start time,
+      // not a local clock read (spec step 4: "a genuine running interval …
+      // provider timing source recorded").
+      runningSince: runningSince ?? new Date().toISOString(),
+      timingSource: runningSince
+        ? "e2b provider sandbox started_at (direct verification)"
+        : "e2b provider sandbox state (direct verification; provider start time unavailable)",
     };
   },
   async verifyWorkerSupervisor(world, convergence) {
@@ -972,6 +1183,35 @@ export function createCloudProvision1Driver(
       MANAGED_CLOUD_TEMPLATE_DESTINATIONS.anyharness,
       "--version",
     ]);
+
+    // Exact-identity check (spec step 5 "…+hashes match the candidate receipts"
+    // / MCW-003): sha256 each baked binary IN the sandbox and compare it to its
+    // candidate-map receipt sha256. Version strings alone can collide across a
+    // stale rebuild; the hash is the authoritative identity. A `--version`
+    // match with a hash mismatch means the sandbox is running a DIFFERENT binary
+    // than the candidate under test, which must fail rather than go green.
+    await assertBinaryHashMatchesReceipt(
+      exec,
+      convergence.providerSandboxId,
+      MANAGED_CLOUD_TEMPLATE_DESTINATIONS.anyharness,
+      world.artifacts.anyharness.sha256,
+      "anyharness",
+    );
+    await assertBinaryHashMatchesReceipt(
+      exec,
+      convergence.providerSandboxId,
+      MANAGED_CLOUD_TEMPLATE_DESTINATIONS.worker,
+      world.artifacts.worker.sha256,
+      "worker",
+    );
+    await assertBinaryHashMatchesReceipt(
+      exec,
+      convergence.providerSandboxId,
+      MANAGED_CLOUD_TEMPLATE_DESTINATIONS.supervisor,
+      world.artifacts.supervisor.sha256,
+      "supervisor",
+    );
+
     return {
       workerVersion: workerVersion.stdout.trim(),
       supervisorVersion: supervisorVersion.stdout.trim(),
@@ -980,6 +1220,9 @@ export function createCloudProvision1Driver(
       // claim it. `false` records the honest current state in evidence.
       supervisorIsParent: false,
       heartbeatRecent: true,
+      anyharnessHashMatchesReceipt: true,
+      workerHashMatchesReceipt: true,
+      supervisorHashMatchesReceipt: true,
     };
   },
   async verifyAnyharnessHealth(world, convergence) {
@@ -999,23 +1242,57 @@ export function createCloudProvision1Driver(
     }
   },
   async verifyCoveredRepo(_world, convergence) {
-    const remote = await exec(convergence.providerSandboxId, [
-      "sh",
-      "-c",
-      "git -C /home/user/workspace remote get-url origin",
-    ]);
-    const commit = await exec(convergence.providerSandboxId, [
-      "sh",
-      "-c",
-      "git -C /home/user/workspace rev-parse HEAD",
-    ]);
+    // The product materializes the covered repo under
+    // <SANDBOX_REPOS_ROOT>/<owner>/<repo> = /home/user/workspace/repos/<owner>/<repo>
+    // (materialization/paths.py `repo_path`), NOT /home/user/workspace.
+    const repoDir = `${COVERED_REPO_CHECKOUT_ROOT}/${COVERED_REPO_OWNER}/${COVERED_REPO_NAME}`;
+    const q = posixSingleQuote(repoDir);
+    const remote = await exec(convergence.providerSandboxId, ["sh", "-c", `git -C ${q} remote get-url origin`]);
+    if (remote.exitCode !== 0) {
+      throw new Error(
+        `verifyCoveredRepo: the covered repository is not a git checkout at ${repoDir} ` +
+          `(git remote exit ${remote.exitCode}: ${remote.stderr.trim().slice(0, 200)}). The product did not ` +
+          "materialize the covered repo where the materializer path resolves it (spec step 7).",
+      );
+    }
     if (/:[^@/]+@/.test(remote.stdout)) {
       throw new Error("verifyCoveredRepo: a credential appears in the remote URL.");
     }
+    const commitResult = await exec(convergence.providerSandboxId, ["sh", "-c", `git -C ${q} rev-parse HEAD`]);
+    const commit = commitResult.stdout.trim();
+    if (!/^[0-9a-f]{40}$/i.test(commit)) {
+      throw new Error(`verifyCoveredRepo: could not read a HEAD commit from ${repoDir} (got "${commit.slice(0, 80)}").`);
+    }
+
+    // COMPARE the checked-out HEAD against the covered repo's pinned commit
+    // (MCW-003), rather than trusting HEAD blindly. The product checks out the
+    // remote's default branch (`git ls-remote --symref origin HEAD`, fallback
+    // main — repo_environment.py), so the pinned commit is that same remote
+    // ref's tip observed from inside the sandbox against the SAME origin the
+    // product cloned (so the credential context matches).
+    const pinnedResult = await exec(convergence.providerSandboxId, [
+      "sh",
+      "-c",
+      `git -C ${q} ls-remote origin HEAD`,
+    ]);
+    const pinned = pinnedResult.stdout.trim().split(/\s+/)[0] ?? "";
+    if (!/^[0-9a-f]{40}$/i.test(pinned)) {
+      throw new Error(
+        `verifyCoveredRepo: could not resolve the covered repo's pinned commit via ls-remote ` +
+          `(git ls-remote exit ${pinnedResult.exitCode}: ${pinnedResult.stderr.trim().slice(0, 200)}).`,
+      );
+    }
+    if (commit.toLowerCase() !== pinned.toLowerCase()) {
+      throw new Error(
+        `verifyCoveredRepo: the materialized checkout HEAD (${commit}) does not equal the covered repo's pinned ` +
+          `commit (${pinned}) — a stale checkout would otherwise go green (spec step 7).`,
+      );
+    }
     return {
-      name: "proliferate-e2e/e2e-fixture",
-      commit: commit.stdout.trim(),
+      name: `${COVERED_REPO_OWNER}/${COVERED_REPO_NAME}`,
+      commit,
       noCredentialInRemote: true,
+      commitMatchesPinned: true,
     };
   },
   allowlistModels: async (world) => {
@@ -1228,36 +1505,76 @@ export function createCloudProvision1Driver(
       windowFinishedAt: params.windowFinishedAt,
     }),
   async verifyActorBIsolation(world, actorB, convergence) {
-    let rejectsMissing = false;
-    let rejectsActorB = false;
+    // (1) Product-level discovery: actor B's OWN authenticated listing must not
+    // reveal actor A's sandbox. Actor B is a real, independent user (invited),
+    // so this is the genuine cross-tenant read. `GET /v1/cloud/cloud-sandbox`
+    // returns actor B's own personal sandbox (or 404) — never actor A's. Derive
+    // the boolean from the OBSERVED response: any body that surfaces actor A's
+    // provider/cloud sandbox id fails the check.
+    let actorBCannotDiscover = true;
     try {
-      await actorB.api.get("/v1/cloud/cloud-sandbox");
-    } catch {
-      // Actor B has no sandbox of her own; a 404/empty response is expected
-      // and asserted structurally, not treated as the isolation proof by
-      // itself — the direct-runtime checks below are the load-bearing proof.
-    }
-    try {
-      if (world.box) {
-        const token = await resolveRuntimeBearerToken(world.box, convergence.cloudSandboxId);
-        await exec(
-          convergence.providerSandboxId,
-          curlWithBearerArgs(token, `http://127.0.0.1:${SANDBOX_RUNTIME_PORT}/v1/agents`),
-        );
+      const listing = await actorB.api.get<{ id?: string; providerSandboxId?: string } | null>(
+        "/v1/cloud/cloud-sandbox",
+      );
+      const serialized = JSON.stringify(listing ?? {});
+      if (serialized.includes(convergence.cloudSandboxId) || serialized.includes(convergence.providerSandboxId)) {
+        actorBCannotDiscover = false;
       }
-    } catch {
-      // Best-effort: exercising the runtime from inside the sandbox is
-      // covered by the missing-credential check below via a distinct
-      // unauthenticated path; direct provider exec always carries the
-      // operator's own E2B key and, here, the sandbox owner's OWN runtime
-      // token — never actor B's credential — so it cannot itself prove
-      // product-level isolation. The two booleans below are asserted from the
-      // actual product/runtime response shape once the driver's HTTP seam is
-      // wired.
+    } catch (error) {
+      // A 404 (actor B has no sandbox) is the expected isolation outcome; any
+      // other status is an unexpected error, not a silent pass.
+      if (!(typeof error === "object" && error !== null && (error as { status?: unknown }).status === 404)) {
+        throw error;
+      }
     }
-    rejectsMissing = true;
-    rejectsActorB = true;
-    return { runtimeRejectsMissing: rejectsMissing, runtimeRejectsActorB: rejectsActorB };
+    if (!actorBCannotDiscover) {
+      throw new Error(
+        "verifyActorBIsolation: actor B's product listing surfaced actor A's sandbox id — cross-tenant isolation " +
+          "is broken (spec step 9).",
+      );
+    }
+
+    const runtimeUrl = `http://127.0.0.1:${SANDBOX_RUNTIME_PORT}/v1/agents`;
+
+    // (2) Missing-credential: an UNAUTHENTICATED request to the bearer-guarded
+    // runtime must be rejected (the runtime is launched with
+    // `--require-bearer-auth`). Derive the boolean from the OBSERVED status.
+    const missingProbe = await exec(convergence.providerSandboxId, curlGetStatusNoAuthArgs(runtimeUrl));
+    const { status: missingCredentialStatus } = splitBodyAndStatus(missingProbe.stdout);
+    const runtimeRejectsMissing = missingProbe.exitCode === 0 && missingCredentialStatus === 401;
+
+    // (3) Actor-B credential: the runtime must reject actor B's PRODUCT bearer
+    // (it is not the sandbox's own runtime token). A product session token is
+    // not a valid AnyHarness runtime bearer, so the runtime must answer 401.
+    const actorBProbe = await exec(
+      convergence.providerSandboxId,
+      curlGetStatusWithBearerArgs(actorB.session.access_token, runtimeUrl),
+    );
+    const { status: actorBCredentialStatus } = splitBodyAndStatus(actorBProbe.stdout);
+    const runtimeRejectsActorB = actorBProbe.exitCode === 0 && actorBCredentialStatus === 401;
+
+    if (!runtimeRejectsMissing) {
+      throw new Error(
+        `verifyActorBIsolation: the direct runtime did not reject an unauthenticated request with 401 ` +
+          `(observed status ${Number.isNaN(missingCredentialStatus) ? "unparseable" : missingCredentialStatus}, ` +
+          `curl exit ${missingProbe.exitCode}) — spec step 9.`,
+      );
+    }
+    if (!runtimeRejectsActorB) {
+      throw new Error(
+        `verifyActorBIsolation: the direct runtime did not reject actor B's product credential with 401 ` +
+          `(observed status ${Number.isNaN(actorBCredentialStatus) ? "unparseable" : actorBCredentialStatus}, ` +
+          `curl exit ${actorBProbe.exitCode}) — spec step 9.`,
+      );
+    }
+
+    return {
+      actorBCannotDiscover,
+      runtimeRejectsMissing,
+      runtimeRejectsActorB,
+      missingCredentialStatus,
+      actorBCredentialStatus,
+    };
   },
   closeWorld: (world) => world.close(),
   };
@@ -1372,7 +1689,10 @@ export async function runCloudProvision1Cell(
       windowFinishedAt,
     });
 
-    const actorB = await driver.createSecondActor(world);
+    const actorB = await driver.createSecondActor(world, actor);
+    // Actor B minted her own LiteLLM key/user/team on enrollment — enrol them
+    // into the world's cleanup stack so world close() deletes them too.
+    await driver.trackActorSubjects(world, actorB);
     const isolation = await driver.verifyActorBIsolation(world, actorB, convergence);
 
     const artifactIds = [
@@ -1414,7 +1734,13 @@ export async function runCloudProvision1Cell(
         no_credential_in_remote: coveredRepo.noCredentialInRemote,
       },
       isolation: {
-        actor_b_denied: true,
+        // Derived from OBSERVED responses (MCW-001), not hard-coded: actor B's
+        // product listing did not reveal actor A's sandbox, AND the direct
+        // runtime rejected both the missing-credential and actor-B-credential
+        // probes. `verifyActorBIsolation` already throws unless all three hold,
+        // so reaching here means every one was observed true.
+        actor_b_denied:
+          isolation.actorBCannotDiscover && isolation.runtimeRejectsMissing && isolation.runtimeRejectsActorB,
         runtime_rejects_missing: isolation.runtimeRejectsMissing,
         runtime_rejects_actor_b: isolation.runtimeRejectsActorB,
       },
@@ -1565,43 +1891,128 @@ interface BotSeedForAutomation {
   clientId: string;
   clientSecret: string;
   refreshToken: string;
-  /** Where the rotated refresh token is persisted back after a live seed. */
+  /** Where the rotated refresh token is persisted back after a live seed (local file). */
   seedFilePath: string;
+  /** Which durable store the CURRENT token came from (governs where the rotated one is written). */
+  source: BotSeedSource;
+  /** The AWS SSM SecureString parameter the durable rotation writes to. */
+  ssmParameterName: string;
+  /** Explicit AWS region for the SSM read/write (the CI job maps RELEASE_E2E_CLOUD_AWS_REGION, not AWS_REGION). */
+  region?: string;
 }
 
 /**
  * Resolves the D2 bot seed + staging App OAuth creds for the automated GitHub
  * refresh-seed, or `null` when any piece is missing (→ manual-assist locally /
- * blocked-honest in Actions). The refresh token comes from the local seed file
- * (`RELEASE_E2E_CLOUD_GITHUB_BOT_SEED_STATE` override, else the default path) or
- * `RELEASE_E2E_CLOUD_GITHUB_BOT_REFRESH_TOKEN` (Actions). Never logs a value.
+ * blocked-honest in Actions). Resolution order for the refresh token (MCW-004):
+ *
+ *   1. `RELEASE_E2E_CLOUD_GITHUB_BOT_REFRESH_TOKEN` (env)  → source "env"
+ *   2. the local seed file (`RELEASE_E2E_CLOUD_GITHUB_BOT_SEED_STATE`
+ *      override, else the default path)                   → source "file"
+ *   3. AWS SSM Parameter Store SecureString
+ *      (`RELEASE_E2E_CLOUD_GITHUB_BOT_SEED_SSM_PARAMETER` override, else the
+ *      default parameter name)                            → source "ssm"
+ *
+ * The SSM lane is the only durable home for the ephemeral Actions runner: env
+ * and local file do not survive there, and GitHub rotates the token on every
+ * use. Async because the SSM read shells out. Never logs a token value.
  */
-export function resolveBotSeedForAutomation(env: NodeJS.ProcessEnv = process.env): BotSeedForAutomation | null {
+export async function resolveBotSeedForAutomation(
+  env: NodeJS.ProcessEnv = process.env,
+  // Injectable so unit tests never shell out to real `aws` for the SSM lane.
+  getFromSsm: typeof getBotRefreshTokenFromSsm = getBotRefreshTokenFromSsm,
+): Promise<BotSeedForAutomation | null> {
   const clientId = env.RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_ID?.trim();
   const clientSecret = env.RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET?.trim();
   if (!clientId || !clientSecret) {
     return null;
   }
   const seedFilePath = env.RELEASE_E2E_CLOUD_GITHUB_BOT_SEED_STATE?.trim() || DEFAULT_BOT_SEED_PATH;
+  const ssmParameterName =
+    env.RELEASE_E2E_CLOUD_GITHUB_BOT_SEED_SSM_PARAMETER?.trim() || DEFAULT_BOT_SEED_SSM_PARAMETER;
+  // The CI job maps RELEASE_E2E_CLOUD_AWS_REGION (not the aws-CLI-native
+  // AWS_REGION), so the SSM read/write must be told the region explicitly —
+  // exactly like ec2.ts's resolveImageId. Omitted locally → ambient region.
+  const region = env.RELEASE_E2E_CLOUD_AWS_REGION?.trim() || undefined;
+
   let refreshToken = env.RELEASE_E2E_CLOUD_GITHUB_BOT_REFRESH_TOKEN?.trim() || "";
+  let source: BotSeedSource | null = refreshToken ? "env" : null;
+
   if (!refreshToken) {
     try {
       const raw = JSON.parse(readFileSync(seedFilePath, "utf8")) as { refresh_token?: unknown };
       if (typeof raw.refresh_token === "string" && raw.refresh_token.trim()) {
         refreshToken = raw.refresh_token.trim();
+        source = "file";
       }
     } catch {
-      // No seed file → automation unavailable; caller falls back.
+      // No seed file → try the durable SSM lane below.
     }
   }
+
   if (!refreshToken) {
+    const ssm = await getFromSsm(ssmParameterName, undefined, region);
+    if (ssm.refreshToken !== null) {
+      refreshToken = ssm.refreshToken;
+      source = "ssm";
+    } else {
+      // Raw diagnostic to the runner stream (make log, NOT evidence) so an
+      // Actions run that falls through to blocked-honest names WHY the durable
+      // seed was unavailable instead of a silent fallback. Never logs a value.
+      process.stderr.write(`[cloud-bot-seed] SSM lane unavailable: ${ssm.reason}\n`);
+    }
+  }
+
+  if (!refreshToken || !source) {
     return null;
   }
-  return { clientId, clientSecret, refreshToken, seedFilePath };
+  return { clientId, clientSecret, refreshToken, seedFilePath, source, ssmParameterName, region };
 }
 
 function sha256Hex(value: string): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+/** Parses the sha256 hex out of a coreutils `sha256sum <path>` line (`<hex>  <path>`). */
+function parseSha256Sum(stdout: string): string | null {
+  const match = stdout.trim().match(/^([0-9a-f]{64})\b/i);
+  return match ? match[1]!.toLowerCase() : null;
+}
+
+/**
+ * Hashes a baked binary IN the sandbox (`sha256sum <path>`) and asserts it
+ * equals the candidate-map receipt sha256 (spec step 5 / MCW-003). Throws on a
+ * mismatch, an unreadable binary, or unparseable output — never records an
+ * unverified `true`.
+ */
+async function assertBinaryHashMatchesReceipt(
+  exec: typeof execInProviderSandbox,
+  providerSandboxId: string,
+  binaryPath: string,
+  expectedSha256: string,
+  label: string,
+): Promise<void> {
+  const result = await exec(providerSandboxId, ["sha256sum", binaryPath]);
+  if (result.exitCode !== 0) {
+    throw new Error(
+      `assertBinaryHashMatchesReceipt: could not sha256 the ${label} binary at ${binaryPath} in the sandbox ` +
+        `(sha256sum exit ${result.exitCode}: ${result.stderr.trim().slice(0, 200)}).`,
+    );
+  }
+  const observed = parseSha256Sum(result.stdout);
+  if (!observed) {
+    throw new Error(
+      `assertBinaryHashMatchesReceipt: sha256sum produced no parseable digest for the ${label} binary ` +
+        `(stdout: ${result.stdout.trim().slice(0, 200)}).`,
+    );
+  }
+  if (observed !== expectedSha256.toLowerCase()) {
+    throw new Error(
+      `assertBinaryHashMatchesReceipt: the in-sandbox ${label} binary sha256 (${observed}) does not match its ` +
+        `candidate receipt (${expectedSha256}). The sandbox is running a different ${label} than the candidate ` +
+        "under test (spec step 5 requires hashes to match the candidate receipts).",
+    );
+  }
 }
 
 function describe(error: unknown): string {
@@ -1680,7 +2091,17 @@ async function selectModelInCloudComposer(page: ProductPage, modelId: string): P
   const deadline = start + MODEL_PICKER_TIMEOUT_MS;
   const optionSelector = `[data-model-option="${cssAttr(modelId)}"]`;
   let lastAvailable: Array<string | null> = [];
-  let reloadedOnce = false;
+  // The cloud composer's model list is the cloud v2 catalog merged with the
+  // sandbox's launch-options, fetched ONCE per workspace open with no refetch
+  // interval. If the workspace opened before the runtime reported the harness
+  // launch-ready, the cached menu is stale/empty and only a RELOAD re-fetches
+  // it. A single reload (the prior behavior) loses the race when the menu is
+  // still cold at that instant, so reload PERIODICALLY whenever the picker is
+  // still empty — each reload remounts the query and `ensureCloudWorkspaceOpen`
+  // rehydrates the same cloud workspace. Bounded by the same deadline.
+  const RELOAD_EVERY_MS = 30_000;
+  let lastReloadAt = start;
+  let surfacedEmpty = false;
   while (Date.now() < deadline) {
     const trigger = p.locator("[data-composer-model-trigger]:not([disabled])").first();
     try {
@@ -1703,13 +2124,21 @@ async function selectModelInCloudComposer(page: ProductPage, modelId: string): P
       .locator("[data-model-option]")
       .evaluateAll((els) => els.map((el) => el.getAttribute("data-model-option")))
       .catch(() => []);
+    // Surface an empty picker once to the runner log (make log, NOT evidence):
+    // an [] here with the sandbox launch-options already listing the harness
+    // (waitForSandboxLaunchOptions passed just before) means the BROWSER's
+    // cloud catalog+launch-options merge has not surfaced the model yet — the
+    // disclosed-unverified browser→cloud path, distinct from a sandbox-side gap.
+    if (lastAvailable.length === 0 && !surfacedEmpty) {
+      surfacedEmpty = true;
+      process.stderr.write(
+        "[cloud-composer] model picker empty despite the sandbox listing the harness; reloading to re-fetch " +
+          "the cloud launch-options menu.\n",
+      );
+    }
     await p.keyboard.press("Escape").catch(() => undefined);
-    // Once, after giving the initial menu a chance, force a fresh
-    // launch-options fetch: the desktop caches the cloud workspace menu at open
-    // with no refetch interval, so a route that synced afterwards only appears
-    // after a reload. `ensureCloudWorkspaceOpen` reattaches the workspace.
-    if (!reloadedOnce && Date.now() - start > MODEL_PICKER_TIMEOUT_MS / 3) {
-      reloadedOnce = true;
+    if (Date.now() - lastReloadAt > RELOAD_EVERY_MS) {
+      lastReloadAt = Date.now();
       await p.reload({ waitUntil: "domcontentloaded" }).catch(() => undefined);
       await ensureCloudWorkspaceOpen(page).catch(() => undefined);
     }
@@ -1736,25 +2165,51 @@ async function resolveActiveSandboxSessionId(
   timeoutMs: number,
 ): Promise<string> {
   const deadline = Date.now() + timeoutMs;
+  // Self-diagnosing on timeout (mirrors [cloud-launch-options]/[cloud-model-probe]):
+  // a blind "no session in 300s" hides WHY. Surface each distinct raw
+  // /v1/sessions outcome to the runner log (make log, NOT evidence) so a
+  // persistent empty list (browser send never dispatched a turn to this
+  // sandbox) is distinguishable from an auth/transport error. The bearer token
+  // rides only in the request header (curlWithBearerArgs), never surfaced.
+  let lastFailure = "no attempt";
+  let lastSurfaced = "";
+  const surface = (line: string): void => {
+    if (line === lastSurfaced) {
+      return;
+    }
+    lastSurfaced = line;
+    process.stderr.write(`[cloud-session] ${line}\n`);
+  };
   while (Date.now() < deadline) {
     const result = await exec(
       providerSandboxId,
       curlWithBearerArgs(token, `http://127.0.0.1:${SANDBOX_RUNTIME_PORT}/v1/sessions`),
     ).catch(() => null);
-    if (result?.stdout.trim()) {
+    if (result && result.exitCode !== 0) {
+      lastFailure = `sessions curl exited ${result.exitCode}`;
+      surface(`curl exit=${result.exitCode} stderr=${result.stderr.trim().slice(0, 200)}`);
+    } else if (result?.stdout.trim()) {
       try {
         const parsed = JSON.parse(result.stdout) as { sessions?: Array<{ id: string }> } | Array<{ id: string }>;
         const sessions = Array.isArray(parsed) ? parsed : parsed.sessions ?? [];
         if (sessions.length > 0) {
           return sessions[sessions.length - 1]!.id;
         }
+        lastFailure = "sessions list is empty (no turn dispatched to this sandbox yet)";
+        surface(`empty session list: ${result.stdout.trim().slice(0, 300)}`);
       } catch {
-        // fall through to retry
+        lastFailure = "sessions response was not valid JSON";
+        surface(`invalid JSON: ${result.stdout.trim().slice(0, 300)}`);
       }
     }
     await sleep(1_000);
   }
-  throw new Error(`resolveActiveSandboxSessionId: no AnyHarness session materialized within ${timeoutMs}ms.`);
+  throw new Error(
+    `resolveActiveSandboxSessionId: no AnyHarness session materialized within ${timeoutMs}ms (last: ${lastFailure}). ` +
+      "The raw /v1/sessions outcome was surfaced to the runner log under [cloud-session]: a persistently empty list " +
+      "means the product UI send never started a session in this sandbox (the disclosed unverified browser→cloud " +
+      "turn path), distinct from an auth/transport error.",
+  );
 }
 
 /**

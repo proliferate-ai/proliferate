@@ -528,9 +528,9 @@ test("the user's E2B sandbox is NOT pre-created by world construction", async ()
     });
     // World setup makes the template + candidate API available but must not spawn
     // the user's sandbox — provisioning is the scenario behavior. A green world
-    // teardown therefore has no e2b_sandbox category to satisfy.
+    // teardown therefore has no e2b_sandbox registrations, which is vacuously clean.
     const evidence = await world.close();
-    assert.equal(evidence.sandboxesDeleted, false);
+    assert.equal(evidence.sandboxesDeleted, true);
     assert.equal(evidence.failed, 0);
   } finally {
     await rm(src, { recursive: true, force: true });

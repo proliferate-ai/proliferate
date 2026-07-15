@@ -1,7 +1,9 @@
-import { mkdir, rename, writeFile } from "node:fs/promises";
+import { mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import type { BoxExec } from "./box-exec.js";
+import type { AwsCliExec } from "./ec2.js";
 
 /**
  * The two server-side seeds CLOUD-PROVISION-1 runs on the candidate box through
@@ -27,6 +29,18 @@ import type { BoxExec } from "./box-exec.js";
  * Every effect is behind the injected `BoxExec` (and, for gap 4, an injected
  * token refresher), so unit tests exercise the plumbing offline with no real
  * box, GitHub, or DB.
+ *
+ * MCW-004: neither the local seed file nor a static Actions secret is a
+ * durable home for the gap-4 refresh token — GitHub ROTATES it on every use,
+ * the local file does not survive an ephemeral Actions runner, and a static
+ * Actions secret goes stale after the first run. This module also owns the
+ * durable AWS SSM Parameter Store seam (`getBotRefreshTokenFromSsm`,
+ * `putBotRefreshTokenToSsm`, `persistRotatedBotSeedDurable`) that resolution
+ * and rotation-persistence fall back to when the env token / local file are
+ * unavailable. AWS credentials stay ambient (the `aws` CLI), matching the
+ * `ec2.ts` precedent; the rotated token is passed to `aws ssm put-parameter`
+ * via a mode-0600 `file://` temp file, never argv, so it never appears in a
+ * shell-failure error message or a process listing.
  */
 
 /** A UUID guard so an actor id can be interpolated into a `docker exec -e` value safely. */
@@ -193,6 +207,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 from proliferate.db.engine import async_session_factory
 from proliferate.db.store import github_app as github_app_store
+from proliferate.db.store import repositories as repositories_store
 from proliferate.integrations.github.app_user_tokens import GitHubAppUserAuthorization
 from proliferate.server.cloud.github_app.service import refresh_github_app_installation_cache
 from proliferate.server.cloud.cloud_sandboxes.service import ensure_personal_cloud_sandbox_exists
@@ -222,12 +237,32 @@ async def main():
         await db.commit()
         await refresh_github_app_installation_cache(db)
         await db.commit()
+        # Configure the covered repo as a CLOUD repo_environment via the
+        # product's OWN store function (the same one save_cloud_environment
+        # calls), so the sandbox bootstrap preclones it into the sandbox (spec
+        # step 7: "materialized BY THE PRODUCT inside the sandbox"). Without a
+        # configured cloud repo_environment the materializer preclones nothing,
+        # so this is a real prerequisite, not a shortcut around product code.
+        repo_owner = payload["repo_owner"]
+        repo_name = payload["repo_name"]
+        await repositories_store.upsert_cloud_repo_environment(
+            db,
+            user_id=user_id,
+            git_provider="github",
+            git_owner=repo_owner,
+            git_repo_name=repo_name,
+            default_branch=None,
+            setup_script="",
+            run_command="",
+        )
+        await db.commit()
         # Mirror the FULL production callback tail
         # (complete_github_app_user_authorization_callback): it also ensures the
         # personal cloud-sandbox row and schedules sandbox materialization. The
         # scheduler variant spawns a background task that would die with this
         # one-shot script process, so run the real materializer to completion —
-        # this is the call that actually creates the E2B provider sandbox.
+        # this is the call that actually creates the E2B provider sandbox AND
+        # preclones the configured cloud repo_environment above.
         await ensure_personal_cloud_sandbox_exists(db, user_id=user_id)
         await db.commit()
         await materialize_sandbox(db, user_id=user_id)
@@ -252,6 +287,9 @@ export interface SeedGithubAuthorizationOptions {
   clientSecret: string;
   /** The current bot refresh token (from the seed file / env). */
   refreshToken: string;
+  /** The covered repo to configure as a cloud repo_environment so the sandbox preclones it (spec step 7). */
+  coveredRepoOwner: string;
+  coveredRepoName: string;
   /**
    * Persists the ROTATED refresh token (+ resolved identity) back to the seed
    * source. Called with the new token BEFORE the box upsert, so a crash after
@@ -299,6 +337,8 @@ export async function seedGithubAuthorizationOnBox(
     refresh_token_expires_at_unix: authorization.refreshTokenExpiresAtUnix,
     github_login: authorization.githubLogin,
     github_user_id: authorization.githubUserId,
+    repo_owner: options.coveredRepoOwner,
+    repo_name: options.coveredRepoName,
   });
   const authFilePath = await options.box.putSecretFile("github-user-auth.json", authFileContents);
   try {
@@ -347,6 +387,190 @@ export async function persistRotatedBotSeed(
   const tmp = `${seedFilePath}.tmp-${process.pid}`;
   await writeFile(tmp, JSON.stringify(body), { mode: 0o600 });
   await rename(tmp, seedFilePath);
+}
+
+// ---------------------------------------------------------------------------
+// MCW-004 — durable AWS SSM Parameter Store seam
+// ---------------------------------------------------------------------------
+
+/**
+ * Default AWS SSM Parameter Store name for the durable D2 GitHub bot
+ * refresh-token seed (SecureString), overridable via
+ * `RELEASE_E2E_CLOUD_GITHUB_BOT_SEED_SSM_PARAMETER` (see env-manifest.ts).
+ */
+export const DEFAULT_BOT_SEED_SSM_PARAMETER = "/proliferate/qualification/github-bot-refresh-token";
+
+/**
+ * Where the CURRENT (pre-rotation) refresh token was resolved from — needed
+ * by `persistRotatedBotSeedDurable` to decide which durable store(s) the
+ * rotated replacement must land in.
+ */
+export type BotSeedSource = "env" | "file" | "ssm";
+
+const defaultAwsCliExec: AwsCliExec = async (file, args, options) => {
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const run = promisify(execFile);
+  const { stdout, stderr } = await run(file, [...args], {
+    timeout: options?.timeoutMs,
+    maxBuffer: 32 * 1024 * 1024,
+  });
+  return { stdout: stdout.toString(), stderr: stderr.toString() };
+};
+
+/** `execFile` failure messages include the full argv; safe here since neither AWS call below puts the token in argv. */
+function describeAwsCliError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Reads the durable bot refresh-token seed from AWS SSM Parameter Store
+ * (`aws ssm get-parameter --with-decryption`). Never throws: any failure
+ * (missing creds, missing parameter, network) comes back as a bounded,
+ * honest `reason` so both the resolution fallback and preflight can report
+ * WHY the SSM lane was unavailable instead of treating "not there" as a bug.
+ * Never logs the resolved value.
+ */
+export async function getBotRefreshTokenFromSsm(
+  parameterName: string,
+  exec: AwsCliExec = defaultAwsCliExec,
+  // Explicit region (from RELEASE_E2E_CLOUD_AWS_REGION) — the CI job maps that
+  // var, NOT the aws-CLI-native AWS_REGION, so the SSM call must pass --region
+  // itself exactly like ec2.ts's resolveImageId does. Omitted → ambient region.
+  region?: string,
+): Promise<{ refreshToken: string } | { refreshToken: null; reason: string }> {
+  try {
+    const { stdout } = await exec("aws", [
+      "ssm",
+      "get-parameter",
+      "--name",
+      parameterName,
+      "--with-decryption",
+      ...(region ? ["--region", region] : []),
+      "--query",
+      "Parameter.Value",
+      "--output",
+      "text",
+    ]);
+    const value = stdout.trim();
+    if (!value || value === "None") {
+      return { refreshToken: null, reason: `SSM parameter "${parameterName}" resolved to an empty value.` };
+    }
+    return { refreshToken: value };
+  } catch (error) {
+    return {
+      refreshToken: null,
+      reason: `SSM get-parameter for "${parameterName}" failed (${describeAwsCliError(error)}).`,
+    };
+  }
+}
+
+/**
+ * Writes the ROTATED bot refresh token to AWS SSM Parameter Store
+ * (`aws ssm put-parameter --overwrite`, SecureString). The token is written
+ * to a mode-0600 temp file first and passed as `--value file://…` — never
+ * argv — so it can never appear in a process listing or a shell-failure
+ * error message, matching `box-exec.ts`'s "secret VALUES travel as a copied
+ * file, never argv" rule. Throws (does not swallow) on failure: per the
+ * MCW-004 ruling, "a silently-lost rotated token bricks the seed", so a
+ * failed durable write must fail the run loudly.
+ */
+export async function putBotRefreshTokenToSsm(
+  parameterName: string,
+  refreshToken: string,
+  exec: AwsCliExec = defaultAwsCliExec,
+  region?: string,
+): Promise<void> {
+  const tmp = path.join(tmpdir(), `bot-seed-ssm-${process.pid}-${Date.now()}.tmp`);
+  await writeFile(tmp, refreshToken, { mode: 0o600 });
+  try {
+    await exec("aws", [
+      "ssm",
+      "put-parameter",
+      "--name",
+      parameterName,
+      "--type",
+      "SecureString",
+      ...(region ? ["--region", region] : []),
+      "--value",
+      `file://${tmp}`,
+      "--overwrite",
+    ]);
+  } catch (error) {
+    throw new Error(
+      `putBotRefreshTokenToSsm: failed to durably persist the rotated GitHub bot refresh token to SSM ` +
+        `parameter "${parameterName}" (${describeAwsCliError(error)}). GitHub has already rotated the ` +
+        "token server-side — the previous token is now invalid. Treat this run as failed; re-bootstrap " +
+        "the seed before retrying.",
+    );
+  } finally {
+    await rm(tmp, { force: true });
+  }
+}
+
+export interface PersistRotatedBotSeedDurableOptions {
+  /** Local seed-file path, written only when NOT running in Actions (an ephemeral runner makes it non-durable there). */
+  localSeedFilePath: string;
+  /** Where the pre-rotation refresh token was resolved from. */
+  source: BotSeedSource;
+  /** SSM parameter name, written when the seed came from SSM, or unconditionally in Actions. */
+  ssmParameterName: string;
+  /** Explicit AWS region for the SSM write (RELEASE_E2E_CLOUD_AWS_REGION); omitted → ambient. */
+  region?: string;
+  exec?: AwsCliExec;
+  /** Defaults to `process.env`; only read for `GITHUB_ACTIONS`. */
+  env?: NodeJS.ProcessEnv;
+}
+
+/**
+ * Durable rotation-write per the MCW-004 ruling: writes the rotated token to
+ * whichever of {local seed file, SSM} are actually durable for the current
+ * lane —
+ *
+ *   - local seed file: only when NOT `GITHUB_ACTIONS=true` (the runner
+ *     filesystem does not survive past this run, so writing it there would
+ *     silently look successful while losing the token);
+ *   - SSM: when the pre-rotation token came FROM SSM (so the durable source
+ *     must be kept current), OR unconditionally when `GITHUB_ACTIONS=true`
+ *     (SSM is the only durable store available to the Actions lane).
+ *
+ * Collects failures from every attempted write and throws a single loud
+ * error naming all of them if any fail — never swallows a failed durable
+ * write, because GitHub has already rotated the token server-side by the
+ * time this runs, so losing the replacement bricks the seed.
+ */
+export async function persistRotatedBotSeedDurable(
+  options: PersistRotatedBotSeedDurableOptions,
+  next: { refreshToken: string; githubLogin: string; githubUserId: string },
+): Promise<void> {
+  const env = options.env ?? process.env;
+  const isActions = env.GITHUB_ACTIONS === "true";
+  const exec = options.exec ?? defaultAwsCliExec;
+  const failures: string[] = [];
+
+  if (!isActions) {
+    try {
+      await persistRotatedBotSeed(options.localSeedFilePath, next);
+    } catch (error) {
+      failures.push(`local seed file (${options.localSeedFilePath}): ${describeAwsCliError(error)}`);
+    }
+  }
+
+  if (isActions || options.source === "ssm") {
+    try {
+      await putBotRefreshTokenToSsm(options.ssmParameterName, next.refreshToken, exec, options.region);
+    } catch (error) {
+      failures.push(describeAwsCliError(error));
+    }
+  }
+
+  if (failures.length > 0) {
+    throw new Error(
+      "persistRotatedBotSeedDurable: failed to durably persist the ROTATED GitHub bot refresh token " +
+        `(${failures.join("; ")}). GitHub has already rotated the token server-side, invalidating the ` +
+        "previous one — this run must be treated as failed and the seed re-bootstrapped before retrying.",
+    );
+  }
 }
 
 /** Parses the last `{...}` line of a script's stdout (reused by other box-exec callers, e.g. cloud-provision-1.ts). */

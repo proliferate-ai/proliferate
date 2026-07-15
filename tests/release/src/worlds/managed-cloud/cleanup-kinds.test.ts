@@ -83,9 +83,10 @@ test("a releaser failure is counted (not thrown) and flips its category boolean"
     assert.equal(evidence.reconciled, 1);
     assert.equal(evidence.ec2Terminated, false); // ec2_instance failed
     assert.equal(evidence.dnsRecordDeleted, true);
-    // Categories with no registered entry are false (an incomplete run cannot be green).
-    assert.equal(evidence.templateDeleted, false);
-    assert.equal(evidence.localPathsRemoved, false);
+    // Categories with no registered entry are vacuously clean (true): a category
+    // this run never touched cannot itself be evidence of a failure.
+    assert.equal(evidence.templateDeleted, true);
+    assert.equal(evidence.localPathsRemoved, true);
   } finally {
     await rm(runDir, { recursive: true, force: true });
   }

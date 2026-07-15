@@ -194,7 +194,10 @@ export class ManagedCloudCleanupStack {
     const kinds = new Set<CleanupResourceKind>(MANAGED_CLOUD_EVIDENCE_CATEGORIES[category]);
     const inCategory = this.registrations.filter((registration) => kinds.has(registration.kind));
     if (inCategory.length === 0) {
-      return false;
+      // No registrations in this category: vacuously clean. A zero-registration
+      // category must not read as a failure (that would produce contradictory
+      // evidence like `failed: 0` alongside a false deletion boolean).
+      return true;
     }
     return inCategory.every((registration) => succeeded.has(registration.entryId));
   }

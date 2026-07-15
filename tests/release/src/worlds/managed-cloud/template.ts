@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { copyFile, readFile } from "node:fs/promises";
 import os from "node:os";
@@ -297,6 +296,11 @@ function readE2bApiKey(secretsEnvFilePath: string): string {
   throw new Error(`${secretsEnvFilePath} does not define RELEASE_E2E_E2B_API_KEY (or E2B_API_KEY).`);
 }
 
+/** Single-quotes a value for safe interpolation into a shell command string (POSIX `'\''` escaping). */
+function shellQuoteArg(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
 /**
  * Exported for the input-hash and the unit tests: the exact bake-time install
  * command. Pins BOTH `HOME` and `--runtime-home` to the serving runtime's home
@@ -304,7 +308,7 @@ function readE2bApiKey(secretsEnvFilePath: string): string {
  * land exactly where `resolve_agent_with_env` looks at launch-options time.
  */
 export function buildAgentInstallCommand(agentKinds: readonly string[]): string {
-  const agentArgs = agentKinds.map((agentKind) => `--agent ${agentKind}`).join(" ");
+  const agentArgs = agentKinds.map((agentKind) => `--agent ${shellQuoteArg(agentKind)}`).join(" ");
   return [
     "set -eu",
     `echo "Preinstalling agents: ${agentKinds.join(", ")}"`,
@@ -338,54 +342,68 @@ export class E2bTemplateBuilder implements ManagedCloudTemplateBuilder {
         bootstrapFileNames.set(bootstrapInput.destination, fileName);
       }
 
-      const previousCwd = process.cwd();
-      process.chdir(contextDir);
-      try {
-        let template = Template({ fileContextPath: "." })
-          .fromBaseImage()
-          .setUser("root")
-          .copy("anyharness", MANAGED_CLOUD_TEMPLATE_DESTINATIONS.anyharness, { mode: 0o755 })
-          .makeDir("/home/user/.proliferate/bin", { mode: 0o755, user: "user" })
-          .copy("proliferate-worker", MANAGED_CLOUD_TEMPLATE_DESTINATIONS.worker, { mode: 0o755 })
-          .copy("proliferate-supervisor", MANAGED_CLOUD_TEMPLATE_DESTINATIONS.supervisor, { mode: 0o755 })
-          .copy("proliferate-git-credential-helper", MANAGED_CLOUD_TEMPLATE_DESTINATIONS.credentialHelper, {
-            mode: 0o700,
-          })
-          .runCmd(
-            `chown user:user ${MANAGED_CLOUD_TEMPLATE_DESTINATIONS.credentialHelper} && chmod 700 ${MANAGED_CLOUD_TEMPLATE_DESTINATIONS.credentialHelper}`,
-            { user: "root" },
-          )
-          .makeDir("/home/user/workspace", { mode: 0o755, user: "user" });
+      let template = Template({ fileContextPath: contextDir })
+        .fromBaseImage()
+        .setUser("root")
+        // Install Node 22 exactly as the production template bake does
+        // (scripts/build-template.mjs): the E2B base image ships Node v20.9.0,
+        // but the bundled claude ACP adapter (claude-agent-acp) requires Node
+        // 20.10+ — without this the runtime reports the claude harness
+        // `readiness: unsupported` ("Claude ACP requires Node.js 20.10+, but
+        // found Node.js v20.9.0"), so launch-options never lists a launchable
+        // claude and step 8's gateway turn can never open. Pinning Node 22
+        // matches what production serves, keeping the candidate faithful.
+        .aptInstall(["ca-certificates", "curl"], { noInstallRecommends: true })
+        .runCmd('bash -lc "curl -fsSL https://deb.nodesource.com/setup_22.x | bash -"')
+        .aptInstall("nodejs", { noInstallRecommends: true })
+        .runCmd(
+          [
+            "rm -f /usr/local/bin/node /usr/local/bin/npm /usr/local/bin/npx",
+            "ln -sf /usr/bin/node /usr/local/bin/node",
+            "ln -sf /usr/bin/npm /usr/local/bin/npm",
+            "ln -sf /usr/bin/npx /usr/local/bin/npx",
+          ],
+          { user: "root" },
+        )
+        .copy("anyharness", MANAGED_CLOUD_TEMPLATE_DESTINATIONS.anyharness, { mode: 0o755 })
+        .makeDir("/home/user/.proliferate/bin", { mode: 0o755, user: "user" })
+        .copy("proliferate-worker", MANAGED_CLOUD_TEMPLATE_DESTINATIONS.worker, { mode: 0o755 })
+        .copy("proliferate-supervisor", MANAGED_CLOUD_TEMPLATE_DESTINATIONS.supervisor, { mode: 0o755 })
+        .copy("proliferate-git-credential-helper", MANAGED_CLOUD_TEMPLATE_DESTINATIONS.credentialHelper, {
+          mode: 0o700,
+        })
+        .runCmd(
+          `chown user:user ${MANAGED_CLOUD_TEMPLATE_DESTINATIONS.credentialHelper} && chmod 700 ${MANAGED_CLOUD_TEMPLATE_DESTINATIONS.credentialHelper}`,
+          { user: "root" },
+        )
+        .makeDir("/home/user/workspace", { mode: 0o755, user: "user" });
 
-        for (const bootstrapInput of inputs.bootstrapInputs) {
-          const fileName = bootstrapFileNames.get(bootstrapInput.destination);
-          if (!fileName) {
-            throw new Error(`Bootstrap input "${bootstrapInput.destination}" was not staged into the build context.`);
-          }
-          template = template
-            .makeDir(path.posix.dirname(bootstrapInput.destination), { mode: 0o755, user: "user" })
-            .copy(fileName, bootstrapInput.destination, { mode: bootstrapInput.mode ?? 0o644 });
+      for (const bootstrapInput of inputs.bootstrapInputs) {
+        const fileName = bootstrapFileNames.get(bootstrapInput.destination);
+        if (!fileName) {
+          throw new Error(`Bootstrap input "${bootstrapInput.destination}" was not staged into the build context.`);
         }
-
-        // setReadyCmd finalizes the builder chain (TemplateFinal), so the last
-        // stage is assigned directly rather than reassigned into `template`.
-        const finalTemplate = template
-          .setUser("user")
-          .runCmd(buildAgentInstallCommand(inputs.agentKinds))
-          .setWorkdir("/home/user/workspace")
-          .setReadyCmd(waitForTimeout(0));
-
-        const buildInfo = await Template.build(finalTemplate, config.templateName, {
-          apiKey,
-          cpuCount: 4,
-          memoryMB: 8192,
-          onBuildLogs: defaultBuildLogger(),
-        });
-
-        return { templateId: buildInfo.templateId, buildId: buildInfo.buildId, templateName: config.templateName };
-      } finally {
-        process.chdir(previousCwd);
+        template = template
+          .makeDir(path.posix.dirname(bootstrapInput.destination), { mode: 0o755, user: "user" })
+          .copy(fileName, bootstrapInput.destination, { mode: bootstrapInput.mode ?? 0o644 });
       }
+
+      // setReadyCmd finalizes the builder chain (TemplateFinal), so the last
+      // stage is assigned directly rather than reassigned into `template`.
+      const finalTemplate = template
+        .setUser("user")
+        .runCmd(buildAgentInstallCommand(inputs.agentKinds))
+        .setWorkdir("/home/user/workspace")
+        .setReadyCmd(waitForTimeout(0));
+
+      const buildInfo = await Template.build(finalTemplate, config.templateName, {
+        apiKey,
+        cpuCount: 4,
+        memoryMB: 8192,
+        onBuildLogs: defaultBuildLogger(),
+      });
+
+      return { templateId: buildInfo.templateId, buildId: buildInfo.buildId, templateName: config.templateName };
     } finally {
       rmSync(contextDir, { recursive: true, force: true });
     }
@@ -395,7 +413,10 @@ export class E2bTemplateBuilder implements ManagedCloudTemplateBuilder {
     const apiKey = readE2bApiKey(config.secretsEnvFilePath);
     // Delete by (globally-unique) template id; no --team, which expects the team
     // slug not the configured UUID (same mismatch as the build namespace).
-    execFileSync("e2b", ["template", "delete", templateId, "--yes"], {
+    const { execFile } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const run = promisify(execFile);
+    await run("e2b", ["template", "delete", templateId, "--yes"], {
       env: { ...process.env, E2B_API_KEY: apiKey },
       encoding: "utf8",
     });

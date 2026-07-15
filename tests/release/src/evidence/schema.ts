@@ -342,11 +342,18 @@ export interface CloudProvisionTurnEvidenceV1 {
     commit: string;
     no_credential_in_remote: true;
   };
-  /** Actor-B isolation denial proof (spec step 9). */
+  /**
+   * Actor-B isolation denial proof (spec step 9). Each field is an OBSERVED
+   * boolean (MCW-001): actor B's product listing did not reveal actor A's
+   * sandbox, and the direct runtime rejected the missing-credential and
+   * actor-B-credential probes. A GREEN cell requires all three true (the
+   * validator gates it); the scenario throws before evidence if any is false,
+   * so these are proven, not fabricated.
+   */
   isolation: {
-    actor_b_denied: true;
-    runtime_rejects_missing: true;
-    runtime_rejects_actor_b: true;
+    actor_b_denied: boolean;
+    runtime_rejects_missing: boolean;
+    runtime_rejects_actor_b: boolean;
   };
   litellm: {
     token_id_hash: string;
@@ -1064,7 +1071,8 @@ const FULL_SHA_PATTERN = /^[0-9a-f]{40}$/;
  * `validateLitellmEvidence` verbatim for the `litellm` block; requires
  * `template.input_hash` and `sandbox_id_hash` be 64-hex digests and the
  * template ids safe tokens; requires `covered_repo.commit` be a full sha;
- * requires the `worker`/`covered_repo`/`isolation` literal-`true` proofs;
+ * requires the `worker`/`covered_repo`/`isolation` proofs true (the isolation
+ * fields are observed booleans the scenario emits true only when proven);
  * requires non-negative-integer cleanup counts and a boolean on every deletion
  * field; and on a GREEN cell requires `cleanup.failed === 0` and every
  * deletion boolean true (a non-green cell may record its own cleanup

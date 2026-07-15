@@ -676,8 +676,15 @@ jobs:
           RELEASE_E2E_CLOUD_GITHUB_APP_INSTALLATION_ID: ${{ vars.RELEASE_E2E_CLOUD_GITHUB_APP_INSTALLATION_ID }}
           RELEASE_E2E_CLOUD_GITHUB_APP_PRIVATE_KEY: ${{ secrets.RELEASE_E2E_CLOUD_GITHUB_APP_PRIVATE_KEY }}
           RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET: ${{ secrets.RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET }}
+          # MCW-004: optional override of the SSM parameter NAME holding the
+          # durable D2 bot refresh-token seed (not a credential itself — the
+          # value is read/written via the ambient AWS creds below). Empty is
+          # fine; the resolver falls back to DEFAULT_BOT_SEED_SSM_PARAMETER.
+          RELEASE_E2E_CLOUD_GITHUB_BOT_SEED_SSM_PARAMETER: ${{ vars.RELEASE_E2E_CLOUD_GITHUB_BOT_SEED_SSM_PARAMETER }}
           # AWS credentials stay ambient (the `aws` CLI reads them directly),
-          # never a manifest var — matching the self-host precedent.
+          # never a manifest var — matching the self-host precedent. The same
+          # credentials this job already uses for EC2/Route53 are what the
+          # SSM bot-seed fallback (box-seeds.ts) shells out with.
           AWS_ACCESS_KEY_ID: ${{ secrets.RELEASE_E2E_CLOUD_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.RELEASE_E2E_CLOUD_AWS_SECRET_ACCESS_KEY }}
           # Same bounded, secret-free diagnostics convention as local-world-smoke-1.

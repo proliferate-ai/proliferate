@@ -559,6 +559,23 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     secret: true,
     lanes: ["sandbox"],
   },
+  {
+    name: "RELEASE_E2E_CLOUD_GITHUB_BOT_SEED_SSM_PARAMETER",
+    description:
+      "Optional override for the AWS SSM Parameter Store NAME (not the token) holding the durable D2 " +
+      "GitHub bot refresh-token seed (SecureString). Defaults to " +
+      "/proliferate/qualification/github-bot-refresh-token when unset (box-seeds.ts's " +
+      "DEFAULT_BOT_SEED_SSM_PARAMETER). MCW-004: SSM is the resolution-order fallback (env token → local " +
+      "seed file → SSM) resolveBotSeedForAutomation uses when neither the env token nor a local seed file " +
+      "is available, and the durable rotation-write target in Actions (an ephemeral runner cannot durably " +
+      "hold the token GitHub rotates on every use). AWS credentials themselves stay ambient (the `aws` " +
+      "CLI), matching the RELEASE_E2E_CLOUD_AWS_REGION precedent — never a manifest var.",
+    whereItLives:
+      "AWS SSM Parameter Store, the qualification AWS account. This var only overrides the parameter " +
+      "NAME; set it only if the default path is wrong for the target account, not to supply a value.",
+    secret: false,
+    lanes: ["sandbox"],
+  },
 ] as const;
 
 export const DEFAULT_LOCAL_RUNTIME_URL = "http://127.0.0.1:8542";

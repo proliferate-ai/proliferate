@@ -26,9 +26,30 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 
+/** One live provider (E2B) sandbox tagged with a given cloud_sandbox_id. */
+export interface E2BSandboxMatch {
+  providerSandboxId: string;
+  state: "running" | "paused";
+  /** The E2B template id the sandbox was actually spawned from (observed, for MCW-003). */
+  templateId: string | null;
+  /** RFC3339 provider start time, or null (the observed running-interval source for step 4). */
+  startedAt: string | null;
+}
+
 export interface E2BFindResult {
+  /** First match's id (back-compat for existing single-match callers). */
   providerSandboxId: string | null;
+  /** First match's state (back-compat). */
   state: "running" | "paused" | null;
+  /**
+   * EVERY live provider sandbox tagged with the queried cloud_sandbox_id.
+   * CLOUD-PROVISION-1 step 3 asserts exactly one; more than one is the
+   * duplicate/orphan anomaly the scenario proves the product does not produce
+   * (MCW-002). Absent on older probe output → callers default to `[]`.
+   */
+  matches?: E2BSandboxMatch[];
+  /** `matches.length` from the probe (absent on older output). */
+  count?: number;
 }
 
 export interface E2BStateResult {

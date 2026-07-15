@@ -126,7 +126,16 @@ test("buildAgentInstallCommand pins HOME and --runtime-home to the serving runti
     "bake must pin the install runtime home explicitly",
   );
   assert.equal(MANAGED_CLOUD_ANYHARNESS_RUNTIME_HOME, "/home/user/.proliferate/anyharness");
-  assert.ok(command.includes("--agent claude") && command.includes("--agent codex"));
+  assert.ok(command.includes("--agent 'claude'") && command.includes("--agent 'codex'"));
+});
+
+test("buildAgentInstallCommand shell-quotes agent kinds so they cannot break out of the command string", () => {
+  const command = buildAgentInstallCommand(["claude' ; rm -rf / #"]);
+  // The malicious kind must appear only inside a single-quoted argument, with
+  // its own single quote escaped via the POSIX '\'' pattern — never as bare
+  // shell syntax that could terminate the quoting and inject a command.
+  assert.ok(command.includes(`--agent 'claude'\\'' ; rm -rf / #'`));
+  assert.ok(!command.includes("--agent claude' ; rm -rf / #"));
 });
 
 test("computeManagedCloudTemplateHash changes when agentKinds change", async () => {
