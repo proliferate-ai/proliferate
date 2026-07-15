@@ -99,6 +99,7 @@ def parse_amendments(path: str):
 
 
 def main() -> int:
+    allow_pending = "--allow-pending-splits" in sys.argv
     rows = parse_ledger(LEDGER)
     amendments = parse_amendments(LEDGER)
     seen_amendment_srcs: set[str] = set()
@@ -165,9 +166,17 @@ def main() -> int:
             print(f"  ... and {len(violations) - 80} more")
         return 1
 
-    print("\nOK: every move/delete/retain row landed exactly once.")
-    if splits_pending:
-        print(f"NOTE: {len(splits_pending)} split rows are unresolved (S2 seam architecture).")
+    if splits_pending and not allow_pending:
+        print(
+            f"\nFAIL: {len(splits_pending)} split row(s) unresolved. The final move "
+            "requires every planned path completed exactly once; pass "
+            "--allow-pending-splits only for intermediate seam rounds."
+        )
+        return 1
+
+    print("\nOK: every move/delete/retain row landed exactly once and all splits are resolved."
+          if not splits_pending else
+          "\nOK (intermediate): move/delete/retain rows landed; pending splits allowed by flag.")
     return 0
 
 
