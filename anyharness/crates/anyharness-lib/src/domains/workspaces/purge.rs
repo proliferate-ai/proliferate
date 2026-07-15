@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::domains::agents::portability::delete_session_agent_artifacts;
+use crate::domains::sessions::admission::SessionMutationAdmission;
 use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::store::SessionStore;
@@ -28,6 +29,12 @@ pub enum WorkspacePurgeServiceOutcome {
         workspace: WorkspaceRecord,
         message: String,
     },
+    /// PR1227-WORKSPACE-FENCE-01: a session controlled by a nonterminal
+    /// workflow was observed under the exclusive workspace lease (a workflow
+    /// created+bound it inside the up-front admission window). The destructive
+    /// path fails closed before any effect; carries the controlling run id for
+    /// logging only.
+    ControlledByWorkflow { run_id: String },
 }
 
 #[derive(Clone)]
@@ -38,12 +45,14 @@ pub struct WorkspacePurgeService {
     session_store: SessionStore,
     attachment_storage: PromptAttachmentStorage,
     operation_gate: Arc<WorkspaceOperationGate>,
+    admission: Arc<SessionMutationAdmission>,
     checkout_gate: Arc<CheckoutDeletionGate>,
     preflight_checker: Arc<RetirePreflightChecker>,
     runtime_home: PathBuf,
 }
 
 impl WorkspacePurgeService {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         workspace_runtime: Arc<WorkspaceRuntime>,
         session_runtime: Arc<SessionRuntime>,
@@ -51,6 +60,7 @@ impl WorkspacePurgeService {
         session_store: SessionStore,
         attachment_storage: PromptAttachmentStorage,
         operation_gate: Arc<WorkspaceOperationGate>,
+        admission: Arc<SessionMutationAdmission>,
         checkout_gate: Arc<CheckoutDeletionGate>,
         preflight_checker: Arc<RetirePreflightChecker>,
         runtime_home: PathBuf,
@@ -62,6 +72,7 @@ impl WorkspacePurgeService {
             session_store,
             attachment_storage,
             operation_gate,
+            admission,
             checkout_gate,
             preflight_checker,
             runtime_home,
@@ -74,6 +85,15 @@ impl WorkspacePurgeService {
         retry_only: bool,
     ) -> anyhow::Result<WorkspacePurgeServiceOutcome> {
         let _workspace_lease = self.operation_gate.acquire_exclusive(workspace_id).await;
+        // PR1227-WORKSPACE-FENCE-01: under the exclusive lease (which excludes
+        // the shared SessionStart lease every workflow session creation holds),
+        // re-enumerate the session set and fail closed if a workflow now
+        // controls one that the HTTP up-front admission could not have seen
+        // (created+bound inside the admission->exclusive-lease window). Read
+        // only: no permit, no further lease — no ABBA edge.
+        if let Some(outcome) = self.reject_if_workflow_controlled(workspace_id).await? {
+            return Ok(outcome);
+        }
         let Some(workspace) = self.workspace_runtime.get_workspace(workspace_id)? else {
             return Ok(WorkspacePurgeServiceOutcome::Deleted {
                 already_deleted: true,
@@ -184,6 +204,37 @@ impl WorkspacePurgeService {
             already_deleted: false,
             cleanup_attempted: true,
         })
+    }
+
+    /// PR1227-WORKSPACE-FENCE-01: re-check, under the already-held exclusive
+    /// workspace lease, whether any workspace session is controlled by a
+    /// nonterminal workflow. Returns the fail-closed outcome when so.
+    async fn reject_if_workflow_controlled(
+        &self,
+        workspace_id: &str,
+    ) -> anyhow::Result<Option<WorkspacePurgeServiceOutcome>> {
+        let session_ids = self
+            .session_store
+            .list_with_dismissed_by_workspace(workspace_id)?
+            .into_iter()
+            .map(|session| session.id)
+            .collect::<Vec<_>>();
+        if let Some((session_id, run_id)) = self
+            .admission
+            .find_workflow_controlled_session(session_ids)
+            .await?
+        {
+            tracing::info!(
+                workspace_id = %workspace_id,
+                session_id = %session_id,
+                controlling_run_id = %run_id,
+                "workspace purge rejected under exclusive lease: a workflow controls a session created after admission"
+            );
+            return Ok(Some(WorkspacePurgeServiceOutcome::ControlledByWorkflow {
+                run_id,
+            }));
+        }
+        Ok(None)
     }
 
     fn acquire_checkout_lease(

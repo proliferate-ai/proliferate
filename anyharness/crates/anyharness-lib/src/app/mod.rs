@@ -417,6 +417,7 @@ impl AppState {
             SessionStore::new(db.clone()),
             PromptAttachmentStorage::new(runtime_home.clone()),
             workspace_operation_gate.clone(),
+            session_admission.clone(),
             checkout_deletion_gate.clone(),
             retire_preflight_checker.clone(),
             runtime_home.clone(),

@@ -2093,3 +2093,349 @@ async fn terminal_release_restores_ordinary_session_behavior() {
     test_barriers::clear(&run_id);
     let _ = std::fs::remove_dir_all(&runtime_home);
 }
+
+// ── PR1227-WORKSPACE-FENCE-01: destruction vs. late-bound workflow session ──
+//
+// The workspace-wide destructive paths admit the CURRENT session set up front,
+// but the real executor creates+binds a FRESH preselected session while holding
+// only the shared SessionStart lease (execution.rs step 2 -> step 3). That
+// session id is absent from the up-front admission snapshot, so its keyed
+// permit is never held. The under-exclusive-lease re-check
+// (`find_workflow_controlled_session`) is the fence: after the destructive path
+// holds the exclusive workspace lease — which excludes the shared SessionStart
+// lease every workflow session creation needs — it re-enumerates and fails
+// closed if a workflow now controls a session. These two proofs drive the REAL
+// executor and the REAL router (purge) / real handler (retire), placing the
+// destructive path deterministically INSIDE the stale-snapshot window with
+// barriers (no sleeps for correctness), and assert the destructive path
+// conflicts before any effect and the session+workspace survive.
+
+async fn delete_workspace(state: &AppState, workspace_id: &str) -> (StatusCode, Value) {
+    let response = build_router(state.clone())
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(format!("/v1/workspaces/{workspace_id}"))
+                .body(Body::empty())
+                .expect("request"),
+        )
+        .await
+        .expect("response");
+    let status = response.status();
+    let bytes = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("body");
+    (
+        status,
+        serde_json::from_slice::<Value>(&bytes).unwrap_or(Value::Null),
+    )
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn purge_fails_closed_against_session_bound_after_admission_snapshot() {
+    // ENV_MUTEX held for the WHOLE body: the grok program override is
+    // process-global and a sibling guard-drop would un-ready the agent
+    // mid-creation.
+    let _env_lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("env mutex");
+    let _bearer_guard = test_support::set_bearer_token_env(None);
+    let (state, ws, runtime_home, _program_guard) = grok_launch_fixture("fence-purge");
+    let service = control_service(&state);
+    let plan = accepted_grok_plan(&service, ws, None);
+    let run_id = plan.run_id.clone();
+
+    // Park the executor right after it holds the shared SessionStart lease and
+    // BEFORE it creates its session — the exact window the up-front admission
+    // snapshot runs in with the workflow session not yet existing.
+    let (lease_tx, lease_rx) = tokio::sync::oneshot::channel();
+    let (resume_create_tx, resume_create_rx) = tokio::sync::oneshot::channel();
+    let (session_bound_tx, session_bound_rx) = tokio::sync::oneshot::channel();
+    let (resume_startup_tx, resume_startup_rx) = tokio::sync::oneshot::channel();
+    test_barriers::install(
+        &run_id,
+        test_barriers::ExecutionBarrier {
+            session_start_lease_tx: Some(lease_tx),
+            resume_create_rx: Some(resume_create_rx),
+            session_bound_tx: Some(session_bound_tx),
+            resume_startup_rx: Some(resume_startup_rx),
+            ..Default::default()
+        },
+    );
+    let executor = tokio::spawn(execute_for_test(
+        service.clone(),
+        state.session_runtime.clone(),
+        state.workspace_operation_gate.clone(),
+        state.workflow_run_runtime.gates_for_test(),
+        state.session_admission.clone(),
+        plan,
+    ));
+
+    // Park purge at its pre-exclusive-lease seam: this fires reached_tx once the
+    // up-front admit_all_workspace_sessions snapshot has fully returned (empty of
+    // the not-yet-created workflow session) and BEFORE the purge service takes
+    // the exclusive workspace lease and runs the under-lease fence. This gives us
+    // a DETERMINISTIC ordering signal (no sleep) that the snapshot completed
+    // before workflow creation resumes.
+    use crate::api::http::workspaces_purge::purge_barriers;
+    let (purge_reached_tx, purge_reached_rx) = tokio::sync::oneshot::channel();
+    let (purge_resume_tx, purge_resume_rx) = tokio::sync::oneshot::channel();
+    purge_barriers::install(
+        ws,
+        purge_barriers::PurgeBarrier {
+            reached_tx: Some(purge_reached_tx),
+            resume_rx: Some(purge_resume_rx),
+        },
+    );
+
+    // Executor parked holding the shared SessionStart lease; no workflow
+    // session exists yet, so a destructive snapshot here is empty of it.
+    within(&state, &run_id, "session start lease", lease_rx)
+        .await
+        .expect("session start lease sender retained");
+
+    // Fire purge INSIDE the window: it snapshots (empty of the workflow
+    // session), admits those permits, then parks at the seam before acquiring
+    // the exclusive workspace lease.
+    let purge_state = state.clone();
+    let purge_ws = ws.to_string();
+    let purge = tokio::spawn(async move { delete_workspace(&purge_state, &purge_ws).await });
+
+    // Deterministic ordering: wait for purge to reach its pre-exclusive-lease
+    // seam. Reaching it PROVES admit_all_workspace_sessions returned (the
+    // snapshot is complete and empty of the workflow session) BEFORE the
+    // workflow session is created below. This replaces the false-pass
+    // sleep(150ms) + !is_finished() ordering signal.
+    within(&state, &run_id, "purge reached seam", purge_reached_rx)
+        .await
+        .expect("purge reached pre-exclusive-lease seam");
+
+    // Release the executor: it creates+binds the fresh session (now workflow
+    // controlled), starts it, dispatches, and drops the shared lease at scope
+    // end.
+    resume_create_tx.send(()).expect("resume create");
+    let session_id = within(&state, &run_id, "session bound", session_bound_rx)
+        .await
+        .expect("session bound sender retained");
+
+    // The fresh session is now created AND bound under workflow control. Release
+    // purge from its seam: it proceeds to acquire the exclusive workspace lease
+    // (still blocked behind the executor's shared SessionStart lease until scope
+    // end), then runs the under-lease fence against a session that its up-front
+    // snapshot could not have seen.
+    purge_resume_tx.send(()).expect("resume purge");
+
+    let mut scripted = state
+        .session_runtime
+        .acp_manager_for_test()
+        .insert_scripted_session_for_test(
+            &session_id,
+            ScriptedSessionSpec {
+                prompt_turn_id: "turn-fence-purge".to_string(),
+                hold_config_replies: false,
+                hold_cancel_replies: false,
+            },
+        )
+        .await;
+    resume_startup_tx.send(()).expect("resume startup");
+    match within(&state, &run_id, "workflow prompt", scripted.events.recv())
+        .await
+        .expect("prompt event")
+    {
+        ScriptedSessionEvent::Prompt { .. } => {}
+        other => panic!("expected the workflow prompt, got {other:?}"),
+    }
+    within(&state, &run_id, "executor join", executor)
+        .await
+        .expect("executor join");
+
+    // The destructive path took the exclusive lease, re-enumerated, and found
+    // the now workflow-controlled session -> fail closed with the stable 409,
+    // BEFORE any destructive effect.
+    let (status, body) = within(&state, &run_id, "purge join", purge)
+        .await
+        .expect("purge join");
+    assert_eq!(
+        status,
+        StatusCode::CONFLICT,
+        "purge must fail closed against a session bound after its admission snapshot (got {status}: {body})"
+    );
+    assert_eq!(body["code"], "SESSION_CONTROLLED_BY_WORKFLOW");
+
+    // No effect: the workflow session row and the workspace both survive.
+    assert!(
+        state
+            .session_service
+            .store()
+            .find_by_id(&session_id)
+            .expect("find session")
+            .is_some(),
+        "purge must not dematerialize the workflow-controlled session"
+    );
+    assert!(
+        state
+            .workspace_runtime
+            .get_workspace(ws)
+            .expect("get workspace")
+            .is_some(),
+        "purge must not delete the workspace holding a controlled session"
+    );
+
+    purge_barriers::clear(ws);
+    test_barriers::clear(&run_id);
+    let _ = std::fs::remove_dir_all(&runtime_home);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn retire_fails_closed_against_workflow_control_acquired_after_admission_snapshot() {
+    // Retire's ordering is: admit the CURRENT session set -> advisory preflight
+    // -> exclusive lease -> under-lease fence. The stale-snapshot window is
+    // between the up-front admission (which sees the session UNCONTROLLED, so it
+    // is admitted, not conflicted) and the exclusive lease: a workflow can bind
+    // control of that session in that gap, exactly mirroring the executor
+    // holding the shared SessionStart lease and binding a session the destroyer
+    // holds no matching permit for. This proof drives the REAL retire handler
+    // and the REAL controller policy: it admits an idle session, parks retire at
+    // the pre-exclusive-lease seam, binds a nonterminal workflow controller in
+    // that window, then releases. The under-lease fence must fail closed.
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _bearer_guard = test_support::set_bearer_token_env(None);
+    let state = test_state();
+    const WS: &str = "40000000-0000-4000-8000-000000000045";
+    // A worktree + active workspace whose checkout path does NOT exist is
+    // retire-eligible (non-materialized skips managed-root/git checks) so
+    // preflight passes and retire reaches the seam.
+    test_support::seed_workspace_with_repo_root(
+        &state.db,
+        WS,
+        "worktree",
+        "/tmp/anyharness-fence-retire-nonexistent",
+    );
+    let session_id = uuid::Uuid::new_v4().to_string();
+    {
+        let now = chrono::Utc::now().to_rfc3339();
+        let record = crate::domains::sessions::model::SessionRecord {
+            id: session_id.clone(),
+            workspace_id: WS.to_string(),
+            agent_kind: "claude".to_string(),
+            native_session_id: None,
+            agent_auth_contexts: None,
+            requested_model_id: None,
+            current_model_id: None,
+            requested_mode_id: None,
+            current_mode_id: None,
+            title: None,
+            thinking_level_id: None,
+            thinking_budget_tokens: None,
+            status: "idle".to_string(),
+            created_at: now.clone(),
+            updated_at: now,
+            last_prompt_at: None,
+            closed_at: None,
+            dismissed_at: None,
+            mcp_bindings_ciphertext: None,
+            mcp_binding_summaries_json: None,
+            mcp_binding_policy:
+                crate::domains::sessions::model::SessionMcpBindingPolicy::InternalOnly,
+            system_prompt_append: None,
+            subagents_enabled: false,
+            action_capabilities_json: None,
+            origin: Some(crate::origin::OriginContext::system_local_runtime()),
+        };
+        state
+            .session_service
+            .store()
+            .insert(&record)
+            .expect("insert idle session");
+    }
+
+    // Park retire between its advisory preflight and the exclusive lease.
+    use crate::api::http::workspaces_lifecycle::retire_barriers;
+    let (reached_tx, reached_rx) = tokio::sync::oneshot::channel();
+    let (resume_tx, resume_rx) = tokio::sync::oneshot::channel();
+    retire_barriers::install(
+        WS,
+        retire_barriers::RetireBarrier {
+            reached_tx: Some(reached_tx),
+            resume_rx: Some(resume_rx),
+        },
+    );
+    let retire_state = state.clone();
+    let retire = tokio::spawn(async move {
+        let response = build_router(retire_state.clone())
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!("/v1/workspaces/{WS}/retire"))
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        let status = response.status();
+        let bytes = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body");
+        (
+            status,
+            serde_json::from_slice::<Value>(&bytes).unwrap_or(Value::Null),
+        )
+    });
+
+    // Retire reached the seam: it admitted the idle session up front (no
+    // conflict) and passed its advisory preflight. NOW, in the stale-snapshot
+    // window, a workflow acquires durable control of that same session.
+    tokio::time::timeout(PROOF_WAIT, reached_rx)
+        .await
+        .expect("retire reached seam")
+        .expect("retire seam sender retained");
+    let control = control_service(&state);
+    let run_id = uuid::Uuid::new_v4().to_string();
+    control
+        .accept(&run_id, domain_input_for_workspace(WS))
+        .expect("accept controller run");
+    assert!(control.begin_run(&run_id).expect("begin_run"));
+    assert!(control
+        .bind_session(&run_id, &session_id)
+        .expect("bind controller session"));
+
+    // Release retire: it takes the exclusive lease and runs the fence.
+    resume_tx.send(()).expect("resume retire");
+    let (status, body) = tokio::time::timeout(PROOF_WAIT, retire)
+        .await
+        .expect("retire join timeout")
+        .expect("retire join");
+    assert_eq!(
+        status,
+        StatusCode::CONFLICT,
+        "retire must fail closed under the exclusive lease against a session that became controlled after admission (got {status}: {body})"
+    );
+    assert_eq!(body["code"], "SESSION_CONTROLLED_BY_WORKFLOW");
+
+    // No effect: the session survives and the workspace is not retired.
+    assert!(
+        state
+            .session_service
+            .store()
+            .find_by_id(&session_id)
+            .expect("find session")
+            .is_some(),
+        "retire must not dematerialize the newly workflow-controlled session's workspace"
+    );
+    let workspace = state
+        .workspace_runtime
+        .get_workspace(WS)
+        .expect("get workspace")
+        .expect("workspace present");
+    assert_eq!(
+        workspace.lifecycle_state,
+        crate::domains::workspaces::model::WorkspaceLifecycleState::Active,
+        "retire must not retire the workspace holding a controlled session"
+    );
+
+    retire_barriers::clear(WS);
+}

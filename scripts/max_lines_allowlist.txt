@@ -14,8 +14,9 @@ anyharness/crates/anyharness-lib/src/api/router_tests.rs 1364 existing AnyHarnes
 anyharness/crates/anyharness-lib/src/domains/materialization/service.rs 625 local materialization domain service (exact-ref workspace materialization + repo-root acquisition orchestration, in-process keyed operation-lock admission, idempotent replay/failure recording; blocking git mechanics split into acquire.rs) — split into service/ on next growth per guides/domains.md
 anyharness/crates/anyharness-lib/src/domains/workflows/service.rs 664 workflow durable rules (+run-control cancel-intent use case and helpers); split into service/ on next growth per guides/domains.md
 anyharness/crates/anyharness-lib/src/domains/workflows/service_tests.rs 1320 workflow-runs merge-gated domain suite (+2b partial-uniqueness contract on nonterminal session binding)
-anyharness/crates/anyharness-lib/src/api/workflow_runs_tests.rs 2090 workflow-runs HTTP + runtime/extension crossing suite (run-control PROOF-01 battery + 2b admission races: reservation/create/bind window and terminal release over the real executor)
+anyharness/crates/anyharness-lib/src/api/workflow_runs_tests.rs 2409 workflow-runs HTTP + runtime/extension crossing suite (run-control PROOF-01 battery + 2b admission races: reservation/create/bind window, terminal release, and PR1227-WORKSPACE-FENCE-01 purge/retire destruction-vs-late-bind proofs over the real executor)
 anyharness/crates/anyharness-lib/src/api/http/agent_gateway_catalog.rs 632 gateway model enrichment (own vs foreign match) + catalog version endpoint
+anyharness/crates/anyharness-lib/src/api/http/workspaces_lifecycle.rs 614 workspace retire lifecycle handlers (+PR1227-WORKSPACE-FENCE-01 under-exclusive-lease workflow-control re-check + test-only proof seam module)
 anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_resolver.rs 704 provider filtering + family normalizer (bedrock/date/version forms) with tests
 anyharness/crates/anyharness-lib/src/domains/agents/catalog/validation.rs 605 defaultAgentKind must name a declared agent (was already at 598)
 anyharness/crates/anyharness-lib/src/domains/agents/auth/context_tests.rs 645 classifier tests incl. gateway route activation + bedrock flag-only detection
@@ -59,7 +60,7 @@ apps/packages/product-client/src/lib/domain/workspaces/sidebar/sidebar.test.ts 6
 apps/packages/product-client/src/lib/domain/workspaces/sidebar/sidebar-indicators.test.ts 648 existing desktop oversized test file
 apps/packages/product-client/src/lib/infra/measurement/measurement-port.ts 734 product-owned measurement port barrel (R1 ruling) mirroring the retained measurement surface through a swappable no-op sink; split deferred
 anyharness/crates/anyharness-lib/src/api/router.rs 621 AnyHarness router (+goals/loops/activity/feed routes, +gateway catalog version route, +workflow-runs route, +workflow-run cancel route, +local materialization operations routes)
-anyharness/crates/anyharness-lib/src/app/mod.rs 639 AnyHarness app wiring (+session mutation admission construction/injection, +goal/loop/activity/feed services, +two-phase workflow-run wiring calls into app/workflows.rs, +local materialization service wiring)
+anyharness/crates/anyharness-lib/src/app/mod.rs 640 AnyHarness app wiring (+session mutation admission construction/injection incl. PR1227-WORKSPACE-FENCE-01 purge-service admission wiring, +goal/loop/activity/feed services, +two-phase workflow-run wiring calls into app/workflows.rs, +local materialization service wiring)
 anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs 867 loops runtime — native write path + emulated Codex scheduler (+2b derived-safe classification comment at the fire seam)
 anyharness/crates/anyharness-lib/src/live/sessions/actor/startup.rs 686 session startup (+goal/loop capability parsing, roster reconcile-on-attach)
 server/tests/integration/test_organizations_api.py 624 added admin-only coverage for GET .../invitations

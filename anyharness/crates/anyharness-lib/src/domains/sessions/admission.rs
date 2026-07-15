@@ -23,6 +23,26 @@
 //! lease (shared or exclusive), never in reverse. The full canonical order is
 //! therefore `workflow run gate -> session mutation permit -> workspace
 //! operation lease`; every handler holding both must take the permit outermost.
+//!
+//! Workspace-destruction fence (PR1227-WORKSPACE-FENCE-01): the workspace-wide
+//! destructive paths (`purge_workspace`, `retire_workspace`) admit the CURRENT
+//! session set up front, but the workflow executor holds only the SHARED
+//! `SessionStart` lease when it creates and binds a fresh preselected session
+//! (`execution.rs`: `acquire_shared(SessionStart) -> reserve_new_session ->
+//! bind_session`). That session id is a brand-new UUID absent from the
+//! destructive path's snapshot, so its keyed permit is never acquired. To keep
+//! the fail-closed contract, each destructive path RE-ENUMERATES the workspace
+//! session set AFTER it holds the EXCLUSIVE workspace lease and conflicts (409)
+//! if any session is controlled by a nonterminal workflow
+//! ([`SessionMutationAdmission::find_workflow_controlled_session`]). The
+//! exclusive lease is mutually exclusive with the shared `SessionStart` lease,
+//! so no new controlled session can materialize while the re-check runs. The
+//! re-check is a PURE read-only controller-policy lookup — it acquires neither a
+//! permit nor a workspace lease — so it adds no edge to the lock order above and
+//! cannot introduce an ABBA cycle. (The executor's `SessionStart -> fresh
+//! permit` order is not the reverse of canonical in any deadlock-relevant sense:
+//! the fresh preselected id is structurally uncontended, so no party ever holds
+//! a workspace lease while waiting on that permit.)
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex as StdMutex, Weak};
@@ -232,6 +252,36 @@ impl SessionMutationAdmission {
                 Err(SessionMutationConflict::ControlledByWorkflow { run_id })
             }
         }
+    }
+
+    /// PR1227-WORKSPACE-FENCE-01: the workspace-destruction re-check. Given the
+    /// session ids enumerated UNDER the exclusive workspace lease, return the
+    /// first that a nonterminal workflow controls (with the controlling run id
+    /// for logging), or `None` if every session is free of an active workflow
+    /// controller.
+    ///
+    /// This performs ONLY the read-only controller-policy lookup — it acquires
+    /// neither a keyed permit nor any workspace lease — so it introduces no edge
+    /// to the canonical `run gate -> permit -> operation lease` order and cannot
+    /// deadlock. Correctness against the creation race depends entirely on the
+    /// caller already holding the EXCLUSIVE workspace lease (which excludes the
+    /// shared `SessionStart` lease every workflow session creation must hold):
+    /// no new controlled session can bind while this runs.
+    pub async fn find_workflow_controlled_session(
+        &self,
+        session_ids: Vec<String>,
+    ) -> anyhow::Result<Option<(String, String)>> {
+        let policy = self.policy.clone();
+        tokio::task::spawn_blocking(move || {
+            for session_id in session_ids {
+                if let Some(run_id) = policy.controlling_run_id(&session_id)? {
+                    return Ok(Some((session_id, run_id)));
+                }
+            }
+            Ok(None)
+        })
+        .await
+        .map_err(|error| anyhow::anyhow!("controlled-session re-check task failed: {error}"))?
     }
 
     /// Reserve a NEW session id's gate before its row becomes visible

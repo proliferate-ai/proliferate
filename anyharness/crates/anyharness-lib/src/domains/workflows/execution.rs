@@ -110,6 +110,9 @@ async fn run_execution(
         .acquire_shared(&plan.workspace_id, WorkspaceOperationKind::SessionStart)
         .await;
 
+    #[cfg(test)]
+    test_barriers::at_session_start_lease(&run_id).await;
+
     // 3+4. Reacquire the gate: recheck nonterminal/uncancelled state, then
     // hold through durable session creation plus session_id binding. If
     // cancellation won the recheck, no session is created; if creation wins,
@@ -320,6 +323,14 @@ pub(crate) mod test_barriers {
 
     #[derive(Default)]
     pub(crate) struct ExecutionBarrier {
+        /// Fired after the shared `SessionStart` lease is held, BEFORE session
+        /// creation (PR1227-WORKSPACE-FENCE-01 window: a destructive path's
+        /// up-front admission snapshot can run here, before this run's session
+        /// exists).
+        pub(crate) session_start_lease_tx: Option<oneshot::Sender<()>>,
+        /// Awaited (still holding the shared `SessionStart` lease) before
+        /// session creation when present.
+        pub(crate) resume_create_rx: Option<oneshot::Receiver<()>>,
         /// Fired with the preselected session id after the reservation
         /// permit is held and the durable session row exists, BEFORE binding
         /// (spec 2b creation-race window).
@@ -350,7 +361,9 @@ pub(crate) mod test_barriers {
 
     impl ExecutionBarrier {
         fn is_spent(&self) -> bool {
-            self.reserved_tx.is_none()
+            self.session_start_lease_tx.is_none()
+                && self.resume_create_rx.is_none()
+                && self.reserved_tx.is_none()
                 && self.resume_bind_rx.is_none()
                 && self.session_bound_tx.is_none()
                 && self.resume_startup_rx.is_none()
@@ -398,6 +411,20 @@ pub(crate) mod test_barriers {
             .expect("barrier lock")
             .get_or_insert_with(HashMap::new)
             .insert(run_id.to_string(), barrier);
+    }
+
+    pub(super) async fn at_session_start_lease(run_id: &str) {
+        let Some(mut barrier) = take(run_id) else {
+            return;
+        };
+        if let Some(tx) = barrier.session_start_lease_tx.take() {
+            let _ = tx.send(());
+        }
+        let resume = barrier.resume_create_rx.take();
+        put_back(run_id, barrier);
+        if let Some(rx) = resume {
+            let _ = rx.await;
+        }
     }
 
     pub(super) async fn at_reserved(run_id: &str, session_id: &str) {

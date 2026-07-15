@@ -76,6 +76,15 @@ pub async fn purge_workspace(
     let _admission_permits =
         admit_all_workspace_sessions(&state, &workspace_id, SessionMutationKind::WorkspacePurge)
             .await?;
+
+    // PR1227-WORKSPACE-FENCE-01 proof seam (test-only, no-op in production):
+    // park between the up-front admission snapshot (now fully complete) and the
+    // exclusive workspace lease taken inside `.purge(...)`, so a proof can bind a
+    // workflow-controlled session in exactly the gap the under-lease fence
+    // guards. Keyed by workspace id; absent keys change nothing.
+    #[cfg(test)]
+    purge_barriers::at_pre_exclusive(&workspace_id).await;
+
     purge_response_from_service_outcome(
         &state,
         None,
@@ -87,6 +96,61 @@ pub async fn purge_workspace(
     )
     .await
     .map(Json)
+}
+
+/// PR1227-WORKSPACE-FENCE-01 proof seam. A keyed, test-only barrier that parks
+/// `purge_workspace` between the up-front `admit_all_workspace_sessions`
+/// snapshot and the exclusive workspace lease taken inside the purge service,
+/// so a deterministic proof can bind a workflow-controlled session in exactly
+/// the window the under-lease fence exists to catch. Absent keys cost one mutex
+/// lookup and change nothing. Test-only by construction.
+#[cfg(test)]
+pub(crate) mod purge_barriers {
+    use std::collections::HashMap;
+    use std::sync::Mutex as StdMutex;
+
+    use tokio::sync::oneshot;
+
+    #[derive(Default)]
+    pub(crate) struct PurgeBarrier {
+        /// Fired when `purge_workspace` reaches the pre-exclusive-lease point.
+        pub(crate) reached_tx: Option<oneshot::Sender<()>>,
+        /// Awaited before proceeding to the exclusive lease when present.
+        pub(crate) resume_rx: Option<oneshot::Receiver<()>>,
+    }
+
+    static BARRIERS: StdMutex<Option<HashMap<String, PurgeBarrier>>> = StdMutex::new(None);
+
+    pub(crate) fn install(workspace_id: &str, barrier: PurgeBarrier) {
+        BARRIERS
+            .lock()
+            .expect("purge barrier lock")
+            .get_or_insert_with(HashMap::new)
+            .insert(workspace_id.to_string(), barrier);
+    }
+
+    pub(crate) fn clear(workspace_id: &str) {
+        if let Some(map) = BARRIERS.lock().expect("purge barrier lock").as_mut() {
+            map.remove(workspace_id);
+        }
+    }
+
+    pub(super) async fn at_pre_exclusive(workspace_id: &str) {
+        let barrier = BARRIERS
+            .lock()
+            .expect("purge barrier lock")
+            .as_mut()
+            .and_then(|map| map.remove(workspace_id));
+        let Some(mut barrier) = barrier else {
+            return;
+        };
+        if let Some(tx) = barrier.reached_tx.take() {
+            let _ = tx.send(());
+        }
+        if let Some(rx) = barrier.resume_rx.take() {
+            let _ = rx.await;
+        }
+    }
 }
 
 #[utoipa::path(
@@ -186,6 +250,13 @@ async fn purge_response_from_service_outcome(
                 cleanup_message: Some(message),
             })
         }
+        // PR1227-WORKSPACE-FENCE-01: the under-lease re-check observed a
+        // workflow-controlled session created after up-front admission. Fail
+        // closed with the same stable 409 as the up-front fence.
+        WorkspacePurgeServiceOutcome::ControlledByWorkflow { .. } => Err(ApiError::conflict(
+            "session execution is controlled by an active workflow run",
+            "SESSION_CONTROLLED_BY_WORKFLOW",
+        )),
     }
 }
 
