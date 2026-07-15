@@ -24,7 +24,7 @@ function makeHost(overrides: Partial<ProductHost> = {}): ProductHost {
       cancelLogin: async () => {},
       logout: async () => ({ provider: "github" }),
     },
-    cloud: { client: null },
+    cloud: { client: null, getSandboxGatewayAccessToken: async () => "test-token" },
     storage: {
       getItem: async () => null,
       setItem: async () => {},
@@ -43,6 +43,7 @@ function makeHost(overrides: Partial<ProductHost> = {}): ProductHost {
       setTag: () => {},
       routeChanged: () => {},
       getSupportContext: () => ({ clientReleaseId: "web@test" }),
+      getAnonymousInstallId: async () => null,
     },
     desktop: null,
     ...overrides,

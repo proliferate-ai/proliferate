@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { UpdaterPhase } from "@/hooks/access/tauri/use-updater";
+import type { UpdaterPhase } from "#product/hooks/access/tauri/use-updater";
 import { SidebarUpdatePill } from "#product/components/workspace/shell/sidebar/SidebarUpdatePill";
 
 afterEach(cleanup);

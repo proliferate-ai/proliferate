@@ -81,6 +81,7 @@ function createLinkHarness(options: { initial?: ProductEntry } = {}): LinkHarnes
         setTag: () => {},
         routeChanged: () => {},
         getSupportContext: () => ({ clientReleaseId: "desktop@test" }),
+        getAnonymousInstallId: async () => null,
       },
     },
   });

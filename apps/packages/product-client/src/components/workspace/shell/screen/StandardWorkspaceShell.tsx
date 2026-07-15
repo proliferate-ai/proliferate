@@ -27,7 +27,7 @@ import { useMainScreenShortcuts } from "#product/hooks/main/lifecycle/use-main-s
 import { useMainScreenActions } from "#product/hooks/main/workflows/use-main-screen-actions";
 import { useTransparentChromeEnabled } from "#product/hooks/theme/derived/use-transparent-chrome";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
-import { useUpdater } from "@/hooks/access/tauri/use-updater";
+import { useUpdater } from "#product/hooks/access/tauri/use-updater";
 import { useRunWorkspaceCommand } from "#product/hooks/workspaces/workflows/use-run-workspace-command";
 import { useWorkspaceOpenInWebActions } from "#product/hooks/workspaces/workflows/remote-access/use-workspace-open-in-web-actions";
 import { useWorkspaceRemoteAccessActions } from "#product/hooks/workspaces/workflows/remote-access/use-workspace-remote-access-actions";

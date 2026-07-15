@@ -39,6 +39,7 @@ import {
   setTelemetryUser,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
+import { loadAnonymousTelemetryBootstrap } from "@/lib/integrations/telemetry/anonymous-storage";
 import { markLoginNotAttempted } from "@proliferate/product-client/internal/lib/domain/telemetry/errors";
 import { handleDesktopCallbackUrl } from "@/lib/integrations/auth/orchestration-callback";
 import { discoverDesktopSso } from "@proliferate/product-client/internal/lib/access/cloud/auth-probes";
@@ -331,5 +332,16 @@ export const desktopTelemetry: ProductTelemetry = {
       clientReleaseId: getSupportReportReleaseId(),
       telemetryRefs: getSupportReportTelemetryRefs(),
     };
+  },
+  async getAnonymousInstallId(): Promise<string | null> {
+    // The anonymous-telemetry bootstrap always resolves an install id on
+    // Desktop (native id, or the browser-storage fallback); return null only if
+    // that read fails, matching the prior consumer's catch-to-null path.
+    try {
+      const { installId } = await loadAnonymousTelemetryBootstrap();
+      return installId ?? null;
+    } catch {
+      return null;
+    }
   },
 };

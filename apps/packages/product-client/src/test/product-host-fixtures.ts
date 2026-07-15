@@ -96,7 +96,10 @@ export function makeTestProductHost(options: TestProductHostOptions = {}): Produ
       logout: async () => ({ provider: "github" }),
       ...auth,
     },
-    cloud: { client: cloudClient },
+    cloud: {
+      client: cloudClient,
+      getSandboxGatewayAccessToken: async () => "test-gateway-token",
+    },
     storage: {
       getItem: async () => null,
       setItem: asyncNoop,
@@ -115,6 +118,7 @@ export function makeTestProductHost(options: TestProductHostOptions = {}): Produ
       setTag: () => {},
       routeChanged: () => {},
       getSupportContext: () => ({ clientReleaseId: "desktop@test" }),
+      getAnonymousInstallId: async () => null,
     },
     desktop,
     ...overrides,

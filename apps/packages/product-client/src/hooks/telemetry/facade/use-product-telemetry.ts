@@ -33,6 +33,7 @@ export interface ProductTelemetryFacade {
   setTag(key: string, value: string): void;
   routeChanged(change: ProductRouteChange): void;
   getSupportContext(): ProductSupportTelemetryContext;
+  getAnonymousInstallId(): Promise<string | null>;
 }
 
 /**
@@ -65,6 +66,9 @@ export function useProductTelemetry(): ProductTelemetryFacade {
       },
       getSupportContext() {
         return telemetry.getSupportContext();
+      },
+      getAnonymousInstallId() {
+        return telemetry.getAnonymousInstallId();
       },
     }),
     [telemetry],

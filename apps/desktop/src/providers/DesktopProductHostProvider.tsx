@@ -9,6 +9,7 @@ import { ProductHostProvider } from "@proliferate/product-client/host/ProductHos
 
 import { desktopProductStorage } from "@/lib/access/browser/product-storage";
 import { desktopBridge } from "@/lib/access/tauri/desktop-bridge";
+import { getDesktopCloudAccessToken } from "@/lib/access/cloud/client";
 import { isProductAuthRequired } from "@proliferate/product-client/internal/lib/domain/auth/auth-mode";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { useAuthBootstrap } from "@/hooks/auth/lifecycle/use-auth-bootstrap";
@@ -192,7 +193,10 @@ export function DesktopProductHostProvider({
       surface: "desktop",
       deployment,
       auth,
-      cloud: { client: cloudClient },
+      cloud: {
+        client: cloudClient,
+        getSandboxGatewayAccessToken: getDesktopCloudAccessToken,
+      },
       storage: desktopProductStorage,
       links: desktopProductLinks,
       clipboard: desktopClipboard,

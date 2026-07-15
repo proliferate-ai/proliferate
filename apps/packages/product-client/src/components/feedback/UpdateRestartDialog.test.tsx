@@ -15,7 +15,7 @@ const updaterMocks = vi.hoisted(() => ({
 
 const sessionMocks = vi.hoisted(() => ({ runningCount: 0 }));
 
-vi.mock("@/hooks/access/tauri/use-updater", () => ({
+vi.mock("#product/hooks/access/tauri/use-updater", () => ({
   useUpdater: () => updaterMocks,
 }));
 

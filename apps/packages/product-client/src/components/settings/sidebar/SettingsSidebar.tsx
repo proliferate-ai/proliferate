@@ -38,13 +38,13 @@ import {
   type SettingsScope,
 } from "#product/lib/domain/settings/navigation-presentation";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
-import { useAppVersion } from "@/hooks/access/tauri/app/use-app-version";
+import { useAppVersion } from "#product/hooks/access/tauri/app/use-app-version";
 import { useSettingsSectionShortcuts } from "#product/hooks/settings/ui/use-settings-section-shortcuts";
 import { useShortcutRevealVisible } from "#product/providers/ShortcutRevealProvider";
 import { buildShortcutRangeLabelById } from "#product/lib/domain/shortcuts/presentation";
 import { buildSettingsShortcutSectionTargets } from "#product/lib/domain/settings/shortcut-targets";
 import { useOpenSupportReportWindow } from "#product/hooks/support/workflows/use-open-support-report-window";
-import type { UpdaterPhase } from "@/hooks/access/tauri/use-updater";
+import type { UpdaterPhase } from "#product/hooks/access/tauri/use-updater";
 
 interface SettingsSidebarProps {
   activeScope: SettingsScope;

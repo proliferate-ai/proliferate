@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useTauriWindowActions } from "@/hooks/access/tauri/use-window-actions";
+import { useTauriWindowActions } from "#product/hooks/access/tauri/use-window-actions";
 
 function isTauriDesktop(): boolean {
   return typeof window !== "undefined"

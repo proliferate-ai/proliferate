@@ -4,12 +4,12 @@ import { Label } from "@proliferate/ui/primitives/Label";
 import { RangeSlider } from "@proliferate/ui/primitives/RangeSlider";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { setDevRunningAgentCount } from "#product/hooks/app/lifecycle/use-running-agent-count";
-import { useUpdater, type UpdaterErrorSource } from "@/hooks/access/tauri/use-updater";
+import { useUpdater, type UpdaterErrorSource } from "#product/hooks/access/tauri/use-updater";
 import {
   updateDevUpdaterMock,
   writeDevUpdaterMock,
   type DevUpdaterMockState,
-} from "@/hooks/access/tauri/updater-dev-mock";
+} from "#product/hooks/access/tauri/updater-dev-mock";
 import { SidebarUpdatePill } from "#product/components/workspace/shell/sidebar/SidebarUpdatePill";
 
 type ProductionSurfacePreview =

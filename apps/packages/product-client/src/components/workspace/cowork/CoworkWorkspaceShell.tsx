@@ -10,7 +10,7 @@ import { CoworkWorkspaceHeader } from "#product/components/workspace/cowork/Cowo
 import { useResize } from "#product/hooks/ui/layout/use-resize";
 import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
 import { useTransparentChromeEnabled } from "#product/hooks/theme/derived/use-transparent-chrome";
-import { useUpdater } from "@/hooks/access/tauri/use-updater";
+import { useUpdater } from "#product/hooks/access/tauri/use-updater";
 import { resolveCoworkWorkspaceChromeClasses } from "#product/lib/domain/preferences/workspace-chrome";
 import {
   WORKSPACE_SIDEBAR_MAX_WIDTH,

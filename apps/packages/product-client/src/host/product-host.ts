@@ -29,6 +29,18 @@ export interface ProductHost {
   cloud: {
     /** Authenticated Cloud client, or null before an authority is resolved. */
     client: ProliferateCloudClient | null;
+    /**
+     * Mint a fresh access token scoped to the Cloud sandbox gateway resource,
+     * for the AnyHarness gateway connection the product already carried to the
+     * connection layer pre-move. This is a scoped resource token, **not** the
+     * auth session/refresh credential barred from crossing this boundary by
+     * slice-01: acquisition and refresh of the underlying session stay
+     * host-owned; this only returns the derived gateway token the connection
+     * needs. Rejects (never returns a placeholder) when no session is present
+     * or the host cannot mint one, exactly as the prior transport did. Web
+     * supplies its own implementation later.
+     */
+    getSandboxGatewayAccessToken(): Promise<string>;
   };
 
   storage: ProductStorage;
@@ -396,4 +408,13 @@ export interface ProductTelemetry {
   routeChanged(change: ProductRouteChange): void;
   /** Release/correlation metadata attached to support-report submissions. */
   getSupportContext(): ProductSupportTelemetryContext;
+  /**
+   * The stable, anonymous device install id used to attribute anonymous
+   * product telemetry (distinct from the Desktop worker install id). Resolves
+   * to `null` when the host has no anonymous-telemetry bootstrap or anonymous
+   * telemetry is unavailable (including any non-Desktop host). Consumers that
+   * tag a request with this id omit the field on `null`, matching the prior
+   * Desktop behavior when the bootstrap read failed.
+   */
+  getAnonymousInstallId(): Promise<string | null>;
 }

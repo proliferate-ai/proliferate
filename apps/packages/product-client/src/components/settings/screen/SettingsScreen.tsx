@@ -32,7 +32,7 @@ import { SettingsScopeTabs } from "@proliferate/product-ui/settings/SettingsScop
 import { ArrowLeft } from "lucide-react";
 import { SETTINGS_COPY } from "#product/copy/settings/settings-copy";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
-import { useUpdater } from "@/hooks/access/tauri/use-updater";
+import { useUpdater } from "#product/hooks/access/tauri/use-updater";
 import { useIsAdmin } from "#product/hooks/access/cloud/organizations/use-is-admin";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
 

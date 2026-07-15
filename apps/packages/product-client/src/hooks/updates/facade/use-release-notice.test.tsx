@@ -23,10 +23,10 @@ const accessMocks = vi.hoisted(() => ({
   requestedManifestVersion: null as string | null,
 }));
 
-vi.mock("@/hooks/access/tauri/use-updater", () => ({
+vi.mock("#product/hooks/access/tauri/use-updater", () => ({
   useUpdater: () => accessMocks.updater,
 }));
-vi.mock("@/hooks/access/tauri/app/use-app-version", () => ({
+vi.mock("#product/hooks/access/tauri/app/use-app-version", () => ({
   useAppVersion: () => accessMocks.appVersion,
 }));
 vi.mock("#product/hooks/access/downloads/desktop-releases/use-desktop-release-manifest", () => ({

@@ -31,6 +31,10 @@
       "types": "./dist/lib/infra/measurement/measurement-port.d.ts",
       "import": "./dist/lib/infra/measurement/measurement-port.js"
     },
+    "./infra/cloud-gateway": {
+      "types": "./dist/lib/access/cloud/sandbox-gateway-access.d.ts",
+      "import": "./dist/lib/access/cloud/sandbox-gateway-access.js"
+    },
     "./ProductClient": {
       "types": "./dist/ProductClient.d.ts",
       "import": "./dist/ProductClient.js"

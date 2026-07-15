@@ -12,7 +12,7 @@ import {
 } from "#product/lib/domain/settings/environment-draft";
 import { resolveAutoDetectedBranch } from "#product/lib/domain/settings/branch-selection";
 import type { SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
-import { loadAnonymousTelemetryBootstrap } from "@/lib/integrations/telemetry/anonymous-storage";
+import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
 import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
 
 const EMPTY_BRANCHES: GitBranchRef[] = [];
@@ -26,6 +26,7 @@ export function useRepositorySettings(repository: SettingsRepositoryEntry | null
   );
   const setRepoConfig = useRepoPreferencesStore((state) => state.setRepoConfig);
   const saveEnvironment = useSaveRepoEnvironment();
+  const telemetry = useProductTelemetry();
   const repoConfigs = useRepositories(Boolean(repository?.gitOwner && repository.gitRepoName));
   const [desktopInstallId, setDesktopInstallId] = useState<string | null>(null);
   const { data: branchRefs = EMPTY_BRANCHES } = useRepoRootGitBranchesQuery({
@@ -47,8 +48,9 @@ export function useRepositorySettings(repository: SettingsRepositoryEntry | null
 
   useEffect(() => {
     let cancelled = false;
-    void loadAnonymousTelemetryBootstrap()
-      .then(({ installId }) => {
+    void telemetry
+      .getAnonymousInstallId()
+      .then((installId) => {
         if (!cancelled) {
           setDesktopInstallId(installId);
         }
@@ -61,7 +63,7 @@ export function useRepositorySettings(repository: SettingsRepositoryEntry | null
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [telemetry]);
 
   const persistedCloudLocalDraft = useMemo(() => {
     if (!repository?.gitOwner || !repository.gitRepoName || !sourceRoot || !desktopInstallId) {
@@ -150,7 +152,7 @@ export function useRepositorySettings(repository: SettingsRepositoryEntry | null
       const { gitOwner, gitRepoName } = repository;
       void (async () => {
         const installId = desktopInstallId
-          ?? (await loadAnonymousTelemetryBootstrap()).installId;
+          ?? (await telemetry.getAnonymousInstallId());
         await saveEnvironment.mutateAsync({
           gitOwner,
           gitRepoName,

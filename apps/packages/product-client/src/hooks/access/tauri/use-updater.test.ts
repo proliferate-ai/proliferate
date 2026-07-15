@@ -2,7 +2,7 @@
 
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useUpdaterStore } from "@proliferate/product-client/internal/stores/updater/updater-store";
+import { useUpdaterStore } from "#product/stores/updater/updater-store";
 
 const updaterMocks = vi.hoisted(() => ({
   check: vi.fn(),
@@ -12,21 +12,34 @@ const updaterMocks = vi.hoisted(() => ({
   isSupported: vi.fn(() => true),
 }));
 
+// Host facades the updater now reads (ruling G1): telemetry supplies the
+// scheduler's track/captureException; storage backs the byte-identical
+// lastCheckedAt metadata read/write.
+const telemetryMocks = vi.hoisted(() => ({
+  track: vi.fn(),
+  captureException: vi.fn(),
+  setUser: vi.fn(),
+  setTag: vi.fn(),
+  routeChanged: vi.fn(),
+  getSupportContext: vi.fn(() => ({ clientReleaseId: "test" })),
+  getAnonymousInstallId: vi.fn(async () => null),
+}));
+
+const storageMocks = vi.hoisted(() => ({
+  getItem: vi.fn(async () => null),
+  setItem: vi.fn(async () => undefined),
+  removeItem: vi.fn(async () => undefined),
+}));
+
 vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
-  useProductHost: () => ({ desktop: { updater: updaterMocks } }),
+  useProductHost: () => ({
+    desktop: { updater: updaterMocks },
+    telemetry: telemetryMocks,
+    storage: storageMocks,
+  }),
 }));
 
-vi.mock("@/lib/infra/persistence/preferences-persistence", () => ({
-  persistValue: vi.fn(async () => undefined),
-  readPersistedValue: vi.fn(async () => null),
-}));
-
-vi.mock("@/lib/integrations/telemetry/client", () => ({
-  trackProductEvent: vi.fn(),
-  captureTelemetryException: vi.fn(),
-}));
-
-vi.mock("@proliferate/product-client/internal/lib/domain/telemetry/failures", () => ({
+vi.mock("#product/lib/domain/telemetry/failures", () => ({
   classifyTelemetryFailure: vi.fn(() => "unknown"),
 }));
 

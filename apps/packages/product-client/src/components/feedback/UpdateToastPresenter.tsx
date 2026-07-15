@@ -2,8 +2,8 @@ import { useEffect, useRef } from "react";
 import { toast } from "@proliferate/ui/kit/Sonner";
 import { CircleAlert } from "@proliferate/ui/icons";
 import { Badge } from "@proliferate/ui/primitives/Badge";
-import { useUpdater, type UpdaterPhase } from "@/hooks/access/tauri/use-updater";
-import { useAppVersion } from "@/hooks/access/tauri/app/use-app-version";
+import { useUpdater, type UpdaterPhase } from "#product/hooks/access/tauri/use-updater";
+import { useAppVersion } from "#product/hooks/access/tauri/app/use-app-version";
 
 export const UPDATE_TOAST_ID = "app-update";
 // The "you're up to date" confirmation is a transient success signal, not a

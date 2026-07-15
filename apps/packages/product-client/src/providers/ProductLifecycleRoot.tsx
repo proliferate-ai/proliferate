@@ -72,8 +72,11 @@ function recordAppRendererEvent(
  * boundary also covers the product route/UI tree passed as `children`.
  */
 export function ProductLifecycleRoot({ children }: { children: ReactNode }) {
+  const diagnostics = useProductHost().desktop?.diagnostics ?? null
   return (
-    <AppErrorBoundary>
+    <AppErrorBoundary
+      onRenderError={(report) => diagnostics?.reportRenderError(report)}
+    >
       <ProductLifecycles>{children}</ProductLifecycles>
     </AppErrorBoundary>
   )

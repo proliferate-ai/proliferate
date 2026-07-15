@@ -1,18 +1,22 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DesktopUpdaterBridge } from "@proliferate/product-client/host/desktop-bridge";
+import type { ErrorContext } from "@proliferate/product-client/host/product-host";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { useUpdaterStore } from "@proliferate/product-client/internal/stores/updater/updater-store";
+import { useUpdaterStore } from "#product/stores/updater/updater-store";
 import {
-  persistValue,
-  readPersistedValue,
-} from "@/lib/infra/persistence/preferences-persistence";
-import type { UpdaterErrorSource, UpdaterPhase } from "@proliferate/product-client/internal/stores/updater/updater-store";
+  readPersistedJsonValue,
+  readPersistedStringValue,
+  writePersistedJson,
+  type ProductStorageContext,
+} from "#product/lib/infra/persistence/product-storage";
+import type { UpdaterErrorSource, UpdaterPhase } from "#product/stores/updater/updater-store";
 import {
-  trackProductEvent,
-  captureTelemetryException,
-} from "@/lib/integrations/telemetry/client";
-import { classifyTelemetryFailure } from "@proliferate/product-client/internal/lib/domain/telemetry/failures";
-import { normalizeReleaseTitle } from "@proliferate/product-client/internal/lib/domain/updates/release-notice";
+  useProductTelemetry,
+  type TrackProductEvent,
+} from "#product/hooks/telemetry/facade/use-product-telemetry";
+import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
+import { classifyTelemetryFailure } from "#product/lib/domain/telemetry/failures";
+import { normalizeReleaseTitle } from "#product/lib/domain/updates/release-notice";
 import {
   clearDevUpdaterMockDownload,
   DEV_UPDATER_MOCK_EVENT,
@@ -38,22 +42,43 @@ interface UpdaterMetadata {
   lastCheckedAt: string | null;
 }
 
-async function persistUpdaterMetadata(metadata: UpdaterMetadata): Promise<void> {
-  await persistValue(UPDATER_METADATA_KEY, metadata);
+/**
+ * The host facades the updater's module-level scheduler needs (ruling G1). The
+ * hook — which has host access — arms these; the plain scheduler functions
+ * receive them as an explicit argument, mirroring the measurement port. Event
+ * names/payloads and the persisted metadata key are byte-identical to the
+ * pre-move Desktop hook.
+ */
+export interface UpdaterSchedulerDeps {
+  track: TrackProductEvent;
+  captureException: (error: unknown, context?: ErrorContext) => void;
+  storage: ProductStorageContext;
 }
 
-async function loadLastCheckedAt(): Promise<string | null> {
-  const metadata = await readPersistedValue<{ lastCheckedAt?: string | null }>(
+async function persistUpdaterMetadata(
+  storage: ProductStorageContext,
+  metadata: UpdaterMetadata,
+): Promise<void> {
+  await writePersistedJson(storage, UPDATER_METADATA_KEY, metadata);
+}
+
+async function loadLastCheckedAt(
+  storage: ProductStorageContext,
+): Promise<string | null> {
+  const metadata = await readPersistedJsonValue<{ lastCheckedAt?: string | null }>(
+    storage,
     UPDATER_METADATA_KEY,
   );
   if (metadata?.lastCheckedAt) {
     return metadata.lastCheckedAt;
   }
-  return (await readPersistedValue<string>(LEGACY_LAST_CHECKED_KEY)) ?? null;
+  // The legacy key stored a bare ISO string (not JSON), so read it as a string.
+  return (await readPersistedStringValue(storage, LEGACY_LAST_CHECKED_KEY)) ?? null;
 }
 
 async function runUpdateCheck(
   updater: DesktopUpdaterBridge,
+  deps: UpdaterSchedulerDeps,
   options: { userInitiated?: boolean } = {},
 ): Promise<void> {
   const store = useUpdaterStore.getState();
@@ -63,20 +88,20 @@ async function runUpdateCheck(
   checkInFlight = true;
 
   store.setPhase("checking");
-  trackProductEvent("app_update_check_started", undefined);
+  deps.track("app_update_check_started", undefined);
 
   try {
     const result = await updater.check();
     const timestamp = new Date().toISOString();
     useUpdaterStore.getState().setChecked(timestamp);
-    void persistUpdaterMetadata({ lastCheckedAt: timestamp });
+    void persistUpdaterMetadata(deps.storage, { lastCheckedAt: timestamp });
 
     if (result !== null) {
       useUpdaterStore.getState().setAvailable(
         result,
         normalizeReleaseTitle(result.title),
       );
-      trackProductEvent("app_update_available", { version: result.version });
+      deps.track("app_update_available", { version: result.version });
     } else {
       useUpdaterStore.getState().setPhase("current");
       if (options.userInitiated) {
@@ -88,7 +113,7 @@ async function runUpdateCheck(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     useUpdaterStore.getState().setError(message, "check");
-    captureTelemetryException(error, {
+    deps.captureException(error, {
       tags: {
         action: "check_for_update",
         domain: "updater",
@@ -102,6 +127,7 @@ async function runUpdateCheck(
 
 async function runDownloadAndPrepareRestart(
   updater: DesktopUpdaterBridge,
+  deps: UpdaterSchedulerDeps,
 ): Promise<void> {
   const store = useUpdaterStore.getState();
   const update = store._update;
@@ -112,7 +138,7 @@ async function runDownloadAndPrepareRestart(
 
   store.setPhase("downloading");
   store.setDownloadProgress(0);
-  trackProductEvent("app_update_download_started", { version });
+  deps.track("app_update_download_started", { version });
 
   try {
     await updater.downloadAndInstall(update, (fraction) => {
@@ -122,15 +148,15 @@ async function runDownloadAndPrepareRestart(
     });
 
     useUpdaterStore.getState().setReady();
-    trackProductEvent("app_update_install_succeeded", { version });
+    deps.track("app_update_install_succeeded", { version });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     useUpdaterStore.getState().setError(message, "download");
-    trackProductEvent("app_update_install_failed", {
+    deps.track("app_update_install_failed", {
       failure_kind: classifyTelemetryFailure(error),
       version,
     });
-    captureTelemetryException(error, {
+    deps.captureException(error, {
       tags: {
         action: "download_and_relaunch",
         domain: "updater",
@@ -140,8 +166,11 @@ async function runDownloadAndPrepareRestart(
   }
 }
 
-async function ensureAutoCheckScheduler(updater: DesktopUpdaterBridge): Promise<void> {
-  const lastChecked = await loadLastCheckedAt();
+async function ensureAutoCheckScheduler(
+  updater: DesktopUpdaterBridge,
+  deps: UpdaterSchedulerDeps,
+): Promise<void> {
+  const lastChecked = await loadLastCheckedAt(deps.storage);
   if (lastChecked) {
     useUpdaterStore.getState().setChecked(lastChecked);
   }
@@ -155,12 +184,12 @@ async function ensureAutoCheckScheduler(updater: DesktopUpdaterBridge): Promise<
 
   if (elapsed >= CHECK_INTERVAL_MS) {
     timeout = window.setTimeout(() => {
-      void runUpdateCheck(updater);
+      void runUpdateCheck(updater, deps);
     }, INITIAL_CHECK_DELAY_MS);
   }
 
   interval = window.setInterval(() => {
-    void runUpdateCheck(updater);
+    void runUpdateCheck(updater, deps);
   }, CHECK_INTERVAL_MS);
 
   stopAutoCheckScheduler = () => {
@@ -178,6 +207,23 @@ async function ensureAutoCheckScheduler(updater: DesktopUpdaterBridge): Promise<
 
 export function useUpdater() {
   const updater = useProductHost().desktop?.updater ?? null;
+  const telemetry = useProductTelemetry();
+  const storageContext = useProductStorageContext();
+  // Arm the module-level scheduler's host facades (ruling G1). Held in a ref so
+  // the auto-check effect and the action callbacks keep their existing
+  // dependency arrays (host is a stable per-mount snapshot, so deps never
+  // change identity mid-mount anyway).
+  const deps = useMemo<UpdaterSchedulerDeps>(
+    () => ({
+      track: (name, payload) => telemetry.track(name, payload),
+      captureException: (error, context) =>
+        telemetry.captureException(error, context),
+      storage: storageContext,
+    }),
+    [telemetry, storageContext],
+  );
+  const depsRef = useRef(deps);
+  depsRef.current = deps;
   const storePhase = useUpdaterStore((s) => s.phase);
   const storeAvailableVersion = useUpdaterStore((s) => s.availableVersion);
   const storeAvailableTitle = useUpdaterStore((s) => s.availableTitle);
@@ -250,7 +296,7 @@ export function useUpdater() {
     if (!isPackaged || updater === null) {
       return;
     }
-    await runUpdateCheck(updater, { userInitiated: true });
+    await runUpdateCheck(updater, depsRef.current, { userInitiated: true });
   }, [devMock, isPackaged, updater]);
 
   const clearManualCheckCompleted = useCallback(() => {
@@ -272,7 +318,7 @@ export function useUpdater() {
     if (!isPackaged || updater === null) {
       return;
     }
-    await runDownloadAndPrepareRestart(updater);
+    await runDownloadAndPrepareRestart(updater, depsRef.current);
   }, [devMock, isPackaged, updater]);
 
   const openRestartPrompt = useCallback(() => {
@@ -328,7 +374,7 @@ export function useUpdater() {
 
     autoCheckConsumerCount += 1;
     if (autoCheckConsumerCount === 1 && !stopAutoCheckScheduler) {
-      void ensureAutoCheckScheduler(updater);
+      void ensureAutoCheckScheduler(updater, depsRef.current);
     }
 
     return () => {

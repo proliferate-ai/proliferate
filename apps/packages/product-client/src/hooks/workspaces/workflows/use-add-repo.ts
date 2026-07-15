@@ -5,7 +5,7 @@ import { useProductHost } from "@proliferate/product-client/host/ProductHostProv
 import { useCallback, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { runAddRepoWorkflow } from "#product/lib/domain/workspaces/creation/add-repo-workflow";
-import { loadAnonymousTelemetryBootstrap } from "@/lib/integrations/telemetry/anonymous-storage";
+import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
 import { useWorkspaceCollectionsInvalidationActions } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { useWorkspaceCollectionsMutationCacheActions } from "#product/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
@@ -41,6 +41,7 @@ function isRepoEntryBlockedPath(pathname: string): boolean {
 
 export function useAddRepo() {
   const localRuntime = useProductHost().desktop?.runtime ?? null;
+  const telemetry = useProductTelemetry();
   const location = useLocation();
   const { upsertRepoRootInWorkspaceCollections } = useWorkspaceCollectionsMutationCacheActions();
   const { invalidateWorkspaceCollectionsForRuntime } = useWorkspaceCollectionsInvalidationActions();
@@ -64,7 +65,7 @@ export function useAddRepo() {
     }
 
     void (async () => {
-      const { installId } = await loadAnonymousTelemetryBootstrap();
+      const installId = await telemetry.getAnonymousInstallId();
       await saveEnvironment.mutateAsync({
         gitOwner,
         gitRepoName,
@@ -81,7 +82,7 @@ export function useAddRepo() {
     })().catch(() => {
       // Local repo registration remains usable when Cloud is unavailable.
     });
-  }, [saveEnvironment]);
+  }, [saveEnvironment, telemetry]);
 
   const addRepoFromPath = useCallback(async (
     path: string,

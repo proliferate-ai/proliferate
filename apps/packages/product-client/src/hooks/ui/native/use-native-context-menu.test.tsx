@@ -25,7 +25,7 @@ function makeHost(desktop: DesktopBridge | null): ProductHost {
       cancelLogin: async () => {},
       logout: async () => ({ provider: "github" }),
     },
-    cloud: { client: null },
+    cloud: { client: null, getSandboxGatewayAccessToken: async () => "test-token" },
     storage: {
       getItem: async () => null,
       setItem: async () => {},
@@ -44,6 +44,7 @@ function makeHost(desktop: DesktopBridge | null): ProductHost {
       setTag: () => {},
       routeChanged: () => {},
       getSupportContext: () => ({ clientReleaseId: "test" }),
+      getAnonymousInstallId: async () => null,
     },
     desktop,
   };

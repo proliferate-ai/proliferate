@@ -1,7 +1,7 @@
 import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
 import type { CloudConnectionInfo, CloudWorkspaceDetail } from "@proliferate/cloud-sdk/types";
 import { isCloudAgentKind, ProliferateClientError } from "@proliferate/cloud-sdk";
-import { getDesktopCloudAccessToken } from "@/lib/access/cloud/client";
+import { getSandboxGatewayAccessToken } from "#product/lib/access/cloud/sandbox-gateway-access";
 
 /**
  * The gateway URL builder this module depends on — satisfied by the single
@@ -33,7 +33,7 @@ export async function withFreshCloudSandboxGatewayAccessToken<
   }
   return {
     ...connection,
-    accessToken: await getDesktopCloudAccessToken(),
+    accessToken: await getSandboxGatewayAccessToken(),
   };
 }
 
@@ -75,7 +75,7 @@ export async function resolveCloudSandboxGatewayConnectionForCloudWorkspace(
       "cloud_client_unavailable",
     );
   }
-  const productToken = await getDesktopCloudAccessToken();
+  const productToken = await getSandboxGatewayAccessToken();
   return {
     runtimeUrl: cloudClient.buildUrl("/v1/gateway/cloud-sandbox/anyharness"),
     accessToken: productToken,

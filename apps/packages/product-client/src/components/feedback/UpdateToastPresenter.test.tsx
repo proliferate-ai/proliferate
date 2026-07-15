@@ -31,11 +31,11 @@ const sonnerMocks = vi.hoisted(() => {
   return { toast };
 });
 
-vi.mock("@/hooks/access/tauri/use-updater", () => ({
+vi.mock("#product/hooks/access/tauri/use-updater", () => ({
   useUpdater: () => updaterMocks,
 }));
 
-vi.mock("@/hooks/access/tauri/app/use-app-version", () => ({
+vi.mock("#product/hooks/access/tauri/app/use-app-version", () => ({
   useAppVersion: () => ({ data: appVersionMocks.version }),
 }));
 

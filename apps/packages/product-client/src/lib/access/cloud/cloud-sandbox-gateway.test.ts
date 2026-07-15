@@ -1,23 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { CloudWorkspaceDetail } from "@proliferate/cloud-sdk/types";
-import { isCloudAgentKind } from "@proliferate/cloud-sdk";
-import { getDesktopCloudAccessToken } from "@/lib/access/cloud/client";
 import {
   type CloudSandboxGatewayUrlSource,
   resolveCloudSandboxGatewayConnectionForWorkspace,
 } from "#product/lib/access/cloud/cloud-sandbox-gateway";
-
-vi.mock("@/lib/access/cloud/client", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/access/cloud/client")>();
-  return {
-    getDesktopCloudAccessToken: vi.fn(),
-    isCloudAgentKind: vi.fn(),
-    ProliferateClientError: actual.ProliferateClientError,
-  };
-});
-
-const getProductToken = vi.mocked(getDesktopCloudAccessToken);
-const isKnownCloudAgent = vi.mocked(isCloudAgentKind);
+import { setSandboxGatewayAccessTokenProvider } from "#product/lib/access/cloud/sandbox-gateway-access";
 
 // The gateway receives the Cloud client (its URL builder) as an explicit
 // dependency; it never reaches for a client singleton. This stand-in proves the
@@ -28,9 +15,13 @@ const explicitCloudClient: CloudSandboxGatewayUrlSource = {
 
 describe("resolveCloudSandboxGatewayConnectionForWorkspace", () => {
   beforeEach(() => {
-    vi.resetAllMocks();
-    getProductToken.mockResolvedValue("product-token");
-    isKnownCloudAgent.mockImplementation((kind) => kind === "claude" || kind === "codex");
+    // The host arms this provider at mount (ruling G4); the test arms its own so
+    // the gateway resolves a deterministic token without a real session.
+    setSandboxGatewayAccessTokenProvider(async () => "product-token");
+  });
+
+  afterEach(() => {
+    setSandboxGatewayAccessTokenProvider(null);
   });
 
   it("uses the gateway URL and CloudWorkspace AnyHarness workspace id", async () => {

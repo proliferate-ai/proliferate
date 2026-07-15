@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useDesktopReleaseManifest } from "#product/hooks/access/downloads/desktop-releases/use-desktop-release-manifest";
-import { useAppVersion } from "@/hooks/access/tauri/app/use-app-version";
-import { useUpdater } from "@/hooks/access/tauri/use-updater";
+import { useAppVersion } from "#product/hooks/access/tauri/app/use-app-version";
+import { useUpdater } from "#product/hooks/access/tauri/use-updater";
 import {
   normalizeReleaseVersion,
   resolveInstalledReleaseTitle,

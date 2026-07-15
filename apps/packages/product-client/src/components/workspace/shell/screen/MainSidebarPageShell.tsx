@@ -3,7 +3,7 @@ import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { SplitPanelLeft } from "@proliferate/ui/icons";
 import { useResize } from "#product/hooks/ui/layout/use-resize";
 import { useTransparentChromeEnabled } from "#product/hooks/theme/derived/use-transparent-chrome";
-import { useUpdater } from "@/hooks/access/tauri/use-updater";
+import { useUpdater } from "#product/hooks/access/tauri/use-updater";
 import { resolveStandardWorkspaceChromeClasses } from "#product/lib/domain/preferences/workspace-chrome";
 import {
   WORKSPACE_SIDEBAR_MAX_WIDTH,

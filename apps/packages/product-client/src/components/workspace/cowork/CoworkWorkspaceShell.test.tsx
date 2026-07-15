@@ -66,7 +66,7 @@ vi.mock("#product/hooks/theme/derived/use-transparent-chrome", () => ({
   useTransparentChromeEnabled: () => false,
 }));
 
-vi.mock("@/hooks/access/tauri/use-updater", () => ({
+vi.mock("#product/hooks/access/tauri/use-updater", () => ({
   useUpdater: () => ({
     phase: "idle",
     downloadProgress: null,

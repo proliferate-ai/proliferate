@@ -1,4 +1,4 @@
-import { useAppVersion } from "@/hooks/access/tauri/app/use-app-version";
+import { useAppVersion } from "#product/hooks/access/tauri/app/use-app-version";
 
 /**
  * Sidebar footer: `Proliferate v{x}`, plus a persistent "Connected to {server}"

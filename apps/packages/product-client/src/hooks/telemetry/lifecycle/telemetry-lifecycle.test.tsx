@@ -23,6 +23,7 @@ function spyTelemetry(): ProductTelemetry {
     setTag: vi.fn(),
     routeChanged: vi.fn(),
     getSupportContext: vi.fn(() => ({ clientReleaseId: "desktop@test" })),
+    getAnonymousInstallId: vi.fn(async () => null),
   };
 }
 

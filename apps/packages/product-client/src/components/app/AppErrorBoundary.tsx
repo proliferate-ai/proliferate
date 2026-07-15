@@ -1,9 +1,16 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { reportReactRenderError } from "@/lib/integrations/telemetry/native-diagnostics";
+import type { RenderErrorReport } from "@proliferate/product-client/host/desktop-bridge";
 
 interface Props {
   children: ReactNode;
+  /**
+   * Forward a caught render-phase error to the host's native render diagnostics
+   * (ruling G3). ProductLifecycleRoot supplies this from
+   * `host.desktop?.diagnostics.reportRenderError`; it is absent (a no-op) on a
+   * host without native render diagnostics.
+   */
+  onRenderError?: (report: RenderErrorReport) => void;
 }
 
 interface State {
@@ -18,7 +25,7 @@ export class AppErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    reportReactRenderError(error, info.componentStack);
+    this.props.onRenderError?.({ error, componentStack: info.componentStack });
     console.error("[AppErrorBoundary] Uncaught render error:", error);
     console.error("[AppErrorBoundary] Component stack:", info.componentStack);
   }

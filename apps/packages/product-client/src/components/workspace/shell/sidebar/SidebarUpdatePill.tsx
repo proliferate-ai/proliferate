@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ArrowDown } from "@proliferate/ui/icons";
-import type { UpdaterPhase } from "@/hooks/access/tauri/use-updater";
+import type { UpdaterPhase } from "#product/hooks/access/tauri/use-updater";
 
 interface SidebarUpdatePillProps {
   phase: UpdaterPhase;
