@@ -71,6 +71,79 @@ async function signInThroughUi(page: Page, email: string, password: string): Pro
  * straight at "Add repository" without this first hangs forever — the
  * button resolves via role query but the sidebar container has zero width).
  */
+/**
+ * Wait for the "Add repository" control to reach a settled, interactable
+ * layout — not merely to exist in the DOM. This is the deterministic
+ * readiness gate the width transition demands.
+ *
+ * The sidebar container animates `width: 0 -> target` over
+ * `transition-[width] duration-150 ease-in-out` with `overflow-hidden`
+ * (WorkspaceShellSidebar.tsx). Two things make a naive "toggle flipped, now
+ * click" sequence flaky on cold starts:
+ *   1. The "Hide sidebar" toggle flips synchronously when `sidebarOpen`
+ *      becomes true — i.e. at t=0 of the width animation, before the panel
+ *      has any usable width. Asserting the toggle proves the state changed,
+ *      not that the layout settled.
+ *   2. Playwright reports the clipped "Add repository" button as `visible`
+ *      (it ignores ancestor `overflow-hidden` clipping), and its built-in
+ *      pre-click stability check only compares two animation frames — a
+ *      window `ease-in-out`'s near-zero opening velocity can satisfy while
+ *      the panel is still expanding. A click then lands on a control that is
+ *      still clipped/shifting, the popover never opens, and the test times
+ *      out on the "Add a repository" heading (observed as the retry-#1
+ *      failure on the exact-head Actions run for this spec).
+ *
+ * So gate on the button's own geometry: poll getBoundingClientRect until it
+ * is positive-width, fully inside the viewport, and unchanged across a
+ * sample gap wider than the 150ms transition, and confirm the button is the
+ * top hit-test element at its center (nothing is painting over it). No
+ * `force`, no fixed sleeps standing in for readiness, and — critically — no
+ * retry of the product action itself.
+ */
+async function waitForAddRepoButtonSettled(page: Page): Promise<void> {
+  await page
+    .getByRole("button", { name: "Add repository" })
+    .evaluate(async (node) => {
+      const TRANSITION_SETTLE_MS = 200; // > the 150ms width transition
+      const raf = () =>
+        new Promise<number>((resolve) => requestAnimationFrame(() => resolve(performance.now())));
+
+      const stableBox = async () => {
+        // Sample, wait past the transition window, sample again; require the
+        // box to have stopped moving/growing before we trust it.
+        for (let attempt = 0; attempt < 50; attempt += 1) {
+          const first = node.getBoundingClientRect();
+          const start = await raf();
+          // Spin frames until the settle window elapses.
+          let now = start;
+          while (now - start < TRANSITION_SETTLE_MS) {
+            now = await raf();
+          }
+          const second = node.getBoundingClientRect();
+          const settled =
+            first.width > 0 &&
+            Math.abs(first.left - second.left) < 0.5 &&
+            Math.abs(first.top - second.top) < 0.5 &&
+            Math.abs(first.width - second.width) < 0.5 &&
+            second.right <= window.innerWidth &&
+            second.left >= 0 &&
+            second.bottom <= window.innerHeight &&
+            second.top >= 0;
+          if (settled) return second;
+        }
+        throw new Error("Add repository control did not settle into a stable, in-viewport box");
+      };
+
+      const box = await stableBox();
+      const cx = box.left + box.width / 2;
+      const cy = box.top + box.height / 2;
+      const topAtCenter = document.elementFromPoint(cx, cy);
+      if (!(topAtCenter && (topAtCenter === node || node.contains(topAtCenter)))) {
+        throw new Error("Add repository control is not the top hit-test element at its center");
+      }
+    });
+}
+
 async function ensureSidebarOpen(page: Page): Promise<void> {
   const showSidebarButton = page.getByRole("button", { name: "Show sidebar" });
   const hideSidebarButton = page.getByRole("button", { name: "Hide sidebar" });
@@ -89,6 +162,10 @@ async function ensureSidebarOpen(page: Page): Promise<void> {
     // Prove the sidebar actually expanded, not just that the click landed.
     await expect(hideSidebarButton.first()).toBeVisible();
   }
+  // The toggle flip above is synchronous with the start of the width
+  // animation; wait for the Add-repository control to actually reach a
+  // stable, clickable layout before any caller clicks it.
+  await waitForAddRepoButtonSettled(page);
 }
 
 async function openAddRepoFlow(page: Page): Promise<void> {
