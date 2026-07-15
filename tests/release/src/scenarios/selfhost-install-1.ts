@@ -744,9 +744,16 @@ export const defaultBaseTurnCellOps: BaseTurnCellOps = {
     // carries AGENT_GATEWAY_LITELLM_* for the sibling SELFHOST-QUAL-1 gateway
     // cell; the allowlisting candidateChildEnvironment drops those before they
     // could reach the BYOK-only candidate runtime, which is exactly what
-    // no_litellm_spend must prove. Mirrors the E2B-key guard's scope.
+    // no_litellm_spend must prove. Mirrors the E2B-key guard's scope AND its
+    // pattern-scan shape: match any surviving gateway-ish key (the four known
+    // names plus anything containing litellm/agent_gateway), not a fixed list,
+    // so a differently-named gateway var that slipped into the allowlist is
+    // still caught.
     const candidateEnv = candidateChildEnvironment(process.env);
-    return LITELLM_GATEWAY_ENV_VARS.find((name) => candidateEnv[name]?.trim());
+    return Object.keys(candidateEnv).find(
+      (key) =>
+        (LITELLM_GATEWAY_ENV_VARS as readonly string[]).includes(key) || /litellm|agent_gateway/i.test(key),
+    );
   },
   detectE2bEnvKey: () => Object.keys(candidateChildEnvironment(process.env)).find((key) => /e2b/i.test(key)),
 };
@@ -1662,9 +1669,17 @@ async function readWorkspaceUiKey(p: Page): Promise<string> {
  * the logical key `repo-root:<repoRootId>:<branch>` (URL-encoded segments); the
  * runtime records the materialized workspace id (a bare UUID) on its sessions
  * and workspaces. This bridges them by matching the runtime workspace whose
- * `repoRootId` (+ branch) equals the logical key's segments. If the ui-key is
- * already a bare materialized id (defensive: some launch kinds render the
- * materialized id directly), a direct id match is accepted.
+ * `repoRootId` equals the logical key's repoRootId. If the ui-key is already a
+ * bare materialized id (defensive: some launch kinds render the materialized id
+ * directly), a direct id match is accepted.
+ *
+ * `repoRootId` alone is the reliable key: this cell materializes exactly one
+ * workspace on a fresh controller-local runtime, so the repoRootId is
+ * unambiguous. Branch is only a best-effort tiebreaker when more than one
+ * workspace shares the repoRootId — it is NEVER allowed to cause a false
+ * non-match, because the logical id's branch segment comes from the product's
+ * `workspaceBranchKey` (which prefers `originalBranch` and treats a detached
+ * `"HEAD"` as absent) and can diverge from the runtime's `currentBranch`.
  */
 async function resolveMaterializedWorkspaceId(
   world: ReadySelfHostWorld,
@@ -1683,11 +1698,15 @@ async function resolveMaterializedWorkspaceId(
       return direct.id;
     }
     if (parsed) {
-      const match = workspaces.find(
-        (w) => w.repoRootId === parsed.repoRootId && normalizeBranch(w.currentBranch) === parsed.branch,
-      );
-      if (match) {
-        return match.id;
+      const byRepoRoot = workspaces.filter((w) => w.repoRootId === parsed.repoRootId);
+      if (byRepoRoot.length === 1) {
+        return byRepoRoot[0]!.id;
+      }
+      if (byRepoRoot.length > 1) {
+        // Ambiguous only when the runtime holds several workspaces for the same
+        // repo-root; prefer an exact branch match, else the most recent.
+        const byBranch = byRepoRoot.find((w) => normalizeBranch(w.currentBranch) === parsed.branch);
+        return (byBranch ?? byRepoRoot[byRepoRoot.length - 1]!).id;
       }
     }
     await sleep(1_000);
