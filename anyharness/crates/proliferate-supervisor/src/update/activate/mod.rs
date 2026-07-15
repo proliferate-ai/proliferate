@@ -30,7 +30,7 @@ use proliferate_runtime_update_protocol::{
     UpdateComponent, UpdateOutcome, UpdateRequestV1, UpdateResultV1,
 };
 use sha2::{Digest, Sha256};
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::{
     config::SupervisorConfig,
@@ -106,6 +106,15 @@ pub async fn run_pending<H: ActivationHost>(
     while let Some(pending) = request::next_pending(&config.update_request_dir)? {
         match activate_one(config, host, &pending).await {
             ActivationStep::Terminal(result) => {
+                // A successful mailbox-triggered activation deserves the same
+                // visibility as the run loop's spawn logging (smoke follow-up:
+                // only retries were logged before).
+                info!(
+                    request_id = %result.request_id,
+                    outcome = ?result.outcome,
+                    observed_version = ?result.observed_version,
+                    "update request reached a terminal result"
+                );
                 request::record_result(&config.update_request_dir, &result)?;
             }
             ActivationStep::Retry(reason) => {
@@ -287,11 +296,14 @@ async fn roll_back<H: ActivationHost>(
 ) -> UpdateResultV1 {
     match plan.apply() {
         Ok(()) => {
-            // Best-effort: bring the restored last-good back up and re-gate. The
-            // outcome is RolledBack — the point is that the new version is never
-            // reported active and a genuine last-good is now serving.
+            // Best-effort: bring the restored last-good back up and wait for
+            // plain reachability. Deliberately NOT `health_gate(request)` — that
+            // asserts the FAILED request's version, which the restored binary can
+            // never report, so it burned a full attempts×delay cycle for nothing
+            // (smoke follow-up). The outcome is RolledBack — the point is that
+            // the new version is never reported active and last-good is serving.
             let _ = restart_in_order(host, request.component).await;
-            let _ = health_gate(host, request).await;
+            let _ = host.anyharness_healthy(None).await;
             UpdateResultV1 {
                 request_id: request.request_id.clone(),
                 outcome: UpdateOutcome::RolledBack,
