@@ -7,6 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from proliferate.constants.ai_magic import COMMIT_MESSAGE_MAX_INSTRUCTIONS_CHARS
 from proliferate.constants.cloud import (
     CloudMaterializationStatus,
     GitProvider,
@@ -41,6 +42,7 @@ class RepoConfigResponse(BaseModel):
     git_provider: GitProvider = Field(serialization_alias="gitProvider")
     git_owner: str = Field(serialization_alias="gitOwner")
     git_repo_name: str = Field(serialization_alias="gitRepoName")
+    commit_instructions: str = Field(serialization_alias="commitInstructions")
     environments: list[RepoEnvironmentResponse]
 
 
@@ -56,6 +58,14 @@ class SaveRepoEnvironmentRequest(BaseModel):
     default_branch: str | None = Field(default=None, alias="defaultBranch")
     setup_script: str = Field(default="", alias="setupScript")
     run_command: str = Field(default="", alias="runCommand")
+
+
+class UpdateRepoConfigRequest(BaseModel):
+    commit_instructions: str = Field(
+        default="",
+        alias="commitInstructions",
+        max_length=COMMIT_MESSAGE_MAX_INSTRUCTIONS_CHARS,
+    )
 
 
 def repo_environment_materialization_payload(
@@ -94,5 +104,6 @@ def repo_config_payload(value: RepoConfigValue) -> RepoConfigResponse:
         git_provider=value.git_provider,
         git_owner=value.git_owner,
         git_repo_name=value.git_repo_name,
+        commit_instructions=value.commit_instructions,
         environments=[repo_environment_payload(item) for item in value.environments],
     )

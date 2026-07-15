@@ -34,6 +34,15 @@ vi.mock("@anyharness/sdk-react", () => ({
   useCommitGitMutation: () => mocks.commitMutation!,
   usePushGitMutation: () => mocks.pushMutation!,
   useCreatePullRequestMutation: () => mocks.createPullRequestMutation!,
+  // Commit-message generation plumbing (leave-blank-to-generate): these
+  // tests always submit with a summary, so the client is never used.
+  useAnyHarnessWorkspaceContext: () => ({ workspaceId: null }),
+  resolveWorkspaceConnectionFromContext: vi.fn(),
+  getAnyHarnessClient: vi.fn(),
+}));
+
+vi.mock("@proliferate/cloud-sdk/client/ai-magic", () => ({
+  generateCommitMessage: vi.fn(),
 }));
 
 vi.mock("@/hooks/workspaces/cache/use-pr-status-refresh", () => ({

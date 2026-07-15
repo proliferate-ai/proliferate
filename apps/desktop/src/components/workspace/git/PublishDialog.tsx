@@ -225,7 +225,7 @@ export function PublishDialog({
                 rows={3}
                 value={commitDraft.summary}
                 onChange={(event) => setCommitDraft({ ...commitDraft, summary: event.target.value })}
-                placeholder="Commit message"
+                placeholder="Commit message (leave blank to generate)…"
                 disabled={isSubmitting}
                 variant="flush"
                 className="h-20"

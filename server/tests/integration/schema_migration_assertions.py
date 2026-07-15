@@ -113,6 +113,7 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
         "git_provider",
         "git_owner",
         "git_repo_name",
+        "commit_instructions",
         "created_at",
         "updated_at",
         "deleted_at",

@@ -38,9 +38,8 @@ export function resolvePublishDisabledReason(input: {
     if (!input.includeUnstaged && !input.hasStagedChanges) {
       return "Stage changes or include unstaged changes before committing.";
     }
-    if (!input.summary) {
-      return "Enter a commit message.";
-    }
+    // A blank summary is allowed: the workflow generates a message from the
+    // pending diff at submit time (AI magic, leave-blank-to-generate).
   } else if (!input.wantsPublish && !input.wantsPr) {
     return "There are no changes to commit.";
   }

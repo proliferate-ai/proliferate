@@ -11,6 +11,7 @@ import { useCloudRepoEnvironmentEditor } from "@/hooks/settings/workflows/use-cl
 import { useRepositorySettings } from "@/hooks/settings/workflows/use-repository-settings";
 import { type SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import { RepoCloudGate } from "./RepoCloudGate";
+import { RepoCommitInstructionsSection } from "./RepoCommitInstructionsSection";
 import {
   LocalNoCheckoutState,
   RepoScopeEmptyState,
@@ -141,6 +142,13 @@ function ConfigureCloud({
           />
         </SettingsRow>
       </SettingsSection>
+      {editor.cloudRepository && (
+        <RepoCommitInstructionsSection
+          gitOwner={editor.cloudRepository.gitOwner}
+          gitRepoName={editor.cloudRepository.gitRepoName}
+          enabled={cloudActive}
+        />
+      )}
       <SettingsSaveFooter
         statusLabel={editor.status.label}
         statusTone={editor.status.tone}

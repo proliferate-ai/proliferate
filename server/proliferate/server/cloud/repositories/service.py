@@ -15,6 +15,7 @@ from proliferate.db.store.repositories import (
     RepoConfigValue,
     RepoEnvironmentValue,
     list_repo_configs_for_user,
+    update_repo_config_commit_instructions,
     upsert_cloud_repo_environment,
     upsert_local_repo_environment,
 )
@@ -28,6 +29,7 @@ from proliferate.server.cloud.repositories.models import (
     RepoConfigResponse,
     RepoEnvironmentResponse,
     SaveRepoEnvironmentRequest,
+    UpdateRepoConfigRequest,
     repo_environment_payload,
 )
 
@@ -87,7 +89,26 @@ async def repo_config_response(
         git_provider=value.git_provider,
         git_owner=value.git_owner,
         git_repo_name=value.git_repo_name,
+        commit_instructions=value.commit_instructions,
         environments=environments,
+    )
+
+
+async def update_repo_config(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    git_owner: str,
+    git_repo_name: str,
+    body: UpdateRepoConfigRequest,
+) -> RepoConfigValue:
+    return await update_repo_config_commit_instructions(
+        db,
+        user_id=user_id,
+        git_provider="github",
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        commit_instructions=body.commit_instructions,
     )
 
 
