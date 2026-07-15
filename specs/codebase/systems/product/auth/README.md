@@ -3,12 +3,23 @@
 Scope:
 
 - `server/proliferate/auth/**`
+- `server/proliferate/server/organizations/sso/**`
 - `apps/web/src/components/auth/**`
 - `apps/mobile/src/components/auth/**`
-- `apps/desktop/src/components/settings/panes/AccountPane.tsx`
+- `apps/desktop/src/lib/integrations/auth/**`
+- `apps/desktop/src/providers/*product-host*`
+- `apps/packages/product-client/src/components/auth/**`
+- `apps/packages/product-client/src/components/settings/panes/AccountPane.tsx`
 - `apps/packages/product-domain/src/auth/**`
 - `apps/packages/product-ui/src/auth/**`
 - `cloud/sdk/src/client/auth.ts`
+
+Target architecture:
+
+- [Desktop and Web authentication method contract](method-set-target.md) defines
+  the approved GitHub, Google, and customer-domain SSO end state plus the trust,
+  account-binding, and session-scope prerequisites. The current behavior in this
+  document remains authoritative until each target rollout checkpoint lands.
 
 ## Model
 
@@ -127,25 +138,28 @@ CIDRs listed in `PASSWORD_AUTH_TRUSTED_PROXY_HOSTS`.
 
 ## Organization SSO Sign-In
 
-The org-SSO backend (connection model, discovery/start endpoints, OIDC callback,
-JIT membership) was fully built before this slice. What was missing was a way for
-a user to reach it: web and desktop cold login only ever probed deployment-scope
-SSO, and org SSO was reachable only through the desktop invite deep link. This
-slice adds the user-facing entry points. It does not change the OIDC flow itself.
+The org-SSO backend includes the connection model, discovery/start endpoints,
+OIDC callback, and JIT membership. Web exposes explicit organization entry
+through a slug link and invitation flow. ProductClient has a slug-capable
+`/login` page for Desktop, but the default anonymous Desktop gate does not
+currently expose a route to it. Email-only discovery still resolves deployment
+SSO rather than an organization connection. The target method contract replaces
+these divergent entries with one verified customer-domain flow.
 
-Entry points, one shape across surfaces:
+Current entry points:
 
-- Web auth screen shows a quiet `Sign in with SSO` link (shown when the
-  deployment is not itself SSO-gated). It opens `/login`, a page with a single
+- Web auth screen shows an email SSO form and a quiet `Sign in with SSO` link
+  when the deployment is not itself SSO-gated. Email-only discovery currently
+  reaches deployment SSO only. The link opens `/login`, a page with a single
   field for the organization's workspace slug.
 - `/login/<slug>` prefills that field. This is the URL an admin pastes into their
   onboarding docs (for example `app.proliferate.ai/login/acme`).
 - The slug resolves to an `organizationId`, then the page calls the existing
   `startSsoAuth` start flow with that org (and connection) id. No new SSO
   machinery.
-- Desktop mirrors this: a `Sign in with SSO` affordance on cold login reveals a
-  slug field and drives the existing native SSO machinery (system browser +
-  `proliferate://auth/callback` deep link).
+- Desktop's `/login` page can reveal a slug field and drive the existing native
+  SSO machinery (system browser + `proliferate://auth/callback` deep link), but
+  the default anonymous gate does not currently expose that page.
 - Web `/join/:orgId` signs the user in on the web when the org has SSO enabled
   (it discovers by org id and starts the SSO flow; JIT membership and invite
   acceptance happen in the SSO callback). It only falls back to the Desktop
@@ -197,9 +211,8 @@ Mobile signed out:
 Desktop:
 
 - Keeps GitHub as the primary sign-in path.
-- Cold login also offers a `Sign in with SSO` affordance that asks for the org
-  workspace slug and drives the existing native SSO flow (see Organization SSO
-  Sign-In).
+- The `/login` route supports organization-slug SSO, but the default cold-login
+  gate does not currently link to it.
 - Account settings expose `Set password` / `Change password` for authenticated
   users.
 - Organization join deep links may arrive before Desktop is authenticated.

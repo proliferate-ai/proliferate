@@ -2,6 +2,8 @@
 
 Date: 2026-06-24.
 
+Last reconciled: 2026-07-15.
+
 Scope:
 
 - `server/proliferate/db/models/organizations.py`
@@ -48,15 +50,18 @@ The browser URL is the universal entrypoint:
 Email / copied link -> https://.../join/{organizationId}
 ```
 
-The join page should try to open Desktop with:
+The join page first discovers SSO by organization id. When the organization has
+an enabled connection, Web starts that SSO flow; JIT membership or invitation
+acceptance remains a server callback decision. When usable SSO is unavailable or
+cannot be started, the page falls back to opening Desktop with:
 
 ```text
 proliferate://join/{organizationId}
 ```
 
 If Desktop does not open, the page presents a retry action and install-oriented
-copy. Hosted web product sessions remain beta-gated, so this page must not
-require web product authentication for the Desktop-first path.
+copy. Hosted web product sessions remain beta-gated, so the fallback path must
+not require web product authentication before attempting the Desktop handoff.
 
 Desktop maps the deep link to:
 
@@ -127,7 +132,7 @@ Accepting an organization invitation must:
 
 ## Out Of Scope
 
-- Public web product join without Desktop
+- Web invite acceptance for organizations without usable SSO
 - Self-serve organization-wide invite-link policy storage
 - Enterprise verified-domain join policy storage
 - Public password signup or password reset
