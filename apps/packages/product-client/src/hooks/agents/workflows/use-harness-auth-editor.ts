@@ -28,7 +28,12 @@ import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 
 export interface HarnessAuthEditorApi {
   // Queries
-  cloudActive: boolean;
+  // The auth plane is ready: the user is signed into the control plane and it
+  // is reachable. Model-auth (BYOK/api_key + gateway route) is an auth-plane
+  // capability, so it gates on this — NOT on cloud compute (E2B). A local-only
+  // or self-hosted user with no cloud compute can still store keys / pick a
+  // route. Mirrors PR 1's decoupling of local gateway-state sync from compute.
+  authReady: boolean;
   capabilitiesQuery: ReturnType<typeof useAgentGatewayCapabilities>;
   enrollmentQuery: ReturnType<typeof useAgentGatewayEnrollment>;
   selectionsQuery: ReturnType<typeof useAuthSelections>;
@@ -88,7 +93,11 @@ export function useHarnessAuthEditor(
   displayName: string,
   surface: AgentAuthSurface,
 ): HarnessAuthEditorApi {
-  const { cloudActive } = useCloudAvailabilityState();
+  const { authStatus, cloudEnabled } = useCloudAvailabilityState();
+  // Auth-plane readiness: signed in + control plane reachable. Cloud compute is
+  // deliberately NOT part of this — model-auth surfaces must work for a
+  // local-only / self-hosted user who never provisioned E2B.
+  const authReady = authStatus === "authenticated" && cloudEnabled;
   const showToast = useToastStore((state) => state.show);
 
   // Org policy is the server's hard gate; here it also drives client-side
@@ -98,13 +107,13 @@ export function useHarnessAuthEditor(
   const { activeOrganizationId } = useActiveOrganization();
   const orgPolicyQuery = useOrgAgentPolicy(
     activeOrganizationId,
-    cloudActive && activeOrganizationId !== null,
+    authReady && activeOrganizationId !== null,
   );
 
-  const capabilitiesQuery = useAgentGatewayCapabilities(cloudActive);
-  const enrollmentQuery = useAgentGatewayEnrollment(cloudActive);
-  const selectionsQuery = useAuthSelections(null, cloudActive);
-  const apiKeysQuery = useAgentApiKeys(cloudActive);
+  const capabilitiesQuery = useAgentGatewayCapabilities(authReady);
+  const enrollmentQuery = useAgentGatewayEnrollment(authReady);
+  const selectionsQuery = useAuthSelections(null, authReady);
+  const apiKeysQuery = useAgentApiKeys(authReady);
   const putSelections = usePutAuthSelections();
   const { agentsByKind } = useAgentCatalog();
   const loginWorkflow = useAgentLoginTerminalWorkflow();
@@ -287,7 +296,7 @@ export function useHarnessAuthEditor(
   }
 
   return {
-    cloudActive,
+    authReady,
     capabilitiesQuery,
     enrollmentQuery,
     selectionsQuery,

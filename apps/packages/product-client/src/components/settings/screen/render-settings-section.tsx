@@ -44,6 +44,7 @@ export function renderSettingsSection(
   cloudActive: boolean,
   cloudSignInChecking: boolean,
   cloudSignInAvailable: boolean,
+  authenticated: boolean,
   focus: SettingsFocus,
   _onSelectSection: (section: SettingsSection) => void,
   onSelectRepo: (sourceRoot: string) => void,
@@ -53,6 +54,15 @@ export function renderSettingsSection(
   const cloudGate: CloudGateFlags = {
     cloudEnabled,
     cloudActive,
+    cloudSignInChecking,
+    cloudSignInAvailable,
+  };
+  // Auth-plane gate: surfaces that only need a signed-in control plane (not
+  // cloud compute/E2B). CloudGuard renders children when its `cloudActive` is
+  // true, so feed it the authentication signal instead of the compute one.
+  const authGate: CloudGateFlags = {
+    cloudEnabled,
+    cloudActive: authenticated,
     cloudSignInChecking,
     cloudSignInAvailable,
   };
@@ -75,7 +85,7 @@ export function renderSettingsSection(
     return renderCloudGatedPane(cloudGate, () => <PersonalSecretsPane />);
   }
   if (activeSection === "integrations") {
-    return renderCloudGatedPane(cloudGate, () => <UserIntegrationsPane focus={focus} />);
+    return renderCloudGatedPane(authGate, () => <UserIntegrationsPane focus={focus} />);
   }
   if (activeSection === "billing") {
     return <BillingPane />;

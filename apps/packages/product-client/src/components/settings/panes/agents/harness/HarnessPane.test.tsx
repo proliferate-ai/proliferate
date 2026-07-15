@@ -26,6 +26,7 @@ type LocalAgent = {
 
 const state = vi.hoisted(() => ({
   cloudActive: true,
+  authStatus: "authenticated" as "authenticated" | "anonymous" | "loading",
   agentSurface: "local" as "cloud" | "local",
   capabilities: {
     data: {
@@ -207,12 +208,13 @@ vi.mock("#product/components/settings/panes/agent-auth/ApiKeyCreatorModal", () =
 
 vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
   useCloudAvailabilityState: () => ({
+    authStatus: state.authStatus,
     cloudEnabled: true,
     cloudActive: state.cloudActive,
     cloudSignInChecking: false,
     // When cloud is inactive the CloudGuard should fall through to the
     // sign-in-required pane (sign-in is available), matching the real hook.
-    cloudSignInAvailable: !state.cloudActive,
+    cloudSignInAvailable: state.authStatus !== "authenticated",
   }),
 }));
 
@@ -284,6 +286,7 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   state.cloudActive = true;
+  state.authStatus = "authenticated";
   state.agentSurface = "local";
   state.capabilities.data = {
     gatewayEnabled: true,
@@ -706,12 +709,33 @@ describe("HarnessPane authentication", () => {
     );
   });
 
-  it("asks the user to sign in when cloud is inactive", () => {
+  it("asks the user to sign in when signed out", () => {
+    state.authStatus = "anonymous";
     state.cloudActive = false;
     renderPane("claude");
 
     expect(screen.queryAllByText(/Sign in to Proliferate Cloud/).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: "Proliferate gateway" })).toBeNull();
+  });
+
+  // The founder ruling for PR 5f: model-auth (BYOK/api_key + gateway route) is
+  // an auth-plane surface. A signed-in user with NO cloud compute (E2B) — a
+  // local-only or self-hosted install — must still get the route cards to store
+  // a key or pick a route. Previously the local surface hid them behind the
+  // compute-based `cloudActive`, showing "Sign in to Proliferate Cloud".
+  it("shows the model-auth route cards for an authenticated user without cloud compute", () => {
+    state.authStatus = "authenticated";
+    state.cloudActive = false;
+    const { container } = renderPane("claude");
+
+    // No sign-in prompt: the auth plane is ready even without cloud compute.
+    expect(screen.queryAllByText(/Sign in to Proliferate Cloud/).length).toBe(0);
+    // The exact route markers the qualification DOM asserts.
+    expect(container.querySelector('[data-harness-route-option="claude:gateway"]')).not.toBeNull();
+    expect(container.querySelector('[data-harness-route-option="claude:api_key"]')).not.toBeNull();
+    expect(container.querySelector('[data-harness-route-option="claude:cli"]')).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Proliferate gateway" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "API key" })).toBeTruthy();
   });
 });
 

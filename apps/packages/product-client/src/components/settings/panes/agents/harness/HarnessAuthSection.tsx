@@ -95,9 +95,11 @@ export function HarnessAuthSection({
   }
 
   // Cloud surface gating is now handled at the pane level by wrapping the
-  // entire cloud surface content in CloudGuard. Local surface keeps its
-  // lighter inline sign-in prompt so nothing changes when running fully offline.
-  if (surface === "local" && !editor.cloudActive) {
+  // entire cloud surface content in CloudGuard. The local surface keeps its
+  // lighter inline sign-in prompt — but it gates on the auth plane (signed in),
+  // NOT on cloud compute, so a local-only / self-hosted user with no E2B still
+  // gets the route cards to store a key or pick a route.
+  if (surface === "local" && !editor.authReady) {
     return (
       <HarnessPanelBlock variant={variant} title={HARNESS_PANE_COPY.signInTitle}>
         <p className="py-3 text-sm text-muted-foreground">

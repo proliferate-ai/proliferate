@@ -65,7 +65,8 @@ export function SettingsScreen({
   onSelectRepoContext,
   onSelectCloudEnvironment,
 }: SettingsScreenProps) {
-  const { cloudActive, cloudEnabled, cloudSignInAvailable, cloudSignInChecking } = useCloudAvailabilityState();
+  const { authStatus, cloudActive, cloudEnabled, cloudSignInAvailable, cloudSignInChecking } = useCloudAvailabilityState();
+  const authenticated = authStatus === "authenticated";
   const { activeOrganizationId, organizationsQuery } = useActiveOrganization();
   const admin = useIsAdmin(activeOrganizationId);
   const {
@@ -226,6 +227,7 @@ export function SettingsScreen({
                     cloudActive,
                     cloudSignInChecking,
                     cloudSignInAvailable,
+                    authenticated,
                     focus,
                     onSelectSection,
                     onSelectRepo,
