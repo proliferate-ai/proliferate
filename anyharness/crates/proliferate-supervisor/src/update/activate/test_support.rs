@@ -102,6 +102,9 @@ pub(super) struct FakeHost {
     /// request, `Some(false)` => a different version (bytes/label mismatch,
     /// R9R-001). Default `None` keeps existing worker tests tolerant.
     pub(super) worker_reports: Option<bool>,
+    /// How many times `worker_alive` was probed, so a test can assert the
+    /// Worker-liveness leg still fires on the rollback path (SUF-001).
+    pub(super) worker_alive_calls: u32,
 }
 
 impl ActivationHost for FakeHost {
@@ -149,6 +152,7 @@ impl ActivationHost for FakeHost {
     }
 
     async fn worker_alive(&mut self) -> bool {
+        self.worker_alive_calls += 1;
         self.worker_live
     }
 

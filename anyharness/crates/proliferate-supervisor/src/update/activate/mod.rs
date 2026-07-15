@@ -296,14 +296,23 @@ async fn roll_back<H: ActivationHost>(
 ) -> UpdateResultV1 {
     match plan.apply() {
         Ok(()) => {
-            // Best-effort: bring the restored last-good back up and wait for
-            // plain reachability. Deliberately NOT `health_gate(request)` — that
-            // asserts the FAILED request's version, which the restored binary can
-            // never report, so it burned a full attempts×delay cycle for nothing
-            // (smoke follow-up). The outcome is RolledBack — the point is that
-            // the new version is never reported active and last-good is serving.
+            // Best-effort: bring the restored last-good back up and probe plain
+            // reachability of the WHOLE runtime. Deliberately NOT
+            // `health_gate(request)` — that asserts the FAILED request's version,
+            // which the restored binary can never report, so it burned a full
+            // attempts×delay cycle for nothing (smoke follow-up). But the probe
+            // must still cover BOTH legs: AnyHarness answering /health (no version
+            // asserted) AND the Worker live after its restart. SUF-001: swapping
+            // health_gate for a bare `anyharness_healthy(None)` silently dropped
+            // the Worker-liveness leg, so a Worker that failed to come back on
+            // rollback went unobserved. Evaluate both, no short-circuit, so the
+            // Worker is always probed. The outcome is RolledBack regardless — the
+            // point is that the new version is never reported active and last-good
+            // is serving.
             let _ = restart_in_order(host, request.component).await;
-            let _ = host.anyharness_healthy(None).await;
+            let anyharness_reachable = host.anyharness_healthy(None).await;
+            let worker_reachable = host.worker_alive().await;
+            let _ = anyharness_reachable && worker_reachable;
             UpdateResultV1 {
                 request_id: request.request_id.clone(),
                 outcome: UpdateOutcome::RolledBack,

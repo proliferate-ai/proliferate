@@ -330,6 +330,16 @@ async fn unhealthy_activation_rolls_back_to_last_good() {
         host.restart_log,
         vec!["anyharness", "worker", "anyharness", "worker"]
     );
+    // SUF-001 regression: the rollback reachability probe must still cover the
+    // Worker-liveness leg. The activation health gate short-circuits on the
+    // unhealthy AnyHarness before ever reaching `worker_alive`, so the only path
+    // that can bump this counter is the post-rollback probe. Before the fix it
+    // was 0 (the probe checked AnyHarness only) — a Worker that failed to come
+    // back on rollback went unobserved.
+    assert_eq!(
+        host.worker_alive_calls, 1,
+        "rollback must probe Worker liveness, not only AnyHarness /health"
+    );
 }
 
 #[tokio::test]
