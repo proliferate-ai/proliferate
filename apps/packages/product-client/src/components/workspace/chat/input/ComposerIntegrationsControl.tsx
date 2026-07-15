@@ -2,8 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { Blocks, Settings } from "@proliferate/ui/icons";
+import { ArrowUpRight, Blocks, Settings } from "@proliferate/ui/icons";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
 import { IntegrationIcon } from "#product/components/settings/panes/integrations/IntegrationIcon";
 import { useComposerIntegrationsState } from "#product/hooks/cloud/derived/use-composer-integrations-state";
@@ -12,15 +11,19 @@ import {
   type ComposerIntegrationProvider,
 } from "#product/lib/domain/cloud/composer-integrations";
 import { buildSettingsHref } from "#product/lib/domain/settings/navigation";
+import {
+  StatusRow,
+  StatusSection,
+} from "#product/components/workspace/chat/input/workspace-status/StatusCardPrimitives";
 
 /**
  * The single composer integrations control. Always present: an icon-only plug
  * when nothing is connected, a quiet plug + count when every connected
  * integration is healthy, and the old reauth chip's urgent warning
  * presentation the moment one needs re-authentication. Clicking opens a
- * popover listing the connected providers (just the Manage entry when there
- * are none), each with a health dot and — when it needs re-authentication —
- * a Reconnect affordance that deep-links to Settings.
+ * status-card-anatomy popover listing the connected providers, each with a
+ * health dot and — when it needs re-authentication — a Reconnect affordance
+ * that deep-links to Settings.
  */
 export function ComposerIntegrationsControl() {
   const navigate = useNavigate();
@@ -64,9 +67,24 @@ export function ComposerIntegrationsControl() {
       )}
     >
       {(close) => (
-        <ComposerPopoverSurface className="w-72 p-1.5">
-          {providers.length > 0 && (
-            <div className="space-y-0.5">
+        // Same card surface + section/row anatomy as the workspace-status
+        // card, so every composer popover speaks one UI language.
+        <ComposerPopoverSurface
+          variant="summary"
+          className="w-[min(300px,calc(100vw-1rem))] overflow-hidden rounded-[1.25rem] p-0 pt-2.5 ring-0 shadow-[0_0_0_0.5px_var(--color-popover-ring),0_3px_7.5px_rgba(0,0,0,0.25),0_0_20px_rgba(0,0,0,0.28)]"
+        >
+          <div className="flex max-h-[min(34rem,calc(100vh-8rem))] flex-col gap-3 overflow-y-auto pb-3">
+            <StatusSection
+              title="Integrations"
+              detail={connectedCount > 0 ? `${connectedCount} connected` : null}
+            >
+              {providers.length === 0 && (
+                <StatusRow
+                  icon={<Blocks className="size-4" />}
+                  label="No integrations connected"
+                  disabled
+                />
+              )}
               {providers.map((provider) => (
                 <ProviderRow
                   key={provider.definitionId}
@@ -77,17 +95,20 @@ export function ComposerIntegrationsControl() {
                   }}
                 />
               ))}
-            </div>
-          )}
-          <div className={providers.length > 0 ? "mt-1 border-t border-border pt-1" : ""}>
-            <PopoverMenuItem
-              icon={<Settings className="size-4" />}
-              label="Manage integrations"
-              onClick={() => {
-                goToIntegrations();
-                close();
-              }}
-            />
+              <StatusRow
+                icon={<Settings className="size-4" />}
+                label="Manage integrations"
+                trailing={(
+                  <span className="shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/status-row:opacity-100 group-focus-visible/status-row:opacity-100">
+                    <ArrowUpRight className="size-3.5" />
+                  </span>
+                )}
+                onSelect={() => {
+                  goToIntegrations();
+                  close();
+                }}
+              />
+            </StatusSection>
           </div>
         </ComposerPopoverSurface>
       )}
@@ -95,6 +116,9 @@ export function ComposerIntegrationsControl() {
   );
 }
 
+/** One provider in the shared status-row recipe: provider icon in the fixed
+ * slot, name, health dot trailing — with the Reconnect action styled like the
+ * status card's checks-row "View" action when re-auth is needed. */
 function ProviderRow({
   provider,
   onReconnect,
@@ -105,27 +129,29 @@ function ProviderRow({
   const dot = composerIntegrationHealthDot(provider.health);
 
   return (
-    <div className="flex items-center gap-2 rounded-lg px-2 py-1.5">
-      <IntegrationIcon namespace={provider.namespace} className="size-5 rounded-md" />
-      <span className="min-w-0 flex-1 truncate text-ui-sm text-popover-foreground">
-        {provider.displayName}
-      </span>
-      <span
-        aria-hidden="true"
-        className={`size-1.5 shrink-0 rounded-full ${dot.className}`}
-      />
-      <span className="sr-only">{dot.label}</span>
-      {provider.needsReauth ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-6 rounded-md px-2 text-ui-sm text-warning"
-          onClick={onReconnect}
-        >
-          Reconnect
-        </Button>
-      ) : null}
-    </div>
+    <StatusRow
+      icon={<IntegrationIcon namespace={provider.namespace} className="size-4 rounded-sm" />}
+      label={provider.displayName}
+      trailing={(
+        <span className="flex shrink-0 items-center gap-2">
+          {provider.needsReauth && (
+            <Button
+              type="button"
+              variant="unstyled"
+              size="unstyled"
+              onClick={onReconnect}
+              className="shrink-0 rounded-sm px-1 text-ui text-warning-foreground hover:text-foreground"
+            >
+              Reconnect
+            </Button>
+          )}
+          <span
+            aria-hidden="true"
+            className={`size-1.5 shrink-0 rounded-full ${dot.className}`}
+          />
+          <span className="sr-only">{dot.label}</span>
+        </span>
+      )}
+    />
   );
 }
