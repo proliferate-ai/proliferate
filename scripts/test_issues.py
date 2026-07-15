@@ -321,6 +321,45 @@ def test_large_but_bounded_payload_emits_valid_json(fake_key, monkeypatch, capsy
     assert json.loads(out) == payload
 
 
+def test_pretty_expansion_falls_back_to_compact_within_bound(fake_key, monkeypatch, capsys):
+    # The reviewer's proof case: a ~400KB wire body whose indented serialization
+    # would exceed the bound. Compact separators keep it inside, so it succeeds
+    # and stdout is one complete valid JSON document within the bound.
+    payload = {"items": [{"k": i, "v": "z" * 20} for i in range(18_000)]}
+    raw = json.dumps(payload).encode("utf-8")
+    assert len(raw) < issues.MAX_RESPONSE_BYTES
+    pretty = json.dumps(payload, indent=2, sort_keys=True).encode("utf-8")
+    assert len(pretty) > issues.MAX_RESPONSE_BYTES
+    monkeypatch.setattr(
+        issues, "_urlopen", lambda req, timeout: FakeResponse(200, raw=raw)
+    )
+    code = _run(["list"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert len(out.encode("utf-8")) <= issues.MAX_RESPONSE_BYTES + 1  # + newline
+    assert json.loads(out) == payload
+
+
+def test_serialized_output_over_bound_fails_with_no_stdout(fake_key, monkeypatch, capsys):
+    # Wire body under the read bound, but ASCII escaping doubles the encoded
+    # size on re-serialization so even the compact document exceeds the output
+    # bound: fail nonzero, body withheld, and NOTHING (no partial JSON) on stdout.
+    snowmen = "☃" * 250_000  # 3 bytes each raw UTF-8; 6 bytes each escaped
+    raw = json.dumps({"pad": snowmen}, ensure_ascii=False).encode("utf-8")
+    assert len(raw) < issues.MAX_RESPONSE_BYTES
+    compact = json.dumps({"pad": snowmen}, separators=(",", ":")).encode("utf-8")
+    assert len(compact) > issues.MAX_RESPONSE_BYTES
+    monkeypatch.setattr(
+        issues, "_urlopen", lambda req, timeout: FakeResponse(200, raw=raw)
+    )
+    code = _run(["get", "7"])
+    out = capsys.readouterr()
+    assert code == 1
+    assert out.out == ""
+    assert "output bound" in out.err
+    assert "☃" not in out.err and "2603" not in out.err.replace("output", "")
+
+
 def test_secret_missing_field_redacts_payload(monkeypatch, capsys):
     class Completed:
         returncode = 0

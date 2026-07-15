@@ -267,10 +267,23 @@ def _emit(status: int, payload: object) -> int:
     2xx -> 0. Everything else (including exposed 409/412 conflict bodies) exits
     nonzero so a caller cannot mistake a conflict for success.
 
-    The payload is already bounded at read time, so the serialized document is
-    printed whole; truncating serialized JSON would emit an invalid document.
+    The bound is enforced on the FINAL serialized document, not just the wire
+    body: pretty-printing and ASCII escaping can expand a bounded response past
+    the limit. An indented document that would exceed the bound falls back to
+    compact separators; if even the compact document exceeds the bound, the
+    call fails nonzero with a body-withheld diagnostic. Output is never
+    truncated, so stdout is always a complete valid JSON document or nothing.
     """
     text = json.dumps(payload, indent=2, sort_keys=True)
+    if len(text.encode("utf-8")) > MAX_RESPONSE_BYTES:
+        text = json.dumps(payload, separators=(",", ":"), sort_keys=True)
+    if len(text.encode("utf-8")) > MAX_RESPONSE_BYTES:
+        print(
+            f"serialized response exceeds the {MAX_RESPONSE_BYTES}-byte output "
+            "bound (body withheld); refusing to emit it",
+            file=sys.stderr,
+        )
+        return 1
     print(text)
     if 200 <= status < 300:
         return 0
