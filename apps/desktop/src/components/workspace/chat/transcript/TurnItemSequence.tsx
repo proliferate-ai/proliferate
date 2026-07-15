@@ -46,7 +46,6 @@ export function TurnItemSequence({
   workspaceId,
   onOpenArtifact,
   onHandOffPlanToNewSession,
-  beforeFrontier = null,
 }: {
   turn: TurnRecord;
   transcript: TranscriptState;
@@ -60,8 +59,6 @@ export function TurnItemSequence({
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
-  /** Completion-only UI that must grow above, never below, the final frontier. */
-  beforeFrontier?: ReactNode;
 }) {
   const artifactToolCalls = collectTurnCoworkArtifactToolCalls(turn, transcript);
   const completedArtifactToolCalls = isTurnComplete
@@ -75,17 +72,14 @@ export function TurnItemSequence({
     tailAssistantProseRootId,
     showCompletedArtifactFallback,
   });
-  const frontierPrelude = beforeFrontier || shouldRenderCompletedArtifacts
+  const frontierPrelude = shouldRenderCompletedArtifacts
     ? (
       <div className="contents" data-turn-frontier-prelude>
-        {shouldRenderCompletedArtifacts && (
-          <CompletedArtifactCards
-            items={completedArtifactToolCalls}
-            workspaceId={workspaceId}
-            onOpenArtifact={onOpenArtifact}
-          />
-        )}
-        {beforeFrontier}
+        <CompletedArtifactCards
+          items={completedArtifactToolCalls}
+          workspaceId={workspaceId}
+          onOpenArtifact={onOpenArtifact}
+        />
       </div>
     )
     : null;
