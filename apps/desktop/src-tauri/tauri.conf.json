@@ -74,7 +74,7 @@
     "macOS": {
       "entitlements": null,
       "dmg": {
-        "background": "assets/dmg-background.png",
+        "background": "assets/dmg-background.tiff",
         "appPosition": {
           "x": 180,
           "y": 170
