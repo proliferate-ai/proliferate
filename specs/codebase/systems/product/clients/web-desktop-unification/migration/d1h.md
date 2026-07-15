@@ -71,6 +71,105 @@ Additional verified facts at this slice's head:
   codemod skips were rewritten `@/X` → `#product/X` across 103 test files so
   mocks intercept the codemod-rewritten import ids (idempotent).
 
+## F1 stage — forward seams (moved product → retained host)
+
+Two forward seams landed and are verified at package typecheck level. The
+forbidden-import count (`check_frontend_boundaries.py`
+`PRODUCT_CLIENT_FORBIDDEN_IMPORT`) fell **272 → 77**; package `tsc` errors fell
+**315 → 79** (all remaining are unresolved seams, 0 non-seam).
+
+### R1 measurement port (landed) — ~172 seam imports
+
+`src/lib/infra/measurement/measurement-port.ts` is a single product-owned barrel
+that re-exposes exactly the retained measurement functions/types the moved tree
+calls (identical names), routing every call through a swappable `MeasurementSink`
+whose default is a **type-safe no-op**. All `@/lib/infra/measurement/*` call
+sites were rewritten to `#product/lib/infra/measurement/measurement-port`
+(import-path-only). Design choice: everything (including the pure helpers) goes
+through the sink so there is **zero measurement logic duplicated** from the
+retained engine — no drift.
+
+- **Desktop injection (byte-identical):** `apps/desktop/.../measurement/
+  measurement-port-sink.ts` assembles the retained functions into a
+  `MeasurementSink`; `DesktopHostProviders` calls `setMeasurementSink(...)` at
+  **module scope** (runs when `main.tsx` imports it, before `ProductClient`
+  renders). Package gains a `./infra/measurement` export for `setMeasurementSink`
+  + `MeasurementSink`.
+- **Web (later):** the no-op default = measurement off (explicitly acceptable).
+- **`MeasurementDebugDump`** is typed as the subset the moved tests read
+  (`recentMetrics` / `activeOperations` / `recentDebugActivities`); the retained
+  full dump remains assignable.
+- **Test-lane injection is BLOCKED and coupled to R3 (reverse seam).** The
+  handful of package tests that assert *real* measurement recording (e.g.
+  `lib/access/cloud/timing.test.ts` expects `console.table` with `requestCount`)
+  need the retained engine injected as the sink in a vitest setup. The retained
+  engine is **not** self-contained: `debug-measurement-dump.ts` /
+  `boot-stall-diagnostics.ts` reach `@/lib/access/tauri/diagnostics` (raw Tauri),
+  and — a genuine reverse-seam item — `typing-latency-probe.ts` (RETAINED)
+  imports `@/lib/domain/telemetry/debug-measurement-catalog`, which **moved into
+  the package**. So injecting the real engine into the package test lane requires
+  the R3 reverse-seam export lane (and a Tauri test double) first. F2 owns this:
+  add the vitest measurement setup once R3 lands. Until then those measurement-
+  asserting tests run against the no-op and will not pass. (A byte-safe gotcha:
+  `src/lib/infra/editor/highlighting.ts` is detected as binary by `rg`/`grep` —
+  use the Python boundary checker or `perl` for measurement-seam scans/rewrites.)
+
+### Cloud-client seam (landed) — 34 files
+
+`getProliferateClient()` is **never called** by moved product code, so **no
+client threading was needed** (contrary to the stage brief's assumption). Every
+`@/lib/access/cloud/client` import is a cloud-sdk type (the module does
+`export type * from "@proliferate/cloud-sdk/types"`), a cloud-sdk runtime value
+(`isCloudAgentKind` / `ProliferateClientError`), or `getDesktopCloudAccessToken`.
+Redirected all type imports → `@proliferate/cloud-sdk/types` and the two runtime
+values → `@proliferate/cloud-sdk` (import-path-only, types erased). **Holdout:**
+`getDesktopCloudAccessToken` (host access-token transport) is used by
+`lib/access/cloud/cloud-sandbox-gateway.ts` (+ test) only and stays on the host
+client module — it belongs to the auth-transport reroute (F2).
+
+### Remaining forward seams (F2) — 60 import lines / ~77 checker hits
+
+These are **not** import-path swaps: each is a rich host hook that must *move*
+into the package (rewired onto a bridge/host capability + its own telemetry /
+store / persistence seams) or a host-threading change. Precise distinct
+specifiers:
+
+```text
+11  @/hooks/access/tauri/use-updater            updater hook (moves; needs telemetry-client
+ 4  @/hooks/access/tauri/app/use-app-version    + updater-store + persistence seams resolved)
+ 1  @/hooks/access/tauri/updater-dev-mock
+ 7  @/lib/infra/proliferate-api                 getProliferateApiBaseUrl / getRuntimeDesktopAppConfig
+                                                → host.deployment (threading in lib fns)
+ 5  @/lib/integrations/auth/proliferate-auth    auth transport → host.auth (F2/R3)
+ 1  @/lib/integrations/auth/proliferate-sso-auth
+ 4  @/hooks/auth/workflows/use-github-sign-in   auth workflow hook move (split row)
+ 3  @/hooks/auth/workflows/use-connect-server   R2a: new connect-server meta bridge port +
+ 1  @/hooks/app/lifecycle/use-dev-desktop-handoff  R2b: new window bridge port; both hook-moves
+ 3  @/stores/auth/auth-store                    auth state → host.auth
+ 2  @/lib/integrations/telemetry/anonymous-storage  telemetry seams → host.telemetry (R3-adjacent)
+ 1  @/lib/integrations/telemetry/client
+ 1  @/lib/integrations/telemetry/native-diagnostics
+ 2  @/lib/access/cloud/client                   getDesktopCloudAccessToken holdout (auth transport)
+ 2  @/hooks/access/cloud/auth/use-github-auth-availability  auth-probe promotion (F2 + R3)
+ 1  @/hooks/access/cloud/auth/use-sso-discovery
+ 1  @/hooks/access/cloud/auth/use-auth-methods
+ 1  @/hooks/access/cloud/auth/use-auth-viewer
+ 1  @/hooks/access/cloud/automations/use-automations        split rows
+ 1  @/hooks/access/cloud/agent-run-configs/use-agent-run-configs
+ 1  @/hooks/access/tauri/credentials/use-local-agent-credentials  → host.desktop.localCredentials
+ 1  @/hooks/access/tauri/shell/use-available-editors              → host.desktop.files
+ 1  @/hooks/access/tauri/use-window-actions                       → host.desktop.nativeUi
+ 1  @/hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad          → host.desktop.scratch
+ 1  @/hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad-mutations
+ 1  @/providers/DesktopProductLifecycleRoot     ledger split row
+ 1  @/hooks/organizations/workflows/use-organization-join-invitation-flow  split row
+```
+
+R2 (the two new bridge ports) is entangled: `use-connect-server` also pulls the
+`proliferate-api` seam (`getRuntimeDesktopAppConfig`) and `@/copy/*`; both hooks
+pull moved `@/lib/domain/*` + cloud-access modules. They are cheapest to land
+alongside the proliferate-api / auth-transport reroutes, not in isolation.
+
 ## Blocked: the S2 seam architecture (three owner rulings required)
 
 The 18 pending split rows are the entire remaining seam. Green (package
@@ -150,9 +249,9 @@ providers/DesktopProductLifecycleRoot.tsx          (+ .test.tsx)
 | `git diff --check` | clean |
 | `python3 scripts/check_docs.py` | pass |
 | `python3 scripts/check_max_lines.py` | pass |
-| `python3 scripts/check_frontend_boundaries.py` | **RED** — 272 `PRODUCT_CLIENT_FORBIDDEN_IMPORT` (unresolved forward `@/` seams) |
+| `python3 scripts/check_frontend_boundaries.py` | **RED** — was 272 `PRODUCT_CLIENT_FORBIDDEN_IMPORT`; **77 after F1** (measurement + cloud-client landed) |
 | `python3 scripts/report_frontend_structure.py --strict --summary-only` | **RED** — TOTAL 266 (248 forbidden-shared-package + 18 large-file) |
-| `pnpm --filter @proliferate/product-client typecheck` | **RED** — ~315 errors (273 seam TS2307 across 42 specifiers + 42 downstream implicit-any; 0 non-seam) |
+| `pnpm --filter @proliferate/product-client typecheck` | **RED** — was ~315; **79 after F1** (all remaining are unresolved seams; 0 non-seam) |
 | `pnpm --filter @proliferate/product-client build` | **RED** — same seams; no `dist` emitted |
 | `pnpm --filter @proliferate/product-client test` | 2010/2017 tests pass; 167 files fail at collection (seam imports) |
 | `pnpm --filter proliferate build` (desktop) | **RED** — reverse seam + missing package dist |
