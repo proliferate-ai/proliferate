@@ -32,7 +32,10 @@ export const DEFAULT_BYOK_ENV_VAR = "ANTHROPIC_API_KEY";
 
 /** Bounded default for the provider preflight call and the desktop-sync poll. */
 const DEFAULT_PREFLIGHT_TIMEOUT_MS = 15_000;
-const DEFAULT_SYNC_TIMEOUT_MS = 60_000;
+// The claude ACP agent builds from git on first install, so becoming launchable
+// (installed + Desktop's api_key push probed) is generously bounded — mirrors
+// LOCAL-WORLD-SMOKE-1's HARNESS_READY_TIMEOUT_MS.
+const DEFAULT_SYNC_TIMEOUT_MS = 300_000;
 const DEFAULT_SYNC_POLL_MS = 2_000;
 
 /** Anthropic's list-models endpoint — a bounded, side-effect-free authenticated GET. */
@@ -168,6 +171,10 @@ export interface WaitForDesktopByokSyncOptions {
    * world's runtime client so unit tests can inject a fake.
    */
   readLaunchOptions?: () => Promise<Array<{ kind: string; models: Array<{ id: string }> }>>;
+  /** Reads an agent's install/readiness (default: the world runtime client). */
+  readAgent?: (kind: string) => Promise<{ installState: string; readiness: string }>;
+  /** Triggers a one-shot agent install (default: the world runtime client). */
+  installAgent?: (kind: string) => Promise<unknown>;
 }
 
 /**
@@ -193,9 +200,18 @@ export async function waitForDesktopByokSync(
   const timeoutMs = options.timeoutMs ?? DEFAULT_SYNC_TIMEOUT_MS;
   const pollMs = options.pollMs ?? DEFAULT_SYNC_POLL_MS;
   const readLaunchOptions = options.readLaunchOptions ?? (() => world.runtime.client.getAgentLaunchOptions());
+  const readAgent = options.readAgent ?? (async (kind) => world.runtime.client.getAgent(kind));
+  const installAgent = options.installAgent ?? (async (kind) => world.runtime.client.installAgent(kind));
 
   const deadline = Date.now() + timeoutMs;
   let lastNote = "no launch options observed yet";
+  // Launchability requires BOTH the api_key source Desktop pushed AND the agent
+  // binary being installed. The candidate AnyHarness starts with no agents
+  // installed, and Desktop does not reliably auto-install, so — exactly as
+  // LOCAL-WORLD-SMOKE-1's ensureHarnessReady does — trigger the install once.
+  // This installs the agent binary; it never pushes the BYOK auth state (that
+  // stays Desktop's job, observed via launchability).
+  let triggeredInstall = false;
   for (;;) {
     try {
       const agents = await readLaunchOptions();
@@ -206,6 +222,13 @@ export async function waitForDesktopByokSync(
       lastNote = entry
         ? `harness "${selection.harnessKind}" present but has no launchable models yet`
         : `harness "${selection.harnessKind}" not yet in launch options`;
+      if (!triggeredInstall) {
+        const agent = await readAgent(selection.harnessKind).catch(() => undefined);
+        if (agent && agent.installState !== "installing" && (agent.readiness === "install_required" || agent.installState === "not_installed")) {
+          triggeredInstall = true;
+          await installAgent(selection.harnessKind).catch(() => undefined);
+        }
+      }
     } catch (error) {
       lastNote = `launch-options read failed: ${error instanceof Error ? error.name : "unknown"}`;
     }

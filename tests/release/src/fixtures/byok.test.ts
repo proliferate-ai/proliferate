@@ -153,6 +153,33 @@ test("waitForDesktopByokSync resolves once the harness becomes launchable in the
   assert.ok(poll >= 3);
 });
 
+test("waitForDesktopByokSync triggers the agent install once when the harness is not installed", async () => {
+  const world = {} as ReadySelfHostWorld;
+  const page = {} as ProductPage;
+  let installs = 0;
+  let poll = 0;
+  await waitForDesktopByokSync(
+    world,
+    page,
+    { apiKeyId: "k", harnessKind: "claude", envVarName: "ANTHROPIC_API_KEY" },
+    {
+      timeoutMs: 1000,
+      pollMs: 1,
+      // Not installed / not launchable until the install is triggered and lands.
+      readLaunchOptions: async () => {
+        poll += 1;
+        return installs > 0 && poll > 2 ? [{ kind: "claude", models: [{ id: "claude-x" }] }] : [];
+      },
+      readAgent: async () => ({ installState: "not_installed", readiness: "install_required" }),
+      installAgent: async () => {
+        installs += 1;
+        return {};
+      },
+    },
+  );
+  assert.equal(installs, 1); // triggered exactly once
+});
+
 test("waitForDesktopByokSync fails CLOSED (never a false green) when Desktop never pushes the source", async () => {
   const world = {} as ReadySelfHostWorld;
   const page = {} as ProductPage;
