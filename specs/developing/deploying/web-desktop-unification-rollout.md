@@ -57,11 +57,28 @@ replacement browser-host build against.
 
 ## Phase-6 first-load budget measurement (optimized candidate)
 
-The replacement browser host was measured against the binding baseline with a
-runtime `/login` request collector (headless Chromium, fresh cache, ProductClient
-readiness marker, `document.fonts.ready`, bounded network-idle settle; gzip
-level 9 for JS/CSS, emitted bytes for pre-compressed assets — the contract's
-metric). Two eager-shell regressions were root-caused and fixed on
+The replacement browser host is measured against the founder-approved `/login`
+ceilings by a **retained, reproducible runtime collector**,
+[`scripts/measure-login-runtime-budget.mjs`](../../../scripts/measure-login-runtime-budget.mjs)
+(headless Chromium, fresh cache, ProductClient readiness marker,
+`document.fonts.ready`, bounded network-idle settle; gzip level 9 for JS/CSS,
+emitted bytes for pre-compressed assets — the contract's metric). It **fails
+closed** against the caps and emits a machine-readable candidate ledger bound to
+the tested commit SHA at
+[`migration/login-runtime-budget-candidate.json`](../../codebase/systems/product/clients/web-desktop-unification/migration/login-runtime-budget-candidate.json).
+Rerun against exact merged main with:
+
+```bash
+pnpm shared:build && pnpm web:build && node scripts/measure-login-runtime-budget.mjs --no-build
+```
+
+A runtime collector is required (not the static-manifest walker
+`collect-web-bundle-baseline.mjs`): the Vite manifest associates side-effect
+assets such as `ding-*.mp3` with `index.html`, so a static closure cannot prove
+the runtime claim that `/login` requests zero audio bytes. The runtime collector
+measures what the browser actually requests before readiness (WDU-1247-B1).
+
+Two eager-shell regressions were root-caused and fixed on
 `codex/wdu-login-budget`:
 
 - **Turn-end audio** (`use-turn-end-sound.ts`): eager `new Audio(ding)` above
@@ -75,12 +92,17 @@ metric). Two eager-shell regressions were root-caused and fixed on
   chunk. Verified against the built manifest: eager entry CSS has zero xterm
   rules.
 
-| Readiness point | Legacy baseline (gzip-9) | Optimized candidate (gzip-9) | Delta | Rule | Result |
-| --- | ---: | ---: | ---: | --- | --- |
-| `/login` requested JS | 471,212 B | 482,329 B | +11,117 B (+2.4%) | No regression | **Over** |
-| `/login` requested CSS | 24,226 B | 65,097 B | +40,871 B (+169%) | No regression | **Over** |
-| `/login` fonts/images/audio | 0 B | 0 B | 0 | No regression | Pass |
-| `/login` total | 495,438 B | 547,426 B | +51,988 B (+10.5%) | No regression | **Over** |
+| Readiness point | Legacy baseline (gzip-9) | Approved cap (gzip-9) | Candidate (gzip-9) | Headroom | Result |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `/login` requested JS | 471,212 B | **485,000 B** | 482,329 B | 2,671 B | **Pass** |
+| `/login` requested CSS | 24,226 B | **66,000 B** | 65,097 B | 903 B | **Pass** |
+| `/login` fonts/images/audio | 0 B | 0 B | 0 B | 0 B | **Pass** |
+
+The `/login` caps are the founder-approved gzip-9 ceilings (WDU-1247-D1):
+JS 485,000 B, CSS 66,000 B, and zero eagerly-requested fonts/images/audio. The
+legacy baseline (471,212 B JS / 24,226 B CSS) is recorded context; the caps are
+the enforceable gate. The candidate passes with thin headroom, so any future
+eager-shell growth must re-run the collector before merge.
 
 **Why the residual gap is structural, not an unshipped optimization.** The
 legacy `/login` numbers are those of a small standalone app that did no code
@@ -102,17 +124,17 @@ product (the full authenticated app is lazy-split into a separate
   of authenticated-only editor/terminal/Monaco/Shiki code; the +2.4% is the
   richer shared shell, not stray authenticated chunks.
 
-**Founder budget decision required.** The pre-approved contract formula for
-`/login` is *no regression vs the legacy baseline*, and the contract forbids
-silently raising a ceiling. The smallest verified split still materially exceeds
-that ceiling for reasons intrinsic to unifying onto one shared design system and
-one shared app shell — the intended, already-accepted cost of the program, but a
-specific byte ceiling that was never explicitly waived. This is the single
-evidence-backed founder gate for phase 6: either accept a revised `/login`
-ceiling that reflects the shared shell (recommended: CSS ≤ ~66 KB gzip, JS
-≤ ~485 KB gzip, one-time and browser-cacheable) or direct further optimization
-before cutover. Qualification does not mutate any production producer until this
-gate is resolved.
+**Founder budget decision — RESOLVED (WDU-1247-D1, approved 2026-07-15).** The
+original contract formula was *no regression vs the legacy baseline*. The
+smallest verified split still exceeds that baseline for reasons intrinsic to
+unifying onto one shared design system and one shared app shell (the intended,
+already-accepted cost of the program). The founder explicitly chose shared-shell
+simplicity and full shared-package Tailwind scanning over adding a separate
+auth-shell CSS build boundary, and set exact enforceable gzip-9 `/login`
+ceilings: **JS 485,000 B, CSS 66,000 B**. These are encoded as fail-closed caps
+in `scripts/measure-login-runtime-budget.mjs` (`CAPS`), and the candidate ledger
+is bound to the tested SHA. This is a deliberate, recorded ceiling — not a silent
+increase.
 
 ## Hosted Web cutover gate
 
