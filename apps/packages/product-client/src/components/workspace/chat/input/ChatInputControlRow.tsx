@@ -48,8 +48,8 @@ export interface ComposerLeadingControlsProps {
 }
 
 /**
- * The leading control cluster (model selector, reasoning bars, fast mode, mode, goal,
- * integrations). Shared verbatim between the in-session chat composer
+ * The leading control cluster (model selector, reasoning bars, mode, fast mode,
+ * goal, integrations). Shared verbatim between the in-session chat composer
  * (ChatInputControlRow) and the home/new-chat composer (HomeNextScreen slot):
  * home feeds it launch-time control descriptors instead of live-session
  * ones, and session-only controls (goal) hide via their own gating.
@@ -91,22 +91,14 @@ export function ComposerLeadingControls({
             runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
           }`}
         >
-          <ComposerReasoningEffortBars control={controlGroups.reasoningEffortControl} />
+          <ComposerReasoningEffortBars
+            control={controlGroups.reasoningEffortControl}
+            agentKind={agentKind}
+          />
         </span>
       )}
 
-      {/* 3. Fast mode toggle */}
-      {controlGroups.fastModeControl && (
-        <span
-          className={`inline-flex shrink-0 ${
-            runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
-          }`}
-        >
-          <ComposerFastModeToggle control={controlGroups.fastModeControl} />
-        </span>
-      )}
-
-      {/* 4. Primary working mode control (bypass/plan/etc) */}
+      {/* 3. Primary working mode control (bypass/plan/etc) */}
       {controlGroups.modeControl && (
         <span
           className={`inline-flex min-w-0 ${
@@ -121,18 +113,30 @@ export function ComposerLeadingControls({
         </span>
       )}
 
+      {/* 4. Fast mode toggle */}
+      {controlGroups.fastModeControl && (
+        <span
+          className={`inline-flex shrink-0 ${
+            runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
+          }`}
+        >
+          <ComposerFastModeToggle control={controlGroups.fastModeControl} />
+        </span>
+      )}
+
       {/* 5. Goal button */}
       {canSetGoal && (
         <ComposerControlButton
+          iconOnly
           icon={<Target className="size-4" />}
           label="Set goal"
+          aria-label="Set goal"
           title="Give the agent an objective to keep pursuing."
           onClick={() => {
             if (activeSessionId) {
               beginComposingGoal(activeSessionId);
             }
           }}
-          className="max-w-[12rem]"
         />
       )}
 
