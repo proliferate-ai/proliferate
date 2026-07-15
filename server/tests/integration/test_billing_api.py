@@ -212,8 +212,7 @@ class TestBillingApi:
             "managedCloudOverageEnabled": False,
             "managedCloudOverageCapCents": None,
             "managedCloudOverageUsedCents": 0,
-            # Derived compute rate: $2.00 E2B list x 1.5 = $3.00/hr (ruled).
-            "overagePricePerHourCents": 300,
+            "overagePricePerHourCents": 300,  # $2.00 E2B list x 1.5 (ruled)
             "activeEnvironmentLimit": settings.cloud_concurrent_sandbox_limit,
             "repoEnvironmentLimit": settings.cloud_free_repo_limit,
             "byoRuntimeAllowed": False,
@@ -258,8 +257,7 @@ class TestBillingApi:
             "managedCloudOverageEnabled": False,
             "managedCloudOverageCapCents": None,
             "managedCloudOverageUsedCents": 0,
-            # Derived compute rate: $2.00 E2B list x 1.5 = $3.00/hr (ruled).
-            "overagePricePerHourCents": 300,
+            "overagePricePerHourCents": 300,  # $2.00 E2B list x 1.5 (ruled)
             "activeEnvironmentLimit": settings.cloud_concurrent_sandbox_limit,
             "repoEnvironmentLimit": settings.cloud_free_repo_limit,
             "byoRuntimeAllowed": False,
@@ -1076,10 +1074,7 @@ class TestBillingApi:
         payload = response.json()
         assert payload["plan"] == "pro"
         assert payload["billableSeatCount"] == 2
-        # Ruled 2026-07-14: $15/seat compute at the default derived rate
-        # ($2.00 E2B list x 1.5 = $3.00/hr) => 5 hours/seat, and a flat
-        # $50/org/month overage cap (not per-seat).
-        assert payload["includedManagedCloudHours"] == 10.0
+        assert payload["includedManagedCloudHours"] == 10.0  # 2 seats * 5 h/seat (ruled)
         assert payload["managedCloudOverageCapCents"] == 5000
 
     @pytest.mark.asyncio

@@ -843,7 +843,16 @@ const t2Bill10: Tier2CellHandler = async (ctx: Tier2CellContext): Promise<Tier2C
 
   const grantsAfterRenewal = await b.listGrants(subject.id);
   const periodGrantsAfter = grantsAfterRenewal.filter((g) => g.grant_type === "pro_period").length;
-  assert.ok(periodGrantsAfter >= firstPeriodGrants, "renewal does not lose the compute grant");
+  if (renewedInvoiceId && renewedInvoiceId !== invoiceId) {
+    // A renewal invoice was delivered: it must have granted a NEW period
+    // allocation (period-keyed source_ref), not merely preserved the old one.
+    assert.ok(
+      periodGrantsAfter > firstPeriodGrants,
+      "paid renewal grants a new period compute allocation exactly once",
+    );
+  } else {
+    assert.ok(periodGrantsAfter >= firstPeriodGrants, "renewal does not lose the compute grant");
+  }
   const topupStillPresent = grantsAfterRenewal.some((g) => g.id === topupId);
   assert.ok(topupStillPresent, "purchased top-up credit carries across renewal (never expires)");
 

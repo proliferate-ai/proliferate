@@ -56,11 +56,12 @@ test.describe("T2-BILL-1: checkout → grants → consumption → cut-off → re
     const paid = await b.deliverEvent({ type: "invoice.paid", object: invoice });
     expect(paid.status).toBe(200);
 
-    // Pro period grant issued: 20h/seat.
+    // Pro period grant issued: $15/seat at the derived $3.00/hr rate = 5h/seat
+    // (ruled 2026-07-14; was flat 20h/seat).
     const grants = await b.listGrants(subject.id);
     const periodGrant = grants.find((g) => g.grant_type === "pro_period");
     expect(periodGrant, "pro_period grant issued by invoice.paid").toBeTruthy();
-    expect(Number(periodGrant!.hours_granted)).toBeCloseTo(20, 1);
+    expect(Number(periodGrant!.hours_granted)).toBeCloseTo(5, 1);
 
     // Backdate the grant's effective_at: accounting checks grant usability at
     // each usage range's accounted_from (grant_is_usable_for_accounting

@@ -918,24 +918,18 @@ const MAX_TIER2_TEST_CLOCK_IDS = 20;
 const MAX_TIER2_OBJECT_IDS = 50;
 
 /**
- * ── WORKSTREAM D: implement `tier2_billing` validation per BRIEF §2 ──────────
- *
- * Kind-scoped validator for `Tier2BillingEvidenceV1`. Requirements (verbatim
- * summary; full contract in BRIEF §2):
+ * Kind-scoped validator for `Tier2BillingEvidenceV1`:
  *   - `requireExactKeys` at top / `asserted_policy` / `stripe` / `ledger`;
  *   - `manifest_id` + `server_version` via `requireSafeEvidenceToken`;
  *   - `billing_mode` in {enforce,observe,off};
- *   - every present `asserted_policy` value: finite number >= 0 (do NOT hardcode
- *     the exact ruled number — the cell asserts it against the product);
+ *   - every present `asserted_policy` value: finite number >= 0 (the exact
+ *     ruled number is asserted by the cell against the product, not here);
  *   - `stripe.test_clock_ids` (<= MAX_TIER2_TEST_CLOCK_IDS) and
  *     `stripe.object_ids` (<= MAX_TIER2_OBJECT_IDS): safe tokens, sorted
  *     ascending, unique, secret-free;
  *   - every `ledger.*` delta: `requireNonNegativeInteger`.
  * Green completeness is enforced upstream (a green Tier-2 cell with null
  * evidence is already rejected via `scenarioRequiresGreenEvidence`).
- *
- * Left intentionally unimplemented so a green Tier-2 cell cannot pass until the
- * validator exists — the same fail-closed posture the local kind uses.
  */
 function validateTier2BillingEvidence(
   where: string,

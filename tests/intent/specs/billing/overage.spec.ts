@@ -1,6 +1,7 @@
-// T2-BILL-5 (compute overage: bill to cap, write off past it, hard-block;
-// disabled → immediate cutoff) and T2-BILL-6 (LLM credits: exhaustion, admin
-// caps, auto top-up incl. declined-card fail-closed).
+// T2-BILL-5 (compute overage: bill to the flat $50/org/month cap, PAUSE past
+// it — write-off is operator-only per the 2026-07-14 ruling; disabled →
+// immediate cutoff) and T2-BILL-6 (LLM credits: exhaustion, admin caps, auto
+// top-up incl. declined-card fail-closed).
 //
 // Tier boundary (T2-BILL-6): the LiteLLM virtual-key *disable* side effect is
 // a tier-3 assertion (it calls the live gateway). At tier 2 we seed the spend
@@ -14,7 +15,7 @@ import { expect } from "@playwright/test";
 import { test, adminContext, skipIfNoStripe } from "./_fixtures.ts";
 import * as b from "../../stack/billing.ts";
 
-async function paidOrgSubjectWithBackdatedPeriod(seats = 1) {
+async function paidOrgSubjectWithBackdatedPeriod(seats = 1, backdateHours = 2) {
   const { token, organizationId } = await adminContext();
   const ownerId = await userIdFor(token);
   const clock = b.createTestClock();
@@ -30,48 +31,52 @@ async function paidOrgSubjectWithBackdatedPeriod(seats = 1) {
   // Backdate the synced period start so seeded recent segments fall inside the
   // paid period (test-time shift, the direct-DB analog of a test clock — the
   // same precedent as the invitation-expiry backdate in seed.ts).
-  const twoHoursAgo = new Date(Date.now() - 2 * 3600 * 1000);
+  const periodStart = new Date(Date.now() - backdateHours * 3600 * 1000);
   await b.withDb((db) =>
     db.query(`UPDATE billing_subscription SET current_period_start = $1 WHERE billing_subject_id = $2`, [
-      twoHoursAgo.toISOString(),
+      periodStart.toISOString(),
       subject.id,
     ]),
   );
   return { subject, ownerId, token, organizationId };
 }
 
-test.describe("T2-BILL-5: compute overage — bill to cap, write off, then block", () => {
+test.describe("T2-BILL-5: compute overage — bill to cap, pause past it, then block", () => {
   skipIfNoStripe(test);
 
-  test("uncovered seconds export as billable cents up to cap, then write off; snapshot flips to cap_exhausted", async () => {
-    const { subject, ownerId, token, organizationId } = await paidOrgSubjectWithBackdatedPeriod(1);
-    // The effective cap is per-seat × ACTIVE org members (accounting.py:
-    // max(active_seat_count,1) * overage_cap_cents_per_seat), and the claimed
-    // org's member count grows across runs (profile DB persists) — so compute
-    // the cap from the live seat count instead of assuming one seat.
-    const seats = await activeMemberCount(organizationId);
-    const capPerSeat = 2;
-    const capCents = seats * capPerSeat;
-    await b.setOverageSettings(subject.id, { enabled: true, capCentsPerSeat: capPerSeat });
+  test("uncovered seconds export as billable cents up to the flat cap, then PAUSE (no auto write-off); snapshot flips to cap_exhausted", async () => {
+    // Ruled 2026-07-14: flat $50/org/month cap (not per-seat), overage metered
+    // at the derived E2B-list x1.5 rate ($3.00/hr = 300 c/hr). Exhausting the
+    // cap therefore needs >16.7h of IN-PERIOD overage; backdate the period far
+    // enough that the long seeded segment stays billable.
+    const OVERAGE_RATE_CENTS_PER_HOUR = 300;
+    const capCents = 5000;
+    const { subject, ownerId, token, organizationId } = await paidOrgSubjectWithBackdatedPeriod(
+      1,
+      capCents / OVERAGE_RATE_CENTS_PER_HOUR + 6,
+    );
+    await b.setOverageSettings(subject.id, { enabled: true, capCentsPerSeat: capCents });
 
-    // Tiny grant (72s), then a segment long enough that its uncovered tail
-    // converts to cents well past the cap (overage is 200 cents/hour).
-    const hoursPastCap = capCents / 200 + 0.6;
+    // Tiny grant (72s), then a segment whose uncovered tail converts to cents
+    // well past the flat cap.
+    const hoursPastCap = capCents / OVERAGE_RATE_CENTS_PER_HOUR + 4;
     await b.seedGrant(subject.id, { userId: ownerId, grantType: "pro_period", hoursGranted: 0.02 });
     await b.seedUsageSegment(subject.id, {
       userId: ownerId,
       hours: hoursPastCap,
-      startedAt: new Date(Date.now() - (hoursPastCap * 60 + 10) * 60 * 1000),
+      startedAt: new Date(Date.now() - (hoursPastCap + 1) * 3600 * 1000),
     });
     b.runAccountingPass();
 
     const exports = await b.listUsageExports(subject.id);
     const billable = exports.filter((e) => (e.meter_quantity_cents ?? 0) > 0);
-    const writeoffs = exports.filter((e) => e.writeoff_reason === "overage_cap_exhausted");
+    const autoWriteoffs = exports.filter((e) => e.writeoff_reason === "overage_cap_exhausted");
     const billableCents = billable.reduce((s, e) => s + (e.meter_quantity_cents ?? 0), 0);
     expect(billable.length, "billable export rows created").toBeGreaterThan(0);
-    expect(billableCents, "billing stops at the cap").toBeLessThanOrEqual(capCents);
-    expect(writeoffs.length, "usage past cap is written off").toBeGreaterThan(0);
+    expect(billableCents, "billing stops at the flat $50/org cap").toBeLessThanOrEqual(capCents);
+    // Ruled: at cap, compute PAUSES; write-off is operator-only — past-cap
+    // usage must NOT be auto-written-off into an export row.
+    expect(autoWriteoffs.length, "past-cap usage is paused, not auto-written-off").toBe(0);
 
     // Owner scope matters: without it /billing/overview resolves the caller's
     // PERSONAL subject (permissions.py falls back to personal), but this
@@ -195,16 +200,6 @@ test.describe("T2-BILL-6: LLM credits — exhaustion, admin caps, top-ups", () =
   });
 });
 
-async function activeMemberCount(organizationId: string): Promise<number> {
-  return b.withDb(async (db) => {
-    const r = await db.query(
-      `SELECT count(*)::int AS n FROM organization_membership
-        WHERE organization_id = $1 AND status = 'active'`,
-      [organizationId],
-    );
-    return Math.max(r.rows[0].n as number, 1);
-  });
-}
 
 async function userIdFor(token: string): Promise<string> {
   const response = await fetch(`${process.env.TIER2_BILLING_API_BASE_URL}/users/me`, {
