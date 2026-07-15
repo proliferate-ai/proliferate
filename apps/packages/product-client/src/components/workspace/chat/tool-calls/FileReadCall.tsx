@@ -8,6 +8,7 @@ import type { FileReadScope } from "@anyharness/sdk";
 
 interface FileReadCallProps {
   path: string;
+  /** null = authoritatively external; undefined = infer from workspace root. */
   workspacePath?: string | null;
   basename?: string | null;
   line?: number | null;
@@ -22,7 +23,7 @@ interface FileReadCallProps {
 
 export function FileReadCall({
   path,
-  workspacePath = null,
+  workspacePath,
   basename = null,
   line = null,
   scope = null,

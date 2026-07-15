@@ -75,13 +75,17 @@ function ReadRows({ item }: { item: ToolCallItem }) {
   const fileReads = item.contentParts.filter(
     (part): part is FileReadContentPart => part.type === "file_read",
   );
+  // Structured parts are server-normalized: a missing workspacePath there is
+  // an authoritative "outside the workspace" ruling (null = external-only).
+  // Raw-input fallbacks carry no such ruling, so leave workspacePath undefined
+  // and let the file-reference resolver infer it from the workspace root.
   const targets = fileReads.length > 0
     ? fileReads.map((part) => ({
       rawPath: part.workspacePath ?? part.path,
       workspacePath: part.workspacePath ?? null,
       displayName: part.basename || basename(part.workspacePath ?? part.path),
     }))
-    : [{ ...deriveReadPathTarget(item), workspacePath: null }];
+    : [{ ...deriveReadPathTarget(item), workspacePath: undefined }];
 
   return (
     <>
@@ -120,7 +124,8 @@ function FileActionRow({
   icon: ReactNode;
   verb: string;
   pathLabel: string;
-  workspacePath: string | null;
+  /** null = authoritatively external; undefined = infer from workspace root. */
+  workspacePath: string | null | undefined;
   displayName: string;
   failed: boolean;
 }) {
@@ -158,7 +163,7 @@ function ParsedCommandRows({
             icon={<CollapsedActionIcon kind="read" />}
             verb={item.status === "in_progress" ? "Reading" : "Read"}
             pathLabel={command.path}
-            workspacePath={null}
+            workspacePath={undefined}
             displayName={command.name ?? basename(command.path)}
             failed={item.status === "failed"}
           />

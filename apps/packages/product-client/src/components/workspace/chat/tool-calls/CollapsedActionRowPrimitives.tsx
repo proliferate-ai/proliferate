@@ -74,7 +74,8 @@ export function ActionFileLink({
   displayName,
 }: {
   pathLabel: string;
-  workspacePath: string | null;
+  /** null = authoritatively external; undefined = infer from workspace root. */
+  workspacePath: string | null | undefined;
   displayName: string;
 }) {
   return (
