@@ -1,15 +1,53 @@
 # Move the Desktop Product into ProductClient (D1h)
 
-Status: **complete — green pending review.** The mechanical move and the full
-seam architecture landed across three owner-ruling rounds (R1–R5 + G1–G7 + 9
-ratified ledger amendments). Package `tsc` **315 → 0**;
-`PRODUCT_CLIENT_FORBIDDEN_IMPORT` **272 → 0**. Package typecheck/build, the
-Desktop build (verified lazy authenticated split), desktop + package vitest, the
-qualification proof, and every boundary/structure/max-lines/docs/ledger scan pass.
-The only red is **12 base-proven pre-existing test failures across 6 files**
-(inherited, not move-caused — see "Inherited pre-existing test failures"). Rounds
-1–2 (§F1–F4 below) and the F3/F4 STOP analyses are retained as a historical
-record; the authoritative final state is **"Round 3 (G1–G7) + green — final"**.
+Status: **complete — merged.** PR #1215, merge `c6e094b41`. The mechanical
+move and the full seam architecture landed across three owner-ruling rounds
+(R1–R5 + G1–G7 + 9 ratified ledger amendments), plus a post-merge
+reconciliation against `origin/main` (see "Post-merge reconciliation" below).
+Package `tsc` **315 → 0**; `PRODUCT_CLIENT_FORBIDDEN_IMPORT` **272 → 0**.
+Package typecheck/build, the Desktop build (verified lazy authenticated
+split), desktop + package vitest, the qualification proof, and every
+boundary/structure/max-lines/docs/ledger scan pass. The only red is **12
+base-proven pre-existing test failures across 6 files** (inherited, not
+move-caused — see "Inherited pre-existing test failures"). Rounds 1–2
+(§F1–F4 below) and the F3/F4 STOP analyses are retained as a historical
+record; the authoritative final state is **"Round 3 (G1–G7) + green — final"**,
+as carried across the merge.
+
+## Post-merge reconciliation
+
+This slice's branch was cut before four unrelated feature PRs landed on
+`origin/main` — goals relight (#1206), the workspace status card + Codex
+publish dialog (#1210), git review v2 (#1214), and per-subagent identicon
+avatars (#847). Landing the move required reconciling the slice against all
+four rather than rebasing them away:
+
+- **34 content conflicts** resolved to main's logic plus the move's plumbing
+  (import paths, `#product/*` specifiers, ProductHost/DesktopBridge threading)
+  — main's feature behavior is preserved verbatim; only ownership/import shape
+  changed.
+- **27 new files** (added by the four feature PRs after this slice's branch
+  point) re-homed into `apps/packages/product-client/src` alongside the rest
+  of the move.
+- **5 delete amendments** — files the git-review-v2 and status-card PRs
+  removed on `main` after this slice's branch point (`GitReviewFileTree`,
+  `GitReviewStageAction`, `GitReviewStatusBadge`,
+  `use-composer-ultra-emphasis`, `git-file-status-presentation`) — recorded as
+  `move -> delete` ledger amendments rather than silently dropped, bringing the
+  amendments total to **23** (18 `retain -> move` + 5 `move -> delete`; see
+  `../move-ledger.md#amendments-ratified-during-the-move`).
+- Landed via a **fast-gate merge per founder directive**: the founder
+  authorized merging ahead of a full independent re-review given the
+  mechanical nature of the reconciliation (import-path and ledger-classification
+  changes only, no product-behavior delta), on the condition that the
+  post-merge battery (package build/typecheck, Desktop build, both vitest
+  lanes, qualification proof, all boundary/structure/max-lines/docs/ledger
+  scans) reran green against the merged tree before this doc records
+  completion. It did.
+
+The slice is complete and closed at `c6e094b41`. No further work is owed
+against this contract; the next contract is the legacy Web replacement (see
+the [rollout procedure](../../../../../../developing/deploying/web-desktop-unification-rollout.md)).
 
 - Exact implementation base:
   `1d00437565d4cdce47cf4dc41f2ea19eb2f31f28`
