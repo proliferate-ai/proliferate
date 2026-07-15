@@ -1,8 +1,11 @@
 # Build outputs and caches (these are what bloated the upload to 4.4GB)
 node_modules
 **/node_modules
-target
-**/target
+# Cargo build outputs only — anchored so source dirs named "target"
+# (e.g. product-client src/lib/domain/automations/target) survive the upload.
+/target
+anyharness/**/target
+apps/desktop/src-tauri/target
 dist
 **/dist
 build
