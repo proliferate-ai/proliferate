@@ -76,7 +76,6 @@ export function RepoConfigurePane({
         <RepoCommitInstructionsSection
           gitOwner={repository.gitOwner}
           gitRepoName={repository.gitRepoName}
-          enabled={cloudActive}
         />
       )}
     </section>

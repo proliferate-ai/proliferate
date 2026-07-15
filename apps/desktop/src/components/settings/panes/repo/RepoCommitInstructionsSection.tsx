@@ -3,6 +3,7 @@ import { useRepositories, useUpdateRepoConfig } from "@proliferate/cloud-sdk-rea
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
+import { useProductAuthStatus } from "@/hooks/auth/facade/use-product-auth";
 
 const MAX_INSTRUCTIONS_CHARS = 4000;
 
@@ -15,12 +16,14 @@ const MAX_INSTRUCTIONS_CHARS = 4000;
 export function RepoCommitInstructionsSection({
   gitOwner,
   gitRepoName,
-  enabled,
 }: {
   gitOwner: string;
   gitRepoName: string;
-  enabled: boolean;
 }) {
+  // Gated on a signed-in account only — NOT on the cloud-compute capability:
+  // the instructions live on the product server but apply to local
+  // workspaces' commit generation too.
+  const enabled = useProductAuthStatus() === "authenticated";
   const repositories = useRepositories(enabled);
   const updateMutation = useUpdateRepoConfig();
 
