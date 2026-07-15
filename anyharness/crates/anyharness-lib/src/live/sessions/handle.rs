@@ -8,8 +8,9 @@ use anyharness_contract::v1::{
 use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
 
 pub use crate::live::sessions::actor::command::{
-    ForkSessionCommandError, ForkSessionCommandResult, PromptAcceptError, PromptAcceptance,
-    QueueMutationError, Resolution, ResolveInteractionCommandError, SetConfigOptionCommandError,
+    ConditionalCancelOutcome, ForkSessionCommandError, ForkSessionCommandResult, PromptAcceptError,
+    PromptAcceptance, QueueMutationError, Resolution, ResolveInteractionCommandError,
+    SetConfigOptionCommandError,
 };
 
 use crate::domains::sessions::prompt::PromptPayload;
@@ -409,6 +410,29 @@ impl LiveSessionHandle {
 
     pub async fn cancel(&self) -> bool {
         self.command_tx.send(SessionCommand::Cancel).await.is_ok()
+    }
+
+    /// Crate-private conditional turn cancellation (spec workflow-run-control
+    /// §5.2): the actor serially compares `expected_turn_id` with its current
+    /// active turn and forwards ACP cancellation only on exact match. `None`
+    /// means the actor is unavailable (command not delivered or reply lost).
+    pub(crate) async fn cancel_turn_if_active(
+        &self,
+        expected_turn_id: String,
+    ) -> Option<ConditionalCancelOutcome> {
+        let (respond_to, rx) = oneshot::channel();
+        if self
+            .command_tx
+            .send(SessionCommand::CancelTurnIfActive {
+                expected_turn_id,
+                respond_to,
+            })
+            .await
+            .is_err()
+        {
+            return None;
+        }
+        rx.await.ok()
     }
 
     pub async fn dismiss(&self) -> anyhow::Result<()> {

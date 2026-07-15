@@ -1,7 +1,7 @@
 use agent_client_protocol as acp;
 use tokio::sync::{mpsc, oneshot};
 
-use crate::live::sessions::actor::command::{Resolution, SessionCommand};
+use crate::live::sessions::actor::command::{ConditionalCancelOutcome, Resolution, SessionCommand};
 use crate::live::sessions::actor::shutdown::types::ActorExitDisposition;
 use crate::live::sessions::actor::state::SessionActor;
 use crate::live::sessions::actor::turn::active::ActivePromptRequest;
@@ -259,6 +259,11 @@ impl SessionActor {
                     .send_notification(acp::schema::CancelNotification::new(
                         self.native_session_id.clone(),
                     ));
+                None
+            }
+            SessionCommand::CancelTurnIfActive { respond_to, .. } => {
+                // Idle: there is no active turn, so no turn can match.
+                let _ = respond_to.send(ConditionalCancelOutcome::NotActive);
                 None
             }
             SessionCommand::Dismiss { respond_to } => {

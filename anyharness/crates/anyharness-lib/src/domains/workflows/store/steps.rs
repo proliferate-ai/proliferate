@@ -88,7 +88,7 @@ pub(super) fn record_turn(
         "UPDATE workflow_run_steps
          SET turn_id = ?4, updated_at = ?5
          WHERE run_id = ?1 AND stage_index = ?2 AND step_index = ?3
-           AND status = 'running' AND (turn_id IS NULL OR turn_id = ?4)",
+           AND status = 'running' AND turn_id IS NULL",
         params![run_id, stage_index, step_index, turn_id, updated_at],
     )
 }
@@ -139,15 +139,30 @@ pub(super) fn fail_nonterminal_steps(
 
 pub(super) fn fence_steps(
     conn: &Connection,
-    failure_code: WorkflowRunFailureCode,
     finished_at: &str,
     updated_at: &str,
 ) -> rusqlite::Result<usize> {
     conn.execute(
         "UPDATE workflow_run_steps
-         SET status = 'failed', failure_code = ?1, finished_at = ?2, updated_at = ?3
+         SET status = 'interrupted', failure_code = NULL, finished_at = ?1, updated_at = ?2
          WHERE status IN ('pending', 'running')",
-        params![failure_code.as_str(), finished_at, updated_at],
+        params![finished_at, updated_at],
+    )
+}
+
+/// Terminalize the still-pending materialized step as `cancelled`: proof that
+/// no prompt was dispatched.
+pub(super) fn cancel_pending_step(
+    conn: &Connection,
+    run_id: &str,
+    finished_at: &str,
+    updated_at: &str,
+) -> rusqlite::Result<usize> {
+    conn.execute(
+        "UPDATE workflow_run_steps
+         SET status = 'cancelled', finished_at = ?2, updated_at = ?3
+         WHERE run_id = ?1 AND status = 'pending'",
+        params![run_id, finished_at, updated_at],
     )
 }
 

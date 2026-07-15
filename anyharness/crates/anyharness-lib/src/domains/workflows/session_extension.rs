@@ -1,8 +1,11 @@
 //! The workflow completion hook. It maps a generic session turn completion
-//! into the domain completion input, matches exact session and prompt identity,
-//! returns immediately on the per-session actor runtime, and schedules the
-//! checked SQLite completion on the process/main runtime's blocking pool. It
-//! depends only on the service and the captured main Tokio handle.
+//! into the domain completion input, matches exact session and prompt
+//! identity, returns immediately on the per-session actor runtime, and
+//! performs the checked terminal CAS on the process/main runtime under the
+//! shared per-run gate (spec workflow-run-control §6.2), so a cancel request
+//! and a terminal callback cannot cross in an unobservable interval. The run
+//! key comes from an exact session+prompt store lookup; the deterministic
+//! prompt ID is never parsed.
 
 use std::sync::Arc;
 
@@ -11,18 +14,25 @@ use tokio::runtime::Handle;
 use crate::domains::sessions::extensions::{
     SessionExtension, SessionTurnFinishedContext, SessionTurnOutcome,
 };
+use crate::domains::workflows::control::WorkflowRunGates;
 use crate::domains::workflows::model::{WorkflowTurnOutcome, WORKFLOW_PROMPT_ID_PREFIX};
 use crate::domains::workflows::service::WorkflowRunService;
 
 pub struct WorkflowRunSessionExtension {
     service: Arc<WorkflowRunService>,
+    gates: Arc<WorkflowRunGates>,
     main_handle: Handle,
 }
 
 impl WorkflowRunSessionExtension {
-    pub fn new(service: Arc<WorkflowRunService>, main_handle: Handle) -> Self {
+    pub fn new(
+        service: Arc<WorkflowRunService>,
+        gates: Arc<WorkflowRunGates>,
+        main_handle: Handle,
+    ) -> Self {
         Self {
             service,
+            gates,
             main_handle,
         }
     }
@@ -30,9 +40,9 @@ impl WorkflowRunSessionExtension {
 
 impl SessionExtension for WorkflowRunSessionExtension {
     fn on_turn_finished(&self, ctx: SessionTurnFinishedContext) {
-        // Only workflow-owned prompts terminalize a workflow run. A missing or
-        // non-workflow prompt id is ignored: session-only matching could
-        // terminalize a workflow for an unrelated or queued turn.
+        // Only workflow-owned prompts terminalize a workflow run. The prefix
+        // is a cheap pre-filter; identity is established by the exact
+        // session+prompt store lookup below, never by parsing the prompt ID.
         let Some(prompt_id) = ctx.prompt_id else {
             return;
         };
@@ -54,17 +64,66 @@ impl SessionExtension for WorkflowRunSessionExtension {
         };
 
         let service = self.service.clone();
-        self.main_handle.spawn_blocking(move || {
-            if let Err(_error) =
-                service.finish_turn(&session_id, &prompt_id, turn_id.as_deref(), outcome)
-            {
-                // Leave rows nonterminal for the next startup fence; never claim
-                // completion. Log correlation IDs only.
-                tracing::error!(
-                    session_id = %session_id,
-                    prompt_id = %prompt_id,
-                    "workflow completion write failed"
-                );
+        let gates = self.gates.clone();
+        // Return immediately on the per-session actor runtime; durable work
+        // rides the main runtime.
+        self.main_handle.spawn(async move {
+            // Opaque run key via exact session+prompt lookup.
+            let key_service = service.clone();
+            let key_session_id = session_id.clone();
+            let key_prompt_id = prompt_id.clone();
+            let run_key = tokio::task::spawn_blocking(move || {
+                key_service.find_run_id_by_session_and_prompt(&key_session_id, &key_prompt_id)
+            })
+            .await;
+            let run_key = match run_key {
+                Ok(Ok(Some(run_key))) => run_key,
+                Ok(Ok(None)) => return,
+                Ok(Err(_)) | Err(_) => {
+                    // Leave rows nonterminal for the next startup fence; never
+                    // claim completion. Correlation IDs only.
+                    tracing::error!(
+                        session_id = %session_id,
+                        prompt_id = %prompt_id,
+                        "workflow completion key lookup failed"
+                    );
+                    return;
+                }
+            };
+
+            // Serialize the terminal CAS on the shared per-run gate.
+            let gate = match gates.slot(&run_key) {
+                Ok(gate) => gate,
+                Err(_poisoned) => {
+                    tracing::error!(
+                        run_id = %run_key,
+                        "workflow run gate unavailable for completion"
+                    );
+                    return;
+                }
+            };
+            let _guard = gate.lock_owned().await;
+
+            let finish_session_id = session_id.clone();
+            let finish_prompt_id = prompt_id.clone();
+            let joined = tokio::task::spawn_blocking(move || {
+                service.finish_turn(
+                    &finish_session_id,
+                    &finish_prompt_id,
+                    turn_id.as_deref(),
+                    outcome,
+                )
+            })
+            .await;
+            match joined {
+                Ok(Ok(_outcome)) => {}
+                Ok(Err(_)) | Err(_) => {
+                    tracing::error!(
+                        session_id = %session_id,
+                        prompt_id = %prompt_id,
+                        "workflow completion write failed"
+                    );
+                }
             }
         });
     }

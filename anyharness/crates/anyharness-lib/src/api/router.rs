@@ -447,6 +447,10 @@ pub fn build_router(state: AppState) -> Router {
             "/workflow-runs/{run_id}",
             put(workflow_runs::put_workflow_run).get(workflow_runs::get_workflow_run),
         )
+        .route(
+            "/workflow-runs/{run_id}/cancel",
+            post(workflow_runs::cancel_workflow_run),
+        )
         // Loops (native crons + emulated scheduler)
         .route(
             "/sessions/{session_id}/loops",

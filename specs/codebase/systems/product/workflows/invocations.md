@@ -5,6 +5,11 @@ Owner: Cloud Workflow invocations and AnyHarness Workflow target resolution.
 Read with [`definitions.md`](definitions.md), [`runs.md`](runs.md),
 the Server and AnyHarness structure guides, and the repository testing standard.
 
+Superseded in part: [`run-control.md`](run-control.md)
+supersedes this spec's "do not rename or widen the existing v1 components"
+clause for exactly the run-control lifecycle additions listed in its §3.4;
+everything else here remains authoritative.
+
 ## Outcome and boundary
 
 Cloud freezes one exact current saved-definition revision, scalar arguments,

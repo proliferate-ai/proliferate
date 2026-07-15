@@ -7,6 +7,7 @@ use axum::http::StatusCode;
 use super::access::map_access_error;
 use super::error::ApiError;
 use super::workflow_runs_contract::{WorkflowRunDecodeError, WorkflowRunEncodeError};
+use crate::domains::workflows::control::WorkflowCancelError;
 use crate::domains::workflows::runtime::{WorkflowGetError, WorkflowPutError};
 use crate::domains::workspaces::access_gate::WorkspaceAccessError;
 
@@ -59,6 +60,22 @@ impl From<WorkflowGetError> for ApiError {
                 ApiError::bad_request(error.to_string(), "WORKFLOW_RUN_INVALID")
             }
             WorkflowGetError::Store(_) | WorkflowGetError::Internal(_) => {
+                ApiError::internal("workflow run storage failure")
+            }
+        }
+    }
+}
+
+impl From<WorkflowCancelError> for ApiError {
+    fn from(error: WorkflowCancelError) -> Self {
+        match error {
+            WorkflowCancelError::InvalidRunId(error) => {
+                ApiError::bad_request(error.to_string(), "WORKFLOW_RUN_INVALID")
+            }
+            WorkflowCancelError::NotFound => {
+                ApiError::not_found("Workflow run not found", "WORKFLOW_RUN_NOT_FOUND")
+            }
+            WorkflowCancelError::Store(_) | WorkflowCancelError::Internal(_) => {
                 ApiError::internal("workflow run storage failure")
             }
         }

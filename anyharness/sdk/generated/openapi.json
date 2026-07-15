@@ -3782,6 +3782,67 @@
         }
       }
     },
+    "/v1/workflow-runs/{run_id}/cancel": {
+      "post": {
+        "tags": [
+          "workflow-runs"
+        ],
+        "operationId": "cancel_workflow_run",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "description": "Canonical UUID for the workflow run",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Durable cancellation intent acknowledged; current truthful versioned snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionedWorkflowRunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Non-canonical run ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Cancel-intent storage failure; nothing changed, or a post-commit snapshot read failed with intent preserved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces": {
       "get": {
         "tags": [
@@ -17854,6 +17915,7 @@
           "arguments",
           "status",
           "workspaceId",
+          "stateVersion",
           "createdAt",
           "updatedAt"
         ],
@@ -17866,6 +17928,13 @@
             "propertyNames": {
               "type": "string"
             }
+          },
+          "cancelRequestedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "First durable cancellation intent; omitted when never requested."
           },
           "createdAt": {
             "type": "string"
@@ -17892,6 +17961,17 @@
           "id": {
             "type": "string"
           },
+          "interruptionCode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkflowRunInterruptionCode",
+                "description": "Present if and only if `status` is `interrupted`."
+              }
+            ]
+          },
           "schemaVersion": {
             "type": "integer",
             "format": "int64"
@@ -17907,6 +17987,11 @@
               "string",
               "null"
             ]
+          },
+          "stateVersion": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Monotonic snapshot version: 1 at acceptance, +1 per externally visible\nsnapshot transaction."
           },
           "status": {
             "$ref": "#/components/schemas/WorkflowRunStatus"
@@ -18087,6 +18172,13 @@
           "boolean"
         ]
       },
+      "WorkflowRunInterruptionCode": {
+        "type": "string",
+        "description": "The closed run interruption code: present if and only if the run status is\n`interrupted`.",
+        "enum": [
+          "runtime_restarted"
+        ]
+      },
       "WorkflowRunModelSelection": {
         "oneOf": [
           {
@@ -18254,12 +18346,14 @@
       },
       "WorkflowRunStatus": {
         "type": "string",
-        "description": "Durable run status.",
+        "description": "Durable run status. Shared by the v1 and v2 response families; the\n`cancelled`/`interrupted` widening is the workflow-run-control §3.4\nsupersession of the earlier no-widening rule.",
         "enum": [
           "accepted",
           "running",
           "completed",
-          "failed"
+          "failed",
+          "cancelled",
+          "interrupted"
         ]
       },
       "WorkflowRunStep": {
@@ -18326,12 +18420,14 @@
       },
       "WorkflowRunStepStatus": {
         "type": "string",
-        "description": "Durable step status.",
+        "description": "Durable step status (shared by both response families; see\n[`WorkflowRunStatus`] for the widening provenance).",
         "enum": [
           "pending",
           "running",
           "completed",
-          "failed"
+          "failed",
+          "cancelled",
+          "interrupted"
         ]
       },
       "WorkflowRunStepV2": {
@@ -18404,6 +18500,7 @@
           "arguments",
           "status",
           "workspaceId",
+          "stateVersion",
           "createdAt",
           "updatedAt"
         ],
@@ -18416,6 +18513,13 @@
             "propertyNames": {
               "type": "string"
             }
+          },
+          "cancelRequestedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "First durable cancellation intent; omitted when never requested."
           },
           "createdAt": {
             "type": "string"
@@ -18442,6 +18546,17 @@
           "id": {
             "type": "string"
           },
+          "interruptionCode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkflowRunInterruptionCode",
+                "description": "Present if and only if `status` is `interrupted`."
+              }
+            ]
+          },
           "schemaVersion": {
             "type": "integer",
             "format": "int64"
@@ -18457,6 +18572,11 @@
               "string",
               "null"
             ]
+          },
+          "stateVersion": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Monotonic snapshot version: 1 at acceptance, +1 per externally visible\nsnapshot transaction."
           },
           "status": {
             "$ref": "#/components/schemas/WorkflowRunStatus"

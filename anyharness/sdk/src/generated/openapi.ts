@@ -1044,6 +1044,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workflow-runs/{run_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["cancel_workflow_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces": {
         parameters: {
             query?: never;
@@ -4622,15 +4638,24 @@ export interface components {
             arguments: {
                 [key: string]: components["schemas"]["WorkflowRunArgumentValue"];
             };
+            /** @description First durable cancellation intent; omitted when never requested. */
+            cancelRequestedAt?: string | null;
             createdAt: string;
             definition: components["schemas"]["WorkflowRunDefinition"];
             failureCode?: null | components["schemas"]["WorkflowRunFailureCode"];
             finishedAt?: string | null;
             id: string;
+            interruptionCode?: null | components["schemas"]["WorkflowRunInterruptionCode"];
             /** Format: int64 */
             schemaVersion: number;
             sessionId?: string | null;
             startedAt?: string | null;
+            /**
+             * Format: int64
+             * @description Monotonic snapshot version: 1 at acceptance, +1 per externally visible
+             *     snapshot transaction.
+             */
+            stateVersion: number;
             status: components["schemas"]["WorkflowRunStatus"];
             updatedAt: string;
             workspaceId: string;
@@ -4686,6 +4711,12 @@ export interface components {
          * @enum {string}
          */
         WorkflowRunInputType: "string" | "number" | "boolean";
+        /**
+         * @description The closed run interruption code: present if and only if the run status is
+         *     `interrupted`.
+         * @enum {string}
+         */
+        WorkflowRunInterruptionCode: "runtime_restarted";
         WorkflowRunModelSelection: {
             /** @enum {string} */
             kind: "targetDefault";
@@ -4727,10 +4758,12 @@ export interface components {
             steps: components["schemas"]["WorkflowRunPromptStep"][];
         };
         /**
-         * @description Durable run status.
+         * @description Durable run status. Shared by the v1 and v2 response families; the
+         *     `cancelled`/`interrupted` widening is the workflow-run-control §3.4
+         *     supersession of the earlier no-widening rule.
          * @enum {string}
          */
-        WorkflowRunStatus: "accepted" | "running" | "completed" | "failed";
+        WorkflowRunStatus: "accepted" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
         /** @description The durable materialized step view. */
         WorkflowRunStep: {
             createdAt: string;
@@ -4747,10 +4780,11 @@ export interface components {
             updatedAt: string;
         };
         /**
-         * @description Durable step status.
+         * @description Durable step status (shared by both response families; see
+         *     [`WorkflowRunStatus`] for the widening provenance).
          * @enum {string}
          */
-        WorkflowRunStepStatus: "pending" | "running" | "completed" | "failed";
+        WorkflowRunStepStatus: "pending" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
         WorkflowRunStepV2: {
             createdAt: string;
             failureCode?: null | components["schemas"]["WorkflowRunFailureCodeV2"];
@@ -4769,15 +4803,24 @@ export interface components {
             arguments: {
                 [key: string]: components["schemas"]["WorkflowRunArgumentValue"];
             };
+            /** @description First durable cancellation intent; omitted when never requested. */
+            cancelRequestedAt?: string | null;
             createdAt: string;
             definition: components["schemas"]["WorkflowRunDefinitionV2"];
             failureCode?: null | components["schemas"]["WorkflowRunFailureCodeV2"];
             finishedAt?: string | null;
             id: string;
+            interruptionCode?: null | components["schemas"]["WorkflowRunInterruptionCode"];
             /** Format: int64 */
             schemaVersion: number;
             sessionId?: string | null;
             startedAt?: string | null;
+            /**
+             * Format: int64
+             * @description Monotonic snapshot version: 1 at acceptance, +1 per externally visible
+             *     snapshot transaction.
+             */
+            stateVersion: number;
             status: components["schemas"]["WorkflowRunStatus"];
             updatedAt: string;
             workspaceId: string;
@@ -7946,6 +7989,56 @@ export interface operations {
                 };
             };
             /** @description Acceptance storage failure; no committed run or step */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    cancel_workflow_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Canonical UUID for the workflow run */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Durable cancellation intent acknowledged; current truthful versioned snapshot */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionedWorkflowRunResponse"];
+                };
+            };
+            /** @description Non-canonical run ID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unknown workflow run */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Cancel-intent storage failure; nothing changed, or a post-commit snapshot read failed with intent preserved */
             500: {
                 headers: {
                     [name: string]: unknown;
