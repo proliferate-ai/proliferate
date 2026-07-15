@@ -454,3 +454,53 @@ async def test_create_github_app_installation_url_allows_desktop_environment_ret
     assert response.installation_url.startswith(
         "https://github.com/apps/proliferate-dev/installations/new?state="
     )
+
+
+# --- Repo authority error-to-status/action mapping (frozen PR 1 contract) -----
+#
+# The authority endpoint may only recommend an action that can actually repair
+# the state: operator misconfiguration and missing human repository access
+# have no user-side repair, so their action must be null.
+
+
+def test_repo_authority_mapping_offers_only_repairable_actions() -> None:
+    mapping = service._repo_authority_status_for_error
+
+    assert mapping("github_app_authorization_required") == (
+        "missing_user_authorization",
+        "authorize_user",
+    )
+    assert mapping("github_app_authorization_expired") == (
+        "expired_user_authorization",
+        "reauthorize_user",
+    )
+    assert mapping("github_app_installation_required") == (
+        "missing_installation",
+        "install_app",
+    )
+    assert mapping("github_app_repo_not_covered") == (
+        "repo_not_covered",
+        "grant_repo_access",
+    )
+
+
+def test_repo_authority_human_repo_access_has_no_user_repair_action() -> None:
+    # Reauthorizing the App cannot grant a GitHub account access to a
+    # repository it cannot see; offering authorize_user here was the bug.
+    assert service._repo_authority_status_for_error("github_repo_access_required") == (
+        "missing_user_repo_access",
+        None,
+    )
+
+
+def test_repo_authority_app_not_configured_is_operator_state() -> None:
+    # Deployment-level App misconfiguration is repaired by the operator, not
+    # by any user action.
+    assert service._repo_authority_status_for_error("github_app_not_configured") == (
+        "operator_configuration_required",
+        None,
+    )
+
+
+def test_repo_authority_unknown_code_stays_error() -> None:
+    assert service._repo_authority_status_for_error("something_else") == ("error", None)

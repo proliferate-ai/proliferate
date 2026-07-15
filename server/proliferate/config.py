@@ -518,6 +518,55 @@ class Settings(BaseSettings):
         return None
 
     @property
+    def github_app_runtime_fields_present(self) -> tuple[bool, ...]:
+        """Presence of each GitHub App runtime requirement, order-stable.
+
+        One entry per field group the App runtime path needs: App id (JWT
+        signing subject), OAuth client id + secret (user authorization and
+        token exchange), webhook secret (webhook validation), and a private
+        key in exactly one of its two forms (App JWT signing). Internal
+        helper for the aggregate predicates below; never expose per-field
+        presence publicly.
+        """
+        return (
+            bool(self.github_app_id.strip()),
+            bool(self.github_app_client_id.strip()),
+            bool(self.github_app_client_secret.strip()),
+            bool(self.github_app_webhook_secret.strip()),
+            bool(self.github_app_private_key.strip() or self.github_app_private_key_path.strip()),
+        )
+
+    @property
+    def github_app_configured(self) -> bool:
+        """True when every GitHub App runtime requirement is configured.
+
+        This is the single completeness predicate shared by the ``/meta``
+        capability contract, startup/preflight expectations, and tests. It
+        gates whether GitHub repository authority (user authorization,
+        installation, repo coverage) can work at runtime.
+        """
+        return all(self.github_app_runtime_fields_present)
+
+    @property
+    def github_app_partially_configured(self) -> bool:
+        """True when some but not all GitHub App runtime fields are set.
+
+        A partial App config is an operator error: repo authorization will
+        fail at runtime even though the deployment looks intentional. The
+        capability contract reports it as operator configuration required
+        rather than disabled.
+        """
+        present = self.github_app_runtime_fields_present
+        return any(present) and not all(present)
+
+    @property
+    def cloud_provisioning_partially_configured(self) -> bool:
+        """True when E2B config is started but incomplete (non-debug only)."""
+        if self.debug:
+            return False
+        return bool(self.e2b_api_key.strip()) and not bool(self.e2b_template_name.strip())
+
+    @property
     def single_org_mode(self) -> bool:
         if self.single_org_mode_override is not None:
             return self.single_org_mode_override
