@@ -119,9 +119,26 @@ export interface LaunchRendererServerOptions {
   fetch?: ReadinessFetch;
 }
 
-/** Inline Node static file server: SPA-fallback to index.html, path-escape
- * guarded, served over the allocated port. Kept inline (no extra file) so the
- * whole renderer server is one hermetic child process. */
+/**
+ * A fixed path the renderer static server answers with a MINIMAL, bare HTML
+ * document that loads NO app bundle. The self-host Connect-Server trust probe
+ * navigates here BEFORE trust so its cross-origin `/meta` fetches carry a real,
+ * CORS-admitted renderer Origin (never the qualification-only `null` origin —
+ * SHR-007) WITHOUT booting the product SPA. Booting the SPA would fire its own
+ * startup traffic at the box (`GET /health`, telemetry, auth discovery, …) and
+ * break the "only GET /meta before trust" assertion. Same-origin with the
+ * renderer and purely additive to the SPA fallback, so local-world serving is
+ * unchanged (nothing ever requests this path there).
+ */
+export const CONNECT_PROBE_PATH = "/__qual_connect_probe__.html";
+
+/** The bare document served at `CONNECT_PROBE_PATH` — no scripts, no app boot. */
+const CONNECT_PROBE_PAGE_HTML = "<!doctype html><title>probe</title>";
+
+/** Inline Node static file server: a fixed bare connect-probe page, then
+ * SPA-fallback to index.html, path-escape guarded, served over the allocated
+ * port. Kept inline (no extra file) so the whole renderer server is one hermetic
+ * child process. */
 const STATIC_SERVER_SOURCE = `
 const http = require("http");
 const fs = require("fs");
@@ -129,10 +146,16 @@ const path = require("path");
 const root = path.resolve(process.argv[1]);
 const host = process.argv[2];
 const port = Number(process.argv[3]);
+const CONNECT_PROBE_PATH = ${JSON.stringify(CONNECT_PROBE_PATH)};
+const CONNECT_PROBE_PAGE_HTML = ${JSON.stringify(CONNECT_PROBE_PAGE_HTML)};
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon", ".woff2": "font/woff2", ".woff": "font/woff", ".map": "application/json", ".wasm": "application/wasm" };
 const server = http.createServer((req, res) => {
   try {
     let rel = decodeURIComponent((req.url || "/").split("?")[0]);
+    if (rel === CONNECT_PROBE_PATH) {
+      res.setHeader("content-type", "text/html");
+      return res.end(CONNECT_PROBE_PAGE_HTML);
+    }
     if (rel.endsWith("/")) rel += "index.html";
     let file = path.join(root, rel);
     if (!file.startsWith(root)) { res.statusCode = 403; return res.end("forbidden"); }

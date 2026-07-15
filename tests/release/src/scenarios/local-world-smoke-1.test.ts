@@ -336,6 +336,7 @@ test("model choice: prefers haiku over sonnet and excludes the fable tier", asyn
   });
   const outcome = await runLocalWorldSmokeCell(fakeCell(), fakeCtx(), driver);
   assert.equal(outcome.status, "green");
+  assert.equal(outcome.evidence!.kind, "local_workspace_turn");
   assert.equal((outcome.evidence as { model_id: string }).model_id, "claude-haiku-4-5");
 });
 
