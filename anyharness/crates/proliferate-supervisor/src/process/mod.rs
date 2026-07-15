@@ -95,6 +95,7 @@ pub async fn run(config: SupervisorConfig) -> Result<(), SupervisorError> {
                 Ok(child) => child,
                 Err(error) => {
                     warn!(?error, "failed to start proliferate-worker");
+                    recover_missing_worker(&config);
                     tokio::select! {
                         result = anyharness.wait() => {
                             warn!(?result, "anyharness exited while worker spawn was failing");
@@ -183,6 +184,36 @@ fn recover_missing_anyharness(config: &SupervisorConfig) {
                 );
             } else {
                 warn!("restored anyharness from .prev after a missing active binary");
+            }
+        }
+    }
+}
+
+/// Best-effort recovery when the Worker fails to spawn because its binary is
+/// missing (R9R3-001): symmetric with `recover_missing_anyharness`, so a
+/// power-loss between the Worker component's two activation renames recovers
+/// instead of livelocking the inner worker-spawn loop. Reconciles the journal,
+/// then restores last-good from `.prev` if the active worker binary is absent.
+fn recover_missing_worker(config: &SupervisorConfig) {
+    if let Err(error) = update::activate::reconcile_activation_journal(config) {
+        warn!(
+            ?error,
+            "activation journal reconcile failed during worker spawn recovery"
+        );
+    }
+    let active = &config.worker_binary;
+    if !active.exists() {
+        let mut previous = active.as_os_str().to_os_string();
+        previous.push(".prev");
+        let previous = std::path::PathBuf::from(previous);
+        if previous.exists() {
+            if let Err(error) = std::fs::rename(&previous, active) {
+                warn!(
+                    ?error,
+                    "failed to restore worker from .prev during recovery"
+                );
+            } else {
+                warn!("restored worker from .prev after a missing active binary");
             }
         }
     }
@@ -282,11 +313,15 @@ impl ActivationHost for LiveHost<'_> {
     async fn worker_reports_version(&mut self, expected: &str) -> Option<bool> {
         // Probe the ACTIVE worker binary on disk (a fresh `--version`
         // subprocess), not the running child, so the answer reflects the
-        // just-activated bytes rather than the request label (R9R-001).
-        let output = std::process::Command::new(&self.config.worker_binary)
-            .arg("--version")
-            .output()
-            .ok()?;
+        // just-activated bytes rather than the request label (R9R-001). Run the
+        // blocking spawn off the async runtime (R9R3-002).
+        let binary = self.config.worker_binary.clone();
+        let output = tokio::task::spawn_blocking(move || {
+            std::process::Command::new(&binary).arg("--version").output()
+        })
+        .await
+        .ok()?
+        .ok()?;
         if !output.status.success() {
             return None;
         }
@@ -395,6 +430,32 @@ mod tests {
         async fn worker_reports_version(&mut self, _expected: &str) -> Option<bool> {
             None
         }
+    }
+
+    #[test]
+    fn recover_missing_worker_restores_last_good_from_prev() {
+        // Simulates a power loss between the Worker component's two activation
+        // renames (R9R3-001): active worker binary absent, `.prev` present, and
+        // an unrelated journal absent. Recovery must restore `.prev` -> active so
+        // the inner worker-spawn loop cannot livelock on a missing binary.
+        let dir = temp_dir();
+        let config = test_config(&dir.0);
+        std::fs::create_dir_all(config.worker_binary.parent().unwrap()).unwrap();
+        let mut prev = config.worker_binary.as_os_str().to_os_string();
+        prev.push(".prev");
+        std::fs::write(&prev, b"last-good-worker-bytes").unwrap();
+        assert!(!config.worker_binary.exists(), "active worker starts absent");
+
+        recover_missing_worker(&config);
+
+        assert!(
+            config.worker_binary.exists(),
+            "recovery restored the active worker binary"
+        );
+        assert_eq!(
+            std::fs::read(&config.worker_binary).unwrap(),
+            b"last-good-worker-bytes"
+        );
     }
 
     /// A supervise seam whose children never exit (healthy) for the first calls:

@@ -124,7 +124,15 @@ pub(super) fn write_activation_journal(
     fs::rename(&tmp, &path).map_err(|source| {
         let _ = fs::remove_file(&tmp);
         SupervisorError::WriteUpdateArtifact { path, source }
-    })
+    })?;
+    // Durably persist the rename itself: fsync the directory so the journal
+    // entry survives a power loss between here and the two activation renames
+    // (R9R3-001). Best-effort — a platform that cannot open a dir for sync
+    // still has the crash-recovery `.prev` fallback.
+    if let Ok(dir_handle) = fs::File::open(dir) {
+        let _ = dir_handle.sync_all();
+    }
+    Ok(())
 }
 
 fn read_activation_journal(
