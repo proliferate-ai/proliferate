@@ -155,6 +155,18 @@ before/around the restart select, so an update in flight cannot race an
 unrelated child-exit restart. This is the core Supervisor primitive. Keep it
 legible.
 
+
+## Operational Notes
+
+- A persistent TLS-trust failure fetching an update artifact (e.g. an expired or
+  wrong certificate at the CDN) is classified as a transient `DownloadTransport`
+  error, so the mailbox request is retried indefinitely rather than latching a
+  terminal `Invalid` (consistent with R9-002's "network blips retry" intent).
+  Operationally this means a genuinely broken artifact host shows up as a
+  never-converging update, not a failed one — watch heartbeat staleness /
+  desired-vs-observed divergence rather than expecting a terminal result. A
+  bounded-retry cap is a possible future refinement.
+
 ## Boundary Model
 
 ```text
