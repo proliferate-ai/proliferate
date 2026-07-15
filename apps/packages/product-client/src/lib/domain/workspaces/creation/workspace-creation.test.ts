@@ -11,6 +11,7 @@ const repoRoot = {
 } as RepoRoot;
 
 const sourceWorkspace: Workspace = {
+  availability: "available",
   id: "workspace-1",
   kind: "local",
   repoRootId: "repo-root-1",

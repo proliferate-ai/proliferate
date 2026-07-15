@@ -9,6 +9,7 @@ import { buildSubmittingPendingWorkspaceEntry } from "#product/lib/domain/worksp
 
 function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
   return {
+    availability: "available",
     id: "workspace-1",
     kind: "worktree",
     repoRootId: "repo-root-1",

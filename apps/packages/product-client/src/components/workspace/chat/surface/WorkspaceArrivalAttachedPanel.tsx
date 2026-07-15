@@ -4,6 +4,7 @@ import { Badge } from "@proliferate/ui/primitives/Badge";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { ComposerAttachedPanel } from "#product/components/workspace/chat/input/ComposerAttachedPanel";
 import { WorkspaceArrivalCloudPanel } from "#product/components/workspace/chat/surface/WorkspaceArrivalCloudPanel";
+import { WorktreeMissingAttachedPanel } from "#product/components/workspace/chat/surface/WorktreeMissingAttachedPanel";
 import { useWorkspaceArrivalActions } from "#product/hooks/workspaces/workflows/use-workspace-arrival-actions";
 import { useWorkspaceStatusPanelState } from "#product/hooks/workspaces/derived/use-workspace-status-panel-state";
 import { usePendingWorkspaceEntryActions } from "#product/hooks/workspaces/workflows/use-pending-workspace-entry-actions";
@@ -152,6 +153,17 @@ export function WorkspaceArrivalAttachedPanel() {
 
   if (!panelState) {
     return null;
+  }
+
+  if (panelState.kind === "directory-missing") {
+    return (
+      <WorktreeMissingAttachedPanel
+        workspaceId={panelState.workspaceId}
+        logicalWorkspaceId={panelState.logicalWorkspaceId}
+        workspacePath={panelState.workspacePath}
+        originalBranch={panelState.originalBranch}
+      />
+    );
   }
 
   if (panelState.kind === "arrival") {

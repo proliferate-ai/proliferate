@@ -95,6 +95,12 @@ pub enum CreateAndStartSessionError {
         mode_id: String,
     },
     WorkspaceNotFound,
+    /// The workspace's local checkout directory has been deleted from disk.
+    /// Caught before creating a durable session so a deleted checkout never
+    /// leaves behind an empty errored session row.
+    WorkspaceDirectoryMissing {
+        path: String,
+    },
     WorkspaceSingleSession {
         session_id: String,
     },
@@ -159,6 +165,12 @@ pub enum ForkSessionError {
     Unsupported(String),
     Busy,
     Invalid(String),
+    /// The parent workspace's local checkout directory has been deleted from
+    /// disk. Caught before inserting the fork child so a deleted checkout never
+    /// leaves behind an empty errored fork session row.
+    WorkspaceDirectoryMissing {
+        path: String,
+    },
     MissingNativeSessionId,
     MissingDataKey,
     StartFailed {

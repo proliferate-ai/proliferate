@@ -1,7 +1,7 @@
 use anyharness_contract::v1::{
     DetectProjectSetupResponse, GetSetupStatusResponse, RepoRoot, RepoRootKind,
     ResolveWorkspaceResponse, SetupHint, SetupHintCategory, SetupScriptStatus, Workspace,
-    WorkspaceCleanupOperation as ContractWorkspaceCleanupOperation,
+    WorkspaceAvailability, WorkspaceCleanupOperation as ContractWorkspaceCleanupOperation,
     WorkspaceCleanupState as ContractWorkspaceCleanupState, WorkspaceKind as ContractWorkspaceKind,
     WorkspaceLifecycleState as ContractWorkspaceLifecycleState,
     WorkspaceSurface as ContractWorkspaceSurface,
@@ -110,12 +110,21 @@ pub(super) fn workspace_to_contract_with_summary(
     record: WorkspaceRecord,
     execution_summary: anyharness_contract::v1::WorkspaceExecutionSummary,
 ) -> Workspace {
+    // Only local-checkout workspaces (`Local`/`Worktree`) can report a missing
+    // directory; the predicate is shared with the session-creation pre-flight
+    // gate so both surface the same condition.
+    let availability = if record.checkout_directory_missing() {
+        WorkspaceAvailability::WorkspaceDirectoryMissing
+    } else {
+        WorkspaceAvailability::Available
+    };
     Workspace {
         id: record.id,
         kind: workspace_kind_to_contract(record.kind),
         repo_root_id: record.repo_root_id,
         path: record.path,
         surface: workspace_surface_to_contract(record.surface),
+        availability,
         original_branch: record.original_branch,
         current_branch: record.current_branch,
         display_name: record.display_name,
@@ -229,5 +238,79 @@ fn setup_hint_to_contract(hint: DetectedSetupHint) -> SetupHint {
             DetectedHintCategory::BuildTool => SetupHintCategory::BuildTool,
             DetectedHintCategory::SecretSync => SetupHintCategory::SecretSync,
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use anyharness_contract::v1::{WorkspaceExecutionPhase, WorkspaceExecutionSummary};
+
+    use super::*;
+
+    fn empty_summary() -> WorkspaceExecutionSummary {
+        WorkspaceExecutionSummary {
+            phase: WorkspaceExecutionPhase::Idle,
+            total_session_count: 0,
+            live_session_count: 0,
+            running_count: 0,
+            awaiting_interaction_count: 0,
+            idle_count: 0,
+            errored_count: 0,
+            updated_at: None,
+        }
+    }
+
+    fn record(kind: WorkspaceKind, path: &str) -> WorkspaceRecord {
+        WorkspaceRecord {
+            id: "workspace-1".to_string(),
+            kind,
+            repo_root_id: "repo-root-1".to_string(),
+            path: path.to_string(),
+            surface: WorkspaceSurface::Standard,
+            original_branch: None,
+            current_branch: None,
+            display_name: None,
+            origin: None,
+            creator_context: None,
+            lifecycle_state: WorkspaceLifecycleState::Active,
+            cleanup_state: WorkspaceCleanupState::None,
+            cleanup_operation: None,
+            cleanup_error_message: None,
+            cleanup_failed_at: None,
+            cleanup_attempted_at: None,
+            created_at: "2026-03-25T00:00:00Z".to_string(),
+            updated_at: "2026-03-25T00:00:00Z".to_string(),
+        }
+    }
+
+    #[test]
+    fn contract_reports_missing_directory_for_deleted_local_checkout() {
+        let path = std::env::temp_dir().join(format!(
+            "anyharness-workspace-contract-missing-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let workspace = workspace_to_contract_with_summary(
+            record(WorkspaceKind::Worktree, &path.to_string_lossy()),
+            empty_summary(),
+        );
+        assert_eq!(
+            workspace.availability,
+            WorkspaceAvailability::WorkspaceDirectoryMissing
+        );
+    }
+
+    #[test]
+    fn contract_reports_available_when_checkout_present() {
+        let dir = std::env::temp_dir().join(format!(
+            "anyharness-workspace-contract-present-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let workspace = workspace_to_contract_with_summary(
+            record(WorkspaceKind::Local, &dir.to_string_lossy()),
+            empty_summary(),
+        );
+        assert_eq!(workspace.availability, WorkspaceAvailability::Available);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -7,6 +7,7 @@ import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creat
 
 function makeWorkspace(overrides: Partial<Workspace>): Workspace {
   return {
+    availability: "available",
     id: "workspace-1",
     kind: "local",
     repoRootId: "repo-root-1",

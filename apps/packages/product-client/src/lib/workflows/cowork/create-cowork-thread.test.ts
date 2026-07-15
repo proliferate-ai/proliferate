@@ -83,6 +83,7 @@ function coworkThreadResponse(): CreateCoworkThreadResponse {
   const createdAt = "2026-07-15T12:00:00Z";
   return {
     workspace: {
+      availability: "available",
       id: "workspace-cowork",
       path: "/tmp/workspace-cowork",
       repoRootId: "repo-root-1",

@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
 use crate::origin::OriginContext;
 
@@ -21,6 +23,24 @@ pub struct WorkspaceRecord {
     pub cleanup_attempted_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+}
+
+impl WorkspaceRecord {
+    /// Whether this workspace is backed by a local checkout directory on this
+    /// machine whose existence is meaningful. Both current kinds (`Local` and
+    /// `Worktree`) are local checkouts; a future remote/cloud-style kind would
+    /// return `false` here and always be treated as available.
+    pub fn has_local_checkout(&self) -> bool {
+        matches!(self.kind, WorkspaceKind::Local | WorkspaceKind::Worktree)
+    }
+
+    /// True when this workspace is a local checkout whose directory has been
+    /// removed from disk. Shared existence predicate used by the workspace
+    /// availability signal and the session-creation pre-flight gate. Uses the
+    /// same `Path::exists` check as retire pre-flight and worktree inventory.
+    pub fn checkout_directory_missing(&self) -> bool {
+        self.has_local_checkout() && !Path::new(&self.path).exists()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -210,4 +230,54 @@ pub struct ParsedRemote {
     pub provider: String,
     pub owner: String,
     pub repo: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn record(kind: WorkspaceKind, path: &str) -> WorkspaceRecord {
+        WorkspaceRecord {
+            id: "workspace-1".to_string(),
+            kind,
+            repo_root_id: "repo-root-1".to_string(),
+            path: path.to_string(),
+            surface: WorkspaceSurface::Standard,
+            original_branch: None,
+            current_branch: None,
+            display_name: None,
+            origin: None,
+            creator_context: None,
+            lifecycle_state: WorkspaceLifecycleState::Active,
+            cleanup_state: WorkspaceCleanupState::None,
+            cleanup_operation: None,
+            cleanup_error_message: None,
+            cleanup_failed_at: None,
+            cleanup_attempted_at: None,
+            created_at: "2026-03-25T00:00:00Z".to_string(),
+            updated_at: "2026-03-25T00:00:00Z".to_string(),
+        }
+    }
+
+    #[test]
+    fn checkout_directory_missing_true_for_deleted_local_checkout() {
+        let path = std::env::temp_dir().join(format!(
+            "anyharness-workspace-model-missing-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let record = record(WorkspaceKind::Worktree, &path.to_string_lossy());
+        assert!(record.checkout_directory_missing());
+    }
+
+    #[test]
+    fn checkout_directory_missing_false_when_directory_exists() {
+        let dir = std::env::temp_dir().join(format!(
+            "anyharness-workspace-model-present-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let record = record(WorkspaceKind::Local, &dir.to_string_lossy());
+        assert!(!record.checkout_directory_missing());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

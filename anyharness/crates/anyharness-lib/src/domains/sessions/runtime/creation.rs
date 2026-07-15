@@ -53,6 +53,7 @@ impl SessionRuntime {
         self.access_gate
             .assert_can_mutate_for_workspace(workspace_id)
             .map_err(|error| CreateAndStartSessionError::Invalid(error.to_string()))?;
+        self.assert_workspace_checkout_present(workspace_id)?;
         let started = Instant::now();
         let system_prompt_append_count = system_prompt_append
             .as_ref()
@@ -134,6 +135,31 @@ impl SessionRuntime {
 
     pub async fn has_live_session(&self, session_id: &str) -> bool {
         self.acp_manager.get_handle(session_id).await.is_some()
+    }
+
+    /// Pre-flight the workspace's local checkout before touching durable state.
+    /// A deleted checkout would otherwise only surface once the session
+    /// subprocess spawns, by which point an empty errored session row exists.
+    /// Uses the shared `WorkspaceRecord::checkout_directory_missing` predicate
+    /// so remote/cloud-style workspaces are never blocked here. A workspace
+    /// that cannot be found is left to `create_durable_session` to classify as
+    /// `WorkspaceNotFound`.
+    pub(crate) fn assert_workspace_checkout_present(
+        &self,
+        workspace_id: &str,
+    ) -> Result<(), CreateAndStartSessionError> {
+        let workspace = self
+            .workspace_runtime
+            .get_workspace(workspace_id)
+            .map_err(CreateAndStartSessionError::Internal)?;
+        if let Some(workspace) = workspace {
+            if workspace.checkout_directory_missing() {
+                return Err(CreateAndStartSessionError::WorkspaceDirectoryMissing {
+                    path: workspace.path,
+                });
+            }
+        }
+        Ok(())
     }
 
     /// Checked, crate-visible internal-session creation seam: assert workspace

@@ -4,6 +4,7 @@ import { isMainThreadMeasurementEnabled } from "#product/lib/infra/measurement/m
 import type { SidebarSessionActivityState } from "@proliferate/product-domain/sessions/activity";
 import { resolveWorkspaceExecutionSidebarActivityState } from "@proliferate/product-domain/sessions/activity";
 import type { ComputeTargetAppearance } from "#product/lib/domain/compute/target-appearance";
+import { WORKTREE_MISSING_TITLE } from "#product/lib/domain/workspaces/availability";
 import { isCloudWorkspacePending } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
 import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
 import { cloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
@@ -26,6 +27,11 @@ export type SidebarIndicatorAction =
 export type SidebarStatusIndicator =
   | {
     kind: "error";
+    tooltip: string;
+    action?: SidebarIndicatorAction | null;
+  }
+  | {
+    kind: "worktree_missing";
     tooltip: string;
     action?: SidebarIndicatorAction | null;
   }
@@ -101,6 +107,19 @@ export function logicalWorkspaceSshTargetId(workspace: LogicalWorkspace): string
   return workspace.cloudWorkspace?.directTargetContext?.targetId
     ?? workspace.cloudWorkspace?.targetId
     ?? null;
+}
+
+// A missing local checkout is a persistent workspace condition that outranks
+// session-activity glyphs: the user should understand the workspace's state
+// before opening it.
+export function worktreeMissingStatusIndicator(
+  action: SidebarIndicatorAction | null,
+): SidebarStatusIndicator {
+  return {
+    kind: "worktree_missing",
+    tooltip: WORKTREE_MISSING_TITLE,
+    action,
+  };
 }
 
 export function sidebarStatusIndicatorFromActivity(args: {

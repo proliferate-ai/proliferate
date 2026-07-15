@@ -14,6 +14,7 @@ import {
   buildPendingWorkspaceArrivalViewModel,
   summarizeSetupFailure,
 } from "#product/lib/domain/workspaces/creation/arrival";
+import { isWorkspaceDirectoryMissing } from "#product/lib/domain/workspaces/availability";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
 import { useWorkspaceArrivalState } from "#product/hooks/workspaces/derived/use-workspace-arrival-state";
@@ -58,6 +59,18 @@ export type WorkspaceStatusPanelState =
     summary: string;
     detail: string | null;
     terminalId: string | null;
+  }
+  | {
+    /**
+     * The workspace's local checkout was removed from disk. Persistent and
+     * non-dismissible while the directory is gone; chat history stays
+     * readable but agents, files, and terminals cannot run.
+     */
+    kind: "directory-missing";
+    workspaceId: string;
+    logicalWorkspaceId: string | null;
+    workspacePath: string;
+    originalBranch: string | null;
   };
 
 function buildPendingSubtitle(entry: PendingWorkspaceEntry): string {
@@ -205,6 +218,23 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
       };
     }
 
+    // Detected on workspace load/select via the collections query — not only
+    // when a send fails. Outranks arrival/setup states: nothing else about
+    // the workspace is actionable while the checkout is gone.
+    if (
+      selectedWorkspaceId
+      && selectedWorkspace
+      && isWorkspaceDirectoryMissing(selectedWorkspace)
+    ) {
+      return {
+        kind: "directory-missing",
+        workspaceId: selectedWorkspaceId,
+        logicalWorkspaceId: selectedLogicalWorkspaceId,
+        workspacePath: selectedWorkspace.path,
+        originalBranch: selectedWorkspace.originalBranch ?? null,
+      };
+    }
+
     if (
       selectedWorkspaceId
       && selectedCloudWorkspace
@@ -269,6 +299,7 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
     pendingSourceRepoRootPath,
     pendingWorkspaceEntry,
     selectedCloudWorkspace,
+    selectedLogicalWorkspaceId,
     selectedWorkspace,
     selectedWorkspaceId,
     setupStatus,

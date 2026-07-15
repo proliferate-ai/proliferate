@@ -221,6 +221,12 @@ fn map_create_cowork_thread_error(error: CoworkCreateThreadError) -> ApiError {
             crate::domains::sessions::runtime::CreateAndStartSessionError::WorkspaceNotFound => {
                 ApiError::bad_request("workspace not found", "WORKSPACE_NOT_FOUND")
             }
+            crate::domains::sessions::runtime::CreateAndStartSessionError::WorkspaceDirectoryMissing {
+                path,
+            } => ApiError::conflict(
+                format!("workspace directory is missing: {path}"),
+                "WORKSPACE_DIRECTORY_MISSING",
+            ),
             crate::domains::sessions::runtime::CreateAndStartSessionError::Invalid(detail) => {
                 ApiError::bad_request(detail, "SESSION_CREATE_FAILED")
             }

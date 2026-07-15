@@ -2,7 +2,10 @@ import { useCallback } from "react";
 import type { ModelSelectorSelection } from "#product/lib/domain/chat/models/model-selector-types";
 import type { Workspace } from "@anyharness/sdk";
 import { useSessionCreationActions } from "#product/hooks/sessions/workflows/use-session-creation-actions";
-import { formatSessionCreateToastMessage } from "#product/lib/domain/sessions/creation/create-session-error";
+import {
+  formatSessionCreateToastMessage,
+  isWorkspaceDirectoryMissingError,
+} from "#product/lib/domain/sessions/creation/create-session-error";
 import { useSessionConfigActions } from "#product/hooks/sessions/workflows/use-session-config-actions";
 import { useCoworkThreadWorkflow } from "#product/hooks/cowork/workflows/use-cowork-thread-workflow";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
@@ -123,7 +126,9 @@ export function useChatLaunchActions(options?: {
         })
         .catch((error) => {
           failLatencyFlow(latencyFlowId, "session_create_failed");
-          showToast(formatSessionCreateToastMessage(error, "Failed to open chat"));
+          if (!isWorkspaceDirectoryMissingError(error)) {
+            showToast(formatSessionCreateToastMessage(error, "Failed to open chat"));
+          }
         });
       return;
     }
@@ -149,7 +154,10 @@ export function useChatLaunchActions(options?: {
       })
       .catch((error) => {
         failLatencyFlow(latencyFlowId, "session_create_failed");
-        showToast(formatSessionCreateToastMessage(error, "Failed to open chat"));
+        // The missing-worktree composer panel owns that condition — no toast.
+        if (!isWorkspaceDirectoryMissingError(error)) {
+          showToast(formatSessionCreateToastMessage(error, "Failed to open chat"));
+        }
       });
   }, [
     configuredLaunch.disabledReason,

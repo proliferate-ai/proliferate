@@ -643,6 +643,79 @@ fn fork_parent_validation_allows_api_origin_as_advisory_provenance() {
     validate_fork_parent(&record, &link_service).expect("api-origin session can fork");
 }
 
+#[tokio::test(flavor = "current_thread")]
+async fn create_and_start_session_rejects_missing_checkout_without_inserting_row() {
+    use std::sync::Mutex;
+
+    use crate::domains::agents::installer::seed::AgentSeedStore;
+    use crate::domains::sessions::runtime::CreateAndStartSessionError;
+
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("env mutex");
+    let _bearer_guard = test_support::set_bearer_token_env(None);
+    let _data_key_guard = test_support::set_data_key_env(None);
+
+    let runtime_home = std::env::temp_dir().join(format!(
+        "anyharness-create-missing-checkout-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let state = crate::app::AppState::new(
+        runtime_home,
+        "http://127.0.0.1:8457".to_string(),
+        Db::open_in_memory().expect("in-memory db"),
+        false,
+        AgentSeedStore::not_configured_dev(),
+    )
+    .expect("app state");
+
+    // Local checkout whose directory does not exist on disk.
+    let missing_path = std::env::temp_dir().join(format!(
+        "anyharness-missing-checkout-dir-{}",
+        uuid::Uuid::new_v4()
+    ));
+    test_support::seed_workspace_with_repo_root(
+        &state.db,
+        "workspace-missing",
+        "worktree",
+        &missing_path.to_string_lossy(),
+    );
+
+    let error = state
+        .session_runtime
+        .create_and_start_session(
+            "workspace-missing",
+            "claude",
+            None,
+            None,
+            None,
+            vec![],
+            None,
+            false,
+            OriginContext::api_local_runtime(),
+        )
+        .await
+        .expect_err("missing checkout should be refused");
+
+    match error {
+        CreateAndStartSessionError::WorkspaceDirectoryMissing { path } => {
+            assert_eq!(path, missing_path.to_string_lossy());
+        }
+        other => panic!("expected WorkspaceDirectoryMissing, got {other:?}"),
+    }
+
+    let sessions = state
+        .session_service
+        .store()
+        .list_by_workspace("workspace-missing")
+        .expect("list sessions");
+    assert!(
+        sessions.is_empty(),
+        "no durable session row should be inserted for a missing checkout"
+    );
+}
+
 #[test]
 fn fork_link_child_unique_index_rejects_multiple_fork_parents() {
     let db = Db::open_in_memory().expect("open db");

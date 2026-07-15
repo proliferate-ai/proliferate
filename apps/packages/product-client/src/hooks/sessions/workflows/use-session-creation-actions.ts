@@ -5,6 +5,7 @@ import { hasPromptContent } from "#product/lib/domain/chat/composer/prompt-input
 import { createPromptId } from "#product/lib/domain/chat/composer/prompt-id";
 import {
   formatSessionCreateFailureMessage,
+  isWorkspaceDirectoryMissingError,
   toSessionCreateFailureDisplayError,
 } from "#product/lib/domain/sessions/creation/create-session-error";
 import { pickLiveDefaultLaunchControls } from "#product/lib/domain/sessions/creation/launch-controls";
@@ -346,7 +347,10 @@ export function useSessionCreationActions() {
     if (hasPrompt) {
       void createPromise.catch((error) => {
         cleanupCreateFailure(error);
-        showToast(formatSessionCreateFailureMessage(error), "error");
+        // The missing-worktree composer panel owns that condition — no toast.
+        if (!isWorkspaceDirectoryMissingError(error)) {
+          showToast(formatSessionCreateFailureMessage(error), "error");
+        }
       }).finally(cleanupInFlight);
       return pendingSessionId;
     }

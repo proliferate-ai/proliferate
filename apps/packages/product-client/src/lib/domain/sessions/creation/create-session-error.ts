@@ -1,4 +1,5 @@
 import { AnyHarnessError } from "@anyharness/sdk";
+import { WORKTREE_MISSING_SEND_BLOCKED_REASON } from "#product/lib/domain/workspaces/availability";
 
 const UNSUPPORTED_SESSION_MODEL_CODE = "SESSION_MODEL_UNSUPPORTED";
 const UNSUPPORTED_SESSION_MODE_CODE = "SESSION_MODE_UNSUPPORTED";
@@ -6,6 +7,25 @@ const UNSUPPORTED_SESSION_MODE_CODE = "SESSION_MODE_UNSUPPORTED";
 // contexts that are not active. UNSUPPORTED means the requested model ID did
 // not resolve. GATED carries the contexts that can unlock the known model.
 const GATED_SESSION_MODEL_CODE = "SESSION_MODEL_GATED";
+// The workspace's local checkout is gone from disk. Not toasted: the
+// persistent missing-worktree composer panel owns this condition, so the
+// helpers below only identify it for suppression.
+const WORKSPACE_DIRECTORY_MISSING_CODE = "WORKSPACE_DIRECTORY_MISSING";
+
+/**
+ * True for both the runtime's typed pre-flight refusal and the client-side
+ * creation gate (which throws the shared blocked-reason string).
+ */
+export function isWorkspaceDirectoryMissingError(error: unknown): boolean {
+  if (error instanceof AnyHarnessError) {
+    return error.problem.code === WORKSPACE_DIRECTORY_MISSING_CODE;
+  }
+  if (error instanceof Error) {
+    return error.message === WORKTREE_MISSING_SEND_BLOCKED_REASON
+      || isWorkspaceDirectoryMissingError((error as Error & { cause?: unknown }).cause);
+  }
+  return false;
+}
 
 export function formatSessionCreateFailureMessage(error: unknown): string {
   const unsupportedMessage = unsupportedSessionSelectionMessage(error);

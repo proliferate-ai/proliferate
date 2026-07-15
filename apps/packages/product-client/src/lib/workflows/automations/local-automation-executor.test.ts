@@ -38,6 +38,7 @@ function claim(overrides: Partial<LocalAutomationRunClaimResponse> = {}): LocalA
 
 function workspace(overrides: Partial<Workspace> = {}): Workspace {
   return {
+    availability: "available",
     id: "workspace-1",
     kind: "worktree",
     path: "/repo/.worktrees/automation",

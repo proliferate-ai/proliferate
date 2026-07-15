@@ -104,6 +104,10 @@ pub(super) fn map_create_session_error(error: CreateAndStartSessionError) -> Api
         CreateAndStartSessionError::WorkspaceNotFound => {
             ApiError::bad_request("workspace not found", "WORKSPACE_NOT_FOUND")
         }
+        CreateAndStartSessionError::WorkspaceDirectoryMissing { path } => ApiError::conflict(
+            format!("workspace directory is missing: {path}"),
+            "WORKSPACE_DIRECTORY_MISSING",
+        ),
         CreateAndStartSessionError::WorkspaceSingleSession { session_id } => ApiError::conflict(
             format!("workspace only allows a single session; existing session: {session_id}"),
             "WORKSPACE_SINGLE_SESSION",
@@ -203,6 +207,10 @@ pub(super) fn map_fork_session_error(error: ForkSessionError) -> ApiError {
             ApiError::conflict("session must be idle before forking", "SESSION_BUSY")
         }
         ForkSessionError::Invalid(detail) => ApiError::bad_request(detail, "FORK_INVALID_SESSION"),
+        ForkSessionError::WorkspaceDirectoryMissing { path } => ApiError::conflict(
+            format!("workspace directory is missing: {path}"),
+            "WORKSPACE_DIRECTORY_MISSING",
+        ),
         ForkSessionError::MissingNativeSessionId => ApiError::conflict(
             "session must have a native agent session id before forking",
             "FORK_MISSING_NATIVE_SESSION",
@@ -330,6 +338,18 @@ mod tests {
         .into_response();
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn missing_workspace_directory_maps_to_conflict() {
+        let response = super::map_create_session_error(
+            CreateAndStartSessionError::WorkspaceDirectoryMissing {
+                path: "/tmp/gone".to_string(),
+            },
+        )
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::CONFLICT);
     }
 
     #[test]

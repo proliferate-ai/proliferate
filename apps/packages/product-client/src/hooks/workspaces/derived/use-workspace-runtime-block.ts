@@ -1,5 +1,9 @@
 import { useCallback } from "react";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
+import {
+  WORKTREE_MISSING_SEND_BLOCKED_REASON,
+  isWorkspaceDirectoryMissing,
+} from "#product/lib/domain/workspaces/availability";
 import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 
@@ -19,6 +23,14 @@ export function useWorkspaceRuntimeBlock() {
 
     const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(workspaceId);
     if (!cloudWorkspaceId) {
+      // Local pre-flight for the runtime's own gate: refusing here keeps the
+      // failed create from ever projecting a session client-side.
+      const localWorkspace = workspaceCollections?.workspaces.find(
+        (workspace) => workspace.id === workspaceId,
+      );
+      if (isWorkspaceDirectoryMissing(localWorkspace)) {
+        return WORKTREE_MISSING_SEND_BLOCKED_REASON;
+      }
       return null;
     }
 
@@ -34,6 +46,7 @@ export function useWorkspaceRuntimeBlock() {
     selectedCloudRuntime.state,
     selectedCloudRuntime.workspaceId,
     workspaceCollections?.cloudWorkspaces,
+    workspaceCollections?.workspaces,
   ]);
 
   return {

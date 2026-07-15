@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { isWorkspaceDirectoryMissingError } from "#product/lib/domain/sessions/creation/create-session-error";
 import type { ContentPart, PromptInputBlock } from "@anyharness/sdk";
 import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
 import { useWorkspaceSetupStatusCache } from "#product/hooks/access/anyharness/workspaces/use-workspace-setup-status-cache";
@@ -68,7 +69,7 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
     currentLaunchIdentity,
   } = useActiveSessionLaunchState();
   const { hasSlot } = useActiveSessionSurfaceSnapshot();
-  const { isDisabled } = useChatAvailabilityState({
+  const { isDisabled, sendBlockedReason } = useChatAvailabilityState({
     activeSessionId: forceNewSession ? null : activeSessionId,
   });
   const scopedLaunchIdentity = forceNewSession ? null : currentLaunchIdentity;
@@ -100,7 +101,11 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
     const text = input?.text.trim() ?? serializeChatDraftToPrompt(currentDraft).trim();
     const blocks = input?.blocks ?? [{ type: "text" as const, text }];
     const attachmentSnapshots = input?.attachmentSnapshots ?? [];
-    if ((!hasPromptContent(text, blocks) && attachmentSnapshots.length === 0) || isDisabled) {
+    if (
+      (!hasPromptContent(text, blocks) && attachmentSnapshots.length === 0)
+      || isDisabled
+      || sendBlockedReason
+    ) {
       return false;
     }
 
@@ -246,8 +251,12 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
         },
       });
 
-      const message = error instanceof Error ? error.message : String(error);
-      showToast(`Failed to send message: ${message}`);
+      // The persistent missing-worktree composer panel owns this condition;
+      // a transient toast would just restate it with internal wording.
+      if (!isWorkspaceDirectoryMissingError(error)) {
+        const message = error instanceof Error ? error.message : String(error);
+        showToast(`Failed to send message: ${message}`);
+      }
       return false;
     }
   }, [
@@ -267,6 +276,7 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
     promptSession,
     selectedLogicalWorkspaceId,
     selectedWorkspaceId,
+    sendBlockedReason,
     setWorkspaceArrivalEvent,
     showToast,
     scopedLaunchIdentity,

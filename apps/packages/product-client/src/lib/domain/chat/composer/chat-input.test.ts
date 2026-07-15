@@ -3,6 +3,7 @@ import {
   resolveChatDraftWorkspaceId,
   resolveChatInputAvailability,
 } from "#product/lib/domain/chat/composer/chat-input";
+import { WORKTREE_MISSING_SEND_BLOCKED_REASON } from "#product/lib/domain/workspaces/availability";
 
 describe("resolveChatDraftWorkspaceId", () => {
   it("prefers the logical workspace when one is selected", () => {
@@ -35,6 +36,7 @@ describe("resolveChatInputAvailability", () => {
       pendingWorkspaceEntry: null,    })).toEqual({
       isDisabled: false,
       disabledReason: null,
+      sendBlockedReason: null,
       areRuntimeControlsDisabled: false,
       selectedWorkspaceKind: "local",
     });
@@ -56,6 +58,7 @@ describe("resolveChatInputAvailability", () => {
       pendingWorkspaceEntry: null,    })).toEqual({
       isDisabled: false,
       disabledReason: null,
+      sendBlockedReason: null,
       areRuntimeControlsDisabled: false,
       selectedWorkspaceKind: "local",
     });
@@ -80,6 +83,7 @@ describe("resolveChatInputAvailability", () => {
       },    })).toEqual({
       isDisabled: false,
       disabledReason: null,
+      sendBlockedReason: null,
       areRuntimeControlsDisabled: false,
       selectedWorkspaceKind: "cloud",
     });
@@ -101,6 +105,7 @@ describe("resolveChatInputAvailability", () => {
       pendingWorkspaceEntry: null,    })).toEqual({
       isDisabled: false,
       disabledReason: null,
+      sendBlockedReason: null,
       areRuntimeControlsDisabled: false,
       selectedWorkspaceKind: "local",
     });
@@ -127,6 +132,7 @@ describe("resolveChatInputAvailability", () => {
     })).toMatchObject({
       isDisabled: true,
       disabledReason: "Resolve the pending approval before sending another message.",
+      sendBlockedReason: null,
       areRuntimeControlsDisabled: false,
     });
     expect(resolveChatInputAvailability({
@@ -135,6 +141,7 @@ describe("resolveChatInputAvailability", () => {
     })).toMatchObject({
       isDisabled: true,
       disabledReason: "Answer the pending request before sending another message.",
+      sendBlockedReason: null,
       areRuntimeControlsDisabled: false,
     });
     expect(resolveChatInputAvailability({
@@ -143,7 +150,51 @@ describe("resolveChatInputAvailability", () => {
     })).toMatchObject({
       isDisabled: true,
       disabledReason: "Complete the pending MCP form before sending another message.",
+      sendBlockedReason: null,
       areRuntimeControlsDisabled: false,
     });
+  });
+  it("blocks send but keeps the editor editable when the worktree is missing", () => {
+    const availability = resolveChatInputAvailability({
+      selectedWorkspaceId: "workspace-1",
+      isCloudWorkspaceSelected: false,
+      isWorkspaceDirectoryMissing: true,
+      connectionState: "healthy",
+      selectedCloudWorkspaceStatus: null,
+      selectedCloudWorkspaceActionBlockReason: null,
+      selectedCloudRuntimePhase: null,
+      selectedCloudRuntimeActionBlockReason: null,
+      activeSessionId: "session-1",
+      isConfiguredLaunchLoading: false,
+      hasReadyConfiguredLaunch: true,
+      configuredLaunchDisabledReason: null,
+      pendingWorkspaceEntry: null,
+    });
+
+    expect(availability).toEqual({
+      isDisabled: false,
+      disabledReason: null,
+      sendBlockedReason: WORKTREE_MISSING_SEND_BLOCKED_REASON,
+      areRuntimeControlsDisabled: true,
+      selectedWorkspaceKind: "local",
+    });
+  });
+
+  it("ignores the missing-directory flag for cloud workspaces", () => {
+    expect(resolveChatInputAvailability({
+      selectedWorkspaceId: "cloud:workspace-1",
+      isCloudWorkspaceSelected: true,
+      isWorkspaceDirectoryMissing: true,
+      connectionState: "healthy",
+      selectedCloudWorkspaceStatus: "ready",
+      selectedCloudWorkspaceActionBlockReason: null,
+      selectedCloudRuntimePhase: "ready",
+      selectedCloudRuntimeActionBlockReason: null,
+      activeSessionId: "session-1",
+      isConfiguredLaunchLoading: false,
+      hasReadyConfiguredLaunch: true,
+      configuredLaunchDisabledReason: null,
+      pendingWorkspaceEntry: null,
+    }).sendBlockedReason).toBeNull();
   });
 });

@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   formatSessionCreateFailureMessage,
   formatSessionCreateToastMessage,
+  isWorkspaceDirectoryMissingError,
   toSessionCreateFailureDisplayError,
 } from "#product/lib/domain/sessions/creation/create-session-error";
+import { WORKTREE_MISSING_SEND_BLOCKED_REASON } from "#product/lib/domain/workspaces/availability";
 
 describe("session create failure presentation", () => {
   it("maps unsupported model errors to target update guidance", () => {
@@ -51,6 +53,22 @@ describe("session create failure presentation", () => {
     );
     expect(formatSessionCreateFailureMessage(error)).not.toContain("anthropic-api");
     expect(formatSessionCreateFailureMessage(error)).not.toContain("gateway");
+  });
+
+  it("identifies missing-worktree errors from the runtime code, the client gate, and causes", () => {
+    const runtimeError = anyHarnessError(
+      "WORKSPACE_DIRECTORY_MISSING",
+      "workspace directory is missing: /tmp/gone",
+    );
+    const clientGateError = new Error(WORKTREE_MISSING_SEND_BLOCKED_REASON);
+    const wrapped = new Error("Failed to create session");
+    (wrapped as Error & { cause?: unknown }).cause = runtimeError;
+
+    expect(isWorkspaceDirectoryMissingError(runtimeError)).toBe(true);
+    expect(isWorkspaceDirectoryMissingError(clientGateError)).toBe(true);
+    expect(isWorkspaceDirectoryMissingError(wrapped)).toBe(true);
+    expect(isWorkspaceDirectoryMissingError(new Error("network down"))).toBe(false);
+    expect(isWorkspaceDirectoryMissingError(anyHarnessError("SESSION_MODEL_GATED", "gated"))).toBe(false);
   });
 
   it("preserves generic errors", () => {

@@ -39,6 +39,8 @@ impl SessionRuntime {
 
         validate_fork_parent(&parent, &self.session_link_service)?;
 
+        self.assert_fork_workspace_checkout_present(&parent.workspace_id)?;
+
         let handle = self
             .ensure_live_session_handle(&parent, None)
             .await
@@ -222,6 +224,30 @@ impl SessionRuntime {
                 })
             }
         }
+    }
+}
+
+impl SessionRuntime {
+    /// Pre-flight the parent workspace's local checkout before forking. Shares
+    /// the `WorkspaceRecord::checkout_directory_missing` predicate with session
+    /// creation so a deleted checkout is refused before a fork child row is
+    /// inserted. Remote/cloud-style workspaces are never blocked.
+    fn assert_fork_workspace_checkout_present(
+        &self,
+        workspace_id: &str,
+    ) -> Result<(), ForkSessionError> {
+        let workspace = self
+            .workspace_runtime
+            .get_workspace(workspace_id)
+            .map_err(ForkSessionError::Internal)?;
+        if let Some(workspace) = workspace {
+            if workspace.checkout_directory_missing() {
+                return Err(ForkSessionError::WorkspaceDirectoryMissing {
+                    path: workspace.path,
+                });
+            }
+        }
+        Ok(())
     }
 }
 
