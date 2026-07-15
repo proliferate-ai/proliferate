@@ -58,6 +58,9 @@ export function RepoCommitInstructionsSection({
           onChange={(event) => setDraft(event.target.value)}
           placeholder={"Prefix with a conventional-commit type.\nMention the ticket from the branch name when present."}
           disabled={updateMutation.isPending}
+          // Quiet field on the settings surface: page-dark with a hairline
+          // border, not the grey control fill.
+          className="border-border bg-transparent"
         />
         <div className="flex items-center justify-between gap-3">
           <p className="text-ui-sm text-muted-foreground/80">
