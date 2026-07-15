@@ -1,4 +1,6 @@
-import bundledAgentCatalogJson from "../../../../../../catalogs/agents/catalog.json?raw";
+// Package-relative copy emitted by scripts/copy-product-client-assets.mjs from
+// the repo-root catalogs/agents/catalog.json (gitignored; no checked-in duplicate).
+import bundledAgentCatalogJson from "../../../generated/agent-catalog.json?raw";
 import {
   projectCloudAgentCatalogToDesktopLaunchCatalog,
   type DesktopAgentLaunchCatalog,
