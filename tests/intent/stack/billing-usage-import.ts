@@ -7,7 +7,7 @@
 // inference call).
 
 import { randomUUID } from "node:crypto";
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import path from "node:path";
 
 import { REPO_ROOT, type BootedStack, type StripeBillingEnv } from "./boot.ts";
@@ -151,11 +151,19 @@ export function clearPublishedGatewayEnv(): void {
  * (`stack/billing.ts::serverPass`), scoped to the LiteLLM importer + fake
  * gateway: a fresh `python -c` process against the same profile DB, with the
  * gateway env pointed at the fake (never the server's own env — this is a
- * separate process, not a child of the booted uvicorn). */
-function serverPass(pyExpr: string): void {
-  const result = spawnSync(path.join(REPO_ROOT, "server", ".venv", "bin", "python"), ["-c", pyExpr], {
+ * separate process, not a child of the booted uvicorn).
+ *
+ * ASYNC by design: these passes make HTTP calls to the management-plane fake,
+ * which — in the single-process `tests/release` runner — is served by THIS
+ * process's event loop. A blocking `spawnSync` would freeze that loop while the
+ * pass waits on the fake, deadlocking. `spawn` + an awaited exit keeps the loop
+ * free to serve the fake. (The Playwright suite runs the fake in a separate
+ * globalSetup process, so blocking there was harmless; awaiting is correct for
+ * both.) The DB-only passes elsewhere (`billing.ts`, `runFreeCreditGrantPass`)
+ * touch no in-process fake, so they stay `spawnSync`. */
+function serverPass(pyExpr: string): Promise<void> {
+  const child = spawn(path.join(REPO_ROOT, "server", ".venv", "bin", "python"), ["-c", pyExpr], {
     cwd: path.join(REPO_ROOT, "server"),
-    encoding: "utf8",
     env: {
       ...process.env,
       DATABASE_URL: databaseUrl(),
@@ -175,24 +183,43 @@ function serverPass(pyExpr: string): void {
       STRIPE_REFILL_10H_PRICE_ID: refillPriceId(),
     },
   });
-  if (result.status !== 0) {
-    throw new Error(`usage-import pass failed (${result.status}): ${(result.stderr || result.stdout || "").trim()}`);
-  }
+  let stdout = "";
+  let stderr = "";
+  child.stdout?.on("data", (chunk: Buffer) => {
+    stdout += chunk.toString();
+  });
+  child.stderr?.on("data", (chunk: Buffer) => {
+    stderr += chunk.toString();
+  });
+  return new Promise<void>((resolve, reject) => {
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error(`usage-import pass failed (${code}): ${(stderr || stdout).trim()}`));
+    });
+  });
 }
 
 /** Drive the REAL importer once against the profile DB + fake gateway.
  * Idempotent/overlap-safe by construction (dedup on `litellm_request_id`);
  * call it as many times as a case needs (restart-safety = calling it twice
- * with no new spend seeded in between and asserting no new rows/duplicates). */
-export function runUsageImportPass(): void {
-  serverPass(
-    "import asyncio; from proliferate.server.cloud.agent_gateway.usage_import import run_usage_import; " +
-      "from proliferate.db import session_ops as db_session; " +
+ * with no new spend seeded in between and asserting no new rows/duplicates).
+ * Await it: it HTTP-calls the in-process fake (see `serverPass`). */
+export function runUsageImportPass(): Promise<void> {
+  return serverPass(
+    // Multi-line: `async def` cannot follow `;`-joined imports on one logical
+    // line (SyntaxError), so imports go on their own newline-separated lines.
+    "import asyncio\n" +
+      "from proliferate.server.cloud.agent_gateway.usage_import import run_usage_import\n" +
+      "from proliferate.db import session_ops as db_session\n" +
       "async def _m():\n" +
       "    async with db_session.open_async_transaction() as db:\n" +
       "        result = await run_usage_import(db)\n" +
       "        print(result)\n" +
-      "asyncio.run(_m())",
+      "asyncio.run(_m())\n",
   );
 }
 
@@ -203,15 +230,18 @@ export function runUsageImportPass(): void {
  * directly gives deterministic, awaitable setup for tests instead of racing
  * a background task. Mints a real virtual key against the fake for every
  * enrollment it processes. */
-export function runEnrollmentBackfillPass(limit = 100): void {
-  serverPass(
-    "import asyncio; from proliferate.server.cloud.agent_gateway.enrollment import backfill_enrollments; " +
-      "from proliferate.db import session_ops as db_session; " +
+export function runEnrollmentBackfillPass(limit = 100): Promise<void> {
+  return serverPass(
+    // Multi-line: `async def` cannot follow `;`-joined imports on one logical
+    // line (SyntaxError), so imports go on their own newline-separated lines.
+    "import asyncio\n" +
+      "from proliferate.server.cloud.agent_gateway.enrollment import backfill_enrollments\n" +
+      "from proliferate.db import session_ops as db_session\n" +
       `async def _m():\n` +
       "    async with db_session.open_async_transaction() as db:\n" +
       `        processed = await backfill_enrollments(db, limit=${limit})\n` +
       "        print(f'processed={processed}')\n" +
-      "asyncio.run(_m())",
+      "asyncio.run(_m())\n",
   );
 }
 

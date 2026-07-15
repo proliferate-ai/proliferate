@@ -79,15 +79,18 @@ function runFreeCreditGrantPass(userId: string): boolean {
     path.join(REPO_ROOT, "server", ".venv", "bin", "python"),
     [
       "-c",
-      "import asyncio, sys; " +
-        "from proliferate.db.session import async_session_factory; " +
-        "from proliferate.server.cloud.agent_gateway.free_credits import ensure_user_free_credit_grant; " +
+      // Imports on their own newline-separated lines: a compound statement
+      // (`async def`) cannot follow `;`-joined simple statements on one logical
+      // line (SyntaxError), so the pyExpr must be genuinely multi-line.
+      "import asyncio\n" +
+        "from proliferate.db.engine import async_session_factory\n" +
+        "from proliferate.server.cloud.agent_gateway.free_credits import ensure_user_free_credit_grant\n" +
         "async def _m():\n" +
         "    async with async_session_factory() as db:\n" +
         `        granted = await ensure_user_free_credit_grant(db, "${userId}")\n` +
         "        await db.commit()\n" +
         "        print('GRANTED' if granted else 'NOT_GRANTED')\n" +
-        "asyncio.run(_m())",
+        "asyncio.run(_m())\n",
     ],
     {
       cwd: path.join(REPO_ROOT, "server"),
@@ -290,24 +293,39 @@ const t2Bill3: Tier2CellHandler = async (): Promise<Tier2CaseResult> => {
   const { token, organizationId } = await adminContext();
   const ownerId = await userIdFor(token);
 
+  // Retire any active subscriptions on this org's subject BEFORE the first
+  // membership change (earlier cases subscribe the same claimed org; a JOIN so
+  // it works regardless of how many billing subjects the org has).
   await b.withDb((db) =>
     db.query(
-      `UPDATE billing_subscription SET status = 'canceled', updated_at = now()
-        WHERE billing_subject_id = (SELECT id FROM billing_subject WHERE organization_id = $1)
-          AND status IN ('active', 'trialing')`,
+      `UPDATE billing_subscription bs SET status = 'canceled', updated_at = now()
+         FROM billing_subject s
+        WHERE s.id = bs.billing_subject_id AND s.organization_id = $1
+          AND bs.status IN ('active', 'trialing')`,
       [organizationId],
     ),
   );
+
+  // The member ACCOUNT must exist before the subscription, but WITHOUT an
+  // active membership: invited self-registration creates account+membership yet
+  // enqueues NO seat adjustment (only the accept-invitation service path does).
+  // Register, then drop the membership, so the later invite->accept is the first
+  // clean seat add on the paid subscription (mirrors specs/billing/seats.spec).
+  const email = `t2bill3-member-${Date.now()}@example.com`;
+  const memberToken = await seed.registerFreshMember(token, organizationId, email, PASSWORD, "member");
+  {
+    const seededMembers = await seed.listMembers(token, organizationId);
+    const seededMember = seededMembers.find((m) => m.email === email)!;
+    await seed.removeMembership(token, organizationId, seededMember.membershipId);
+  }
+
   const clock = b.createTestClock();
   const subject = await b.ensureOrganizationSubject(organizationId, ownerId);
-  const customer = b.createCustomer({ clockId: clock.id, billingSubjectId: subject.id, email: `t2bill3-${Date.now()}@example.com` });
+  const customer = b.createCustomer({ clockId: clock.id, billingSubjectId: subject.id, email: `t2bill3-org-${Date.now()}@example.com` });
   await b.ensureOrganizationSubject(organizationId, ownerId, customer.id);
   const sub = b.createProSubscription({ customerId: customer.id, seats: 1 });
   const fullSub = b.retrieveSubscription(sub.id);
   await b.deliverEvent({ type: "customer.subscription.created", object: fullSub });
-
-  const email = `t2bill3-member-${Date.now()}@example.com`;
-  const memberToken = await seed.registerFreshMember(token, organizationId, email, PASSWORD, "member");
 
   const invitation = await seed.inviteMember(token, organizationId, email, "member");
   const accept = await seed.acceptCurrentInvitation(memberToken, invitation.id);
@@ -475,31 +493,40 @@ const t2Bill5: Tier2CellHandler = async (ctx: Tier2CellContext): Promise<Tier2Ca
   const sub = b.createProSubscription({ customerId: customer.id, seats: 1, overage: true });
   ctx.ids.addObject(sub.id);
   await b.deliverEvent({ type: "customer.subscription.created", object: b.retrieveSubscription(sub.id) });
-  const twoHoursAgo = new Date(Date.now() - 2 * 3600 * 1000);
-  await b.withDb((db) =>
-    db.query(`UPDATE billing_subscription SET current_period_start = $1 WHERE billing_subject_id = $2`, [twoHoursAgo.toISOString(), subject.id]),
-  );
 
-  // Ruled: flat $50/org/month cap, not scaled by per-seat count.
+  // Ruled: flat $50/org/month cap, not scaled by per-seat count. Compute
+  // overage now meters at the derived E2B-list x1.5 rate ($3/hr = 300 c/hr), so
+  // exhausting a $50 cap needs >16.7h of IN-PERIOD overage. Backdate the synced
+  // period start far enough that a long seeded segment falls fully inside the
+  // paid period (a segment older than the period start is not billable overage).
+  const OVERAGE_RATE_CENTS_PER_HOUR = 300;
   const capCents = 5000;
+  const hoursPastCap = capCents / OVERAGE_RATE_CENTS_PER_HOUR + 4; // ~20.7h → ~6200c, past the cap
+  const periodStart = new Date(Date.now() - (hoursPastCap + 2) * 3600 * 1000);
+  await b.withDb((db) =>
+    db.query(`UPDATE billing_subscription SET current_period_start = $1 WHERE billing_subject_id = $2`, [periodStart.toISOString(), subject.id]),
+  );
   await b.setOverageSettings(subject.id, { enabled: true, capCentsPerSeat: capCents });
 
-  const hoursPastCap = capCents / 200 + 0.6;
   await b.seedGrant(subject.id, { userId: ownerId, grantType: "pro_period", hoursGranted: 0.02 });
   await b.seedUsageSegment(subject.id, {
     userId: ownerId,
     hours: hoursPastCap,
-    startedAt: new Date(Date.now() - (hoursPastCap * 60 + 10) * 60 * 1000),
+    startedAt: new Date(Date.now() - (hoursPastCap + 1) * 3600 * 1000),
   });
   b.runAccountingPass();
 
   const exports = await b.listUsageExports(subject.id);
   const billable = exports.filter((e) => (e.meter_quantity_cents ?? 0) > 0);
-  const writeoffs = exports.filter((e) => e.writeoff_reason === "overage_cap_exhausted");
+  const autoWriteoffs = exports.filter((e) => e.writeoff_reason === "overage_cap_exhausted");
   const billableCents = billable.reduce((s, e) => s + (e.meter_quantity_cents ?? 0), 0);
   assert.ok(billable.length > 0, "billable export rows created");
   assert.ok(billableCents <= capCents, "billing stops at the $50/org/month cap");
-  assert.ok(writeoffs.length > 0, "usage past cap is written off, not billed");
+  // Ruled 2026-07-14: at cap, compute PAUSES; write-off is operator-only. So
+  // usage past the cap is NOT auto-written-off into an export row — it is simply
+  // not billed and the subject is blocked (asserted just below), which is what
+  // makes cap exposure a hard stop rather than silent accrual.
+  assert.equal(autoWriteoffs.length, 0, "past-cap usage is paused, not auto-written-off (write-off is operator-only)");
 
   const overview = await b.apiRequest<b.BlockState>(
     `/v1/billing/overview?ownerScope=organization&organizationId=${organizationId}`,
@@ -572,7 +599,7 @@ const t2Bill6: Tier2CellHandler = async (ctx: Tier2CellContext): Promise<Tier2Ca
   // ONLY the scoped key is disabled at the gateway — the org membership's
   // separate key is untouched (the ruled "disable the scoped gateway key, not
   // compute, not a valid BYOK" guarantee).
-  runEnrollmentBackfillPass();
+  await runEnrollmentBackfillPass();
   const personal = await getUserEnrollment(userId);
   const orgEnrollment = await getOrgEnrollment(organizationId, userId);
   assert.ok(personal?.virtualKeyId, "personal enrollment minted a real virtual key against the fake");
@@ -582,7 +609,7 @@ const t2Bill6: Tier2CellHandler = async (ctx: Tier2CellContext): Promise<Tier2Ca
   await seedFakeSpendRows([
     { request_id: exhaustReq, api_key: personal!.virtualKeyId!, spend: 1000, startTime: new Date().toISOString() },
   ]);
-  runUsageImportPass();
+  await runUsageImportPass();
   const afterExhaust = await getUserEnrollment(userId);
   assert.equal(afterExhaust!.budgetStatus, "exhausted", "exhausting a subject's credit flips budget_status");
   const blockedKeys = await fetchFakeBlockedKeys();
@@ -773,7 +800,13 @@ const t2Bill11: Tier2CellHandler = async (): Promise<Tier2CaseResult> => {
     Promise.resolve().then(() => b.runReconcilePass()),
   ]);
   for (const result of results) {
-    assert.equal(result.status, "fulfilled", "concurrent reconciler passes never crash the process");
+    assert.equal(
+      result.status,
+      "fulfilled",
+      result.status === "rejected"
+        ? `reconciler pass crashed: ${String((result as PromiseRejectedResult).reason)}`
+        : "concurrent reconciler passes never crash the process",
+    );
   }
   // Restart: a subsequent pass after the concurrent pair still succeeds
   // (singleton lock released cleanly, no wedge).
@@ -882,11 +915,11 @@ const t2Bill14: Tier2CellHandler = async (): Promise<Tier2CaseResult> => {
   // Enrollment idempotency: the real backfill mints exactly one virtual key per
   // subject, and a replayed backfill reuses it (no second key minted for the
   // same identity) — the enrollment analog of the free-credit dedup above.
-  runEnrollmentBackfillPass();
+  await runEnrollmentBackfillPass();
   const firstEnrollment = await getUserEnrollment(memberId);
   assert.ok(firstEnrollment?.virtualKeyId, "backfill mints a real virtual key for the member");
   assert.equal(firstEnrollment!.syncStatus, "synced", "enrollment reaches synced against the fake");
-  runEnrollmentBackfillPass();
+  await runEnrollmentBackfillPass();
   const secondEnrollment = await getUserEnrollment(memberId);
   assert.equal(
     secondEnrollment!.virtualKeyId,
@@ -911,7 +944,7 @@ const t2Bill15: Tier2CellHandler = async (): Promise<Tier2CaseResult> => {
 
   // Enrollment mints real virtual keys (personal + a distinct org key) against
   // the fake — the identities the importer attributes spend to.
-  runEnrollmentBackfillPass();
+  await runEnrollmentBackfillPass();
   const personal = await getUserEnrollment(userId);
   const org = await getOrgEnrollment(organizationId, userId);
   assert.ok(personal?.virtualKeyId, "personal enrollment minted a real virtual key");
@@ -932,7 +965,7 @@ const t2Bill15: Tier2CellHandler = async (): Promise<Tier2CaseResult> => {
   ]);
 
   const before = await countUsageEvents();
-  runUsageImportPass();
+  await runUsageImportPass();
   const afterFirst = await countUsageEvents();
   assert.equal(afterFirst - before, 3, "all three seeded rows imported exactly once");
 
@@ -957,7 +990,7 @@ const t2Bill15: Tier2CellHandler = async (): Promise<Tier2CaseResult> => {
 
   // Restart / exactly-once: a repeated tick over the SAME overlap window (no new
   // spend seeded) creates no duplicate rows — dedup on litellm_request_id.
-  runUsageImportPass();
+  await runUsageImportPass();
   const afterSecond = await countUsageEvents();
   assert.equal(afterSecond, afterFirst, "a repeated import tick adds no duplicate rows (exactly-once)");
 
