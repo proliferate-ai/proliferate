@@ -88,8 +88,60 @@ export interface TestRunReportV3 {
  *     evidence recording its own cleanup failure).
  */
 
-/** One result's optional bounded evidence; today only the local-workspace turn. */
-export type CellEvidenceV1 = LocalWorkspaceTurnEvidenceV1;
+/**
+ * One result's optional bounded evidence. `local_workspace_turn` is the
+ * Tier-3 local-world proof; `tier2_billing` (PR 4) binds, per Tier-2 cell, the
+ * asserted ruled policy values, safe Stripe object/test-clock ids, and ledger
+ * deltas. Each kind is validated by its own kind-scoped function; a kind never
+ * touches another kind's validation (extension-contract rule).
+ */
+export type CellEvidenceV1 = LocalWorkspaceTurnEvidenceV1 | Tier2BillingEvidenceV1;
+
+/**
+ * ── Tier-2 billing evidence (PR 4) ─────────────────────────────────────────
+ *
+ * Bounded and secret-free BY CONSTRUCTION: asserted ruled policy values as
+ * finite non-negative numbers, safe Stripe test-mode object/test-clock ids as
+ * safe tokens, integer ledger row-count deltas. No free text, no credentials,
+ * no local paths. Full validator/sanitizer contract in BRIEF §2 — the validator
+ * body is owned by workstream D (`validateTier2BillingEvidence` below is the
+ * kind-scoped seam).
+ */
+export interface Tier2BillingEvidenceV1 {
+  kind: "tier2_billing";
+  /** The authoritative manifest case id, e.g. "T2-BILL-2" (safe token). */
+  manifest_id: string;
+  /** The Server under test's VERSION (safe token). */
+  server_version: string;
+  billing_mode: "enforce" | "observe" | "off";
+  /** Ruled policy values THIS case asserted; every present value is finite >= 0. */
+  asserted_policy: {
+    free_grant_usd?: number;
+    llm_per_seat_usd?: number;
+    compute_per_seat_usd?: number;
+    compute_margin_multiplier?: number;
+    topup_pack_usd?: number;
+    topup_margin_pct?: number;
+    topup_trigger_usd?: number;
+    overage_cap_usd_per_org_month?: number;
+  };
+  /** Safe Stripe test-mode identifiers this case created (never secrets). */
+  stripe: {
+    /** tc_… ; sorted ascending, unique, bounded. */
+    test_clock_ids: string[];
+    /** sub_/cus_/in_/evt_/pi_… ; sorted ascending, unique, bounded. */
+    object_ids: string[];
+  };
+  /** Billing-ledger row-count deltas this case produced (non-negative integers). */
+  ledger: {
+    grants_delta: number;
+    seat_adjustments_delta: number;
+    usage_exports_delta: number;
+    llm_events_delta: number;
+    webhook_receipts_delta: number;
+    holds_delta: number;
+  };
+}
 
 export interface LocalWorkspaceTurnEvidenceV1 {
   kind: "local_workspace_turn";
@@ -682,9 +734,9 @@ function validateCellEvidence(result: FinalCellResultV2): void {
   }
   const evidence = result.evidence;
   if (evidence === null) {
-    if (result.status === "green" && result.scenario_id === "LOCAL-WORLD-SMOKE-1") {
+    if (result.status === "green" && scenarioRequiresGreenEvidence(result.scenario_id)) {
       throw new ReportValidationError(
-        `Green result "${result.cell_id}" for LOCAL-WORLD-SMOKE-1 requires complete evidence.`,
+        `Green result "${result.cell_id}" for ${result.scenario_id} requires complete evidence.`,
       );
     }
     return;
@@ -693,6 +745,13 @@ function validateCellEvidence(result: FinalCellResultV2): void {
     throw new ReportValidationError(`Result "${result.cell_id}" evidence must be an object or null.`);
   }
   const where = `Result "${result.cell_id}" evidence`;
+  // Kind-scoped dispatch: each kind validates in its own function and never
+  // touches another kind's rules (extension-contract). Tier-2 billing evidence
+  // is validated by workstream D's `validateTier2BillingEvidence`.
+  if ((evidence as { kind?: unknown }).kind === "tier2_billing") {
+    validateTier2BillingEvidence(where, evidence as Tier2BillingEvidenceV1, result.status);
+    return;
+  }
   requireExactKeys(evidence, LOCAL_WORKSPACE_TURN_EVIDENCE_KEYS, where);
   if (evidence.kind !== "local_workspace_turn") {
     throw new ReportValidationError(`${where}.kind is unknown.`);
@@ -809,6 +868,141 @@ function validateCleanupEvidence(
  * `[REDACTED]`-bearing string here, which the safe-token/hash patterns above
  * then reject rather than silently persisting.
  */
+/**
+ * Scenario ids whose GREEN cells must carry complete evidence (a green cell
+ * with `evidence: null` is rejected). Kind/id-scoped allowlist — LOCAL-WORLD
+ * proof plus the PR-4 Tier-2 scenarios (BRIEF §2/§7). Extend here, not by
+ * touching another kind's validation.
+ */
+const GREEN_EVIDENCE_REQUIRED_SCENARIOS: ReadonlySet<string> = new Set([
+  "LOCAL-WORLD-SMOKE-1",
+  "T2-BILL",
+  "T2-AUTH-ORG",
+]);
+
+function scenarioRequiresGreenEvidence(scenarioId: string): boolean {
+  return GREEN_EVIDENCE_REQUIRED_SCENARIOS.has(scenarioId);
+}
+
+const TIER2_BILLING_EVIDENCE_KEYS = [
+  "kind",
+  "manifest_id",
+  "server_version",
+  "billing_mode",
+  "asserted_policy",
+  "stripe",
+  "ledger",
+] as const;
+
+const TIER2_ASSERTED_POLICY_KEYS = [
+  "free_grant_usd",
+  "llm_per_seat_usd",
+  "compute_per_seat_usd",
+  "compute_margin_multiplier",
+  "topup_pack_usd",
+  "topup_margin_pct",
+  "topup_trigger_usd",
+  "overage_cap_usd_per_org_month",
+] as const;
+
+const TIER2_LEDGER_KEYS = [
+  "grants_delta",
+  "seat_adjustments_delta",
+  "usage_exports_delta",
+  "llm_events_delta",
+  "webhook_receipts_delta",
+  "holds_delta",
+] as const;
+
+const MAX_TIER2_TEST_CLOCK_IDS = 20;
+const MAX_TIER2_OBJECT_IDS = 50;
+
+/**
+ * Kind-scoped validator for `Tier2BillingEvidenceV1`:
+ *   - `requireExactKeys` at top / `asserted_policy` / `stripe` / `ledger`;
+ *   - `manifest_id` + `server_version` via `requireSafeEvidenceToken`;
+ *   - `billing_mode` in {enforce,observe,off};
+ *   - every present `asserted_policy` value: finite number >= 0 (the exact
+ *     ruled number is asserted by the cell against the product, not here);
+ *   - `stripe.test_clock_ids` (<= MAX_TIER2_TEST_CLOCK_IDS) and
+ *     `stripe.object_ids` (<= MAX_TIER2_OBJECT_IDS): safe tokens, sorted
+ *     ascending, unique, secret-free;
+ *   - every `ledger.*` delta: `requireNonNegativeInteger`.
+ * Green completeness is enforced upstream (a green Tier-2 cell with null
+ * evidence is already rejected via `scenarioRequiresGreenEvidence`).
+ */
+function validateTier2BillingEvidence(
+  where: string,
+  evidence: Tier2BillingEvidenceV1,
+  _status: FinalTestStatus,
+): void {
+  requireExactKeys(evidence, TIER2_BILLING_EVIDENCE_KEYS, where);
+  if (evidence.kind !== "tier2_billing") {
+    throw new ReportValidationError(`${where}.kind is unknown.`);
+  }
+  requireSafeEvidenceToken(`${where}.manifest_id`, evidence.manifest_id);
+  requireSafeEvidenceToken(`${where}.server_version`, evidence.server_version);
+  if (evidence.billing_mode !== "enforce" && evidence.billing_mode !== "observe" && evidence.billing_mode !== "off") {
+    throw new ReportValidationError(`${where}.billing_mode must be one of enforce|observe|off.`);
+  }
+
+  const policy = evidence.asserted_policy;
+  if (typeof policy !== "object" || policy === null || Array.isArray(policy)) {
+    throw new ReportValidationError(`${where}.asserted_policy must be an object.`);
+  }
+  const presentPolicyKeys = Object.keys(policy);
+  for (const key of presentPolicyKeys) {
+    if (!(TIER2_ASSERTED_POLICY_KEYS as readonly string[]).includes(key)) {
+      throw new ReportValidationError(`${where}.asserted_policy has an undeclared field "${key}".`);
+    }
+  }
+  for (const key of presentPolicyKeys as (keyof typeof policy)[]) {
+    const value = policy[key];
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+      throw new ReportValidationError(`${where}.asserted_policy.${key} must be a finite number >= 0.`);
+    }
+  }
+
+  const stripe = evidence.stripe;
+  if (typeof stripe !== "object" || stripe === null || Array.isArray(stripe)) {
+    throw new ReportValidationError(`${where}.stripe must be an object.`);
+  }
+  requireExactKeys(stripe, ["test_clock_ids", "object_ids"], `${where}.stripe`);
+  validateSortedUniqueSafeTokenArray(`${where}.stripe.test_clock_ids`, stripe.test_clock_ids, MAX_TIER2_TEST_CLOCK_IDS);
+  validateSortedUniqueSafeTokenArray(`${where}.stripe.object_ids`, stripe.object_ids, MAX_TIER2_OBJECT_IDS);
+
+  const ledger = evidence.ledger;
+  if (typeof ledger !== "object" || ledger === null || Array.isArray(ledger)) {
+    throw new ReportValidationError(`${where}.ledger must be an object.`);
+  }
+  requireExactKeys(ledger, TIER2_LEDGER_KEYS, `${where}.ledger`);
+  for (const key of TIER2_LEDGER_KEYS) {
+    requireNonNegativeInteger(`${where}.ledger.${key}`, ledger[key]);
+  }
+}
+
+function validateSortedUniqueSafeTokenArray(where: string, value: unknown, cap: number): void {
+  if (!Array.isArray(value)) {
+    throw new ReportValidationError(`${where} must be an array.`);
+  }
+  if (value.length > cap) {
+    throw new ReportValidationError(`${where} exceeds the bounded cap of ${cap}.`);
+  }
+  const seen = new Set<string>();
+  let previous: string | undefined;
+  for (const [index, id] of value.entries()) {
+    requireSafeEvidenceToken(`${where}[${index}]`, id);
+    if (seen.has(id)) {
+      throw new ReportValidationError(`${where} has a duplicate entry.`);
+    }
+    seen.add(id);
+    if (previous !== undefined && id < previous) {
+      throw new ReportValidationError(`${where} must be sorted ascending.`);
+    }
+    previous = id;
+  }
+}
+
 export function sanitizeCellEvidence(
   evidence: CellEvidenceV1 | null,
   secretValues: readonly string[],
@@ -817,6 +1011,20 @@ export function sanitizeCellEvidence(
     return null;
   }
   const clean = (value: string): string => boundMessage(redactUrlCredentials(redactSecrets(value, secretValues)));
+  if (evidence.kind === "tier2_billing") {
+    // All string fields are safe tokens by construction; clean them as a
+    // fail-closed backstop (numbers pass through untouched).
+    return {
+      ...evidence,
+      manifest_id: clean(evidence.manifest_id),
+      server_version: clean(evidence.server_version),
+      stripe: {
+        ...evidence.stripe,
+        test_clock_ids: evidence.stripe.test_clock_ids.map(clean),
+        object_ids: evidence.stripe.object_ids.map(clean),
+      },
+    };
+  }
   return {
     ...evidence,
     artifact_ids: evidence.artifact_ids.map(clean),

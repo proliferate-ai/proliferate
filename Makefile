@@ -913,6 +913,36 @@ qualification-local-workspace:
 		--run-id "$$run_id" --shard-id "$$shard_id" \
 		--output-dir "$$run_dir/evidence"
 
+# Tier-2 strict billing/auth qualification (PR 4). Boots the shared BootedStack
+# (real Server + Postgres + Redis + real Stripe test mode; AnyHarness runtime
+# skipped) ONCE and runs the authoritative T2-BILL-1..15 + representative
+# T2-AUTH-ORG cells through the SAME tests/release aggregate command as tier 3.
+# No candidate build (Tier-2 boots from source) — `--source-candidate`
+# synthesizes the Server identity for the strict report. Selected financial
+# cells require a Stripe `sk_test_` key (env or `stripe config`); a missing key
+# in trusted CI is a FAILURE (fail-closed), never skip-as-success.
+#
+# PROFILE=<unique-name>       Names this run.
+# BEHAVIOR=diagnostic|strict
+QUALIFICATION_TIER2_BASE_DIR ?= $(CURDIR)/tests/release/.output/tier2
+qualification-tier2:
+	@test -n "$(BEHAVIOR)" || { echo "BEHAVIOR=<diagnostic|strict> is required."; exit 1; }
+	pnpm install --silent
+	pnpm exec playwright install --with-deps chromium
+	@run_id="qt2-$${PROFILE:-$$(whoami)}"; \
+	shard_id="1"; \
+	run_dir="$(QUALIFICATION_TIER2_BASE_DIR)/$$run_id/$$shard_id"; \
+	mkdir -p "$$run_dir/evidence"; \
+	cd tests/release && TIER2_INTENT_SKIP_RUNTIME=1 pnpm exec tsx src/cli/run.ts \
+		--behavior $(BEHAVIOR) \
+		--lane local \
+		--desktop web \
+		--agents claude \
+		--scenarios T2-BILL,T2-AUTH-ORG \
+		--source-candidate \
+		--run-id "$$run_id" --shard-id "$$shard_id" \
+		--output-dir "$$run_dir/evidence"
+
 test-cloud-ssh-worker:
 	@test -n "$(SSH_TARGET)" || { \
 		echo "SSH_TARGET is required, for example:"; \

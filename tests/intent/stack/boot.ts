@@ -372,6 +372,12 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
       serverEnv.E2B_API_KEY = "e2b_tier2_billing_boot_placeholder";
     }
     serverEnv.PRO_BILLING_ENABLED = "true";
+    // Deterministic billing: the Tier-2 cells (and the Playwright billing
+    // suites) drive the reconciler/accounting/gateway passes on demand
+    // out-of-process. Silence the server's periodic maintenance loops so a
+    // background tick never races or deadlocks with a test's own pass. A
+    // caller's extraServerEnv (applied last) can flip this back on.
+    serverEnv.RUN_BACKGROUND_WORKERS = "false";
     serverEnv.CLOUD_BILLING_MODE = s.billingMode;
     serverEnv.STRIPE_SECRET_KEY = s.secretKey;
     serverEnv.STRIPE_WEBHOOK_SECRET = s.webhookSecret;

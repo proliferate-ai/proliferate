@@ -752,11 +752,11 @@ test("validateReportV4 rejects an extra field on evidence or nested objects", ()
   assert.throws(() => validateReportV4(report), /undeclared or missing field/);
 
   const nested = validSmokeReportV4();
-  (nested.results[0].evidence!.litellm as unknown as Record<string, unknown>).extra = "x";
+  ((nested.results[0].evidence as LocalWorkspaceTurnEvidenceV1).litellm as unknown as Record<string, unknown>).extra = "x";
   assert.throws(() => validateReportV4(nested), /litellm has undeclared/);
 
   const cleanupExtra = validSmokeReportV4();
-  (cleanupExtra.results[0].evidence!.cleanup as unknown as Record<string, unknown>).extra = "x";
+  ((cleanupExtra.results[0].evidence as LocalWorkspaceTurnEvidenceV1).cleanup as unknown as Record<string, unknown>).extra = "x";
   assert.throws(() => validateReportV4(cleanupExtra), /cleanup has undeclared/);
 });
 
@@ -765,59 +765,59 @@ test("validateReportV4 rejects unsafe strings: paths and secret-like markers", (
   assert.throws(() => validateReportV4(leaked), /model_id is missing or unsafe/);
 
   const traversal = validSmokeReportV4();
-  traversal.results[0].evidence!.artifact_ids = ["server/../../etc/passwd"];
+  (traversal.results[0].evidence as LocalWorkspaceTurnEvidenceV1).artifact_ids = ["server/../../etc/passwd"];
   assert.throws(() => validateReportV4(traversal), /artifact_ids\[0\] is missing or unsafe/);
 
   const redactedLooking = validSmokeReportV4();
-  redactedLooking.results[0].evidence!.litellm.token_id_hash = "[REDACTED]";
+  (redactedLooking.results[0].evidence as LocalWorkspaceTurnEvidenceV1).litellm.token_id_hash = "[REDACTED]";
   assert.throws(() => validateReportV4(redactedLooking), /token_id_hash must be a lowercase 64-hex digest/);
 });
 
 test("validateReportV4 rejects invalid or inconsistent token counts", () => {
   const mismatched = validSmokeReportV4();
-  mismatched.results[0].evidence!.litellm.total_tokens = 999;
+  (mismatched.results[0].evidence as LocalWorkspaceTurnEvidenceV1).litellm.total_tokens = 999;
   assert.throws(() => validateReportV4(mismatched), /token counts are internally inconsistent/);
 
   const zero = validSmokeReportV4();
-  zero.results[0].evidence!.litellm.prompt_tokens = 0;
+  (zero.results[0].evidence as LocalWorkspaceTurnEvidenceV1).litellm.prompt_tokens = 0;
   assert.throws(() => validateReportV4(zero), /prompt_tokens must be a positive integer/);
 
   const negative = validSmokeReportV4();
-  negative.results[0].evidence!.litellm.completion_tokens = -1;
+  (negative.results[0].evidence as LocalWorkspaceTurnEvidenceV1).litellm.completion_tokens = -1;
   assert.throws(() => validateReportV4(negative), /completion_tokens must be a positive integer/);
 });
 
 test("validateReportV4 rejects non-positive spend", () => {
   const zeroSpend = validSmokeReportV4();
-  zeroSpend.results[0].evidence!.litellm.spend_usd = 0;
+  (zeroSpend.results[0].evidence as LocalWorkspaceTurnEvidenceV1).litellm.spend_usd = 0;
   assert.throws(() => validateReportV4(zeroSpend), /spend_usd must be positive/);
 
   const negativeSpend = validSmokeReportV4();
-  negativeSpend.results[0].evidence!.litellm.spend_usd = -0.01;
+  (negativeSpend.results[0].evidence as LocalWorkspaceTurnEvidenceV1).litellm.spend_usd = -0.01;
   assert.throws(() => validateReportV4(negativeSpend), /spend_usd must be positive/);
 });
 
 test("validateReportV4 rejects unsorted/duplicate/oversized request_ids", () => {
   const unsorted = validSmokeReportV4();
-  unsorted.results[0].evidence!.litellm.request_ids = ["req-2", "req-1"];
+  (unsorted.results[0].evidence as LocalWorkspaceTurnEvidenceV1).litellm.request_ids = ["req-2", "req-1"];
   assert.throws(() => validateReportV4(unsorted), /must be sorted ascending/);
 
   const duplicated = validSmokeReportV4();
-  duplicated.results[0].evidence!.litellm.request_ids = ["req-1", "req-1"];
+  (duplicated.results[0].evidence as LocalWorkspaceTurnEvidenceV1).litellm.request_ids = ["req-1", "req-1"];
   assert.throws(() => validateReportV4(duplicated), /duplicate entry/);
 
   const oversized = validSmokeReportV4();
-  oversized.results[0].evidence!.litellm.request_ids = Array.from({ length: 51 }, (_, i) => `req-${String(i).padStart(3, "0")}`);
+  (oversized.results[0].evidence as LocalWorkspaceTurnEvidenceV1).litellm.request_ids = Array.from({ length: 51 }, (_, i) => `req-${String(i).padStart(3, "0")}`);
   assert.throws(() => validateReportV4(oversized), /exceeds the bounded cap/);
 });
 
 test("validateReportV4 rejects a green cell whose cleanup has a false deletion flag or a failure", () => {
   const incomplete = validSmokeReportV4();
-  incomplete.results[0].evidence!.cleanup.virtual_key_deleted = false;
+  (incomplete.results[0].evidence as LocalWorkspaceTurnEvidenceV1).cleanup.virtual_key_deleted = false;
   assert.throws(() => validateReportV4(incomplete), /incomplete on a green result/);
 
   const failed = validSmokeReportV4();
-  failed.results[0].evidence!.cleanup.failed = 1;
+  (failed.results[0].evidence as LocalWorkspaceTurnEvidenceV1).cleanup.failed = 1;
   assert.throws(() => validateReportV4(failed), /cleanup.failed must be 0/);
 });
 
@@ -835,11 +835,11 @@ test("sanitizeCellEvidence redacts secrets so validation then rejects the mangle
   const secret = "sk-live-leaked";
   const evidence: CellEvidenceV1 = validCellEvidence({ model_id: `claude-haiku-4-5-${secret}` });
   const sanitized = sanitizeCellEvidence(evidence, [secret]);
-  assert.ok(sanitized && sanitized.model_id.includes("[REDACTED]"));
+  assert.ok(sanitized && (sanitized as LocalWorkspaceTurnEvidenceV1).model_id.includes("[REDACTED]"));
   assert.throws(
     () =>
       validateReportV4(
-        validSmokeReportV4({ model_id: sanitized!.model_id }),
+        validSmokeReportV4({ model_id: (sanitized as LocalWorkspaceTurnEvidenceV1).model_id }),
       ),
     /model_id is missing or unsafe/,
   );

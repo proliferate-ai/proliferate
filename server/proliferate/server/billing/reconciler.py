@@ -291,10 +291,6 @@ async def run_billing_reconcile_pass() -> None:
     async def _run(_db: object) -> None:
         await run_billing_accounting_pass()
 
-        provider = get_configured_sandbox_provider()
-        states = await provider.list_sandbox_states()
-        states_by_external_id = {state.external_sandbox_id: state for state in states}
-
         snapshots_by_subject: dict[UUID, BillingSnapshot] = {}
         recorded_hold_decision_subjects: set[UUID] = set()
         # Org budget-limit enforcement caches (spec §4.2), scoped to this pass:
@@ -305,7 +301,20 @@ async def run_billing_reconcile_pass() -> None:
         recorded_limit_decisions: set[tuple[UUID, UUID | None, str]] = set()
         now = utcnow()
         open_segments = await list_all_open_usage_segments()
+        # The provider is only needed to reconcile OPEN sandboxes against
+        # live provider state; with nothing open there is nothing to list, so
+        # skip the provider round-trip entirely. This also keeps the pass from
+        # requiring a configured sandbox provider when it has no open segments
+        # to reconcile (e.g. accounting-only runs).
+        provider = get_configured_sandbox_provider() if open_segments else None
+        states = await provider.list_sandbox_states() if provider is not None else []
+        states_by_external_id = {state.external_sandbox_id: state for state in states}
         for segment in open_segments:
+            # open_segments is non-empty here, so the provider was resolved
+            # above. Not an `assert`: those vanish under `python -O`, and this
+            # invariant guards real reconciliation work.
+            if provider is None:
+                raise RuntimeError("sandbox provider unresolved with open usage segments")
             billing_snapshot = snapshots_by_subject.get(segment.billing_subject_id)
             if billing_snapshot is None:
                 billing_snapshot = await get_billing_snapshot_for_subject(
@@ -387,6 +396,8 @@ async def _billing_reconciler_loop() -> None:
 
 def start_billing_reconciler() -> None:
     global _reconciler_task
+    if not settings.run_background_workers:
+        return
     if _reconciler_task is not None and not _reconciler_task.done():
         return
     _reconciler_task = asyncio.create_task(_billing_reconciler_loop())

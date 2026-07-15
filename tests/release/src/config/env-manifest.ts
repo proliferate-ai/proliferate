@@ -397,6 +397,29 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     secret: false,
     lanes: ["local"],
   },
+  {
+    name: "TIER2_BILLING_STRIPE_SECRET_KEY",
+    description:
+      "Stripe TEST secret key (sk_test_…) the Tier-2 billing scenarios' financial cells use via the real " +
+      "Stripe test-mode API (customers, subscriptions, invoices, test clocks). Resolved at boot by " +
+      "bootBillingStack (this env, then STRIPE_SECRET_KEY/STRIPE_TEST_SECRET_KEY, then `stripe config " +
+      "--list`); an unresolved key returns every financial cell BLOCKED (never green). Declared here so " +
+      "its value is redacted from the persisted report; NOT a scenario requiredEnv (the local `stripe " +
+      "config` fallback must keep working). Never live mode.",
+    whereItLives:
+      "Local: the developer's Stripe CLI test-mode config, or ~/.proliferate-local/dev/*.env. " +
+      "CI: the GitHub `Qualification` environment's Stripe test secret.",
+    secret: true,
+  },
+  {
+    name: "TIER2_BILLING_STRIPE_WEBHOOK_SECRET",
+    description:
+      "The webhook signing secret (whsec_…) the Tier-2 billing harness self-signs deliveries with and the " +
+      "booted server verifies against. Generated per boot by bootBillingStack and exported to process.env; " +
+      "declared here so it is redacted from the persisted report. Not a scenario requiredEnv.",
+    whereItLives: "Generated per run by tests/intent/stack/billing-boot.ts; never committed.",
+    secret: true,
+  },
 ] as const;
 
 export const DEFAULT_LOCAL_RUNTIME_URL = "http://127.0.0.1:8542";

@@ -128,6 +128,14 @@ interface ScenarioBase {
   lanes: readonly RuntimeLane[];
   /** Env var names (from src/config/env-manifest.ts) every cell of this scenario needs. */
   requiredEnv: readonly string[];
+  /**
+   * True only for deterministic Tier-2 scenarios that legitimately boot the
+   * Server from source. `--source-candidate` refuses any selection containing
+   * a scenario without this marker, so a strict Tier-3/Tier-4 invocation can
+   * never substitute a synthetic source identity for the exact
+   * candidate-build map.
+   */
+  sourceBacked?: true;
 }
 
 /**

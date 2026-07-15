@@ -74,6 +74,32 @@ class LlmTopupRunResult:
     eligible: int
     topped_up: int
     skipped: int
+    # Auto-top-up admin-alert intents recorded this tick (one per auto top-up).
+    # The real Resend send is deferred (founder ruling); this only records the
+    # intent, so ``alerts_recorded == topped_up`` on every tick.
+    alerts_recorded: int = 0
+
+
+# Structured-log marker for the deferred admin-alert send. A downstream
+# notifications worker (not PR 4) turns these intents into real emails.
+AUTO_TOPUP_ADMIN_ALERT_MARKER = "AUTO_TOPUP_ADMIN_ALERT_INTENT"
+
+
+def _record_topup_admin_alert_intent(*, billing_subject_id: UUID, invoice_id: str) -> None:
+    """Record the intent to alert org admins about an auto top-up (no send).
+
+    Ruled 2026-07-14: alert org admins on every auto top-up. PR 4 records the
+    intent deterministically; the outbound Resend send + template is deferred to
+    the notifications work, so this function has NO email dependency.
+    """
+    logger.info(
+        AUTO_TOPUP_ADMIN_ALERT_MARKER,
+        extra={
+            "billing_subject_id": str(billing_subject_id),
+            "stripe_invoice_id": invoice_id,
+            "alert_audience": "org_admins",
+        },
+    )
 
 
 def topups_enabled() -> bool:
@@ -317,6 +343,7 @@ async def run_llm_topups(
     eligible = 0
     topped_up = 0
     skipped = 0
+    alerts_recorded = 0
     after: UUID | None = None
     while True:
         subject_ids = await agent_gateway_store.list_billing_subject_ids_with_active_enrollments(
@@ -380,6 +407,11 @@ async def run_llm_topups(
                     "stripe_invoice_id": invoice_id,
                 },
             )
+            _record_topup_admin_alert_intent(
+                billing_subject_id=billing_subject_id,
+                invoice_id=invoice_id,
+            )
+            alerts_recorded += 1
         if len(subject_ids) < _SUBJECT_SCAN_PAGE_SIZE:
             break
         after = subject_ids[-1]
@@ -388,6 +420,7 @@ async def run_llm_topups(
         eligible=eligible,
         topped_up=topped_up,
         skipped=skipped,
+        alerts_recorded=alerts_recorded,
     )
 
 

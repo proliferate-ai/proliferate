@@ -212,7 +212,7 @@ class TestBillingApi:
             "managedCloudOverageEnabled": False,
             "managedCloudOverageCapCents": None,
             "managedCloudOverageUsedCents": 0,
-            "overagePricePerHourCents": 200,
+            "overagePricePerHourCents": 300,  # $2.00 E2B list x 1.5 (ruled)
             "activeEnvironmentLimit": settings.cloud_concurrent_sandbox_limit,
             "repoEnvironmentLimit": settings.cloud_free_repo_limit,
             "byoRuntimeAllowed": False,
@@ -257,7 +257,7 @@ class TestBillingApi:
             "managedCloudOverageEnabled": False,
             "managedCloudOverageCapCents": None,
             "managedCloudOverageUsedCents": 0,
-            "overagePricePerHourCents": 200,
+            "overagePricePerHourCents": 300,  # $2.00 E2B list x 1.5 (ruled)
             "activeEnvironmentLimit": settings.cloud_concurrent_sandbox_limit,
             "repoEnvironmentLimit": settings.cloud_free_repo_limit,
             "byoRuntimeAllowed": False,
@@ -1074,8 +1074,8 @@ class TestBillingApi:
         payload = response.json()
         assert payload["plan"] == "pro"
         assert payload["billableSeatCount"] == 2
-        assert payload["includedManagedCloudHours"] == 40.0
-        assert payload["managedCloudOverageCapCents"] == 4000
+        assert payload["includedManagedCloudHours"] == 10.0  # 2 seats * 5 h/seat (ruled)
+        assert payload["managedCloudOverageCapCents"] == 5000
 
     @pytest.mark.asyncio
     async def test_org_seat_adjustments_prorate_grants_and_resync_same_member(

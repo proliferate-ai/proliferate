@@ -536,7 +536,7 @@ async def test_manual_unlimited_with_pro_subscription_does_not_export_overage(
 
 
 @pytest.mark.asyncio
-async def test_zero_pro_overage_cap_writes_off_uncovered_usage(
+async def test_zero_pro_overage_cap_pauses_without_auto_writeoff(
     db_session: AsyncSession,
     test_engine: Any,
     monkeypatch: pytest.MonkeyPatch,
@@ -604,11 +604,11 @@ async def test_zero_pro_overage_cap_writes_off_uncovered_usage(
         .scalars()
         .all()
     )
-    assert len(exports) == 1
-    assert exports[0].status == BILLING_USAGE_EXPORT_STATUS_WRITTEN_OFF
-    assert exports[0].meter_quantity_cents == 0
-    assert exports[0].cap_cents_snapshot == 0
-    assert exports[0].writeoff_reason == "overage_cap_exhausted"
+    # Ruled 2026-07-14: at the cap, compute PAUSES rather than auto-writing-off
+    # the over-cap usage. No export (billable or written-off) is created; the
+    # snapshot emits WORKSPACE_ACTION_BLOCK_KIND_CAP_EXHAUSTED elsewhere so
+    # compute stops. Write-offs are operator-only.
+    assert exports == []
     cursor = (
         await db_session.execute(
             select(BillingUsageCursor).where(BillingUsageCursor.usage_segment_id == segment_id)
