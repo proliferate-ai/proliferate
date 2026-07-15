@@ -74,8 +74,13 @@ fn parse_ordinary_or_rename(
     entries: &[&str],
     idx: &mut usize,
 ) -> Option<GitChangedFile> {
-    let parts: Vec<&str> = entry.splitn(9, ' ').collect();
-    if parts.len() < 9 {
+    // Porcelain v2 type-2 (rename/copy) records carry one extra field —
+    // `<X><score>`, e.g. "R85" — between the shared header fields and the
+    // path, so they split into 10 fields where type-1 records split into 9.
+    let is_rename = entry.starts_with("2 ");
+    let field_count = if is_rename { 10 } else { 9 };
+    let parts: Vec<&str> = entry.splitn(field_count, ' ').collect();
+    if parts.len() < field_count {
         return None;
     }
 
@@ -83,9 +88,7 @@ fn parse_ordinary_or_rename(
     let index_char = xy.as_bytes().first().copied().unwrap_or(b'.');
     let worktree_char = xy.as_bytes().get(1).copied().unwrap_or(b'.');
 
-    let is_rename = entry.starts_with("2 ");
-
-    let path = parts[8].to_string();
+    let path = parts[field_count - 1].to_string();
 
     let old_path = if is_rename {
         *idx += 1;

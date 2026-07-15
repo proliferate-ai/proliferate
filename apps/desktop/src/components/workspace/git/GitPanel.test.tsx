@@ -1,9 +1,21 @@
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { createElement, type ReactElement } from "react";
+import { renderToStaticMarkup as renderReactToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ProductHost } from "@proliferate/product-client/host/product-host";
+import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import { GitPanel } from "./GitPanel";
 import { GitPanelHeader } from "./GitPanelHeader";
 import { GitReviewTargetSelector } from "./GitReviewTargetSelector";
+
+const webTestHost = { desktop: null } as ProductHost;
+
+// Expanded review rows render the full diff body (wrap context menu included),
+// which requires a ProductHost above it.
+function renderToStaticMarkup(ui: ReactElement) {
+  return renderReactToStaticMarkup(
+    createElement(ProductHostProvider, { host: webTestHost, children: ui }),
+  );
+}
 
 const mockGitPanelState = vi.hoisted(() => vi.fn());
 const gitDiffQuery = vi.hoisted(() => ({
@@ -126,33 +138,32 @@ describe("GitPanel", () => {
     };
   });
 
-  it("renders changed files as right-sidebar diff review cards", () => {
+  it("renders changed files as one flat review document, expanded by default", () => {
     const html = renderToStaticMarkup(createElement(GitPanel));
 
-    expect(html).toContain("Unstaged");
+    // Single target dropdown (working tree default) instead of filter tabs.
+    expect(html).toContain("Working tree");
     expect(html).toContain(">1<");
-    expect(html).not.toContain("Working tree");
+    expect(html).not.toContain("Show files");
     expect(html).toContain("Git review options");
-    expect(html).toContain("Show files");
-    expect(html).toContain("data-diff-surface=\"sidebar\"");
-    expect(html).toContain("codex-review-diff-card");
+    // Flat document sections replace the card grid; no section headers.
+    expect(html).toContain("data-review-file-section");
+    expect(html).not.toContain("codex-review-diff-card");
     expect(html).toContain("data-review-path=\"apps/desktop/src/components/workspace/git/GitPanel.tsx\"");
+    expect(html).toContain("data-git-review-document=\"\"");
     expect(html).toContain("id=\"review-diffs-collapsed\"");
     expect(html).toContain("data-app-action-review-scroll=\"\"");
     expect(html).toContain("data-thread-find-target=\"review\"");
     expect(html).toContain("data-app-action-review-metrics-probe=\"\"");
     expect(html).toContain("[container-name:review-header]");
-    expect(html).toContain("grid-cols-[minmax(0,1fr)_auto]");
-    expect(html).toContain("min-h-10");
-    expect(html).toContain("px-2 pb-3");
-    expect(html).toContain("pt-2");
     expect(html).not.toContain("No diff available");
     expect(html).toContain("GitPanel.tsx");
-    expect(html).toContain("aria-expanded=\"false\"");
-    expect(html).not.toContain("new line");
+    // Expanded by default: the diff body renders and the fetch is enabled.
+    expect(html).toContain("aria-expanded=\"true\"");
+    expect(html).toContain("new line");
     expect(gitDiffQuery.calls[0]).toMatchObject({
       path: "apps/desktop/src/components/workspace/git/GitPanel.tsx",
-      enabled: false,
+      enabled: true,
     });
   });
 
@@ -166,14 +177,12 @@ describe("GitPanel", () => {
       baseRef: "origin/main",
       layout: "unified" as const,
       wrapLongLines: true,
-      fileTreeOpen: false,
       allFilesCollapsed: false,
       reviewEntries: [],
       onFilterChange: vi.fn(),
       onBaseRefChange: vi.fn(),
       onToggleLayout: vi.fn(),
       onToggleWrap: vi.fn(),
-      onToggleFileTree: vi.fn(),
       onToggleAllFiles: vi.fn(),
       onFocusFile: vi.fn(),
       onRefresh: vi.fn(),
@@ -193,11 +202,7 @@ describe("GitPanel", () => {
     );
 
     expect(unstagedHtml).not.toContain("origin/main");
-    expect(unstagedHtml).toContain("min-h-10");
     expect(branchHtml).toContain("origin/main");
-    expect(branchHtml).toContain("min-h-10");
-    expect(branchHtml).not.toContain("min-h-[68px]");
-    expect(branchHtml).not.toContain("col-span-2");
   });
 
   it("renders the active changes filter as plain text until hover or open", () => {
@@ -209,9 +214,8 @@ describe("GitPanel", () => {
         isRuntimeReady: true,
         branchRefs: [],
         baseRef: null,
-        layout: "unified",
+          layout: "unified",
         wrapLongLines: false,
-        fileTreeOpen: false,
         allFilesCollapsed: false,
         reviewEntries: [],
         changesFilter: "unstaged",
@@ -219,11 +223,10 @@ describe("GitPanel", () => {
         onBaseRefChange: vi.fn(),
         onToggleLayout: vi.fn(),
         onToggleWrap: vi.fn(),
-        onToggleFileTree: vi.fn(),
         onToggleAllFiles: vi.fn(),
         onFocusFile: vi.fn(),
         onRefresh: vi.fn(),
-      }),
+        }),
     );
 
     expect(html).toContain("border-transparent bg-transparent");
@@ -253,17 +256,13 @@ describe("GitPanel", () => {
     expect(html).not.toContain("data-[state=open]:bg-sidebar-accent");
   });
 
-  it("keeps the Changes header options before the sidebar controls", () => {
+  it("exposes collapse-all, jump-to-file, and options controls without the tree overlay", () => {
     const html = renderToStaticMarkup(createElement(GitPanel));
-    const layoutIndex = html.indexOf("Use split diff");
-    const optionsIndex = html.indexOf("Git review options");
-    const sidebarIndex = html.indexOf("Show files");
 
-    expect(layoutIndex).toBeGreaterThanOrEqual(0);
-    expect(optionsIndex).toBeGreaterThanOrEqual(0);
-    expect(sidebarIndex).toBeGreaterThanOrEqual(0);
-    expect(optionsIndex).toBeLessThan(layoutIndex);
-    expect(layoutIndex).toBeLessThan(sidebarIndex);
+    expect(html).toContain("Collapse all diffs");
+    expect(html).toContain("Jump to file");
+    expect(html).toContain("Git review options");
+    expect(html).not.toContain("Show files");
   });
 
   it("renders a compact empty state when there are no changes", () => {
@@ -275,8 +274,8 @@ describe("GitPanel", () => {
 
     const html = renderToStaticMarkup(createElement(GitPanel));
 
-    expect(html).toContain("No unstaged changes");
-    expect(html).toContain("Edit files in the workspace and they will appear here.");
+    expect(html).toContain("Working tree clean");
+    expect(html).toContain("No unstaged or staged changes in this workspace.");
     expect(html).toContain("Refresh");
   });
 
@@ -293,9 +292,9 @@ describe("GitPanel", () => {
 
     const html = renderToStaticMarkup(createElement(GitPanel));
 
-    expect(html).toContain("No unstaged changes");
-    expect(html).toContain("Edit files in the workspace and they will appear here.");
-    expect(html).not.toContain("data-diff-surface=\"sidebar\"");
+    expect(html).toContain("Working tree clean");
+    expect(html).toContain("No unstaged or staged changes in this workspace.");
+    expect(html).not.toContain("data-review-file-section");
   });
 
   it("renders last-turn current diffs without stage actions", () => {
@@ -330,9 +329,9 @@ describe("GitPanel", () => {
     expect(html).not.toContain("Stage README.md");
   });
 
-  it("starts zero-stat rows collapsed until the user expands them", () => {
-    const files = Array.from({ length: 4 }, (_, index) => {
-      const path = index === 3 ? "src/unknown-stat.ts" : `src/file-${index}.ts`;
+  it("fetches expanded diffs up to the concurrency cap and defers the rest", () => {
+    const files = Array.from({ length: 7 }, (_, index) => {
+      const path = `src/file-${index}.ts`;
       const diff = {
         key: `:${path}:modified`,
         path,
@@ -340,8 +339,8 @@ describe("GitPanel", () => {
         displayPath: path,
         status: "modified",
         includedState: "excluded",
-        additions: index === 3 ? 0 : 1,
-        deletions: index === 3 ? 0 : 1,
+        additions: 1,
+        deletions: 1,
         binary: false,
       };
       return {
@@ -358,42 +357,31 @@ describe("GitPanel", () => {
       visibleChangedCount: files.length,
     }));
 
-    const html = renderToStaticMarkup(createElement(GitPanel));
+    renderToStaticMarkup(createElement(GitPanel));
 
-    expect(html).toContain("src/unknown-stat.ts");
-    expect(html).not.toContain("new line");
+    // Rows are expanded by default; the first batch fetches immediately and
+    // the tail waits for capacity (GIT_DIFF_FETCH_CONCURRENCY_LIMIT = 5).
     expect(gitDiffQuery.calls.map((call) => (call as { enabled?: boolean }).enabled))
-      .toEqual([false, false, false, false]);
+      .toEqual([true, true, true, true, true, false, false]);
   });
 
-  it("keeps collapsed changed-file rows visible until their diff is expanded", () => {
+  it("shows real counts on headers while a row's diff is still unfetched", () => {
     gitDiffQuery.state = {
-      data: {
-        patch: null,
-        additions: 0,
-        deletions: 0,
-        binary: false,
-        truncated: false,
-      },
+      data: null,
       error: null,
       isError: false,
-      isLoading: false,
+      isLoading: true,
     };
 
     const html = renderToStaticMarkup(createElement(GitPanel));
 
-    expect(html).toContain("Unstaged");
-    expect(html).not.toContain("No diff available");
-    expect(html).toContain("data-diff-surface=\"sidebar\"");
-    expect(html).toContain("GitPanel.tsx");
-    expect(html).toContain("aria-label=\"Modified\"");
-    expect(gitDiffQuery.calls[0]).toMatchObject({
-      path: "apps/desktop/src/components/workspace/git/GitPanel.tsx",
-      enabled: false,
-    });
+    // Status-list counts render even before the diff body arrives.
+    expect(html).toContain(">+3</span>");
+    expect(html).toContain(">-1</span>");
+    expect(html).toContain("Loading diff");
   });
 
-  it("does not render diff load errors before collapsed rows are expanded", () => {
+  it("renders diff load errors inline on expanded rows", () => {
     gitDiffQuery.state = {
       data: null,
       error: new Error("pathspec did not match any files"),
@@ -403,12 +391,9 @@ describe("GitPanel", () => {
 
     const html = renderToStaticMarkup(createElement(GitPanel));
 
-    expect(html).not.toContain("Diff unavailable: pathspec did not match any files");
-    expect(html).toContain("aria-expanded=\"false\"");
-    expect(gitDiffQuery.calls[0]).toMatchObject({
-      path: "apps/desktop/src/components/workspace/git/GitPanel.tsx",
-      enabled: false,
-    });
+    expect(html).toContain("Diff unavailable");
+    expect(html).toContain("pathspec did not match any files");
+    expect(html).toContain("aria-expanded=\"true\"");
   });
 
   it("does not auto-fetch oversized generated diffs on first render", () => {
@@ -445,38 +430,4 @@ describe("GitPanel", () => {
     });
   });
 
-  it("does not fetch file diffs before the user expands rows", () => {
-    const files = Array.from({ length: 4 }, (_, index) => {
-      const path = `src/file-${index}.ts`;
-      const diff = {
-        key: `:${path}:modified`,
-        path,
-        oldPath: null,
-        displayPath: path,
-        status: "modified",
-        includedState: "excluded",
-        additions: 1,
-        deletions: 1,
-        binary: false,
-      };
-      return {
-        ...diff,
-        currentDiff: diff,
-      };
-    });
-    mockGitPanelState.mockReturnValue(createGitPanelState({
-      sections: [{
-        scope: "unstaged",
-        label: "Unstaged",
-        files,
-      }],
-      visibleChangedCount: files.length,
-    }));
-
-    renderToStaticMarkup(createElement(GitPanel));
-
-    expect(gitDiffQuery.calls).toHaveLength(4);
-    expect(gitDiffQuery.calls.map((call) => (call as { enabled?: boolean }).enabled))
-      .toEqual([false, false, false, false]);
-  });
 });

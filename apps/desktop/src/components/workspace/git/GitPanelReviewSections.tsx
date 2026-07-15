@@ -1,10 +1,8 @@
 import type { AnyHarnessQueryTimingOptions } from "@anyharness/sdk-react";
 import { GitReviewFileRow } from "@/components/workspace/git/GitReviewFileRow";
-import { GitReviewSectionHeader } from "@/components/workspace/git/GitPanelReviewChrome";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import type {
   GitPanelMode,
-  GitPanelReviewScope,
   GitPanelSection,
 } from "@/lib/domain/workspaces/changes/git-panel-diff";
 import { gitReviewEntryForFile } from "@/lib/domain/workspaces/changes/git-review-entries";
@@ -12,85 +10,71 @@ import { gitReviewEntryForFile } from "@/lib/domain/workspaces/changes/git-revie
 interface GitPanelReviewSectionsProps {
   changesFilter: GitPanelMode;
   sections: readonly GitPanelSection[];
-  visibleSectionScopes: ReadonlySet<GitPanelReviewScope>;
-  collapsedSections: ReadonlySet<GitPanelReviewScope>;
   activeWorkspaceId: string | null;
   baseRef: string | null;
   layout: "unified" | "split";
   wrapLongLines: boolean;
-  effectiveCollapsedFiles: ReadonlySet<string>;
+  collapsedFiles: ReadonlySet<string>;
   isRuntimeReady: boolean;
   permittedDiffFetchKeys: ReadonlySet<string>;
   openFile: (path: string) => Promise<void>;
-  stagePath: (path: string) => Promise<unknown>;
-  unstagePath: (path: string) => Promise<unknown>;
-  onToggleSectionCollapsed: (scope: GitPanelReviewScope) => void;
   onToggleFileCollapsed: (key: string) => void;
   onDiffFetchSettled: (key: string) => void;
   diffTimingOptions?: AnyHarnessQueryTimingOptions;
   measurementOperationId?: MeasurementOperationId | null;
 }
 
+/**
+ * One flat review document: file sections from every scope stack in a single
+ * list with no section boxes or headers. In the composite working-tree view a
+ * partially staged file can appear twice (staged + unstaged diffs differ);
+ * the staged row carries a quiet "staged" chip to disambiguate.
+ */
 export function GitPanelReviewSections({
   changesFilter,
   sections,
-  visibleSectionScopes,
-  collapsedSections,
   activeWorkspaceId,
   baseRef,
   layout,
   wrapLongLines,
-  effectiveCollapsedFiles,
+  collapsedFiles,
   isRuntimeReady,
   permittedDiffFetchKeys,
   openFile,
-  stagePath,
-  unstagePath,
-  onToggleSectionCollapsed,
   onToggleFileCollapsed,
   onDiffFetchSettled,
   diffTimingOptions,
   measurementOperationId,
 }: GitPanelReviewSectionsProps) {
+  const isComposite = changesFilter === "working_tree_composite";
   return (
-    <>
-      {sections.map((section) => (
-        <div key={section.scope} className="flex flex-col gap-1">
-          {changesFilter === "working_tree_composite" && (
-            <GitReviewSectionHeader
-              section={section}
-              collapsed={collapsedSections.has(section.scope)}
-              onToggle={() => onToggleSectionCollapsed(section.scope)}
+    <div className="flex flex-col gap-0.5">
+      {sections.flatMap((section) =>
+        section.files.map((file) => {
+          const entry = gitReviewEntryForFile(section.scope, file);
+          return (
+            <GitReviewFileRow
+              key={entry.key}
+              id={entry.id}
+              workspaceId={activeWorkspaceId}
+              sectionScope={section.scope}
+              file={file}
+              baseRef={baseRef}
+              layout={layout}
+              wrapLongLines={wrapLongLines}
+              collapsed={collapsedFiles.has(entry.key)}
+              isRuntimeReady={isRuntimeReady}
+              fetchDiff={permittedDiffFetchKeys.has(entry.key)}
+              showStagedChip={isComposite && section.scope === "staged"}
+              onToggleCollapsed={() => onToggleFileCollapsed(entry.key)}
+              onDiffFetchSettled={() => onDiffFetchSettled(entry.key)}
+              openFile={openFile}
+              diffTimingOptions={diffTimingOptions}
+              measurementOperationId={measurementOperationId}
             />
-          )}
-          {visibleSectionScopes.has(section.scope)
-            && section.files.map((file) => {
-              const entry = gitReviewEntryForFile(section.scope, file);
-              return (
-                <GitReviewFileRow
-                  key={entry.key}
-                  id={entry.id}
-                  workspaceId={activeWorkspaceId}
-                  sectionScope={section.scope}
-                  file={file}
-                  baseRef={baseRef}
-                  layout={layout}
-                  wrapLongLines={wrapLongLines}
-                  collapsed={effectiveCollapsedFiles.has(entry.key)}
-                  isRuntimeReady={isRuntimeReady}
-                  fetchDiff={permittedDiffFetchKeys.has(entry.key)}
-                  onToggleCollapsed={() => onToggleFileCollapsed(entry.key)}
-                  onDiffFetchSettled={() => onDiffFetchSettled(entry.key)}
-                  openFile={openFile}
-                  stagePath={stagePath}
-                  unstagePath={unstagePath}
-                  diffTimingOptions={diffTimingOptions}
-                  measurementOperationId={measurementOperationId}
-                />
-              );
-            })}
-        </div>
-      ))}
-    </>
+          );
+        })
+      )}
+    </div>
   );
 }

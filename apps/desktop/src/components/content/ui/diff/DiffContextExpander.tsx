@@ -112,7 +112,7 @@ export function DiffGapContentLabel({
       style={{ position: "sticky", left: stickyLeft }}
       className="flex w-max items-center gap-0.5 px-2"
     >
-      <span className="shrink-0 text-[10px] leading-none text-muted-foreground/70">
+      <span className="shrink-0 text-muted-foreground/70">
         {label}
       </span>
       {!isSmall && onExpand && (
@@ -123,7 +123,7 @@ export function DiffGapContentLabel({
           onClick={() => onExpand("all")}
           aria-label={`Expand all ${label}`}
           title="Expand all"
-          className="ml-1.5 shrink-0 cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[10px] leading-none text-muted-foreground/60 transition-colors hover:text-foreground"
+          className="ml-1.5 shrink-0 cursor-pointer rounded border-0 bg-transparent px-1 text-[length:inherit] leading-[inherit] text-muted-foreground/60 transition-colors hover:text-foreground"
         >
           Expand all
         </Button>
@@ -166,7 +166,7 @@ export function DiffCollapsedContentLabel({
       style={{ position: "sticky", left: stickyLeft }}
       className="flex w-max items-center gap-0.5 px-2"
     >
-      <span className="shrink-0 text-[10px] leading-none">
+      <span className="shrink-0">
         {formatUnmodifiedLinesLabel(lineCount)}
       </span>
     </span>
@@ -248,7 +248,7 @@ export function DiffContextExpander({
         style={{ position: "sticky", left: stickyLeft }}
         className="flex w-max items-center gap-0.5 px-2"
       >
-        <span className="shrink-0 text-[10px] leading-none text-muted-foreground/70">
+        <span className="shrink-0 text-muted-foreground/70">
           {label}
         </span>
         {!isSmall && (
@@ -259,7 +259,7 @@ export function DiffContextExpander({
             onClick={() => onExpand("all")}
             aria-label={`Expand all ${label}`}
             title="Expand all"
-            className="ml-1.5 shrink-0 cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[10px] leading-none text-muted-foreground/60 transition-colors hover:text-foreground"
+            className="ml-1.5 shrink-0 cursor-pointer rounded border-0 bg-transparent px-1 text-[length:inherit] leading-[inherit] text-muted-foreground/60 transition-colors hover:text-foreground"
           >
             Expand all
           </Button>
@@ -295,7 +295,7 @@ export function DiffCollapsedContextCluster({
       >
         <ChevronsUpDown className="h-3 w-3" />
       </span>
-      <span className="shrink-0 pl-1 text-[10px] leading-none">
+      <span className="shrink-0 pl-1">
         {formatUnmodifiedLinesLabel(lineCount)}
       </span>
     </span>
@@ -321,7 +321,7 @@ export function DiffGapInfoRow({
     >
       <span
         style={{ position: "sticky", left: stickyLeft }}
-        className="w-max px-2 text-[10px] leading-none text-muted-foreground/50"
+        className="w-max px-2 text-muted-foreground/50"
       >
         {formatUnmodifiedLinesLabel(lineCount)}
       </span>

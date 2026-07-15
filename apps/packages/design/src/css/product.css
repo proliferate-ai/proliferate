@@ -907,6 +907,55 @@ mark.codex-thread-find-active {
   background-color: var(--diffs-bg-context-override);
 }
 
+/* -- Git review document (sidebar Changes pane) --
+   Flat Codex-style review: unchanged lines sit on the plain pane background
+   (only +/- rows carry a tint), and hunk-gap separators render as a slim
+   strip inset from the pane edges with rounded ends instead of a full-width
+   band. Scoped to the review scroll container so chat-transcript diffs keep
+   their own treatment. */
+[data-git-review-document] {
+  --diffs-bg-context-override: var(--color-background);
+  --codex-diffs-context-number: var(--color-background);
+  /* Separator cells draw their strip via ::before below; the cell itself must
+     stay transparent or the strip reads as a full-width band. This var feeds
+     the later .composer-diff-simple-line [data-separator] background rule. */
+  --diffs-bg-separator-override: transparent;
+}
+
+[data-git-review-document] [data-separator] {
+  background: transparent;
+  position: relative;
+}
+
+[data-git-review-document] [data-separator]::before {
+  content: "";
+  position: absolute;
+  inset: 3px 0;
+  background: var(--codex-diffs-separator-surface);
+  pointer-events: none;
+}
+
+/* Gutter cells cap the left end of the strip; content cells (gap-expander,
+   gap-info, collapsed-context rows) cap the right end. Between them the two
+   ::before segments meet edge-to-edge, so the strip reads as one slim pill
+   inset from the pane edges — Codex's [data-separator='line-info'] look. */
+[data-git-review-document] .diff-gutter-cell[data-separator]::before {
+  left: 6px;
+  border-radius: 6px 0 0 6px;
+}
+
+[data-git-review-document] .diff-content-cell[data-separator]::before,
+[data-git-review-document] [data-separator="gap-expander"]::before,
+[data-git-review-document] [data-separator="gap-info"]::before {
+  right: 6px;
+  border-radius: 0 6px 6px 0;
+}
+
+/* Keep separator labels and expand controls above the ::before strip. */
+[data-git-review-document] [data-separator] > * {
+  position: relative;
+}
+
 .composer-diff-simple-line [data-line-type="change-addition"] {
   background-color: var(--diffs-bg-addition-override);
 }
