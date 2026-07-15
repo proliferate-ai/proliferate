@@ -91,8 +91,26 @@ class Settings(BaseSettings):
     celery_task_always_eager: bool = False
     celery_task_time_limit_seconds: int = 3600
     celery_task_soft_time_limit_seconds: int = 3300
+    # Publisher-confirm timeout (seconds) for broker publishes. With confirm mode
+    # enabled the relay waits up to this long for RabbitMQ to durably ack a
+    # publish; a nack, a confirm timeout, or connection ambiguity raises so the
+    # outbox row stays retryable instead of being marked published on an
+    # unconfirmed socket write. Bounded so a wedged broker cannot hang a tick.
+    celery_broker_confirm_timeout_seconds: float = 10.0
     redbeat_redis_url: str = "redis://127.0.0.1:6379/0"
     redbeat_key_prefix: str = "redbeat:proliferate:"
+    # Outbox relay: Beat fires the thin ``background.relay`` task on this
+    # interval; each tick drains one bounded batch and exits (no in-process
+    # loop). Supported broker failures retry indefinitely with capped
+    # exponential backoff. ``oldest_due_slo_seconds`` is the alarm threshold on
+    # the oldest due-but-unpublished outbox row (5-minute reviewable default).
+    background_relay_interval_seconds: float = 1.0
+    background_relay_batch_size: int = 50
+    background_relay_lease_seconds: float = 60.0
+    background_relay_retry_base_seconds: float = 2.0
+    background_relay_retry_cap_seconds: float = 300.0
+    background_relay_retry_jitter_seconds: float = 5.0
+    background_relay_oldest_due_slo_seconds: float = 300.0
 
     # Auth
     jwt_secret: str = "CHANGE-ME-IN-PRODUCTION"
