@@ -64,6 +64,15 @@ Existing Cloud repo:
   unavailable until authority is restored
 ```
 
+The add-repository UI presents user authorization, organization installation,
+and repository selection as separate ordered steps. It identifies the current
+step, preserves completed prerequisites, and exposes only the action for the
+current blocker. Redirect guidance is host-aware: Web explains that GitHub
+returns to the current browser, while Desktop explains that GitHub opens in a
+browser and then returns to Proliferate Desktop. A member who cannot install
+the app gets an actionable organization-admin request instead of an install
+control they cannot use.
+
 ## Token Model
 
 GitHub App user access tokens are the only sandbox Git credential source.

@@ -121,6 +121,12 @@ matching client contracts.
 Desktop and Web both reuse the same
 [`BillingSettingsSurface`](../../../../apps/packages/product-surfaces/src/settings/BillingSettingsSurface.tsx).
 That shared surface does not make their organization navigation identical.
+It reads the selected owner's plan and both unit balances independently. The
+surface must preserve loading, error, deployment-disabled, and absent-data
+states; it must not present a default plan, active status, zero balance, or
+sample compute balance when the corresponding backend read is unavailable.
+Plan status reflects returned entitlement and health fields, including holds,
+payment health, legacy status, and unlimited access where applicable.
 Mobile has a smaller personal
 [`Billing section`](../../../../apps/mobile/src/components/settings/MobileSettingsScreen.tsx)
 that shows plan and usage state and exposes the available portal, checkout, or

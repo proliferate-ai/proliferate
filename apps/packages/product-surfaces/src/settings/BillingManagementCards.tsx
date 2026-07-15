@@ -3,6 +3,7 @@ import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import { ExternalLink } from "@proliferate/ui/icons";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { SkeletonBlock } from "@proliferate/ui/primitives/Skeleton";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import type { BillingSettingsOrganization } from "./BillingSettingsSurface";
 
@@ -18,43 +19,68 @@ export function BillingPlanCard({
   organization,
   organizationLoading,
   loading,
+  errorMessage,
+  unavailableMessage,
   actionError,
+  onRetry,
   onManage,
 }: {
-  plan: BillingPlanPresentation;
+  plan: BillingPlanPresentation | null;
   organization: BillingSettingsOrganization | null;
   organizationLoading: boolean;
   loading: boolean;
+  errorMessage: string | null;
+  unavailableMessage: string | null;
   actionError: string | null;
+  onRetry: () => void;
   onManage: () => void;
 }) {
   const context = organizationLoading
     ? "Billing details for this organization."
     : organization
       ? `Billing for ${organization.name}.`
-      : "Shared billing and credits for this workspace.";
+      : "Billing for your personal account.";
+
+  const label = loading && !plan
+    ? "Loading billing plan"
+    : errorMessage
+      ? "Billing plan unavailable"
+      : unavailableMessage
+        ? "Billing unavailable"
+        : plan
+          ? (
+              <span className="flex flex-wrap items-center gap-2">
+                {plan.name}
+                <span className="font-normal text-muted-foreground">{plan.price}</span>
+                <Badge tone={plan.badgeTone}>{plan.badge}</Badge>
+              </span>
+            )
+          : "Billing plan unavailable";
+
+  const description = errorMessage ?? unavailableMessage ?? context;
 
   return (
     <SettingsSection title="Plan">
       <SettingsRow
-        label={(
-          <span className="flex flex-wrap items-center gap-2">
-            {plan.name}
-            <span className="font-normal text-muted-foreground">{plan.price}</span>
-            <Badge tone={plan.badgeTone}>{plan.badge}</Badge>
-          </span>
-        )}
-        description={context}
+        label={label}
+        description={description}
       >
-        <Button
-          type="button"
-          variant="primary"
-          loading={loading}
-          disabled={organizationLoading}
-          onClick={onManage}
-        >
-          Manage
-        </Button>
+        {loading && !plan ? (
+          <SkeletonBlock className="h-8 w-20" />
+        ) : errorMessage ? (
+          <Button type="button" variant="secondary" onClick={onRetry}>
+            Retry
+          </Button>
+        ) : plan ? (
+          <Button
+            type="button"
+            variant="primary"
+            disabled={organizationLoading}
+            onClick={onManage}
+          >
+            Manage
+          </Button>
+        ) : null}
       </SettingsRow>
       {actionError ? (
         <p className="pt-2 text-ui-sm text-destructive">{actionError}</p>

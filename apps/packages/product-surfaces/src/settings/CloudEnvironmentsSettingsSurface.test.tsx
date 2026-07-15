@@ -375,6 +375,13 @@ describe("CloudEnvironmentsSettingsSurface", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add cloud environment" }));
 
     expect(screen.queryByRole("heading", { name: "Authorize GitHub App" })).not.toBeNull();
+    expect(screen.getByLabelText("GitHub setup progress")).toBeTruthy();
+    expect(screen.getByText("Authorize your GitHub identity")).toBeTruthy();
+    expect(screen.getByText("Install for repository access")).toBeTruthy();
+    expect(screen.getByText("Choose a repository")).toBeTruthy();
+    expect(
+      screen.getByText("GitHub opens in your browser, then returns you to Proliferate Desktop."),
+    ).toBeTruthy();
     expect(screen.queryByLabelText("Search GitHub repositories")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Authorize GitHub App" }));
@@ -408,6 +415,10 @@ describe("CloudEnvironmentsSettingsSurface", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add cloud environment" }));
 
     expect(screen.queryByRole("heading", { name: "Install GitHub App" })).not.toBeNull();
+    expect(screen.getByText("GitHub identity authorized.")).toBeTruthy();
+    expect(
+      screen.getByText("GitHub opens in your browser, then returns you to Proliferate Desktop."),
+    ).toBeTruthy();
     expect(screen.queryByLabelText("Search GitHub repositories")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Install GitHub App" }));
@@ -421,5 +432,27 @@ describe("CloudEnvironmentsSettingsSurface", () => {
       });
     });
     expect(onOpenExternalUrl).toHaveBeenCalledWith("https://github.test/install");
+  });
+
+  it("explains the browser return path during web GitHub authorization", () => {
+    cloudHooks.useGitHubAppUserAuthorizationStatus.mockReturnValue({
+      data: { connected: false, action: "connect" },
+      isLoading: false,
+    });
+
+    render(
+      <CloudEnvironmentsSettingsSurface
+        organizationId="org-1"
+        userAuthorizationReturnTo="https://web.proliferate.com/settings/environments"
+        onSelectCloudEnvironment={vi.fn()}
+        onBackToList={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add cloud environment" }));
+
+    expect(
+      screen.getByText("GitHub opens and returns you to Proliferate in this browser."),
+    ).toBeTruthy();
   });
 });
