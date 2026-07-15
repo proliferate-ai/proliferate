@@ -63,6 +63,12 @@ HANDLER_REF_RE = re.compile(r"\b(post|put|patch|delete)\(\s*([a-z_0-9]+)::([a-z_
 # `put(put_agent_auth_state)`); resolve those through the router's own use
 # imports so no mutating handler can escape enumeration.
 BARE_HANDLER_REF_RE = re.compile(r"\b(post|put|patch|delete)\(\s*([a-z_0-9]+)\s*[),]")
+# Catch-all: ANY mutating-verb route reference, including doubly-qualified
+# paths like `post(a::b::c)` that match NEITHER of the two shapes above and
+# would otherwise escape enumeration silently (PR1227-RATCHET-01). Every
+# capture must be covered by the qualified/bare/import-resolved sets; anything
+# left over is routed into `unresolved` so it FAILS LOUDLY.
+ANY_HANDLER_REF_RE = re.compile(r"\b(post|put|patch|delete)\(\s*([A-Za-z_0-9:]+)\s*[),]")
 IMPORT_GROUP_RE = re.compile(r"([a-z_0-9]+)::\{([^{}]*)\}", re.S)
 CLASS_LINE_RE = re.compile(r"^([a-z_0-9]+::[a-z_0-9]+)\s+(fenced|derived-safe|read-like|cosmetic|creation|workspace-scoped|workflow-plane)\s+(.+)$")
 
@@ -90,6 +96,21 @@ def collect_mutating_handlers() -> set[str]:
                 unresolved.append(f"{router.name}: bare handler '{fn}' not resolvable via imports")
             else:
                 handlers.add(f"{module}::{fn}")
+        # Catch-all teeth (PR1227-RATCHET-01): the two shapes above only match
+        # bare (`fn`) and singly-qualified (`module::fn`) references. A ref with
+        # any other segment count — notably doubly-qualified `post(a::b::c)` —
+        # is covered by NEITHER and would slip through unenumerated. Route every
+        # such leftover into `unresolved` so it fails loudly instead of silently
+        # escaping the admission decision.
+        for _method, path in ANY_HANDLER_REF_RE.findall(text):
+            segments = path.split("::")
+            if len(segments) == 1 or len(segments) == 2:
+                # Bare or singly-qualified: already handled above.
+                continue
+            unresolved.append(
+                f"{router.name}: route handler ref '{path}' has an unsupported "
+                f"segment count and escaped enumeration; classify it explicitly"
+            )
     if unresolved:
         raise SystemExit("Unresolvable bare route handlers:\n  " + "\n  ".join(unresolved))
     return handlers

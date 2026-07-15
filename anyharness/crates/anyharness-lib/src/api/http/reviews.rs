@@ -67,15 +67,21 @@ pub async fn start_plan_review(
     Json(req): Json<StartPlanReviewRequest>,
 ) -> Result<Json<ReviewRunResponse>, ApiError> {
     assert_workspace_auth_scope(&auth, &workspace_id)?;
+    // LOCK-01: permit is acquired BEFORE the workspace operation lease
+    // (canonical order run gate -> permit -> operation lease). The plan's
+    // session_id lookup runs before the lease; the permit is bound at handler
+    // scope so it is held across the review side effect, not dropped early.
+    let _admission_permit = match state.plan_service.get(&plan_id) {
+        Ok(Some(plan)) => Some(
+            admit_session_mutation(&state, &plan.session_id, SessionMutationKind::Review).await?,
+        ),
+        _ => None,
+    };
     let _lease = state
         .workspace_operation_gate
         .acquire_shared(&workspace_id, WorkspaceOperationKind::ReviewWrite)
         .await;
     assert_workspace_mutable(&state, &workspace_id)?;
-    if let Ok(Some(plan)) = state.plan_service.get(&plan_id) {
-        let _admission_permit =
-            admit_session_mutation(&state, &plan.session_id, SessionMutationKind::Review).await?;
-    }
     let run = state
         .review_runtime
         .start_plan_review(&workspace_id, &plan_id, start_plan_review_input(req))
@@ -103,13 +109,14 @@ pub async fn start_code_review(
     Json(req): Json<StartCodeReviewRequest>,
 ) -> Result<Json<ReviewRunResponse>, ApiError> {
     assert_workspace_auth_scope(&auth, &workspace_id)?;
+    // LOCK-01: permit before the workspace operation lease.
+    let _admission_permit =
+        admit_session_mutation(&state, &req.parent_session_id, SessionMutationKind::Review).await?;
     let _lease = state
         .workspace_operation_gate
         .acquire_shared(&workspace_id, WorkspaceOperationKind::ReviewWrite)
         .await;
     assert_workspace_mutable(&state, &workspace_id)?;
-    let _admission_permit =
-        admit_session_mutation(&state, &req.parent_session_id, SessionMutationKind::Review).await?;
     let run = state
         .review_runtime
         .start_code_review(&workspace_id, start_code_review_input(req))

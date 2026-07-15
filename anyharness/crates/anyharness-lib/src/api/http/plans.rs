@@ -145,12 +145,15 @@ pub async fn approve_plan(
     Path((workspace_id, plan_id)): Path<(String, String)>,
     Json(req): Json<PlanDecisionRequest>,
 ) -> Result<Json<PlanDecisionResponse>, ApiError> {
+    // LOCK-01: permit is acquired BEFORE the workspace operation lease
+    // (canonical order run gate -> permit -> operation lease). The plan's
+    // session_id lookup inside admit_plan_session runs before the lease.
+    let _admission_permit = admit_plan_session(&state, &plan_id).await?;
     let _lease = state
         .workspace_operation_gate
         .acquire_shared(&workspace_id, WorkspaceOperationKind::PlanWrite)
         .await;
     assert_workspace_mutable(&state, &workspace_id)?;
-    let _admission_permit = admit_plan_session(&state, &plan_id).await?;
     state
         .plan_runtime
         .approve(&workspace_id, &plan_id, req.expected_decision_version)
@@ -178,12 +181,13 @@ pub async fn reject_plan(
     Path((workspace_id, plan_id)): Path<(String, String)>,
     Json(req): Json<PlanDecisionRequest>,
 ) -> Result<Json<PlanDecisionResponse>, ApiError> {
+    // LOCK-01: permit before the workspace operation lease.
+    let _admission_permit = admit_plan_session(&state, &plan_id).await?;
     let _lease = state
         .workspace_operation_gate
         .acquire_shared(&workspace_id, WorkspaceOperationKind::PlanWrite)
         .await;
     assert_workspace_mutable(&state, &workspace_id)?;
-    let _admission_permit = admit_plan_session(&state, &plan_id).await?;
     state
         .plan_runtime
         .reject(&workspace_id, &plan_id, req.expected_decision_version)
@@ -211,12 +215,13 @@ pub async fn handoff_plan(
     Path((workspace_id, plan_id)): Path<(String, String)>,
     Json(req): Json<HandoffPlanRequest>,
 ) -> Result<Json<HandoffPlanResponse>, ApiError> {
+    // LOCK-01: permit before the workspace operation lease.
+    let _admission_permit = admit_plan_session(&state, &plan_id).await?;
     let _lease = state
         .workspace_operation_gate
         .acquire_shared(&workspace_id, WorkspaceOperationKind::PlanWrite)
         .await;
     assert_workspace_mutable(&state, &workspace_id)?;
-    let _admission_permit = admit_plan_session(&state, &plan_id).await?;
     state
         .plan_runtime
         .handoff(&workspace_id, &plan_id, handoff_plan_input(req))

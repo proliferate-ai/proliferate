@@ -12,6 +12,17 @@
 //! `workflow run gate -> session mutation permit`; no caller acquires them in
 //! reverse. The permit is NOT reentrant — nested session use cases must use
 //! crate-private permit-aware helpers instead of re-acquiring.
+//!
+//! Operation-gate ordering (PR1227-LOCK-01): the frozen spec fixes only the
+//! run-gate/permit pair and is SILENT on the permit vs. the per-workspace
+//! `WorkspaceOperationGate` RwLock (`acquire_shared` = read, `acquire_exclusive`
+//! and the exclusive session lease = write). Because fork/plan/review/retire/
+//! purge/mobility handlers hold BOTH the permit and an operation lease at once,
+//! a single documented order is mandatory to avoid an ABBA deadlock: the
+//! session mutation permit is ALWAYS acquired BEFORE any workspace operation
+//! lease (shared or exclusive), never in reverse. The full canonical order is
+//! therefore `workflow run gate -> session mutation permit -> workspace
+//! operation lease`; every handler holding both must take the permit outermost.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex as StdMutex, Weak};
@@ -229,11 +240,25 @@ impl SessionMutationAdmission {
     /// through durable creation and controller binding; foreign callers
     /// arriving meanwhile wait on this same gate and then observe the
     /// controller.
-    pub async fn reserve_new_session(
+    ///
+    /// PR1227-ADMISSION-01: this bypasses the controller-policy lookup, which
+    /// is sound ONLY for a fresh preselected id whose owner is the workflow
+    /// executor. Both the visibility (`pub(crate)`) and the source guard lock
+    /// the fresh-id contract at the type boundary — the sole caller is the
+    /// workflow executor (the Workflows domain's `execution` module), and an
+    /// External source here is a programming error, never a runtime-reachable
+    /// state.
+    pub(crate) async fn reserve_new_session(
         &self,
         session_id: &str,
-        _source: &SessionMutationSource,
+        source: &SessionMutationSource,
     ) -> Result<SessionMutationPermit, SessionMutationConflict> {
+        debug_assert!(
+            matches!(source.0, SourceInner::WorkflowRun { .. }),
+            "reserve_new_session bypasses controller policy and is only sound \
+             for the workflow executor's preselected id; source must be a \
+             trusted WorkflowRun, never External"
+        );
         let gate = self
             .slot(session_id)
             .map_err(SessionMutationConflict::Internal)?;
