@@ -23,9 +23,7 @@ async def repo_environment_has_automation_references(
     return bool(
         await db.scalar(
             select(
-                exists().where(
-                    AutomationRun.repo_environment_id_snapshot == repo_environment_id
-                )
+                exists().where(AutomationRun.repo_environment_id_snapshot == repo_environment_id)
             )
         )
     )

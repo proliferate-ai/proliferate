@@ -95,9 +95,7 @@ async def repo_environment_has_workspaces(
 
     return bool(
         await db.scalar(
-            select(
-                exists().where(CloudWorkspace.repo_environment_id == repo_environment_id)
-            )
+            select(exists().where(CloudWorkspace.repo_environment_id == repo_environment_id))
         )
     )
 

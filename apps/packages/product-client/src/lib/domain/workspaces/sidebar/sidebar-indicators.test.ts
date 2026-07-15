@@ -314,7 +314,6 @@ describe("sidebar indicators", () => {
       preferredMaterializationId: cloudWorkspaceSyntheticId(cloudWorkspace.id),
       lifecycle: "cloud_active",
     };
-
     const groups = buildGroups({
       logicalWorkspaces: [dualCloudEffective],
       workspaceActivities: {
@@ -322,16 +321,11 @@ describe("sidebar indicators", () => {
         [cloudWorkspaceSyntheticId(cloudWorkspace.id)]: "iterating",
       },
     });
-
     expect(groups[0]?.items[0]?.statusIndicator?.kind).toBe("iterating");
-    expect(groups[0]?.items[0]?.detailIndicators).toContainEqual(
+    expect(groups[0]?.items[0]?.detailIndicators).toEqual([
       expect.objectContaining({ kind: "materialization", variant: "cloud" }),
-    );
-    expect(groups[0]?.items[0]?.detailIndicators).not.toContainEqual(
-      expect.objectContaining({ kind: "cloud_exposure" }),
-    );
+    ]);
   });
-
   it("shows cloud workspace errors in the left status channel", () => {
     const groups = buildGroups({
       logicalWorkspaces: [
