@@ -127,6 +127,102 @@ values → `@proliferate/cloud-sdk` (import-path-only, types erased). **Holdout:
 `lib/access/cloud/cloud-sandbox-gateway.ts` (+ test) only and stays on the host
 client module — it belongs to the auth-transport reroute (F2).
 
+## F2 stage — reverse seam (R3) + build emission (R4) + desktop sanity
+
+Landed this stage (commits `a9c4f078e` R3, `1204fb2a8` R4, `08acd07df` sanity):
+
+- **R3 reverse seam (complete).** The package gained the public `./internal/*`
+  export lane (`types → ./src/*`, `default → ./dist/*.js`). All retained-desktop
+  host imports of moved modules — ~123 specifiers across 51 host files (auth /
+  telemetry domain, stores, config, test fixtures) — now use
+  `@proliferate/product-client/internal/<path>`. Also rewired 4 host hooks whose
+  `./query-keys` sibling moved into the package, and `main.tsx`'s pre-render
+  `initializeTheme()` (config/theme moved). **Zero** retained host files now
+  import a moved-only module via `@/` or a relative path (verified by desktop
+  `tsc`: 0 `Cannot find module '@/…'`/`'./…'` for moved paths). A desktop vitest
+  alias `internal/ → package src` was added for the test lane.
+  - **Resolution mechanism (important for the next stage):** `internal/*`
+    resolves through the package's **built dist `.d.ts`** (the `default` target
+    with `.js→.d.ts` substitution), whose `#product/*` self-imports resolve
+    against product-client's own `package.json` `imports` field. A desktop
+    tsconfig `paths` entry `internal/* → ../packages/product-client/src/*` was
+    tried and **reverted**: pointing at package *source* drags the package's
+    `#product/*` self-imports into desktop's tsconfig, which does not know
+    `#product`, surfacing ~100 spurious errors. Desktop `tsc` is therefore
+    correctly gated on the package build (dist), not independently green.
+- **R4 build emission (wired; dist copy verifiable once the build is green).**
+  New `scripts/copy-product-client-assets.mjs`: (1) syncs repo-root
+  `catalogs/agents/catalog.json` → gitignored
+  `src/generated/agent-catalog.json` (verified: file lands, `git check-ignore`
+  confirms ignored), (2) `--dist` mirrors the 85 non-TS resources under `src`
+  (index.css, 78 svg + png/jpeg/mp3, config + generated JSON) into `dist`. Wired
+  into the package `build` (pre-tsc sync + post-tsc `--dist`), `typecheck`,
+  `prepare`, and a `sync-assets` script. `bundled-agent-catalog.ts` now imports
+  the package-relative generated copy (`../../../generated/agent-catalog.json?raw`)
+  instead of reaching six levels up into the repo root at the wrong post-move
+  depth. No checked-in catalog duplicate.
+- **Desktop thin-host sanity (verified).** `main.tsx` mounts the package
+  `ProductClient` with `RoutesComponent=InstrumentedRoutes` inside
+  `BrowserRouter > DesktopHostProviders`; `DesktopHostProviders` calls
+  `setMeasurementSink(desktopMeasurementSink)` at module scope; Sentry +
+  measurement-sink injection stay host; no desktop path still targets a moved
+  module.
+
+### Verification at this stage's head
+
+| Command | Result |
+| --- | --- |
+| `pnpm --filter @proliferate/product-client typecheck` | 79 (unchanged — R3/R4/sanity are host-side + build-wiring; forward seams untouched) |
+| `python3 scripts/check_frontend_boundaries.py` (`PRODUCT_CLIENT_FORBIDDEN_IMPORT`) | 77 (unchanged — reverse seam does not touch product→host forbidden imports) |
+| desktop `tsc --noEmit` | 184; **0 reverse-seam breaks**; all 184 are downstream of the missing package dist (151 direct `@proliferate/product-client` resolution, 33 cascading implicit-any/null in host files whose moved-type imports are `any` while dist is absent) |
+| `node scripts/copy-product-client-assets.mjs` | catalog synced to gitignored `src/generated/`; import resolves |
+| `python3 scripts/check_docs.py` / `git diff --check` | PASS / clean |
+
+### DEFERRED this stage — auth-probe promotion (finding, owner may overrule)
+
+The round-2 brief authorized promoting `getDesktopAuthMethods` /
+`discoverDesktopSso` / `getGitHubDesktopAuthAvailability` into product-owned
+package code, with the stop clause "STOP only if a fetcher touches secret
+transport." The fetchers do **not** touch secret transport, but a
+behavior-identical, no-dual-ownership promotion is **not** independently
+landable:
+
+1. **Bound to the proliferate-api / host.deployment seam.** Each probe builds
+   its URL via `buildUrl → buildProliferateApiUrl` and defaults `apiBaseUrl` to
+   `getProliferateApiBaseUrl()` (`@/lib/infra/proliferate-api`, a separate
+   unresolved forward seam). The consuming hooks always pass
+   `useProductHost().deployment.apiBaseUrl`, so a package copy *could* inline the
+   join — but the public fetcher's default-baseUrl behavior is host-deployment
+   config; reproducing it in the package either drops the default (behavior
+   change) or duplicates the deployment seam.
+2. **Shares `AuthRequestError` / `fetchAuthResponse` / `parseAuthError`** with
+   the host password + OAuth flows (which do `instanceof AuthRequestError`).
+   Moving the generic transport pulls the proliferate-api seam too; duplicating
+   the error class risks `instanceof` divergence — a forbidden behavior change.
+   (No probe *consumer* does `instanceof`, but the shared class is used broadly
+   host-side.)
+
+Both routes converge on the `@/lib/infra/proliferate-api` → `host.deployment`
+and auth-transport seams. The correct landing is **atomic with those seams**
+(move `buildUrl`/transport once, not duplicate), analogous to F1 deferring the
+`getDesktopCloudAccessToken` holdout to the auth-transport reroute. The 3 probe
+hooks stay host for now (their `./query-keys` import was repointed to the
+internal lane so the reverse seam is internally consistent); their forward-seam
+`tsc` errors (`use-auth-methods`/`use-sso-discovery`/`use-github-auth-availability`,
+4 of the 79) remain until that cohort lands.
+
+### NOT in this stage's named scope (remainder for the next F2 sub-stage)
+
+R2 bridge ports (`use-connect-server`, `use-dev-desktop-handoff`), the updater
+hook move (`use-updater`/`use-app-version`/`updater-dev-mock`, 16), the
+`proliferate-api → host.deployment` threading (7), auth transport → `host.auth`
+(`proliferate-auth`/`proliferate-sso-auth`/`auth-store`, ~14),
+`use-github-sign-in` (4), telemetry seams, and the remaining split rows
+(`use-automations`, `use-cloud-*-workspaces`, `use-auth-viewer`,
+`use-agent-run-configs`, `use-organization-join-invitation-flow`,
+`DesktopProductLifecycleRoot`). These are the 79 package forward-seam errors;
+resolving them unblocks the package build → dist → desktop `tsc`/build green.
+
 ### Remaining forward seams (F2) — 60 import lines / ~77 checker hits
 
 These are **not** import-path swaps: each is a rich host hook that must *move*
