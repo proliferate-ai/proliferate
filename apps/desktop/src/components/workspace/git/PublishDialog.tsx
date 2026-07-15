@@ -228,7 +228,9 @@ export function PublishDialog({
                 placeholder="Commit message (leave blank to generate)…"
                 disabled={isSubmitting}
                 variant="flush"
-                className="h-20"
+                // Codex git-modal field: bare textarea, no focus ring — the
+                // section hairlines already frame it.
+                className="h-20 focus:ring-0"
               />
               {viewState.hasUnstagedChanges && (
                 <div className="flex items-center gap-2 px-3 pb-3 pt-2">
