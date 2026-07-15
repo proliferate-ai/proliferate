@@ -694,6 +694,13 @@ jobs:
             BEHAVIOR=strict
 
       - name: Upload V4 report and bounded diagnostic logs
+        # Actions-durable (SHR-006): `if: always()` already runs this step on an
+        # interrupted/failed job, not just a green one; the ledger glob below is
+        # what makes the run's cleanup-ledger.json land in that upload — without
+        # it the ledger (written directly under the run dir, one level above
+        # `evidence/`/`logs/`) never reached CI artifacts even though the step
+        # itself always ran. See `cleanup-ledger-artifact-upload.test.ts` for the
+        # unit proof that the ledger's on-disk path matches this glob.
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -701,6 +708,7 @@ jobs:
           path: |
             tests/release/.output/selfhost-world/*/*/evidence/
             tests/release/.output/selfhost-world/*/*/logs/
+            tests/release/.output/selfhost-world/*/*/cleanup-ledger.json
           retention-days: 7
           if-no-files-found: ignore
 

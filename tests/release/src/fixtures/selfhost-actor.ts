@@ -171,7 +171,13 @@ function ownerEmail(world: ReadySelfHostWorld): string {
   return `qual-owner-${world.run.run_id}-${world.run.shard_id}@example.com`;
 }
 
-function inviteeEmail(world: ReadySelfHostWorld): string {
+/**
+ * A run-scoped, non-reserved invitee email (see `ownerEmail`). Exported so the
+ * `SH-INVITEE` cell driver (`scenarios/selfhost-install-1.ts`), which now
+ * creates the invitation through the real renderer UI rather than this
+ * fixture's own `transport.invite` (SHR-001), can default to the same address.
+ */
+export function inviteeEmail(world: ReadySelfHostWorld): string {
   return `qual-invitee-${world.run.run_id}-${world.run.shard_id}@example.com`;
 }
 
@@ -241,14 +247,71 @@ export async function assertSecondClaimRejected(
 }
 
 /**
- * Invites a member through the product, captures the invitation response, and
- * registers the invitee. The `SH-INVITEE` cell drives login from a SECOND
- * isolated product page and asserts the intended role + one authenticated
- * member action; this fixture performs the invite/register prerequisite and
- * returns the invitee identity + a product session. The generated password is
- * never persisted on the returned invitee.
+ * Registers + logs in an invitee against an ALREADY-CREATED pending invitation
+ * (the invitation id doubles as the registration token — verified against the
+ * retired `t3-sh-1` walk and the shipped self-host smoke's own fallback,
+ * `server/deploy/smoke/run-smoke.sh`). This is the shared tail for both invite
+ * paths:
+ *   - `SH-INVITEE` (canonical since SHR-001): the invitation is CREATED through
+ *     the real renderer settings UI (`scenarios/selfhost-install-1.ts`), then
+ *     read back over the product API and handed to this function.
+ *   - `inviteAndRegisterMemberViaApi` below (retained, non-canonical): the
+ *     invitation is created directly over the API.
+ * The generated password is never persisted on the returned invitee.
  */
-export async function inviteAndRegisterMember(
+export async function registerInvitee(
+  world: ReadySelfHostWorld,
+  owner: SelfHostOwnerActor,
+  invitation: { id: string; email: string; status: string },
+  transport: SelfHostActorTransport = defaultSelfHostActorTransport,
+): Promise<SelfHostInvitee> {
+  if (invitation.status !== "pending") {
+    throw new Error(`registerInvitee: invitation should be pending, got ${invitation.status}.`);
+  }
+  const password = generatePassword();
+
+  // The invitation id doubles as the invitation token in `/auth/password/register`
+  // (verified against the retired `t3-sh-1` walk).
+  await transport.register(world.api.baseUrl, { email: invitation.email, password, invitationToken: invitation.id });
+
+  const tokenResponse = await transport.loginWithPassword(world.api.baseUrl, invitation.email, password);
+  const session = toStoredSession(tokenResponse);
+  const api = world.api.client.withBearerToken(session.access_token);
+
+  const organizations = await transport.listOrganizations(api);
+  if (organizations.organizations.length !== 1) {
+    throw new Error(
+      `registerInvitee: invitee should belong to exactly one org, got ${organizations.organizations.length}.`,
+    );
+  }
+  const organization = organizations.organizations[0];
+  if (organization.id !== owner.organizationId) {
+    throw new Error("registerInvitee: invitee joined the wrong organization.");
+  }
+
+  return {
+    role: "member",
+    userId: session.user_id,
+    organizationId: organization.id,
+    email: invitation.email,
+    invitationId: invitation.id,
+    api,
+    session,
+  };
+}
+
+/**
+ * Invites a member by POSTing `/v1/organizations/{id}/invitations` directly,
+ * then registers the invitee (`registerInvitee`).
+ *
+ * NOT the `SH-INVITEE` cell's canonical path since SHR-001: the frozen tier-3
+ * contract requires the invitation to be CREATED through the product UI, and
+ * the cell driver now does that itself (`scenarios/selfhost-install-1.ts`).
+ * Retained (not deleted — checked for other callers first) for tests that want
+ * a pure-API invite path; `tests/release/src/fixtures/selfhost-actor.test.ts`
+ * still exercises it directly.
+ */
+export async function inviteAndRegisterMemberViaApi(
   world: ReadySelfHostWorld,
   owner: SelfHostOwnerActor,
   options: { email?: string; role?: "member" } = {},
@@ -256,41 +319,8 @@ export async function inviteAndRegisterMember(
 ): Promise<SelfHostInvitee> {
   const email = options.email ?? inviteeEmail(world);
   const role = options.role ?? "member";
-  const password = generatePassword();
-
   const invitation = await transport.invite(owner.api, owner.organizationId, email, role);
-  if (invitation.status !== "pending") {
-    throw new Error(`inviteAndRegisterMember: invitation should be pending, got ${invitation.status}.`);
-  }
-
-  // The invitation id doubles as the invitation token in `/auth/password/register`
-  // (verified against the retired `t3-sh-1` walk).
-  await transport.register(world.api.baseUrl, { email, password, invitationToken: invitation.id });
-
-  const tokenResponse = await transport.loginWithPassword(world.api.baseUrl, email, password);
-  const session = toStoredSession(tokenResponse);
-  const api = world.api.client.withBearerToken(session.access_token);
-
-  const organizations = await transport.listOrganizations(api);
-  if (organizations.organizations.length !== 1) {
-    throw new Error(
-      `inviteAndRegisterMember: invitee should belong to exactly one org, got ${organizations.organizations.length}.`,
-    );
-  }
-  const organization = organizations.organizations[0];
-  if (organization.id !== owner.organizationId) {
-    throw new Error("inviteAndRegisterMember: invitee joined the wrong organization.");
-  }
-
-  return {
-    role: "member",
-    userId: session.user_id,
-    organizationId: organization.id,
-    email,
-    invitationId: invitation.id,
-    api,
-    session,
-  };
+  return registerInvitee(world, owner, { ...invitation, email }, transport);
 }
 
 /** True for a 404 `ApiRequestError` (helper for callers asserting closed endpoints). */

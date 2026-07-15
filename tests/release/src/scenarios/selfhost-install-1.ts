@@ -12,6 +12,7 @@ import type {
   ScenarioRunContext,
 } from "./types.js";
 import type { CandidateBuildMapV1 } from "../artifacts/build-map.js";
+import { candidateChildEnvironment } from "../artifacts/anyharness-smoke.js";
 import type {
   CellEvidenceV1,
   SelfHostBaseTurnEvidenceV1,
@@ -30,7 +31,8 @@ import { runShippedInstaller, waitForHealth } from "../worlds/selfhost/install.j
 import {
   claimSelfHostOwner,
   assertSecondClaimRejected,
-  inviteAndRegisterMember,
+  inviteeEmail,
+  registerInvitee,
   type SelfHostOwnerActor,
 } from "../fixtures/selfhost-actor.js";
 import {
@@ -86,6 +88,38 @@ const TURN_TIMEOUT_MS = 300_000;
 const RESTART_HEALTH_TIMEOUT_MS = 180_000;
 /** A real, healthy, reachable host that is definitely not a Proliferate control plane. */
 const NON_PROLIFERATE_PROBE_URL = "https://example.com";
+/** SHR-004a: the SH-BASE-TURN transcript re-read after reload must contain the assistant's reply to `SELFHOST_TURN_PROMPT`. */
+const EXPECTED_TURN_REPLY_PATTERN = /pong/i;
+/**
+ * SHR-004b: known LiteLLM/gateway env var names
+ * (`tests/release/src/config/env-manifest.ts`). SH-BASE-TURN's world is
+ * BYOK-only — `SELFHOST_REQUIRED_ENV` above carries no gateway input — so
+ * observing their absence from the controller's own ambient env is part of the
+ * "world was constructed with no LiteLLM env configured" half of
+ * `no_litellm_spend`.
+ */
+const LITELLM_GATEWAY_ENV_VARS = [
+  "RELEASE_E2E_GATEWAY_TEST_KEY",
+  "AGENT_GATEWAY_LITELLM_BASE_URL",
+  "AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL",
+  "AGENT_GATEWAY_LITELLM_MASTER_KEY",
+] as const;
+/**
+ * SHR-004a: the raw-string key the browser-fallback `ProductStorage` persists
+ * the selected LOGICAL workspace id under
+ * (`apps/desktop/src/lib/access/browser/product-storage.ts` falls through to
+ * `window.localStorage` outside Tauri; the key name itself is
+ * `apps/packages/product-client/src/hooks/sessions/lifecycle/use-session-selection-lifecycle.ts`'s
+ * `LOGICAL_WORKSPACE_SELECTION_KEY`). For a purely local (non-cloud) workspace
+ * the logical id IS the physical AnyHarness workspace id (verified against
+ * `data-workspace-ui-key={selectedLogicalWorkspaceId ?? selectedWorkspaceId ?? ""}`
+ * in `StandardWorkspaceShell.tsx`, and against how `local-world-smoke-1.ts`'s
+ * own natural "materialize via the UI, reload, and the shell comes back" reopen
+ * already relies on this same persisted key). Presetting it before a reload —
+ * exactly like `BROWSER_AUTH_SESSION_KEY` is preset elsewhere in this file — is
+ * what makes a plain reload restore the SAME local workspace's shell.
+ */
+const LOGICAL_WORKSPACE_SELECTION_KEY = "selected_logical_workspace_id";
 
 /**
  * Env the self-host lane needs. AWS/SSH provisioning inputs + the BYOK key are
@@ -142,11 +176,11 @@ function planForCell(cell: PlannedCellV1): ScenarioPlanStep[] {
         { description: `${prefix} owner stores a run-scoped BYOK key; select it (surface=local, sourceKind=api_key)` },
         { description: `${prefix} Desktop pushes state into the controller-local candidate AnyHarness` },
         { description: `${prefix} create a local workspace + run one bounded cheapest-eligible Claude turn (no LiteLLM/E2B)` },
-        { description: `${prefix} reopen; server/renderer/AnyHarness/workspace/session/transcript stay commandable` },
+        { description: `${prefix} reload the renderer and re-read the same session's transcript; observe /meta + runtime auth state confirm no LiteLLM/E2B` },
       ];
     case SH_INVITEE:
       return [
-        { description: `${prefix} owner invites a member; capture the invitation response` },
+        { description: `${prefix} owner invites a member through the product UI; capture the invitation` },
         { description: `${prefix} register + login from a SECOND isolated product page` },
         { description: `${prefix} assert the intended role + one authenticated member action` },
       ];
@@ -466,13 +500,94 @@ export const defaultSelfHostInstallDriver: SelfHostInstallDriver = {
           reason: { code: "scenario_failure", message: `SH-BASE-TURN: assistant turn did not end within ${TURN_TIMEOUT_MS}ms.` },
         };
       }
-      // Reopen: the workspace/session/transcript must remain commandable from
-      // the controller-local runtime after the turn.
+      // Reopen (API): the workspace/session must remain commandable from the
+      // controller-local runtime after the turn.
       const reopened = await world.runtime.client.getSession(session.id);
       if (!reopened || reopened.workspaceId !== created.workspace.id) {
         return {
           status: "failed",
           reason: { code: "scenario_failure", message: "SH-BASE-TURN: session did not remain commandable after reopen." },
+        };
+      }
+
+      // SHR-004a: `transcript_reopened` must be OBSERVED, not merely asserted
+      // by construction — actually reload the renderer page/context and
+      // re-read the SAME session's transcript DOM. This workspace/session were
+      // created directly over the runtime API (never through the composer), so
+      // nothing points the renderer at them yet; point it there the same way
+      // the product itself restores a workspace on reload (see the helper doc).
+      const reloadedTranscript = await reopenAndReadTranscriptInRenderer(page, created.workspace.id);
+      if (!EXPECTED_TURN_REPLY_PATTERN.test(reloadedTranscript)) {
+        return {
+          status: "failed",
+          reason: {
+            code: "scenario_failure",
+            message:
+              `SH-BASE-TURN: the renderer's re-read transcript after a fresh page load did not contain the ` +
+              `turn's reply (saw ${JSON.stringify(reloadedTranscript)}).`,
+          },
+        };
+      }
+
+      // SHR-004b/c: `no_litellm_spend`/`no_e2b` must be OBSERVED, not merely
+      // asserted by construction.
+      const capabilities = await fetchServerCapabilities(world);
+      if (capabilities.agentGateway) {
+        return {
+          status: "failed",
+          reason: {
+            code: "scenario_failure",
+            message: "SH-BASE-TURN: /meta reports capabilities.agentGateway=true; expected the self-host instance to advertise it disabled.",
+          },
+        };
+      }
+      if (capabilities.cloudWorkspaces) {
+        return {
+          status: "failed",
+          reason: {
+            code: "scenario_failure",
+            message: "SH-BASE-TURN: /meta reports capabilities.cloudWorkspaces=true; expected the self-host instance to advertise it disabled.",
+          },
+        };
+      }
+      const gatewayEnvVar = LITELLM_GATEWAY_ENV_VARS.find((name) => process.env[name]?.trim());
+      if (gatewayEnvVar) {
+        return {
+          status: "failed",
+          reason: {
+            code: "scenario_failure",
+            message: `SH-BASE-TURN: the world's controller env carries "${gatewayEnvVar}"; a BYOK-only self-host run must configure no LiteLLM gateway input.`,
+          },
+        };
+      }
+      const authSourceKinds = readRuntimeAuthSourceKinds(world.paths.runtimeHome, selection.harnessKind);
+      if (!authSourceKinds.includes("api_key")) {
+        return {
+          status: "failed",
+          reason: {
+            code: "scenario_failure",
+            message: `SH-BASE-TURN: the pushed BYOK auth state for "${selection.harnessKind}" does not carry an "api_key" source (saw ${JSON.stringify(authSourceKinds)}).`,
+          },
+        };
+      }
+      if (authSourceKinds.includes("gateway")) {
+        return {
+          status: "failed",
+          reason: {
+            code: "scenario_failure",
+            message: `SH-BASE-TURN: the pushed BYOK auth state for "${selection.harnessKind}" carries a "gateway" (LiteLLM virtual-key) source; a BYOK-direct turn must show only "api_key" (saw ${JSON.stringify(authSourceKinds)}).`,
+          },
+        };
+      }
+      const scrubbedChildEnv = candidateChildEnvironment(process.env);
+      const e2bEnvKey = Object.keys(scrubbedChildEnv).find((key) => /e2b/i.test(key));
+      if (e2bEnvKey) {
+        return {
+          status: "failed",
+          reason: {
+            code: "scenario_failure",
+            message: `SH-BASE-TURN: the world's scrubbed candidate child env carries an E2B key ("${e2bEnvKey}"); expected none.`,
+          },
         };
       }
 
@@ -510,7 +625,21 @@ export const defaultSelfHostInstallDriver: SelfHostInstallDriver = {
         },
       };
     }
-    const invitee = await inviteAndRegisterMember(world, owner);
+    // SHR-001: the CREATE goes through the real renderer UI, never a direct
+    // API POST — drive the owner's authenticated Members/Invitations settings
+    // surface and submit the invite-by-email form. The API is used only to
+    // READ the created invitation's registration token back (matching the
+    // shipped self-host smoke's own token-recovery pattern), never to create it.
+    const email = inviteeEmail(world);
+    const invitePage = await openOwnerMembersSettingsPage(world, owner);
+    let createdInvitation: { id: string; email: string; status: string };
+    try {
+      await inviteMemberThroughUi(invitePage, email);
+      createdInvitation = await readCreatedInvitation(owner, email);
+    } finally {
+      await invitePage.close().catch(() => undefined);
+    }
+    const invitee = await registerInvitee(world, owner, createdInvitation);
     const page = await openAuthenticatedPage(world, invitee);
     try {
       // One authenticated member action: the invitee can list the org's
@@ -933,6 +1062,91 @@ async function openAuthenticatedPage(
 }
 
 /**
+ * SHR-001: opens an authenticated page navigated directly at the org
+ * Members/Invitations settings surface (`/settings?section=organization-members`
+ * — the real route `SidebarAccountFooter.tsx`'s "Settings" menu item navigates
+ * to; `AuthenticatedAppHost.tsx` keeps the home shell mounted underneath it, so
+ * `AUTHENTICATED_READINESS_SELECTOR` still resolves). Renders
+ * `OrganizationMembersPane` → `OrganizationInvitationsSection`
+ * (apps/packages/product-client/src/components/settings/panes/organization/).
+ */
+async function openOwnerMembersSettingsPage(
+  world: ReadySelfHostWorld,
+  owner: SelfHostOwnerActor,
+): Promise<ProductPage> {
+  const context = await world.renderer.browser.newContext();
+  await context.addInitScript(
+    ({ key, value }) => {
+      window.localStorage.setItem(key, value);
+    },
+    { key: BROWSER_AUTH_SESSION_KEY, value: JSON.stringify(owner.session) },
+  );
+  const page = await context.newPage();
+  await page.goto(`${world.renderer.baseUrl}/settings?section=organization-members`, {
+    waitUntil: "domcontentloaded",
+  });
+  await page.locator(AUTHENTICATED_READINESS_SELECTOR).first().waitFor({ state: "visible", timeout: 30_000 });
+  return wrapPage(context, page);
+}
+
+/**
+ * SHR-001: submits the invite-by-email form on the Members/Invitations
+ * settings surface. The product ships almost no `data-testid`s on this surface
+ * (see `product-page.ts`'s module doc on the same gap for the home/workspace
+ * shell) — `OrganizationInvitationsSection.tsx`'s email `<Input>` carries
+ * `aria-label="Invite email"` and the submit `<Button>` reads "Send
+ * invitation"; those accessible-name hooks are the most resilient selectors
+ * available. Waits for the form's own success signal: `handleInvite`
+ * (`OrganizationMembersPane.tsx`) only resets the controlled email input to ""
+ * after `createInvitation` resolves — a rejected create leaves it populated and
+ * throws, so a persistently non-empty value is a real failure, not a race.
+ */
+async function inviteMemberThroughUi(page: ProductPage, email: string): Promise<void> {
+  const p = page.page;
+  const emailInput = p.locator('input[aria-label="Invite email"]');
+  await emailInput.waitFor({ state: "visible", timeout: 30_000 });
+  await emailInput.fill(email);
+  const submit = p.getByRole("button", { name: "Send invitation" });
+  await submit.waitFor({ state: "visible", timeout: 10_000 });
+  await submit.click();
+
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    const value = await emailInput.inputValue().catch(() => email);
+    if (value === "") {
+      return;
+    }
+    await sleep(500);
+  }
+  throw new Error(
+    `inviteMemberThroughUi: the invite form never confirmed success for "${email}" within 30000ms ` +
+      `(the email input still reads a non-empty value).`,
+  );
+}
+
+/**
+ * SHR-001: reads the invitation the UI just created back over the product API
+ * (the invitation id doubles as the registration token — see
+ * `registerInvitee` in `fixtures/selfhost-actor.ts`). This is a READ only: the
+ * CREATE already happened through the UI in `inviteMemberThroughUi`, matching
+ * the shipped self-host smoke's own token-recovery pattern
+ * (`server/deploy/smoke/run-smoke.sh`).
+ */
+async function readCreatedInvitation(
+  owner: SelfHostOwnerActor,
+  email: string,
+): Promise<{ id: string; email: string; status: string }> {
+  const response = await owner.api.get<{ invitations: Array<{ id: string; email: string; status: string }> }>(
+    `/v1/organizations/${encodeURIComponent(owner.organizationId)}/invitations`,
+  );
+  const invitation = response.invitations.find((entry) => entry.email === email);
+  if (!invitation) {
+    throw new Error(`readCreatedInvitation: no invitation for "${email}" was found after the UI submit.`);
+  }
+  return invitation;
+}
+
+/**
  * Installs a session into an already-open (trusted, pre-login) isolated page and
  * boots it authenticated. `openIsolatedPage` already loaded a bare page on the
  * renderer origin (that is where the pre-trust `/meta` probes ran from), but with
@@ -966,6 +1180,49 @@ function wrapPage(context: BrowserContext, page: Page): ProductPage {
       await context.close().catch(() => undefined);
     },
   };
+}
+
+/** Escapes a value for safe interpolation inside a `[attr="…"]` CSS selector. */
+function cssAttr(value: string): string {
+  return value.replace(/["\\]/g, "\\$&");
+}
+
+/**
+ * SHR-004a: reloads the SAME renderer page/context and re-reads the
+ * SH-BASE-TURN workspace's transcript DOM — a genuine fresh document load, not
+ * a second call into AnyHarness's in-memory API. The workspace/session were
+ * created directly over the runtime API (never through the composer), so
+ * nothing points the renderer at them yet; presetting
+ * `LOGICAL_WORKSPACE_SELECTION_KEY` (see its doc) before the reload is what
+ * makes the restored shell resolve to THIS workspace, the same mechanism a
+ * plain reload already relies on for a UI-materialized workspace. Returns the
+ * settled assistant reply text (empty string if none rendered in time).
+ */
+async function reopenAndReadTranscriptInRenderer(page: ProductPage, workspaceId: string): Promise<string> {
+  const p = page.page;
+  await p.evaluate(
+    ({ key, value }) => {
+      window.localStorage.setItem(key, value);
+    },
+    { key: LOGICAL_WORKSPACE_SELECTION_KEY, value: workspaceId },
+  );
+  await p.reload({ waitUntil: "domcontentloaded" });
+  await p
+    .locator(`[data-workspace-shell][data-workspace-ui-key="${cssAttr(workspaceId)}"]`)
+    .first()
+    .waitFor({ state: "attached", timeout: 60_000 });
+
+  const settled = p.locator('[data-assistant-prose][data-assistant-streaming="false"]').last();
+  await settled.waitFor({ state: "attached", timeout: 30_000 }).catch(() => undefined);
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    const text = (await settled.textContent().catch(() => "")) ?? "";
+    if (text.trim().length > 0) {
+      return text.trim();
+    }
+    await sleep(500);
+  }
+  return "";
 }
 
 /**
@@ -1055,4 +1312,65 @@ function summarizeRuntimeAuthState(runtimeHome: string, harnessKind: string): st
   } catch {
     return `[diag: runtime agent-auth/state.json unparseable]`;
   }
+}
+
+/**
+ * SHR-004b: reads the controller-local runtime's agent-auth state file (the
+ * same file `summarizeRuntimeAuthState` diagnoses) and returns the harness's
+ * source `kind`s. `"api_key"`/`"gateway"` are AnyHarness's own route-auth
+ * profile constants (`anyharness/crates/anyharness-lib/src/domains/agents/
+ * route_auth/state.rs` `SOURCE_KIND_API_KEY`/`SOURCE_KIND_GATEWAY`) — a
+ * BYOK-direct turn's pushed state must show only `"api_key"`, never
+ * `"gateway"` (the LiteLLM virtual-key route). Returns `[]` if the state file
+ * is absent/unparseable/missing the harness (the caller's `includes("api_key")`
+ * check then fails closed rather than vacuously passing).
+ */
+function readRuntimeAuthSourceKinds(runtimeHome: string, harnessKind: string): string[] {
+  const statePath = path.join(runtimeHome, "agent-auth", "state.json");
+  let raw: string;
+  try {
+    raw = readFileSync(statePath, "utf8");
+  } catch {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(raw) as {
+      harnesses?: Array<{ harness_kind?: string; sources?: Array<{ kind?: string }> }>;
+    };
+    const entry = parsed.harnesses?.find((h) => h.harness_kind === harnessKind);
+    return (entry?.sources ?? []).map((source) => source.kind ?? "").filter((kind) => kind.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+/** The `/meta` capability fields SHR-004b/c observe (`server/proliferate/server/meta.py` `ServerCapabilities`). */
+interface SelfHostMetaCapabilities {
+  cloudWorkspaces: boolean;
+  agentGateway: boolean;
+}
+
+/**
+ * SHR-004b/c: reads the public `/meta` capability contract the SH-DESKTOP-OWNER
+ * cell already trusts pre-login (bare `fetch`, no bearer needed) so
+ * `no_litellm_spend`/`no_e2b` are backed by the server's own OBSERVED
+ * advertisement rather than merely "we never called those paths."
+ */
+async function fetchServerCapabilities(world: ReadySelfHostWorld): Promise<SelfHostMetaCapabilities> {
+  const response = await fetch(`${world.api.baseUrl}/meta`);
+  if (!response.ok) {
+    throw new Error(`fetchServerCapabilities: GET /meta failed with HTTP ${response.status}.`);
+  }
+  const body = (await response.json()) as { capabilities?: Partial<SelfHostMetaCapabilities> };
+  const capabilities = body.capabilities;
+  if (
+    !capabilities ||
+    typeof capabilities.cloudWorkspaces !== "boolean" ||
+    typeof capabilities.agentGateway !== "boolean"
+  ) {
+    throw new Error(
+      "fetchServerCapabilities: /meta response did not carry a capabilities.cloudWorkspaces/agentGateway boolean pair.",
+    );
+  }
+  return { cloudWorkspaces: capabilities.cloudWorkspaces, agentGateway: capabilities.agentGateway };
 }
