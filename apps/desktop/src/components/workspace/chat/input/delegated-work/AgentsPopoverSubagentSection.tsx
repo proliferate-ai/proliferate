@@ -1,5 +1,6 @@
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ExternalLink, Robot } from "@proliferate/ui/icons";
+import { ExternalLink } from "@proliferate/ui/icons";
+import { DelegatedAgentIdenticon } from "@/components/workspace/delegated-work/DelegatedAgentIdenticon";
 import type {
   DelegatedWorkComposerViewModel,
 } from "@/hooks/chat/facade/use-delegated-work-composer";
@@ -81,7 +82,10 @@ function SubagentPopoverRow({
         className="h-auto w-full min-w-0 justify-start gap-2 rounded-md px-1.5 py-1 text-left hover:bg-transparent"
         onClick={onOpen}
       >
-        <Robot className={`size-3.5 shrink-0 ${row.identity.textColorClassName}`} />
+        <DelegatedAgentIdenticon
+          identity={row.identity}
+          className={`size-3.5 shrink-0 ${row.identity.textColorClassName}`}
+        />
         <span className="min-w-0">
           <span className="block truncate text-sm font-medium text-foreground">
             {row.identity.displayName}

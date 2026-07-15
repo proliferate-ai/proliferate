@@ -4,6 +4,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { Robot } from "@proliferate/ui/icons";
 import { MarkdownBody } from "@proliferate/product-ui/chat/transcript/MarkdownBody";
 import { renderDesktopCodeBlock } from "@/components/content/ui/desktop-markdown-code-block";
+import { DelegatedAgentIdenticon } from "@/components/workspace/delegated-work/DelegatedAgentIdenticon";
 import {
   parseSubagentLaunchResult,
   resolveSubagentLaunchDisplay,
@@ -128,8 +129,8 @@ function SubagentFinishedRow({
         aria-expanded={detailsExpanded}
         onClick={() => setDetailsExpanded((next) => !next)}
       >
-        <Robot
-          aria-hidden="true"
+        <DelegatedAgentIdenticon
+          identity={identity}
           className={`size-3 shrink-0 transition-colors ${
             detailsExpanded
               ? "text-foreground/70"

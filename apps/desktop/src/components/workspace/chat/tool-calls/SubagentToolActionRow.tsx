@@ -4,6 +4,7 @@ import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import { Robot } from "@proliferate/ui/icons";
 import { ToolActionDetailsPanel } from "@/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 import { DelegatedAgentHoverCard } from "@/components/workspace/shell/tabs/DelegatedAgentHoverCard";
+import { DelegatedAgentIdenticon } from "@/components/workspace/delegated-work/DelegatedAgentIdenticon";
 import { useTranscriptOpenSession } from "@/components/workspace/chat/transcript/TranscriptContexts";
 import type {
   SubagentMcpReceiptPresentation,
@@ -69,7 +70,10 @@ export function SubagentToolActionRow({
 
   const identityContent = (
     <span className="inline-flex min-w-0 max-w-full items-center gap-1 align-baseline">
-      <Robot className={`size-3 shrink-0 ${identity.textColorClassName}`} />
+      <DelegatedAgentIdenticon
+        identity={identity}
+        className={`size-3 shrink-0 ${identity.textColorClassName}`}
+      />
       <span className={`truncate font-medium ${identity.textColorClassName}`}>
         {identity.displayName}
       </span>

@@ -113,6 +113,7 @@ export interface DelegatedWorkVisualIdentity {
   borderColorClassName: string;
   colorToken: string;
   colorVar: string;
+  iconSeedHash: number;
 }
 
 export function delegatedWorkVisualIdentity(id: string): DelegatedWorkVisualIdentity {
@@ -131,6 +132,7 @@ export function delegatedWorkVisualIdentity(id: string): DelegatedWorkVisualIden
     borderColorClassName: color.borderColorClassName,
     colorToken: color.token,
     colorVar: color.colorVar,
+    iconSeedHash: seedHash,
   };
 }
 
@@ -163,6 +165,7 @@ export function buildDelegatedAgentIdentity({
     textColorClassName: visual.textColorClassName,
     borderColorClassName: visual.borderColorClassName,
     colorVar: visual.colorVar,
+    iconSeedHash: visual.iconSeedHash,
     openTarget: sessionId
       ? {
         workspaceId: workspaceId ?? null,
@@ -187,7 +190,7 @@ function normalizeTitle(title: string | null | undefined): string {
   return trimmed && trimmed.length > 0 ? trimmed : "Agent";
 }
 
-function stableIndex(value: string): number {
+export function stableIndex(value: string): number {
   let hash = 0;
   for (let index = 0; index < value.length; index += 1) {
     hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
@@ -198,7 +201,7 @@ function stableIndex(value: string): number {
 // 32-bit avalanche finalizer (splitmix-style): spreads every input bit across the
 // output so a value derived from it (the color index) does not stay correlated with
 // the low bits that the name index already consumes.
-function mixHash(hash: number): number {
+export function mixHash(hash: number): number {
   let value = hash >>> 0;
   value = Math.imul(value ^ (value >>> 16), 0x7feb352d) >>> 0;
   value = Math.imul(value ^ (value >>> 15), 0x846ca68b) >>> 0;

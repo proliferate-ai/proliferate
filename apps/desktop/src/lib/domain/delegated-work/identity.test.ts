@@ -45,6 +45,24 @@ describe("delegatedWorkVisualIdentity", () => {
 });
 
 describe("buildDelegatedAgentIdentity", () => {
+  it("derives the identicon seed from the same seed as name and color", () => {
+    const identity = buildDelegatedAgentIdentity({
+      id: "subagent_abc123456",
+      title: "API Surface Check",
+      sessionId: "session-1",
+      sessionLinkId: "link-abc123",
+    });
+
+    // The seed is sessionLinkId || sessionId || id; seeding the shape from the
+    // raw id instead would make it diverge from name/color across surfaces.
+    expect(identity.iconSeedHash).toBe(
+      delegatedWorkVisualIdentity("link-abc123").iconSeedHash,
+    );
+    expect(identity.iconSeedHash).not.toBe(
+      delegatedWorkVisualIdentity("subagent_abc123456").iconSeedHash,
+    );
+  });
+
   it("builds the canonical generated display handle", () => {
     const identity = buildDelegatedAgentIdentity({
       id: "subagent_abc123456",
