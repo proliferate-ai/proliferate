@@ -128,6 +128,14 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      # Wait for the one-shot schema migration to finish before starting the
+      # API. The API's lifespan validates the schema and exits if the
+      # alembic_version table is missing; without this the API races `migrate`
+      # and crash-loops (restart: unless-stopped) on every fresh install until
+      # migrations happen to win, flapping /health and emitting alarming
+      # "schema is not up to date" tracebacks.
+      migrate:
+        condition: service_completed_successfully
     command:
       [
         "uvicorn",
