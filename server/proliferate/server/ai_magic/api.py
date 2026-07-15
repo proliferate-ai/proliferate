@@ -4,10 +4,8 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import current_product_user
-from proliferate.constants.cloud import GitProvider
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
-from proliferate.db.store.repositories import get_repo_config_for_user
 from proliferate.server.ai_magic.models import (
     GenerateCommitMessageRequest,
     GenerateCommitMessageResponse,
@@ -20,6 +18,7 @@ from proliferate.server.ai_magic.service import (
     generate_commit_message,
     generate_session_title,
     generate_workspace_name,
+    resolve_commit_instructions,
 )
 
 router = APIRouter(prefix="/ai_magic", tags=["ai_magic"])
@@ -49,17 +48,12 @@ async def generate_commit_message_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> GenerateCommitMessageResponse:
-    instructions: str | None = None
-    if body.git_owner and body.git_repo_name:
-        repo_config = await get_repo_config_for_user(
-            db,
-            user_id=user.id,
-            git_provider=GitProvider.github.value,
-            git_owner=body.git_owner,
-            git_repo_name=body.git_repo_name,
-        )
-        if repo_config is not None:
-            instructions = repo_config.commit_instructions
+    instructions = await resolve_commit_instructions(
+        db,
+        user_id=user.id,
+        git_owner=body.git_owner,
+        git_repo_name=body.git_repo_name,
+    )
 
     message = await generate_commit_message(
         user.id,
