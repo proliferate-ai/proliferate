@@ -47,6 +47,9 @@ VERSION_EXPLICIT=0
 EVAL_MODE=0
 TELEMETRY_MODE="self_managed"
 IMAGE_REPO="ghcr.io/proliferate-ai/proliferate-server"
+# Optional extra browser origins allowed to call the API (CORS). Empty leaves
+# the compose/image default (localhost + tauri desktop origins) untouched.
+CORS_ALLOW_ORIGINS_OVERRIDE=""
 ASSUME_YES=0
 DRY_RUN=0
 NO_START=0
@@ -75,6 +78,10 @@ Options:
                            rerun.
       --telemetry-mode M   PROLIFERATE_TELEMETRY_MODE (default: self_managed).
       --image-repo REPO    Server image repository (default GHCR).
+      --cors-allow-origins CSV
+                           Extra browser origins allowed to call the API
+                           (CORS_ALLOW_ORIGINS). Set this when a browser-based
+                           client on a non-default origin must reach the API.
       --bundle PATH        Install from a local, checksum-verified deploy bundle
                            (proliferate-deploy.tar.gz) instead of downloading a
                            GitHub release. For air-gapped installs and for
@@ -129,6 +136,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --image-repo)
       IMAGE_REPO="${2:-}"
+      shift 2
+      ;;
+    --cors-allow-origins)
+      CORS_ALLOW_ORIGINS_OVERRIDE="${2:-}"
       shift 2
       ;;
     --bundle)
@@ -464,6 +475,10 @@ configure() {
   fi
 
   set_env_key "$static_file" PROLIFERATE_TELEMETRY_MODE "$TELEMETRY_MODE"
+  if [[ -n "$CORS_ALLOW_ORIGINS_OVERRIDE" ]]; then
+    set_env_key "$static_file" CORS_ALLOW_ORIGINS "$CORS_ALLOW_ORIGINS_OVERRIDE"
+    info "CORS_ALLOW_ORIGINS set to $CORS_ALLOW_ORIGINS_OVERRIDE"
+  fi
   set_env_key "$static_file" PROLIFERATE_SERVER_IMAGE "$IMAGE_REPO"
   # Pin the image tag to the resolved release for controlled, reproducible
   # upgrades (the spec's recommended strategy over the rolling :stable tag).

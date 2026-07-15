@@ -126,6 +126,41 @@ test("runShippedInstaller transports bytes, runs the shipped installer pinned to
   assert.ok(!installCmd!.includes(":stable") && !installCmd!.includes(":latest"));
 });
 
+test("runShippedInstaller passes --cors-allow-origins when browser origins are supplied, and omits it otherwise", async () => {
+  const withCors = fakeSsh(happyHandler);
+  await runShippedInstaller({
+    box: box(),
+    ssh: withCors,
+    serverImageArchive: materialized("server/linux/amd64", "/run/artifacts/server-image.tar"),
+    bundle: materialized("selfhost-bundle/linux/amd64", "/run/artifacts/proliferate-deploy.tar.gz"),
+    bundleSha256SumsPath: "/run/artifacts/self-hosted-assets.SHA256SUMS",
+    siteAddress: "run-1.qualification.proliferate.com",
+    candidateImageRepo: "proliferate-server-qualification",
+    candidateImageTag: "0.3.28",
+    corsAllowOrigins: "http://127.0.0.1:5173,http://localhost:5173,null",
+    fetchImpl: okFetch({ "/meta": { serverVersion: "0.3.28" } }),
+  });
+  const corsCmd = withCors.runCalls.find((c) => c.includes("install.sh --bundle"));
+  assert.ok(corsCmd!.includes("--cors-allow-origins http://127.0.0.1:5173,http://localhost:5173,null"));
+  // The CSV is a single argv token (no spaces) and precedes --yes.
+  assert.ok(/--cors-allow-origins \S+ --yes/.test(corsCmd!));
+
+  const noCors = fakeSsh(happyHandler);
+  await runShippedInstaller({
+    box: box(),
+    ssh: noCors,
+    serverImageArchive: materialized("server/linux/amd64", "/run/artifacts/server-image.tar"),
+    bundle: materialized("selfhost-bundle/linux/amd64", "/run/artifacts/proliferate-deploy.tar.gz"),
+    bundleSha256SumsPath: "/run/artifacts/self-hosted-assets.SHA256SUMS",
+    siteAddress: "run-1.qualification.proliferate.com",
+    candidateImageRepo: "proliferate-server-qualification",
+    candidateImageTag: "0.3.28",
+    fetchImpl: okFetch({ "/meta": { serverVersion: "0.3.28" } }),
+  });
+  const plainCmd = noCors.runCalls.find((c) => c.includes("install.sh --bundle"));
+  assert.ok(!plainCmd!.includes("--cors-allow-origins"));
+});
+
 test("runShippedInstaller refuses a rolling stable/latest candidate tag", async () => {
   const ssh = fakeSsh(happyHandler);
   await assert.rejects(

@@ -39,6 +39,13 @@ export interface RunInstallerInputs {
   candidateImageRepo: string;
   /** Loaded candidate image tag — NEVER `stable`/`latest`. */
   candidateImageTag: string;
+  /**
+   * Extra browser origins the box's API must allow (CORS). The Desktop renderer
+   * and the Connect-Server trust probe drive the API from a browser, so their
+   * origins must be admitted or the browser blocks the cross-origin fetches.
+   * Passed to the shipped installer's `--cors-allow-origins`; omitted when empty.
+   */
+  corsAllowOrigins?: string;
   timeoutMs?: number;
   log?: (message: string) => void;
   /** Injectable HTTP readiness seam (real `fetch` in production, fake in tests). */
@@ -106,26 +113,29 @@ export async function runShippedInstaller(inputs: RunInstallerInputs): Promise<I
   // Pin `.env.static` to the docker-loaded candidate image via --image-repo /
   // --version (never stable/latest). No secret ever rides on argv.
   log(`running shipped install.sh --bundle for ${inputs.siteAddress}`);
-  await ssh.run(
-    [
-      "sudo bash",
-      SELFHOST_REMOTE_INSTALLER,
-      "--bundle",
-      SELFHOST_REMOTE_BUNDLE,
-      "--bundle-sha256sums",
-      SELFHOST_REMOTE_SHA256SUMS,
-      "--domain",
-      inputs.siteAddress,
-      "--image-repo",
-      inputs.candidateImageRepo,
-      "--version",
-      inputs.candidateImageTag,
-      "--telemetry-mode",
-      "self_managed",
-      "--yes",
-    ].join(" "),
-    { timeoutMs: inputs.timeoutMs },
-  );
+  const installArgs = [
+    "sudo bash",
+    SELFHOST_REMOTE_INSTALLER,
+    "--bundle",
+    SELFHOST_REMOTE_BUNDLE,
+    "--bundle-sha256sums",
+    SELFHOST_REMOTE_SHA256SUMS,
+    "--domain",
+    inputs.siteAddress,
+    "--image-repo",
+    inputs.candidateImageRepo,
+    "--version",
+    inputs.candidateImageTag,
+    "--telemetry-mode",
+    "self_managed",
+  ];
+  // The CSV carries no spaces (origins + "null"), so it is a single argv token
+  // in the space-joined command; no secret ever rides on argv.
+  if (inputs.corsAllowOrigins && inputs.corsAllowOrigins.trim().length > 0) {
+    installArgs.push("--cors-allow-origins", inputs.corsAllowOrigins.trim());
+  }
+  installArgs.push("--yes");
+  await ssh.run(installArgs.join(" "), { timeoutMs: inputs.timeoutMs });
 
   // 4. Wait for public HTTPS /health (Caddy TLS issuance + stack readiness).
   const apiOrigin = `https://${inputs.siteAddress}`;
