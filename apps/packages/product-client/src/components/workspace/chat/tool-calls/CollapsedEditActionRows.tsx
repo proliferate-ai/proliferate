@@ -106,18 +106,20 @@ function EditActionRow({
         <span className={failed ? "shrink-0 text-destructive/80" : "shrink-0 text-inherit"}>
           {action}
         </span>
-        <ActionFileLink
-          pathLabel={pathLabel}
-          workspacePath={workspacePath}
-          displayName={displayName}
-        />
-        {(additions > 0 || deletions > 0) && (
-          <FileChangeStats
-            additions={additions}
-            deletions={deletions}
-            className="text-sm"
+        <span className="inline-flex min-w-0 items-baseline gap-1">
+          <ActionFileLink
+            pathLabel={pathLabel}
+            workspacePath={workspacePath}
+            displayName={displayName}
           />
-        )}
+          {(additions > 0 || deletions > 0) && (
+            <FileChangeStats
+              additions={additions}
+              deletions={deletions}
+              className="text-sm"
+            />
+          )}
+        </span>
         {hasDetails && (
           <ChevronRight
             aria-hidden="true"
