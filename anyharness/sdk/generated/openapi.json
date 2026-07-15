@@ -79,6 +79,27 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "agent-auth"
+        ],
+        "operationId": "delete_agent_auth_state",
+        "responses": {
+          "204": {
+            "description": "Persisted route state cleared; native auth is active"
+          },
+          "500": {
+            "description": "State could not be cleared",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/agents": {

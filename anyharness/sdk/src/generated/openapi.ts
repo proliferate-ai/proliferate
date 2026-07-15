@@ -30,7 +30,7 @@ export interface paths {
         get?: never;
         put: operations["put_agent_auth_state"];
         post?: never;
-        delete?: never;
+        delete: operations["delete_agent_auth_state"];
         options?: never;
         head?: never;
         patch?: never;
@@ -5183,6 +5183,33 @@ export interface operations {
             };
             /** @description Stale revision; persisted state unchanged */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_agent_auth_state: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Persisted route state cleared; native auth is active */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description State could not be cleared */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

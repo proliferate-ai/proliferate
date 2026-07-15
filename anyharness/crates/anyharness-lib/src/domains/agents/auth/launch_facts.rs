@@ -25,38 +25,55 @@ use std::path::{Path, PathBuf};
 use anyharness_credential_discovery::{route_kinds, CredentialFact};
 
 use crate::domains::agents::registry::bundled::bundled_agent_registry_document;
-use crate::domains::agents::registry::schema::{AgentRegistryAuthSlotEnvVar, AgentRegistryEnvVarKind};
-use crate::domains::agents::route_auth::profile::{
-    resolve_profile, AgentRuntimeAuthProfile, ResolvedSource,
+use crate::domains::agents::registry::schema::{
+    AgentRegistryAuthSlotEnvVar, AgentRegistryEnvVarKind,
 };
-use crate::domains::agents::route_auth::state::load_state_file;
+use crate::domains::agents::route_auth::profile::{AgentRuntimeAuthProfile, ResolvedSource};
+use crate::domains::agents::route_auth::resolve_launch_auth_profile;
 
-/// Collect credential facts for classification, merging composed workspace env
-/// with registry-bounded ambient process env, AND the enrolled-route facts
-/// resolved from workspace-scoped `agent-auth/state.json`. Both call sites
-/// (launch_options and create_session) go through this single entry point.
+/// Collect credential facts for classification from the auth profile the
+/// launcher will actually use. Native profiles merge composed workspace env
+/// with registry-bounded ambient process env. Explicit sources replace those
+/// native facts for single-source harnesses; OpenCode intentionally composes
+/// both. Both call sites (launch_options and create_session) go through this
+/// single entry point.
 ///
 /// `runtime_home` is the AnyHarness home whose `agent-auth/state.json` the
-/// route reader consults. It uses the same resolution as `route_auth` at
-/// launch. A missing, native, or non-gateway state yields no route fact;
-/// classification then falls through exactly as before.
+/// route reader consults, including the same server-origin guard as launch.
 pub fn collect_launch_env_facts(
     agent_kind: &str,
     readiness_env: &BTreeMap<String, String>,
     runtime_home: &Path,
 ) -> Vec<CredentialFact> {
     let ambient: BTreeMap<String, String> = std::env::vars().collect();
-    let mut facts = collect_launch_env_facts_with_ambient(agent_kind, readiness_env, &ambient);
-    facts.extend(collect_enrolled_source_facts(agent_kind, runtime_home));
-    facts
+    let native_facts =
+        || collect_launch_env_facts_with_ambient(agent_kind, readiness_env, &ambient);
+    match resolve_launch_auth_profile(runtime_home, agent_kind) {
+        Ok(profile @ AgentRuntimeAuthProfile::Sources(_)) => {
+            let mut facts = collect_enrolled_source_facts(&profile);
+            // OpenCode intentionally composes injected sources with its native
+            // providers. Every other supported routed harness is single-source:
+            // its selected route must mask ambient/native credentials exactly as
+            // the launch renderer does.
+            if agent_kind == "opencode" {
+                facts.extend(native_facts());
+            }
+            facts
+        }
+        Ok(AgentRuntimeAuthProfile::Native) => native_facts(),
+        Err(error) => {
+            tracing::debug!(agent_kind, %error, "route profile unresolved; native facts govern");
+            native_facts()
+        }
+    }
 }
 
 /// Facts derived from the enrolled credential sources in workspace-scoped
-/// `agent-auth/state.json`. Reuses `route_auth::resolve_profile` — one reader,
-/// two consumers (this collector and the launch-time renderer) — so a
-/// classification-visible context exactly tracks a source the launcher would
-/// inject. A malformed state file is tolerated as "no facts" (stale in the SAFE
-/// direction: contexts stay gated until the file heals), never an error here.
+/// `agent-auth/state.json`. Reuses the launch-time route resolver — one reader,
+/// two consumers (this collector and the renderer) — so a classification-
+/// visible context exactly tracks a source the launcher would inject. Route
+/// resolution errors are logged and leave native/composed facts in control,
+/// preserving the collector's existing non-fatal behavior.
 ///
 /// Per source kind:
 /// - `gateway` → a single [`CredentialFact::Route`] for the gateway route
@@ -69,16 +86,9 @@ pub fn collect_launch_env_facts(
 ///   `Env(ANTHROPIC_API_KEY)`) never activates and the model menu comes back
 ///   empty. The Env fact carries presence only; the raw value is still rendered
 ///   into the launch env by the existing `render_profile` path at spawn time.
-fn collect_enrolled_source_facts(agent_kind: &str, runtime_home: &Path) -> Vec<CredentialFact> {
-    let state = match load_state_file(runtime_home) {
-        Ok(state) => state,
-        Err(error) => {
-            tracing::debug!(agent_kind, %error, "route state unreadable; no source facts");
-            return Vec::new();
-        }
-    };
-    match resolve_profile(state.as_ref(), agent_kind) {
-        Ok(AgentRuntimeAuthProfile::Sources(sources)) => {
+fn collect_enrolled_source_facts(profile: &AgentRuntimeAuthProfile) -> Vec<CredentialFact> {
+    match profile {
+        AgentRuntimeAuthProfile::Sources(sources) => {
             let mut facts = Vec::new();
             let mut has_gateway = false;
             for source in &sources.sources {
@@ -98,11 +108,7 @@ fn collect_enrolled_source_facts(agent_kind: &str, runtime_home: &Path) -> Vec<C
             }
             facts
         }
-        Ok(AgentRuntimeAuthProfile::Native) => Vec::new(),
-        Err(error) => {
-            tracing::debug!(agent_kind, %error, "route profile unresolved; no source facts");
-            Vec::new()
-        }
+        AgentRuntimeAuthProfile::Native => Vec::new(),
     }
 }
 
@@ -311,7 +317,7 @@ mod tests {
     }
 
     /// A gateway source in `agent-auth/state.json` emits a `Route` fact for
-    /// that harness, collected beside the env facts.
+    /// that harness instead of native credential facts.
     #[test]
     fn gateway_source_in_state_emits_route_fact() {
         let home = temp_home();
@@ -583,5 +589,74 @@ mod tests {
             baseline_visible.iter().map(|m| &m.id).collect::<Vec<_>>(),
             visible.iter().map(|m| &m.id).collect::<Vec<_>>()
         );
+    }
+
+    /// Regression for gateway -> native -> API-key route changes. A Codex
+    /// native credential may be present throughout, but an explicit route is
+    /// authoritative for single-source harnesses. In particular, the native-
+    /// only `gpt-5.6-sol` model must be rejected while gateway is selected and
+    /// become valid again for native and explicit OpenAI API-key launches.
+    #[test]
+    fn codex_route_transitions_scope_model_validation_to_the_effective_provider() {
+        use crate::domains::agents::auth::context::classify;
+        use crate::domains::agents::catalog::bundled::bundled_agent_catalog_document;
+        use crate::domains::agents::catalog::service::{ActiveCatalog, SelectionUnsupported};
+        use crate::domains::agents::model::AgentKind;
+        use crate::domains::agents::registry::built_in_registry;
+        use std::sync::Arc;
+
+        let home = temp_home();
+        let document = Arc::new(bundled_agent_catalog_document().clone());
+        let contexts = document
+            .agents
+            .iter()
+            .find(|agent| agent.kind == "codex")
+            .map(|agent| agent.auth_contexts.as_slice())
+            .expect("codex auth contexts");
+        let descriptor = built_in_registry()
+            .into_iter()
+            .find(|descriptor| descriptor.kind == AgentKind::Codex)
+            .expect("codex descriptor");
+        let catalog = ActiveCatalog::new(Arc::clone(&document));
+        let native_key_env = BTreeMap::from([(
+            "OPENAI_API_KEY".to_string(),
+            "present-but-never-inspected".to_string(),
+        )]);
+
+        write_state(
+            &home,
+            r#"{"version":2,"revision":1,"harnesses":[
+                {"harness_kind":"codex","sources":[
+                    {"kind":"gateway","base_url":"https://gw","key":"sk-vk"}]}]}"#,
+        );
+        let gateway_facts = collect_launch_env_facts("codex", &native_key_env, &home);
+        let gateway_contexts = classify(&descriptor, contexts, &gateway_facts);
+        assert_eq!(gateway_contexts.ids(), &["gateway".to_string()]);
+        assert!(matches!(
+            catalog.validate_launch("codex", &gateway_contexts, Some("gpt-5.6-sol"), None,),
+            Err(SelectionUnsupported::ModelGated { .. })
+        ));
+
+        std::fs::remove_file(home.join("agent-auth/state.json")).expect("clear to native");
+        let native_facts = collect_launch_env_facts("codex", &native_key_env, &home);
+        let native_contexts = classify(&descriptor, contexts, &native_facts);
+        catalog
+            .validate_launch("codex", &native_contexts, Some("gpt-5.6-sol"), None)
+            .expect("native OpenAI route accepts native model");
+
+        write_state(
+            &home,
+            r#"{"version":2,"revision":2,"harnesses":[
+                {"harness_kind":"codex","sources":[
+                    {"kind":"api_key","env_var_name":"OPENAI_API_KEY","value":"sk-raw"}]}]}"#,
+        );
+        let api_key_facts = collect_launch_env_facts("codex", &BTreeMap::new(), &home);
+        let api_key_contexts = classify(&descriptor, contexts, &api_key_facts);
+        assert_eq!(api_key_contexts.ids(), &["openai-api".to_string()]);
+        catalog
+            .validate_launch("codex", &api_key_contexts, Some("gpt-5.6-sol"), None)
+            .expect("explicit OpenAI API-key route accepts native model");
+
+        let _ = std::fs::remove_dir_all(&home);
     }
 }

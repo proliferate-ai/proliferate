@@ -193,6 +193,23 @@ pub fn apply_state_file(runtime_home: &Path, state: &AgentAuthState) -> Result<(
     super::materialize::write_private_file(&path, &serialized)
 }
 
+/// Clear the delivered route state and return the runtime to native auth.
+///
+/// Clearing is a separate operation from revisioned replacement because native
+/// auth is represented by the absence of route state at the runtime. Making
+/// the reset explicit avoids weakening stale-write protection for ordinary
+/// state documents.
+pub fn clear_state_file(runtime_home: &Path) -> Result<(), RouteAuthError> {
+    let path = state_file_path(runtime_home);
+    match fs::remove_file(&path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(RouteAuthError::Materialize {
+            detail: format!("failed to remove {}: {error}", path.display()),
+        }),
+    }
+}
+
 pub(super) fn load_state_from_path(path: &Path) -> Result<Option<AgentAuthState>, RouteAuthError> {
     let contents = match fs::read(path) {
         Ok(contents) => contents,
@@ -475,5 +492,25 @@ mod tests {
         apply_state_file(home.path(), &state_with_revision(3)).expect("heal");
         let loaded = load_state_file(home.path()).expect("load").expect("state");
         assert_eq!(loaded.revision, 3);
+    }
+
+    #[test]
+    fn clear_state_file_resets_revision_lineage_for_native_then_new_route() {
+        let home = TempHome::new("clear-native");
+        apply_state_file(home.path(), &state_with_revision(7)).expect("apply gateway state");
+
+        clear_state_file(home.path()).expect("clear to native");
+        assert!(load_state_file(home.path())
+            .expect("load cleared state")
+            .is_none());
+
+        apply_state_file(home.path(), &state_with_revision(1)).expect("apply new route lineage");
+        assert_eq!(
+            load_state_file(home.path())
+                .expect("load replacement")
+                .expect("replacement state")
+                .revision,
+            1
+        );
     }
 }

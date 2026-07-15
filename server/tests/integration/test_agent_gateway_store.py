@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import delete as sql_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import proliferate.db.store.agent_gateway.selections as selections_store
 from proliferate.db.models.auth import User
 from proliferate.db.models.cloud.agent_gateway import AgentApiKey
 from proliferate.db.store import agent_gateway as store
@@ -220,6 +221,43 @@ async def test_put_updates_row_in_place(db_session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
+async def test_put_normalizes_empty_sources_to_monotonic_disabled_gateway_marker(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user_id = await _create_user(db_session)
+    key = await store.create_agent_api_key(
+        db_session, user_id=user_id, title="OpenAI", value="sk-openai-1234abcd"
+    )
+    first_write = datetime(2026, 7, 15, tzinfo=UTC)
+    clear_write = first_write + timedelta(seconds=1)
+    writes = iter((first_write, clear_write))
+    monkeypatch.setattr(selections_store, "utcnow", lambda: next(writes))
+
+    first = await store.put_auth_selections(
+        db_session,
+        user_id=user_id,
+        harness_kind="codex",
+        surface="local",
+        sources=[_gateway(enabled=False), _api_key(key.id)],
+    )
+    gateway_id = next(row.id for row in first if row.source_kind == "gateway")
+
+    cleared = await store.put_auth_selections(
+        db_session,
+        user_id=user_id,
+        harness_kind="codex",
+        surface="local",
+        sources=[],
+    )
+
+    assert len(cleared) == 1
+    assert cleared[0].id == gateway_id
+    assert cleared[0].enabled is False
+    assert cleared[0].updated_at == clear_write
+
+
+@pytest.mark.asyncio
 async def test_put_rejects_duplicate_source(db_session: AsyncSession) -> None:
     user_id = await _create_user(db_session)
     key = await store.create_agent_api_key(
@@ -387,7 +425,10 @@ async def test_api_key_hard_delete_cascades_selection(db_session: AsyncSession) 
     await db_session.execute(sql_delete(AgentApiKey).where(AgentApiKey.id == key.id))
     await db_session.flush()
 
-    assert await store.list_auth_selections(db_session, user_id=user_id) == []
+    remaining = await store.list_auth_selections(db_session, user_id=user_id)
+    assert [(row.source_kind, row.enabled) for row in remaining] == [
+        ("gateway", False)
+    ]
 
 
 @pytest.mark.asyncio

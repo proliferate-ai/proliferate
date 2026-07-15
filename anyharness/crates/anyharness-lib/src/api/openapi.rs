@@ -133,6 +133,7 @@ use anyharness_contract::v1::{
         super::http::agents::reconcile_agents,
         super::http::auth::push_revoked_jtis,
         super::http::agent_auth::put_agent_auth_state,
+        super::http::agent_auth::delete_agent_auth_state,
         super::http::catalogs::apply_agent_catalog,
         super::http::agent_gateway_catalog::get_gateway_models,
         super::http::agent_gateway_catalog::refresh_gateway_models,

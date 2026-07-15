@@ -114,8 +114,12 @@ under Bedrock rather than transparently remapped.
 Credential fact collection reads the composed launch environment plus only
 registry-declared ambient variables; composed values win. Arbitrary ambient
 values do not become classification law. Secret facts expose presence, while
-declared flag facts may expose the value required for matching. Workspace route
-facts are collected separately from workspace route state.
+declared flag facts may expose the value required for matching. The effective
+workspace route is resolved through the same server-origin guard used at
+launch. For single-source harnesses, an explicit gateway or API-key route is
+authoritative and its source facts replace native/ambient credential facts;
+OpenCode remains additive because its native providers intentionally coexist
+with injected sources.
 
 Classification is pure. Within each auth slot, the first matching catalog
 context wins; results are unioned across slots, and baseline applies when no
@@ -127,6 +131,19 @@ route resolver used at launch. Every `gatewayPolicy.seedModels` ID must have a
 gateway-available `session.models` row. Gateway model resolution uses the
 latest successful gateway probe when one exists and otherwise falls back to
 the configured seed models.
+
+Desktop local-route delivery uses revisioned `PUT /v1/agent-auth/state` for a
+non-empty rendered state and idempotent `DELETE /v1/agent-auth/state` when the
+rendered surface is native (zero harnesses). Clear is a distinct operation so
+an empty server selection can remove an older persisted route without
+weakening stale-revision protection for ordinary replacements. A successful
+apply or clear invalidates target launch options and gateway-model projections
+before the next session is created. Local route writes are serialized so a
+superseded request cannot land after the route that replaced it.
+Gateway-capable selection writes retain a disabled gateway row when another
+method is selected; the server normalizes older/direct clients' empty desired
+state to the same tombstone. It advances the surface revision across future
+gateway-to-native transitions while staying out of the rendered source list.
 
 ## Bundled Agent Inputs
 

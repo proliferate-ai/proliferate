@@ -69,7 +69,10 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route("/auth/revoked-jtis", put(http_auth::push_revoked_jtis))
         // Agent-auth state (desktop-pushed local-surface state.json)
-        .route("/agent-auth/state", put(agent_auth::put_agent_auth_state))
+        .route(
+            "/agent-auth/state",
+            put(agent_auth::put_agent_auth_state).delete(agent_auth::delete_agent_auth_state),
+        )
         // Catalogs (worker-pushed agent catalog document)
         .route("/catalogs/agents", put(catalogs::apply_agent_catalog))
         .route(

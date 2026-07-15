@@ -36,6 +36,7 @@ export {
   anyHarnessAgentReconcileStatusKey,
   anyHarnessReconcileAgentsMutationKey,
   anyHarnessAgentGatewayModelsKey,
+  anyHarnessAgentGatewayModelsPrefixKey,
   anyHarnessRuntimeWorkspacesKey,
   anyHarnessWorkspaceRetirePreflightKey,
   anyHarnessWorkspacePurgePreflightKey,
