@@ -2162,7 +2162,7 @@ lib/infra/measurement/typing-latency-probe.ts	retain		retain (Desktop host) per 
 lib/infra/persistence/preferences-persistence.ts	retain		audited exception: readPersistedValue/persistValue directly import getPreferencesStore from @/lib/access/tauri/store (raw Tauri store); consumed only by retained lib/access/tauri/ssh-target-profile.ts
 lib/infra/persistence/product-storage.test.ts	move	apps/packages/product-client/src/lib/infra/persistence/product-storage.test.ts	product module; default move per ledger rules; no host-retained runtime import
 lib/infra/persistence/product-storage.ts	move	apps/packages/product-client/src/lib/infra/persistence/product-storage.ts	product module; default move per ledger rules; no host-retained runtime import
-lib/infra/proliferate-api.ts	retain		retain (Desktop host) per brief retain bucket
+lib/infra/proliferate-api.ts	retain		retain (Desktop host) per brief retain bucket; AMENDED during the move to a split pair: host keeps the bootstrap/runtime singleton, a distinct pure-helper counterpart (explicit baseUrl args) was created at apps/packages/product-client/src/lib/infra/proliferate-api.ts for moved consumers (see d1h ruling #7)
 lib/infra/proliferate-web.ts	move	apps/packages/product-client/src/lib/infra/proliferate-web.ts	product module; default move per ledger rules; no host-retained runtime import
 lib/infra/query/query-client.test.ts	move	apps/packages/product-client/src/lib/infra/query/query-client.test.ts	product module; default move per ledger rules; no host-retained runtime import
 lib/infra/query/query-client.ts	move	apps/packages/product-client/src/lib/infra/query/query-client.ts	product module; default move per ledger rules; no host-retained runtime import
