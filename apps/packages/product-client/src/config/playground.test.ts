@@ -101,6 +101,17 @@ function renderComposerSurfaceMarkup(scenario: ScenarioKey): string {
   );
 }
 
+function visibleText(html: string): string {
+  let out = "";
+  let inTag = false;
+  for (const ch of html) {
+    if (ch === "<") inTag = true;
+    else if (ch === ">") inTag = false;
+    else if (!inTag) out += ch;
+  }
+  return out;
+}
+
 describe("playground scenarios", () => {
   it("includes user-input card scenarios for visual iteration", () => {
     expect(Object.keys(SCENARIOS)).toEqual(expect.arrayContaining(USER_INPUT_SCENARIOS));
@@ -233,8 +244,9 @@ describe("playground scenarios", () => {
 
     const groupedHtml = renderComposerSurfaceMarkup("slash-command-search");
     // The tray renders the leading slash in its own styled span, so assert the
-    // user-visible text rather than raw markup bytes.
-    const groupedText = groupedHtml.replace(/<[^>]*>/g, "");
+    // user-visible text rather than raw markup bytes. Character-wise scan (not
+    // a sanitizer): drop everything between tag delimiters.
+    const groupedText = visibleText(groupedHtml);
     expect(groupedText).toContain("/compact");
     expect(groupedText).toContain("MCP");
 
