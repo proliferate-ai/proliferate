@@ -816,9 +816,19 @@ The following are known implementation differences, not alternate contracts:
 - the tracker currently stores Sentry groups rather than event occurrences;
 - the tracker currently creates Grafana issues per firing window and stores no
   structured log attribution;
-- all six currently provisioned Grafana rules lack the required UID/component
-  labels; none has the log-enrichment annotations, and no webhook health canary
-  exists;
+- slice E1 is live-accepted (2026-07-15): all six production Grafana rules
+  carry the required UID/component labels, `bfrmh7e7x2k8wd` carries the exact
+  log-enrichment annotations, and the dedicated `issue-tracker-webhook` contact
+  point exists dark (present, encrypted credential, referenced by no
+  notification policy). The reproducible artifacts are the rule-identity +
+  metadata overlay (`server/infra/observability/grafana/production-alerts.json`),
+  the contact-point template
+  (`server/infra/observability/grafana/issue-tracker-contact.json`), and the
+  target-locked operator script (`scripts/ops/grafana-alerting.mjs`) with its
+  runbook ([`../../../../developing/operating/production-alerts.md`](../../../../developing/operating/production-alerts.md)).
+  Contact-point creation is one-time (apply refuses a pre-existing receiver;
+  restore removes only the tooling-created receiver). Delivery activation is
+  E2; no webhook health canary exists yet and the health check is manual;
 - the private support feed endpoint and its dedicated key exist and are
   dark-deployable, but tracker-side production sync is still disabled;
 - release identity is not deterministic on every component: server release is
