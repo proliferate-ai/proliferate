@@ -26,12 +26,14 @@ _SPEC.loader.exec_module(issues)
 
 
 class FakeResponse:
-    def __init__(self, status: int, payload):
+    def __init__(self, status: int, payload=None, raw: bytes | None = None):
         self.status = status
-        self._body = json.dumps(payload).encode("utf-8")
+        self._body = raw if raw is not None else json.dumps(payload).encode("utf-8")
 
     def read(self, size=-1):
-        return self._body
+        if size is None or size < 0:
+            return self._body
+        return self._body[:size]
 
     def __enter__(self):
         return self
@@ -41,16 +43,20 @@ class FakeResponse:
 
 
 class Capture:
-    """Records the last request and returns a scripted response."""
+    """Records every request issued and returns a scripted response."""
 
     def __init__(self, status=200, payload=None):
         self.status = status
         self.payload = payload if payload is not None else {"ok": True}
-        self.request = None
+        self.requests = []
         self.timeout = None
 
+    @property
+    def request(self):
+        return self.requests[-1] if self.requests else None
+
     def __call__(self, request, timeout):
-        self.request = request
+        self.requests.append(request)
         self.timeout = timeout
         return FakeResponse(self.status, self.payload)
 
@@ -228,6 +234,91 @@ def test_secret_provider_failure_redacted(monkeypatch, capsys):
     assert code == 2
     assert "OTHER-SECRET-abc123" not in err
     assert "issue-tracker/app" in err
+
+
+def test_transport_uses_no_redirect_opener():
+    # The installed handler must refuse to build a follow-up request: urllib
+    # then raises the 3xx as HTTPError and never re-sends the bearer token.
+    handler = issues._NoRedirect()
+    result = handler.redirect_request(
+        None, None, 302, "Found", {"Location": "https://evil.example/x"}, "https://evil.example/x"
+    )
+    assert result is None
+
+
+def test_redirect_fails_closed_with_single_request(fake_key, monkeypatch, capsys):
+    import urllib.error
+
+    log = []
+
+    def raise_redirect(request, timeout):
+        log.append(request)
+        raise urllib.error.HTTPError(
+            request.full_url,
+            302,
+            "Found",
+            {"Location": "https://evil.example/steal"},
+            io.BytesIO(b""),
+        )
+
+    monkeypatch.setattr(issues, "_urlopen", raise_redirect)
+    code = _run(["ops"])
+    err = capsys.readouterr().err
+    assert code == 2
+    assert "redirect" in err
+    # Exactly one request; the token was never carried to a second host.
+    assert len(log) == 1
+    assert log[0].full_url.startswith(issues.FIXED_ORIGIN)
+    assert "SECRET-AGENT-KEY" not in err
+
+
+# --------------------------------------------------------------------------- #
+# Strict 2xx protocol validation
+# --------------------------------------------------------------------------- #
+def test_success_with_html_body_fails_and_withholds_body(fake_key, monkeypatch, capsys):
+    html = b"<html><body>totally-not-json MARKER-9f2</body></html>"
+    monkeypatch.setattr(
+        issues, "_urlopen", lambda req, timeout: FakeResponse(200, raw=html)
+    )
+    code = _run(["ops"])
+    out = capsys.readouterr()
+    assert code == 2
+    assert "not valid JSON" in out.err
+    assert "MARKER-9f2" not in out.out + out.err
+
+
+def test_success_with_wrong_shape_fails(fake_key, monkeypatch, capsys):
+    monkeypatch.setattr(
+        issues, "_urlopen", lambda req, timeout: FakeResponse(200, raw=b'["a", "b"]')
+    )
+    code = _run(["ops"])
+    assert code == 2
+    assert "unexpected shape" in capsys.readouterr().err
+
+
+def test_success_oversized_body_fails(fake_key, monkeypatch, capsys):
+    huge = b'{"pad": "' + b"x" * (issues.MAX_RESPONSE_BYTES + 10) + b'"}'
+    monkeypatch.setattr(
+        issues, "_urlopen", lambda req, timeout: FakeResponse(200, raw=huge)
+    )
+    code = _run(["ops"])
+    out = capsys.readouterr()
+    assert code == 2
+    assert "bound" in out.err
+    assert "xxxx" not in out.out + out.err
+
+
+def test_large_but_bounded_payload_emits_valid_json(fake_key, monkeypatch, capsys):
+    payload = {"items": ["y" * 1000 for _ in range(100)]}
+    assert len(json.dumps(payload)) < issues.MAX_RESPONSE_BYTES
+    monkeypatch.setattr(
+        issues, "_urlopen", lambda req, timeout: FakeResponse(200, payload=payload)
+    )
+    code = _run(["list"])
+    out = capsys.readouterr().out
+    assert code == 0
+    # The emitted document must be complete, valid JSON — never truncated.
+    assert json.loads(out) == payload
 
 
 def test_secret_missing_field_redacts_payload(monkeypatch, capsys):

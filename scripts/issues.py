@@ -70,9 +70,26 @@ def resolve_origin() -> str:
     return origin
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse every redirect.
+
+    Python's default redirect handler copies the Authorization header onto the
+    follow-up request, so a redirect from the fixed origin could forward the
+    bearer token off-origin. The fixed tracker origin never legitimately
+    redirects agent routes, so redirects fail closed: returning ``None`` makes
+    urllib raise the 3xx as an ``HTTPError`` and no second request is issued.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: D102
+        return None
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect())
+
+
 def _urlopen(request: urllib.request.Request, timeout: float):
     """Transport seam. Faked in tests; never contacts the network there."""
-    return urllib.request.urlopen(request, timeout=timeout)  # noqa: S310
+    return _OPENER.open(request, timeout=timeout)  # noqa: S310
 
 
 def _run_aws(args: list[str]) -> subprocess.CompletedProcess:
@@ -145,7 +162,13 @@ def _build_url(origin: str, path: str, query: dict | None) -> str:
 
 
 def _read_bounded(response) -> bytes:
-    return response.read(MAX_RESPONSE_BYTES + 1)[:MAX_RESPONSE_BYTES]
+    """Read at most the bound; anything larger is a protocol error, not data."""
+    data = response.read(MAX_RESPONSE_BYTES + 1)
+    if len(data) > MAX_RESPONSE_BYTES:
+        raise HelperError(
+            f"response exceeded the {MAX_RESPONSE_BYTES}-byte bound; refusing to process it"
+        )
+    return data
 
 
 def request(
@@ -177,19 +200,49 @@ def request(
     try:
         with _urlopen(req, timeout=REQUEST_TIMEOUT_S) as response:
             raw = _read_bounded(response)
-            return response.status, _parse(raw)
+            return response.status, _parse_success(raw)
     except urllib.error.HTTPError as exc:
+        if 300 <= exc.code < 400:
+            # The no-redirect handler surfaces 3xx here without issuing a
+            # follow-up request; the bearer token never leaves the origin.
+            raise HelperError(
+                f"server responded with a redirect (HTTP {exc.code}); refusing to follow"
+            ) from exc
         # A 4xx/5xx with a body (e.g. 409 conflict, 412 precondition) is a
         # meaningful, non-secret API response. Expose its body, not the request.
-        raw = exc.read(MAX_RESPONSE_BYTES + 1)[:MAX_RESPONSE_BYTES] if exc.fp else b""
-        return exc.code, _parse(raw)
+        raw = _read_bounded(exc) if exc.fp else b""
+        return exc.code, _parse_error(raw)
     except urllib.error.URLError as exc:
         raise HelperError(f"transport error contacting {origin}: {_safe_reason(exc)}") from exc
     except TimeoutError as exc:
         raise HelperError(f"timed out contacting {origin}") from exc
 
 
-def _parse(raw: bytes) -> object:
+def _parse_success(raw: bytes) -> dict:
+    """Parse a 2xx body strictly: it must be a JSON object or the call fails.
+
+    A successful status with non-JSON or unexpectedly shaped content is a
+    protocol error, not data. The body is withheld from the error message so a
+    misrouted response can never leak through stderr.
+    """
+    text = raw.decode("utf-8", errors="replace")
+    if not text:
+        return {}
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise HelperError(
+            "successful response was not valid JSON (body withheld)"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise HelperError(
+            "successful response had an unexpected shape (expected a JSON object)"
+        )
+    return payload
+
+
+def _parse_error(raw: bytes) -> object:
+    """Parse an error body leniently so conflict/precondition JSON is exposed."""
     text = raw.decode("utf-8", errors="replace")
     if not text:
         return {}
@@ -213,10 +266,11 @@ def _emit(status: int, payload: object) -> int:
 
     2xx -> 0. Everything else (including exposed 409/412 conflict bodies) exits
     nonzero so a caller cannot mistake a conflict for success.
+
+    The payload is already bounded at read time, so the serialized document is
+    printed whole; truncating serialized JSON would emit an invalid document.
     """
     text = json.dumps(payload, indent=2, sort_keys=True)
-    if len(text) > MAX_RESPONSE_BYTES:
-        text = text[:MAX_RESPONSE_BYTES]
     print(text)
     if 200 <= status < 300:
         return 0
