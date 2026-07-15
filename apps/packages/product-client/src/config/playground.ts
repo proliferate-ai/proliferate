@@ -22,7 +22,6 @@ export type ScenarioKey =
   | "composer-ultra"
   | "workspace-activity-card"
   | "workspace-status-card"
-  | "environment-card"
   | "slash-command-search"
   | "slash-command-empty"
   | "workspace-arrival-created"
@@ -135,7 +134,6 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "composer-ultra": { label: "Composer ultra tier" },
   "workspace-activity-card": { label: "Workspace activity cap" },
   "workspace-status-card": { label: "Workspace status (new)" },
-  "environment-card": { label: "Environment card (new)" },
   "slash-command-search": { label: "Slash commands" },
   "slash-command-empty": { label: "Slash commands empty" },
   "workspace-arrival-created": { label: "Workspace arrival" },

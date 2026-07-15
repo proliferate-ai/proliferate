@@ -6,12 +6,16 @@ import type {
   RuntimePressureTargetState,
 } from "#product/hooks/workspaces/facade/use-runtime-pressure-control-state";
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
-import { RuntimeEnvironmentControl } from "#product/components/workspace/chat/input/RuntimePressureIndicator";
+import {
+  WorkspaceStatusComposerControl,
+  type WorkspaceStatusModel,
+} from "#product/components/workspace/chat/input/workspace-status/WorkspaceStatusComposerControl";
 
-function actions() {
+function statusModel(): WorkspaceStatusModel {
   return {
-    pruneOrphan: vi.fn(),
-    purgeWorkspace: vi.fn(),
+    environment: null,
+    subagents: { working: [], done: [] },
+    native: [],
   };
 }
 
@@ -68,10 +72,10 @@ function accessModeControl(): LiveSessionControlDescriptor {
 }
 
 function openCard() {
-  fireEvent.click(screen.getByRole("button", { name: "Open environment details" }));
+  fireEvent.click(screen.getByRole("button", { name: "Workspace status" }));
 }
 
-describe("RuntimeEnvironmentControl", () => {
+describe("WorkspaceStatusComposerControl (resources + advanced)", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
@@ -79,9 +83,10 @@ describe("RuntimeEnvironmentControl", () => {
 
   it("shows advanced controls as sections with codex option labels", () => {
     render(
-      <RuntimeEnvironmentControl
-        targetState={targetState()}
-        actions={actions()}
+      <WorkspaceStatusComposerControl
+        model={statusModel()}
+        environmentState={targetState()}
+        onOpenWorktrees={vi.fn()}
         advancedControls={[accessModeControl()]}
         agentKind="codex"
       />,
@@ -97,11 +102,9 @@ describe("RuntimeEnvironmentControl", () => {
   it("keeps the card open on advanced option select (multi-adjust)", () => {
     const control = accessModeControl();
     render(
-      <RuntimeEnvironmentControl
-        targetState={targetState()}
-        actions={actions()}
+      <WorkspaceStatusComposerControl
+        model={statusModel()}
         advancedControls={[control]}
-        agentKind={null}
       />,
     );
     openCard();
@@ -112,25 +115,12 @@ describe("RuntimeEnvironmentControl", () => {
     expect(screen.getByText("Permissions")).toBeTruthy();
   });
 
-  it("renders the trigger for advanced config even with no runtime target", () => {
+  it("shows the worktrees summary in Resources and opens the modal on click", () => {
+    const onOpenWorktrees = vi.fn();
     render(
-      <RuntimeEnvironmentControl
-        targetState={null}
-        actions={actions()}
-        advancedControls={[accessModeControl()]}
-        agentKind={null}
-      />,
-    );
-    openCard();
-    expect(screen.getByText("Permissions")).toBeTruthy();
-    expect(screen.queryByText("Worktrees")).toBeNull();
-  });
-
-  it("routes a worktree delete through the confirm dialog to purgeWorkspace", () => {
-    const acts = actions();
-    render(
-      <RuntimeEnvironmentControl
-        targetState={targetState({
+      <WorkspaceStatusComposerControl
+        model={statusModel()}
+        environmentState={targetState({
           inventory: [
             {
               id: "wt-1",
@@ -141,20 +131,10 @@ describe("RuntimeEnvironmentControl", () => {
               state: "associated",
               managed: true,
               materialized: true,
-              availableActions: ["delete_workspace_history"],
+              availableActions: [],
               blockers: [],
-              associatedWorkspaces: [
-                {
-                  id: "ws-1",
-                  displayName: "Thread One",
-                  branch: "thread/abc",
-                  kind: "worktree",
-                  lifecycleState: "active",
-                  cleanupState: "none",
-                  sessionCount: 2,
-                },
-              ],
-              totalSessionCount: 2,
+              associatedWorkspaces: [],
+              totalSessionCount: 0,
               gitStatus: null,
               storage: {
                 worktreeBytes: 33 * 1024 * 1024,
@@ -164,23 +144,16 @@ describe("RuntimeEnvironmentControl", () => {
             },
           ] as RuntimePressureTargetState["inventory"],
         })}
-        actions={acts}
-        advancedControls={[]}
-        agentKind={null}
+        onOpenWorktrees={onOpenWorktrees}
       />,
     );
     openCard();
 
-    // Card shows the compact summary row; the detail lives in the modal.
-    fireEvent.click(screen.getByText("1 worktree"));
-    expect(screen.getByText("Thread One")).toBeTruthy();
+    expect(screen.getByText("Resources")).toBeTruthy();
+    expect(screen.getByText("5 of 20")).toBeTruthy();
     expect(screen.getByText("~34 MB")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Delete Thread One" }));
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
-    expect(acts.purgeWorkspace).toHaveBeenCalledWith(
-      expect.objectContaining({ label: "Local runtime" }),
-      "ws-1",
-    );
+    fireEvent.click(screen.getByText("1 worktree"));
+    expect(onOpenWorktrees).toHaveBeenCalledTimes(1);
   });
 });

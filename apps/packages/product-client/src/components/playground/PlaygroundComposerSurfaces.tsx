@@ -26,7 +26,7 @@ import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/sess
 import { noop } from "#product/components/playground/PlaygroundComposerActions";
 import { WorkspaceStatusComposerControl } from "#product/components/workspace/chat/input/workspace-status/WorkspaceStatusComposerControl";
 import { createPlaygroundWorkspaceStatusModel } from "#product/lib/domain/chat/__fixtures__/playground/workspace-status-fixtures";
-import { RuntimeEnvironmentControl } from "#product/components/workspace/chat/input/RuntimePressureIndicator";
+import { RuntimePressureDetailsDialog } from "#product/components/workspace/chat/input/RuntimePressureDetailsDialog";
 import {
   createPlaygroundEnvironmentAdvancedControls,
   createPlaygroundEnvironmentTargetState,
@@ -38,25 +38,8 @@ export function renderComposerSurfaceForScenario(scenario: ScenarioKey): ReactNo
       return <PlaygroundLongInputComposerSurface />;
     case "composer-ultra":
       return <PlaygroundComposerSurface ultra />;
-    case "environment-card":
-      return <PlaygroundComposerSurface statusControl={<PlaygroundEnvironmentControl />} />;
     case "workspace-status-card":
-      return (
-        <PlaygroundComposerSurface
-          statusControl={(
-            <WorkspaceStatusComposerControl
-              model={createPlaygroundWorkspaceStatusModel()}
-              actions={{
-                onOpenChanges: noop,
-                onCommitOrPush: noop,
-                onCompareBranch: noop,
-                onViewChecks: noop,
-                onOpenAgentSession: noop,
-              }}
-            />
-          )}
-        />
-      );
+      return <PlaygroundComposerSurface statusControl={<PlaygroundWorkspaceStatusControl />} />;
     case "slash-command-search":
       return <PlaygroundSlashCommandComposerSurface commands={PLAYGROUND_SLASH_COMMANDS} />;
     case "slash-command-empty":
@@ -171,19 +154,37 @@ function PlaygroundSlashCommandComposerSurface({
  * to stepping (reasoning level swap, fast-mode toggle) can be exercised in
  * the playground.
  */
-/** Environment card scenario: fixture worktrees + interactive advanced
- * controls behind the pressure-ring trigger. */
-function PlaygroundEnvironmentControl() {
+/** Workspace-status scenario: the full card — fixture status model, fixture
+ * runtime resources (Resources row opens the worktrees modal), and
+ * interactive advanced controls absorbed from the old overflow menu. */
+function PlaygroundWorkspaceStatusControl() {
   const baseControls = useMemo(createPlaygroundEnvironmentAdvancedControls, []);
   const advancedControls = usePlaygroundLiveControls(baseControls);
   const targetState = useMemo(createPlaygroundEnvironmentTargetState, []);
+  const [worktreesOpen, setWorktreesOpen] = useState(false);
   return (
-    <RuntimeEnvironmentControl
-      targetState={targetState}
-      actions={{ pruneOrphan: noop, purgeWorkspace: noop }}
-      advancedControls={advancedControls}
-      agentKind="codex"
-    />
+    <>
+      <WorkspaceStatusComposerControl
+        model={createPlaygroundWorkspaceStatusModel()}
+        actions={{
+          onOpenChanges: noop,
+          onCommitOrPush: noop,
+          onCompareBranch: noop,
+          onViewChecks: noop,
+          onOpenAgentSession: noop,
+        }}
+        environmentState={targetState}
+        onOpenWorktrees={() => setWorktreesOpen(true)}
+        advancedControls={advancedControls}
+        agentKind="codex"
+      />
+      <RuntimePressureDetailsDialog
+        open={worktreesOpen}
+        targetState={targetState}
+        actions={{ pruneOrphan: noop, purgeWorkspace: noop }}
+        onClose={() => setWorktreesOpen(false)}
+      />
+    </>
   );
 }
 

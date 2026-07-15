@@ -387,7 +387,15 @@ export function ChatInput({
               onCancel={onCancel}
               statusControl={suppressActiveSessionState
                 ? undefined
-                : <ConnectedWorkspaceStatusComposerControl />}
+                : (
+                  <ConnectedWorkspaceStatusComposerControl
+                    advancedControls={
+                      buildComposerSessionControlGroups(effectiveSessionConfigControls)
+                        .overflowControls
+                    }
+                    agentKind={effectiveAgentKind}
+                  />
+                )}
             />
           </form>
         </ChatComposerSurface>

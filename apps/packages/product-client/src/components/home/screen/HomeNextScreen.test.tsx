@@ -411,7 +411,6 @@ describe("HomeNextScreen composer control-row parity", () => {
     });
     expect(screenMocks.trailingControlsProps).toMatchObject({
       runtimeControlsDisabled: false,
-      agentKind: "codex",
       activeSessionId: null,
       isEditingQueuedPrompt: false,
       chatDisabled: false,

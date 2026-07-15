@@ -20,6 +20,12 @@ import {
   type WorkspaceStatusDetailItem,
   type WorkspaceStatusDetailState,
 } from "#product/components/workspace/chat/input/workspace-status/StatusCardPrimitives";
+import {
+  AdvancedControlSections,
+  ResourcesSection,
+} from "#product/components/workspace/chat/input/EnvironmentStatusCard";
+import type { RuntimePressureTargetState } from "#product/hooks/workspaces/facade/use-runtime-pressure-control-state";
+import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 
 /**
  * Workspace status: the single ambient-state surface for a session.
@@ -28,10 +34,11 @@ import {
  *   - Source control first (review / commit-push / compare / checks)
  *   - Subagents (ours), codex-format: pixel sprite + name rows
  *   - Native agents & terminals as count rows with hover detail cards
+ *   - Resources (worktrees summary → searchable modal, cloud CPU/RAM)
+ *   - Advanced session config (absorbed from the removed "..." overflow)
  * Conversation-flow state (queued prompts, goal, blocking approvals)
  * deliberately stays in the composer dock and is NOT rendered here.
- * Section/row primitives live in StatusCardPrimitives (shared with the
- * environment popover).
+ * Section/row primitives live in StatusCardPrimitives.
  */
 
 export type { WorkspaceStatusDetailItem, WorkspaceStatusDetailState };
@@ -90,13 +97,27 @@ export interface WorkspaceStatusActions {
   onOpenAgentSession?: (sessionId: string) => void;
 }
 
+export interface WorkspaceStatusEnvironmentProps {
+  /** Runtime resources (worktrees, cloud CPU/RAM) for the Resources section. */
+  environmentState?: RuntimePressureTargetState | null;
+  /** Opens the searchable worktrees modal (owner renders the dialog). */
+  onOpenWorktrees?: () => void;
+  /** Advanced session config absorbed from the removed overflow menu. */
+  advancedControls?: LiveSessionControlDescriptor[];
+  agentKind?: string | null;
+}
+
 export function WorkspaceStatusComposerControl({
   model,
   actions = {},
+  environmentState = null,
+  onOpenWorktrees,
+  advancedControls = [],
+  agentKind = null,
 }: {
   model: WorkspaceStatusModel;
   actions?: WorkspaceStatusActions;
-}) {
+} & WorkspaceStatusEnvironmentProps) {
   return (
     <PopoverButton
       trigger={(
@@ -113,7 +134,17 @@ export function WorkspaceStatusComposerControl({
       offset={8}
       className="w-auto border-0 bg-transparent p-0 shadow-none"
     >
-      {(close) => <WorkspaceStatusCard model={model} actions={actions} close={close} />}
+      {(close) => (
+        <WorkspaceStatusCard
+          model={model}
+          actions={actions}
+          close={close}
+          environmentState={environmentState}
+          onOpenWorktrees={onOpenWorktrees}
+          advancedControls={advancedControls}
+          agentKind={agentKind}
+        />
+      )}
     </PopoverButton>
   );
 }
@@ -122,11 +153,15 @@ export function WorkspaceStatusCard({
   model,
   actions,
   close,
+  environmentState = null,
+  onOpenWorktrees,
+  advancedControls = [],
+  agentKind = null,
 }: {
   model: WorkspaceStatusModel;
   actions: WorkspaceStatusActions;
   close: () => void;
-}) {
+} & WorkspaceStatusEnvironmentProps) {
   const run = (action?: () => void) => () => {
     action?.();
     close();
@@ -234,6 +269,18 @@ export function WorkspaceStatusCard({
             ))}
           </StatusSection>
         )}
+
+        {environmentState && onOpenWorktrees && (
+          <ResourcesSection
+            targetState={environmentState}
+            onOpenWorktrees={() => {
+              close();
+              onOpenWorktrees();
+            }}
+          />
+        )}
+
+        <AdvancedControlSections controls={advancedControls} agentKind={agentKind} />
       </div>
     </ComposerPopoverSurface>
   );

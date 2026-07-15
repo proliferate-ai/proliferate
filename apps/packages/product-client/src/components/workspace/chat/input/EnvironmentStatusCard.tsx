@@ -3,7 +3,6 @@ import type { WorktreeInventoryRow } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchField";
 import { Check, GitBranch, X } from "@proliferate/ui/icons";
-import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
 import type {
   RuntimePressureTargetState,
   useRuntimePressureControlState,
@@ -36,28 +35,20 @@ export type EnvironmentCardActions = Pick<
 const HOVER_ITEM_CAP = 12;
 
 /**
- * The environment surface behind the composer's pressure ring, in the shared
- * status-card anatomy (StatusCardPrimitives). The card stays compact: a
- * Resources section with summary rows ("N worktrees" · total size, cloud
- * CPU/RAM) — hover shows the per-worktree list, click opens the searchable
- * worktrees modal — plus the session's advanced config controls inline, one
- * section per control, options click-to-select WITHOUT closing the surface
- * (multi-adjust, same contract the old "..." overflow menu had).
+ * Resources: summary rows for the runtime the workspace-status card tracks —
+ * "N worktrees" with total size (hover lists each checkout, click opens the
+ * searchable worktrees modal) plus CPU/RAM on cloud targets. Replaces the
+ * composer's old pressure-ring control.
  */
-export function EnvironmentStatusCard({
+export function ResourcesSection({
   targetState,
-  advancedControls,
-  agentKind,
   onOpenWorktrees,
 }: {
-  targetState: RuntimePressureTargetState | null;
-  advancedControls: LiveSessionControlDescriptor[];
-  agentKind: string | null;
-  /** Resources rows are summaries — clicking one opens the searchable modal. */
+  targetState: RuntimePressureTargetState;
   onOpenWorktrees: () => void;
 }) {
-  const inventory = targetState?.inventory ?? [];
-  const isCloud = targetState?.target.location === "cloud";
+  const inventory = targetState.inventory;
+  const isCloud = targetState.target.location === "cloud";
   const worktreeHoverItems: WorkspaceStatusDetailItem[] = inventory
     .slice(0, HOVER_ITEM_CAP)
     .map((row) => {
@@ -72,71 +63,77 @@ export function EnvironmentStatusCard({
     });
 
   return (
-    // Same codex card surface as the workspace-status card.
-    <ComposerPopoverSurface
-      variant="summary"
-      className="w-[min(300px,calc(100vw-1rem))] overflow-hidden rounded-[1.25rem] p-0 pt-2.5 ring-0 shadow-[0_0_0_0.5px_var(--color-popover-ring),0_3px_7.5px_rgba(0,0,0,0.25),0_0_20px_rgba(0,0,0,0.28)]"
-      data-telemetry-mask
+    <StatusSection
+      title="Resources"
+      detail={!isCloud
+        ? `${targetState.worktreeCount} of ${targetState.idealWorktreeCount}`
+        : null}
     >
-      <div className="flex max-h-[min(34rem,calc(100vh-8rem))] flex-col gap-3 overflow-y-auto pb-3">
-        {targetState && (
-          <StatusSection
-            title="Resources"
-            detail={!isCloud
-              ? `${targetState.worktreeCount} of ${targetState.idealWorktreeCount}`
-              : null}
-          >
-            <StatusRow
-              icon={<GitBranch className="size-4" />}
-              label={`${inventory.length} ${inventory.length === 1 ? "worktree" : "worktrees"}`}
-              meta={worktreeInventoryTotalMeta(inventory)}
-              hoverItems={worktreeHoverItems}
-              onSelect={onOpenWorktrees}
-            />
-            {isCloud && (
-              <>
-                <StatusRow
-                  label="CPU"
-                  meta={formatPercent(targetState.resourcePressure?.cpu?.normalizedPercent)}
-                />
-                <StatusRow
-                  label="Memory"
-                  meta={formatPercent(targetState.resourcePressure?.memory?.percent)}
-                />
-              </>
-            )}
-          </StatusSection>
-        )}
+      <StatusRow
+        icon={<GitBranch className="size-4" />}
+        label={`${inventory.length} ${inventory.length === 1 ? "worktree" : "worktrees"}`}
+        meta={worktreeInventoryTotalMeta(inventory)}
+        hoverItems={worktreeHoverItems}
+        onSelect={onOpenWorktrees}
+      />
+      {isCloud && (
+        <>
+          <StatusRow
+            label="CPU"
+            meta={formatPercent(targetState.resourcePressure?.cpu?.normalizedPercent)}
+          />
+          <StatusRow
+            label="Memory"
+            meta={formatPercent(targetState.resourcePressure?.memory?.percent)}
+          />
+        </>
+      )}
+    </StatusSection>
+  );
+}
 
-        {advancedControls.map((control) => (
-          <StatusSection key={control.key} title={control.label}>
-            {control.options.map((option) => (
-              <StatusRow
-                key={option.value}
-                label={resolveComposerControlOptionLabel(
-                  agentKind,
-                  control,
-                  option.value,
-                  option.label,
-                )}
-                disabled={!control.settable}
-                trailing={(
-                  <span className="flex shrink-0 items-center gap-1">
-                    {option.selected && <Check className="size-3.5 text-foreground/60" />}
-                    {option.selected && control.pendingState && (
-                      <PendingConfigIndicator pendingState={control.pendingState} />
-                    )}
-                  </span>
-                )}
-                // Intentionally does not close the surface — multi-adjust,
-                // same contract the old overflow menu had.
-                onSelect={() => control.onSelect(option.value)}
-              />
-            ))}
-          </StatusSection>
-        ))}
-      </div>
-    </ComposerPopoverSurface>
+/**
+ * The session's advanced config in card anatomy — one section per control,
+ * options click-to-select WITHOUT closing the surface (multi-adjust, same
+ * contract the removed "..." overflow menu had).
+ */
+export function AdvancedControlSections({
+  controls,
+  agentKind,
+}: {
+  controls: LiveSessionControlDescriptor[];
+  agentKind: string | null;
+}) {
+  return (
+    <>
+      {controls.map((control) => (
+        <StatusSection key={control.key} title={control.label}>
+          {control.options.map((option) => (
+            <StatusRow
+              key={option.value}
+              label={resolveComposerControlOptionLabel(
+                agentKind,
+                control,
+                option.value,
+                option.label,
+              )}
+              disabled={!control.settable}
+              trailing={(
+                <span className="flex shrink-0 items-center gap-1">
+                  {option.selected && <Check className="size-3.5 text-foreground/60" />}
+                  {option.selected && control.pendingState && (
+                    <PendingConfigIndicator pendingState={control.pendingState} />
+                  )}
+                </span>
+              )}
+              // Intentionally does not close the surface — multi-adjust,
+              // same contract the old overflow menu had.
+              onSelect={() => control.onSelect(option.value)}
+            />
+          ))}
+        </StatusSection>
+      ))}
+    </>
   );
 }
 
