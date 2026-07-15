@@ -284,6 +284,55 @@ fi
 grep -qi "checksum" "$SCRATCH/bad.log" && ok "checksum failure is reported" || no "checksum failure not reported"
 
 # ---------------------------------------------------------------------------
+group "6b. Installer: --bundle checksum requires the bundle line actually verified"
+# ---------------------------------------------------------------------------
+# `sha256sum -c --ignore-missing` exits 0 even when NO listed file was checked
+# (e.g. a SUMS that only names a versioned filename), which used to let unverified
+# bytes through silently. The installer must additionally require the bundle's own
+# `proliferate-deploy.tar.gz: OK` line. Build a real local bundle and prove:
+#   (a) a SUMS covering the real proliferate-deploy.tar.gz filename -> install passes;
+#   (b) a SUMS naming only a versioned/other filename (bundle line absent) -> DIES.
+BUNDLE_DIR="$SCRATCH/localbundle"
+mkdir -p "$BUNDLE_DIR"
+BSTAGE="$SCRATCH/bstage"
+mkdir -p "$BSTAGE/proliferate-deploy"
+cp -R "$DEPLOY_DIR/." "$BSTAGE/proliferate-deploy/"
+rm -rf "$BSTAGE/proliferate-deploy/smoke" "$BSTAGE/proliferate-deploy/tests"
+printf '0.3.18\n' >"$BSTAGE/proliferate-deploy/VERSION"
+tar czf "$BUNDLE_DIR/proliferate-deploy.tar.gz" -C "$BSTAGE" proliferate-deploy
+rm -rf "$BSTAGE"
+
+# (a) correct SUMS covering the REAL proliferate-deploy.tar.gz filename -> passes.
+( cd "$BUNDLE_DIR" && sha256sum proliferate-deploy.tar.gz >self-hosted-assets.SHA256SUMS )
+GOODBUNDLE="$SCRATCH/goodbundle"
+if PATH="$FAKE_BIN:$PATH" PROLIFERATE_INSTALL_ROOT="$GOODBUNDLE" \
+  bash "$DEPLOY_DIR/install.sh" --bundle "$BUNDLE_DIR/proliferate-deploy.tar.gz" \
+  --domain api.test --no-start --yes >"$SCRATCH/goodbundle.log" 2>&1; then
+  ok "--bundle install passes with a SUMS covering proliferate-deploy.tar.gz"
+else
+  no "--bundle install should pass with a correct SUMS"
+  sed 's/^/      /' "$SCRATCH/goodbundle.log" | tail -20
+fi
+
+# (b) SUMS names only a versioned/other filename (bundle line ABSENT) -> die, do
+# not extract. Uses the bundle's real hash so the ONLY difference is the filename.
+realsha="$(cd "$BUNDLE_DIR" && sha256sum proliferate-deploy.tar.gz | cut -d' ' -f1)"
+VERSIONED_SUMS="$BUNDLE_DIR/versioned.SHA256SUMS"
+printf '%s  proliferate-deploy-0.3.18.tar.gz\n' "$realsha" >"$VERSIONED_SUMS"
+BADBUNDLE="$SCRATCH/badbundle"
+if PATH="$FAKE_BIN:$PATH" PROLIFERATE_INSTALL_ROOT="$BADBUNDLE" \
+  bash "$DEPLOY_DIR/install.sh" --bundle "$BUNDLE_DIR/proliferate-deploy.tar.gz" \
+  --bundle-sha256sums "$VERSIONED_SUMS" --domain api.test --no-start --yes >"$SCRATCH/badbundle.log" 2>&1; then
+  no "--bundle install should DIE when the SUMS omits the bundle line (silent-pass guard)"
+else
+  ok "--bundle install dies when the SUMS omits the bundle line"
+fi
+grep -qi "did not cover proliferate-deploy.tar.gz" "$SCRATCH/badbundle.log" \
+  && ok "missing-bundle-line failure is reported" || no "missing-bundle-line failure not reported"
+[[ ! -f "$BADBUNDLE/server/deploy/bootstrap.sh" ]] \
+  && ok "no files extracted when the bundle line is absent" || no "files were extracted despite an unverified bundle"
+
+# ---------------------------------------------------------------------------
 group "7. Installer: unsupported system + partial-config guard"
 # ---------------------------------------------------------------------------
 # Fake a non-Linux OS.

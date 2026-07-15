@@ -337,6 +337,22 @@ FETCH_TMP=""
 cleanup_fetch() { [[ -n "$FETCH_TMP" && -d "$FETCH_TMP" ]] && rm -rf "$FETCH_TMP"; }
 trap cleanup_fetch EXIT
 
+# verify_bundle_checksum <dir> <sums-desc>: verify proliferate-deploy.tar.gz in
+# <dir> against its adjacent self-hosted-assets.SHA256SUMS. --ignore-missing lets
+# the SUMS legitimately cover other assets (runtime tarballs, AWS template) that
+# are not present here — but that same flag makes `sha256sum -c` exit 0 even when
+# NO listed file was actually checked (e.g. a SUMS that only names a versioned
+# filename), which would silently let unverified bytes through. So we ALSO require
+# the bundle's own line to have verified OK. Dies on any failure. Never prints
+# file contents.
+verify_bundle_checksum() {
+  local dir="$1" sums_desc="$2" out
+  out="$(cd "$dir" && sha256sum -c --ignore-missing self-hosted-assets.SHA256SUMS 2>&1)" \
+    || die "checksum verification FAILED for proliferate-deploy.tar.gz ($sums_desc). The file is corrupt or does not match its checksums; not extracting."
+  grep -qF 'proliferate-deploy.tar.gz: OK' <<<"$out" \
+    || die "checksum file did not cover proliferate-deploy.tar.gz ($sums_desc): no 'proliferate-deploy.tar.gz: OK' line in the verification output. Refusing to extract an unverified bundle."
+}
+
 download_and_verify_bundle() {
   local base="${DOWNLOAD_BASE}/server-v${VERSION}"
   local bundle_url="$base/proliferate-deploy.tar.gz"
@@ -352,12 +368,10 @@ download_and_verify_bundle() {
     || die "failed to download the checksum file from $sums_url."
 
   log "Verifying checksum before extraction"
-  (
-    cd "$FETCH_TMP"
-    # --ignore-missing: the sums file also covers the runtime tarballs and AWS
-    # template, which we did not download here.
-    sha256sum -c --ignore-missing self-hosted-assets.SHA256SUMS
-  ) || die "checksum verification FAILED for proliferate-deploy.tar.gz. The download is corrupt or tampered; not extracting."
+  # --ignore-missing: the sums file also covers the runtime tarballs and AWS
+  # template, which we did not download here. verify_bundle_checksum additionally
+  # requires the bundle's own line to have verified (guards the empty-match pass).
+  verify_bundle_checksum "$FETCH_TMP" "$sums_url"
   info "Checksum OK"
 
   log "Extracting bundle"
@@ -383,12 +397,10 @@ verify_and_extract_local_bundle() {
   cp "$sums" "$FETCH_TMP/self-hosted-assets.SHA256SUMS"
 
   log "Verifying checksum of the local bundle before extraction"
-  (
-    cd "$FETCH_TMP"
-    # --ignore-missing: the sums file may also cover runtime tarballs / the AWS
-    # template that a local bundle does not carry.
-    sha256sum -c --ignore-missing self-hosted-assets.SHA256SUMS
-  ) || die "checksum verification FAILED for the local --bundle. The file is corrupt or does not match its checksums; not extracting."
+  # --ignore-missing: the sums file may also cover runtime tarballs / the AWS
+  # template that a local bundle does not carry. verify_bundle_checksum additionally
+  # requires the bundle's own line to have verified (guards the empty-match pass).
+  verify_bundle_checksum "$FETCH_TMP" "$sums"
   info "Checksum OK"
 
   log "Extracting local bundle"
