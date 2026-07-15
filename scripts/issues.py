@@ -267,17 +267,18 @@ def _emit(status: int, payload: object) -> int:
     2xx -> 0. Everything else (including exposed 409/412 conflict bodies) exits
     nonzero so a caller cannot mistake a conflict for success.
 
-    The bound is enforced on the FINAL serialized document, not just the wire
-    body: pretty-printing and ASCII escaping can expand a bounded response past
-    the limit. An indented document that would exceed the bound falls back to
-    compact separators; if even the compact document exceeds the bound, the
-    call fails nonzero with a body-withheld diagnostic. Output is never
-    truncated, so stdout is always a complete valid JSON document or nothing.
+    The bound is enforced on the TOTAL bytes written to stdout — the final
+    serialized document plus its trailing newline — not just the wire body:
+    pretty-printing and ASCII escaping can expand a bounded response past the
+    limit. An indented document that would exceed the bound falls back to
+    compact separators; if even the compact document (with its newline) exceeds
+    the bound, the call fails nonzero with a body-withheld diagnostic. Output
+    is never truncated, so stdout is a complete valid JSON document or nothing.
     """
     text = json.dumps(payload, indent=2, sort_keys=True)
-    if len(text.encode("utf-8")) > MAX_RESPONSE_BYTES:
+    if len(text.encode("utf-8")) + 1 > MAX_RESPONSE_BYTES:
         text = json.dumps(payload, separators=(",", ":"), sort_keys=True)
-    if len(text.encode("utf-8")) > MAX_RESPONSE_BYTES:
+    if len(text.encode("utf-8")) + 1 > MAX_RESPONSE_BYTES:
         print(
             f"serialized response exceeds the {MAX_RESPONSE_BYTES}-byte output "
             "bound (body withheld); refusing to emit it",

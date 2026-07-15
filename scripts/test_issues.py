@@ -336,8 +336,41 @@ def test_pretty_expansion_falls_back_to_compact_within_bound(fake_key, monkeypat
     code = _run(["list"])
     out = capsys.readouterr().out
     assert code == 0
-    assert len(out.encode("utf-8")) <= issues.MAX_RESPONSE_BYTES + 1  # + newline
+    # TOTAL stdout bytes, trailing newline included, never exceed the bound.
+    assert len(out.encode("utf-8")) <= issues.MAX_RESPONSE_BYTES
     assert json.loads(out) == payload
+
+
+def test_stdout_exactly_at_bound_passes(fake_key, monkeypatch, capsys):
+    # Compact document of MAX-1 bytes + the trailing newline = exactly MAX
+    # bytes on stdout: the largest permitted output, must succeed.
+    pad = "x" * (issues.MAX_RESPONSE_BYTES - 1 - len('{"pad":""}'))
+    raw = json.dumps({"pad": pad}, separators=(",", ":")).encode("utf-8")
+    assert len(raw) == issues.MAX_RESPONSE_BYTES - 1
+    monkeypatch.setattr(
+        issues, "_urlopen", lambda req, timeout: FakeResponse(200, raw=raw)
+    )
+    code = _run(["get", "7"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert len(out.encode("utf-8")) == issues.MAX_RESPONSE_BYTES
+    assert json.loads(out) == {"pad": pad}
+
+
+def test_stdout_one_byte_past_bound_fails(fake_key, monkeypatch, capsys):
+    # Compact document of exactly MAX bytes + newline = MAX+1 total stdout
+    # bytes: one past the hard limit, must fail with nothing on stdout.
+    pad = "x" * (issues.MAX_RESPONSE_BYTES - len('{"pad":""}'))
+    raw = json.dumps({"pad": pad}, separators=(",", ":")).encode("utf-8")
+    assert len(raw) == issues.MAX_RESPONSE_BYTES
+    monkeypatch.setattr(
+        issues, "_urlopen", lambda req, timeout: FakeResponse(200, raw=raw)
+    )
+    code = _run(["get", "7"])
+    out = capsys.readouterr()
+    assert code == 1
+    assert out.out == ""
+    assert "output bound" in out.err
 
 
 def test_serialized_output_over_bound_fails_with_no_stdout(fake_key, monkeypatch, capsys):
