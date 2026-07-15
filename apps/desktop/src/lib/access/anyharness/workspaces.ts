@@ -110,3 +110,14 @@ export function purgeWorkspace(connection: WorkspaceConnection, workspaceId: str
 export function retryPurgeWorkspace(connection: WorkspaceConnection, workspaceId: string) {
   return getAnyHarnessClient(connection).workspaces.retryPurge(workspaceId);
 }
+
+type GetGitDiffOptions = Parameters<AnyHarnessClient["git"]["getDiff"]>[2];
+
+export function getWorkspaceGitDiff(
+  connection: WorkspaceConnection,
+  workspaceId: string,
+  path: string,
+  options?: GetGitDiffOptions,
+) {
+  return getAnyHarnessClient(connection).git.getDiff(workspaceId, path, options);
+}

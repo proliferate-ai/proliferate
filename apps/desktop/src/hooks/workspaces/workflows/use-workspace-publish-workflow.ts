@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CreatePullRequestResponse } from "@anyharness/sdk";
 import {
-  getAnyHarnessClient,
   resolveWorkspaceConnectionFromContext,
   useAnyHarnessWorkspaceContext,
   useCommitGitMutation,
@@ -12,6 +11,7 @@ import {
   useStageGitPathsMutation,
 } from "@anyharness/sdk-react";
 import { generateCommitMessage } from "@proliferate/cloud-sdk/client/ai-magic";
+import { getWorkspaceGitDiff } from "@/lib/access/anyharness/workspaces";
 import {
   buildPublishViewState,
 } from "@/lib/domain/workspaces/creation/publish-workflow";
@@ -178,13 +178,13 @@ export function useWorkspacePublishWorkflow({
           anyHarnessWorkspace,
           workspaceId,
         );
-        const client = getAnyHarnessClient(resolved.connection);
         const targets = commitDiffTargets({
           fileGroups: viewState.fileGroups,
           includeUnstaged: commitDraft.includeUnstaged,
         });
         const patches = await Promise.all(targets.map(async (target) => {
-          const diff = await client.git.getDiff(
+          const diff = await getWorkspaceGitDiff(
+            resolved.connection,
             resolved.connection.anyharnessWorkspaceId,
             target.path,
             { scope: target.scope },

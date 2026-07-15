@@ -6,6 +6,8 @@ from threading import Lock
 from time import monotonic
 from uuid import UUID
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from proliferate.config import settings
 from proliferate.constants.ai_magic import (
     COMMIT_MESSAGE_MAX_DIFF_CHARS,
@@ -21,6 +23,8 @@ from proliferate.constants.ai_magic import (
     WORKSPACE_NAME_RATE_LIMIT_REQUESTS,
     WORKSPACE_NAME_RATE_LIMIT_WINDOW_SECONDS,
 )
+from proliferate.constants.cloud import GitProvider
+from proliferate.db.store.repositories import get_repo_config_for_user
 from proliferate.integrations.anthropic import (
     AnthropicIntegrationError,
     generate_message_text,
@@ -246,3 +250,29 @@ async def generate_commit_message(
             message="Generated commit message was empty.",
         )
     return message
+
+
+async def resolve_commit_instructions(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    git_owner: str | None,
+    git_repo_name: str | None,
+) -> str | None:
+    """Repo-scoped commit instructions for the AI commit-message prompt.
+
+    Lives here so the API layer stays transport-only: the store read is a
+    service concern, keyed to the GitHub identity the desktop client sends.
+    """
+    if not (git_owner and git_repo_name):
+        return None
+    repo_config = await get_repo_config_for_user(
+        db,
+        user_id=user_id,
+        git_provider=GitProvider.github.value,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+    )
+    if repo_config is None:
+        return None
+    return repo_config.commit_instructions

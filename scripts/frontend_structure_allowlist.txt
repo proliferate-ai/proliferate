@@ -29,3 +29,5 @@ apps/desktop/src/hooks/sessions/workflows/use-session-creation-actions.ts 406 pr
 apps/desktop/src/components/playground/WorkspaceStatusPlayground.tsx 450 status-card playground fixtures pending scenario-module split (#1202 debt repair)
 apps/desktop/src/lib/domain/preferences/appearance.ts 437 appearance preset model pending preset-catalog split (#1202 growth recorded in debt repair)
 apps/packages/product-ui/src/chat/transcript/VirtualizedTranscriptRowList.tsx 416 virtualized transcript list pending row-window split (recorded in debt repair)
+apps/desktop/src/components/workspace/chat/input/ChatInput.tsx 401 chat composer pending control-cluster split (#1210 growth recorded)
+apps/desktop/src/components/workspace/chat/input/workspace-status/WorkspaceStatusComposerControl.tsx 463 workspace status composer control pending card-section split (#1210 growth recorded)
