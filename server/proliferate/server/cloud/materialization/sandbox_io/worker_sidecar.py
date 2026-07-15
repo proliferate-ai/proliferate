@@ -51,6 +51,32 @@ def _detached_worker_launch_command(runtime_context: SandboxRuntimeContext) -> s
     )
 
 
+async def mint_cloud_sandbox_worker_enrollment(sandbox_record: CloudSandboxValue) -> str | None:
+    """Mint (and durably commit) a fresh worker enrollment token for a sandbox.
+
+    Returns ``None`` when the sandbox has no owner (defensive; the column is
+    NOT NULL in practice). Runs in its own transaction/session so the token
+    is durably visible before the worker (a separate process) tries to
+    consume it, matching the legacy sidecar's minting semantics.
+    """
+    owner_user_id = sandbox_record.owner_user_id
+    if owner_user_id is None:
+        return None
+    enrollment_token = ""
+
+    async def _mint(fresh_db: AsyncSession) -> None:
+        nonlocal enrollment_token
+        enrollment_token = await create_cloud_sandbox_enrollment(
+            fresh_db,
+            cloud_sandbox_id=sandbox_record.id,
+            owner_user_id=owner_user_id,
+            organization_id=sandbox_record.organization_id,
+        )
+
+    await run_with_fresh_session(_mint)
+    return enrollment_token
+
+
 async def launch_worker_sidecar(
     *,
     provider: SandboxProvider,
@@ -59,8 +85,7 @@ async def launch_worker_sidecar(
     runtime_context: SandboxRuntimeContext,
     runtime_bearer_token: str | None = None,
 ) -> None:
-    owner_user_id = sandbox_record.owner_user_id
-    if owner_user_id is None:
+    if sandbox_record.owner_user_id is None:
         return
 
     cloud_base_url = worker_cloud_base_url()
@@ -68,20 +93,9 @@ async def launch_worker_sidecar(
         return
 
     try:
-        # Mint + commit the enrollment in its own transaction so it is durably
-        # visible before the worker (a separate process) tries to consume it.
-        enrollment_token = ""
-
-        async def _mint(fresh_db: AsyncSession) -> None:
-            nonlocal enrollment_token
-            enrollment_token = await create_cloud_sandbox_enrollment(
-                fresh_db,
-                cloud_sandbox_id=sandbox_record.id,
-                owner_user_id=owner_user_id,
-                organization_id=sandbox_record.organization_id,
-            )
-
-        await run_with_fresh_session(_mint)
+        enrollment_token = await mint_cloud_sandbox_worker_enrollment(sandbox_record)
+        if enrollment_token is None:
+            return
 
         await provider.write_file(
             provider_sandbox,

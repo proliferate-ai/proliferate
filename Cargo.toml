@@ -100,5 +100,6 @@ window-vibrancy = "0.6"
 
 # Internal crates
 anyharness-contract = { path = "anyharness/crates/anyharness-contract" }
+proliferate-runtime-update-protocol = { path = "anyharness/crates/proliferate-runtime-update-protocol" }
 anyharness-credential-discovery = { path = "anyharness/crates/anyharness-credential-discovery" }
 anyharness-lib = { path = "anyharness/crates/anyharness-lib" }

@@ -1,13 +1,39 @@
 # Proliferate Worker
 
 Proliferate Worker is an optional process beside AnyHarness. It enrolls with
-Cloud once, sends heartbeats, and converges the local catalog, Worker binary,
-and AnyHarness binary when its launch configuration enables those paths.
+Cloud once, sends heartbeats, and converges the local catalog and, depending
+on target topology, either the AnyHarness/Worker binaries directly or a
+durable update request into a Proliferate Supervisor mailbox.
 
 It is not a Cloud command runner. It does not lease commands, materialize
-workspaces, upload session events, maintain Cloud projections, or send update
-requests to Proliferate Supervisor. Cloud reaches AnyHarness directly for the
-current workspace and session flows.
+workspaces, upload session events, or maintain Cloud projections. Cloud
+reaches AnyHarness directly for the current workspace and session flows.
+
+On a **supervisor-owned target** (`supervisor_update_request_dir` set in
+config — server-controlled, gated behind `supervisor_owned_runtime`), the
+Worker never downloads, replaces, kills, or rolls back AnyHarness or itself.
+It only observes heartbeat divergence and writes one durable request into
+`.proliferate/supervisor/updates` for Proliferate Supervisor to act on; see
+[Lifecycle](guides/lifecycle.md) and
+[`proliferate-supervisor/README.md`](../proliferate-supervisor/README.md) for
+the consumer side. On a **legacy (non-supervisor-owned) target** the Worker
+still performs the in-place AnyHarness/Worker binary swap described below;
+that path is deprecated and scheduled for deletion after the one-time
+bridge window (see decision 7 in the frozen delivery spec for this change).
+
+## Implementation Status (this PR)
+
+The mailbox-write module described below (`supervisor_bridge.rs`, its
+`WorkerConfig` fields, and the `HeartbeatResponse.desired_topology` field) is
+implemented, unit-tested, and wired into the heartbeat loop.
+`runtime.rs::heartbeat_and_converge` branches on
+`supervisor_bridge::is_supervisor_owned(config)` (mailbox dir set): supervisor-owned
+targets route to `converge_supervisor_owned` (D5 bridge + mailbox write) instead
+of the legacy `converge_anyharness_runtime` + `self_update` swap, which stays
+byte-for-byte unchanged for non-supervisor targets. The "Current Process"
+outline below describes running behavior. The live E2B N-1→N proof is deferred
+with the rest of Tier 4. See
+[Lifecycle](guides/lifecycle.md#supervisor-owned-convergence-mailbox) for detail.
 
 ## Current Process
 
@@ -18,8 +44,15 @@ config + single-process lock + local SQLite
   -> heartbeat Cloud
   -> use desiredVersions to converge, in order:
        agent catalog
-       AnyHarness binary (when enabled)
-       Worker binary (when enabled; successful swap execs the new binary)
+       AnyHarness binary:
+         supervisor-owned target -> write a mailbox update request
+         legacy target (when enabled) -> in-place swap (deprecated)
+       Worker binary:
+         supervisor-owned target -> write a mailbox update request
+         legacy target (when enabled) -> in-place swap + exec (deprecated)
+  -> on a heartbeat ack requesting supervisor-owned topology, an
+     already-provisioned legacy Worker performs the one-time bridge to
+     Proliferate Supervisor (idempotent, crash-safe) and exits
   -> sleep and repeat
 ```
 
@@ -42,6 +75,7 @@ src/
 ├── catalog_sync.rs
 ├── self_update.rs
 ├── anyharness_update.rs
+├── supervisor_bridge.rs
 ├── cloud_client/
 │   ├── mod.rs
 │   ├── auth.rs
@@ -73,8 +107,9 @@ inventory, or materialization subsystems.
 | `identity/**` | Enrollment request, durable Worker credential, fingerprint | Sandbox identity, command identity, re-enrollment policy | [Identity](guides/identity.md) |
 | `lifecycle/heartbeat.rs` | Heartbeat cadence, request, and acknowledgement | Update execution or server-side liveness policy | [Lifecycle](guides/lifecycle.md) |
 | `catalog_sync.rs` | Compare catalog versions, fetch from Cloud, push to AnyHarness | General AnyHarness access | [Lifecycle](guides/lifecycle.md), [Clients](guides/clients.md) |
-| `self_update.rs` | Verify, preflight, swap, and exec the Worker binary | AnyHarness or Supervisor updates | [Lifecycle](guides/lifecycle.md) |
-| `anyharness_update.rs` | Verify, stop, swap, relaunch, health-gate, and roll back AnyHarness | General runtime lifecycle | [Lifecycle](guides/lifecycle.md) |
+| `self_update.rs` | Verify, preflight, swap, and exec the Worker binary on a **legacy** (non-supervisor-owned) target; deprecated, scheduled for deletion after the bridge window | AnyHarness or Supervisor updates, any behavior on a supervisor-owned target | [Lifecycle](guides/lifecycle.md) |
+| `anyharness_update.rs` | Verify, stop, swap, relaunch, health-gate, and roll back AnyHarness on a **legacy** target; deprecated, scheduled for deletion after the bridge window | General runtime lifecycle, any behavior on a supervisor-owned target | [Lifecycle](guides/lifecycle.md) |
+| `supervisor_bridge.rs` | Write one durable mailbox update request per diverging heartbeat on a supervisor-owned target; the one-time D5 bridge that hands an already-provisioned legacy target to Proliferate Supervisor | Update download, verification, activation, health-gating, or rollback (Supervisor owns all of that) | [Lifecycle](guides/lifecycle.md) |
 | `integration_gateway.rs` | Write the private gateway credential file returned by enrollment | Credential issuance or recovery | [Identity](guides/identity.md) |
 | `cloud_client/**` | Raw Cloud HTTP and wire shapes | Convergence decisions or local persistence | [Clients](guides/clients.md) |
 | `store/**` | Durable Worker identity and AnyHarness update state in local SQLite | Cloud or AnyHarness product truth | [Store](guides/store.md) |
@@ -121,8 +156,14 @@ catalog_sync
 
 self_update / anyharness_update
   -> heartbeat response + cloud_client artifact downloads
+  -> legacy (non-supervisor-owned) targets only
 anyharness_update
   -> store (converged version and failed pin) + narrow AnyHarness health probe
+
+supervisor_bridge
+  -> heartbeat response + cloud_client artifact-coordinate resolution
+     (writes the mailbox request; never acts on it)
+  -> config (bridge paths) for the one-time D5 hand-off
 
 store and cloud_client
   -> root support only
@@ -144,7 +185,13 @@ and `anyharness_update.rs` owns its health probe. There is no general
   Desktop leaves both gates disabled; the cloud-sandbox sidecar enables both.
 - Keep Worker-local SQLite private and limited to restart-critical Worker
   state. It is not Cloud or AnyHarness product truth.
-- Do not add command polls, event tails, target/profile state, workspace
-  materialization, or a Supervisor mailbox without an approved product change.
+- Do not add command polls, event tails, target/profile state, or workspace
+  materialization to this crate.
+- On a supervisor-owned target, the Worker never downloads, replaces, kills,
+  or rolls back AnyHarness or itself — it only writes a durable mailbox
+  request (`supervisor_bridge.rs`) and lets Proliferate Supervisor act.
+  `self_update.rs`/`anyharness_update.rs` stay compilable only for the
+  legacy-target/bridge-window path and must keep logging a deprecation
+  warning when they run; do not extend them with new capability.
 - A missing or invalid durable credential has no automatic re-enrollment path.
   Do not invent destructive recovery in this crate.

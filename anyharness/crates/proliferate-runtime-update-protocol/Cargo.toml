@@ -1,0 +1,11 @@
+[package]
+name = "proliferate-runtime-update-protocol"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Frozen wire contract for the Supervisor-owned runtime update mailbox (request/result JSON + atomic file IO), shared by proliferate-worker (write side) and proliferate-supervisor (consume side)."
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

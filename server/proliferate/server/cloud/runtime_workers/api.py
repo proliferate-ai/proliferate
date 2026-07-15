@@ -5,9 +5,14 @@
   heartbeat.
 - ``router`` holds the user-authenticated endpoint the desktop app calls to
   mint an enrollment token for its install.
+- ``admin_router`` (``/workers/admin``): instance-admin-authenticated
+  target-scoped desired-version management (admin authorization is enforced
+  inside the service, following the ``integrations`` admin-router convention).
 """
 
 from __future__ import annotations
+
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import RedirectResponse
@@ -25,6 +30,8 @@ from proliferate.server.cloud.runtime_workers.models import (
     DesktopWorkerEnrollmentResponse,
     DesktopWorkerRevokeRequest,
     DesktopWorkerRevokeResponse,
+    SetSandboxDesiredVersionsRequest,
+    SetSandboxDesiredVersionsResponse,
     WorkerEnrollRequest,
     WorkerEnrollResponse,
     WorkerHeartbeatRequest,
@@ -36,11 +43,13 @@ from proliferate.server.cloud.runtime_workers.service import (
     record_heartbeat,
     revoke_desktop_worker,
     runtime_artifact_redirect_url,
+    set_sandbox_desired_versions,
     worker_artifact_redirect_url,
 )
 
 worker_router = APIRouter(tags=["cloud-runtime-worker"])
 router = APIRouter(tags=["cloud-runtime-worker"])
+admin_router = APIRouter(prefix="/workers/admin", tags=["cloud-runtime-worker-admin"])
 
 
 @worker_router.post("/worker/enroll", response_model=WorkerEnrollResponse)
@@ -119,4 +128,23 @@ async def revoke_desktop_worker_endpoint(
         db,
         owner_user_id=user.id,
         desktop_install_id=body.desktop_install_id,
+    )
+
+
+@admin_router.put(
+    "/sandboxes/{cloud_sandbox_id}/desired-versions",
+    response_model=SetSandboxDesiredVersionsResponse,
+)
+async def set_sandbox_desired_versions_endpoint(
+    cloud_sandbox_id: UUID,
+    body: SetSandboxDesiredVersionsRequest,
+    user: User = Depends(current_product_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> SetSandboxDesiredVersionsResponse:
+    return await set_sandbox_desired_versions(
+        db,
+        cloud_sandbox_id=cloud_sandbox_id,
+        actor_user_id=user.id,
+        desired_anyharness_version=body.desired_anyharness_version,
+        desired_worker_version=body.desired_worker_version,
     )

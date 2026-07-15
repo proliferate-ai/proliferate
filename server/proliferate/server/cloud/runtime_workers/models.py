@@ -66,6 +66,29 @@ class WorkerHeartbeatResponse(_CamelModel):
     server_time: datetime
     heartbeat_interval_seconds: int
     desired_versions: WorkerDesiredVersions
+    # Make Managed Runtime Updates Supervisor-Owned, decision 6 (the D5
+    # bridge): "supervisor_owned" only for cloud-sandbox targets while
+    # `settings.supervisor_owned_runtime` is on, else None/absent. A legacy
+    # Worker that has never seen this field treats it exactly like an absent
+    # one (old-worker compat, same shape as `desired_versions`).
+    desired_topology: str | None = None
+
+
+class SetSandboxDesiredVersionsRequest(_CamelModel):
+    """Admin setter body for a sandbox's target-scoped desired versions.
+
+    ``None`` (the default, and the JSON explicit ``null``) clears the
+    override so the target inherits the global pin again.
+    """
+
+    desired_anyharness_version: str | None = Field(default=None, max_length=64)
+    desired_worker_version: str | None = Field(default=None, max_length=64)
+
+
+class SetSandboxDesiredVersionsResponse(_CamelModel):
+    cloud_sandbox_id: str
+    desired_anyharness_version: str | None
+    desired_worker_version: str | None
 
 
 class DesktopWorkerEnrollmentRequest(_CamelModel):

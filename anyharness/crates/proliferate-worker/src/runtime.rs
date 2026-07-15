@@ -11,9 +11,19 @@ use crate::{
     identity::credentials::WorkerIdentity,
     integration_gateway, lifecycle,
     process_lock::WorkerProcessLock,
-    self_update,
+    self_update, supervisor_bridge,
     store::WorkerStore,
 };
+
+/// Whether the worker loop should keep running or exit cleanly after a tick. The
+/// D5 bridge hands the box to a freshly-started Supervisor and asks this Worker
+/// to exit so the Supervisor's own Worker child takes over; every other tick
+/// continues the loop.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TickControl {
+    Continue,
+    Exit,
+}
 
 pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
     let _process_lock = WorkerProcessLock::acquire(&config.worker_db_path)?;
@@ -33,13 +43,21 @@ pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
     }
 
     let catalog_state = CatalogSyncState::new();
-    heartbeat_and_converge(&config, &cloud, &store, &identity, &catalog_state, once).await;
+    if heartbeat_and_converge(&config, &cloud, &store, &identity, &catalog_state, once).await
+        == TickControl::Exit
+    {
+        return Ok(());
+    }
     if once {
         return Ok(());
     }
     loop {
         sleep(lifecycle::heartbeat::interval(&config)).await;
-        heartbeat_and_converge(&config, &cloud, &store, &identity, &catalog_state, false).await;
+        if heartbeat_and_converge(&config, &cloud, &store, &identity, &catalog_state, false).await
+            == TickControl::Exit
+        {
+            return Ok(());
+        }
     }
 }
 
@@ -54,14 +72,14 @@ async fn heartbeat_and_converge(
     identity: &WorkerIdentity,
     catalog_state: &CatalogSyncState,
     dry_run: bool,
-) {
+) -> TickControl {
     let anyharness_version = anyharness_update::running_anyharness_version(store);
     let response = match lifecycle::heartbeat::send_once(cloud, identity, anyharness_version).await
     {
         Ok(response) => response,
         Err(error) => {
             warn!(?error, "worker heartbeat failed");
-            return;
+            return TickControl::Continue;
         }
     };
 
@@ -76,21 +94,33 @@ async fn heartbeat_and_converge(
     )
     .await;
 
+    // Supervisor-owned target: the Worker is only an observer + writer. It never
+    // runs the legacy in-place AnyHarness swap or the self-exec worker swap here;
+    // version divergence is routed through the Supervisor mailbox and the
+    // one-time D5 bridge migrates an already-provisioned sandbox to Supervisor
+    // ownership (exiting cleanly once the Supervisor owns the box).
+    if supervisor_bridge::is_supervisor_owned(config) {
+        return converge_supervisor_owned(config, cloud, store, &response, dry_run).await;
+    }
+
+    // Legacy independent-launch path (fenced during the bridge window): the
+    // Worker owns the AnyHarness swap and its own self-update.
+    //
     // AnyHarness runtime binary swap: non-fatal, runs before worker
-    // self-update for the same reason. Unlike the worker swap this does not
-    // exec — it stops/swaps/relaunches a sibling process and keeps
-    // heartbeating — so the loop continues normally afterward.
+    // self-update. Unlike the worker swap this does not exec — it
+    // stops/swaps/relaunches a sibling process and keeps heartbeating — so the
+    // loop continues normally afterward.
     converge_anyharness_runtime(config, cloud, store, &response, dry_run).await;
 
     let Some(update) = self_update::plan(config, &response) else {
-        return;
+        return TickControl::Continue;
     };
     if dry_run {
         info!(
             desired = %update.desired_version,
             "self-update pending; skipped in --once mode"
         );
-        return;
+        return TickControl::Continue;
     }
     // On success this never returns: converge ends by exec'ing the swapped
     // binary in place of this process.
@@ -101,6 +131,48 @@ async fn heartbeat_and_converge(
             "worker self-update failed; staying on the current version"
         );
     }
+    TickControl::Continue
+}
+
+/// Supervisor-owned convergence (decision 2 write side + decision 6 bridge).
+/// Runs the one-time D5 bridge when the ack requests it — exiting cleanly once a
+/// freshly-started Supervisor owns the box — then routes any version divergence
+/// through the Supervisor mailbox. The Worker never downloads, replaces, kills,
+/// or rolls back AnyHarness or itself in this path.
+async fn converge_supervisor_owned(
+    config: &WorkerConfig,
+    cloud: &CloudClient,
+    store: &WorkerStore,
+    response: &crate::cloud_client::HeartbeatResponse,
+    dry_run: bool,
+) -> TickControl {
+    if dry_run {
+        // Dry run: never spawn a Supervisor or write a request. Only report.
+        if response.desired_topology.as_deref()
+            == Some(supervisor_bridge::SUPERVISOR_OWNED_TOPOLOGY)
+        {
+            info!("supervisor bridge pending; skipped in --once mode");
+        }
+        supervisor_bridge::converge_via_mailbox(config, cloud, store, response, true).await;
+        return TickControl::Continue;
+    }
+
+    match supervisor_bridge::maybe_bridge_to_supervisor(config, response).await {
+        Ok(supervisor_bridge::BridgeOutcome::Bridged) => {
+            // Handed the box to a freshly-started Supervisor; exit cleanly so its
+            // own Worker child takes over as the mailbox writer.
+            return TickControl::Exit;
+        }
+        Ok(_) => {}
+        Err(error) => {
+            // The bridge did not confirm this tick; the current runtime keeps
+            // serving and the next heartbeat resumes it (crash-safe via markers).
+            warn!(?error, "supervisor bridge attempt did not complete; retrying next heartbeat");
+        }
+    }
+
+    supervisor_bridge::converge_via_mailbox(config, cloud, store, response, false).await;
+    TickControl::Continue
 }
 
 async fn converge_anyharness_runtime(

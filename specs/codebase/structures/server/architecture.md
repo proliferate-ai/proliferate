@@ -247,17 +247,34 @@ environment or workspace needs materialization:
 ```text
 Cloud service
   -> E2B create/resume
-  -> launch authenticated AnyHarness when absent/unhealthy
-       -> persist ready access
-       -> best-effort start Proliferate Worker sidecar
-     OR reuse an already-healthy authenticated AnyHarness
-       -> do not restart a missing Worker sidecar
+  -> settings.supervisor_owned_runtime off (default at merge):
+       launch authenticated AnyHarness when absent/unhealthy
+         -> persist ready access
+         -> best-effort start Proliferate Worker sidecar
+       OR reuse an already-healthy authenticated AnyHarness
+         -> do not restart a missing Worker sidecar
+  -> settings.supervisor_owned_runtime on:
+       launch Proliferate Supervisor detached (build_supervisor_config +
+       build_detached_supervisor_launch_command); Supervisor starts and
+       supervises AnyHarness and Worker itself — no separate Worker sidecar
+       launch
   -> materialize the repo
 ```
 
-The current E2B launch path does not start Proliferate Supervisor. Supervisor
-remains the process/update owner for the SSH installer and its installed target
-layout; do not infer that topology for hosted sandboxes.
+`supervisor_owned_runtime` is a server config flag, off by default until the
+post-merge live E2B N-1→N proof passes. With the flag off, the E2B launch path
+is unchanged: it does not start Proliferate Supervisor, and Supervisor remains
+the process/update owner only for the SSH installer and its installed target
+layout. With the flag on, a newly provisioned sandbox is Supervisor-first from
+the start; do not infer either topology for a given target without checking
+the flag and how that target was provisioned.
+
+The `connect.py` branch that issues the Supervisor-first launch is
+implemented, but as of this note it cannot be exercised: it depends on the
+`proliferate-supervisor` binary building, and that crate's update-mailbox
+consumer is not finished (see
+[`proliferate-supervisor/README.md`](../proliferate-supervisor/README.md#implementation-status-this-pr)).
+Do not flip this flag on before that gap closes.
 
 The optional Worker has one heartbeat loop, not a product-command channel:
 
@@ -266,18 +283,42 @@ fresh process
   -> consume one-time enrollment token when no durable identity exists
   -> persist opaque Worker identity/token in local SQLite
   -> heartbeat with Worker and AnyHarness versions
-  -> act on desired catalog, Worker, and AnyHarness versions
+  -> act on desired catalog, Worker, and AnyHarness versions:
+       supervisor-owned target -> write one durable Supervisor mailbox
+         request per diverging component; never swap/restart/rollback itself
+       legacy (non-supervisor-owned) target -> in-place swap (deprecated,
+         fenced for deletion after the one-time bridge window)
 ```
 
 Cloud enrollment returns a Worker token plus integration-gateway credentials.
 Heartbeat updates `last_seen_at` and installed versions and returns desired
-versions. Catalog convergence reads/writes the AnyHarness catalog directly.
-Worker self-update verifies and preflights a public artifact, atomically swaps
-the binary, then `exec`s it. AnyHarness convergence stops, swaps, relaunches,
-health-checks, and can roll back the runtime binary.
+versions plus, on a supervisor-owned target, `desiredTopology`. Desired
+versions are no longer a single global pin: `record_heartbeat` overlays
+nullable per-target `desired_anyharness_version`/`desired_worker_version`
+columns on the target's `cloud_sandbox` row over the global pin (null
+inherits the pin). Catalog convergence reads/writes the AnyHarness catalog
+directly. On a legacy target, Worker self-update verifies and preflights a
+public artifact, atomically swaps the binary, then `exec`s it, and AnyHarness
+convergence stops, swaps, relaunches, health-checks, and can roll back the
+runtime binary — both deprecated paths. On a supervisor-owned target, that
+mechanics moves to Proliferate Supervisor's mailbox consumer (verify, download,
+re-verify, stage, atomically activate, dependency-ordered restart, health-gate,
+rollback), which is implemented, unit-tested, and drained by `process/mod.rs`.
+See
+[`proliferate-supervisor/README.md`](../proliferate-supervisor/README.md#implementation-status-this-pr)
+for detail.
+
+A legacy Worker on an already-provisioned target that receives
+`desiredTopology: "supervisor_owned"` performs a one-time, idempotent,
+crash-safe bridge: write Supervisor config, start Supervisor detached, confirm
+it took ownership, then exit so Supervisor's own Worker child takes over. That
+bridge logic lives in `supervisor_bridge.rs` and is reached from
+`runtime.rs::converge_supervisor_owned` (see `proliferate-worker/README.md`).
+The live bridge and live N-1→N proof are deferred to the post-merge Tier 4
+pass.
 
 There is no mounted Target registry, command/control poll, event tail, exposure
-reconcile loop, inventory report, materialization report, or Supervisor mailbox.
+reconcile loop, inventory report, or materialization report.
 See `specs/codebase/structures/proliferate-worker/README.md` for the exact current
 source tree.
 

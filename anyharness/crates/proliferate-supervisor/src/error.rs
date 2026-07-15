@@ -43,4 +43,14 @@ pub enum SupervisorError {
     },
     #[error("update manifest does not include {component} {version}")]
     UpdateArtifactMissing { component: String, version: String },
+    #[error("failed to download update artifact from {url}: {message}")]
+    DownloadArtifact { url: String, message: String },
+    #[error("update artifact exceeded max size {max} bytes")]
+    ArtifactTooLarge { max: u64 },
+    #[error("failed to activate update for {component}")]
+    Activate { component: String, source: io::Error },
+    #[error("failed to roll back update for {component}")]
+    Rollback { component: String, source: io::Error },
+    #[error(transparent)]
+    Protocol(#[from] proliferate_runtime_update_protocol::ProtocolError),
 }

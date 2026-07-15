@@ -498,16 +498,43 @@ The agreed contract is not implemented today:
 - the exact retained production Desktop cannot yet be safely directed to an
   isolated updater feed in the complete product journey;
 - Desktop Tier 4 is opt-in/local-only and reports blocked in CI;
-- cloud desired versions are global image environment pins, not target/run
-  scoped;
+- ~~cloud desired versions are global image environment pins, not target/run
+  scoped~~ — **implemented**: nullable per-target
+  `desired_anyharness_version`/`desired_worker_version` columns on
+  `cloud_sandboxes` overlay the global pin in `record_heartbeat` (null
+  inherits the pin, unit-isolated per target). Not flag-gated; this closes
+  regardless of `supervisor_owned_runtime`. Deterministic server tests only —
+  no live E2B proof yet, so this row is not re-qualified;
 - cloud artifact routes can fall back to rolling `stable` rather than failing
-  closed on a missing candidate artifact;
+  closed on a missing candidate artifact — **still open**, disclosed non-goal
+  of the supervisor-ownership change (PR 10/12 territory); the new Supervisor
+  fails closed on checksum/size mismatch regardless, but the route itself can
+  still serve rolling `stable` upstream of that check;
 - managed cloud launches AnyHarness and Worker separately; Supervisor is not
-  the active product parent;
+  the active product parent — **server-side branch implemented, gated off at
+  merge**: the `settings.supervisor_owned_runtime`-gated branch in `connect.py`
+  (default off) launches Supervisor detached instead of a separate Worker
+  sidecar, and the flag-off path is unchanged and regression-pinned. Exercised
+  deterministically in server tests; the live E2B proof is deferred;
 - Worker directly downloads/swaps/restarts itself and AnyHarness instead of
-  writing a durable Supervisor request;
-- Supervisor can verify/stage artifacts but does not consume requests,
-  activate, health-gate, or orchestrate rollback;
+  writing a durable Supervisor request — **implemented and wired**:
+  `supervisor_bridge.rs` (mailbox request write, D5 bridge, crash-safety
+  markers) and the `WorkerConfig`/`HeartbeatResponse` fields it needs all exist
+  with passing inline tests, and the legacy in-place swap logs a one-time
+  deprecation warning. `runtime.rs::heartbeat_and_converge` branches on
+  `supervisor_bridge::is_supervisor_owned` and routes supervisor-owned targets
+  to `converge_supervisor_owned` (which calls `maybe_bridge_to_supervisor` and
+  the mailbox write) instead of the legacy swap; the legacy path is byte-for-byte
+  unchanged for non-supervisor targets;
+- ~~Supervisor can verify/stage artifacts but does not consume requests,
+  activate, health-gate, or orchestrate rollback~~ — **implemented and
+  unit-tested**: `RollbackPlan::apply` (restore `.prev` over the active path),
+  the mailbox consumer (`update/request.rs`), the activation state machine
+  (`update/activate.rs`), the bounded fetch (`update/download.rs`), and the real
+  `/health`-polling gate in `process/health.rs` are all in place;
+  `process/mod.rs` drains the mailbox via `activate::run_pending`, and
+  `proliferate-supervisor` builds and passes its inline test matrix. Only the
+  live E2B proof is deferred;
 - current cloud automation mutates shared staging, chooses hard-coded published
   versions, checks only runtime health, and allows expected failure;
 - the release workflows do not invoke the required Tier 4 target cells as a
@@ -518,7 +545,24 @@ The agreed contract is not implemented today:
 - seed/reconcile work is asynchronous and best-effort, while top-level health
   can remain `ok`; qualification must inspect its terminal per-agent results;
   and
-- the first direct-Worker to Supervisor-ownership bridge is not designed.
+- the first direct-Worker to Supervisor-ownership bridge is not designed —
+  **designed, implemented, and wired**:
+  `supervisor_bridge::maybe_bridge_to_supervisor` (config write, detached spawn,
+  ownership confirmation, `bridge.started`/`bridge.done` markers,
+  no-double-Supervisor liveness gate) is implemented with deterministic tests
+  for idempotency, marker-file crash recovery, and the no-double-Supervisor
+  invariant, and is called from `runtime.rs::converge_supervisor_owned`. The
+  live bridge run against a real production N-1 target remains deferred with the
+  rest of Tier 4.
+
+None of the above closes a manifest row or this document's own scenario
+contract: `T4-RUNTIME-1`'s baseline/upgrade/assertions and the Cloud evidence
+list are unchanged, and the machine manifest rows stay `planned` until the
+live E2B proof runs post-PR2. The Supervisor update engine and the
+Worker/runtime.rs wiring are implemented and unit-tested in this PR (both crates
+build and pass their inline matrices); what remains for qualification is the
+live E2B N-1→N proof against real candidate binaries, not further
+implementation.
 
 No item above may become a skipped or expected-success release result. Machine
 manifest rows remain `planned` until exact collectors, lanes, candidate binding,

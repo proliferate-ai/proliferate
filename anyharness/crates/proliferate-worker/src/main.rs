@@ -12,6 +12,7 @@ mod process_lock;
 mod runtime;
 mod self_update;
 mod store;
+mod supervisor_bridge;
 mod versions;
 
 use std::path::PathBuf;

@@ -74,6 +74,12 @@ class CloudSandbox(Base):
         nullable=True,
     )
     destroyed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Target-scoped desired runtime versions (Make Managed Runtime Updates
+    # Supervisor-Owned, decision 1). Null inherits the global RUNTIME_VERSION /
+    # WORKER_VERSION pin; a value overrides it for this sandbox only. Set via
+    # the admin-authenticated setter in runtime_workers/service.py.
+    desired_anyharness_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    desired_worker_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

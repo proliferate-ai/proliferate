@@ -20,6 +20,8 @@ from proliferate.constants.cloud import (
     CLOUD_RUNTIME_WORKER_DESKTOP_ENROLLMENT_TTL_SECONDS,
     CLOUD_RUNTIME_WORKER_HEARTBEAT_INTERVAL_SECONDS,
 )
+from proliferate.db.store import cloud_sandboxes as cloud_sandbox_store
+from proliferate.db.store import instance_organizations as instance_organization_store
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store import runtime_workers as store
 from proliferate.integrations.desktop_downloads import (
@@ -32,11 +34,13 @@ from proliferate.server.cloud.runtime_workers.models import (
     DesktopWorkerEnrollmentResponse,
     DesktopWorkerRevokeResponse,
     IntegrationGatewayConfig,
+    SetSandboxDesiredVersionsResponse,
     WorkerDesiredVersions,
     WorkerEnrollRequest,
     WorkerEnrollResponse,
     WorkerHeartbeatResponse,
 )
+from proliferate.server.organizations.domain.policy import organization_admin_roles
 from proliferate.server.version import runtime_version_pin as pinned_runtime_version
 from proliferate.server.version import worker_version_pin as pinned_worker_version
 from proliferate.utils.time import utcnow
@@ -250,15 +254,100 @@ async def record_heartbeat(
         worker_version=worker_version,
         anyharness_version=anyharness_version,
     )
+    # Target-scoped desired state (decision 1): a cloud-sandbox worker's
+    # target may override either global pin; a desktop worker (no
+    # cloud_sandbox_id) always gets pins only, unchanged from before this PR.
+    anyharness_pin = pinned_runtime_version()
+    worker_pin = pinned_worker_version()
+    desired_topology: str | None = None
+    worker = await store.get_worker(db, worker_id=worker_id)
+    if worker is not None and worker.cloud_sandbox_id is not None:
+        sandbox = await cloud_sandbox_store.load_cloud_sandbox_by_id(
+            db, worker.cloud_sandbox_id
+        )
+        if sandbox is not None:
+            if sandbox.desired_anyharness_version is not None:
+                anyharness_pin = sandbox.desired_anyharness_version
+            if sandbox.desired_worker_version is not None:
+                worker_pin = sandbox.desired_worker_version
+            # D5 bridge (decision 6): only signalled for cloud-sandbox targets,
+            # and only once the flag is on. A legacy worker with no field
+            # decodes this heartbeat exactly like the pre-PR shape.
+            if settings.supervisor_owned_runtime:
+                desired_topology = "supervisor_owned"
     return WorkerHeartbeatResponse(
         worker_id=str(worker_id),
         server_time=utcnow(),
         heartbeat_interval_seconds=CLOUD_RUNTIME_WORKER_HEARTBEAT_INTERVAL_SECONDS,
         desired_versions=WorkerDesiredVersions(
-            worker=pinned_worker_version(),
-            anyharness=pinned_runtime_version(),
+            worker=worker_pin,
+            anyharness=anyharness_pin,
             catalog_version=served_agent_catalog_version(),
         ),
+        desired_topology=desired_topology,
+    )
+
+
+async def _require_instance_admin(db: AsyncSession, *, user_id: UUID) -> None:
+    """Require the caller hold the admin role in the instance organization.
+
+    ``cloud_sandbox`` rows are user-owned, not organization-scoped, so there
+    is no per-target organization to check membership against. Setting a
+    target's desired runtime versions is an operator action, gated the same
+    way every other instance-wide admin action in this codebase is gated: the
+    caller must hold at least the admin role in the single instance
+    organization (see ``proliferate.server.organizations.admin_emails`` for
+    the ADMIN_EMAILS floor that keeps that org non-empty).
+    """
+    instance_organization = await instance_organization_store.get_instance_organization(db)
+    if instance_organization is None:
+        raise CloudApiError(
+            "instance_admin_required",
+            "No instance organization is configured.",
+            status_code=403,
+        )
+    membership = await organization_store.get_active_membership(
+        db,
+        organization_id=instance_organization.id,
+        user_id=user_id,
+    )
+    if membership is None or membership.role not in organization_admin_roles():
+        raise CloudApiError(
+            "instance_admin_required",
+            "You do not have permission to manage sandbox runtime versions.",
+            status_code=403,
+        )
+
+
+async def set_sandbox_desired_versions(
+    db: AsyncSession,
+    *,
+    cloud_sandbox_id: UUID,
+    actor_user_id: UUID,
+    desired_anyharness_version: str | None,
+    desired_worker_version: str | None,
+) -> SetSandboxDesiredVersionsResponse:
+    """Overlay one sandbox's target-scoped desired versions (decision 1).
+
+    Admin-authenticated; changing target A never affects target B (each call
+    touches exactly the one ``cloud_sandbox`` row named by ``cloud_sandbox_id``).
+    """
+    await _require_instance_admin(db, user_id=actor_user_id)
+    updated = await cloud_sandbox_store.set_cloud_sandbox_desired_versions(
+        db,
+        cloud_sandbox_id,
+        desired_anyharness_version=desired_anyharness_version,
+        desired_worker_version=desired_worker_version,
+    )
+    if updated is None:
+        raise CloudApiError(
+            "cloud_sandbox_not_found", "Cloud sandbox not found.", status_code=404
+        )
+    await db.commit()
+    return SetSandboxDesiredVersionsResponse(
+        cloud_sandbox_id=str(updated.id),
+        desired_anyharness_version=updated.desired_anyharness_version,
+        desired_worker_version=updated.desired_worker_version,
     )
 
 

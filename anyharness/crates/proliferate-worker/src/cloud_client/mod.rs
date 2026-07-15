@@ -97,6 +97,15 @@ pub struct HeartbeatResponse {
     // Absent on servers that predate version convergence.
     #[serde(default)]
     pub desired_versions: Option<DesiredVersions>,
+    /// The desired runtime-management topology for this target. `"supervisor_owned"`
+    /// (the only non-null value the server emits, and only for flag-enabled
+    /// cloud-sandbox targets) tells a Worker to route divergence through the
+    /// Supervisor mailbox and, if it is a legacy independent-launch Worker, to
+    /// perform the one-time D5 bridge to Supervisor ownership. Absent-tolerant,
+    /// exactly like `desired_versions`: older servers omit it and every Worker
+    /// treats `None` as today's behavior.
+    #[serde(default)]
+    pub desired_topology: Option<String>,
 }
 
 impl CloudClient {
@@ -242,6 +251,76 @@ impl CloudClient {
         Ok(response.bytes().await?.to_vec())
     }
 
+    /// Resolve an artifact's CDN coordinates — the post-redirect URL and its
+    /// byte size — WITHOUT downloading the binary body. The supervisor-owned
+    /// Worker records these coordinates in an update request; the Supervisor is
+    /// the only party that downloads the bytes (boundary: the Worker never
+    /// downloads/replaces AnyHarness or itself in the new path).
+    ///
+    /// `redirect_path` is a server download endpoint (e.g.
+    /// `v1/cloud/runtime/download/<target>/<asset>`). The no-redirect client
+    /// reads the server's `Location` (the resolved CDN URL, so pinned-vs-fallback
+    /// is resolved exactly once), then a `HEAD` on that URL yields
+    /// `Content-Length`. A missing/empty `Content-Length` is an error: the
+    /// request needs a concrete size the Supervisor re-verifies after download.
+    pub async fn resolve_artifact_location(
+        &self,
+        redirect_path: &str,
+    ) -> Result<ArtifactLocation, WorkerError> {
+        let redirect = self
+            .http
+            .get(format!("{}/{}", self.base_url, redirect_path))
+            .send()
+            .await?;
+        let status = redirect.status();
+        let url = if status.is_redirection() {
+            redirect
+                .headers()
+                .get(reqwest::header::LOCATION)
+                .and_then(|value| value.to_str().ok())
+                .map(str::to_owned)
+                .ok_or_else(|| WorkerError::ResolveArtifact {
+                    detail: format!("{redirect_path} redirected with no Location header"),
+                })?
+        } else if status.is_success() {
+            // Directly served (no redirect): the endpoint URL is the artifact.
+            redirect.url().to_string()
+        } else {
+            let body = redirect.text().await.unwrap_or_default();
+            return Err(WorkerError::Cloud { status, body });
+        };
+        let head = self
+            .http_download
+            .head(&url)
+            .timeout(ARTIFACT_DOWNLOAD_TIMEOUT)
+            .send()
+            .await?;
+        let head_status = head.status();
+        if !head_status.is_success() {
+            let body = head.text().await.unwrap_or_default();
+            return Err(WorkerError::Cloud {
+                status: head_status,
+                body,
+            });
+        }
+        let size_bytes = head
+            .headers()
+            .get(reqwest::header::CONTENT_LENGTH)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.trim().parse::<u64>().ok())
+            .filter(|size| *size > 0)
+            .ok_or_else(|| WorkerError::ResolveArtifact {
+                detail: format!("{url} returned no usable Content-Length"),
+            })?;
+        // Capture the final URL after any HEAD-time redirect so the request's
+        // sibling `.sha256` derivation targets the same published directory.
+        let resolved_url = head.url().to_string();
+        Ok(ArtifactLocation {
+            url: resolved_url,
+            size_bytes,
+        })
+    }
+
     /// Fetch the agent catalog document from the cloud server. Sends the
     /// stored ETag (if any) as `If-None-Match`; a 304 means the cached
     /// document is current. Returns `None` on 304, `Some((bytes, etag))` on
@@ -291,6 +370,14 @@ pub struct CatalogFetchResult {
 pub struct DownloadedArtifact {
     pub bytes: Vec<u8>,
     pub resolved_url: String,
+}
+
+/// An artifact's CDN coordinates resolved without downloading the body: the
+/// post-redirect URL and its `Content-Length`. Used by the supervisor-owned
+/// Worker to stamp an update request the Supervisor later downloads.
+pub struct ArtifactLocation {
+    pub url: String,
+    pub size_bytes: u64,
 }
 
 const ARTIFACT_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(300);
@@ -411,6 +498,30 @@ mod tests {
             .expect("heartbeat ack without catalogVersion");
         let desired = response.desired_versions.expect("desiredVersions present");
         assert_eq!(desired.catalog_version, None);
+    }
+
+    #[test]
+    fn heartbeat_response_tolerates_absent_desired_topology() {
+        // Servers that predate supervisor-owned topology omit the field.
+        let payload = br#"{
+            "workerId": "worker",
+            "desiredVersions": {"worker": "0.2.16", "anyharness": "0.2.16"}
+        }"#;
+        let response = serde_json::from_slice::<HeartbeatResponse>(payload)
+            .expect("heartbeat ack without desiredTopology");
+        assert_eq!(response.desired_topology, None);
+    }
+
+    #[test]
+    fn heartbeat_response_parses_supervisor_owned_topology() {
+        let payload = br#"{
+            "workerId": "worker",
+            "desiredVersions": {"worker": "0.2.16", "anyharness": "0.2.16"},
+            "desiredTopology": "supervisor_owned"
+        }"#;
+        let response = serde_json::from_slice::<HeartbeatResponse>(payload)
+            .expect("heartbeat ack with desiredTopology");
+        assert_eq!(response.desired_topology.as_deref(), Some("supervisor_owned"));
     }
 
     #[test]
