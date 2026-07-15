@@ -195,6 +195,52 @@ test("buildSelfHostQualificationCandidates: full offline orchestration produces 
   }
 });
 
+test("buildSelfHostQualificationCandidates bakes the supplied --api-base-url into the web renderer (and falls back to a non-hosted local origin without one)", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "selfhost-apibase-"));
+  try {
+    const deployDir = path.join(dir, "server", "deploy");
+    mkdirSync(deployDir, { recursive: true });
+    writeFileSync(path.join(deployDir, "install.sh"), "#!/usr/bin/env bash\n");
+    const distDir = path.join(dir, "desktop-dist");
+    mkdirSync(distDir, { recursive: true });
+    writeFileSync(path.join(distDir, "index.html"), "<html></html>");
+
+    const runWith = async (apiBaseUrl, runDirName) => {
+      const { exec, calls } = fakeExecFactory();
+      await buildSelfHostQualificationCandidates(
+        {
+          runId: "qs-run-abc123",
+          shardId: "1",
+          runDir: path.join(dir, runDirName),
+          sourceSha: SHA,
+          version: "0.3.28",
+          target: "aarch64-apple-darwin",
+          platform: "linux/amd64",
+          deployDir,
+          desktopDistDir: distDir,
+          apiBaseUrl,
+        },
+        { exec, allocatePorts: fakeAllocatePorts(), log: () => {} },
+      );
+      const rendererBuild = calls.find(
+        (c) => c.command === "pnpm" && c.args.includes("build") && c.options?.env?.VITE_PROLIFERATE_API_BASE_URL,
+      );
+      return rendererBuild.options.env.VITE_PROLIFERATE_API_BASE_URL;
+    };
+
+    // Supplied run URL is baked verbatim.
+    assert.equal(
+      await runWith("https://sh-qs-run-abc123-1-deadbeef.qualification.proliferate.com", "run-a"),
+      "https://sh-qs-run-abc123-1-deadbeef.qualification.proliferate.com",
+    );
+    // Omitted → falls back to a dead LOCAL origin (never a hosted API).
+    const fallback = await runWith(undefined, "run-b");
+    assert.match(fallback, /^http:\/\/127\.0\.0\.1:\d+$/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("buildSelfHostQualificationCandidates rejects unsafe ids, a missing run-dir, and a bad platform", async () => {
   const { exec } = fakeExecFactory();
   await assert.rejects(() =>

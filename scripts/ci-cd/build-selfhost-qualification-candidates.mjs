@@ -21,7 +21,13 @@
 //   node scripts/ci-cd/build-selfhost-qualification-candidates.mjs \
 //     --run-id <run-id> --shard-id <shard-id> --run-dir <path> \
 //     [--source-sha <40-hex>] [--version <v>] [--target <rust-triple>] \
-//     [--platform linux/amd64|linux/arm64]
+//     [--platform linux/amd64|linux/arm64] \
+//     [--api-base-url https://<run>.qualification.proliferate.com]
+//
+// `--api-base-url` is baked into the web renderer as VITE_PROLIFERATE_API_BASE_URL
+// (see buildSelfHostQualificationCandidates); it is this run's own deterministic
+// self-host instance URL. Omit it only for offline unit tests (falls back to a
+// dead local origin — never a hosted API).
 //
 // Prints one line of machine-readable JSON to stdout on success:
 //   {"run_id":...,"shard_id":...,"candidate_build_map":"<path>",
@@ -237,11 +243,18 @@ export async function buildSelfHostQualificationCandidates(options, deps = {}) {
     log,
   });
 
-  // The self-host renderer connects to the box through the Connect-Server trust
-  // flow, which writes the runtime app config and takes precedence over the
-  // baked VITE base URL. Bake the (unused) allocated local port so pre-trust the
-  // renderer points at a dead local origin and cannot leak to a hosted API.
-  const apiBaseUrl = `http://127.0.0.1:${ports.server}`;
+  // The self-host renderer is the PLAIN WEB build (`--desktop web`), whose only
+  // API-base source is the baked `VITE_PROLIFERATE_API_BASE_URL`
+  // (`getProliferateApiBaseUrl`): the Connect-Server runtime-config repoint is
+  // Tauri-only (`setDesktopAppConfig` `invoke`s a native command that throws in
+  // the browser), so a web renderer CANNOT be pointed at the instance at
+  // runtime. It must therefore be baked with THIS RUN's own self-host API URL,
+  // which is deterministic from the run/shard id (`--api-base-url`, computed by
+  // the caller from `runSubdomainLabel` + the qualification zone). That URL is
+  // the run's unique per-run instance — it cannot leak to the shared hosted API.
+  // Falls back to a dead local origin only when no run URL is supplied (offline
+  // unit tests), never a hosted origin.
+  const apiBaseUrl = options.apiBaseUrl?.trim() || `http://127.0.0.1:${ports.server}`;
   const anyharnessDevUrl = `http://127.0.0.1:${ports.anyharness}`;
   buildDesktopRendererArchive({
     outputPath: rendererArchivePath,
@@ -300,6 +313,7 @@ async function main() {
       version: argValue("--version"),
       target: argValue("--target"),
       platform: argValue("--platform"),
+      apiBaseUrl: argValue("--api-base-url"),
     },
     {
       log: (message) => console.error(`[build-selfhost-qualification-candidates] ${message}`),
