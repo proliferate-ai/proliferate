@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import type { ApiClient } from "../../fixtures/http.js";
 import type { SshTransport } from "./world.js";
 import { SELFHOST_DEPLOY_DIR } from "./install.js";
+import { scrubSecretText } from "../../fixtures/redact-diagnostics.js";
 
 /**
  * Box-side operations for SELFHOST-QUAL-1's `SH-GATEWAY` cell (frozen tier-3
@@ -299,15 +300,20 @@ export async function configureAndEnableGatewayProfile(
       { timeoutMs: 60_000 },
     );
     try {
-      await ssh.run(`cd ${GATEWAY_DEPLOY_DIR} && sudo bash bootstrap.sh`, { timeoutMs: BOX_STEP_TIMEOUT_MS });
+      // Capture bootstrap's own stdout+stderr to a box file so a failure's
+      // on-box cause (preflight err/warn lines, compose pull/health errors) is
+      // recoverable — the ssh transport otherwise discards the remote stderr.
+      await ssh.run(
+        `cd ${GATEWAY_DEPLOY_DIR} && sudo bash bootstrap.sh > /tmp/gw-bootstrap.log 2>&1`,
+        { timeoutMs: BOX_STEP_TIMEOUT_MS },
+      );
     } catch (error) {
       // bootstrap.sh runs `up -d --wait litellm`; if litellm never reaches
       // healthy it exits non-zero and the raw ssh error withholds the on-box
       // cause. Capture a bounded, SECRET-FREE snapshot of the compose service
-      // states + the litellm container's status/health/exit code so the failure
-      // is diagnosable from the persisted red without a live box. Container
-      // states/health/exit codes carry no secrets; raw logs (which can echo the
-      // master key) are deliberately NOT captured here.
+      // states + the litellm container's status/health/exit code, plus a
+      // secret-scrubbed tail of the bootstrap log (allowlisted diagnostic lines
+      // only — never raw container logs, which can echo the master key).
       const diag = await captureGatewayBootstrapDiag(ssh).catch(() => "(diagnostic capture failed)");
       const base = error instanceof Error ? error.message : String(error);
       throw new Error(`SH-GATEWAY: bootstrap.sh failed to bring up the agent-gateway profile. ${diag} (${base})`);
@@ -343,7 +349,24 @@ async function captureGatewayBootstrapDiag(ssh: SshTransport): Promise<string> {
       )
       .catch(() => "")
   ).trim();
-  return `compose states: [${composePs || "none"}]; litellm container: [${litellmInspect || "none"}]`;
+  // Allowlisted, secret-scrubbed tail of bootstrap's own output. grep -E keeps
+  // only diagnostic marker lines (preflight err/warn/ok, compose/pull/health
+  // errors) — never arbitrary lines that might echo a resolved secret value —
+  // and every survivor still passes through scrubSecretText.
+  const bootstrapTail = (
+    await ssh
+      .run(
+        "grep -aiE 'error|err:|warn|preflight|litellm|health|cannot|failed|denied|manifest|" +
+          "pull|no space|unhealthy|exited|dependency' /tmp/gw-bootstrap.log 2>/dev/null | tail -n 20 | tr '\\n' '|'",
+        { timeoutMs: 60_000 },
+      )
+      .catch(() => "")
+  ).trim();
+  const scrubbedTail = bootstrapTail ? scrubSecretText(bootstrapTail) : "";
+  return (
+    `compose states: [${composePs || "none"}]; litellm container: [${litellmInspect || "none"}]` +
+    (scrubbedTail ? `; bootstrap tail: [${scrubbedTail}]` : "")
+  );
 }
 
 /** Reads the running litellm container name on the box (empty if the profile is down). */
