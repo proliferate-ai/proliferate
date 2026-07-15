@@ -14,6 +14,7 @@ import {
   FolderTree,
   MoreHorizontal,
 } from "@proliferate/ui/icons";
+import { PaneIconButton } from "@proliferate/ui/layout/PaneIconButton";
 import { DiffViewer } from "@/components/content/ui/DiffViewer";
 import { FileChangeStats } from "@/components/content/ui/FileChangeStats";
 import { FileTreeEntryIcon } from "@/components/workspace/files/file-icons";
@@ -254,9 +255,9 @@ function ReviewHeader({
             align="end"
             className={`w-72 ${POPOVER_SURFACE_CLASS}`}
             trigger={
-              <HeaderIconButton label="Jump to file">
+              <PaneIconButton label="Jump to file">
                 <FolderTree className="size-3.5" />
-              </HeaderIconButton>
+              </PaneIconButton>
             }
           >
             {(close) => (
@@ -292,7 +293,7 @@ function ReviewHeader({
               </div>
             )}
           </PopoverButton>
-          <HeaderIconButton
+          <PaneIconButton
             label={allCollapsed ? "Expand all diffs" : "Collapse all diffs"}
             onClick={onToggleAll}
           >
@@ -301,41 +302,13 @@ function ReviewHeader({
             ) : (
               <CollapseAll className="size-3.5" />
             )}
-          </HeaderIconButton>
-          <HeaderIconButton label="Review options">
+          </PaneIconButton>
+          <PaneIconButton label="Review options">
             <MoreHorizontal className="size-3.5" />
-          </HeaderIconButton>
+          </PaneIconButton>
         </div>
       </div>
     </div>
-  );
-}
-
-function HeaderIconButton({
-  label,
-  onClick,
-  children,
-  ref,
-}: {
-  label: string;
-  onClick?: () => void;
-  children: React.ReactNode;
-  // Forwarded so PopoverButton triggers can anchor to the underlying element.
-  ref?: React.Ref<HTMLButtonElement>;
-}) {
-  return (
-    <Button
-      ref={ref}
-      type="button"
-      variant="ghost"
-      size="icon-sm"
-      aria-label={label}
-      title={label}
-      onClick={onClick}
-      className="size-6 rounded-md text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
-    >
-      {children}
-    </Button>
   );
 }
 

@@ -6,7 +6,11 @@ from threading import Lock
 from time import monotonic
 from uuid import UUID
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from proliferate.config import settings
+from proliferate.constants.cloud import GitProvider
+from proliferate.db.store.repositories import get_repo_config_for_user
 from proliferate.constants.ai_magic import (
     COMMIT_MESSAGE_MAX_DIFF_CHARS,
     COMMIT_MESSAGE_MAX_MESSAGE_CHARS,
@@ -246,3 +250,25 @@ async def generate_commit_message(
             message="Generated commit message was empty.",
         )
     return message
+
+
+async def resolve_commit_instructions(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    git_owner: str | None,
+    git_repo_name: str | None,
+) -> str | None:
+    """Per-repo commit instructions for the user's repo config, if any."""
+    if not git_owner or not git_repo_name:
+        return None
+    repo_config = await get_repo_config_for_user(
+        db,
+        user_id=user_id,
+        git_provider=GitProvider.github.value,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+    )
+    if repo_config is None:
+        return None
+    return repo_config.commit_instructions

@@ -18,8 +18,6 @@
 # max-lines entries.
 
 apps/desktop/src/components/content/ui/diff/UnifiedDiffViewer.tsx 414 unified diff viewer pending row-renderer split
-apps/desktop/src/components/workspace/git/GitPanel.tsx 429 git panel pending staged/unstaged section split
-apps/desktop/src/components/workspace/git/GitReviewFileRow.tsx 404 git review file row pending action-cluster split
 apps/desktop/src/components/workspace/shell/sidebar/WorkspaceItem.tsx 414 workspace sidebar item pending indicator/menu split
 apps/desktop/src/hooks/sessions/lifecycle/session-stream-flush-apply.ts 401 session stream flush/apply pending reducer split
 apps/packages/product-domain/src/chats/transcript/transcript-row-model.ts 946 transcript row model pending row-kind module split
@@ -29,3 +27,7 @@ apps/desktop/src/hooks/sessions/workflows/use-session-creation-actions.ts 406 pr
 apps/desktop/src/components/playground/WorkspaceStatusPlayground.tsx 450 status-card playground fixtures pending scenario-module split (#1202 debt repair)
 apps/desktop/src/lib/domain/preferences/appearance.ts 437 appearance preset model pending preset-catalog split (#1202 growth recorded in debt repair)
 apps/packages/product-ui/src/chat/transcript/VirtualizedTranscriptRowList.tsx 416 virtualized transcript list pending row-window split (recorded in debt repair)
+apps/desktop/src/components/content/ui/diff/SplitDiffViewer.tsx 465 split diff viewer pending cell-renderer split (gap flattening already extracted)
+apps/desktop/src/components/playground/GitReviewV2Playground.tsx 445 git review playground fixtures pending scenario-module split
+apps/desktop/src/components/workspace/chat/input/ChatInput.tsx 401 composer input growth from workspace-status card wiring (#1210 debt repair)
+apps/desktop/src/components/workspace/chat/input/workspace-status/WorkspaceStatusComposerControl.tsx 463 workspace-status composer control pending section split (#1210 debt repair)

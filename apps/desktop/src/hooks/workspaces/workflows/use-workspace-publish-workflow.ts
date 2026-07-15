@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CreatePullRequestResponse } from "@anyharness/sdk";
 import {
-  getAnyHarnessClient,
-  resolveWorkspaceConnectionFromContext,
   useAnyHarnessWorkspaceContext,
   useCommitGitMutation,
   useCreatePullRequestMutation,
@@ -26,6 +24,7 @@ import type {
   PublishPullRequestDraft,
 } from "@/lib/domain/workspaces/creation/publish-workflow-model";
 import { persistedSnapshotFromPullRequestSummary } from "@/lib/domain/workspaces/git-status/workspace-git-status-snapshots";
+import { fetchGitDiffPatches } from "@/lib/access/anyharness/git-diff-patches";
 import { runWorkspacePublishWorkflow } from "@/lib/workflows/workspaces/run-workspace-publish-workflow";
 import { useRefreshPrStatuses } from "@/hooks/workspaces/cache/use-pr-status-refresh";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
@@ -174,23 +173,15 @@ export function useWorkspacePublishWorkflow({
       const needsGeneratedMessage = !commitDraft.summary.trim()
         && workflowSteps.some((step) => step.kind === "commit");
       if (needsGeneratedMessage && workspaceId) {
-        const resolved = await resolveWorkspaceConnectionFromContext(
-          anyHarnessWorkspace,
-          workspaceId,
-        );
-        const client = getAnyHarnessClient(resolved.connection);
         const targets = commitDiffTargets({
           fileGroups: viewState.fileGroups,
           includeUnstaged: commitDraft.includeUnstaged,
         });
-        const patches = await Promise.all(targets.map(async (target) => {
-          const diff = await client.git.getDiff(
-            resolved.connection.anyharnessWorkspaceId,
-            target.path,
-            { scope: target.scope },
-          );
-          return { path: target.path, patch: diff.patch ?? null, binary: diff.binary };
-        }));
+        const patches = await fetchGitDiffPatches(
+          anyHarnessWorkspace,
+          workspaceId,
+          targets,
+        );
         const diffText = assembleCommitDiffText(patches);
         if (!diffText) {
           throw new Error("Nothing to describe: the pending diff is empty.");
