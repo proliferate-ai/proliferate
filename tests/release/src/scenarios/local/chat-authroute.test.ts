@@ -378,6 +378,31 @@ test("LOCAL-3: leaked managed spend on the user-key route fails the cell", async
   assert.match(outcome.reason?.message ?? "", /leaked/i);
 });
 
+test("LOCAL-3: stores + selects the user key BEFORE gating harness readiness (decision #3)", async () => {
+  // The api_key route only surfaces launch-options models after the key is
+  // stored AND selected, so `ensureHarnessReady` (launchable gate) must come
+  // AFTER store+select and the user-key route sync. Gating readiness first is
+  // what timed out in run-1 ("never became launchable").
+  const { driver, calls } = fakeDriver();
+  await collectLocal3UserKeyCells(fakeCtx(), [cell("T3-AUTHROUTE-1", { harness: "claude" })], driver);
+  const store = calls.indexOf("storeAndSelectUserKeyRoute:claude");
+  const sync = calls.indexOf("waitForRouteSync:claude:user_key");
+  const ready = calls.indexOf("ensureHarnessReady:claude");
+  assert.ok(store >= 0 && sync >= 0 && ready >= 0, `missing a step: ${calls.join(",")}`);
+  assert.ok(store < sync, "store+select must precede the user-key route sync");
+  assert.ok(sync < ready, "the user-key route sync must precede the launchable gate");
+});
+
+test("LOCAL-6: stores + selects the user key BEFORE gating harness readiness (decision #3)", async () => {
+  const { driver, calls } = fakeDriver();
+  await collectLocal6RouteChangeCell(fakeCtx(), cell("T3-AUTHROUTE-1", { route: "change" }), driver);
+  const store = calls.indexOf("storeAndSelectUserKeyRoute:claude");
+  const sync = calls.indexOf("waitForRouteSync:claude:user_key");
+  const ready = calls.indexOf("ensureHarnessReady:claude");
+  assert.ok(store >= 0 && sync >= 0 && ready >= 0, `missing a step: ${calls.join(",")}`);
+  assert.ok(store < sync && sync < ready, "store+select → user-key sync → readiness gate order");
+});
+
 test("LOCAL-3: OpenCode user-key cell must select a DIRECT provider, not the proliferate gateway provider", async () => {
   const { driver } = fakeDriver({
     resolveRouteModel: (_h, route) => ({ route, modelId: "claude-haiku-4-5", providerId: GATEWAY_PROVIDER_ID }),
@@ -533,6 +558,30 @@ test("T3-AUTHROUTE-1 expands one user-key cell per BYOK-mapped harness (cursor e
   // Exactly one route=change cell.
   const routeChange = specs.filter((spec) => spec.dimensions.route === "change");
   assert.equal(routeChange.length, 1);
+});
+
+test("T3-AUTHROUTE-1 --agents claude expands ONLY the claude user-key cell + route=change (decision #6)", async () => {
+  // Run-1 expanded claude+codex+grok+opencode despite AGENTS=claude because
+  // expandCells ignored ctx.agents. It must now consume the selector.
+  const specs = await t3Authroute1.expandCells({ runtimeLane: "local", desktop: "web", agents: ["claude"] });
+  const userKeyHarnesses = specs
+    .filter((spec) => spec.dimensions.route !== "change")
+    .map((spec) => spec.dimensions.harness);
+  assert.deepEqual(userKeyHarnesses, ["claude"]);
+  // The representative route-change harness (claude) IS selected, so its cell is planned.
+  assert.equal(specs.filter((spec) => spec.dimensions.route === "change").length, 1);
+  assert.equal(specs.length, 2);
+});
+
+test("T3-AUTHROUTE-1 --agents codex expands only codex and no route=change (representative not selected)", async () => {
+  const specs = await t3Authroute1.expandCells({ runtimeLane: "local", desktop: "web", agents: ["codex"] });
+  const userKeyHarnesses = specs
+    .filter((spec) => spec.dimensions.route !== "change")
+    .map((spec) => spec.dimensions.harness);
+  assert.deepEqual(userKeyHarnesses, ["codex"]);
+  // The LOCAL-6 route-change cell is driven by the representative harness
+  // (claude); an --agents codex run must not plan an unrunnable route-change cell.
+  assert.equal(specs.filter((spec) => spec.dimensions.route === "change").length, 0);
 });
 
 function sha256Hex(value: string): string {

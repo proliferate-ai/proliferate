@@ -40,20 +40,34 @@ export const t3Authroute1: MatrixScenarioDefinition = {
     "AGENT_GATEWAY_LITELLM_MASTER_KEY",
   ],
   kind: "matrix",
-  expandCells: async (): Promise<ScenarioCellSpec[]> => {
-    const kinds = new Set(await shippedHarnessKinds());
+  expandCells: async ({ agents }): Promise<ScenarioCellSpec[]> => {
+    // Consume `ctx.agents` (the `t3-chat-1` fanout pattern, decision #6): an
+    // explicit `--agents claude` must expand ONLY the claude user-key cell, not
+    // the full catalog fanout. `all` derives the shipped harness kinds from the
+    // catalog. Run-1 expanded claude+codex+grok+opencode despite AGENTS=claude
+    // because this ignored the selector.
+    const selected = agents.includes("all") ? await shippedHarnessKinds() : [...agents];
+    const selectedKinds = new Set(selected);
     const byokEntries = Object.entries(BYOK_ENV_BY_HARNESS) as Array<[string, string]>;
     const userKeyCells: ScenarioCellSpec[] = byokEntries
       // Cursor excluded from user-key cells: its CURSOR_API_KEY is an account
       // key, not a provider key (standing program exclusion) — it has no entry
-      // in BYOK_ENV_BY_HARNESS. Keep only the harnesses this catalog ships.
-      .filter(([kind]) => kinds.has(kind))
+      // in BYOK_ENV_BY_HARNESS. Keep only the SELECTED harnesses (intersected
+      // with the catalog's user-key-capable set).
+      .filter(([kind]) => selectedKinds.has(kind))
       .map(([kind, envVar]) => ({ dimensions: { harness: kind }, requiredEnv: [envVar] }));
-    const routeChangeCell: ScenarioCellSpec = {
-      dimensions: { ...ROUTE_CHANGE_DIMENSION },
-      requiredEnv: [BYOK_ENV_BY_HARNESS[LOCAL6_REPRESENTATIVE_HARNESS]],
-    };
-    return [...userKeyCells, routeChangeCell];
+    // The single LOCAL-6 route-change cell is driven by the representative
+    // source harness; include it whenever that harness is selected (always, for
+    // `all`) so a scoped `--agents` run that excludes it does not plan an
+    // unrunnable route-change cell.
+    const cells = [...userKeyCells];
+    if (selectedKinds.has(LOCAL6_REPRESENTATIVE_HARNESS)) {
+      cells.push({
+        dimensions: { ...ROUTE_CHANGE_DIMENSION },
+        requiredEnv: [BYOK_ENV_BY_HARNESS[LOCAL6_REPRESENTATIVE_HARNESS]],
+      });
+    }
+    return cells;
   },
   planCell: (_ctx, cell: PlannedCellV1): ScenarioPlanStep[] =>
     cell.dimensions.route === "change"
