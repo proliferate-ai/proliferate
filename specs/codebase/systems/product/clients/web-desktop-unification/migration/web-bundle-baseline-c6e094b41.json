@@ -1,7 +1,9 @@
 {
   "schema": "web-bundle-baseline/v1",
-  "provisional": true,
-  "note": "Provisional historical baseline of the CURRENT legacy apps/web bundle. NOT a budget. The Legacy-Web-replacement PR reruns this collector on its exact base immediately before deletion; those numbers are the binding cutover baseline.",
+  "provisional": false,
+  "binding": true,
+  "baseSha": "c6e094b41b05cd4752979bb595c79a0c35aaf0f5",
+  "note": "BINDING phase-6 cutover baseline of the legacy apps/web bundle, captured on the exact Legacy-Web-replacement base c6e094b41 immediately before the Web deletions (contract ordered-mechanics step 2). Supersedes the provisional d1g baseline (base f93afce81). The hosted Web cutover (next slice) compares the replacement browser-host build against these numbers.",
   "tool": "scripts/collect-web-bundle-baseline.mjs",
   "command": "PROLIFERATE_WEB_BUNDLE_MANIFEST=1 pnpm --filter @proliferate/web build (then walk apps/web/dist/.vite/manifest.json)",
   "target": "apps/web",

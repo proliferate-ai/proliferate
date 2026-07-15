@@ -5,11 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:built": "pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-domain build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build && pnpm --filter @proliferate/product-surfaces build && vite",
-    "build": "pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-domain build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build && pnpm --filter @proliferate/product-surfaces build && tsc -p tsconfig.json && vite build",
+    "dev:built": "pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-domain build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build && pnpm --filter @proliferate/product-surfaces build && pnpm --filter @proliferate/product-client build && vite",
+    "build": "pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-domain build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build && pnpm --filter @proliferate/product-surfaces build && pnpm --filter @proliferate/product-client build && tsc -p tsconfig.json && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-domain build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build && pnpm --filter @proliferate/product-surfaces build && tsc -p tsconfig.json --noEmit"
+    "typecheck": "pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-domain build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build && pnpm --filter @proliferate/product-surfaces build && pnpm --filter @proliferate/product-client build && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@anyharness/sdk": "workspace:*",
@@ -17,6 +17,7 @@
     "@proliferate/cloud-sdk": "workspace:*",
     "@proliferate/cloud-sdk-react": "workspace:*",
     "@proliferate/design": "workspace:*",
+    "@proliferate/product-client": "workspace:*",
     "@proliferate/product-domain": "workspace:*",
     "@proliferate/product-surfaces": "workspace:*",
     "@proliferate/product-ui": "workspace:*",
@@ -33,9 +34,12 @@
   "devDependencies": {
     "@sentry/vite-plugin": "^5.3.0",
     "@tailwindcss/vite": "^4",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
     "@types/react": "~19.2.17",
     "@types/react-dom": "~19.2.3",
     "@vitejs/plugin-react": "^4",
+    "jsdom": "^29.1.1",
     "tailwindcss": "^4",
     "typescript": "^5.7",
     "vite": "^6",

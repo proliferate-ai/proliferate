@@ -730,6 +730,9 @@ importers:
       '@proliferate/design':
         specifier: workspace:*
         version: link:../packages/design
+      '@proliferate/product-client':
+        specifier: workspace:*
+        version: link:../packages/product-client
       '@proliferate/product-domain':
         specifier: workspace:*
         version: link:../packages/product-domain
@@ -773,6 +776,12 @@ importers:
       '@tailwindcss/vite':
         specifier: ^4
         version: 4.3.1(vite@6.4.3(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.22.4)(yaml@2.9.0))
+      '@testing-library/dom':
+        specifier: ^10.4.1
+        version: 10.4.1
+      '@testing-library/react':
+        specifier: ^16.3.2
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@types/react':
         specifier: ~19.2.17
         version: 19.2.17
@@ -782,6 +791,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4
         version: 4.7.0(vite@6.4.3(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.22.4)(yaml@2.9.0))
+      jsdom:
+        specifier: ^29.1.1
+        version: 29.1.1
       tailwindcss:
         specifier: ^4
         version: 4.3.1
