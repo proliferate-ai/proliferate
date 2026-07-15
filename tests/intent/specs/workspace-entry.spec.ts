@@ -73,8 +73,21 @@ async function signInThroughUi(page: Page, email: string, password: string): Pro
  */
 async function ensureSidebarOpen(page: Page): Promise<void> {
   const showSidebarButton = page.getByRole("button", { name: "Show sidebar" });
+  const hideSidebarButton = page.getByRole("button", { name: "Hide sidebar" });
+  // The shell mounts asynchronously after the auth gate clears. An instant
+  // isVisible() here raced that mount on cold starts (the first test of a CI
+  // run): the check missed while the shell was still booting, the expand was
+  // skipped, and the "Add repository" click then hung forever against the
+  // zero-width collapsed sidebar (the button is in the DOM either way — see
+  // the note above). Wait for whichever toggle state the shell settles into
+  // before deciding whether to expand.
+  await expect(showSidebarButton.or(hideSidebarButton).first()).toBeVisible({
+    timeout: 60_000,
+  });
   if (await showSidebarButton.isVisible().catch(() => false)) {
     await showSidebarButton.click();
+    // Prove the sidebar actually expanded, not just that the click landed.
+    await expect(hideSidebarButton.first()).toBeVisible();
   }
 }
 
