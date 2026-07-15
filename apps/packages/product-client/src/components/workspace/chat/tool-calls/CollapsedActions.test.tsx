@@ -357,6 +357,7 @@ describe("CollapsedActions", () => {
     expect(badge?.textContent).toContain("read.ts");
     expect(badge?.className).toContain("decoration-dotted");
     expect(badge?.className).toContain("[&>span:first-child]:hidden");
+    expect(readRow?.getAttribute("title")).toContain("read.ts");
   });
 
   it("uses the same Codex ink for command and plain ledger rows", () => {
