@@ -31,7 +31,7 @@ test.describe("T2-BILL-15: LiteLLM usage import — real pagination/cursor/dedup
   test("enrollment sync mints real virtual keys (personal + org) against the fake", async () => {
     const userId = await adminUserId();
     const { organizationId } = await adminContext();
-    runEnrollmentBackfillPass();
+    await runEnrollmentBackfillPass();
 
     const personal = await getUserEnrollment(userId);
     expect(personal, "personal enrollment row exists").toBeTruthy();
@@ -46,7 +46,7 @@ test.describe("T2-BILL-15: LiteLLM usage import — real pagination/cursor/dedup
 
   test("imports paginated spend exactly once, and a repeated tick (restart) adds nothing new", async () => {
     const userId = await adminUserId();
-    runEnrollmentBackfillPass();
+    await runEnrollmentBackfillPass();
     const personal = await getUserEnrollment(userId);
     expect(personal!.virtualKeyId).toBeTruthy();
 
@@ -59,7 +59,7 @@ test.describe("T2-BILL-15: LiteLLM usage import — real pagination/cursor/dedup
     ]);
 
     const before = await countUsageEvents();
-    runUsageImportPass();
+    await runUsageImportPass();
     const afterFirst = await countUsageEvents();
     expect(afterFirst - before, "both seeded rows imported exactly once").toBe(2);
 
@@ -72,7 +72,7 @@ test.describe("T2-BILL-15: LiteLLM usage import — real pagination/cursor/dedup
     // window (no new fake rows) must not create duplicates — the unique
     // constraint on litellm_request_id dedupes even though the fake still
     // serves the same rows within the window.
-    runUsageImportPass();
+    await runUsageImportPass();
     const afterSecond = await countUsageEvents();
     expect(afterSecond, "a repeated tick over an overlapping window adds no duplicate rows").toBe(afterFirst);
   });
@@ -84,7 +84,7 @@ test.describe("T2-BILL-15: LiteLLM usage import — real pagination/cursor/dedup
       { request_id: requestId, api_key: unresolvedKey, spend: 1.23, startTime: new Date().toISOString() },
     ]);
 
-    runUsageImportPass();
+    await runUsageImportPass();
 
     const event = await getUsageEvent(requestId);
     expect(event, "the row is still recorded, never silently dropped").toBeTruthy();
@@ -97,7 +97,7 @@ test.describe("T2-BILL-15: LiteLLM usage import — real pagination/cursor/dedup
   test("member/payer attribution: org-enrolled spend attributes to the org subject, personal spend to the personal subject", async () => {
     const userId = await adminUserId();
     const { organizationId } = await adminContext();
-    runEnrollmentBackfillPass();
+    await runEnrollmentBackfillPass();
     const personal = await getUserEnrollment(userId);
     const org = await getOrgEnrollment(organizationId, userId);
     expect(personal!.virtualKeyId).toBeTruthy();
@@ -111,7 +111,7 @@ test.describe("T2-BILL-15: LiteLLM usage import — real pagination/cursor/dedup
       { request_id: orgRequestId, api_key: org!.virtualKeyId!, spend: 0.75, startTime: now },
     ]);
 
-    runUsageImportPass();
+    await runUsageImportPass();
 
     const personalEvent = await getUsageEvent(personalRequestId);
     expect(personalEvent!.userId).toBe(userId);
@@ -132,7 +132,7 @@ test.describe("T2-BILL-6: managed-LLM exhaustion disables only the scoped gatewa
   test("exhausting a subject's credit blocks its virtual key at the fake and flips budget_status, leaving other keys untouched", async () => {
     const userId = await adminUserId();
     const { organizationId } = await adminContext();
-    runEnrollmentBackfillPass();
+    await runEnrollmentBackfillPass();
     const personal = await getUserEnrollment(userId);
     const org = await getOrgEnrollment(organizationId, userId);
     expect(personal!.virtualKeyId).toBeTruthy();
@@ -146,7 +146,7 @@ test.describe("T2-BILL-6: managed-LLM exhaustion disables only the scoped gatewa
       { request_id: requestId, api_key: personal!.virtualKeyId!, spend: 1000, startTime: new Date().toISOString() },
     ]);
 
-    runUsageImportPass();
+    await runUsageImportPass();
 
     const updated = await getUserEnrollment(userId);
     expect(updated!.budgetStatus).toBe("exhausted");
