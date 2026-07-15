@@ -224,6 +224,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Reconcile the built-in integration seed definitions into the database.
     async with db_engine.async_session_factory() as db, db.begin():
         await sync_seed_definitions(db)
+    # The periodic maintenance loops below no-op when
+    # settings.run_background_workers is false (deterministic billing tests
+    # drive these same passes on demand out-of-process).
     if settings.cloud_billing_mode in {"observe", "enforce"}:
         start_billing_reconciler()
     anonymous_telemetry_task = await start_server_anonymous_telemetry_sender()

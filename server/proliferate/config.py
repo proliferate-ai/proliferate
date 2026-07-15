@@ -297,6 +297,13 @@ class Settings(BaseSettings):
     cloud_concurrent_sandbox_limit: int = 200
     cloud_billing_mode: str = "off"
     pro_billing_enabled: bool = False
+    # Periodic maintenance loops (billing reconciler + agent-gateway enrollment
+    # backfill / usage import / LLM top-ups) start with the API by default. Set
+    # false to run the API without them — used by deterministic billing tests
+    # that drive those same passes on demand out-of-process, so a background
+    # tick never races or deadlocks with the test's own pass. Does not change
+    # any billing behavior; only whether the loops auto-run.
+    run_background_workers: bool = True
     support_slack_webhook_url: str = ""
     support_report_s3_bucket: str = ""
     support_report_s3_prefix: str = "support/reports"
