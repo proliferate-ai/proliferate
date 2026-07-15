@@ -50,7 +50,7 @@ on:
         required: false
         type: string
       selfhost:
-        description: Also run the SELFHOST-INSTALL-1 EC2 job (provisions a real box).
+        description: run the self-host qualification world (provisions a run-scoped EC2 box).
         default: false
         required: false
         type: boolean
@@ -535,10 +535,12 @@ jobs:
   # lane). It runs `make qualification-selfhost`, the exact same entrypoint a
   # laptop uses; only the AWS/SSH/BYOK input source differs (the protected
   # `Qualification` GitHub environment's vars/secrets + configured AWS creds,
-  # never the ignored local secret profile). Gated on the `selfhost` dispatch
-  # input so a manual tier-2/local run does not also spin up the EC2 box.
+  # never the ignored local secret profile).
   release-e2e-selfhost-install:
     name: selfhost-install-1 (manual, strict)
+    # Gated behind an explicit self-host selection: a bare workflow_dispatch of
+    # this workflow (e.g. the local-world smoke) must NOT provision EC2. Only a
+    # dispatch that ticks `selfhost` fires this job.
     if: github.event_name == 'workflow_dispatch' && inputs.selfhost
     runs-on: ubuntu-latest
     timeout-minutes: 90
