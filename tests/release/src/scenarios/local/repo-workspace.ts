@@ -1,5 +1,3 @@
-import type { Page } from "playwright";
-
 import type { ScenarioCellOutcome, ScenarioRunContext } from "../types.js";
 import { ScenarioBlockedError, ScenarioExpectedFailError } from "../types.js";
 import type { PlannedCellV1 } from "../../runner/result.js";
@@ -8,34 +6,42 @@ import type { LocalWorldCleanupEvidence } from "../../worlds/local-workspace/cle
 import { authenticatedActor, type AuthenticatedActor } from "../../fixtures/authenticated-actor.js";
 import { preparedRepository, type PreparedRepository } from "../../fixtures/prepared-repository.js";
 import { productPage, type ProductPage } from "../../fixtures/product-page.js";
-import { defaultLocalWorldSmokeDriver } from "../local-world-smoke-1.js";
+import { selectCheapestEligibleClaudeModel } from "../../services/qualification-litellm.js";
+import { DETERMINISTIC_PROMPT, REPRESENTATIVE_HARNESS, defaultLocalWorldSmokeDriver } from "../local-world-smoke-1.js";
 import { bootLocalFunctionalWorld, isWorldBackedRun, resolveLocalFunctionalWorldInputs } from "./world-boot.js";
 import { captureLocalDriverFailure } from "./debug-capture.js";
+import { resolveLocalWorkspaceSessionId } from "./local-session.js";
 
 /**
  * LOCAL-1 (repository to workspace) under `T3-WT-1/local` and `T3-REPO-1/local`
  * (world-backed). Owner: builders-ci workstream.
  *
- * Given an authenticated actor and prepared local repository, create a local
- * workspace THROUGH the product surface (Home project picker + "Work locally" +
- * create — the smoke's `selectRepoAndWorkLocally` idiom, but the assertion is
- * the created workspace, not a turn). Assert the correct repository and default
- * branch (T3-REPO-1's default-branch contribution, folded into this one cell),
- * commandable AnyHarness, one visible empty chat, and reload continuity. Do NOT
- * seed the workspace or session directly.
+ * ── Live-proof reconciliation ruling (fix round 3, spec §"Live-proof …") ──────
+ * Run #2 proved the product materializes a local workspace + AnyHarness session
+ * only on first SEND — there is no affordance for an empty *materialized* local
+ * workspace. So LOCAL-1 now, through the genuine product surface (no direct DB/
+ * API injection — that is what "no seeding" forbids; the real send path is
+ * allowed):
+ *   1. select the prepared repo + "Work locally" and assert the PRE-SEND
+ *      pending-composer empty-chat state (composer visible + empty, the repo root
+ *      resolved so AnyHarness is commandable);
+ *   2. send ONE bounded prompt via the smoke's proven `sendPromptAndMaterialize`
+ *      to materialize the workspace + session (the only real creation path);
+ *   3. assert the correct repository + a real default branch (T3-REPO-1's
+ *      folded-in contribution), exactly one visible chat tab, and that the
+ *      workspace/session/transcript survive a reload.
  *
- * Evidence: LOCAL-1 has NO LLM turn, and the four new evidence kinds (audit
- * ruling #3) do not cover it, so its green cell carries `evidence: null` — the
- * repo/branch/empty-chat/reload assertions are proven by the green status and
- * the plan steps (BRIEF §"Evidence → LOCAL-1"). T3-REPO-1's own repo-environment
- * write path stays its diagnostic #1043-blocked behavior, unchanged (the
- * world-backed branch only fires when a candidate world is supplied).
+ * Evidence: LOCAL-1 has NO kind-scoped evidence variant (audit ruling #3), so its
+ * green cell carries `evidence: null` — the green status plus plan steps are the
+ * proof. T3-REPO-1's own repo-environment write path stays its diagnostic
+ * #1043-blocked behavior, unchanged.
  */
 
 /** Bounded waits for the live browser/runtime flow (kept generous but finite). */
 const WORKSPACE_SETTLE_TIMEOUT_MS = 90_000;
 const EMPTY_CHAT_TIMEOUT_MS = 60_000;
 const RUNTIME_RECORD_TIMEOUT_MS = 60_000;
+const COMPOSER_READY_TIMEOUT_MS = 30_000;
 
 export interface LocalRepoWorkspaceDriver {
   /**
@@ -49,15 +55,29 @@ export interface LocalRepoWorkspaceDriver {
   prepareRepo(world: ReadyLocalWorld, actor: AuthenticatedActor, cellId: string): Promise<PreparedRepository>;
   openPage(world: ReadyLocalWorld, actor: AuthenticatedActor): Promise<ProductPage>;
 
-  /** Create the local workspace via the Home product surface (no seeding) and
-   * return the materialized workspace id + observed repo/default-branch. */
-  createLocalWorkspaceInUi(world: ReadyLocalWorld, page: ProductPage, repo: PreparedRepository): Promise<{ workspaceId: string; repoName: string; defaultBranch: string }>;
+  /**
+   * Prepare the home surface (gateway synced, harness ready, repo + "Work
+   * locally" selected, cheapest eligible model chosen) and assert the PRE-SEND
+   * pending-composer empty-chat state: the composer is visible and empty and the
+   * repo root has resolved (AnyHarness commandable). No workspace is materialized
+   * and no message is sent here.
+   */
+  prepareAndAssertPendingComposer(world: ReadyLocalWorld, page: ProductPage, repo: PreparedRepository): Promise<void>;
 
-  /** Assert one visible empty chat and commandable AnyHarness for the workspace. */
-  assertEmptyChatCommandable(world: ReadyLocalWorld, page: ProductPage, workspaceId: string): Promise<void>;
+  /**
+   * Materialize the local workspace + session by sending ONE bounded prompt
+   * through the real product surface (the only creation path), returning the
+   * materialized workspace id + observed repo/default-branch. Reuses the smoke's
+   * `sendPromptAndMaterialize` / runtime-workspace resolution — no seeding.
+   */
+  materializeBySend(world: ReadyLocalWorld, page: ProductPage, repo: PreparedRepository): Promise<{ workspaceId: string; sessionId: string; repoName: string; defaultBranch: string }>;
 
-  /** Reload and assert the workspace/repo/branch/empty-chat persist. */
-  reloadAndVerifyContinuity(world: ReadyLocalWorld, page: ProductPage, expect: { workspaceId: string; defaultBranch: string }): Promise<void>;
+  /** Assert exactly one visible chat tab for the materialized workspace and that
+   * AnyHarness is commandable (a launchable agent resolves). */
+  assertSingleTabCommandable(world: ReadyLocalWorld, page: ProductPage, workspaceId: string): Promise<void>;
+
+  /** Reload and assert the workspace/session/transcript/default-branch persist. */
+  reloadAndVerifyContinuity(world: ReadyLocalWorld, page: ProductPage, expect: { workspaceId: string; sessionId: string; defaultBranch: string; repoPath: string }): Promise<void>;
 
   closeWorld(world: ReadyLocalWorld): ReturnType<ReadyLocalWorld["close"]>;
 }
@@ -73,48 +93,79 @@ export const defaultLocalRepoWorkspaceDriver: LocalRepoWorkspaceDriver = {
   createActor: (world) => authenticatedActor(world, "owner"),
   prepareRepo: (world, actor, cellId) => preparedRepository(world, actor, { cellId }),
   openPage: (world, actor) => productPage(world, actor),
-  async createLocalWorkspaceInUi(world, page, repo) {
+  async prepareAndAssertPendingComposer(world, page, repo) {
     const p = page.page;
-    // Home screen: select the prepared repo + "Work locally" (the smoke idiom).
+    // Prerequisites, identical to the smoke: Desktop syncs gateway state into
+    // AnyHarness, the representative harness becomes launchable, the prepared
+    // repo + "Work locally" are selected, and the cheapest eligible non-Fable
+    // model is chosen. Only then is the pending composer commandable.
+    await defaultLocalWorldSmokeDriver.waitForGatewaySync(world, page, REPRESENTATIVE_HARNESS);
+    await defaultLocalWorldSmokeDriver.ensureHarnessReady(world, page, REPRESENTATIVE_HARNESS);
     await defaultLocalWorldSmokeDriver.selectRepoAndWorkLocally(page, repo);
-    // Create the workspace WITHOUT seeding a turn: a fresh local workspace opens
-    // with one visible empty chat and no message sent. The create affordance is
-    // the home surface's create action, reached by role (never by sending the
-    // composer — sending would seed a session, which LOCAL-1 forbids).
-    await clickByRole(p, "button", /^(create|new workspace|start|open workspace)$/i, "create local workspace");
-    // The workspace shell settles onto the materialized (non-pending) id.
-    await p.locator("[data-workspace-shell]").first().waitFor({ state: "visible", timeout: WORKSPACE_SETTLE_TIMEOUT_MS });
-    await p
-      .locator('[data-workspace-shell][data-pending-workspace="false"]')
-      .first()
-      .waitFor({ state: "attached", timeout: WORKSPACE_SETTLE_TIMEOUT_MS });
-    const workspaceId = await readWorkspaceUiKey(p);
-    // Read the repo + default branch off AnyHarness's own local workspace record
-    // (kind=local, cloned at the prepared repo path). This is the runtime's
-    // ground truth for the created workspace — no direct seeding.
-    const record = await resolveLocalWorkspaceRecord(world, repo, RUNTIME_RECORD_TIMEOUT_MS);
-    return {
-      workspaceId,
-      repoName: deriveRepoName(repo),
-      defaultBranch: record.currentBranch ?? record.originalBranch ?? "",
-    };
-  },
-  async assertEmptyChatCommandable(world, page, _workspaceId) {
-    const p = page.page;
-    // One visible empty chat in the tab strip (data-workspace-empty-chat="true").
-    await p.locator("[data-workspace-tab-strip]").first().waitFor({ state: "visible", timeout: EMPTY_CHAT_TIMEOUT_MS });
-    const emptyChat = p.locator('[data-chat-tab][data-workspace-empty-chat="true"]').first();
-    await emptyChat.waitFor({ state: "visible", timeout: EMPTY_CHAT_TIMEOUT_MS });
-    const tabs = await p.locator("[data-chat-tab]").count();
-    if (tabs !== 1) {
-      throw new Error(`assertEmptyChatCommandable: expected exactly one visible chat tab, saw ${tabs}.`);
+    const [allowlist, liveProbe] = await Promise.all([
+      defaultLocalWorldSmokeDriver.allowlistModels(world),
+      defaultLocalWorldSmokeDriver.liveProbeModels(world, REPRESENTATIVE_HARNESS),
+    ]);
+    const modelId = selectCheapestEligibleClaudeModel(allowlist, liveProbe);
+    if (!modelId) {
+      throw new Error(
+        "prepareAndAssertPendingComposer: no eligible non-Fable Claude model in the allowlist ∩ live gateway probe",
+      );
     }
-    // Commandable AnyHarness: the runtime lists the workspace and its launch
-    // options resolve (an agent is launchable), so the empty chat can accept a
-    // command. No command is sent (that would seed the session).
+    await defaultLocalWorldSmokeDriver.selectModelInUi(page, modelId);
+    // PRE-SEND empty-chat state: the home composer is visible and empty, and no
+    // workspace shell has materialized yet (materialization happens only on send).
+    const editor = p.locator("[data-home-composer-editor]").first();
+    await editor.waitFor({ state: "visible", timeout: COMPOSER_READY_TIMEOUT_MS });
+    const draft = (await editor.textContent().catch(() => "")) ?? "";
+    if (draft.trim().length > 0) {
+      throw new Error(`prepareAndAssertPendingComposer: the home composer was not empty pre-send (saw "${draft.trim()}").`);
+    }
+    // Commandable AnyHarness: the runtime resolves a launchable agent so the
+    // pending composer can accept a command (asserted without sending one).
     const launchable = await world.runtime.client.getAgentLaunchOptions().catch(() => []);
     if (!launchable.some((agent) => agent.models.length > 0)) {
-      throw new Error("assertEmptyChatCommandable: AnyHarness reports no launchable agent for the empty chat.");
+      throw new Error("prepareAndAssertPendingComposer: AnyHarness reports no launchable agent for the pending composer.");
+    }
+  },
+  async materializeBySend(world, page, repo) {
+    // The only real creation path: send one bounded prompt. Reuses the smoke's
+    // proven materialize helper (settles the workspace shell, resolves the
+    // AnyHarness session by the repo clone path, waits for turn completion).
+    const { workspaceId, sessionId } = await defaultLocalWorldSmokeDriver.sendPromptAndMaterialize(
+      world,
+      page,
+      DETERMINISTIC_PROMPT,
+      repo.path,
+    );
+    // Confirm AnyHarness materialized a kind=local workspace at the prepared repo
+    // clone path (the runtime's ground truth — no seeding).
+    await resolveLocalWorkspaceRecord(world, repo, RUNTIME_RECORD_TIMEOUT_MS);
+    // T3-REPO-1's default branch is the REPO's default branch (RepoRoot.defaultBranch,
+    // e.g. "main"), NOT the workspace's currentBranch: the fixture clone is pinned
+    // to a full SHA (detached HEAD), so the workspace record carries no branch.
+    const repoRoot = await world.runtime.client.getRepoRoot(repo.repoRootId).catch(() => null);
+    return {
+      workspaceId,
+      sessionId,
+      repoName: deriveRepoName(repo),
+      defaultBranch: (repoRoot?.defaultBranch ?? "").trim(),
+    };
+  },
+  async assertSingleTabCommandable(world, page, _workspaceId) {
+    const p = page.page;
+    // Exactly one visible chat tab for the materialized workspace (the tab strip
+    // renders only after materialization — fix round 3).
+    await p.locator("[data-workspace-tab-strip]").first().waitFor({ state: "visible", timeout: EMPTY_CHAT_TIMEOUT_MS });
+    const firstTab = p.locator("[data-chat-tab]").first();
+    await firstTab.waitFor({ state: "visible", timeout: EMPTY_CHAT_TIMEOUT_MS });
+    const tabs = await p.locator("[data-chat-tab]").count();
+    if (tabs !== 1) {
+      throw new Error(`assertSingleTabCommandable: expected exactly one visible chat tab, saw ${tabs}.`);
+    }
+    const launchable = await world.runtime.client.getAgentLaunchOptions().catch(() => []);
+    if (!launchable.some((agent) => agent.models.length > 0)) {
+      throw new Error("assertSingleTabCommandable: AnyHarness reports no launchable agent for the workspace.");
     }
   },
   async reloadAndVerifyContinuity(world, page, expect) {
@@ -124,20 +175,27 @@ export const defaultLocalRepoWorkspaceDriver: LocalRepoWorkspaceDriver = {
       .locator(`[data-workspace-shell][data-workspace-ui-key="${cssAttr(expect.workspaceId)}"]`)
       .first();
     await shell.waitFor({ state: "attached", timeout: WORKSPACE_SETTLE_TIMEOUT_MS });
-    // The empty chat and workspace survive the reload.
+    // The workspace + its single tab survive the reload.
     await p.locator("[data-workspace-tab-strip]").first().waitFor({ state: "visible", timeout: EMPTY_CHAT_TIMEOUT_MS });
-    await p
-      .locator('[data-chat-tab][data-workspace-empty-chat="true"]')
-      .first()
-      .waitFor({ state: "visible", timeout: EMPTY_CHAT_TIMEOUT_MS });
-    // The repo default branch is stable across the reload (runtime ground truth).
-    const record = await resolveLocalWorkspaceRecordById(world, RUNTIME_RECORD_TIMEOUT_MS).catch(() => null);
-    const observed = record?.currentBranch ?? record?.originalBranch ?? "";
-    if (expect.defaultBranch && observed && observed !== expect.defaultBranch) {
+    await p.locator("[data-chat-tab]").first().waitFor({ state: "visible", timeout: EMPTY_CHAT_TIMEOUT_MS });
+    // Session persistence on AnyHarness's stable native session id (resolved from
+    // the runtime's concrete local workspace at the repo clone path).
+    const sessionId = await resolveLocalWorkspaceSessionId(world, expect.repoPath, 30_000).catch(() => null);
+    if (sessionId !== expect.sessionId) {
       throw new Error(
-        `reloadAndVerifyContinuity: default branch changed across reload (was "${expect.defaultBranch}", saw "${observed}").`,
+        `reloadAndVerifyContinuity: session "${expect.sessionId}" did not remain active after reload (saw "${sessionId ?? ""}").`,
       );
     }
+    // The transcript re-renders an assistant reply after reload.
+    const settled = p.locator('[data-assistant-prose][data-assistant-streaming="false"]').last();
+    await settled.waitFor({ state: "attached", timeout: 20_000 }).catch(() => {
+      throw new Error("reloadAndVerifyContinuity: the transcript did not re-render an assistant reply after reload.");
+    });
+    // The repo's default branch is an immutable property of the repo root, so it
+    // needs no re-check across reload; workspace/session/transcript persistence
+    // (asserted above) is the continuity proof. `expect.defaultBranch` is retained
+    // in the contract for the caller's materialize-time assertion.
+    void expect.defaultBranch;
   },
   closeWorld: (world) => world.close(),
 };
@@ -185,7 +243,11 @@ export async function collectLocal1WorkspaceCell(
     const repo = await driver.prepareRepo(world, actor, cell.cell_id);
     const page = await driver.openPage(world, actor);
     try {
-      const created = await driver.createLocalWorkspaceInUi(world, page, repo);
+      // 1) Pre-send: assert the pending-composer empty-chat state (repo + "Work
+      //    locally" selected, composer visible + empty, repo-root commandable).
+      await driver.prepareAndAssertPendingComposer(world, page, repo);
+      // 2) Materialize via the real send path (the only creation path; not seeding).
+      const created = await driver.materializeBySend(world, page, repo);
       // Correct repository (T3-REPO-1's repo assertion, folded in): the created
       // workspace must be the prepared repo, and the default branch must be a
       // real, non-empty branch (T3-REPO-1's default-branch contribution).
@@ -201,10 +263,13 @@ export async function collectLocal1WorkspaceCell(
       if (!created.workspaceId.trim()) {
         throw new Error("LOCAL-1: the product surface did not materialize a workspace id.");
       }
-      await driver.assertEmptyChatCommandable(world, page, created.workspaceId);
+      // 3) Exactly one visible tab + commandable AnyHarness, then reload continuity.
+      await driver.assertSingleTabCommandable(world, page, created.workspaceId);
       await driver.reloadAndVerifyContinuity(world, page, {
         workspaceId: created.workspaceId,
+        sessionId: created.sessionId,
         defaultBranch: created.defaultBranch,
+        repoPath: repo.path,
       });
 
       const cleanup = await driver.closeWorld(world);
@@ -313,48 +378,6 @@ async function resolveLocalWorkspaceRecord(
     await sleep(1_000);
   }
   throw new Error(`resolveLocalWorkspaceRecord: no kind=local workspace at "${repo.path}" within ${timeoutMs}ms (saw ${seen}).`);
-}
-
-/** Resolves the single local workspace record after a reload (the run owns one). */
-async function resolveLocalWorkspaceRecordById(
-  world: ReadyLocalWorld,
-  timeoutMs: number,
-): Promise<{ currentBranch?: string | null; originalBranch?: string | null }> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const workspaces = await world.runtime.client.listWorkspaces().catch(() => []);
-    const local = workspaces.find((workspace) => workspace.kind === "local");
-    if (local) {
-      return local;
-    }
-    await sleep(1_000);
-  }
-  throw new Error(`resolveLocalWorkspaceRecordById: no kind=local workspace within ${timeoutMs}ms.`);
-}
-
-/** Reads the settled workspace ui-key off the workspace shell (briefly retried). */
-async function readWorkspaceUiKey(page: Page): Promise<string> {
-  const shell = page.locator("[data-workspace-shell]").first();
-  const deadline = Date.now() + 30_000;
-  let workspaceId = "";
-  while (Date.now() < deadline) {
-    workspaceId = (await shell.getAttribute("data-workspace-ui-key").catch(() => "")) ?? "";
-    if (workspaceId) {
-      return workspaceId;
-    }
-    await sleep(500);
-  }
-  throw new Error(`readWorkspaceUiKey: workspace ui-key never settled (workspace="${workspaceId}").`);
-}
-
-async function clickByRole(page: Page, role: "button", name: RegExp, what: string): Promise<void> {
-  const locator = page.getByRole(role, { name }).first();
-  try {
-    await locator.waitFor({ state: "visible", timeout: 20_000 });
-  } catch (error) {
-    throw new Error(`could not find ${what} (role=${role}, name=${name}): ${describe(error)}`);
-  }
-  await locator.click();
 }
 
 /** Escapes a value for safe interpolation inside a `[attr="…"]` CSS selector. */

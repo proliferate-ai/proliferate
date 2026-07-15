@@ -868,16 +868,45 @@ async function createEmptyChat(
   harness: LocalHarnessKind,
 ): Promise<{ workspaceId: string; sessionId: string; tabId: string }> {
   const p = page.page;
-  // Selecting the repo + "Work locally" leaves a pending workspace whose first
-  // (empty) chat tab is created without a message; wait for the tab strip to
-  // render the single empty chat and read its identity off the new testids.
+  // Fix round 3 (live-proof ruling): the local workspace + AnyHarness session —
+  // and therefore the tab strip — materialize ONLY on first send. Waiting for the
+  // tab strip pre-send (the round-2 body) timed out. So materialize the first
+  // (single-turn) session through the real send path: select the cheapest
+  // eligible model, send one bounded prompt from the home composer, then read the
+  // materialized session's tab off the strip. Sending to create the session is
+  // not "seeding" — it is the only real creation path.
+  const preflight = await world.gateway.preflight();
+  const probe = (await world.runtime.client.getGatewayModels(harness).catch(() => [])).map((model) => model.id);
+  const modelId = selectCheapestEligibleClaudeModel(preflight.eligibleClaudeModels, probe);
+  if (!modelId) {
+    throw new Error(`createEmptyChat: no eligible non-Fable model for "${harness}" in the allowlist ∩ live probe`);
+  }
+  await selectModelInComposer(page, modelId);
+  const editor = p.locator("[data-home-composer-editor]").first();
+  await editor.waitFor({ state: "visible", timeout: 15_000 });
+  await editor.fill(BASELINE_PROMPT);
+  const send = p.locator("[data-chat-send-button]:not([disabled])").first();
+  await send.waitFor({ state: "visible", timeout: 15_000 });
+  await send.click();
+  // The pending composer transitions to the workspace shell; the tab strip then
+  // renders the materialized session's tab.
+  await p
+    .locator('[data-workspace-shell][data-pending-workspace="false"]')
+    .first()
+    .waitFor({ state: "attached", timeout: WORKSPACE_SETTLE_TIMEOUT_MS });
   await p.locator("[data-workspace-tab-strip]").first().waitFor({ state: "visible", timeout: WORKSPACE_SETTLE_TIMEOUT_MS });
-  const tab = p.locator('[data-chat-tab][data-workspace-empty-chat="true"]').first();
+  const tab = p.locator("[data-chat-tab]").first();
   await tab.waitFor({ state: "visible", timeout: TAB_SETTLE_TIMEOUT_MS });
   const tabId = await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab", tab);
   const workspaceId = await readRequiredAttr(p, "[data-workspace-shell]", "data-workspace-ui-key");
   const sessionId = await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab-session-id", tab);
-  void world;
+  // Wait for the materializing turn to complete so the session is real before the
+  // subsequent tab-semantics proofs run against it.
+  const anyharnessSessionId = await resolveActiveSessionId(world, sessionId);
+  const completion = await waitForTurnCompletion(world, anyharnessSessionId, TURN_TIMEOUT_MS);
+  if (completion.error) {
+    throw new Error(`createEmptyChat: the materializing turn errored: ${completion.error}`);
+  }
   return { workspaceId, sessionId, tabId };
 }
 

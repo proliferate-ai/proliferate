@@ -185,6 +185,13 @@ export class LocalRuntimeClient {
     return Array.isArray(response) ? response : (response.workspaces ?? []);
   }
 
+  /** The runtime repo-root record (carries the repo's `defaultBranch` — the
+   * T3-REPO-1 default-branch source, since a SHA-pinned local clone is on a
+   * detached HEAD and the workspace record's currentBranch is empty). */
+  async getRepoRoot(repoRootId: string): Promise<RepoRoot> {
+    return this.request<RepoRoot>("GET", `/v1/repo-roots/${repoRootId}`);
+  }
+
   async createWorktree(params: {
     repoRootId: string;
     targetPath: string;

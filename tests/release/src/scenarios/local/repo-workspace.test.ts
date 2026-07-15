@@ -148,7 +148,7 @@ const REPO_NAME = "e2e-fixture";
 interface FakeDriverOptions {
   cleanup?: LocalWorldCleanupEvidence;
   buildWorldError?: Error;
-  created?: { workspaceId: string; repoName: string; defaultBranch: string };
+  created?: { workspaceId: string; sessionId: string; repoName: string; defaultBranch: string };
   emptyChatError?: Error;
   reloadError?: Error;
 }
@@ -180,12 +180,15 @@ function fakeDriver(options: FakeDriverOptions = {}): { driver: LocalRepoWorkspa
         },
       } satisfies ProductPage;
     },
-    createLocalWorkspaceInUi: async () => {
-      calls.push("createLocalWorkspaceInUi");
-      return options.created ?? { workspaceId: "workspace-1", repoName: REPO_NAME, defaultBranch: "develop" };
+    prepareAndAssertPendingComposer: async () => {
+      calls.push("prepareAndAssertPendingComposer");
     },
-    assertEmptyChatCommandable: async (_w, _p, workspaceId) => {
-      calls.push(`assertEmptyChatCommandable:${workspaceId}`);
+    materializeBySend: async () => {
+      calls.push("materializeBySend");
+      return options.created ?? { workspaceId: "workspace-1", sessionId: "session-1", repoName: REPO_NAME, defaultBranch: "develop" };
+    },
+    assertSingleTabCommandable: async (_w, _p, workspaceId) => {
+      calls.push(`assertSingleTabCommandable:${workspaceId}`);
       if (options.emptyChatError) {
         throw options.emptyChatError;
       }
@@ -220,15 +223,21 @@ test("LOCAL-1: the cell drives every step in contract order and closes the world
     "createActor",
     "prepareRepo:T3-WT-1/local",
     "openPage",
-    "createLocalWorkspaceInUi",
-    "assertEmptyChatCommandable:workspace-1",
+    "prepareAndAssertPendingComposer",
+    "materializeBySend",
+    "assertSingleTabCommandable:workspace-1",
     "reloadAndVerifyContinuity:workspace-1:develop",
     "closeWorld",
     "page.close",
   ]);
-  // No-seeding invariant: the driver interface exposes no turn/send/seed step,
-  // and the executed sequence never sends a prompt or materializes a session.
-  assert.ok(!calls.some((c) => /send|prompt|seed|turn|message/i.test(c)));
+  // Live-proof ruling (fix round 3): "no seeding" means no DIRECT DB/API
+  // injection of a workspace/session/transcript — materializing through the
+  // product's real send path is the requirement, not a violation. The driver
+  // interface therefore exposes the pre-send empty-composer assertion followed by
+  // a materialize-via-send step, and NO direct seed/inject seam.
+  assert.ok(calls.includes("prepareAndAssertPendingComposer"));
+  assert.ok(calls.includes("materializeBySend"));
+  assert.ok(!calls.some((c) => /seed|inject/i.test(c)));
 });
 
 test("LOCAL-1: a non-world-backed run is a clean blocked cell and never builds a world", async () => {
@@ -248,14 +257,14 @@ test("LOCAL-1: a world-construction failure fails cleanly, never throwing", asyn
 });
 
 test("LOCAL-1: a repository mismatch fails the cell (T3-REPO-1 correct-repository assertion)", async () => {
-  const { driver } = fakeDriver({ created: { workspaceId: "workspace-1", repoName: "some-other-repo", defaultBranch: "develop" } });
+  const { driver } = fakeDriver({ created: { workspaceId: "workspace-1", sessionId: "session-1", repoName: "some-other-repo", defaultBranch: "develop" } });
   const outcome = await collectLocal1WorkspaceCell(fakeCtx(), cell("T3-WT-1"), driver);
   assert.equal(outcome.status, "failed");
   assert.match(outcome.reason?.message ?? "", /does not match the prepared repo/i);
 });
 
 test("LOCAL-1: a missing default branch fails the cell (T3-REPO-1 default-branch assertion)", async () => {
-  const { driver } = fakeDriver({ created: { workspaceId: "workspace-1", repoName: REPO_NAME, defaultBranch: "" } });
+  const { driver } = fakeDriver({ created: { workspaceId: "workspace-1", sessionId: "session-1", repoName: REPO_NAME, defaultBranch: "" } });
   const outcome = await collectLocal1WorkspaceCell(fakeCtx(), cell("T3-WT-1"), driver);
   assert.equal(outcome.status, "failed");
   assert.match(outcome.reason?.message ?? "", /default branch/i);
