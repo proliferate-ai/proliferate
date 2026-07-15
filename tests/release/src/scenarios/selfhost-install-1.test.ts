@@ -10,6 +10,7 @@ import {
   SH_INVITEE,
   attachCleanupEvidence,
   browserOriginsForBox,
+  parseRepoRootLogicalWorkspaceId,
   resolveSelfHostWorldInputs,
   runBaseTurnCell,
   runSelfHostInstallCells,
@@ -440,7 +441,12 @@ function greenBaseTurnOps(closed: { value: boolean }, overrides: Partial<BaseTur
     waitForByokSync: async () => undefined,
     summarizeAuthState: () => "[diag: state.json present]",
     resolveModel: async () => "claude-haiku-4-5",
-    createWorkspaceTurnThroughUi: async () => ({ workspaceId: "ws-1", sessionId: "sess-1", reply: "pong" }),
+    createWorkspaceTurnThroughUi: async () => ({
+      workspaceId: "ws-1",
+      logicalWorkspaceId: "repo-root:root-1:main",
+      sessionId: "sess-1",
+      reply: "pong",
+    }),
     reopenSession: async () => ({ workspaceId: "ws-1" }),
     reloadTranscript: async () => ({ ok: true, text: "pong" }),
     fetchCapabilities: async () => ({ agentGateway: false, cloudWorkspaces: false }),
@@ -527,7 +533,12 @@ test("runBaseTurnCell: a ui-turn step (uiTurnStep) is rendered BEFORE the redact
 test("runBaseTurnCell: a turn that never renders a reply (timeout) fails the cell", async () => {
   const closed = { value: false };
   const ops = greenBaseTurnOps(closed, {
-    createWorkspaceTurnThroughUi: async () => ({ workspaceId: "ws-1", sessionId: "sess-1", reply: "" }),
+    createWorkspaceTurnThroughUi: async () => ({
+      workspaceId: "ws-1",
+      logicalWorkspaceId: "repo-root:root-1:main",
+      sessionId: "sess-1",
+      reply: "",
+    }),
   });
   const result = await runBaseTurnCell(baseTurnWorld(), FAKE_OWNER, ops);
   assert.equal(result.status, "failed");
@@ -570,6 +581,28 @@ test("runBaseTurnCell: a 'gateway' auth source (LiteLLM route) on a BYOK-direct 
   const result = await runBaseTurnCell(baseTurnWorld(), FAKE_OWNER, ops);
   assert.equal(result.status, "failed");
   assert.match(result.reason?.message ?? "", /carries a "gateway"/);
+});
+
+test("parseRepoRootLogicalWorkspaceId: maps a repo-root logical ui-key to its repoRootId + branch", () => {
+  assert.deepEqual(
+    parseRepoRootLogicalWorkspaceId("repo-root:4edb9096-4439-4dbd-8969-2950f232a21a:main"),
+    { repoRootId: "4edb9096-4439-4dbd-8969-2950f232a21a", branch: "main" },
+  );
+  // URL-encoded segments (a branch with a slash) decode.
+  assert.deepEqual(
+    parseRepoRootLogicalWorkspaceId("repo-root:root-1:feature%2Fx"),
+    { repoRootId: "root-1", branch: "feature/x" },
+  );
+  // Empty branch normalizes to HEAD (matches the product's branch key).
+  assert.deepEqual(
+    parseRepoRootLogicalWorkspaceId("repo-root:root-1:"),
+    { repoRootId: "root-1", branch: "HEAD" },
+  );
+  // Non-repo-root kinds and malformed keys return null (fall back to a direct
+  // materialized-id match at the call site).
+  assert.equal(parseRepoRootLogicalWorkspaceId("remote:github:o:r:main"), null);
+  assert.equal(parseRepoRootLogicalWorkspaceId("a-bare-materialized-uuid"), null);
+  assert.equal(parseRepoRootLogicalWorkspaceId("repo-root:only-one-segment"), null);
 });
 
 test("runBaseTurnCell: a leaked E2B key in the scrubbed child env fails no_e2b", async () => {

@@ -487,6 +487,20 @@ export const defaultSelfHostInstallDriver: SelfHostInstallDriver = {
  * in the sibling SELFHOST-QUAL-1. Production wiring (`defaultBaseTurnCellOps`)
  * calls the real fixtures + the UI-real turn machinery.
  */
+/**
+ * The result of a UI-real "Work locally" turn. `workspaceId` is the runtime's
+ * MATERIALIZED workspace id (what sessions/getSession key off, and what the
+ * evidence receipt hashes); `logicalWorkspaceId` is the product's LOGICAL
+ * ui-key (`repo-root:<repoRootId>:<branch>`) the DOM re-renders on reload. The
+ * two are distinct handles and MUST NOT be conflated.
+ */
+export interface LocalWorkspaceTurn {
+  workspaceId: string;
+  logicalWorkspaceId: string;
+  sessionId: string;
+  reply: string;
+}
+
 export interface BaseTurnCellOps {
   /** The run-scoped BYOK key from the controller env (never stored/logged). */
   resolveByokRawKey(): string | undefined;
@@ -513,7 +527,7 @@ export interface BaseTurnCellOps {
     page: ProductPage,
     modelId: string,
     prompt: string,
-  ): Promise<{ workspaceId: string; sessionId: string; reply: string }>;
+  ): Promise<LocalWorkspaceTurn>;
   /** Runtime-side reopen: the session must remain commandable (secondary observation). */
   reopenSession(world: ReadySelfHostWorld, sessionId: string): Promise<{ workspaceId?: string } | undefined>;
   /**
@@ -591,7 +605,7 @@ export async function runBaseTurnCell(
     }
 
     // UI-REAL: workspace + session + prompt all go through the renderer composer.
-    let turn: { workspaceId: string; sessionId: string; reply: string };
+    let turn: LocalWorkspaceTurn;
     try {
       turn = await ops.createWorkspaceTurnThroughUi(world, page, modelId, SELFHOST_TURN_PROMPT);
     } catch (error) {
@@ -618,7 +632,9 @@ export async function runBaseTurnCell(
 
     // SHR-004a: `transcript_reopened` must be OBSERVED — reload the renderer
     // product-native (no preset) and re-read the SAME workspace's transcript.
-    const reloaded = await ops.reloadTranscript(world, page, turn.workspaceId);
+    // The DOM re-renders the LOGICAL ui-key, so the reload match keys off it,
+    // not the runtime's materialized workspace id.
+    const reloaded = await ops.reloadTranscript(world, page, turn.logicalWorkspaceId);
     if (!reloaded.ok) {
       return failedBaseTurn(
         `SH-BASE-TURN: after a product-native page reload the renderer did not restore the workspace/transcript — ${reloaded.diagnostic}`,
@@ -1282,7 +1298,7 @@ export async function createLocalWorkspaceTurnThroughUi(
   modelId: string,
   prompt: string,
   workspaceDirName: string,
-): Promise<{ workspaceId: string; sessionId: string; reply: string }> {
+): Promise<LocalWorkspaceTurn> {
   const p = page.page;
   // Failure attribution: evidence redaction withholds response bodies, so a
   // bare rethrow loses WHERE the flow died. `step` is a bounded label carried
@@ -1356,7 +1372,7 @@ async function createLocalWorkspaceTurnThroughUiInner(
   prompt: string,
   workspaceDirName: string,
   setStep: (step: string) => void,
-): Promise<{ workspaceId: string; sessionId: string; reply: string }> {
+): Promise<LocalWorkspaceTurn> {
   const p = page.page;
 
   // 1. Prerequisite repo-root under runDir (git repo required by AnyHarness).
@@ -1392,19 +1408,28 @@ async function createLocalWorkspaceTurnThroughUiInner(
   await send.click();
 
   setStep("wait for workspace shell to settle");
-  // 5. Wait for the shell to settle (data-pending-workspace flips to "false") so
-  //    the ui-key is the materialized workspace id, then read it.
+  // 5. Wait for the shell to settle (data-pending-workspace flips to "false"),
+  //    then read the DOM ui-key. This ui-key is the product's LOGICAL workspace
+  //    id (`repo-root:<repoRootId>:<branch>` for a "Work locally" launch), NOT
+  //    the runtime's materialized workspace id — the two are distinct handles.
   await p.locator("[data-workspace-shell]").first().waitFor({ state: "visible", timeout: 30_000 });
   await p
     .locator('[data-workspace-shell][data-pending-workspace="false"]')
     .first()
     .waitFor({ state: "attached", timeout: WORKSPACE_SETTLE_TIMEOUT_MS });
-  const workspaceId = await readWorkspaceUiKey(p);
+  const logicalWorkspaceId = await readWorkspaceUiKey(p);
+
+  // Map the logical ui-key to the runtime's MATERIALIZED workspace id (the id the
+  // runtime records on sessions and returns from getSession). All runtime
+  // correlation keys off the materialized id; the logical id is kept only for
+  // the product-native DOM reload match (the DOM re-renders the logical ui-key).
+  setStep("resolve materialized workspace id");
+  const materializedWorkspaceId = await resolveMaterializedWorkspaceId(world, logicalWorkspaceId, WORKSPACE_SETTLE_TIMEOUT_MS);
 
   // Resolve the stable AnyHarness native session id from the runtime (the DOM's
   // data-workspace-session-id is the client's ephemeral, reload-regenerated id).
   setStep("resolve runtime session id");
-  const sessionId = await resolveAnyharnessSessionId(world, workspaceId, WORKSPACE_SETTLE_TIMEOUT_MS);
+  const sessionId = await resolveAnyharnessSessionId(world, materializedWorkspaceId, WORKSPACE_SETTLE_TIMEOUT_MS);
 
   // Turn completion is authoritative from AnyHarness's event stream (not
   // DOM-timing-flaky); a session-level error is a real failure, not a hang.
@@ -1422,7 +1447,7 @@ async function createLocalWorkspaceTurnThroughUiInner(
 
   setStep("read assistant reply");
   const reply = await readAssistantReply(p, ASSISTANT_REPLY_TIMEOUT_MS);
-  return { workspaceId, sessionId, reply };
+  return { workspaceId: materializedWorkspaceId, logicalWorkspaceId, sessionId, reply };
 }
 
 /**
@@ -1617,10 +1642,81 @@ async function readWorkspaceUiKey(p: Page): Promise<string> {
 }
 
 /**
+ * Maps the product's LOGICAL workspace ui-key to the runtime's MATERIALIZED
+ * workspace id. The DOM `data-workspace-ui-key` for a "Work locally" launch is
+ * the logical key `repo-root:<repoRootId>:<branch>` (URL-encoded segments); the
+ * runtime records the materialized workspace id (a bare UUID) on its sessions
+ * and workspaces. This bridges them by matching the runtime workspace whose
+ * `repoRootId` (+ branch) equals the logical key's segments. If the ui-key is
+ * already a bare materialized id (defensive: some launch kinds render the
+ * materialized id directly), a direct id match is accepted.
+ */
+async function resolveMaterializedWorkspaceId(
+  world: ReadySelfHostWorld,
+  logicalWorkspaceId: string,
+  timeoutMs: number,
+): Promise<string> {
+  const parsed = parseRepoRootLogicalWorkspaceId(logicalWorkspaceId);
+  const deadline = Date.now() + timeoutMs;
+  let lastSeen: Array<{ id: string; repoRootId: string; branch?: string | null }> = [];
+  while (Date.now() < deadline) {
+    const workspaces = await world.runtime.client.listWorkspaces().catch(() => []);
+    lastSeen = workspaces.map((w) => ({ id: w.id, repoRootId: w.repoRootId, branch: w.currentBranch }));
+    // Direct materialized-id match (ui-key already a bare workspace id).
+    const direct = workspaces.find((w) => w.id === logicalWorkspaceId);
+    if (direct) {
+      return direct.id;
+    }
+    if (parsed) {
+      const match = workspaces.find(
+        (w) => w.repoRootId === parsed.repoRootId && normalizeBranch(w.currentBranch) === parsed.branch,
+      );
+      if (match) {
+        return match.id;
+      }
+    }
+    await sleep(1_000);
+  }
+  throw new Error(
+    `resolveMaterializedWorkspaceId: no runtime workspace matched logical ui-key "${logicalWorkspaceId}" within ${timeoutMs}ms ` +
+      `(runtime workspaces observed: ${JSON.stringify(lastSeen)}).`,
+  );
+}
+
+/**
+ * Parses a `repo-root:<repoRootId>:<branch>` logical workspace id (the format
+ * the product's `buildRepoRootLogicalWorkspaceId` emits — URL-encoded segments,
+ * mirrored here so the test harness stays free of a product-client import).
+ * Returns null for any other logical-id kind (remote/path/local-slot) or a
+ * malformed key.
+ */
+export function parseRepoRootLogicalWorkspaceId(
+  logicalWorkspaceId: string,
+): { repoRootId: string; branch: string } | null {
+  const [kind, ...encoded] = logicalWorkspaceId.split(":");
+  if (kind !== "repo-root" || encoded.length !== 2) {
+    return null;
+  }
+  try {
+    return { repoRootId: decodeURIComponent(encoded[0]!), branch: normalizeBranch(decodeURIComponent(encoded[1]!)) };
+  } catch {
+    return null;
+  }
+}
+
+/** The branch key the logical id uses: an empty/absent branch normalizes to "HEAD". */
+function normalizeBranch(value: string | null | undefined): string {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : "HEAD";
+}
+
+/**
  * Resolves the AnyHarness native session id for a just-materialized local
  * workspace by polling the runtime's session list (the workspace holds exactly
  * this turn's session). This is the stable, correlatable identity — unlike the
  * Desktop client's ephemeral, reload-regenerated `data-workspace-session-id`.
+ * `workspaceId` here is the MATERIALIZED runtime id (see
+ * `resolveMaterializedWorkspaceId`), not the logical ui-key.
  */
 async function resolveAnyharnessSessionId(world: ReadySelfHostWorld, workspaceId: string, timeoutMs: number): Promise<string> {
   const deadline = Date.now() + timeoutMs;
