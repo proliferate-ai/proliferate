@@ -241,6 +241,7 @@ mod tests {
                 catalog_version: version.map(str::to_string),
             }),
             desired_topology: None,
+            supervisor_bridge: None,
         }
     }
 
@@ -252,6 +253,7 @@ mod tests {
             server_time: None,
             desired_versions: None,
             desired_topology: None,
+            supervisor_bridge: None,
         };
         assert_eq!(plan(&response), None);
     }

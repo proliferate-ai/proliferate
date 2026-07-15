@@ -106,6 +106,36 @@ pub struct HeartbeatResponse {
     /// treats `None` as today's behavior.
     #[serde(default)]
     pub desired_topology: Option<String>,
+    /// D5 bridge inputs the server materializes for an already-provisioned
+    /// LEGACY target it is migrating to Supervisor ownership (R9R-002). A legacy
+    /// Worker's persisted config has none of the bridge fields, so without this
+    /// it could never bridge; the server delivers the Supervisor + supervisor-
+    /// owned Worker config TOML and the paths through the live heartbeat channel
+    /// so the legacy Worker can materialize them and hand the box off. Absent for
+    /// Supervisor-first provisions (their on-disk config already carries the
+    /// inputs) and for every non-flag-enabled target.
+    #[serde(default)]
+    pub supervisor_bridge: Option<SupervisorBridgeInputs>,
+}
+
+/// Server-delivered D5 bridge inputs (R9R-002). Carried on the heartbeat ack so
+/// an already-provisioned legacy Worker — whose on-disk config predates the
+/// supervisor-owned shape — can materialize the Supervisor config AND a
+/// supervisor-owned Worker config, then hand the box to a freshly-started
+/// Supervisor. All paths are absolute in-sandbox paths the server computes from
+/// the target's runtime context.
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SupervisorBridgeInputs {
+    pub supervisor_binary_path: String,
+    pub supervisor_config_path: String,
+    pub supervisor_config_toml: String,
+    /// The supervisor-owned Worker config TOML + its on-disk path. The bridge
+    /// overwrites the legacy Worker config with this so the Supervisor's spawned
+    /// Worker child is a mailbox writer (not the legacy in-place swapper).
+    pub worker_config_path: String,
+    pub worker_config_toml: String,
+    pub marker_dir: String,
 }
 
 impl CloudClient {
@@ -521,7 +551,10 @@ mod tests {
         }"#;
         let response = serde_json::from_slice::<HeartbeatResponse>(payload)
             .expect("heartbeat ack with desiredTopology");
-        assert_eq!(response.desired_topology.as_deref(), Some("supervisor_owned"));
+        assert_eq!(
+            response.desired_topology.as_deref(),
+            Some("supervisor_owned")
+        );
     }
 
     #[test]
