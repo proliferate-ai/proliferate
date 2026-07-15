@@ -120,13 +120,50 @@ export function useWorkspaceStatusModel() {
     nowMs,
   }), [activity, agents, gitStatus, hasExistingPullRequest, nowMs, pullRequest]);
 
+  const { repoRoot } = useSelectedRepoRoot();
+  // Compare branch opens the hosting provider's base...current compare page.
+  const compareUrl = useMemo(() => {
+    const branch = gitStatus?.currentBranch?.trim();
+    const base = gitStatus?.suggestedBaseBranch?.trim()
+      || repoRoot?.defaultBranch?.trim();
+    if (
+      !branch
+      || !base
+      || branch === base
+      || repoRoot?.remoteProvider !== "github"
+      || !repoRoot.remoteOwner
+      || !repoRoot.remoteRepoName
+    ) {
+      return null;
+    }
+    return `https://github.com/${repoRoot.remoteOwner}/${repoRoot.remoteRepoName}/compare/${encodeURIComponent(base)}...${encodeURIComponent(branch)}`;
+  }, [gitStatus?.currentBranch, gitStatus?.suggestedBaseBranch, repoRoot]);
+
   useChecksWatch(pullRequest?.checks ?? "none");
 
   return {
     model,
     runtimeBlockedReason,
+    compareUrl,
     openAgentSession: subagentStrip?.openSubagent ?? null,
   };
+}
+
+/** The selected workspace's repo root (remote identity + default branch). */
+function useSelectedRepoRoot() {
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const selectedLogicalWorkspaceId = useSessionSelectionStore(
+    (state) => state.selectedLogicalWorkspaceId,
+  );
+  const { logicalWorkspaces } = useLogicalWorkspaces();
+  return useMemo(() => {
+    const logicalId = selectedLogicalWorkspaceId ?? selectedWorkspaceId;
+    const workspace = logicalWorkspaces.find((candidate) =>
+      candidate.id === logicalId
+      || candidate.localWorkspace?.id === selectedWorkspaceId
+      || (candidate.aliasIds ?? []).includes(logicalId ?? ""));
+    return { repoRoot: workspace?.repoRoot ?? null };
+  }, [logicalWorkspaces, selectedLogicalWorkspaceId, selectedWorkspaceId]);
 }
 
 function useChecksWatch(checks: "none" | "pending" | "passing" | "failing") {

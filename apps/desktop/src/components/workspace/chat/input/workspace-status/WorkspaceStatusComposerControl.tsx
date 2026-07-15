@@ -4,6 +4,7 @@ import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerContro
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import {
   AppShellReviewIcon,
+  ArrowUpRight,
   Check,
   CircleAlert,
   Circle,
@@ -170,6 +171,11 @@ export function WorkspaceStatusCard({
               icon={<GitPullRequest className="size-4" />}
               label={model.environment.compareLabel}
               meta={model.environment.compareMeta ?? undefined}
+              trailing={(
+                <span className="shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/status-row:opacity-100 group-focus-visible/status-row:opacity-100">
+                  <ArrowUpRight className="size-3.5" />
+                </span>
+              )}
               onSelect={run(actions.onCompareBranch)}
             />
             {model.environment.checks && (
@@ -265,7 +271,7 @@ function StatusSection({
    truncating label, trailing meta, full-row hover paint via ::before that
    outsets 8px past the row box. */
 const STATUS_ROW_CLASS =
-  "group/status-row relative isolate flex h-7 w-full min-w-0 items-center gap-2 rounded-sm py-1 text-left text-ui text-foreground before:absolute before:inset-y-0 before:-inset-x-2 before:-z-10 before:rounded-sm before:content-['']";
+  "group/status-row relative isolate flex h-7 w-full min-w-0 items-center gap-2 rounded-md py-1 text-left text-ui text-foreground before:absolute before:inset-y-0 before:-inset-x-2 before:-z-10 before:rounded-md before:content-['']";
 
 function StatusRow({
   icon,

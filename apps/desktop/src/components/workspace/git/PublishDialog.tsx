@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, type KeyboardEvent, type ReactNode } from "react";
 import type { CurrentPullRequestResponse } from "@anyharness/sdk";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import { Button } from "@proliferate/ui/primitives/Button";
@@ -6,21 +6,25 @@ import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
 import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
-import {
-  SegmentedControl,
-  type SegmentedControlItem,
-} from "@proliferate/ui/primitives/SegmentedControl";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
-import { ArrowUp, GitCommit, GitHub, GitPullRequest } from "@proliferate/ui/icons";
+import { ArrowUp, GitCommit, GitHub, GitPullRequest, Spinner } from "@proliferate/ui/icons";
 import { useWorkspacePublishWorkflow } from "@/hooks/workspaces/workflows/use-workspace-publish-workflow";
 import type { PublishIntent } from "@/lib/domain/workspaces/creation/publish-workflow-model";
 
-const PUBLISH_INTENT_ITEMS = [
-  { id: "commit", label: "Commit", icon: <GitCommit /> },
-  { id: "publish", label: "Publish", icon: <ArrowUp /> },
-  { id: "pull_request", label: "Pull request", icon: <GitPullRequest /> },
-] satisfies readonly SegmentedControlItem<PublishIntent>[];
+/* Codex git-modal anatomy (reference/codex/git_modal/git_modal.html): no
+ * intent tabs and no Cancel/Submit footer — the bottom of the card is a
+ * command list. The row for the current intent is the primary action and
+ * carries the ⌘⏎ hint; clicking another row switches intent. */
+const PUBLISH_INTENTS: ReadonlyArray<{
+  id: PublishIntent;
+  label: string;
+  icon: ReactNode;
+}> = [
+  { id: "commit", label: "Commit", icon: <GitCommit className="size-4" /> },
+  { id: "publish", label: "Publish", icon: <ArrowUp className="size-4" /> },
+  { id: "pull_request", label: "Pull request", icon: <GitPullRequest className="size-4" /> },
+];
 
 interface PublishDialogProps {
   open: boolean;
@@ -99,16 +103,6 @@ export function PublishDialog({
   );
   const visibleValidationMessage = error
     ?? (primaryActionViewsExistingPr ? null : viewState.disabledReason);
-  const stagedCount = viewState.fileGroups.staged.length;
-  const partialCount = viewState.fileGroups.partial.length;
-  const unstagedCount = viewState.fileGroups.unstaged.length;
-  const changeSummary = [
-    `${stats.files} ${stats.files === 1 ? "change" : "changes"}`,
-    stagedCount > 0 ? `${stagedCount} staged` : null,
-    partialCount > 0 ? `${partialCount} partially staged` : null,
-    unstagedCount > 0 ? `${unstagedCount} unstaged` : null,
-  ].filter((part): part is string => Boolean(part)).join(" · ");
-
   function handleClose() {
     resetDrafts();
     onClose();
@@ -128,6 +122,18 @@ export function PublishDialog({
     const didComplete = await submit();
     if (didComplete) {
       handleClose();
+    }
+  }
+
+  const primaryDisabled = isLoading
+    || (!primaryActionViewsExistingPr && !!viewState.disabledReason);
+
+  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      if (!isSubmitting && !primaryDisabled) {
+        void handleSubmit();
+      }
     }
   }
 
@@ -165,67 +171,53 @@ export function PublishDialog({
       sizeClassName="max-h-[88vh] w-[420px] max-w-[calc(100vw-2rem)]"
       headerClassName="shrink-0 px-3"
       bodyClassName="flex min-h-0 flex-col p-0"
-      footerClassName="shrink-0 border-t border-border/60 px-3 py-2"
+      footerClassName="shrink-0 border-t border-border/60 p-1"
       panelClassName="border-border bg-background shadow-xl"
       showCloseButton={false}
       footer={(
-        <div className="flex w-full flex-col gap-2">
+        <div className="flex w-full flex-col gap-1" onKeyDown={handleKeyDown}>
           {visibleValidationMessage && (
-            <p className={`text-ui-sm ${error ? "text-destructive" : "text-muted-foreground"}`}>
+            <p className={`px-2 pt-1 text-ui-sm ${error ? "text-destructive" : "text-muted-foreground"}`}>
               {visibleValidationMessage}
             </p>
           )}
-          <div className="flex w-full items-center justify-end gap-2">
+          <div className="flex w-full flex-col gap-1" role="listbox" aria-label="Source control action">
+            {PUBLISH_INTENTS.map((item) => {
+              const active = item.id === intent;
+              return (
+                <PublishActionRow
+                  key={item.id}
+                  icon={item.icon}
+                  label={active ? viewState.primaryLabel : item.label}
+                  active={active}
+                  loading={active && isSubmitting}
+                  disabled={isSubmitting || (active && primaryDisabled)}
+                  onClick={() => {
+                    if (active) {
+                      void handleSubmit();
+                    } else {
+                      handleIntentChange(item.id);
+                    }
+                  }}
+                />
+              );
+            })}
             {viewState.existingPr && viewState.workflowSteps.length > 0 && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
+              <PublishActionRow
+                icon={<GitHub className="size-4" />}
+                label="View pull request"
+                active={false}
+                loading={false}
                 disabled={isSubmitting}
                 onClick={() => onViewPr(viewState.existingPr!)}
-              >
-                <GitHub className="size-3.5" />
-                View PR
-              </Button>
+              />
             )}
-            <Button type="button" variant="ghost" size="sm" onClick={handleClose} disabled={isSubmitting}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="inverted"
-              size="sm"
-              loading={isSubmitting}
-              disabled={isLoading || (!primaryActionViewsExistingPr && !!viewState.disabledReason)}
-              onClick={handleSubmit}
-            >
-              {viewState.primaryLabel}
-            </Button>
           </div>
         </div>
       )}
     >
       <AutoHideScrollArea className="min-h-0 flex-1">
-        <div className="flex flex-col">
-          <div className="border-t border-border/60 px-3 py-2">
-            <SegmentedControl
-              items={PUBLISH_INTENT_ITEMS.map((item) => ({
-                ...item,
-                disabled: isSubmitting,
-              }))}
-              value={intent}
-              onChange={handleIntentChange}
-              ariaLabel="Source control action"
-              className="grid w-full grid-cols-3"
-            />
-          </div>
-
-          {hasDirtyChanges && (
-            <div className="border-t border-border/60 px-3 py-2 text-ui-sm text-muted-foreground">
-              {changeSummary}
-            </div>
-          )}
-
+        <div className="flex flex-col" onKeyDown={handleKeyDown}>
           {hasDirtyChanges && (
             <div className="border-t border-border/60">
               <Textarea
@@ -317,13 +309,56 @@ export function PublishDialog({
             </div>
           )}
 
-          {!hasDirtyChanges && intent === "commit" && viewState.disabledReason && (
-            <p className="border-t border-border/60 px-3 py-3 text-ui-sm text-muted-foreground">
-              No local changes
-            </p>
-          )}
         </div>
       </AutoHideScrollArea>
     </ModalShell>
+  );
+}
+
+/* Codex cmdk-item recipe: rounded-lg row, icon slot + truncating label,
+ * list-hover paint on the selected/primary row, disabled rows dimmed, and
+ * the primary row carries the ⌘⏎ hint. */
+function PublishActionRow({
+  icon,
+  label,
+  active,
+  loading,
+  disabled,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  active: boolean;
+  loading: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="unstyled"
+      size="unstyled"
+      role="option"
+      aria-selected={active}
+      disabled={disabled}
+      onClick={onClick}
+      className={`flex h-8 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left text-ui text-foreground disabled:opacity-25 ${
+        active ? "bg-list-hover" : "hover:bg-list-hover"
+      }`}
+    >
+      <span className="flex w-[18px] shrink-0 items-center justify-start text-muted-foreground">
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {active && (
+        loading
+          ? <Spinner className="size-3.5 shrink-0 text-muted-foreground" />
+          : (
+            <kbd className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-md bg-current/10 px-1.5 font-sans text-xs leading-4 text-current opacity-80">
+              ⌘⏎
+            </kbd>
+          )
+      )}
+    </Button>
   );
 }
