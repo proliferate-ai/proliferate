@@ -867,7 +867,7 @@ async function selectConfigValueInUi(
   value: string,
 ): Promise<{ accepted: boolean; readback: string }> {
   if (control.surface === "reasoning") {
-    return stepReasoningEffortToValue(page, value);
+    return stepReasoningEffortToValue(page, value, control.values.length);
   }
   // mode: SessionModeControl is a real popover — click the trigger, click the
   // target PopoverMenuItem (data-session-mode-option), read the selection back.
@@ -894,15 +894,23 @@ async function selectConfigValueInUi(
  * STEP, not jump"). So step until the trigger's own readback attribute reports
  * the target, bounded by one full lap of the ladder; a step whose readback never
  * moves is a rejected apply (the UI stayed on the last-accepted value).
+ *
+ * `ladderSize` is the enumerated control value count (`control.values.length`),
+ * NOT the count of `data-reasoning-effort-option` spans: the tier-label branch
+ * (e.g. the 6-value low..ultra ladder) renders a plain ComposerControlButton
+ * with NO option spans, so a DOM-span count would be 0 there and cap the walk at
+ * 2 steps — enough to give up early on a >2-step target and record a FALSE
+ * rejection. Bounding by the enumerated ladder length covers both the bars and
+ * tier-label renderings.
  */
 async function stepReasoningEffortToValue(
   page: ProductPage,
   value: string,
+  ladderSize: number,
 ): Promise<{ accepted: boolean; readback: string }> {
   const p = page.page;
   const trigger = p.locator("[data-reasoning-effort-trigger]").first();
   await trigger.waitFor({ state: "visible", timeout: 15_000 });
-  const ladderSize = await p.locator("[data-reasoning-effort-option]").count().catch(() => 0);
   const maxSteps = Math.max(ladderSize, 2);
   let readback = (await trigger.getAttribute("data-reasoning-effort-selected").catch(() => null)) ?? "";
   for (let step = 0; step < maxSteps && readback !== value; step += 1) {
