@@ -85,6 +85,16 @@ impl SessionService {
             .is_ok()
     }
 
+    /// The active catalog's curated "run unattended" mode for the family
+    /// (`session.unattendedModeId`). `None` means the family declares none —
+    /// callers must omit `mode_id` rather than guess.
+    pub fn unattended_mode_id(&self, kind: &str) -> Option<String> {
+        self.catalog_service
+            .active_catalog()
+            .unattended_mode_id(kind)
+            .map(str::to_string)
+    }
+
     pub fn resolved_workspace_launch_options(
         &self,
         workspace_id: Option<&str>,
@@ -130,6 +140,7 @@ impl SessionService {
                 kind: agent.kind.clone(),
                 display_name: agent.display_name.clone(),
                 default_model_id: default_model_id.clone(),
+                unattended_mode_id: agent.session.unattended_mode_id.clone(),
                 models: catalog
                     .visible_models(&agent.kind, &active)
                     .into_iter()

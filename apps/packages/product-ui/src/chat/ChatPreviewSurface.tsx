@@ -1,4 +1,5 @@
-import { ArrowLeft, ExternalLink, GitBranch, MoreHorizontal, Send } from "lucide-react";
+import { ArrowLeft, ExternalLink, MoreHorizontal, Send } from "lucide-react";
+import { GitBranchIcon } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
@@ -73,7 +74,7 @@ export function ChatPreviewSurface({
         <div className="mx-auto w-full max-w-3xl px-6 py-6">
           <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1">
-              <GitBranch size={13} />
+              <GitBranchIcon className="size-[13px]" />
               {branchLabel}
             </span>
             <span className="rounded-md border border-border px-2 py-1">{repoLabel}</span>

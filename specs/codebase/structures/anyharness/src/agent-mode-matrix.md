@@ -210,8 +210,19 @@ will pass `mode_id` through verbatim.
 
 ## Recommended cowork default by agent family
 
+This ruling is now machine-readable: the catalog carries it per family as
+`session.unattendedModeId` (declared in the `UNATTENDED_MODE_IDS` curation
+overlay in `scripts/agent-catalog/build-catalog.mjs`, validated against the
+probed mode values at build time and by `scripts/validate-agent-catalog.mjs`).
+Consumers resolve it from the catalog instead of hardcoding: the runtime via
+`ActiveCatalog::unattended_mode_id` / `ResolvedLaunchAgentOption.unattended_mode_id`
+(cowork session create, cowork MCP recommendations, workflow target
+resolution), and the desktop via `resolveUnattendedModeId`
+(`apps/desktop/src/lib/domain/agents/unattended-mode.ts` — cowork, plan
+handoff, review defaults). Do not reintroduce per-surface mode maps.
+
 Only families with a repo-supported "most permissive" value get a
-recommendation. For the rest, explicitly: unknown — do not ship a default.
+declaration. For the rest, explicitly: unknown — do not ship a default.
 
 | Agent    | Control             | Recommended permissive value | Confidence                                       |
 | -------- | ------------------- | ---------------------------- | ------------------------------------------------ |

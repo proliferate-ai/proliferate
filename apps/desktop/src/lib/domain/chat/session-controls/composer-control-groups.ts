@@ -48,6 +48,11 @@ export function buildComposerSessionControlGroups(
   };
 }
 
+// Cowork owns both its access policy and its working mode, so neither mode
+// control belongs in its composer — only model tuning (model, reasoning
+// level, fast mode) remains user-facing.
+const COWORK_HIDDEN_CONTROL_KEYS = new Set<string>(["mode", "collaboration_mode"]);
+
 export function filterComposerSessionControlsForSurface(
   controls: LiveSessionControlDescriptor[],
   surface: WorkspaceSurface | null | undefined,
@@ -56,10 +61,7 @@ export function filterComposerSessionControlsForSurface(
     return controls;
   }
 
-  // Cowork owns its access policy, so the raw approval preset remains hidden.
-  // Working mode (`collaboration_mode`) and independent tuning dimensions such
-  // as reasoning and fast mode still belong in the composer.
-  return controls.filter((control) => control.key !== "mode");
+  return controls.filter((control) => !COWORK_HIDDEN_CONTROL_KEYS.has(control.key));
 }
 
 export function uniqueSessionControls(

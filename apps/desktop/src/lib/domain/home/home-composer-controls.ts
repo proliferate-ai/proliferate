@@ -7,6 +7,7 @@ import type {
   ModelSelectorSelection,
 } from "@/lib/domain/chat/models/model-selector-types";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
+import { filterComposerSessionControlsForSurface } from "@/lib/domain/chat/session-controls/composer-control-groups";
 import type { ConfiguredSessionControlValue } from "@/lib/domain/chat/session-controls/presentation";
 import type {
   HomeNextDestination,
@@ -108,7 +109,7 @@ export function buildHomeSessionConfigControls({
   onSelectMode: (modeId: string) => void;
 }): LiveSessionControlDescriptor[] {
   if (destination === "cowork") {
-    return launchControls.filter((control) => control.key !== "mode");
+    return filterComposerSessionControlsForSurface(launchControls, "cowork");
   }
 
   const hasCollaborationMode = launchControls.some(

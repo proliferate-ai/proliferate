@@ -246,7 +246,6 @@ export function FullTranscriptRowList({
       >
         <div
           ref={contentRef}
-          className="mt-auto"
           data-transcript-virtualization-mode="full"
           data-transcript-virtualization-setting={virtualizationMode}
           data-transcript-virtualization-fallback={fallbackReason ?? undefined}

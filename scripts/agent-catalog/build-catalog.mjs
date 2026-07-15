@@ -235,6 +235,22 @@ const AGENT_SUPPORTS_GOALS = {
   codex: true,
 };
 
+// The "run unattended" permission mode per harness (session.unattendedModeId,
+// curation-owned): the mode value product surfaces send when they own the
+// access policy and need the harness to stop asking (cowork, workflow runs,
+// reviews, plan handoff). Only families with a vetted most-permissive value
+// get an entry — see the ruling in
+// specs/codebase/structures/anyharness/src/agent-mode-matrix.md. Grok
+// advertises no ACP modes (a non-empty mode_id is rejected at create-session)
+// and MUST stay absent; cursor/opencode stay absent until their binaries are
+// vetted. Declared ids are checked against the probed mode values at build
+// time, so a harness upgrade that renames its bypass mode fails the build
+// instead of failing at session create.
+const UNATTENDED_MODE_IDS = {
+  claude: "bypassPermissions",
+  codex: "full-access",
+};
+
 // Display-name curation: probe snapshots carry pretty names for some models
 // and raw ids for others. When a display name has no uppercase at all we
 // title-case it with a brand-aware token map (matching the existing
@@ -795,6 +811,16 @@ for (const [kind, runs] of byAgent) {
     })),
   ];
 
+  const unattendedModeId = UNATTENDED_MODE_IDS[kind] ?? null;
+  if (unattendedModeId) {
+    const modeValues = controls.find((control) => control.key === "mode")?.values ?? [];
+    if (!modeValues.includes(unattendedModeId)) {
+      throw new Error(
+        `${kind}: unattendedModeId "${unattendedModeId}" is not among probed mode values [${modeValues.join(", ")}]`,
+      );
+    }
+  }
+
   // observedDefaults per auth context: the model the harness had selected at
   // session start (probe-owned input for curation; `defaults` is curation-owned)
   const observedDefaults = {};
@@ -840,6 +866,7 @@ for (const [kind, runs] of byAgent) {
       })),
     session: {
       supportsGoals: AGENT_SUPPORTS_GOALS[kind] ?? false,
+      ...(unattendedModeId ? { unattendedModeId } : {}),
       controls,
       models,
       defaults: AGENT_SESSION_DEFAULTS[kind] ?? {},

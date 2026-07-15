@@ -19,6 +19,7 @@ export type ScenarioKey =
   | "pending-prompts-editing"
   | "pending-prompts-with-approval"
   | "composer-long-input"
+  | "composer-cowork"
   | "slash-command-search"
   | "slash-command-empty"
   | "workspace-arrival-created"
@@ -128,6 +129,7 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "pending-prompts-editing": { label: "Queue (editing row)" },
   "pending-prompts-with-approval": { label: "Queue + approval" },
   "composer-long-input": { label: "Composer long input" },
+  "composer-cowork": { label: "Composer cowork" },
   "slash-command-search": { label: "Slash commands" },
   "slash-command-empty": { label: "Slash commands empty" },
   "workspace-arrival-created": { label: "Workspace arrival" },

@@ -84,6 +84,8 @@ export interface DesktopAgentLaunchAgent {
   displayName: string;
   description?: string | null;
   defaultModelId: string | null;
+  /** Catalog `session.unattendedModeId`; absent/null = family declares none. */
+  unattendedModeId?: string | null;
   models: DesktopAgentLaunchModel[];
   launchControls: DesktopAgentLaunchControl[];
 }
@@ -155,6 +157,12 @@ export interface CloudAgentCatalogSessionInput {
   /** Curation default per auth context id (contextId -> modelId). */
   defaults?: Record<string, string> | null;
   observedDefaults?: Record<string, string> | null;
+  /**
+   * Curation-owned "run unattended" mode for the family (cowork, workflow
+   * runs, reviews, plan handoff). Absent/null = family declares none;
+   * consumers must omit the mode entirely rather than guess.
+   */
+  unattendedModeId?: string | null;
 }
 
 export interface CloudAgentCatalogControlMappingInput {

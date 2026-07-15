@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
-import { resolveCoworkDefaultSessionModeId } from "@/lib/domain/cowork/session-mode-defaults";
+import { resolveUnattendedModeId } from "@/lib/domain/agents/unattended-mode";
 import {
   launchControlToConfiguredSessionControlValues,
   listConfiguredSessionControlValues,
@@ -55,7 +55,7 @@ export function useHomeNextModeSelection({
     }
 
     const preferredModeId = destination === "cowork"
-      ? resolveCoworkDefaultSessionModeId(agentKind)
+      ? resolveUnattendedModeId(agentKind)
       : defaultSessionModeByAgentKind[agentKind] ?? null;
 
     return resolveModeOption(modeOptions, preferredModeId)

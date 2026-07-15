@@ -88,6 +88,7 @@
       ],
       "session": {
         "supportsGoals": true,
+        "unattendedModeId": "bypassPermissions",
         "controls": [
           {
             "key": "model",
@@ -1279,6 +1280,7 @@
       ],
       "session": {
         "supportsGoals": true,
+        "unattendedModeId": "full-access",
         "controls": [
           {
             "key": "model",

@@ -12,6 +12,8 @@ import {
   WORKSPACE_CHAT_COMPOSER_INPUT,
 } from "@/config/chat";
 import type { ScenarioKey } from "@/config/playground";
+import type { WorkspaceSurface } from "@anyharness/sdk";
+import { filterComposerSessionControlsForSurface } from "@/lib/domain/chat/session-controls/composer-control-groups";
 import { useComposerTextareaAutosize } from "@/hooks/chat/ui/use-composer-textarea-autosize";
 import type { PlaygroundReplayState } from "@/hooks/playground/lifecycle/use-replay-session";
 import {
@@ -27,6 +29,8 @@ export function renderComposerSurfaceForScenario(scenario: ScenarioKey): ReactNo
   switch (scenario) {
     case "composer-long-input":
       return <PlaygroundLongInputComposerSurface />;
+    case "composer-cowork":
+      return <PlaygroundComposerSurface surface="cowork" />;
     case "slash-command-search":
       return <PlaygroundSlashCommandComposerSurface commands={PLAYGROUND_SLASH_COMMANDS} />;
     case "slash-command-empty":
@@ -36,7 +40,11 @@ export function renderComposerSurfaceForScenario(scenario: ScenarioKey): ReactNo
   }
 }
 
-export function PlaygroundComposerSurface() {
+export function PlaygroundComposerSurface({
+  surface,
+}: {
+  surface?: WorkspaceSurface;
+} = {}) {
   return (
     <ChatComposerSurface>
       <form className="relative flex flex-col">
@@ -53,7 +61,7 @@ export function PlaygroundComposerSurface() {
             className="min-h-0 px-0 py-0 text-base leading-relaxed text-foreground placeholder:text-muted-foreground/70"
           />
         </div>
-        <PlaygroundComposerControlRow />
+        <PlaygroundComposerControlRow surface={surface} />
       </form>
     </ChatComposerSurface>
   );
@@ -129,13 +137,16 @@ function PlaygroundSlashCommandComposerSurface({
   );
 }
 
-function PlaygroundComposerControlRow() {
+function PlaygroundComposerControlRow({ surface }: { surface?: WorkspaceSurface }) {
   return (
     <ChatInputControlRow
       runtimeControlsDisabled={false}
       modelSelectorProps={createPlaygroundModelSelectorProps()}
       agentKind="codex"
-      sessionConfigControls={createPlaygroundSessionConfigControls()}
+      sessionConfigControls={filterComposerSessionControlsForSurface(
+        createPlaygroundSessionConfigControls(),
+        surface ?? null,
+      )}
       isEditingQueuedPrompt={false}
       chatDisabled={false}
       isSubmitting={false}

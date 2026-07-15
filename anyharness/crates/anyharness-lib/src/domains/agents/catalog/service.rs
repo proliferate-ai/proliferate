@@ -222,6 +222,13 @@ impl ActiveCatalog {
             .unwrap_or(false)
     }
 
+    /// The curated "run unattended" mode for the family (cowork, workflow
+    /// runs, reviews, plan handoff). `None` means the family has no vetted
+    /// most-permissive mode — send no `mode_id` at all rather than guessing.
+    pub fn unattended_mode_id(&self, kind: &str) -> Option<&str> {
+        self.agent(kind)?.session.unattended_mode_id.as_deref()
+    }
+
     /// Models available under the active contexts: `availability.anyOf`
     /// intersected with the active ids (`"baseline"` counts when active).
     pub fn models(&self, kind: &str, contexts: &ActiveAuthContexts) -> Vec<&AgentCatalogModel> {

@@ -15,6 +15,9 @@ export const TEXT_SIZE_TOKEN_IDS = [
   "title",
   "hero",
   "chat",
+  "sidebar-nav",
+  "sidebar-row",
+  "sidebar-brand",
 ] as const;
 
 /**

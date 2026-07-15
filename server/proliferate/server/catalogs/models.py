@@ -118,6 +118,9 @@ class AgentCatalogSession(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     supportsGoals: bool = False
+    # Curation-owned "run unattended" mode for the family (cowork, workflow
+    # runs, reviews, plan handoff). None = family declares none; omit mode_id.
+    unattendedModeId: str | None = None
     controls: list[AgentCatalogSessionControl] = []
     models: list[AgentCatalogModel] = []
     defaults: dict[str, str] = {}

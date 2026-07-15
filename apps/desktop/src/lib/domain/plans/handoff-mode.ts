@@ -1,5 +1,5 @@
 import type { NormalizedSessionControl } from "@anyharness/sdk";
-import { PLAN_HANDOFF_DEFAULT_MODE_ID_BY_AGENT_KIND } from "@/config/plan-handoff-session-mode-defaults";
+import { resolveUnattendedModeId } from "@/lib/domain/agents/unattended-mode";
 import type { ConfiguredSessionControlValue } from "@/lib/domain/chat/session-controls/presentation";
 import { listConfiguredSessionControlValues } from "@/lib/domain/chat/session-controls/session-mode-control";
 
@@ -28,7 +28,9 @@ export function resolvePlanHandoffModeId(
   }
 
   const options = listPlanHandoffModeOptions(trimmedAgentKind);
-  const configuredDefault = PLAN_HANDOFF_DEFAULT_MODE_ID_BY_AGENT_KIND[trimmedAgentKind];
+  // Handoff starts a fresh implementation session: default to the catalog's
+  // curated unattended mode so work continues without permission prompts.
+  const configuredDefault = resolveUnattendedModeId(trimmedAgentKind);
   return resolvePlanHandoffModeIdFromOptions(configuredDefault, options);
 }
 

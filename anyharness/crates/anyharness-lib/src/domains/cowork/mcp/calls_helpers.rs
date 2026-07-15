@@ -1,7 +1,7 @@
 use serde_json::{json, Value};
 
 use crate::domains::agents::readiness::launch_options::ResolvedWorkspaceLaunchOptions;
-use crate::domains::cowork::runtime::{default_cowork_coding_mode_for_agent, CoworkRuntime};
+use crate::domains::cowork::runtime::CoworkRuntime;
 use crate::domains::sessions::links::model::SessionLinkRecord;
 use crate::domains::sessions::runtime::SendPromptOutcome;
 
@@ -21,7 +21,7 @@ pub(super) fn launch_agents_to_json(catalog: ResolvedWorkspaceLaunchOptions) -> 
                         "isDefault": model.is_default,
                     })
                 }).collect::<Vec<_>>(),
-                "recommendedModeId": default_cowork_coding_mode_for_agent(&agent.kind),
+                "recommendedModeId": agent.unattended_mode_id,
             })
         })
         .collect()
@@ -48,11 +48,21 @@ pub(super) fn mode_options_to_json(
         .unwrap_or_default()
 }
 
-pub(super) fn recommended_modes_by_agent_kind_json() -> Value {
-    json!({
-        "claude": "bypassPermissions",
-        "codex": "full-access",
-    })
+pub(super) fn recommended_modes_by_agent_kind_json(
+    catalog: &ResolvedWorkspaceLaunchOptions,
+) -> Value {
+    Value::Object(
+        catalog
+            .agents
+            .iter()
+            .filter_map(|agent| {
+                agent
+                    .unattended_mode_id
+                    .as_ref()
+                    .map(|mode_id| (agent.kind.clone(), Value::String(mode_id.clone())))
+            })
+            .collect(),
+    )
 }
 
 pub(super) fn prompt_outcome_label(outcome: &SendPromptOutcome) -> &'static str {

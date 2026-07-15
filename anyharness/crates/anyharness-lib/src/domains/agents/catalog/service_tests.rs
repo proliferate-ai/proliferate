@@ -44,6 +44,25 @@ fn bundled_catalog_declares_goal_support_for_claude_and_codex_only() {
 }
 
 #[test]
+fn bundled_catalog_declares_unattended_modes_for_claude_and_codex_only() {
+    let sync = Arc::new(CatalogSyncService::from_bundled());
+    let catalog = AgentCatalogService::new(sync).active_catalog();
+
+    assert_eq!(
+        catalog.unattended_mode_id("claude"),
+        Some("bypassPermissions")
+    );
+    assert_eq!(catalog.unattended_mode_id("codex"), Some("full-access"));
+    // Grok has no catalog `mode` control (ACP modes=null); a non-empty
+    // mode_id would be rejected at create-session, so unattended surfaces
+    // must send none. Cursor/opencode stay undeclared until vetted (see
+    // specs/codebase/structures/anyharness/src/agent-mode-matrix.md).
+    for kind in ["cursor", "opencode", "grok", "unknown"] {
+        assert_eq!(catalog.unattended_mode_id(kind), None, "kind={kind}");
+    }
+}
+
+#[test]
 fn pins_surface_catalog_harness_versions() {
     let catalog = draft_catalog();
 

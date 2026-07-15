@@ -1,4 +1,4 @@
-import { resolveCoworkDefaultSessionModeId } from "@/lib/domain/cowork/session-mode-defaults";
+import { resolveUnattendedModeId } from "@/lib/domain/agents/unattended-mode";
 
 export function resolveSessionCreationModeId(input: {
   explicitModeId?: string | null;
@@ -12,7 +12,9 @@ export function resolveSessionCreationModeId(input: {
   }
 
   if (input.workspaceSurface === "cowork") {
-    return resolveCoworkDefaultSessionModeId(input.agentKind);
+    // Cowork owns the access policy: run unattended per the catalog's curated
+    // per-family mode (undefined → send no mode, e.g. grok).
+    return resolveUnattendedModeId(input.agentKind);
   }
 
   return input.preferredModeId?.trim() || undefined;

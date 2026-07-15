@@ -217,6 +217,14 @@ pub struct AgentCatalogSession {
     /// initialize `_meta.anyharness.goals` advertisement.
     #[serde(default)]
     pub supports_goals: bool,
+    /// Curation-owned: the mode value product surfaces send when they own the
+    /// access policy and need the harness to run unattended (cowork, workflow
+    /// runs, reviews, plan handoff). Absent when the family has no vetted
+    /// most-permissive mode — grok advertises no ACP modes at all, and
+    /// cursor/opencode are unvetted — in which case consumers must omit
+    /// `mode_id` entirely rather than guess.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unattended_mode_id: Option<String>,
     /// The control universe: every key/value any model of this harness might
     /// support. Per-model matrices are subsets of this.
     #[serde(default)]

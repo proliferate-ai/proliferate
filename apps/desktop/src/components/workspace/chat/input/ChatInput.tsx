@@ -38,7 +38,11 @@ import { serializeChatDraftToPrompt } from "@/lib/domain/chat/composer/file-ment
 import { promptAttachmentSnapshotsToContentParts } from "@proliferate/product-domain/chats/composer/prompt-attachment-snapshot";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { mergeSessionConfigControlDescriptors } from "@/lib/domain/chat/session-controls/session-controls";
-import { buildComposerSessionControlGroups } from "@/lib/domain/chat/session-controls/composer-control-groups";
+import {
+  buildComposerSessionControlGroups,
+  filterComposerSessionControlsForSurface,
+} from "@/lib/domain/chat/session-controls/composer-control-groups";
+import { useWorkspaceShellSurface } from "@/hooks/workspaces/derived/use-workspace-shell-surface";
 import { useComposerUltraEmphasis } from "@/hooks/chat/ui/use-composer-ultra-emphasis";
 import {
   finishOrCancelMeasurementOperation,
@@ -102,12 +106,19 @@ export function ChatInput({
     replacementSessionId,
   });
   const { agentKind, controls: sessionConfigControls, modeControl } = useChatSessionControls();
+  const shellSurface = useWorkspaceShellSurface();
   const launchConfigControls = suppressActiveSessionState ? [] : modelSelectorProps.launchControls;
+  // Launch controls come from the catalog unfiltered, so the surface policy
+  // must re-apply after the merge — pre-session cowork composers would
+  // otherwise resurface the mode controls that live sessions already hide.
   const effectiveSessionConfigControls = useMemo(() => (
     suppressActiveSessionState
       ? []
-      : mergeSessionConfigControlDescriptors(launchConfigControls, sessionConfigControls)
-  ), [launchConfigControls, sessionConfigControls, suppressActiveSessionState]);
+      : filterComposerSessionControlsForSurface(
+        mergeSessionConfigControlDescriptors(launchConfigControls, sessionConfigControls),
+        shellSurface,
+      )
+  ), [launchConfigControls, sessionConfigControls, shellSurface, suppressActiveSessionState]);
   const effectiveAgentKind = suppressActiveSessionState
     ? null
     : agentKind ?? modelSelectorProps.launchAgentKind;

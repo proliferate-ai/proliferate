@@ -19,7 +19,7 @@ use crate::domains::cowork::delegation::model::{
     CreateCodingSessionInput, CreateCodingWorkspaceInput, SendCodingMessageInput,
     MAX_CODING_SESSIONS_PER_MANAGED_WORKSPACE, MAX_MANAGED_WORKSPACES_PER_COWORK_SESSION,
 };
-use crate::domains::cowork::runtime::{default_cowork_coding_mode_for_agent, CoworkRuntime};
+use crate::domains::cowork::runtime::CoworkRuntime;
 use crate::domains::workspaces::model::WorkspaceRecord;
 use crate::integrations::mcp::json_rpc::deserialize_args;
 
@@ -297,12 +297,16 @@ fn get_coding_session_launch_options(
         .current_model_id
         .clone()
         .or(parent.requested_model_id.clone());
-    let default_mode_id = default_cowork_coding_mode_for_agent(&default_agent_kind)
-        .map(str::to_string)
+    let catalog = cowork_runtime.resolved_workspace_launch_options(&managed.workspace_id)?;
+    let default_mode_id = catalog
+        .agents
+        .iter()
+        .find(|agent| agent.kind == default_agent_kind)
+        .and_then(|agent| agent.unattended_mode_id.clone())
         .or(parent.current_mode_id.clone())
         .or(parent.requested_mode_id.clone())
         .or_else(|| live_mode_control.and_then(|control| control.current_value.clone()));
-    let catalog = cowork_runtime.resolved_workspace_launch_options(&managed.workspace_id)?;
+    let recommended_modes_by_agent_kind = recommended_modes_by_agent_kind_json(&catalog);
     Ok(json!({
         "parentSessionId": parent_session_id,
         "coworkWorkspaceId": managed.public_id,
@@ -316,7 +320,7 @@ fn get_coding_session_launch_options(
         "agents": launch_agents_to_json(catalog),
         "mode": {
             "recommendedModeId": default_mode_id,
-            "recommendedModeByAgentKind": recommended_modes_by_agent_kind_json(),
+            "recommendedModeByAgentKind": recommended_modes_by_agent_kind,
             "recommendedModeSource": "runtime fast coding defaults; explicit modeId overrides this",
             "acceptedModeIdSource": "modeId is stored as a launch hint on the coding session and applied by the child agent when supported",
             "options": mode_options_to_json(live_mode_control),

@@ -202,7 +202,9 @@
   /* -- Sidebar (one step darker than the content surface) -- */
   --color-sidebar: #1d1d1d;
   --color-sidebar-background: #181818;
-  --color-sidebar-foreground: #ffffff;
+  /* Row ink sits one step below the wordmark/primary white (codex: nav rows
+     run at an 85% foreground mix; only the brand row is full-strength). */
+  --color-sidebar-foreground: color-mix(in oklab, #ffffff 85%, transparent);
   --color-sidebar-primary: #ffffff;
   --color-sidebar-primary-foreground: #ffffff;
   --color-sidebar-muted-foreground: rgba(255, 255, 255, 0.481);

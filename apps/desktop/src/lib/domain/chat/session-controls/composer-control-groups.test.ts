@@ -245,7 +245,7 @@ describe("buildComposerSessionControlGroups", () => {
 });
 
 describe("filterComposerSessionControlsForSurface", () => {
-  it("keeps Cowork working mode and fast mode while hiding its permission preset", () => {
+  it("hides both Cowork mode controls while keeping model tuning", () => {
     const approvalMode = descriptor({
       key: "mode",
       label: "Permissions",
@@ -256,6 +256,11 @@ describe("filterComposerSessionControlsForSurface", () => {
       label: "Mode",
       detail: "Default",
     });
+    const effort = descriptor({
+      key: "effort",
+      label: "Reasoning effort",
+      detail: "High",
+    });
     const fastMode = descriptor({
       key: "fast_mode",
       label: "Fast mode",
@@ -263,9 +268,9 @@ describe("filterComposerSessionControlsForSurface", () => {
     });
 
     expect(filterComposerSessionControlsForSurface(
-      [approvalMode, collaborationMode, fastMode],
+      [approvalMode, collaborationMode, effort, fastMode],
       "cowork",
-    )).toEqual([collaborationMode, fastMode]);
+    )).toEqual([effort, fastMode]);
   });
 
   it("does not filter standard-workspace controls", () => {

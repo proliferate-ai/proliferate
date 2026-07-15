@@ -130,9 +130,14 @@ Permission/access mode and every other unclaimed configuration control render
 only under the rightmost three-dot configuration menu. A reasoning-level
 control with two or more ordered values remains visible in the combined picker
 when the runtime reports it as non-settable, but its choices are disabled.
-Cowork hides the permission/access `mode` because its access policy is
-product-defined, but retains independent working-mode controls such as
-`collaboration_mode` together with model tuning in the combined picker.
+Cowork hides every mode control — the permission/access `mode` and the
+`collaboration_mode` working mode — because its access policy and working
+behavior are product-defined; only model tuning (model, reasoning level, fast
+mode) stays user-facing. This policy lives in
+`filterComposerSessionControlsForSurface` and applies at every composer entry
+point: live cowork sessions, the pre-session launch composer inside a cowork
+workspace (launch controls merge in unfiltered and must be re-filtered), and
+the Home cowork destination.
 
 ## 2. Dock Regions
 

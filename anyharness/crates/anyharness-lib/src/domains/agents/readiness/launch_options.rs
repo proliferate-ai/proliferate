@@ -46,6 +46,9 @@ pub struct ResolvedLaunchAgentOption {
     pub kind: String,
     pub display_name: String,
     pub default_model_id: Option<String>,
+    /// The catalog's curated "run unattended" mode (`session.unattendedModeId`);
+    /// `None` when the family declares none — consumers omit `mode_id` then.
+    pub unattended_mode_id: Option<String>,
     pub models: Vec<ResolvedLaunchModelOption>,
 }
 

@@ -46,11 +46,13 @@ pub fn resolve_workflow_target(
         .find(|candidate| candidate.id == model_id)
         .ok_or(WorkflowResolutionError::ModelUnavailable)?;
 
-    let mode_id = match harness.agent_kind.as_str() {
-        "claude" => "bypassPermissions",
-        "codex" => "full-access",
-        _ => return Err(WorkflowResolutionError::ModeUnavailable),
-    };
+    // Workflow runs execute unattended, so the mode is the catalog's curated
+    // `session.unattendedModeId` (carried on the launch options). A family
+    // without one cannot run workflows.
+    let mode_id = agent
+        .unattended_mode_id
+        .as_deref()
+        .ok_or(WorkflowResolutionError::ModeUnavailable)?;
     if !model
         .modes
         .as_ref()
@@ -142,6 +144,7 @@ mod tests {
                     kind: "claude".to_string(),
                     display_name: "Claude".to_string(),
                     default_model_id: Some("sonnet".to_string()),
+                    unattended_mode_id: Some("bypassPermissions".to_string()),
                     models: vec![model(
                         "sonnet",
                         &["bypassPermissions"],
@@ -152,6 +155,7 @@ mod tests {
                     kind: "codex".to_string(),
                     display_name: "Codex".to_string(),
                     default_model_id: Some("gpt".to_string()),
+                    unattended_mode_id: Some("full-access".to_string()),
                     models: vec![model("gpt", &["full-access"], None)],
                 },
             ],

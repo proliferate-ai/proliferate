@@ -138,8 +138,10 @@ A definition contains at least one stage. A stage contains exactly one
 | `modelId` | no | Explicit catalog model. Omission means use the target default at execution. |
 | `effort` | no | Explicit model-specific effort. Requires `modelId`. |
 
-Execution mode is not authored. Workflow sessions will use the product's
-bypass-equivalent execution mode.
+Execution mode is not authored. Workflow sessions use the catalog's curated
+`session.unattendedModeId` for the family (declared in the build-catalog
+curation overlay, carried on resolved launch options); a family that declares
+none cannot run workflows (`ModeUnavailable`).
 
 The string `"default"` is never an omission sentinel. If a catalog contains a
 model whose ID is `default`, selecting that model persists `"modelId":

@@ -4,7 +4,7 @@ import type {
   StartCodeReviewRequest,
   StartPlanReviewRequest,
 } from "@anyharness/sdk";
-import { REVIEW_DEFAULT_MODE_ID_BY_AGENT_KIND } from "@/config/review-session-mode-defaults";
+import { resolveUnattendedModeId } from "@/lib/domain/agents/unattended-mode";
 import { listConfiguredSessionControlValues } from "@/lib/domain/chat/session-controls/session-mode-control";
 import {
   findReviewPersonaTemplateForReviewer,
@@ -243,7 +243,9 @@ export function resolveReviewExecutionModeIdForAgent(
   preferredModeId: string | null | undefined,
 ): string {
   const values = listConfiguredSessionControlValues(agentKind, "mode");
-  const configuredDefault = REVIEW_DEFAULT_MODE_ID_BY_AGENT_KIND[agentKind];
+  // Reviewers run runtime-managed: default to the catalog's curated
+  // unattended mode, then fall back through the presentation values.
+  const configuredDefault = resolveUnattendedModeId(agentKind);
   return values.find((value) => value.value === configuredDefault)?.value
     ?? values.find((value) => value.value === preferredModeId)?.value
     ?? values.find((value) => value.value !== "plan")?.value

@@ -91,7 +91,7 @@ describe("home composer controls", () => {
     ]);
   });
 
-  it("hides Cowork permission mode while retaining independent collaboration mode", () => {
+  it("hides every Cowork mode control, keeping only model tuning", () => {
     const collaborationMode = descriptor({
       key: "collaboration_mode",
       label: "Collaboration Mode",
@@ -106,7 +106,7 @@ describe("home composer controls", () => {
       selectedModeId: "auto",
       launchControls: [collaborationMode, permissionMode, effort],
       onSelectMode: vi.fn(),
-    })).toEqual([collaborationMode, effort]);
+    })).toEqual([effort]);
   });
 });
 

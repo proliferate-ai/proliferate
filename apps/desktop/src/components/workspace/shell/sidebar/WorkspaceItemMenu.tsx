@@ -3,7 +3,7 @@ import { SHORTCUTS } from "@/config/shortcuts/registry";
 import {
   Archive,
   Folder,
-  GitBranch,
+  GitBranchIcon,
   GitPullRequest,
   MoreHorizontal,
   Pencil,
@@ -133,13 +133,13 @@ export function WorkspaceItemMenu({
             )}
             {branchName && (
               <div className="flex items-center gap-2 px-2 py-1.5 font-mono text-ui-sm text-muted-foreground">
-                <GitBranch className="size-3.5 shrink-0" />
+                <GitBranchIcon className="size-3.5 shrink-0" />
                 <span className="min-w-0 truncate">{branchName}</span>
               </div>
             )}
             {onCopyBranchName && (
               <DropdownMenuItem onSelect={onCopyBranchName}>
-                <GitBranch className="size-4 text-muted-foreground" />
+                <GitBranchIcon className="size-4 text-muted-foreground" />
                 Copy branch name
                 <DropdownMenuShortcut>
                   {getShortcutDisplayLabel(SHORTCUTS.copyBranchName)}

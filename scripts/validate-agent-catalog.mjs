@@ -77,6 +77,19 @@ function validateCatalog(catalog) {
       fail(`${kind}: session.supportsGoals must be boolean when present`);
     }
 
+    const unattendedModeId = agent.session?.unattendedModeId;
+    if (unattendedModeId !== undefined) {
+      if (typeof unattendedModeId !== "string" || !unattendedModeId.trim()) {
+        fail(`${kind}: session.unattendedModeId must be a non-empty string when present`);
+      } else {
+        const modeValues = (agent.session?.controls ?? [])
+          .find((control) => control.key === "mode")?.values ?? [];
+        if (!modeValues.includes(unattendedModeId)) {
+          fail(`${kind}: session.unattendedModeId '${unattendedModeId}' is not a value of the mode control`);
+        }
+      }
+    }
+
     const models = agent.session?.models;
     if (!Array.isArray(models) || models.length === 0) {
       fail(`${kind}: session.models must be a non-empty array`);

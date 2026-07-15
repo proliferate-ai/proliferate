@@ -7,7 +7,7 @@ import { SHORTCUTS } from "@/config/shortcuts/registry";
 import {
   Archive,
   Folder,
-  GitBranch,
+  GitBranchIcon,
   GitPullRequest,
   Pencil,
   Trash,
@@ -341,7 +341,7 @@ export function WorkspaceItem({
               )}
               {onCopyBranchName && (
                 <PopoverMenuItem
-                  icon={<GitBranch className="size-3.5 shrink-0 text-muted-foreground" />}
+                  icon={<GitBranchIcon className="size-3.5 shrink-0 text-muted-foreground" />}
                   label="Copy branch name"
                   trailing={(
                     <ShortcutBadge

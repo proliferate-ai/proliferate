@@ -87,6 +87,7 @@ export function mergeRuntimeLaunchOptionsIntoDesktopLaunchModelRegistries(
         displayName: registry.displayName,
         description: null,
         defaultModelId: registry.defaultModelId ?? null,
+        unattendedModeId: null,
         models: registry.models.map((model) => ({
           ...model,
           aliases: model.aliases ?? [],
@@ -131,6 +132,7 @@ export function mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
       displayName: cloud?.displayName ?? agent.displayName,
       description: cloud?.description ?? null,
       defaultModelId,
+      unattendedModeId: cloud?.unattendedModeId ?? null,
       models: agent.models.map((model) => {
         const modelIdCandidates = runtimeModelCatalogLookupCandidates(
           agent.kind,
@@ -281,6 +283,7 @@ function projectCloudAgent(agent: CloudAgentCatalogAgentInput): DesktopAgentLaun
     displayName: agent.displayName,
     description: agent.description ?? null,
     defaultModelId,
+    unattendedModeId: agent.session.unattendedModeId ?? null,
     models,
     launchControls,
   };

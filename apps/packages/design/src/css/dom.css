@@ -22,6 +22,12 @@
   --text-title--line-height: 22px;    /* 1.2 × font size */
   --text-hero: 25px;                  /* home hero heading */
   --text-hero--line-height: 33px;     /* font size + 8px */
+  --text-sidebar-nav: 12px;           /* sidebar primary nav + repo-group labels (codex --text-base tier) */
+  --text-sidebar-nav--line-height: 17px;   /* font size + 5px */
+  --text-sidebar-row: 12px;           /* sidebar workspace rows + section headers (codex --text-sm tier) */
+  --text-sidebar-row--line-height: 17px;   /* font size + 5px */
+  --text-sidebar-brand: 15px;         /* sidebar brand wordmark */
+  --text-sidebar-brand--line-height: 22px; /* font size + 7px */
 }
 
 :root {
