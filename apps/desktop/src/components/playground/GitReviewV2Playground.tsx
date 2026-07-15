@@ -12,14 +12,12 @@ import {
   CollapseAll,
   ExpandAll,
   FolderTree,
-  GitCommit,
   MoreHorizontal,
 } from "@proliferate/ui/icons";
 import { DiffViewer } from "@/components/content/ui/DiffViewer";
 import { FileChangeStats } from "@/components/content/ui/FileChangeStats";
 import { FileTreeEntryIcon } from "@/components/workspace/files/file-icons";
 import {
-  GIT_REVIEW_V2_BRANCH,
   GIT_REVIEW_V2_FILES,
   GIT_REVIEW_V2_TARGETS,
   type GitReviewV2File,
@@ -309,14 +307,6 @@ function ReviewHeader({
           </HeaderIconButton>
         </div>
       </div>
-      <div className="flex min-w-0 items-center gap-1.5">
-        <span className="flex min-w-0 items-center gap-1 truncate text-[length:var(--text-ui)] text-sidebar-muted-foreground">
-          <span className="truncate">{GIT_REVIEW_V2_BRANCH.local}</span>
-          <span aria-hidden="true" className="shrink-0">→</span>
-          <span className="truncate">{GIT_REVIEW_V2_BRANCH.remote}</span>
-        </span>
-        <CommitSplitButton />
-      </div>
     </div>
   );
 }
@@ -346,31 +336,6 @@ function HeaderIconButton({
     >
       {children}
     </Button>
-  );
-}
-
-function CommitSplitButton() {
-  return (
-    <div className="ms-auto flex shrink-0 items-center">
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="h-6 gap-1 rounded-md rounded-e-none border border-e-0 border-sidebar-border bg-sidebar-background px-2 text-[length:var(--text-ui)] text-sidebar-foreground hover:bg-sidebar-accent"
-      >
-        <GitCommit className="size-3.5" />
-        Commit or push
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label="More git actions"
-        className="h-6 w-5 rounded-md rounded-s-none border border-sidebar-border bg-sidebar-background px-0 text-sidebar-muted-foreground hover:bg-sidebar-accent"
-      >
-        <ChevronDown className="size-3" />
-      </Button>
-    </div>
   );
 }
 
