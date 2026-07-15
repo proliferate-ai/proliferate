@@ -14,6 +14,7 @@ export function ConnectedWorkspaceStatusComposerControl() {
   const shellActions = useWorkspaceShellActions();
   const { openExternal } = useProductHost().links;
 
+  const compareOpensPr = model?.environment?.compareOpensPr ?? false;
   const actions = useMemo<WorkspaceStatusActions>(() => ({
     onOpenChanges: shellActions
       ? () => shellActions.openRightPanelTool("git")
@@ -21,15 +22,18 @@ export function ConnectedWorkspaceStatusComposerControl() {
     onCommitOrPush: shellActions
       ? () => shellActions.openPublishDialog("commit")
       : undefined,
-    // Compare branch opens the provider's base...current compare page; the
-    // publish-dialog PR flow is the fallback when there is no remote to link.
-    onCompareBranch: compareUrl
-      ? () => void openExternal(compareUrl)
-      : shellActions?.openPullRequest,
+    // "View PR" opens the PR itself; without a PR, Compare branch opens the
+    // provider's base...current compare page. The publish-dialog PR flow is
+    // the fallback when there is no remote to link.
+    onCompareBranch: compareOpensPr
+      ? shellActions?.openPullRequest
+      : compareUrl
+        ? () => void openExternal(compareUrl)
+        : shellActions?.openPullRequest,
     // "View" on the checks row opens the PR itself (ruled 2026-07-14).
     onViewChecks: shellActions?.openPullRequest,
     onOpenAgentSession: openAgentSession ?? undefined,
-  }), [compareUrl, openAgentSession, openExternal, shellActions]);
+  }), [compareOpensPr, compareUrl, openAgentSession, openExternal, shellActions]);
 
   if (!model) {
     return null;

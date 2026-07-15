@@ -76,6 +76,8 @@ export interface WorkspaceStatusModel {
     commitOrPushDisabled: boolean;
     compareLabel: string;
     compareMeta: string | null;
+    /** True when the row is "View PR" — the action opens the PR itself. */
+    compareOpensPr: boolean;
     checks: {
       label: string;
       state: "failing" | "pending" | "passing";

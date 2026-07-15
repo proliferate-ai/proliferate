@@ -68,8 +68,9 @@ describe("buildWorkspaceStatusModel", () => {
       commitOrPushLabel: "Commit or push",
       commitOrPushMeta: "2 ahead",
       commitOrPushDisabled: false,
-      compareLabel: "Compare branch",
-      compareMeta: "PR #1042",
+      compareLabel: "View PR",
+      compareMeta: "#1042",
+      compareOpensPr: true,
       checks: {
         label: "Checks failing",
         state: "failing",
@@ -87,6 +88,8 @@ describe("buildWorkspaceStatusModel", () => {
 
     expect(model?.environment?.checks).toBeNull();
     expect(model?.environment?.compareMeta).toBeNull();
+    expect(model?.environment?.compareLabel).toBe("Compare branch");
+    expect(model?.environment?.compareOpensPr).toBe(false);
     expect(model?.environment?.reviewChangesLabel).toBe("Review 12 changes");
   });
 

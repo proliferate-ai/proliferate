@@ -11,8 +11,9 @@ export function createPlaygroundWorkspaceStatusModel(): WorkspaceStatusModel {
       commitOrPushLabel: "Commit or push",
       commitOrPushMeta: "2 ahead",
       commitOrPushDisabled: false,
-      compareLabel: "Compare branch",
-      compareMeta: "PR #1042",
+      compareLabel: "View PR",
+      compareMeta: "#1042",
+      compareOpensPr: true,
       checks: {
         label: "1 failing check",
         state: "failing",

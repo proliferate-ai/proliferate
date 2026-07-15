@@ -91,10 +91,13 @@ function buildEnvironment({
     // Clean tree with nothing ahead: the row has no work to offer — dim it
     // in the card instead of letting the modal deliver the bad news.
     commitOrPushDisabled: changedFiles === 0 && gitStatus.ahead === 0,
-    compareLabel: "Compare branch",
+    // With a PR the row becomes "View PR" (opens it); without one it opens
+    // the provider's base...branch compare page.
+    compareLabel: hasExistingPullRequest ? "View PR" : "Compare branch",
     compareMeta: hasExistingPullRequest && pullRequest?.number != null
-      ? `PR #${pullRequest.number}`
+      ? `#${pullRequest.number}`
       : null,
+    compareOpensPr: hasExistingPullRequest,
     checks: buildChecks(pullRequest),
   };
 }
