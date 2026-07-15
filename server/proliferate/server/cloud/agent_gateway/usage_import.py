@@ -79,6 +79,7 @@ def apply_llm_margin(spend: float) -> float:
         return 0.0
     return float(Decimal(str(spend)) * llm_margin_multiplier())
 
+
 # Keyset-pagination page size for the limit_reached sweep below.
 _LIMIT_REACHED_SWEEP_PAGE_SIZE = 500
 

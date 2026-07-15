@@ -58,6 +58,7 @@ async def _add_active_members(
             )
         )
 
+
 _PERIOD1_START = 1_776_586_422  # 2026-04-19T...
 _PERIOD1_END = 1_779_178_422  # +30d
 _PERIOD2_START = 1_779_178_422
@@ -225,9 +226,7 @@ async def test_seat_pool_grants_five_per_seat_and_resets_each_period(
     # Reset semantics: at a point inside period 2 the period-1 pool has expired,
     # so remaining reflects only the current period's $15 (no roll-over of the
     # first period's unused allocation).
-    period2_midpoint = datetime.fromtimestamp(
-        (_PERIOD2_START + _PERIOD2_END) // 2, tz=UTC
-    )
+    period2_midpoint = datetime.fromtimestamp((_PERIOD2_START + _PERIOD2_END) // 2, tz=UTC)
     balance = await agent_gateway_store.get_remaining_credit_usd(
         db_session, subject_id, now=period2_midpoint
     )

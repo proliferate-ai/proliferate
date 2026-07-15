@@ -76,7 +76,5 @@ def prorated_seat_grant_hours(
     effective = min(max(effective_at, period_start), period_end)
     total_seconds = max((period_end - period_start).total_seconds(), 1.0)
     remaining_seconds = max((period_end - effective).total_seconds(), 0.0)
-    prorated_seconds = (
-        added_seats * hours_per_seat * 3600.0 * remaining_seconds / total_seconds
-    )
+    prorated_seconds = added_seats * hours_per_seat * 3600.0 * remaining_seconds / total_seconds
     return max(int(prorated_seconds), 0) / 3600.0
