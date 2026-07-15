@@ -7,7 +7,7 @@ use tokio::sync::broadcast;
 use self::state::{PlanItemState, StreamingItemState, ToolItemState};
 use crate::live::sessions::model::EventPersist;
 use crate::observability::transcript_phase::TranscriptPhaseDebugState;
-use anyharness_contract::v1::SessionEventEnvelope;
+use anyharness_contract::v1::{GoalStatus, SessionEvent, SessionEventEnvelope};
 
 mod assistant;
 mod background_work;
@@ -44,6 +44,10 @@ pub struct SessionEventSink {
     store: Arc<dyn EventPersist>,
 
     current_turn_id: Option<String>,
+    /// True while the open turn was synthesized for engine-initiated activity
+    /// (goal continuation/evaluation) rather than begun by a prompt. Only
+    /// such turns may be auto-closed by terminal goal events.
+    engine_initiated_turn: bool,
     open_assistant_item: Option<StreamingItemState>,
     open_reasoning_item: Option<StreamingItemState>,
     open_plan_item: Option<PlanItemState>,
@@ -67,6 +71,7 @@ impl SessionEventSink {
             event_tx,
             store,
             current_turn_id: None,
+            engine_initiated_turn: false,
             open_assistant_item: None,
             open_reasoning_item: None,
             open_plan_item: None,
@@ -91,6 +96,7 @@ impl SessionEventSink {
             event_tx,
             store,
             current_turn_id: None,
+            engine_initiated_turn: false,
             open_assistant_item: None,
             open_reasoning_item: None,
             open_plan_item: None,
@@ -112,11 +118,23 @@ impl SessionEventSink {
     }
 
     pub fn publish_persisted_events(&mut self, envelopes: Vec<SessionEventEnvelope>) {
+        // Observer-persisted goal events flow back through here after being
+        // attributed to the current turn, so this is the one spot that sees a
+        // goal reach quiescence AFTER its event already carries the right
+        // turn id. A quiescent goal ends the engine-initiated turn its
+        // pursuit opened (see `ensure_open_turn`); prompt-begun turns are
+        // never auto-closed — their lifecycle ends them.
+        let goal_reached_quiescence = envelopes
+            .iter()
+            .any(|envelope| goal_event_quiesces_turn(&envelope.event));
         for envelope in envelopes {
             if envelope.seq >= self.next_seq {
                 self.next_seq = envelope.seq + 1;
             }
             let _ = self.event_tx.send(envelope);
+        }
+        if goal_reached_quiescence {
+            self.end_engine_initiated_turn_if_open();
         }
     }
 
@@ -148,5 +166,17 @@ impl SessionEventSink {
             open_tool_call_ids: self.tool_items.keys().cloned().collect(),
             next_seq: self.next_seq,
         }
+    }
+}
+
+/// A goal event that means the pursuit engine has gone quiet: met/cleared,
+/// or any update whose status is no longer `active` (paused, blocked, failed).
+/// Active-status ticks (accounting updates between continuation steps) do not
+/// quiesce the turn.
+fn goal_event_quiesces_turn(event: &SessionEvent) -> bool {
+    match event {
+        SessionEvent::GoalMet(_) | SessionEvent::GoalCleared(_) => true,
+        SessionEvent::GoalUpdated(payload) => payload.goal.status != GoalStatus::Active,
+        _ => false,
     }
 }

@@ -14,6 +14,8 @@ use anyharness_contract::v1::{
 
 impl SessionEventSink {
     pub fn tool_call(&mut self, payload: AcpToolPayload) {
+        // See agent_message_chunk: engine-initiated turns need their own turn.
+        self.ensure_open_turn();
         self.close_open_items();
 
         let item_id = payload.tool_call_id.clone();
