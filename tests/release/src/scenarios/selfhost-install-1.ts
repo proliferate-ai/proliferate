@@ -1320,6 +1320,26 @@ export async function createLocalWorkspaceTurnThroughUi(
     if (error instanceof Error && error.stack) {
       console.error(error.stack);
     }
+    // Correlation diagnostic: the runtime's sessions + workspaces + the DOM's
+    // ui-key/session-id reveal whether the UI turn ran on world.runtime and how
+    // the ui-key relates to the runtime workspaceId. Ids are opaque handles.
+    try {
+      const sessions = await world.runtime.client.listSessions().catch(() => []);
+      const workspaces = await world.runtime.client.listWorkspaces().catch(() => []);
+      const domUiKeys = await p
+        .locator("[data-workspace-shell]")
+        .evaluateAll((els) => els.map((el) => el.getAttribute("data-workspace-ui-key")))
+        .catch(() => [] as Array<string | null>);
+      console.error(
+        `[ui-turn raw diag] runtime sessions=${JSON.stringify(
+          sessions.map((s) => ({ id: s.id, workspaceId: s.workspaceId, status: s.status })),
+        )} runtime workspaces=${JSON.stringify(
+          workspaces.map((w) => ({ id: w.id, kind: w.kind, repoRootId: w.repoRootId, branch: w.currentBranch })),
+        )} dom ui-keys=${JSON.stringify(domUiKeys)}`,
+      );
+    } catch {
+      // best-effort correlation diagnostic
+    }
     // Carry the step in a property so the cell-level catch can render it
     // BEFORE the "failed:" redaction boundary (the label after that colon is
     // stripped by evidence redaction).
@@ -1604,15 +1624,24 @@ async function readWorkspaceUiKey(p: Page): Promise<string> {
  */
 async function resolveAnyharnessSessionId(world: ReadySelfHostWorld, workspaceId: string, timeoutMs: number): Promise<string> {
   const deadline = Date.now() + timeoutMs;
+  let lastSeenWorkspaceIds: string[] = [];
   while (Date.now() < deadline) {
     const sessions = await world.runtime.client.listSessions().catch(() => []);
+    lastSeenWorkspaceIds = sessions.map((session) => session.workspaceId);
     const forWorkspace = sessions.filter((session) => session.workspaceId === workspaceId);
     if (forWorkspace.length > 0) {
       return forWorkspace[forWorkspace.length - 1]!.id;
     }
     await sleep(1_000);
   }
-  throw new Error(`resolveAnyharnessSessionId: no AnyHarness session for workspace "${workspaceId}" within ${timeoutMs}ms.`);
+  // Bounded, secret-free diagnostic: the observed session workspaceIds reveal
+  // whether the runtime saw NO session at all (empty → the turn ran on a
+  // different runtime than world.runtime) or a workspaceId FORMAT mismatch
+  // (non-empty but no exact match). Ids are opaque handles, not secrets.
+  throw new Error(
+    `resolveAnyharnessSessionId: no AnyHarness session for workspace "${workspaceId}" within ${timeoutMs}ms ` +
+      `(runtime session workspaceIds observed: ${JSON.stringify(lastSeenWorkspaceIds)}).`,
+  );
 }
 
 /**
