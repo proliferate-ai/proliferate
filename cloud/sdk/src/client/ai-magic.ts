@@ -1,5 +1,7 @@
 import { getProliferateClient } from "./core.js";
 import type {
+  GenerateCommitMessageRequest,
+  GenerateCommitMessageResponse,
   GenerateSessionTitleRequest,
   GenerateSessionTitleResponse,
   GenerateWorkspaceNameRequest,
@@ -15,6 +17,26 @@ export async function generateSessionTitle(
 
   return (
     await getProliferateClient().POST("/v1/ai_magic/session-titles/generate", {
+      body: request,
+    })
+  ).data!;
+}
+
+export async function generateCommitMessage(input: {
+  diffText: string;
+  gitOwner?: string | null;
+  gitRepoName?: string | null;
+  branchName?: string | null;
+}): Promise<GenerateCommitMessageResponse> {
+  const request: GenerateCommitMessageRequest = {
+    diffText: input.diffText,
+    gitOwner: input.gitOwner ?? null,
+    gitRepoName: input.gitRepoName ?? null,
+    branchName: input.branchName ?? null,
+  };
+
+  return (
+    await getProliferateClient().POST("/v1/ai_magic/commit-messages/generate", {
       body: request,
     })
   ).data!;

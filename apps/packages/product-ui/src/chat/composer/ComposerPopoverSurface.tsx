@@ -19,7 +19,7 @@ export function ComposerPopoverSurface({
       {...props}
       className={twMerge(
         variant === "summary"
-          ? "rounded-3xl bg-popover pb-1.5 pt-2.5 text-popover-foreground shadow-popover ring-[0.5px] ring-popover-ring"
+          ? "rounded-2xl bg-popover pb-1.5 pt-2.5 text-popover-foreground shadow-popover ring-[0.5px] ring-popover-ring"
           : "rounded-xl bg-popover/90 p-1 text-popover-foreground shadow-popover ring-[0.5px] ring-popover-ring backdrop-blur-sm",
         className,
       )}

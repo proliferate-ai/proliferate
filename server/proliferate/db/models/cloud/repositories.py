@@ -65,6 +65,7 @@ class RepoConfig(Base):
     )
     git_owner: Mapped[str] = mapped_column(String(255))
     git_repo_name: Mapped[str] = mapped_column(String(255))
+    commit_instructions: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

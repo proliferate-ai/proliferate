@@ -111,6 +111,7 @@ export function makeRepoConfig(args: {
     gitProvider: "github",
     gitOwner: owner,
     gitRepoName: repoName,
+    commitInstructions: "",
     environments,
   };
 }

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { ChatComposerActions } from "./ChatComposerActions";
 import { ComposerModelSelectorControl } from "./ComposerModelSelectorControl";
 import { ComposerReasoningEffortBars } from "./ComposerReasoningEffortBars";
@@ -34,6 +35,8 @@ export interface ChatInputControlRowProps {
   isEmpty: boolean;
   onSubmit: () => void;
   onCancel: () => void;
+  /** Workspace-status trigger — slots after the runtime-pressure ring. */
+  statusControl?: ReactNode;
 }
 
 export interface ComposerLeadingControlsProps {
@@ -150,6 +153,8 @@ export interface ComposerTrailingControlsProps {
   canAttachFiles: boolean;
   activeSessionId: string | null;
   onAttachFile: () => void;
+  /** Workspace-status trigger — slots after the runtime-pressure ring. */
+  statusControl?: ReactNode;
 }
 
 /**
@@ -170,6 +175,7 @@ export function ComposerTrailingControls({
   canAttachFiles,
   activeSessionId,
   onAttachFile,
+  statusControl,
 }: ComposerTrailingControlsProps) {
   const canUseUtilityActions =
     !isEditingQueuedPrompt && !chatDisabled && !runtimeControlsDisabled && !isSubmitting;
@@ -200,6 +206,9 @@ export function ComposerTrailingControls({
 
       {/* 8. Runtime pressure */}
       <RuntimePressureIndicator />
+
+      {/* 8b. Workspace status — ambient background work + environment */}
+      {statusControl}
 
       {/* 9. Overflow three-dots */}
       <span
@@ -232,6 +241,7 @@ export function ChatInputControlRow({
   isEmpty,
   onSubmit,
   onCancel,
+  statusControl,
 }: ChatInputControlRowProps) {
   return (
     <ChatComposerControlRowFrame
@@ -256,6 +266,7 @@ export function ChatInputControlRow({
           canAttachFiles={canAttachFiles}
           activeSessionId={activeSessionId}
           onAttachFile={onAttachFile}
+          statusControl={statusControl}
         />
       )}
       action={(

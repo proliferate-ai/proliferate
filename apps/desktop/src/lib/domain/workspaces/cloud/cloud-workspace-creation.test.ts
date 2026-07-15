@@ -25,6 +25,7 @@ describe("cloud workspace creation helpers", () => {
         gitProvider: "github",
         gitOwner: "acme",
         gitRepoName: "rocket",
+        commitInstructions: "",
         environments: [{
           id: "env-rocket-cloud",
           repoConfigId: "repo-rocket",
@@ -41,6 +42,7 @@ describe("cloud workspace creation helpers", () => {
         gitProvider: "github",
         gitOwner: "acme",
         gitRepoName: "draft",
+        commitInstructions: "",
         environments: [{
           id: "env-draft-local",
           repoConfigId: "repo-draft",

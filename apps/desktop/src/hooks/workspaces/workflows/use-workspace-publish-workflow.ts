@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CreatePullRequestResponse } from "@anyharness/sdk";
 import {
+  getAnyHarnessClient,
+  resolveWorkspaceConnectionFromContext,
+  useAnyHarnessWorkspaceContext,
   useCommitGitMutation,
   useCreatePullRequestMutation,
   useCurrentPullRequestQuery,
@@ -8,9 +11,14 @@ import {
   usePushGitMutation,
   useStageGitPathsMutation,
 } from "@anyharness/sdk-react";
+import { generateCommitMessage } from "@proliferate/cloud-sdk/client/ai-magic";
 import {
   buildPublishViewState,
 } from "@/lib/domain/workspaces/creation/publish-workflow";
+import {
+  assembleCommitDiffText,
+  commitDiffTargets,
+} from "@/lib/domain/workspaces/creation/commit-message-generation";
 import { defaultPublishPullRequestDraft } from "@/lib/domain/workspaces/creation/publish-draft";
 import type {
   PublishCommitDraft,
@@ -60,6 +68,7 @@ export function useWorkspacePublishWorkflow({
   const runtimeReadyRef = useRef(runtimeBlockedReason === null);
   const { logicalWorkspaces } = useLogicalWorkspaces();
   const refreshPrStatuses = useRefreshPrStatuses();
+  const anyHarnessWorkspace = useAnyHarnessWorkspaceContext();
 
   const gitStatusQuery = useGitStatusQuery({ workspaceId, enabled });
   const currentPullRequestEnabled = enabled && Boolean(gitStatusQuery.data?.currentBranch?.trim());
@@ -105,6 +114,17 @@ export function useWorkspacePublishWorkflow({
     ],
   );
 
+  // Remote identity for repo-scoped AI-magic instructions (Configure page).
+  const repoRemote = useMemo(() => {
+    const workspace = logicalWorkspaces.find((entry) =>
+      entry.localWorkspace?.id === workspaceId
+      || entry.aliasIds?.includes(workspaceId ?? ""));
+    const root = workspace?.repoRoot;
+    return root?.remoteOwner && root?.remoteRepoName
+      ? { owner: root.remoteOwner, repoName: root.remoteRepoName }
+      : null;
+  }, [logicalWorkspaces, workspaceId]);
+
   const clearError = useCallback(() => {
     setError(null);
   }, []);
@@ -148,8 +168,51 @@ export function useWorkspacePublishWorkflow({
     setError(null);
     let didComplete = false;
     try {
+      let workflowSteps = viewState.workflowSteps;
+      // Leave-blank-to-generate: a commit step with no message gets one from
+      // the pending diff via the server's AI magic before the workflow runs.
+      const needsGeneratedMessage = !commitDraft.summary.trim()
+        && workflowSteps.some((step) => step.kind === "commit");
+      if (needsGeneratedMessage && workspaceId) {
+        const resolved = await resolveWorkspaceConnectionFromContext(
+          anyHarnessWorkspace,
+          workspaceId,
+        );
+        const client = getAnyHarnessClient(resolved.connection);
+        const targets = commitDiffTargets({
+          fileGroups: viewState.fileGroups,
+          includeUnstaged: commitDraft.includeUnstaged,
+        });
+        const patches = await Promise.all(targets.map(async (target) => {
+          const diff = await client.git.getDiff(
+            resolved.connection.anyharnessWorkspaceId,
+            target.path,
+            { scope: target.scope },
+          );
+          return { path: target.path, patch: diff.patch ?? null, binary: diff.binary };
+        }));
+        const diffText = assembleCommitDiffText(patches);
+        if (!diffText) {
+          throw new Error("Nothing to describe: the pending diff is empty.");
+        }
+        const generated = await generateCommitMessage({
+          diffText,
+          gitOwner: repoRemote?.owner ?? null,
+          gitRepoName: repoRemote?.repoName ?? null,
+          branchName: gitStatusQuery.data?.currentBranch ?? null,
+        });
+        const summary = generated.message.trim();
+        if (!summary) {
+          throw new Error("Commit message generation returned nothing. Enter one manually.");
+        }
+        // Surface the generated text in the draft so a later failure (push,
+        // PR) leaves it visible and editable rather than vanishing.
+        setCommitDraft((draft) => ({ ...draft, summary }));
+        workflowSteps = workflowSteps.map((step) =>
+          step.kind === "commit" ? { ...step, summary } : step);
+      }
       let createdPullRequest: CreatePullRequestResponse["pullRequest"] | null = null;
-      await runWorkspacePublishWorkflow(viewState.workflowSteps, {
+      await runWorkspacePublishWorkflow(workflowSteps, {
         stagePaths: (paths) => stageMutation.mutateAsync(paths),
         commit: (input) => commitMutation.mutateAsync(input),
         push: () => pushMutation.mutateAsync({}),
@@ -202,6 +265,9 @@ export function useWorkspacePublishWorkflow({
     }
     return false;
   }, [
+    anyHarnessWorkspace,
+    commitDraft.includeUnstaged,
+    commitDraft.summary,
     commitMutation,
     createPullRequestMutation,
     currentPrQuery,
@@ -210,9 +276,11 @@ export function useWorkspacePublishWorkflow({
     logicalWorkspaces,
     pushMutation,
     refreshPrStatuses,
+    repoRemote,
     resetDrafts,
     stageMutation,
     viewState.disabledReason,
+    viewState.fileGroups,
     viewState.workflowSteps,
     workspaceId,
   ]);

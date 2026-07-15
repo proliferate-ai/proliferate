@@ -39,7 +39,6 @@ import { promptAttachmentSnapshotsToContentParts } from "@proliferate/product-do
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { mergeSessionConfigControlDescriptors } from "@/lib/domain/chat/session-controls/session-controls";
 import { buildComposerSessionControlGroups } from "@/lib/domain/chat/session-controls/composer-control-groups";
-import { useComposerUltraEmphasis } from "@/hooks/chat/ui/use-composer-ultra-emphasis";
 import {
   finishOrCancelMeasurementOperation,
   recordMeasurementWorkflowStep,
@@ -52,6 +51,7 @@ import {
 } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import { ChatInputControlRow } from "./ChatInputControlRow";
+import { ConnectedWorkspaceStatusComposerControl } from "./workspace-status/ConnectedWorkspaceStatusComposerControl";
 import { ChatInputDraftArea } from "./ChatInputDraftArea";
 import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
 import { Input } from "@proliferate/ui/primitives/Input";
@@ -116,7 +116,6 @@ export function ChatInput({
     : buildComposerSessionControlGroups(effectiveSessionConfigControls).modeControl
       ?? modeControl
       ?? null;
-  const isUltraEmphasis = useComposerUltraEmphasis(effectiveSessionConfigControls);
   const { handleSubmit, handleCancel } = useChatPromptActions();
   const { isSubmitting, run: runSubmit } = useComposerSubmitGate();
   const {
@@ -339,7 +338,6 @@ export function ChatInput({
         <div ref={setComposerOverlayHost} className="relative z-20 flex flex-col" />
         <ChatComposerSurface
           overflowMode="clip"
-          data-ultra-emphasis={isUltraEmphasis || undefined}
           onClick={handleComposerSurfaceClick}
           onPaste={handlePaste}
         >
@@ -387,6 +385,9 @@ export function ChatInput({
               isEmpty={effectiveIsEmpty}
               onSubmit={onSubmit}
               onCancel={onCancel}
+              statusControl={suppressActiveSessionState
+                ? undefined
+                : <ConnectedWorkspaceStatusComposerControl />}
             />
           </form>
         </ChatComposerSurface>

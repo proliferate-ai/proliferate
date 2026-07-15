@@ -80,12 +80,11 @@ describe("PublishDialog", () => {
     );
 
     expect(screen.getByRole("dialog", { name: "Create pull request" })).toBeTruthy();
-    expect(screen.getByText("1 change · 1 unstaged")).toBeTruthy();
     expect(screen.queryByText("src/app.ts")).toBeNull();
     expect(screen.getByText("Stage changes or include unstaged changes before committing."))
       .toBeTruthy();
-    expect((screen.getByRole("button", {
-      name: "Commit, publish, create PR",
+    expect((screen.getByRole("option", {
+      name: /Commit, publish, create PR/,
     }) as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -116,8 +115,8 @@ describe("PublishDialog", () => {
     );
 
     expect(screen.getByRole("dialog", { name: "Pull request" })).toBeTruthy();
-    expect((screen.getByRole("button", {
-      name: "View pull request",
+    expect((screen.getByRole("option", {
+      name: /View pull request/,
     }) as HTMLButtonElement).disabled).toBe(false);
     expect(screen.queryByText("Sync this branch before publishing.")).toBeNull();
   });
@@ -148,7 +147,7 @@ describe("PublishDialog", () => {
       />,
     );
 
-    expect((screen.getByRole("button", { name: "Commit" }) as HTMLButtonElement).disabled)
+    expect((screen.getByRole("option", { name: /^Commit/ }) as HTMLButtonElement).disabled)
       .toBe(true);
   });
 
@@ -156,14 +155,16 @@ describe("PublishDialog", () => {
     render(<SwitchingDialogHarness />);
 
     expect(screen.getByRole("dialog", { name: "Commit changes" })).toBeTruthy();
-    expect(screen.getByRole("radio", { name: "Commit" }).getAttribute("aria-checked"))
-      .toBe("true");
+    // The current intent's row is the selected option (it carries the ⌘⏎
+    // hint and shows the workflow's primary label); clicking another row
+    // switches intent.
+    expect(screen.getAllByRole("option")[0]?.getAttribute("aria-selected")).toBe("true");
 
-    fireEvent.click(screen.getByRole("radio", { name: "Publish" }));
+    fireEvent.click(screen.getByRole("option", { name: "Publish" }));
     expect(screen.getByRole("dialog", { name: "Publish branch" })).toBeTruthy();
     expect(mocks.workflow?.clearError).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole("radio", { name: "Pull request" }));
+    fireEvent.click(screen.getByRole("option", { name: "Pull request" }));
     expect(screen.getByRole("dialog", { name: "Create pull request" })).toBeTruthy();
     expect(screen.getByPlaceholderText("Pull request title")).toBeTruthy();
     expect(mocks.workflow?.clearError).toHaveBeenCalledTimes(2);
@@ -187,7 +188,8 @@ describe("PublishDialog", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    // Codex anatomy has no Cancel button — Escape closes and clears drafts.
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     expect(mocks.workflow?.resetDrafts).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -210,7 +212,7 @@ describe("PublishDialog", () => {
       />,
     );
 
-    for (const option of screen.getAllByRole("radio")) {
+    for (const option of screen.getAllByRole("option")) {
       expect((option as HTMLButtonElement).disabled).toBe(true);
     }
   });

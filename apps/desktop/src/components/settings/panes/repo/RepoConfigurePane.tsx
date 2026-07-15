@@ -11,6 +11,7 @@ import { useCloudRepoEnvironmentEditor } from "@/hooks/settings/workflows/use-cl
 import { useRepositorySettings } from "@/hooks/settings/workflows/use-repository-settings";
 import { type SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import { RepoCloudGate } from "./RepoCloudGate";
+import { RepoCommitInstructionsSection } from "./RepoCommitInstructionsSection";
 import {
   LocalNoCheckoutState,
   RepoScopeEmptyState,
@@ -66,6 +67,15 @@ export function RepoConfigurePane({
           repository={repository}
           onSelectRepo={onSelectRepo}
           onSelectCloudEnvironment={onSelectCloudEnvironment}
+        />
+      )}
+      {/* Repo-level, context-independent: commit-message generation applies
+          to local and cloud workspaces alike. Needs a signed-in account
+          (the instructions live on the product server's RepoConfig). */}
+      {repository.gitOwner && repository.gitRepoName && (
+        <RepoCommitInstructionsSection
+          gitOwner={repository.gitOwner}
+          gitRepoName={repository.gitRepoName}
         />
       )}
     </section>

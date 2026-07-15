@@ -420,7 +420,9 @@ export function ChatDiffViewer({
   overscrollBehavior = "none",
   overscrollBehaviorX,
   overscrollBehaviorY,
-  chainVerticalWheel = false,
+  // Chained by default: overscroll-behavior none otherwise traps vertical
+  // wheel whenever the cursor rests on a diff, freezing the page scroll.
+  chainVerticalWheel = true,
   fileLines,
   onRequestFileLines,
   hunkActions,

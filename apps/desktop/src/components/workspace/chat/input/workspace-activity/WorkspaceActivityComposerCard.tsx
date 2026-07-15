@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { Button } from "@proliferate/ui/primitives/Button";
 import {
-  AppShellReviewIcon,
   ArrowUp,
   CircleAlert,
   Copy,
@@ -12,6 +11,7 @@ import {
   StackedFiles,
 } from "@proliferate/ui/icons";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
+import { FileChangeStats } from "@/components/content/ui/FileChangeStats";
 import { useComposerWorkspaceActivityModel } from "@/hooks/workspaces/derived/use-composer-workspace-activity-model";
 import type {
   ComposerWorkspaceActivityModel,
@@ -128,24 +128,41 @@ export function WorkspaceActivityComposerCard({
                 title="Source control"
                 flush
               >
+                {/* Changes is the codex-style summary row: the change count
+                    with +adds −dels trailing, and the row itself opens the
+                    review panel (no separate "Review changes" entry). */}
+                <ActivityActionRow
+                  icon={<StackedFiles className="size-4" />}
+                  label={model.git.changeLabel}
+                  meta={model.git.stagedFiles > 0 ? model.git.stagingLabel : null}
+                  trailing={(
+                    <FileChangeStats
+                      additions={model.git.additions}
+                      deletions={model.git.deletions}
+                      className="text-xs"
+                    />
+                  )}
+                  onSelect={() => {
+                    onOpenChanges?.();
+                    close();
+                  }}
+                  disabled={!onOpenChanges}
+                />
                 {model.git.branchName ? (
                   <ActivityActionRow
                     icon={<GitBranchIcon className="size-4" />}
                     label={model.git.branchName}
-                    meta="Copy"
-                    trailing={<Copy className="size-3.5" />}
+                    trailing={(
+                      <Copy className="size-3.5 opacity-0 transition-opacity group-hover/activity-row:opacity-100 group-focus-visible/activity-row:opacity-100" />
+                    )}
                     onSelect={() => {
                       onCopyBranch?.();
                       close();
                     }}
                     disabled={!onCopyBranch}
+                    title="Copy branch name"
                   />
                 ) : null}
-                <ActivityDetailRow
-                  icon={<StackedFiles className="size-4" />}
-                  label={model.git.changeLabel}
-                  meta={model.git.stagingLabel}
-                />
                 {model.git.conflictedFiles > 0 ? (
                   <ActivityDetailRow
                     icon={<CircleAlert className="size-4 text-destructive" />}
@@ -164,15 +181,7 @@ export function WorkspaceActivityComposerCard({
                     label={model.git.pullRequestLabel}
                   />
                 ) : null}
-                <ActivityActionRow
-                  icon={<AppShellReviewIcon className="size-4" />}
-                  label="Review changes"
-                  onSelect={() => {
-                    onOpenChanges?.();
-                    close();
-                  }}
-                  disabled={!onOpenChanges}
-                />
+                <ActivityRowDivider />
                 <ActivityActionRow
                   icon={<GitCommit className="size-4" />}
                   label="Commit…"
@@ -270,6 +279,14 @@ function WorkspaceActivitySection({
   );
 }
 
+/* Hairline between the status rows above and the action rows below —
+   same recipe as the section divider, scoped to the row column. */
+function ActivityRowDivider() {
+  return (
+    <div aria-hidden="true" className="-mx-1 my-1 h-px scale-y-50 bg-border" />
+  );
+}
+
 function ActivityDetailRow({
   icon,
   label,
@@ -313,7 +330,7 @@ function ActivityActionRow({
       disabled={disabled}
       title={title}
       onClick={onSelect}
-      className="relative isolate flex min-h-7 w-full min-w-0 items-center justify-start gap-2 py-1 text-left text-ui-sm text-foreground before:absolute before:inset-y-0 before:-inset-x-2 before:-z-10 before:rounded-sm before:content-[''] hover:before:bg-list-hover"
+      className="group/activity-row relative isolate flex min-h-7 w-full min-w-0 items-center justify-start gap-2 py-1 text-left text-ui-sm text-foreground before:absolute before:inset-y-0 before:-inset-x-2 before:-z-10 before:rounded-sm before:content-[''] hover:before:bg-list-hover"
     >
       <span className="flex w-[18px] shrink-0 items-center justify-start text-muted-foreground">
         {icon}

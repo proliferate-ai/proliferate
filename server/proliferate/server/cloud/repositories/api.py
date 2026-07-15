@@ -22,15 +22,18 @@ from proliferate.server.cloud.repos.service import (
     list_cloud_repositories,
 )
 from proliferate.server.cloud.repositories.models import (
+    RepoConfigResponse,
     RepoConfigsListResponse,
     RepoEnvironmentResponse,
     SaveRepoEnvironmentRequest,
+    UpdateRepoConfigRequest,
 )
 from proliferate.server.cloud.repositories.service import (
     list_repositories,
     repo_config_response,
     repo_environment_response,
     save_repo_environment,
+    update_repo_config,
 )
 
 router = APIRouter()
@@ -90,6 +93,27 @@ async def get_repository_branches_endpoint(
         )
     except CloudApiError as error:
         raise_cloud_error(error)
+
+
+@router.patch(
+    "/repositories/{git_owner}/{git_repo_name}",
+    response_model=RepoConfigResponse,
+)
+async def update_repo_config_endpoint(
+    git_owner: str,
+    git_repo_name: str,
+    body: UpdateRepoConfigRequest,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> RepoConfigResponse:
+    value = await update_repo_config(
+        db,
+        user_id=user.id,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        body=body,
+    )
+    return await repo_config_response(db, user_id=user.id, value=value)
 
 
 @router.put(

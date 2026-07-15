@@ -1,6 +1,33 @@
 import type { ModelSelectorProps } from "@/lib/domain/chat/models/model-selector-types";
 import type { SessionSlashCommandViewModel } from "@/lib/domain/chat/composer/session-slash-command-policy";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
+import type { ComposerWorkspaceActivityModel } from "@/lib/domain/workspaces/activity/composer-workspace-activity";
+
+export function createPlaygroundWorkspaceActivityModel(): ComposerWorkspaceActivityModel {
+  return {
+    facts: [
+      { key: "sync", label: "2 ahead", tone: "default" },
+      { key: "changes", label: "12 changes", tone: "default" },
+      { key: "pull-request", label: "PR #1042 checks pending", tone: "default" },
+    ],
+    git: {
+      branchName: "codex/workspace-activity-popover",
+      changedFiles: 12,
+      stagedFiles: 3,
+      unstagedFiles: 9,
+      conflictedFiles: 0,
+      additions: 486,
+      deletions: 73,
+      ahead: 2,
+      behind: 0,
+      changeLabel: "12 changes",
+      stagingLabel: "3 staged · 9 unstaged",
+      syncLabel: "2 ahead",
+      pullRequestLabel: "PR #1042 · Open · Checks pending",
+      pushLabel: "Push",
+    },
+  };
+}
 
 export const PLAYGROUND_SLASH_COMMANDS: SessionSlashCommandViewModel[] = [
   {
@@ -91,6 +118,25 @@ export function createPlaygroundModelSelectorProps(): ModelSelectorProps {
     isLoading: false,
     onSelect: () => undefined,
   };
+}
+
+/** Ultra-capable ladder (frontier model): the chip names the tier instead of
+ * rendering icon-only bars, and selecting the top rung is the ultra state. */
+export function createPlaygroundUltraSessionConfigControls(): LiveSessionControlDescriptor[] {
+  return createPlaygroundSessionConfigControls().map((control) => (
+    control.key === "effort"
+      ? {
+        ...control,
+        detail: "Ultra",
+        options: [
+          { value: "medium", label: "Medium", selected: false },
+          { value: "high", label: "High", selected: false },
+          { value: "xhigh", label: "Extra High", selected: false },
+          { value: "ultra", label: "Ultra", selected: true },
+        ],
+      }
+      : control
+  ));
 }
 
 export function createPlaygroundSessionConfigControls(): LiveSessionControlDescriptor[] {
