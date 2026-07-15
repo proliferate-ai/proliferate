@@ -114,8 +114,11 @@ export interface LocalConfigControl {
   currentValue: string;
   settable: boolean;
   values: readonly string[];
-  /** Which composer surface renders it, so the driver picks the right testid. */
-  surface: "model" | "mode" | "reasoning" | "config";
+  /** Which composer surface renders it, so the driver picks the right testid.
+   * Only "mode" (SessionModeControl popover) and "reasoning"
+   * (ComposerReasoningEffortBars stepper) exist on the live chat composer —
+   * see `configSurfaceFor` for why the other advertised controls are excluded. */
+  surface: "mode" | "reasoning";
 }
 
 /** Every privileged/UI step LOCAL-5 performs, faked in offline unit tests. */
@@ -162,14 +165,30 @@ export const defaultLocalConfigDriver: LocalConfigDriver = {
   runBaselineTurn: (world, page, harness, repoPath) => runBaselineTurn(world, page, harness, repoPath),
   async enumerateControls(world, sessionId) {
     const live = await world.runtime.client.getLiveConfig(sessionId);
-    return Object.values(live.normalizedControls).map((control) => ({
-      key: control.key,
-      rawConfigId: control.rawConfigId,
-      currentValue: control.currentValue,
-      settable: control.settable,
-      values: control.values.map((option) => option.value),
-      surface: configSurfaceFor(control.key, control.rawConfigId),
-    }));
+    const normalized = Object.values(live.normalizedControls);
+    // The reasoning bars render ONE ladder: `effort` wins over `reasoning` when
+    // both are advertised (resolveReasoningEffortControl), so a shadowed
+    // `reasoning` control has no surface of its own.
+    const hasEffort = normalized.some((control) => control.key === "effort");
+    return normalized.flatMap((control) => {
+      const surface = configSurfaceFor(control.key);
+      if (!surface || (control.key === "reasoning" && hasEffort)) {
+        // No live-composer surface renders this control (see configSurfaceFor);
+        // it cannot be UI-driven, so LOCAL-4 excludes it from the cycle rather
+        // than timing out against a selector that can never exist.
+        return [];
+      }
+      return [
+        {
+          key: control.key,
+          rawConfigId: control.rawConfigId,
+          currentValue: control.currentValue,
+          settable: control.settable,
+          values: control.values.map((option) => option.value),
+          surface,
+        },
+      ];
+    });
   },
   selectConfigValueInUi: (page, control, value) => selectConfigValueInUi(page, control, value),
   closeWorld: (world) => world.close(),
@@ -177,7 +196,20 @@ export const defaultLocalConfigDriver: LocalConfigDriver = {
 
 export const defaultLocalSessionTabsDriver: LocalSessionTabsDriver = {
   buildWorld: (inputs, worldId) => bootLocalFunctionalWorld(inputs, worldId),
-  createActor: (world) => authenticatedActor(world, "owner"),
+  createActor: async (world) => {
+    const actor = await authenticatedActor(world, "owner");
+    // LOCAL-5 launches sessions on BOTH harnesses (start + switch).
+    // `authenticatedActor` selects the gateway route only for its default
+    // harness (the start harness, claude); without a selected route the switch
+    // harness never resolves launch credentials and can never appear in
+    // launch-options, so select its gateway route through the same documented
+    // selections API the actor fixture itself uses (fix round 4).
+    await actor.api.put(
+      `/v1/cloud/agent-gateway/selections/${encodeURIComponent(SESSION_TABS_SWITCH_HARNESS)}?surface=local`,
+      { sources: [{ sourceKind: "gateway", enabled: true }] },
+    );
+    return actor;
+  },
   prepareRepo: (world, actor, cellId) => preparedRepository(world, actor, { cellId }),
   openPage: (world, actor) => productPage(world, actor),
   ensureHarnessReady: (world, page, harness) => ensureHarnessReady(world, page, harness),
@@ -647,21 +679,39 @@ function allCleanupBooleansTrue(cleanup: LocalCleanupV1): boolean {
   );
 }
 
-/** Picks the composer surface (and thus testid family) for a live-config control
- * from its key/raw id. Model/mode/reasoning have dedicated composer controls; any
- * other mutable ACP control renders through the generic session-config surface. */
-export function configSurfaceFor(key: string, rawConfigId: string): LocalConfigControl["surface"] {
-  const token = `${key} ${rawConfigId}`.toLowerCase();
-  if (/\bmodel\b/.test(token)) {
-    return "model";
-  }
-  if (/reason|effort|thinking/.test(token)) {
+/**
+ * Picks the live-composer surface (and thus testid family) for a normalized
+ * live-config control, or null when the composer renders no UI for it.
+ *
+ * Ground truth (fix round 4, verified in product source): the live chat
+ * composer (ChatInputControlRow) renders ONLY the promoted control groups from
+ * `buildComposerSessionControlGroups` —
+ *   - `collaboration_mode` / `mode`  → SessionModeControl (data-session-mode-*)
+ *   - `effort` / `reasoning`         → ComposerReasoningEffortBars
+ *                                      (data-reasoning-effort-*)
+ *   - `fast_mode`                    → ComposerFastModeToggle (NO testid)
+ * and the product's supported normalized keys are exactly that set
+ * (config/session-controls.ts SupportedLiveControlKey). Everything else has no
+ * composer surface:
+ *   - the raw ACP `model` control is owned by the catalog model picker
+ *     (data-model-option carries CATALOG model ids, never the control's raw
+ *     values — run 3 deadlocked waiting for `[data-model-option="default"]`),
+ *     and the baseline turn already proves that surface end-to-end via
+ *     `selectModelInComposer` (set + data-composer-selected-model readback);
+ *   - the generic SessionConfigControls strip (data-session-config-control)
+ *     renders only on the Settings/automations composers, not the live chat
+ *     composer;
+ *   - `fast_mode` carries no data-* testid, and no assigned harness currently
+ *     advertises it on this candidate (claude/grok probe fastMode=false).
+ */
+export function configSurfaceFor(key: string): LocalConfigControl["surface"] | null {
+  if (key === "effort" || key === "reasoning") {
     return "reasoning";
   }
-  if (/\bmode\b/.test(token)) {
+  if (key === "collaboration_mode" || key === "mode") {
     return "mode";
   }
-  return "config";
+  return null;
 }
 
 function dedupe(values: readonly string[]): string[] {
@@ -717,7 +767,18 @@ async function ensureHarnessReady(world: ReadyLocalWorld, page: ProductPage, har
     throw new Error(`ensureHarnessReady: agent "${harness}" never became launchable within ${HARNESS_READY_TIMEOUT_MS}ms.`);
   }
   await page.page.reload({ waitUntil: "domcontentloaded" });
-  await page.page.locator("[data-home-composer-editor]").first().waitFor({ state: "visible", timeout: 30_000 });
+  // `ensureHarnessReady` is shared by two contexts: LOCAL-4 gates readiness from
+  // the HOME composer (before any workspace is materialized), while LOCAL-5's
+  // harness-switch calls it AFTER `createEmptyChat` has already materialized a
+  // workspace — so the post-reload page lands on the WORKSPACE shell, whose
+  // composer is `[data-chat-composer-editor]`, not `[data-home-composer-editor]`.
+  // Waiting only for the home composer is the run-3/4 30s
+  // "locator.waitFor: Timeout 30000ms" in the switch flow. Accept whichever
+  // composer the reload actually renders.
+  await page.page
+    .locator("[data-home-composer-editor], [data-chat-composer-editor], [data-workspace-tab-strip]")
+    .first()
+    .waitFor({ state: "visible", timeout: 30_000 });
 }
 
 async function selectRepoAndWorkLocally(page: ProductPage, repo: PreparedRepository): Promise<void> {
@@ -805,59 +866,69 @@ async function selectConfigValueInUi(
   control: LocalConfigControl,
   value: string,
 ): Promise<{ accepted: boolean; readback: string }> {
+  if (control.surface === "reasoning") {
+    return stepReasoningEffortToValue(page, value);
+  }
+  // mode: SessionModeControl is a real popover — click the trigger, click the
+  // target PopoverMenuItem (data-session-mode-option), read the selection back.
   const p = page.page;
-  const family = configTestidFamily(control);
-  const trigger = p.locator(family.trigger).first();
+  const trigger = p.locator("[data-session-mode-trigger]").first();
   await trigger.waitFor({ state: "visible", timeout: 15_000 });
   await trigger.click();
-  const option = p.locator(family.option(value)).first();
+  const option = p.locator(`[data-session-mode-option="${cssAttr(value)}"]`).first();
   await option.waitFor({ state: "visible", timeout: 15_000 });
   await option.click();
   // Wait beyond the runtime's normal apply/reject window so a late rejection has
   // reverted the UI to the last-accepted value before we read back.
   await sleep(CONFIG_REJECTION_WINDOW_MS);
-  const readback = await readRequiredAttr(p, family.selected, family.selectedAttr);
+  const readback = await readRequiredAttr(p, "[data-session-mode-trigger]", "data-session-mode-selected");
   return { accepted: readback === value, readback };
 }
 
-interface ConfigTestidFamily {
-  trigger: string;
-  option(value: string): string;
-  selected: string;
-  selectedAttr: string;
-}
-
-function configTestidFamily(control: LocalConfigControl): ConfigTestidFamily {
-  switch (control.surface) {
-    case "model":
-      return {
-        trigger: "[data-composer-model-trigger]:not([disabled])",
-        option: (value) => `[data-model-option="${cssAttr(value)}"]`,
-        selected: "[data-composer-model-trigger]",
-        selectedAttr: "data-composer-selected-model",
-      };
-    case "mode":
-      return {
-        trigger: "[data-session-mode-trigger]",
-        option: (value) => `[data-session-mode-option="${cssAttr(value)}"]`,
-        selected: "[data-session-mode-trigger]",
-        selectedAttr: "data-session-mode-selected",
-      };
-    case "reasoning":
-      return {
-        trigger: "[data-reasoning-effort-trigger]",
-        option: (value) => `[data-reasoning-effort-option="${cssAttr(value)}"]`,
-        selected: "[data-reasoning-effort-trigger]",
-        selectedAttr: "data-reasoning-effort-selected",
-      };
-    default:
-      return {
-        trigger: `[data-session-config-control="${cssAttr(control.key)}"]`,
-        option: (value) => `[data-session-config-option="${cssAttr(`${control.key}:${value}`)}"]`,
-        selected: `[data-session-config-control="${cssAttr(control.key)}"]`,
-        selectedAttr: "data-session-config-selected",
-      };
+/**
+ * Drives the reasoning-effort ladder to `value`. ComposerReasoningEffortBars is
+ * a STEPPER, not a menu: the whole control is one button whose click advances
+ * the selection to the next level ((currentIndex + 1) % levels — LevelBarsButton),
+ * and the `data-reasoning-effort-option` spans inside it are decorative level
+ * bars whose clicks just bubble to the same button (round-3 note: "click may
+ * STEP, not jump"). So step until the trigger's own readback attribute reports
+ * the target, bounded by one full lap of the ladder; a step whose readback never
+ * moves is a rejected apply (the UI stayed on the last-accepted value).
+ */
+async function stepReasoningEffortToValue(
+  page: ProductPage,
+  value: string,
+): Promise<{ accepted: boolean; readback: string }> {
+  const p = page.page;
+  const trigger = p.locator("[data-reasoning-effort-trigger]").first();
+  await trigger.waitFor({ state: "visible", timeout: 15_000 });
+  const ladderSize = await p.locator("[data-reasoning-effort-option]").count().catch(() => 0);
+  const maxSteps = Math.max(ladderSize, 2);
+  let readback = (await trigger.getAttribute("data-reasoning-effort-selected").catch(() => null)) ?? "";
+  for (let step = 0; step < maxSteps && readback !== value; step += 1) {
+    const before = readback;
+    await trigger.click();
+    // Each step round-trips through the runtime's apply seam; wait (bounded by
+    // the rejection window) for the readback attribute to move before deciding.
+    const deadline = Date.now() + CONFIG_REJECTION_WINDOW_MS;
+    while (Date.now() < deadline) {
+      readback = (await trigger.getAttribute("data-reasoning-effort-selected").catch(() => null)) ?? "";
+      if (readback !== before) {
+        break;
+      }
+      await sleep(300);
+    }
+    if (readback === before) {
+      // The step was rejected (or the control is wedged): the UI held the
+      // last-accepted value. Report it so the cycle records a clean rejection.
+      break;
+    }
   }
+  // Let a late rejection revert before the final readback (same settle the
+  // popover path uses).
+  await sleep(CONFIG_REJECTION_WINDOW_MS);
+  readback = (await trigger.getAttribute("data-reasoning-effort-selected").catch(() => null)) ?? "";
+  return { accepted: readback === value, readback };
 }
 
 // ── LOCAL-5 tab-strip production bodies (new tab-strip testids, BRIEF §4.6) ──
@@ -920,7 +991,7 @@ async function switchHarnessEmptyChat(
   const tab = p.locator("[data-chat-tab]").first();
   const tabId = await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab", tab);
   const oldSessionId = await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab-session-id", tab);
-  await selectHarnessInComposer(page, toHarness);
+  await selectHarnessInComposer(world, page, toHarness);
   // The unused backend session is replaced in place: same visible tab, a new
   // session id. Poll the same tab until its session-id attribute changes.
   const newSessionId = await waitForAttrChange(p, "[data-chat-tab]", "data-chat-tab-session-id", oldSessionId, tab);
@@ -954,7 +1025,7 @@ async function switchHarnessAfterMessages(
   const activeTab = p.locator('[data-chat-tab][data-chat-tab-active="true"]').first();
   const preservedTabId = await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab", activeTab);
   const beforeCount = await p.locator("[data-chat-tab]").count();
-  await selectHarnessInComposer(page, toHarness);
+  await selectHarnessInComposer(world, page, toHarness);
   // A new session tab appears immediately to the right of the messaged one.
   await p.locator("[data-chat-tab]").nth(beforeCount).waitFor({ state: "visible", timeout: TAB_SETTLE_TIMEOUT_MS });
   const newTab = p.locator('[data-chat-tab][data-chat-tab-active="true"]').first();
@@ -1029,17 +1100,52 @@ async function reloadAndVerifyTabs(
   void world;
 }
 
-/** Selects `harness` in the composer's agent picker (existing model picker
- * family reflects the harness through its models; harness selection is via the
- * same composer surface the smoke uses). */
-async function selectHarnessInComposer(page: ProductPage, harness: LocalHarnessKind): Promise<void> {
+/** Selects `harness` in the composer by picking one of ITS models in the model
+ * picker. The picker (ComposerModelPickerPopover) groups rows by harness but
+ * stamps only `data-model-option="<modelId>"` on each row — there is no
+ * per-harness section testid in the popover (`data-harness-auth-section` is a
+ * SETTINGS pane testid). The round-3 body clicked `.first()` of a union with
+ * `[data-model-option]`, which resolves to the CURRENT harness's first model and
+ * never switches (fix round 4). Resolve the target harness's own model ids from
+ * the runtime's gateway probe and click the first one the picker offers. */
+async function selectHarnessInComposer(
+  world: ReadyLocalWorld,
+  page: ProductPage,
+  harness: LocalHarnessKind,
+): Promise<void> {
   const p = page.page;
-  const trigger = p.locator("[data-composer-model-trigger]:not([disabled])").first();
-  await trigger.waitFor({ state: "visible", timeout: MODEL_PICKER_TIMEOUT_MS });
-  await trigger.click();
-  const harnessOption = p.locator(`[data-harness-auth-section="${cssAttr(harness)}"], [data-model-option]`).first();
-  await harnessOption.waitFor({ state: "visible", timeout: 15_000 });
-  await harnessOption.click();
+  const candidates = (await world.runtime.client.getGatewayModels(harness).catch(() => [])).map(
+    (model) => model.id,
+  );
+  if (candidates.length === 0) {
+    throw new Error(
+      `selectHarnessInComposer: the runtime probed no gateway model for "${harness}", so the picker has no ` +
+        "option that would switch to it.",
+    );
+  }
+  const deadline = Date.now() + MODEL_PICKER_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    const trigger = p.locator("[data-composer-model-trigger]:not([disabled])").first();
+    try {
+      await trigger.waitFor({ state: "visible", timeout: 5_000 });
+      await trigger.click();
+    } catch {
+      await sleep(1_500);
+      continue;
+    }
+    for (const modelId of candidates) {
+      const option = p.locator(`[data-model-option="${cssAttr(modelId)}"]`).first();
+      if (await option.count().catch(() => 0)) {
+        await option.click();
+        return;
+      }
+    }
+    // The just-installed harness's models can surface a beat later; close and
+    // retry (the same idiom selectModelInComposer uses).
+    await p.keyboard.press("Escape").catch(() => undefined);
+    await sleep(2_000);
+  }
+  throw new Error(`selectHarnessInComposer: no "${harness}" model option appeared in the composer picker.`);
 }
 
 // ── Runtime/DOM read helpers ─────────────────────────────────────────────────

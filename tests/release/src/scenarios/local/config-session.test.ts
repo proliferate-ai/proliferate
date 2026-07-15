@@ -8,6 +8,7 @@ import {
   collectLocal5SessionTabsCell,
   configSurfaceFor,
   cycleConfigControls,
+  defaultLocalConfigDriver,
   type LocalConfigControl,
   type LocalConfigDriver,
   type LocalSessionTabsDriver,
@@ -481,10 +482,67 @@ test("buildLocalSessionTabsEvidence pins the four proofs true and hashes each se
   }
 });
 
-test("configSurfaceFor routes model/mode/reasoning/config to the right testid family", () => {
-  assert.equal(configSurfaceFor("model", "model_id"), "model");
-  assert.equal(configSurfaceFor("reasoning", "reasoning_effort"), "reasoning");
-  assert.equal(configSurfaceFor("thinking", "thinking_level"), "reasoning");
-  assert.equal(configSurfaceFor("mode", "session_mode"), "mode");
-  assert.equal(configSurfaceFor("temperature", "temp"), "config");
+test("enumerateControls keeps only UI-drivable controls and drops a reasoning ladder shadowed by effort", async () => {
+  const liveConfig = {
+    rawConfigOptions: [],
+    sourceSeq: 1,
+    normalizedControls: {
+      model: {
+        key: "model",
+        rawConfigId: "model",
+        label: "Model",
+        currentValue: "default",
+        settable: true,
+        values: [{ value: "default", label: "Default" }, { value: "opus", label: "Opus" }],
+      },
+      effort: {
+        key: "effort",
+        rawConfigId: "model.effort",
+        label: "Effort",
+        currentValue: "default",
+        settable: true,
+        values: [{ value: "default", label: "Default" }, { value: "high", label: "High" }],
+      },
+      reasoning: {
+        key: "reasoning",
+        rawConfigId: "reasoning",
+        label: "Reasoning",
+        currentValue: "on",
+        settable: true,
+        values: [{ value: "on", label: "On" }, { value: "off", label: "Off" }],
+      },
+      mode: {
+        key: "mode",
+        rawConfigId: "permission_mode",
+        label: "Mode",
+        currentValue: "default",
+        settable: true,
+        values: [{ value: "default", label: "Default" }, { value: "plan", label: "Plan" }],
+      },
+    },
+  };
+  const world = {
+    ...fakeWorld(),
+    runtime: { baseUrl: "http://fake", client: { getLiveConfig: async () => liveConfig } },
+  } as unknown as ReadyLocalWorld;
+  const controls = await defaultLocalConfigDriver.enumerateControls(world, "session-1");
+  assert.deepEqual(
+    controls.map((control) => `${control.key}:${control.surface}`).sort(),
+    ["effort:reasoning", "mode:mode"],
+  );
+});
+
+test("configSurfaceFor maps only the live-composer control keys; everything else has no surface", () => {
+  // The live chat composer renders exactly the promoted control groups
+  // (ChatInputControlRow): effort/reasoning bars and the working-mode control.
+  assert.equal(configSurfaceFor("effort"), "reasoning");
+  assert.equal(configSurfaceFor("reasoning"), "reasoning");
+  assert.equal(configSurfaceFor("mode"), "mode");
+  assert.equal(configSurfaceFor("collaboration_mode"), "mode");
+  // The raw ACP model control is owned by the catalog model picker (its raw
+  // values are never data-model-option ids — the run-3 deadlock), fast_mode has
+  // no testid, and arbitrary ACP controls have no live-composer strip.
+  assert.equal(configSurfaceFor("model"), null);
+  assert.equal(configSurfaceFor("fast_mode"), null);
+  assert.equal(configSurfaceFor("temperature"), null);
 });
