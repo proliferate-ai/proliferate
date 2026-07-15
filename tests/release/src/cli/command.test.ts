@@ -279,6 +279,53 @@ test("an invalid cell expansion exits 2 before any setup side effect and writes 
   assert.deepEqual(calls, ["identity", "select"]);
 });
 
+function twoCellMatrix(): ScenarioDefinition {
+  return {
+    id: "T3-TWO",
+    title: "two-cell matrix",
+    registryFlowRef: "specs#T3-TWO",
+    lanes: ["local"],
+    requiredEnv: [],
+    kind: "matrix",
+    expandCells: () => [
+      { dimensions: { cell: "CELL-A" } },
+      { dimensions: { cell: "CELL-B" } },
+    ],
+    planCell: () => [],
+    runCells: async () => [],
+  } as unknown as ScenarioDefinition;
+}
+
+test("--cells keeps only the selected matrix cell and threads it to execute", async () => {
+  let executedCells: Array<Record<string, string>> = [];
+  const { deps } = makeDeps();
+  deps.selectScenarios = () => [twoCellMatrix()];
+  deps.execute = async (options) => {
+    executedCells = options.cells.map((c) => c.dimensions);
+    return fakeReport(options.candidateBuild ?? null);
+  };
+  const exit = await runReleaseCommand(
+    ["--behavior", "diagnostic", "--cells", "CELL-B"],
+    deps,
+  );
+  assert.equal(exit, 0);
+  assert.deepEqual(executedCells, [{ cell: "CELL-B" }]);
+});
+
+test("--cells matching no planned cell exits 2 before setup", async () => {
+  const { deps, calls } = makeDeps();
+  deps.selectScenarios = () => {
+    calls.push("select");
+    return [twoCellMatrix()];
+  };
+  const exit = await runReleaseCommand(
+    ["--behavior", "diagnostic", "--cells", "CELL-Z"],
+    deps,
+  );
+  assert.equal(exit, 2);
+  assert.deepEqual(calls, ["identity", "select"]);
+});
+
 test("the validated path-bearing candidate build map reaches execute (not just its evidence)", async () => {
   let seenMap: unknown = "unset";
   const { deps } = makeDeps();

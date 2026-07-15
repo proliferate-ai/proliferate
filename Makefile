@@ -1112,6 +1112,16 @@ qualification-local-functional:
 QUALIFICATION_SELFHOST_BASE_DIR ?= $(CURDIR)/tests/release/.output/selfhost-world
 SELFHOST_SCENARIOS ?= SELFHOST-INSTALL-1
 SELFHOST_API_BASE_URL ?=
+# The candidate box platform. Defaults to linux/amd64 (t3.small-based scenarios:
+# INSTALL-1/QUAL-1/ISOLATION-1). SELFHOST-CFN-1's CloudFormation template
+# defaults to a Graviton (arm64) t4g instance, so run it with
+# SELFHOST_CANDIDATE_PLATFORM=linux/arm64 so the docker-load candidate image
+# matches the box arch.
+SELFHOST_CANDIDATE_PLATFORM ?= linux/amd64
+# Optional matrix-cell filter passed verbatim to run.ts --cells (e.g. SH-GATEWAY
+# to run SELFHOST-QUAL-1's gateway cell alone on a run-scoped origin). Empty =
+# every planned cell.
+SELFHOST_CELLS ?=
 qualification-selfhost:
 	@test -n "$(PROFILE)" || { \
 		echo "PROFILE=<unique-name> is required, e.g. make qualification-selfhost PROFILE=$$(whoami)-1 BEHAVIOR=diagnostic"; \
@@ -1162,15 +1172,19 @@ qualification-selfhost:
 	fi; \
 	build_summary=$$(node scripts/ci-cd/build-selfhost-qualification-candidates.mjs \
 		--run-id "$$run_id" --shard-id "$$shard_id" --run-dir "$$run_dir" \
+		--platform "$(SELFHOST_CANDIDATE_PLATFORM)" \
 		--api-base-url "$$api_base_url") || exit $$?; \
 	echo "$$build_summary"; \
 	candidate_map=$$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).candidate_build_map)' "$$build_summary"); \
+	cells_flag=""; \
+	if [ -n "$(SELFHOST_CELLS)" ]; then cells_flag="--cells $(SELFHOST_CELLS)"; fi; \
 	cd tests/release && pnpm exec tsx src/cli/run.ts \
 		--behavior $(BEHAVIOR) \
 		--lane local \
 		--desktop web \
 		--agents claude \
 		--scenarios $(SELFHOST_SCENARIOS) \
+		$$cells_flag \
 		--candidate-build-map "$$candidate_map" \
 		--run-id "$$run_id" --shard-id "$$shard_id" \
 		--output-dir "$$run_dir/evidence"

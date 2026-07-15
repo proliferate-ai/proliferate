@@ -80,6 +80,19 @@ test("--only remains an alias for --scenarios", () => {
   assert.deepEqual(args.scenarios, ["T3-WT-1"]);
 });
 
+test("--cells parses a matrix-cell filter and defaults to all", () => {
+  assert.equal(parseArgs(["--behavior", "diagnostic"]).cells, "all");
+  assert.deepEqual(
+    parseArgs(["--behavior", "diagnostic", "--cells", "SH-GATEWAY"]).cells,
+    ["SH-GATEWAY"],
+  );
+  assert.deepEqual(
+    parseArgs(["--behavior", "diagnostic", "--cells", "SH-GATEWAY,SH-GITHUB-AUTH"]).cells,
+    ["SH-GATEWAY", "SH-GITHUB-AUTH"],
+  );
+  assert.throws(() => parseArgs(["--behavior", "diagnostic", "--cells", ","]), CliUsageError);
+});
+
 test("rejects empty lists", () => {
   assert.throws(() => parseArgs(["--behavior", "diagnostic", "--scenarios", ","]), CliUsageError);
   assert.throws(() => parseArgs(["--behavior", "diagnostic", "--agents", " , "]), CliUsageError);

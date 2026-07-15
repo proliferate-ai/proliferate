@@ -173,6 +173,28 @@ export async function runReleaseCommand(argv: readonly string[], deps: CommandDe
     return 2;
   }
 
+  // Optional matrix-cell filter (--cells): keep only cells whose `cell`
+  // dimension is selected. Leaf (non-matrix) cells have no `cell` dimension and
+  // are kept only when they match by scenario-level selection already applied
+  // above; the filter never resurrects an unselected scenario. Used to run a
+  // single staged cell of a multi-cell scenario in isolation (e.g.
+  // SELFHOST-QUAL-1's SH-GATEWAY without the fixed-lane SH-GITHUB-AUTH cell).
+  if (args.cells !== "all") {
+    const wanted = new Set(args.cells);
+    const filtered = cells.filter((cell) => {
+      const cellDim = cell.dimensions.cell;
+      return cellDim !== undefined && wanted.has(cellDim);
+    });
+    if (filtered.length === 0) {
+      deps.error(
+        `--cells ${formatSelector(args.cells)} matched no planned cells ` +
+          `(selected scenarios: ${scenarios.map((s) => s.id).join(", ")}).`,
+      );
+      return 2;
+    }
+    cells = filtered;
+  }
+
   // Local lane self-seeds its durable user per run (Part 2 of #1069): the CI
   // local lane boots a fresh, ephemeral server, so it mints the durable
   // identity through the real /setup claim instead of depending on a repo
