@@ -69,6 +69,16 @@ export function RepoConfigurePane({
           onSelectCloudEnvironment={onSelectCloudEnvironment}
         />
       )}
+      {/* Repo-level, context-independent: commit-message generation applies
+          to local and cloud workspaces alike. Needs a signed-in account
+          (the instructions live on the product server's RepoConfig). */}
+      {repository.gitOwner && repository.gitRepoName && (
+        <RepoCommitInstructionsSection
+          gitOwner={repository.gitOwner}
+          gitRepoName={repository.gitRepoName}
+          enabled={cloudActive}
+        />
+      )}
     </section>
   );
 }
@@ -142,13 +152,6 @@ function ConfigureCloud({
           />
         </SettingsRow>
       </SettingsSection>
-      {editor.cloudRepository && (
-        <RepoCommitInstructionsSection
-          gitOwner={editor.cloudRepository.gitOwner}
-          gitRepoName={editor.cloudRepository.gitRepoName}
-          enabled={cloudActive}
-        />
-      )}
       <SettingsSaveFooter
         statusLabel={editor.status.label}
         statusTone={editor.status.tone}
