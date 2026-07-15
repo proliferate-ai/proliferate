@@ -9,6 +9,7 @@ import {
   SH_INSTALL_CLAIM,
   SH_INVITEE,
   attachCleanupEvidence,
+  browserOriginsForBox,
   resolveSelfHostWorldInputs,
   runSelfHostInstallCells,
   type CellEvidenceNoCleanup,
@@ -351,4 +352,31 @@ test("runSelfHostInstallCells: closeWorld throwing fails every evidence-bearing 
     assert.equal(outcome.status, "failed");
     assert.equal(outcome.evidence, undefined);
   }
+});
+
+test("browserOriginsForBox always emits both 127.0.0.1 and localhost forms (greptile P2)", () => {
+  const forBase = (rendererBaseUrl: string): string[] =>
+    browserOriginsForBox({ renderer: { baseUrl: rendererBaseUrl } } as unknown as ReadySelfHostWorld).split(",");
+
+  // Renderer bound on 127.0.0.1 → both forms present.
+  const fromIp = forBase("http://127.0.0.1:9103/");
+  assert.ok(fromIp.includes("http://127.0.0.1:9103"), `missing 127.0.0.1 form: ${fromIp.join(",")}`);
+  assert.ok(fromIp.includes("http://localhost:9103"), `missing localhost form: ${fromIp.join(",")}`);
+
+  // Renderer bound on localhost → the 127.0.0.1 form must NOT be dropped
+  // (the old `.replace("127.0.0.1", ...)` + Set left only localhost here).
+  const fromLocalhost = forBase("http://localhost:9103/");
+  assert.ok(
+    fromLocalhost.includes("http://127.0.0.1:9103"),
+    `missing 127.0.0.1 form when bound on localhost: ${fromLocalhost.join(",")}`,
+  );
+  assert.ok(fromLocalhost.includes("http://localhost:9103"), `missing localhost form: ${fromLocalhost.join(",")}`);
+
+  // Same origin set regardless of which loopback host the renderer bound on,
+  // and exact-deduped (no repeated entries).
+  assert.deepEqual([...fromIp].sort(), [...fromLocalhost].sort());
+  assert.equal(new Set(fromIp).size, fromIp.length);
+
+  // A non-loopback renderer origin is passed through unchanged (single entry).
+  assert.deepEqual(forBase("https://renderer.internal.example:8443/"), ["https://renderer.internal.example:8443"]);
 });

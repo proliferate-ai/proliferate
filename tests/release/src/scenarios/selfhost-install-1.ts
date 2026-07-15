@@ -803,13 +803,40 @@ function describe(error: unknown): string {
  * merges + dedupes). Comma-joined, no spaces, so it is a single
  * `--cors-allow-origins` argv token.
  */
-function browserOriginsForBox(world: ReadySelfHostWorld): string {
-  const rendererOrigin = originUrl(world.renderer.baseUrl);
-  const origins = new Set<string>([
-    rendererOrigin,
-    rendererOrigin.replace("127.0.0.1", "localhost"),
-  ]);
-  return [...origins].join(",");
+export function browserOriginsForBox(world: ReadySelfHostWorld): string {
+  return rendererLoopbackOrigins(world.renderer.baseUrl).join(",");
+}
+
+/**
+ * Both loopback host forms (127.0.0.1 AND localhost) of the renderer origin,
+ * sharing its scheme + port, exact-deduped and first-seen ordered. The renderer
+ * may bind on EITHER form, and the box's CORS must admit both regardless of which
+ * one it bound on: a plain `127.0.0.1 -> localhost` string replace drops the
+ * 127.0.0.1 origin when the renderer already bound on localhost, so parse the
+ * origin and emit both variants explicitly. Non-loopback origins are passed
+ * through unchanged (only a single entry).
+ */
+function rendererLoopbackOrigins(rendererBaseUrl: string): string[] {
+  const origin = originUrl(rendererBaseUrl);
+  let parsed: URL;
+  try {
+    parsed = new URL(origin);
+  } catch {
+    return [origin];
+  }
+  const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost"]);
+  if (!LOOPBACK_HOSTS.has(parsed.hostname)) {
+    return [origin];
+  }
+  const out: string[] = [];
+  for (const host of ["127.0.0.1", "localhost"]) {
+    const variant = new URL(origin);
+    variant.hostname = host;
+    if (!out.includes(variant.origin)) {
+      out.push(variant.origin);
+    }
+  }
+  return out;
 }
 
 /** The scheme://host[:port] origin of a URL (no path), stable for CORS matching. */
