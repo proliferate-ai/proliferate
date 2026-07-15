@@ -396,6 +396,115 @@ export async function constructSelfHostWorld(
   }
 }
 
+/**
+ * A provisioned pair of independent self-host worlds (frozen tier-3 contract
+ * `SH-SWITCH-ISOLATION`: "Cross-server isolation alone provisions two"). `a` is
+ * the server whose public API origin equals the ONE origin the web candidate
+ * renderer was built with (its baked `VITE_PROLIFERATE_API_BASE_URL`, derived
+ * from the run/shard subdomain), so `a`'s renderer/browser are the shared
+ * Desktop-renderer product state the isolation cell drives; `b` is a second,
+ * fully distinct self-host instance (its own EC2 box, security group, key pair,
+ * Route53 record, and controller-local ports) the product state is switched to.
+ */
+export interface SelfHostWorldPair {
+  a: ReadySelfHostWorld;
+  b: ReadySelfHostWorld;
+}
+
+/**
+ * A fixed, well-separated offset applied to server B's controller-local ports.
+ * Server A reuses the builder's pre-allocated `local-world-ports.json` (the
+ * renderer/AnyHarness URLs baked into A's renderer bytes); server B needs a
+ * SECOND, non-conflicting set of controller-local ports for its own renderer +
+ * AnyHarness. The candidate builder allocates only ONE port set today, so the
+ * pair constructor derives B's set from A's by this offset.
+ *
+ * TODO(builder-flag, other workstream): the honest end state is for
+ * `scripts/ci-cd/build-selfhost-qualification-candidates.mjs` to allocate and
+ * write a SECOND port set (e.g. a `--second-ports`/`local-world-ports-b.json`
+ * sidecar), which the isolation scenario would thread in as
+ * `ConstructSelfHostWorldPairOptions.bPorts`. Until that 1-flag builder change
+ * lands, this deterministic offset stands in; a collision surfaces as a bounded
+ * world-construction failure (fail-closed), never a silent green.
+ */
+export const SECOND_WORLD_PORT_OFFSET = 1000;
+
+/**
+ * Derives server B's controller-local ports from server A's by a fixed offset,
+ * keeping every value a valid TCP port (1024–65535). B's renderer bytes are the
+ * same baked-to-A candidate archive (B's renderer is never pointed at B — the
+ * product cannot repoint a web renderer at runtime), so B's ports need not be
+ * deterministic/baked; they only have to not conflict with A's live binds.
+ */
+export function offsetLocalWorldPorts(ports: LocalWorldPorts, offset = SECOND_WORLD_PORT_OFFSET): LocalWorldPorts {
+  const bump = (port: number): number => {
+    const shifted = port + offset;
+    // Wrap back into the 1024–65535 range so an already-high port stays valid.
+    return shifted <= 65_535 ? shifted : 1024 + ((shifted - 1024) % (65_535 - 1024));
+  };
+  return {
+    server: bump(ports.server),
+    postgres: bump(ports.postgres),
+    redis: bump(ports.redis),
+    anyharness: bump(ports.anyharness),
+    renderer: bump(ports.renderer),
+  };
+}
+
+export interface ConstructSelfHostWorldPairOptions extends ConstructSelfHostWorldOptions {
+  /**
+   * Server B's controller-local ports. Defaults to A's ports offset by
+   * {@link SECOND_WORLD_PORT_OFFSET} (see the TODO there for the builder change
+   * that would supply a real second allocation instead).
+   */
+  bPorts?: LocalWorldPorts;
+  /**
+   * The shard-id suffix that makes server B's run-scoped names + subdomain
+   * distinct from A's. Every run-scoped identity (`runScopedName` /
+   * `runSubdomainLabel`) is derived from the `<runId>:<shardId>` pair, so
+   * suffixing B's shard id yields a fully distinct EC2 box, security group, key
+   * pair, DNS record, ledger, and run directory — without touching the existing
+   * single-world constructor's signature. Default `"b"`.
+   */
+  bShardSuffix?: string;
+}
+
+/**
+ * Constructs the two independent self-host worlds `SH-SWITCH-ISOLATION` needs.
+ * Server A is built with the run identity UNCHANGED so its public API origin
+ * equals the renderer's baked origin (the only origin a web renderer can
+ * reach); server B is built with a shard-suffixed identity (distinct EC2/DNS/SG/
+ * key-pair/ledger) and its own controller-local ports. Each world owns its own
+ * cleanup ledger and tears down independently via `close()`; the isolation cell
+ * folds the two cleanup summaries into one evidence block.
+ *
+ * If B fails to construct, A is closed before rethrowing so a partial pair never
+ * leaks a provisioned box.
+ */
+export async function constructSelfHostWorldPair(
+  options: ConstructSelfHostWorldPairOptions,
+): Promise<SelfHostWorldPair> {
+  const bShardSuffix = options.bShardSuffix ?? "b";
+  const bPorts = options.bPorts ?? offsetLocalWorldPorts(options.ports);
+
+  const a = await constructSelfHostWorld({
+    ...options,
+    runDir: path.join(options.runDir, "server-a"),
+  });
+  try {
+    const b = await constructSelfHostWorld({
+      ...options,
+      run: { ...options.run, shard_id: `${options.run.shard_id}-${bShardSuffix}` },
+      runDir: path.join(options.runDir, `server-${bShardSuffix}`),
+      ports: bPorts,
+    });
+    return { a, b };
+  } catch (error) {
+    await a.close().catch(() => undefined);
+    throw error;
+  }
+}
+
 async function materialize(
   artifactId: string,
   map: CandidateBuildMapV1,
