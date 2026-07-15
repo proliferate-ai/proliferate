@@ -25,3 +25,6 @@ tower-http.workspace = true
 sentry.workspace = true
 sentry-anyhow.workspace = true
 sentry-tracing.workspace = true
+
+[dev-dependencies]
+sentry = { workspace = true, features = ["test"] }
