@@ -208,6 +208,26 @@ mod tests {
     };
 
     #[test]
+    fn tracing_error_reaches_the_sentry_client() {
+        // Regression (B2 amendment): PR #684 bumped `sentry` to 0.48 while
+        // `sentry-tracing` stayed at 0.47, linking two `sentry-core` instances.
+        // The tracing layer then captured events into the 0.47 Hub — which has
+        // no client — so every runtime ERROR event was silently dropped in
+        // production from 2026-06-14. This test binds a test client to the same
+        // `sentry-core` the layer uses; it fails (0 events) whenever the two
+        // crates diverge again.
+        use tracing_subscriber::layer::SubscriberExt;
+        let subscriber = tracing_subscriber::registry().with(sentry_tracing::layer());
+        let events = sentry::test::with_captured_events(|| {
+            tracing::subscriber::with_default(subscriber, || {
+                tracing::error!("sentry emission regression probe");
+            });
+        });
+        assert_eq!(events.len(), 1, "tracing ERROR must reach the Sentry client");
+        assert_eq!(events[0].level, sentry::Level::Error);
+    }
+
+    #[test]
     fn sentry_scope_tags_include_runtime_surface_and_mode() {
         let tags = sentry_scope_tags();
         assert!(tags.iter().any(|(k, v)| *k == "surface" && v == "anyharness_runtime"));
