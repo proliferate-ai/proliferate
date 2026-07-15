@@ -1,10 +1,5 @@
 # Frontend Architecture
 
-Status: consolidated architecture reference for Desktop, Web, Mobile, and shared
-frontend packages. The per-layer guides remain the detailed canon; this doc is
-the single structured overview — purpose, the 20k-foot model, core workflows,
-and each folder's best practices.
-
 ---
 
 ## 1. Purpose / Ownership

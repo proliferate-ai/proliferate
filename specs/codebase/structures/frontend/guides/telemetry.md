@@ -1,8 +1,5 @@
 # Frontend Telemetry Standards
 
-Status: authoritative for frontend telemetry in `apps/desktop/src/**`,
-`apps/web/src/**`, and `apps/mobile/src/**`.
-
 Use this doc for analytics events, exception capture, anonymous telemetry,
 session replay, and telemetry-related provider and hook ownership.
 

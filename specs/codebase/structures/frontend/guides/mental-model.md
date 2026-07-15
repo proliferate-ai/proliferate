@@ -1,10 +1,5 @@
 # Frontend Mental Model
 
-Status: orientation primer for the frontend structure. The per-layer guides in
-this folder and `packages/README.md` are authoritative; this doc is the lens
-that makes them cohere. Read [../README.md](../README.md) first, then this, then
-the focused guide for the layer you are changing.
-
 ## The Core Idea
 
 Three rules generate the entire structure. Everything else is a consequence.

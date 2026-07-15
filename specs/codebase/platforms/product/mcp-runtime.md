@@ -1,7 +1,5 @@
 # MCP In AnyHarness
 
-Status: authoritative for the MCP mental model in AnyHarness.
-
 MCP appears in several places. They are related, but they are not the same
 thing.
 

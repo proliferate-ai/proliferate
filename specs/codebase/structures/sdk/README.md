@@ -1,7 +1,5 @@
 # SDK Structure
 
-Status: current structure rules for the TypeScript SDK layers in this repo.
-
 Scope:
 
 - `cloud/sdk/**`

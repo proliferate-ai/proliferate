@@ -1,7 +1,5 @@
 # Codebase Documentation
 
-Status: current index
-
 This area explains where code belongs, which reusable contracts it implements,
 and how complete product and engineering domains behave. Contributor
 procedures live under [`../developing/`](../developing/).
@@ -11,7 +9,7 @@ procedures live under [`../developing/`](../developing/).
 | Category | Question it answers | Start here |
 | --- | --- | --- |
 | Structures | Where does this code belong, and which dependencies are allowed? | [`structures/README.md`](structures/README.md) |
-| Platforms | Which reusable product, engineering, or internal capability owns this shared contract? | [`platforms/README.md`](platforms/README.md) |
+| Platforms | Which reusable cross-system capability owns this shared contract? | [`platforms/README.md`](platforms/README.md) |
 | Systems | Which complete product or engineering domain owns this behavior? | [`systems/README.md`](systems/README.md) |
 
 Most product changes require one structure document and either a platform or

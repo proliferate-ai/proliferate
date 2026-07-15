@@ -1,7 +1,5 @@
 # Frontend Packages
 
-Status: authoritative for shared frontend package ownership.
-
 Scope: `apps/packages/{design,ui,product-domain,product-ui,product-surfaces,product-client}/**`
 
 **Packages are the shared product tier, not a second frontend taxonomy.** Most

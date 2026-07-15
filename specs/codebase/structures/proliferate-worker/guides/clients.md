@@ -1,9 +1,5 @@
 # Worker HTTP Clients
 
-Status: authoritative for
-`anyharness/crates/proliferate-worker/src/cloud_client/**` and the narrow raw
-HTTP calls in `catalog_sync.rs` and `anyharness_update.rs`.
-
 ## Cloud Client
 
 ```text

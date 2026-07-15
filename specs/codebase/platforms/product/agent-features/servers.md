@@ -1,7 +1,5 @@
 # Product MCP Servers
 
-Status: authoritative for product-owned MCP servers in AnyHarness.
-
 Product MCP servers are AnyHarness-owned tools exposed to agents through MCP.
 They let an agent call Proliferate product capabilities such as subagents,
 reviews, cowork artifacts, computer use, browser use, or

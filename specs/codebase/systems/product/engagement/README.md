@@ -1,7 +1,5 @@
 # Product Engagement
 
-Status: authoritative for the current Customer.io lifecycle integration.
-
 Product Engagement owns the server-to-Customer.io transport, the profile
 attributes and lifecycle event produced by current code, and the gates that
 make the integration active or inert. Customer.io campaigns, segments,

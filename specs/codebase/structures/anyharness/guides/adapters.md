@@ -1,7 +1,5 @@
 # AnyHarness Adapters
 
-Status: authoritative for local workspace/machine capability adapters.
-
 Adapter code lives under `anyharness-lib/src/adapters/**`.
 
 ## Purpose

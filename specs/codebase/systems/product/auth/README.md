@@ -1,8 +1,5 @@
 # Product Auth
 
-Status: authoritative for Proliferate product account sign-in, linked provider
-identity, password credentials, and product-readiness gates.
-
 Scope:
 
 - `server/proliferate/auth/**`

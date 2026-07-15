@@ -1,10 +1,8 @@
 # Session Actor
 
-Status: authoritative for the split live session actor. The migration this
-spec drove is complete; the shapes below are the current code.
-
-This spec is specific to the actor portion of the AnyHarness session engine. It
-assumes the broader architecture in
+This spec describes the current split live session actor. It is specific to
+the actor portion of the AnyHarness session engine and assumes the broader
+architecture in
 [guides/system-architecture.md](../guides/system-architecture.md) and the
 session engine overview in [session-engine.md](session-engine.md).
 

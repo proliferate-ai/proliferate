@@ -1,8 +1,5 @@
 # Pending Workspace Shell, Session Intents, And Optimistic UI
 
-Status: authoritative for pending workspace entry, projected session shell, and
-optimistic outbound session work in the desktop frontend.
-
 Read this doc before changing new-workspace launch, existing-workspace
 selection/opening, pending workspace UI, optimistic session creation, queued
 prompts, projected chat tabs, workspace arrival panels, optimistic

@@ -1,7 +1,5 @@
 # AnyHarness Observability
 
-Status: authoritative for reusable runtime diagnostics.
-
 ## Purpose
 
 `observability/` owns reusable tracing, latency, and measurement helpers.
