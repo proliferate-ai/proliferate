@@ -1209,7 +1209,10 @@ async function reopenAndReadTranscriptInRenderer(page: ProductPage, workspaceId:
     ({ key, value }) => {
       window.localStorage.setItem(key, value);
     },
-    { key: LOGICAL_WORKSPACE_SELECTION_KEY, value: workspaceId },
+    // ProductStorage decodes stored values with JSON.parse (decodeStoredJson),
+    // so the id must be stored as a JSON string — a raw UUID fails to parse
+    // and the selection silently falls back to none.
+    { key: LOGICAL_WORKSPACE_SELECTION_KEY, value: JSON.stringify(workspaceId) },
   );
   await p.reload({ waitUntil: "domcontentloaded" });
   await p
