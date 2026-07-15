@@ -1280,26 +1280,57 @@ export async function createLocalWorkspaceTurnThroughUi(
   workspaceDirName: string,
 ): Promise<{ workspaceId: string; sessionId: string; reply: string }> {
   const p = page.page;
+  // Failure attribution: evidence redaction withholds response bodies, so a
+  // bare rethrow loses WHERE the flow died. `step` is a bounded label carried
+  // in the thrown message; a failure also drops one screenshot into the run's
+  // uploaded logs/ dir. Neither carries a response body or secret.
+  let step = "prepare repo root";
+  try {
+    return await createLocalWorkspaceTurnThroughUiInner(world, page, modelId, prompt, workspaceDirName, (s) => {
+      step = s;
+    });
+  } catch (error) {
+    const shot = path.join(world.paths.runDir, "logs", `ui-turn-failure-${workspaceDirName}.png`);
+    await p.screenshot({ path: shot, fullPage: true }).catch(() => undefined);
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`[ui-turn step: ${step}] ${message}`);
+  }
+}
+
+async function createLocalWorkspaceTurnThroughUiInner(
+  world: ReadySelfHostWorld,
+  page: ProductPage,
+  modelId: string,
+  prompt: string,
+  workspaceDirName: string,
+  setStep: (step: string) => void,
+): Promise<{ workspaceId: string; sessionId: string; reply: string }> {
+  const p = page.page;
 
   // 1. Prerequisite repo-root under runDir (git repo required by AnyHarness).
   const repoPath = await prepareLocalRepoRoot(world, workspaceDirName);
 
+  setStep("reload home composer");
   // 2. Reload so the freshly-registered repo-root + launch options are re-fetched
   //    by the (already-open) composer, then wait for the home composer to render.
   await p.reload({ waitUntil: "domcontentloaded" });
   await p.locator("[data-home-composer-editor]").first().waitFor({ state: "visible", timeout: HOME_COMPOSER_TIMEOUT_MS });
 
+  setStep("select repo in Project picker");
   // Select the repo in the Project picker and "Work locally" in the Runtime picker.
   await clickByRole(p, "button", /^Project:/, "home Project picker trigger");
   const repoRow = p.locator(`[data-repo-source-root="${cssAttr(repoPath)}"]`).first();
   await repoRow.waitFor({ state: "visible", timeout: 20_000 });
   await repoRow.click();
+  setStep("select Work locally runtime");
   await clickByRole(p, "button", /^Runtime:/, "home Runtime picker trigger");
   await clickMenuItemByText(p, "Work locally", '"Work locally" runtime option');
 
+  setStep("select model in composer");
   // 3. Select the resolved model in the composer picker.
   await selectModelInComposer(p, modelId);
 
+  setStep("send prompt");
   // 4. Send the prompt; the pending-workspace composer materializes the workspace.
   const editor = p.locator("[data-home-composer-editor]").first();
   await editor.waitFor({ state: "visible", timeout: 15_000 });
@@ -1308,6 +1339,7 @@ export async function createLocalWorkspaceTurnThroughUi(
   await send.waitFor({ state: "visible", timeout: 15_000 });
   await send.click();
 
+  setStep("wait for workspace shell to settle");
   // 5. Wait for the shell to settle (data-pending-workspace flips to "false") so
   //    the ui-key is the materialized workspace id, then read it.
   await p.locator("[data-workspace-shell]").first().waitFor({ state: "visible", timeout: 30_000 });
@@ -1319,10 +1351,12 @@ export async function createLocalWorkspaceTurnThroughUi(
 
   // Resolve the stable AnyHarness native session id from the runtime (the DOM's
   // data-workspace-session-id is the client's ephemeral, reload-regenerated id).
+  setStep("resolve runtime session id");
   const sessionId = await resolveAnyharnessSessionId(world, workspaceId, WORKSPACE_SETTLE_TIMEOUT_MS);
 
   // Turn completion is authoritative from AnyHarness's event stream (not
   // DOM-timing-flaky); a session-level error is a real failure, not a hang.
+  setStep("wait for turn completion");
   const completion = await waitForTurnCompletion(world, sessionId, TURN_TIMEOUT_MS);
   if (completion.error) {
     if (process.env.LOCAL_WORLD_SMOKE_DEBUG_DIR) {
@@ -1334,6 +1368,7 @@ export async function createLocalWorkspaceTurnThroughUi(
     throw new Error(`assistant turn did not end within ${TURN_TIMEOUT_MS}ms`);
   }
 
+  setStep("read assistant reply");
   const reply = await readAssistantReply(p, ASSISTANT_REPLY_TIMEOUT_MS);
   return { workspaceId, sessionId, reply };
 }
