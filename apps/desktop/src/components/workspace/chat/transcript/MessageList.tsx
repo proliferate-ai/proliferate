@@ -39,7 +39,7 @@ import {
   type ChatTranscriptTurnStatusInput,
 } from "@proliferate/product-ui/chat/transcript/ChatTranscriptView";
 import { useContentSearchStore } from "@/stores/search/content-search-store";
-import { useChatTranscriptContentSearch } from "@/hooks/chat/search/use-chat-transcript-content-search";
+import { useChatTranscriptContentSearch } from "@/hooks/chat/lifecycle/use-chat-transcript-content-search";
 import {
   chatRowKeyFromUnitId,
   parseChatRowMatchId,

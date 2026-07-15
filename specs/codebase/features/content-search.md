@@ -37,7 +37,7 @@ transcript rows are unmounted (virtualized), so the DOM cannot be the source of
 truth.
 
 - **Index (data — authoritative).**
-  `apps/desktop/src/hooks/chat/search/use-chat-transcript-content-search.ts`
+  `apps/desktop/src/hooks/chat/lifecycle/use-chat-transcript-content-search.ts`
   rebuilds the transcript row model and, per row, extracts searchable prose via
   `apps/desktop/src/lib/domain/content-search/transcript-search-text.ts`
   (`extractTranscriptRowProseSegments` → markdown-stripped assistant prose +
