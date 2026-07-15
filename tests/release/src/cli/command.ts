@@ -133,6 +133,19 @@ export async function runReleaseCommand(argv: readonly string[], deps: CommandDe
     // (Tier-2). `candidateBuildMap`/`runDir`/`ports` stay null — no world
     // materialization is claimed — while `candidateBuild` still carries a
     // non-null, honest identity so a strict report is not rejected.
+    //
+    // T2R-R01: only source-backed (Tier-2) scenarios may run this way. A
+    // strict Tier-3/Tier-4 invocation must never substitute a synthetic
+    // source identity for the exact candidate-build map.
+    const nonSourceBacked = scenarios.filter((s) => s.sourceBacked !== true);
+    if (nonSourceBacked.length > 0) {
+      deps.error(
+        `--source-candidate is restricted to source-backed Tier-2 scenarios; ` +
+          `refusing: ${nonSourceBacked.map((s) => s.id).join(", ")}. ` +
+          `Use --candidate-build-map for exact-candidate scenarios.`,
+      );
+      return 2;
+    }
     try {
       candidateBuild = synthesizeSourceCandidateBuild(identity.source_sha);
     } catch (error) {

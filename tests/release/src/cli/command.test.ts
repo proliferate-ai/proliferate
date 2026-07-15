@@ -389,6 +389,7 @@ test("synthesizeSourceCandidateBuild binds the digest to the source sha (two dif
 
 test("--source-candidate threads a non-null candidate_build into the written report with no map materialization", async () => {
   const { deps } = makeDeps();
+  deps.selectScenarios = () => [{ ...SCENARIO, id: "T2-FAKE", sourceBacked: true }];
   let written: TestRunReportV4 | undefined;
   deps.write = async (_dir, report) => {
     written = report;
@@ -398,4 +399,28 @@ test("--source-candidate threads a non-null candidate_build into the written rep
   assert.equal(exit, 0);
   assert.ok(written?.candidate_build !== null, "candidate_build is non-null for a source-candidate run");
   assert.equal(written?.candidate_build?.artifacts[0].artifact_id, `server/${process.platform}`);
+});
+
+test("--source-candidate refuses non-source-backed scenarios with exit 2 and no report (T2R-R01)", async () => {
+  const { deps, calls } = makeDeps();
+  // The default SCENARIO is a Tier-3 shape with no sourceBacked marker — a
+  // strict T3/T4 selection must never substitute a synthetic source identity
+  // for the exact candidate-build map.
+  let wrote = false;
+  deps.write = async () => {
+    wrote = true;
+    return "/tmp/report.json";
+  };
+  const errors: string[] = [];
+  deps.error = (message) => {
+    errors.push(message);
+  };
+  const exit = await runReleaseCommand(["--behavior", "strict", "--source-candidate"], deps);
+  assert.equal(exit, 2);
+  assert.equal(wrote, false, "no report is written");
+  assert.ok(
+    errors.some((e) => e.includes("T3-FAKE") && e.includes("source-backed")),
+    "the refusal names the offending scenario",
+  );
+  assert.ok(!calls.includes("execute"), "no scenario executes");
 });

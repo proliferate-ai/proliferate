@@ -310,8 +310,11 @@ async def run_billing_reconcile_pass() -> None:
         states = await provider.list_sandbox_states() if provider is not None else []
         states_by_external_id = {state.external_sandbox_id: state for state in states}
         for segment in open_segments:
-            # open_segments is non-empty here, so the provider was resolved above.
-            assert provider is not None
+            # open_segments is non-empty here, so the provider was resolved
+            # above. Not an `assert`: those vanish under `python -O`, and this
+            # invariant guards real reconciliation work.
+            if provider is None:
+                raise RuntimeError("sandbox provider unresolved with open usage segments")
             billing_snapshot = snapshots_by_subject.get(segment.billing_subject_id)
             if billing_snapshot is None:
                 billing_snapshot = await get_billing_snapshot_for_subject(

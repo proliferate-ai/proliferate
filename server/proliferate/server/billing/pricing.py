@@ -35,9 +35,14 @@ from proliferate.server.billing.models import BillingServiceError
 def _e2b_list_price_per_hour_usd() -> Decimal:
     try:
         value = Decimal(settings.e2b_list_price_usd_per_hour)
-    except (InvalidOperation, ValueError):
-        return Decimal("0")
-    return value if value > 0 else Decimal("0")
+    except (InvalidOperation, ValueError) as exc:
+        raise BillingServiceError(
+            "compute_price_unconfigured",
+            "E2B_LIST_PRICE_USD_PER_HOUR is not a valid decimal: "
+            f"{settings.e2b_list_price_usd_per_hour!r}",
+            status_code=500,
+        ) from exc
+    return value
 
 
 def compute_price_per_hour_usd() -> Decimal:
@@ -46,10 +51,22 @@ def compute_price_per_hour_usd() -> Decimal:
     The multiplier (not a fixed dollar rate) is the constant, so margin
     survives provider price changes. Used both to convert the $15/seat compute
     allocation into included hours and to price compute overage.
+
+    T2R-R02: a zero/invalid derived price fails CLOSED. Returning 0 would give
+    paid subjects zero included hours while overage metering silently priced
+    every uncovered second at 0 cents — unbounded free compute. Misconfigured
+    pricing must abort the billing pass loudly instead.
     """
     multiplier = Decimal(str(settings.pro_compute_margin_multiplier))
     price = _e2b_list_price_per_hour_usd() * multiplier
-    return price if price > 0 else Decimal("0")
+    if price <= 0:
+        raise BillingServiceError(
+            "compute_price_unconfigured",
+            "Derived compute price must be > 0 "
+            f"(E2B list {settings.e2b_list_price_usd_per_hour!r} x multiplier {multiplier})",
+            status_code=500,
+        )
+    return price
 
 
 def compute_price_per_hour_cents() -> int:
@@ -60,13 +77,10 @@ def compute_price_per_hour_cents() -> int:
 def compute_hours_per_seat() -> float:
     """Sandbox-hours the $15/seat compute allocation buys at the current rate.
 
-    Returns 0.0 when compute is unpriced (misconfigured) rather than dividing by
-    zero — a zero allocation is fail-safe (no free hours) until pricing is set.
+    Misconfigured pricing raises upstream (T2R-R02, fail closed) — by the time
+    this divides, the rate is guaranteed positive.
     """
-    rate = compute_price_per_hour_usd()
-    if rate <= 0:
-        return 0.0
-    return float(PRO_COMPUTE_ALLOCATION_USD_PER_SEAT / rate)
+    return float(PRO_COMPUTE_ALLOCATION_USD_PER_SEAT / compute_price_per_hour_usd())
 
 
 def billing_price_ids_from_settings() -> BillingPriceIds:

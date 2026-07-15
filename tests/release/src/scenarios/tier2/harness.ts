@@ -131,6 +131,9 @@ export function makeTier2MatrixScenario(
     registryFlowRef: cfg.registryFlowRef,
     lanes: ["local"],
     requiredEnv: cfg.requiredEnv,
+    // Every scenario built by this factory boots the Server from source via
+    // BootedStack — the one legitimate consumer of `--source-candidate`.
+    sourceBacked: true,
     expandCells: (): ScenarioCellSpec[] =>
       caseIds.map((caseId) => ({ dimensions: { [TIER2_CASE_DIMENSION]: caseId } })),
     planCell: (_ctx, cell: PlannedCellV1): ScenarioPlanStep[] => {
