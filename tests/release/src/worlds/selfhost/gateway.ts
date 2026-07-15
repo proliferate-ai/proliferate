@@ -200,6 +200,36 @@ export function renderGatewayEnvLines(block: GatewayEnvBlock): string {
 }
 
 /**
+ * The env keys `renderGatewayEnvLines` sets. The shipped `.env.static` (copied
+ * from `.env.production.example` by install.sh) already carries defaults for
+ * some of these — notably `AGENT_GATEWAY_ENABLED=false`. `proliferate_read_env`
+ * reads the FIRST `KEY=` occurrence (`grep -m1`), so a blind append leaves the
+ * shipped `false` winning and the profile never comes up. These keys must be
+ * stripped from `.env.static` before the block is appended so ours are the only
+ * occurrence.
+ */
+export const GATEWAY_ENV_KEYS = [
+  "AGENT_GATEWAY_ENABLED",
+  "AGENT_GATEWAY_LITELLM_BASE_URL",
+  "AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL",
+  "AGENT_GATEWAY_LITELLM_MASTER_KEY",
+  "LITELLM_MASTER_KEY",
+  "LITELLM_POSTGRES_PASSWORD",
+  "PROLIFERATE_LITELLM_IMAGE_TAG",
+  "ANTHROPIC_API_KEY",
+] as const;
+
+/**
+ * A `sed -i` program that deletes every existing `KEY=` line for the gateway
+ * keys from an env file, so the appended block's values are the only
+ * occurrences `proliferate_read_env` (grep -m1) can read. Anchored to the line
+ * start with an escaped literal key; no secret value appears (keys only).
+ */
+export function stripGatewayKeysSedProgram(): string {
+  return GATEWAY_ENV_KEYS.map((key) => `/^${key}=/d`).join(";");
+}
+
+/**
  * One LiteLLM per-request spend row (`/spend/logs?summarize=false`). `api_key`
  * is the request's virtual-key token id (or the master key's token id for a
  * direct master-key call). `total_tokens` distinguishes a real, token-consuming
@@ -256,12 +286,18 @@ export async function configureAndEnableGatewayProfile(
   const localTmp = await io.writeLocalTmp(renderGatewayEnvLines(block));
   try {
     await ssh.scp(localTmp, remoteTmp);
-    // Append the block to .env.static (0600), then rerun the shipped bootstrap
-    // so it re-resolves .env.runtime and brings up the agent-gateway profile.
-    log("appending gateway env block + running bootstrap.sh --wait");
-    await ssh.run(`sudo bash -c 'cat ${remoteTmp} >> ${GATEWAY_DEPLOY_DIR}/.env.static && rm -f ${remoteTmp}'`, {
-      timeoutMs: 60_000,
-    });
+    // Strip any pre-existing gateway keys from .env.static (the shipped example
+    // seeds AGENT_GATEWAY_ENABLED=false, and proliferate_read_env reads the
+    // FIRST occurrence), THEN append the block, so our values are the only ones
+    // bootstrap resolves. Finally rerun the shipped bootstrap so it re-resolves
+    // .env.runtime and brings up the agent-gateway profile.
+    log("overriding gateway env keys in .env.static + running bootstrap.sh --wait");
+    const sedProgram = stripGatewayKeysSedProgram();
+    await ssh.run(
+      `sudo bash -c 'sed -i "${sedProgram}" ${GATEWAY_DEPLOY_DIR}/.env.static && ` +
+        `cat ${remoteTmp} >> ${GATEWAY_DEPLOY_DIR}/.env.static && rm -f ${remoteTmp}'`,
+      { timeoutMs: 60_000 },
+    );
     await ssh.run(`cd ${GATEWAY_DEPLOY_DIR} && sudo bash bootstrap.sh`, { timeoutMs: BOX_STEP_TIMEOUT_MS });
   } finally {
     await io.removeLocalTmp(localTmp).catch(() => undefined);

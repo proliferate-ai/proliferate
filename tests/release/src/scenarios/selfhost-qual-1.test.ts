@@ -29,8 +29,11 @@ import {
   correlateGatewaySpend,
   enrollmentIsSynced,
   gatewayAuthSelectionBody,
+  GATEWAY_ENV_KEYS,
+  renderGatewayEnvLines,
   resolveGatewayConfig,
   selectPersonalEnrollmentKeyToken,
+  stripGatewayKeysSedProgram,
   type GatewayEnvSource,
 } from "../worlds/selfhost/gateway.js";
 import {
@@ -580,6 +583,47 @@ test("gatewayAuthSelectionBody: a single enabled gateway source, no api_key mate
   assert.deepEqual(gatewayAuthSelectionBody(), {
     sources: [{ sourceKind: "gateway", enabled: true }],
   });
+});
+
+test("stripGatewayKeysSedProgram + append overrides a shipped AGENT_GATEWAY_ENABLED=false", () => {
+  // proliferate_read_env reads the FIRST KEY= occurrence (grep -m1), so a blind
+  // append leaves the shipped `false` winning. Simulate the on-box sed strip +
+  // append and assert the resolved (first-occurrence) value is our `true`.
+  const shippedStatic = [
+    "PROLIFERATE_HOSTNAME=box.example.com",
+    "AGENT_GATEWAY_ENABLED=false",
+    "SOME_OTHER=keep-me",
+    "",
+  ].join("\n");
+  const block = renderGatewayEnvLines({
+    agentGatewayEnabled: true,
+    litellmMasterKey: "MASTER",
+    litellmPostgresPassword: "PGPW",
+    litellmPublicBaseUrl: "https://box.example.com/gateway",
+    litellmImageTag: "pinned",
+    upstreamAnthropicKey: "UPSTREAM",
+  });
+  // Apply the sed program's `/^KEY=/d` semantics in JS, then append the block.
+  const stripped = shippedStatic
+    .split("\n")
+    .filter((line) => !GATEWAY_ENV_KEYS.some((key) => line.startsWith(`${key}=`)))
+    .join("\n");
+  const resolved = `${stripped}\n${block}`;
+  const firstValue = (key: string): string | undefined => {
+    const match = resolved.split("\n").find((line) => line.startsWith(`${key}=`));
+    return match?.slice(key.length + 1);
+  };
+  assert.equal(firstValue("AGENT_GATEWAY_ENABLED"), "true");
+  assert.equal(firstValue("LITELLM_MASTER_KEY"), "MASTER");
+  assert.equal(firstValue("PROLIFERATE_LITELLM_IMAGE_TAG"), "pinned");
+  // Unrelated shipped keys are preserved.
+  assert.equal(firstValue("SOME_OTHER"), "keep-me");
+  assert.equal(firstValue("PROLIFERATE_HOSTNAME"), "box.example.com");
+  // The sed program deletes exactly the gateway keys, anchored to line start.
+  const program = stripGatewayKeysSedProgram();
+  for (const key of GATEWAY_ENV_KEYS) {
+    assert.ok(program.includes(`/^${key}=/d`), `sed program should delete ${key}`);
+  }
 });
 
 test("selectPersonalEnrollmentKeyToken: prefers the personal (vk-user-) alias over a co-located org key", () => {
