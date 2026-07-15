@@ -38,6 +38,29 @@ After the Desktop extraction:
 Desktop remains the behavioral baseline throughout. There is no intermediate
 state in which two product implementations are maintained.
 
+## Binding legacy-Web bundle baseline (phase 6 cutover gate)
+
+This is the **binding** cutover baseline required before hosted Web cutover
+(phase 6). It supersedes the provisional d1g baseline (base `f93afce81`): it was
+captured with the same deterministic collector
+(`scripts/collect-web-bundle-baseline.mjs`, `gzip` via Node `zlib` level 9) on
+the **exact Legacy-Web-replacement base** `c6e094b41` immediately before the
+Web deletions, per the contract's ordered mechanics step 2. The committed
+artifact is
+[`web-bundle-baseline-c6e094b41.json`](../../codebase/systems/product/clients/web-desktop-unification/migration/web-bundle-baseline-c6e094b41.json).
+
+| Segment | gzip | raw | Composition |
+| --- | --- | --- | --- |
+| Unauthenticated `/login` entry | 495,438 B (483.8 KiB) | 1,730,429 B | 1 JS chunk 471,212 B gzip + 1 CSS chunk 24,226 B gzip; 0 fonts, 0 images |
+| Per-route lazy chunks | — | — | none (route splitting: `none`) |
+| Authenticated total | 495,438 B (483.8 KiB) | 1,730,429 B | identical to entry |
+
+Legacy Web still performs **no route-level code splitting** (`apps/web/src/App.tsx`
+statically imports every page, so `/login` eagerly loads the whole authenticated
+product) and emits **no separate font/image assets** (`index.css` imports only
+`@proliferate/design/dom.css`). These are the numbers phase 6 compares the
+replacement browser-host build against.
+
 ## Hosted Web cutover gate
 
 Before hosted Web cutover, inventory every external producer of a hosted Web

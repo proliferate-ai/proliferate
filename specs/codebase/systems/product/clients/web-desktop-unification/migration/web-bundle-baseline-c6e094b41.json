@@ -1,0 +1,78 @@
+{
+  "schema": "web-bundle-baseline/v1",
+  "provisional": true,
+  "note": "Provisional historical baseline of the CURRENT legacy apps/web bundle. NOT a budget. The Legacy-Web-replacement PR reruns this collector on its exact base immediately before deletion; those numbers are the binding cutover baseline.",
+  "tool": "scripts/collect-web-bundle-baseline.mjs",
+  "command": "PROLIFERATE_WEB_BUNDLE_MANIFEST=1 pnpm --filter @proliferate/web build (then walk apps/web/dist/.vite/manifest.json)",
+  "target": "apps/web",
+  "compressionMetric": "gzip (Node zlib, level 9)",
+  "routeSplitting": "none",
+  "entryChunks": [
+    {
+      "key": "index.html",
+      "file": "assets/index-Cn46L5E5.js",
+      "src": "index.html"
+    }
+  ],
+  "unauthenticatedEntry": {
+    "totalGzipBytes": 495438,
+    "totalRawBytes": 1730429,
+    "byType": {
+      "css": {
+        "count": 1,
+        "gzipBytes": 24226,
+        "rawBytes": 163070
+      },
+      "js": {
+        "count": 1,
+        "gzipBytes": 471212,
+        "rawBytes": 1567359
+      }
+    },
+    "files": [
+      {
+        "file": "assets/index-Cn46L5E5.js",
+        "type": "js",
+        "gzipBytes": 471212,
+        "rawBytes": 1567359
+      },
+      {
+        "file": "assets/index-DBYiIABn.css",
+        "type": "css",
+        "gzipBytes": 24226,
+        "rawBytes": 163070
+      }
+    ]
+  },
+  "routeChunks": [],
+  "authenticatedTotal": {
+    "totalGzipBytes": 495438,
+    "totalRawBytes": 1730429,
+    "byType": {
+      "css": {
+        "count": 1,
+        "gzipBytes": 24226,
+        "rawBytes": 163070
+      },
+      "js": {
+        "count": 1,
+        "gzipBytes": 471212,
+        "rawBytes": 1567359
+      }
+    },
+    "files": [
+      {
+        "file": "assets/index-Cn46L5E5.js",
+        "type": "js",
+        "gzipBytes": 471212,
+        "rawBytes": 1567359
+      },
+      {
+        "file": "assets/index-DBYiIABn.css",
+        "type": "css",
+        "gzipBytes": 24226,
+        "rawBytes": 163070
+      }
+    ]
+  }
+}
