@@ -153,16 +153,15 @@ export function buildSelfHostDeployBundle({
     // Archive as root:root, numeric owner (server-ci parity) so a root
     // extraction on the box does not hand ownership to the builder's uid.
     log(`tar czf ${bundleOutputPath} --owner=0 --group=0 --numeric-owner -C ${bundleRoot} proliferate-deploy`);
-    exec("tar", [
-      "czf",
-      bundleOutputPath,
-      "--owner=0",
-      "--group=0",
-      "--numeric-owner",
-      "-C",
-      bundleRoot,
-      "proliferate-deploy",
-    ]);
+    // COPYFILE_DISABLE=1 stops macOS bsdtar from injecting `._*` AppleDouble
+    // entries into the archive (harmless/ignored on Linux). Without it the
+    // qualification bundle diverges from the Linux server-ci release bundle and
+    // extracts junk `._Caddyfile`/`._bootstrap.sh` files onto the box.
+    exec(
+      "tar",
+      ["czf", bundleOutputPath, "--owner=0", "--group=0", "--numeric-owner", "-C", bundleRoot, "proliferate-deploy"],
+      { env: { ...process.env, COPYFILE_DISABLE: "1" } },
+    );
     requireRegularFile(bundleOutputPath, "self-host deploy bundle");
 
     // Bare-name checksum (run in the artifacts dir) so `sha256sum -c` inside the
