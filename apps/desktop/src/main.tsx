@@ -2,7 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { ProductClient } from "@proliferate/product-client/ProductClient";
-import { initializeTheme } from "./config/theme";
+import { initializeTheme } from "@proliferate/product-client/internal/config/theme";
 import "./lib/access/cloud/client";
 import { bootstrapProliferateApiConfig } from "./lib/infra/proliferate-api";
 import { initializeAnonymousTelemetry } from "./lib/integrations/telemetry/anonymous";
