@@ -465,7 +465,8 @@ async def set_sandbox_desired_versions(
     )
     if updated is None:
         raise CloudApiError("cloud_sandbox_not_found", "Cloud sandbox not found.", status_code=404)
-    await db.commit()
+    # The request's session dependency (get_async_session) commits on success;
+    # the service layer must not call db.commit() (server-boundary rule).
     return SetSandboxDesiredVersionsResponse(
         cloud_sandbox_id=str(updated.id),
         desired_anyharness_version=updated.desired_anyharness_version,
