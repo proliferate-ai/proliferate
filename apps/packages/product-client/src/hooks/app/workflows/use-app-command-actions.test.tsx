@@ -52,6 +52,11 @@ vi.mock("#product/hooks/cloud/facade/use-cloud-billing", () => ({
 }));
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
+  useGitHubRepoAuthority: () => ({
+    data: undefined,
+    isPending: false,
+    isError: false,
+  }),
   useRepositories: () => ({
     data: {
       repositories: [{
