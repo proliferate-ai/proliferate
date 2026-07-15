@@ -36,21 +36,28 @@ pub async fn download_artifact(
         // some other host/path.
         .redirect(reqwest::redirect::Policy::none())
         .build()
-        .map_err(|source| SupervisorError::DownloadArtifact {
+        // Building the client failing is a local/config fault, not a network
+        // blip; treat it as transient so the next drain retries rather than
+        // permanently latching the request Invalid.
+        .map_err(|source| SupervisorError::DownloadTransport {
             url: url.clone(),
             message: source.to_string(),
         })?;
 
+    // A connect/send failure is transport-class (transient): leave the request
+    // pending so the next drain retries instead of bricking convergence.
     let mut response =
         client
             .get(&url)
             .send()
             .await
-            .map_err(|source| SupervisorError::DownloadArtifact {
+            .map_err(|source| SupervisorError::DownloadTransport {
                 url: url.clone(),
                 message: source.to_string(),
             })?;
 
+    // A definitive non-2xx status means the artifact is missing/wrong at the
+    // named URL: this is terminal (fail-closed Invalid), not retried.
     if !response.status().is_success() {
         return Err(SupervisorError::DownloadArtifact {
             url,
@@ -69,7 +76,9 @@ pub async fn download_artifact(
     while let Some(chunk) = response
         .chunk()
         .await
-        .map_err(|source| SupervisorError::DownloadArtifact {
+        // A mid-stream read reset is transport-class (transient), like the
+        // connect failure above.
+        .map_err(|source| SupervisorError::DownloadTransport {
             url: url.clone(),
             message: source.to_string(),
         })?

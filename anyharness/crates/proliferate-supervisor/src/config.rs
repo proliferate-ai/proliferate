@@ -43,6 +43,12 @@ pub struct SupervisorConfig {
     /// Whole-download timeout for the bounded artifact fetch, in seconds.
     #[serde(default = "default_download_timeout_seconds")]
     pub download_timeout_seconds: u64,
+    /// How often (seconds) the run loop drains the update mailbox while both
+    /// children are healthy. Without a periodic drain the mailbox would only be
+    /// consumed on a child respawn, so a request written to a stable box would
+    /// never be actioned. Bounded cadence, not a busy loop.
+    #[serde(default = "default_update_poll_interval_seconds")]
+    pub update_poll_interval_seconds: u64,
 }
 
 fn default_anyharness_args() -> Vec<String> {
@@ -79,6 +85,10 @@ fn default_max_artifact_bytes() -> u64 {
 
 fn default_download_timeout_seconds() -> u64 {
     300
+}
+
+fn default_update_poll_interval_seconds() -> u64 {
+    15
 }
 
 fn supervisor_state_dir() -> PathBuf {

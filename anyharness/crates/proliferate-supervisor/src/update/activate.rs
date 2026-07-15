@@ -29,6 +29,8 @@ use std::{
 use proliferate_runtime_update_protocol::{
     UpdateComponent, UpdateOutcome, UpdateRequestV1, UpdateResultV1,
 };
+use sha2::{Digest, Sha256};
+use tracing::warn;
 
 use crate::{
     config::SupervisorConfig,
@@ -61,24 +63,53 @@ pub trait ActivationHost {
     /// after an AnyHarness restart, since the Worker depends on it).
     async fn restart_worker(&mut self) -> Result<(), SupervisorError>;
 
-    /// Poll AnyHarness `/health` after a restart.
-    async fn anyharness_healthy(&mut self) -> bool;
+    /// Poll AnyHarness `/health` after a restart. When `expected_version` is
+    /// `Some`, a lagging-but-2xx artifact (answers healthy on the prior version)
+    /// must fail the gate too — not just a non-2xx (R9-008).
+    async fn anyharness_healthy(&mut self, expected_version: Option<&str>) -> bool;
 
     /// Confirm the Worker is still live after a restart.
     async fn worker_alive(&mut self) -> bool;
+}
+
+/// The disposition of one drained request. A terminal result is recorded and
+/// the request is never actioned again; a transient failure leaves NO result on
+/// disk so the request stays pending and the next drain retries it (R9-002).
+enum ActivationStep {
+    Terminal(UpdateResultV1),
+    Retry(String),
 }
 
 /// Drain the mailbox: for each pending request with no result yet, run the
 /// state machine and write exactly one result. Idempotent — a request that
 /// already has a result is skipped by `next_pending`, so a replayed heartbeat
 /// or a Supervisor restart activates each request at most once.
+///
+/// A transport-class download blip does not write a terminal result: the
+/// request is left pending and the drain returns (breaks) so the next poll tick
+/// retries it, instead of latching a permanent `Invalid` that only a version
+/// change could clear (R9-002).
 pub async fn run_pending<H: ActivationHost>(
     config: &SupervisorConfig,
     host: &mut H,
 ) -> Result<(), SupervisorError> {
     while let Some(pending) = request::next_pending(&config.update_request_dir)? {
-        let result = activate_one(config, host, &pending).await;
-        request::record_result(&config.update_request_dir, &result)?;
+        match activate_one(config, host, &pending).await {
+            ActivationStep::Terminal(result) => {
+                request::record_result(&config.update_request_dir, &result)?;
+            }
+            ActivationStep::Retry(reason) => {
+                warn!(
+                    request_id = %pending.request.request_id,
+                    reason,
+                    "update left pending after a transient failure; the next drain retries"
+                );
+                // No result written: `next_pending` would return the SAME
+                // request again, so stop this pass and let the next poll tick
+                // retry rather than spin.
+                break;
+            }
+        }
     }
     Ok(())
 }
@@ -87,17 +118,38 @@ async fn activate_one<H: ActivationHost>(
     config: &SupervisorConfig,
     host: &mut H,
     pending: &PendingUpdate,
-) -> UpdateResultV1 {
+) -> ActivationStep {
     let request = &pending.request;
     let component = request.component;
+    let active_path = active_path_for(config, component);
 
-    // 1. Download the exact artifact URL (bounded). A failure means nothing was
-    //    activated: fail closed with Invalid (the Worker re-emits only when the
-    //    desired version changes, matching today's not-retried-until-superseded
-    //    behavior).
+    // 0. Crash-recovery fast path (R9-004): if the active binary already hashes
+    //    to the requested artifact, a prior attempt activated it and the
+    //    Supervisor crashed before recording a result. Do NOT re-stage or move
+    //    `active -> .prev` again — that second rename would push the NEW binary
+    //    into `.prev` and destroy the true last-good, so a later health-fail
+    //    would "roll back" onto the bad binary. Restart + health-gate against
+    //    the EXISTING `.prev` instead.
+    if active_matches(&active_path, &request.sha256) {
+        let plan = RollbackPlan::new(
+            component.as_str(),
+            active_path.clone(),
+            prev_path_for(&active_path),
+        );
+        return finish_activation(host, request, component, plan).await;
+    }
+
+    // 1. Download the exact artifact URL (bounded). A transport-class failure is
+    //    transient — leave the request pending to retry (R9-002). A definitive
+    //    failure (bad status, too large) fails closed with a terminal Invalid.
     let bytes = match host.fetch_artifact(request).await {
         Ok(bytes) => bytes,
-        Err(error) => return invalid(request, format!("download failed: {error}")),
+        Err(error) if is_transient(&error) => {
+            return ActivationStep::Retry(format!("transient download failure: {error}"));
+        }
+        Err(error) => {
+            return ActivationStep::Terminal(invalid(request, format!("download failed: {error}")));
+        }
     };
 
     // 2. Re-verify sha256 + size and stage atomically with private permissions.
@@ -105,27 +157,65 @@ async fn activate_one<H: ActivationHost>(
     //    `verify_sha256`), leaving no active change.
     let staged = match stage_verified(config, request, &bytes) {
         Ok(staged) => staged,
-        Err(error) => return invalid(request, format!("verify/stage failed: {error}")),
+        Err(error) => {
+            return ActivationStep::Terminal(invalid(
+                request,
+                format!("verify/stage failed: {error}"),
+            ));
+        }
     };
 
     // 3. Activate atomically, retaining `.prev` for rollback. A crash between
     //    the two renames still leaves a runnable binary at a known path.
-    let active_path = active_path_for(config, component);
     let plan = match activate_binary(component, &staged.path, &active_path) {
         Ok(plan) => plan,
-        Err(error) => return invalid(request, format!("activate failed: {error}")),
+        Err(error) => {
+            return ActivationStep::Terminal(invalid(
+                request,
+                format!("activate failed: {error}"),
+            ));
+        }
     };
 
-    // 4. Restart the changed component(s) in dependency order, then health-gate.
-    if let Err(error) = restart_in_order(host, component).await {
-        return roll_back(host, request, &plan, format!("restart failed: {error}")).await;
-    }
-    if health_gate(host).await {
-        return activated(request);
-    }
+    finish_activation(host, request, component, plan).await
+}
 
-    // 5. Unhealthy: restore last-good, restart, re-gate. Never reported active.
-    roll_back(host, request, &plan, "unhealthy after activation".to_string()).await
+/// Restart the changed component(s), health-gate, and roll back on failure.
+/// Shared by the normal activation path and the crash-recovery fast path.
+async fn finish_activation<H: ActivationHost>(
+    host: &mut H,
+    request: &UpdateRequestV1,
+    component: UpdateComponent,
+    plan: RollbackPlan,
+) -> ActivationStep {
+    if let Err(error) = restart_in_order(host, component).await {
+        return ActivationStep::Terminal(
+            roll_back(host, request, &plan, format!("restart failed: {error}")).await,
+        );
+    }
+    if health_gate(host, request).await {
+        return ActivationStep::Terminal(activated(request));
+    }
+    // Unhealthy: restore last-good, restart, re-gate. Never reported active.
+    ActivationStep::Terminal(
+        roll_back(host, request, &plan, "unhealthy after activation".to_string()).await,
+    )
+}
+
+/// Whether a fetch error is transport-class (transient) and should leave the
+/// request pending for a retry rather than latch a terminal `Invalid`.
+fn is_transient(error: &SupervisorError) -> bool {
+    matches!(error, SupervisorError::DownloadTransport { .. })
+}
+
+/// Does the active binary already hash to `expected_sha256`? Used by the
+/// crash-recovery fast path to detect an already-activated artifact.
+fn active_matches(active: &Path, expected_sha256: &str) -> bool {
+    let Ok(bytes) = fs::read(active) else {
+        return false;
+    };
+    let actual = format!("{:x}", Sha256::digest(&bytes));
+    actual.eq_ignore_ascii_case(expected_sha256)
 }
 
 /// Dependency order: AnyHarness before Worker. An AnyHarness update also
@@ -146,10 +236,18 @@ async fn restart_in_order<H: ActivationHost>(
     Ok(())
 }
 
-async fn health_gate<H: ActivationHost>(host: &mut H) -> bool {
+async fn health_gate<H: ActivationHost>(host: &mut H, request: &UpdateRequestV1) -> bool {
     // The whole runtime must be healthy: AnyHarness answering `/health` and the
-    // Worker still live after the restart.
-    host.anyharness_healthy().await && host.worker_alive().await
+    // Worker still live after the restart. For an AnyHarness update the gate
+    // also requires the `/health` version to be the one we activated, so a
+    // lagging-but-checksum-valid artifact that answers 2xx on the prior version
+    // still fails the gate (R9-008). A Worker update leaves AnyHarness
+    // untouched, so no version is asserted there.
+    let expected_version = match request.component {
+        UpdateComponent::Anyharness => Some(request.version.as_str()),
+        UpdateComponent::Worker => None,
+    };
+    host.anyharness_healthy(expected_version).await && host.worker_alive().await
 }
 
 async fn roll_back<H: ActivationHost>(
@@ -158,20 +256,37 @@ async fn roll_back<H: ActivationHost>(
     plan: &RollbackPlan,
     reason: String,
 ) -> UpdateResultV1 {
-    if plan.apply().is_ok() {
-        // Best-effort: bring the restored last-good back up and re-gate. The
-        // result is RolledBack regardless — the point is that the new version
-        // is never reported active.
-        let _ = restart_in_order(host, request.component).await;
-        let _ = health_gate(host).await;
-    }
-    UpdateResultV1 {
-        request_id: request.request_id.clone(),
-        outcome: UpdateOutcome::RolledBack,
-        // The prior version string is not tracked in this slice; the Worker
-        // reports the converged (restored) version through the heartbeat.
-        observed_version: None,
-        error: Some(reason),
+    match plan.apply() {
+        Ok(()) => {
+            // Best-effort: bring the restored last-good back up and re-gate. The
+            // outcome is RolledBack — the point is that the new version is never
+            // reported active and a genuine last-good is now serving.
+            let _ = restart_in_order(host, request.component).await;
+            let _ = health_gate(host, request).await;
+            UpdateResultV1 {
+                request_id: request.request_id.clone(),
+                outcome: UpdateOutcome::RolledBack,
+                // The prior version string is not tracked in this slice; the
+                // Worker reports the converged (restored) version via heartbeat.
+                observed_version: None,
+                error: Some(reason),
+            }
+        }
+        Err(apply_error) => {
+            // Nothing was restored (a first activation with no `.prev`, or a
+            // `.prev` that is missing/unmovable): the unhealthy NEW binary is
+            // STILL ACTIVE. Never claim RolledBack — the protocol has no
+            // dedicated variant, so report Invalid with the honest state
+            // (R9-005).
+            UpdateResultV1 {
+                request_id: request.request_id.clone(),
+                outcome: UpdateOutcome::Invalid,
+                observed_version: None,
+                error: Some(format!(
+                    "{reason}; rollback failed: {apply_error}; new binary still active"
+                )),
+            }
+        }
     }
 }
 
@@ -338,6 +453,7 @@ mod tests {
             health_check_delay_seconds: 0,
             max_artifact_bytes: 1024,
             download_timeout_seconds: 5,
+            update_poll_interval_seconds: 1,
         }
     }
 
@@ -358,14 +474,29 @@ mod tests {
         read_result(&dir.join(result_file_name(request_id))).expect("read result")
     }
 
+    /// How the fake download behaves: hands back bytes, a transient transport
+    /// blip (leaves the request pending), or a definitive bad status (terminal).
+    #[derive(Default)]
+    enum FetchMode {
+        Bytes(Vec<u8>),
+        #[default]
+        Transient,
+        Status,
+    }
+
     #[derive(Default)]
     struct FakeHost {
-        /// `None` => the fetch errors; `Some(bytes)` => it returns those bytes.
-        fetch: Option<Vec<u8>>,
+        fetch: FetchMode,
         healthy: bool,
         worker_live: bool,
+        /// The version the modeled AnyHarness `/health` reports (`None` => the
+        /// body carries no version, so any 2xx passes — mirrors real health.rs).
+        anyharness_version: Option<String>,
         restart_log: Vec<&'static str>,
         fetch_count: u32,
+        /// The `expected_version` values passed to each health probe, so a test
+        /// can assert the gate was asked to check a version (R9-008).
+        health_expected: Vec<Option<String>>,
     }
 
     impl ActivationHost for FakeHost {
@@ -375,10 +506,14 @@ mod tests {
         ) -> Result<Vec<u8>, SupervisorError> {
             self.fetch_count += 1;
             match &self.fetch {
-                Some(bytes) => Ok(bytes.clone()),
-                None => Err(SupervisorError::DownloadArtifact {
+                FetchMode::Bytes(bytes) => Ok(bytes.clone()),
+                FetchMode::Transient => Err(SupervisorError::DownloadTransport {
                     url: "https://downloads.example.test/artifact".to_string(),
-                    message: "simulated transport failure".to_string(),
+                    message: "simulated transient transport failure".to_string(),
+                }),
+                FetchMode::Status => Err(SupervisorError::DownloadArtifact {
+                    url: "https://downloads.example.test/artifact".to_string(),
+                    message: "unexpected status 404 Not Found".to_string(),
                 }),
             }
         }
@@ -393,8 +528,19 @@ mod tests {
             Ok(())
         }
 
-        async fn anyharness_healthy(&mut self) -> bool {
-            self.healthy
+        async fn anyharness_healthy(&mut self, expected_version: Option<&str>) -> bool {
+            self.health_expected
+                .push(expected_version.map(str::to_string));
+            if !self.healthy {
+                return false;
+            }
+            match expected_version {
+                None => true,
+                Some(expected) => match &self.anyharness_version {
+                    Some(running) => running == expected,
+                    None => true,
+                },
+            }
         }
 
         async fn worker_alive(&mut self) -> bool {
@@ -413,7 +559,7 @@ mod tests {
         write_request(&config.update_request_dir, &request).expect("write request");
 
         let mut host = FakeHost {
-            fetch: Some(new_bytes.to_vec()),
+            fetch: FetchMode::Bytes(new_bytes.to_vec()),
             healthy: true,
             worker_live: true,
             ..Default::default()
@@ -441,7 +587,7 @@ mod tests {
         write_request(&config.update_request_dir, &request).expect("write request");
 
         let mut host = FakeHost {
-            fetch: Some(new_bytes.to_vec()),
+            fetch: FetchMode::Bytes(new_bytes.to_vec()),
             healthy: true,
             worker_live: true,
             ..Default::default()
@@ -466,7 +612,7 @@ mod tests {
         write_request(&config.update_request_dir, &request).expect("write request");
 
         let mut host = FakeHost {
-            fetch: Some(b"totally-different-bytes".to_vec()),
+            fetch: FetchMode::Bytes(b"totally-different-bytes".to_vec()),
             healthy: true,
             worker_live: true,
             ..Default::default()
@@ -491,7 +637,7 @@ mod tests {
         write_request(&config.update_request_dir, &request).expect("write request");
 
         let mut host = FakeHost {
-            fetch: Some(new_bytes.to_vec()),
+            fetch: FetchMode::Bytes(new_bytes.to_vec()),
             healthy: true,
             worker_live: true,
             ..Default::default()
@@ -504,7 +650,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn download_failure_is_invalid_and_never_restarts() {
+    async fn download_status_failure_is_invalid_and_never_restarts() {
         let dir = temp_dir();
         let config = test_config(&dir.0);
         fs::write(&config.anyharness_binary, b"old").expect("seed active");
@@ -512,7 +658,7 @@ mod tests {
         write_request(&config.update_request_dir, &request).expect("write request");
 
         let mut host = FakeHost {
-            fetch: None, // transport failure
+            fetch: FetchMode::Status, // definitive non-2xx: terminal
             healthy: true,
             worker_live: true,
             ..Default::default()
@@ -527,6 +673,147 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn transient_download_failure_stays_pending_then_next_drain_converges() {
+        // R9-002: a transport blip must NOT latch a terminal Invalid — the
+        // request stays pending and the next drain retries and converges.
+        let dir = temp_dir();
+        let config = test_config(&dir.0);
+        fs::write(&config.anyharness_binary, b"old-anyharness").expect("seed active");
+        let new_bytes = b"new-anyharness";
+        let request = make_request(UpdateComponent::Anyharness, "0.2.16", new_bytes);
+        write_request(&config.update_request_dir, &request).expect("write request");
+
+        // First drain: the fetch fails transiently, so no result is written.
+        let mut host = FakeHost {
+            fetch: FetchMode::Transient,
+            healthy: true,
+            worker_live: true,
+            ..Default::default()
+        };
+        run_pending(&config, &mut host).await.expect("first drain");
+        assert!(
+            !result_exists(&config.update_request_dir, &request.request_id),
+            "a transient failure must not write a terminal result"
+        );
+        assert_eq!(fs::read(&config.anyharness_binary).unwrap(), b"old-anyharness");
+
+        // Next drain: the network recovered — the same still-pending request now
+        // converges to Activated.
+        host.fetch = FetchMode::Bytes(new_bytes.to_vec());
+        run_pending(&config, &mut host).await.expect("retry drain");
+        let result = result_for(&config.update_request_dir, &request.request_id);
+        assert_eq!(result.outcome, UpdateOutcome::Activated);
+        assert_eq!(fs::read(&config.anyharness_binary).unwrap(), new_bytes);
+    }
+
+    #[tokio::test]
+    async fn crash_after_activate_on_unhealthy_path_preserves_last_good() {
+        // R9-004: a crash after activate but before result must not let the
+        // re-drain clobber the true last-good. On the UNHEALTHY path the drain
+        // must roll back onto the ORIGINAL last-good, not the new bad binary.
+        let dir = temp_dir();
+        let config = test_config(&dir.0);
+        let new_bytes = b"new-bad-anyharness";
+        let request = make_request(UpdateComponent::Anyharness, "0.2.16", new_bytes);
+        write_request(&config.update_request_dir, &request).expect("write request");
+
+        // On-disk state a crash-after-activate leaves: the two renames already
+        // happened (active = new, .prev = the true last-good) and NO result.
+        fs::write(&config.anyharness_binary, new_bytes).expect("active = activated new");
+        fs::write(prev_path_for(&config.anyharness_binary), b"old-good").expect(".prev = last-good");
+
+        let mut host = FakeHost {
+            fetch: FetchMode::Bytes(new_bytes.to_vec()),
+            healthy: false, // the new binary is unhealthy
+            worker_live: true,
+            ..Default::default()
+        };
+        run_pending(&config, &mut host).await.expect("recovery drain");
+
+        // The fast path recognized the already-activated artifact and never
+        // re-downloaded or re-moved active->.prev; the health-fail restored the
+        // genuine last-good, not the bad binary.
+        assert_eq!(host.fetch_count, 0, "already-activated artifact is not re-fetched");
+        assert_eq!(fs::read(&config.anyharness_binary).unwrap(), b"old-good");
+        let result = result_for(&config.update_request_dir, &request.request_id);
+        assert_eq!(result.outcome, UpdateOutcome::RolledBack);
+    }
+
+    #[tokio::test]
+    async fn version_mismatch_fails_the_health_gate_and_rolls_back() {
+        // R9-008: a checksum-valid but lagging artifact that answers /health 2xx
+        // on the PRIOR version must still fail the gate.
+        let dir = temp_dir();
+        let config = test_config(&dir.0);
+        fs::write(&config.anyharness_binary, b"old-anyharness").expect("seed active");
+        let new_bytes = b"new-anyharness-binary";
+        let request = make_request(UpdateComponent::Anyharness, "0.2.16", new_bytes);
+        write_request(&config.update_request_dir, &request).expect("write request");
+
+        let mut host = FakeHost {
+            fetch: FetchMode::Bytes(new_bytes.to_vec()),
+            healthy: true,
+            worker_live: true,
+            // The runtime answers 2xx but on the LAGGING version, not 0.2.16.
+            anyharness_version: Some("0.2.15".to_string()),
+            ..Default::default()
+        };
+        run_pending(&config, &mut host).await.expect("run pending");
+
+        let result = result_for(&config.update_request_dir, &request.request_id);
+        assert_eq!(result.outcome, UpdateOutcome::RolledBack);
+        assert_eq!(fs::read(&config.anyharness_binary).unwrap(), b"old-anyharness");
+        // The gate was asked to check the activated version, not just 2xx.
+        assert!(host
+            .health_expected
+            .iter()
+            .any(|expected| expected.as_deref() == Some("0.2.16")));
+    }
+
+    #[tokio::test]
+    async fn staging_interruption_leaves_no_active_change_and_rerequest_converges() {
+        // R9-013: a staging interruption (here modeled as a wrong-size artifact
+        // that fails re-verify at stage time) must leave the active binary
+        // untouched and no `.prev`; a corrected re-request then converges.
+        let dir = temp_dir();
+        let config = test_config(&dir.0);
+        fs::write(&config.anyharness_binary, b"old-anyharness").expect("seed active");
+        let new_bytes = b"new-anyharness";
+        let mut request = make_request(UpdateComponent::Anyharness, "0.2.16", new_bytes);
+        request.size_bytes += 1; // declared size disagrees: staging re-verify fails
+
+        write_request(&config.update_request_dir, &request).expect("write request");
+        let mut host = FakeHost {
+            fetch: FetchMode::Bytes(new_bytes.to_vec()),
+            healthy: true,
+            worker_live: true,
+            ..Default::default()
+        };
+        run_pending(&config, &mut host).await.expect("first drain");
+        let result = result_for(&config.update_request_dir, &request.request_id);
+        assert_eq!(result.outcome, UpdateOutcome::Invalid);
+        assert!(host.restart_log.is_empty(), "no restart on a rejected stage");
+        assert_eq!(fs::read(&config.anyharness_binary).unwrap(), b"old-anyharness");
+        assert!(!prev_path_for(&config.anyharness_binary).exists(), "no active change staged");
+
+        // A corrected re-request (same version, now with the honest size) mints
+        // the same request_id; drop the stale Invalid result so the re-request
+        // is actionable, then confirm it converges.
+        fs::remove_file(
+            config
+                .update_request_dir
+                .join(result_file_name(&request.request_id)),
+        )
+        .expect("clear stale result");
+        let good = make_request(UpdateComponent::Anyharness, "0.2.16", new_bytes);
+        write_request(&config.update_request_dir, &good).expect("re-request");
+        run_pending(&config, &mut host).await.expect("re-request drain");
+        let result = result_for(&config.update_request_dir, &good.request_id);
+        assert_eq!(result.outcome, UpdateOutcome::Activated);
+        assert_eq!(fs::read(&config.anyharness_binary).unwrap(), new_bytes);
+    }
+
+    #[tokio::test]
     async fn unhealthy_activation_rolls_back_to_last_good() {
         let dir = temp_dir();
         let config = test_config(&dir.0);
@@ -536,7 +823,7 @@ mod tests {
         write_request(&config.update_request_dir, &request).expect("write request");
 
         let mut host = FakeHost {
-            fetch: Some(new_bytes.to_vec()),
+            fetch: FetchMode::Bytes(new_bytes.to_vec()),
             healthy: false, // unhealthy after activation
             worker_live: true,
             ..Default::default()
@@ -565,7 +852,7 @@ mod tests {
         write_request(&config.update_request_dir, &request).expect("write request");
 
         let mut host = FakeHost {
-            fetch: Some(new_bytes.to_vec()),
+            fetch: FetchMode::Bytes(new_bytes.to_vec()),
             healthy: true,
             worker_live: true,
             ..Default::default()
@@ -602,7 +889,7 @@ mod tests {
         .expect("write malformed request");
 
         let mut host = FakeHost {
-            fetch: Some(b"never-used".to_vec()),
+            fetch: FetchMode::Bytes(b"never-used".to_vec()),
             healthy: true,
             worker_live: true,
             ..Default::default()
@@ -626,7 +913,7 @@ mod tests {
         write_request(&config.update_request_dir, &request).expect("write request");
 
         let mut host = FakeHost {
-            fetch: Some(new_bytes.to_vec()),
+            fetch: FetchMode::Bytes(new_bytes.to_vec()),
             healthy: true,
             worker_live: true,
             ..Default::default()
