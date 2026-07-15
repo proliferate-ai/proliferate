@@ -60,15 +60,15 @@ export type { LocalRoute } from "../../evidence/schema.js";
  */
 export const BYOK_ENV_BY_HARNESS: Readonly<Record<Exclude<LocalHarnessKind, "cursor">, string>> = {
   // Anthropic direct key A → claude user-key route.
-  claude: "RELEASE_E2E_BYOK_ANTHROPIC_A",
+  claude: "RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY",
   // OpenAI direct key → codex user-key route (codex's own provider family).
-  codex: "RELEASE_E2E_BYOK_OPENAI",
+  codex: "RELEASE_E2E_BYOK_OPENAI_API_KEY",
   // xAI direct key → grok user-key route.
-  grok: "RELEASE_E2E_BYOK_XAI",
+  grok: "RELEASE_E2E_BYOK_XAI_API_KEY",
   // Anthropic direct key B → opencode user-key route (its matching DIRECT
   // provider, distinct from the injected `proliferate` gateway provider; a
   // second Anthropic key so the two Anthropic-consuming harnesses stay isolated).
-  opencode: "RELEASE_E2E_BYOK_ANTHROPIC_B",
+  opencode: "RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY",
 };
 
 /** The representative single-source harness LOCAL-6 uses (gateway and direct do
