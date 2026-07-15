@@ -1,0 +1,44 @@
+{
+  "schema": "login-runtime-budget/v1",
+  "measuredAt": "runtime headless chromium, fresh cache, ProductClient readiness marker, document.fonts.ready, bounded network-idle + 2s settle",
+  "testedSha": "8f0482375b648a47a0e8d139fcaa593de745b012",
+  "base": "/login",
+  "compressionMetric": "gzip (Node zlib, level 9) for js/css/svg/other; emitted bytes for fonts/images/audio",
+  "caps": {
+    "js": 485000,
+    "css": 66000,
+    "source": "founder decision WDU-1247-D1 (2026-07-15), gzip-9 bytes"
+  },
+  "legacyBaseline": {
+    "source": "specs/codebase/systems/product/clients/web-desktop-unification/migration/web-bundle-baseline-c6e094b41.json",
+    "jsGzipBytes": 471212,
+    "cssGzipBytes": 24226,
+    "note": "recorded context; the enforceable gate is the founder caps above"
+  },
+  "perKind": {
+    "css": 65097,
+    "js": 482329
+  },
+  "total": 547426,
+  "jsBytes": 482329,
+  "cssBytes": 65097,
+  "headroom": {
+    "js": 2671,
+    "css": 903
+  },
+  "pass": true,
+  "violations": [],
+  "files": [
+    {
+      "path": "/assets/index-DO5cjKOq.css",
+      "kind": "css",
+      "bytes": 65097
+    },
+    {
+      "path": "/assets/index-F2qG_uA4.js",
+      "kind": "js",
+      "bytes": 482329
+    }
+  ],
+  "rerunCommand": "pnpm shared:build && pnpm web:build && node scripts/measure-login-runtime-budget.mjs --no-build"
+}
