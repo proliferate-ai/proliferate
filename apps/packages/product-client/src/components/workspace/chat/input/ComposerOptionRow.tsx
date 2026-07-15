@@ -91,14 +91,17 @@ function isTypingTarget(target: EventTarget | null): boolean {
   );
 }
 
-function isEmptyTypingTarget(target: EventTarget | null): boolean {
-  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
-    return target.value === "";
-  }
-  if (target instanceof HTMLElement && target.isContentEditable) {
-    return (target.textContent ?? "") === "";
-  }
-  return false;
+/**
+ * Only the main composer draft editor may cede its arrow/Enter keys to a
+ * docked option card — and only while empty. Any OTHER typing surface (a
+ * popover search field, the question card's own free-text inputs) keeps its
+ * keystrokes unconditionally: hijacking those turns "pick a model" into an
+ * accidental permission decision.
+ */
+function isCardNavigableTypingTarget(target: EventTarget | null): boolean {
+  return target instanceof HTMLTextAreaElement
+    && target.hasAttribute("data-chat-composer-editor")
+    && target.value === "";
 }
 
 /**
@@ -141,10 +144,11 @@ export function useComposerOptionNumberKeys(
  * Arrow-key (ArrowUp/ArrowDown + Enter) roving highlight for a visible option
  * list. Listens on the capture phase so an open card wins over the composer
  * textarea's own ArrowUp (edit-last-queued) and Enter (submit) handling — but
- * only while the user is not mid-text: keystrokes inside a NON-EMPTY
- * input/textarea/contenteditable are always left alone, so arrows keep moving
- * the caret and Enter keeps submitting a typed draft. Enter selects only once
- * a highlight exists (set by arrows or hover); until then it falls through.
+ * ONLY when the keystroke lands outside every typing surface, or inside the
+ * EMPTY main composer draft editor. Every other input keeps its keys: the
+ * model-picker search field navigates its own list, and the question card's
+ * free-text fields keep Enter-to-advance. Enter selects only once a highlight
+ * exists (set by arrows or hover); until then it falls through.
  *
  * `resetKey` clears the highlight when it changes (e.g. the question index in
  * a multi-question card).
@@ -176,7 +180,7 @@ export function useComposerOptionArrowKeys(
       if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
         return;
       }
-      if (isTypingTarget(event.target) && !isEmptyTypingTarget(event.target)) {
+      if (isTypingTarget(event.target) && !isCardNavigableTypingTarget(event.target)) {
         return;
       }
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {

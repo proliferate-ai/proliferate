@@ -129,7 +129,6 @@ export function CoworkThreadsSection() {
                 />
               )}
               label={pendingCoworkEntry.displayName}
-              trailingLabel="Setting up"
             />
           )}
           {statusLoading || threadsLoading ? (

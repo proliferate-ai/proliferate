@@ -179,7 +179,8 @@ describe("CoworkThreadsSection", () => {
     render(<CoworkThreadsSection />);
 
     expect(screen.getByText("Cowork thread")).not.toBeNull();
-    expect(screen.getByText("Setting up")).not.toBeNull();
+    // The trailing spinner alone marks the pending row (trailingStatus wins
+    // over any trailing label, so the row no longer carries "Setting up").
     expect(screen.getByTestId("status-iterating")).not.toBeNull();
     expect(screen.getByTestId("thread-row").getAttribute("data-active")).toBe("true");
     expect(screen.queryByText("No chats yet")).toBeNull();
