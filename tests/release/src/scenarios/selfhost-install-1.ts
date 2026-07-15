@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import type { BrowserContext, Page } from "playwright";
@@ -320,7 +320,7 @@ export const defaultSelfHostInstallDriver: SelfHostInstallDriver = {
           },
         };
       }
-      await installSessionAndReload(page, owner.session);
+      await installSessionAndReload(page, owner.session, world.renderer.baseUrl);
       const orgs = await owner.api.get<{ organizations: Array<{ id: string }> }>("/v1/organizations");
       if (orgs.organizations.length !== 1) {
         return {
@@ -396,7 +396,15 @@ export const defaultSelfHostInstallDriver: SelfHostInstallDriver = {
 
     const page = await openAuthenticatedPage(world, owner);
     try {
-      await waitForDesktopByokSync(world, page, selection);
+      try {
+        await waitForDesktopByokSync(world, page, selection);
+      } catch (error) {
+        // Enrich the timeout with whether the Desktop push actually landed in
+        // the controller-local runtime home (Layer A vs Layer B): source kinds
+        // + env-var names only, never the raw key value.
+        const diag = summarizeRuntimeAuthState(world.paths.runtimeHome, selection.harnessKind);
+        throw new Error(`${error instanceof Error ? error.message : String(error)} ${diag}`);
+      }
 
       const modelId = await resolveBaseTurnModel(world);
       if (!modelId) {
@@ -853,15 +861,27 @@ async function openAuthenticatedPage(
   return wrapPage(context, page);
 }
 
-/** Installs a session into an already-open (trusted, pre-login) page and reloads to authenticated readiness. */
-async function installSessionAndReload(page: ProductPage, session: unknown): Promise<void> {
+/**
+ * Installs a session into an already-open (trusted, pre-login) isolated page and
+ * boots it authenticated. The pre-trust page is opened by `openIsolatedPage` and
+ * never navigated to the renderer — the Connect-Server trust checks run as
+ * document-context `fetch`es from `about:blank` (that is why install.sh admits
+ * the `null` origin). So this NAVIGATES to the renderer for the first time
+ * (a `reload()` of `about:blank` never boots the app), after installing the
+ * session, then waits for authenticated readiness.
+ */
+async function installSessionAndReload(
+  page: ProductPage,
+  session: unknown,
+  rendererBaseUrl: string,
+): Promise<void> {
   await page.context.addInitScript(
     ({ key, value }) => {
       window.localStorage.setItem(key, value);
     },
     { key: BROWSER_AUTH_SESSION_KEY, value: JSON.stringify(session) },
   );
-  await page.page.reload({ waitUntil: "domcontentloaded" });
+  await page.page.goto(rendererBaseUrl, { waitUntil: "domcontentloaded" });
   await page.page.locator(AUTHENTICATED_READINESS_SELECTOR).first().waitFor({ state: "visible", timeout: 30_000 });
 }
 
@@ -907,4 +927,37 @@ async function waitForTurnCompletion(
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Secret-free diagnostic of the controller-local runtime's agent-auth state file
+ * (`<runtime_home>/agent-auth/state.json`) for a `waitForDesktopByokSync`
+ * timeout: reports whether the Desktop push landed and, if so, the harness's
+ * source KINDS + env-var names — never the raw provider key value. Distinguishes
+ * "Desktop never pushed" (Layer A) from "pushed but models did not unlock"
+ * (Layer B) without a live box.
+ */
+function summarizeRuntimeAuthState(runtimeHome: string, harnessKind: string): string {
+  const statePath = path.join(runtimeHome, "agent-auth", "state.json");
+  let raw: string;
+  try {
+    raw = readFileSync(statePath, "utf8");
+  } catch {
+    return `[diag: runtime agent-auth/state.json absent — Desktop never pushed BYOK state (Layer A)]`;
+  }
+  try {
+    const parsed = JSON.parse(raw) as {
+      harnesses?: Array<{ harness_kind?: string; sources?: Array<{ kind?: string; env_var_name?: string }> }>;
+    };
+    const entry = parsed.harnesses?.find((h) => h.harness_kind === harnessKind);
+    if (!entry) {
+      return `[diag: state.json present but no "${harnessKind}" entry — Desktop push missing this harness (Layer A)]`;
+    }
+    const sources = (entry.sources ?? [])
+      .map((s) => (s.env_var_name ? `${s.kind}(${s.env_var_name})` : String(s.kind)))
+      .join(",");
+    return `[diag: state.json "${harnessKind}" sources=[${sources}] — push landed; models did not unlock (Layer B)]`;
+  } catch {
+    return `[diag: runtime agent-auth/state.json unparseable]`;
+  }
 }
