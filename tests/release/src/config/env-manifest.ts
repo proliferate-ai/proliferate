@@ -423,29 +423,33 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
   {
     name: "RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY",
     description:
-      "Dedicated bounded BYOK (bring-your-own-key) Anthropic provider key for the LOCAL-3 user-API-key " +
-      "route of the CLAUDE harness (and the LOCAL-6 route-change actor). Stored + selected through the " +
-      "product Settings UI as a user-owned credential; the user-key route must consume ZERO managed LLM " +
-      "credit and leave the managed balance unchanged. Distinct from RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY so the two " +
+      "Dedicated bounded BYOK (bring-your-own-key) Anthropic provider key. Local lane: the LOCAL-3 user-API-key " +
+      "route of the CLAUDE harness (and the LOCAL-6 route-change actor); stored + selected through the product " +
+      "Settings UI as a user-owned credential, the user-key route must consume ZERO managed LLM credit and leave " +
+      "the managed balance unchanged. Self-host lane: SELFHOST-INSTALL-1's SH-BASE-TURN cell stores it through the " +
+      "product (POST /v1/cloud/agent-gateway/keys) and the controller-local candidate AnyHarness spawns the harness " +
+      "with the raw key (no LiteLLM/E2B). Distinct from RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY so the two " +
       "Anthropic-consuming harnesses (claude, opencode) stay isolated. Never enters logs or evidence.",
     whereItLives:
       "A rate/spend-bounded Anthropic API key reserved for qualification BYOK. Local: " +
       "~/.proliferate-local/dev/qualification-infra.env (mode 0600). CI: the `Qualification` environment secret.",
     secret: true,
-    lanes: ["local"],
+    lanes: ["local", "selfhost"],
   },
   {
     name: "RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY",
     description:
-      "Second bounded BYOK Anthropic provider key, for the LOCAL-3 user-API-key route of the OPENCODE harness " +
-      "(its matching DIRECT provider, distinct from the injected `proliferate` gateway provider). Kept " +
-      "separate from RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY so concurrent claude/opencode user-key cells do not share a " +
-      "key. Zero managed spend / zero balance change asserted. Never enters logs or evidence.",
+      "Second bounded BYOK Anthropic provider key. Local lane: the LOCAL-3 user-API-key route of the OPENCODE " +
+      "harness (its matching DIRECT provider, distinct from the injected `proliferate` gateway provider). Self-host " +
+      "lane: reserved for a future two-key scenario (e.g. key rotation/replacement); not consumed by the current " +
+      "single-key SH-BASE-TURN cell. Kept separate from RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY so concurrent " +
+      "claude/opencode user-key cells do not share a key. Zero managed spend / zero balance change asserted. " +
+      "Never enters logs or evidence.",
     whereItLives:
       "A second rate/spend-bounded Anthropic API key. Local: ~/.proliferate-local/dev/qualification-infra.env " +
       "(mode 0600). CI: the `Qualification` environment secret.",
     secret: true,
-    lanes: ["local"],
+    lanes: ["local", "selfhost"],
   },
   {
     name: "RELEASE_E2E_BYOK_OPENAI_API_KEY",
@@ -471,32 +475,6 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
       "~/.proliferate-local/dev/qualification-infra.env (mode 0600). CI: the `Qualification` environment secret.",
     secret: true,
     lanes: ["local"],
-  },
-  {
-    name: "RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY",
-    description:
-      "Bounded, run-scoped Anthropic provider key used by SELFHOST-INSTALL-1's SH-BASE-TURN cell: the owner " +
-      "stores it through the product (POST /v1/cloud/agent-gateway/keys) and selects it for the local surface " +
-      "(sourceKind=api_key); the controller-local candidate AnyHarness spawns the harness with this raw key — " +
-      "no LiteLLM/E2B is involved. `preflightByokKey` runs before storing/selecting; a rejected key fails the " +
-      "cell closed (never blocked/skipped). Never stored in evidence (only a hash of the created key id is).",
-    whereItLives:
-      "Local: `~/.proliferate-local/dev/qualification-infra.env` (mode 0600). CI: the `Qualification` " +
-      "environment's `RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY` secret.",
-    secret: true,
-    lanes: ["selfhost"],
-  },
-  {
-    name: "RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY",
-    description:
-      "Second bounded, run-scoped Anthropic provider key, reserved for a future two-key self-host scenario " +
-      "(e.g. asserting key rotation/replacement). Not consumed by SELFHOST-INSTALL-1's single-key SH-BASE-TURN " +
-      "cell today. Never stored in evidence.",
-    whereItLives:
-      "Local: `~/.proliferate-local/dev/qualification-infra.env` (mode 0600). CI: the `Qualification` " +
-      "environment's `RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY` secret.",
-    secret: true,
-    lanes: ["selfhost"],
   },
   {
     name: "RELEASE_E2E_SELFHOST_REGION",
