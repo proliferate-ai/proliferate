@@ -18,11 +18,30 @@ not be rendered in the shared right-panel header.
 
 Changes is changed-file workflow:
 
-- summarize unstaged, staged, and branch changes
+- render one flat review document: per-file sections with sticky headers,
+  expanded by default, no card grid and no staged/unstaged section boxes
+- one target dropdown picks what the review diffs against — working tree
+  (composite), branch vs base, or last turn; staged/unstaged are no longer
+  top-level filters (they survive as internal data modes)
+- every file header always shows real +N/−N counts (the runtime returns
+  numstat with the changed-file list); status letters are gone — quiet word
+  chips mark `deleted`/`renamed`/`copied`/`binary`, and a `staged` chip
+  disambiguates a partially staged file that appears twice in the composite
+  view
+- header carries the aggregate counts, a jump-to-file menu, collapse-all,
+  a branch line (`current → base` in branch mode), and a Commit-or-push
+  split button that opens the shared publish dialog
+- per-row stage/unstage buttons are removed — staging decisions live in the
+  commit flow (hunk-level stage/unstage pills on working-tree diffs remain)
 - open per-file diff viewer targets
 - open an all-changes review target
 - review the latest completed turn as a transcript-backed file filter over
   current git diffs
+
+In the review document, unchanged diff lines sit on the plain pane background
+(only +/− rows are tinted) and hunk-gap separators render as slim inset
+strips with rounded ends — both scoped by `[data-git-review-document]` in
+design `product.css`.
 
 Commit, publish, and pull-request dialogs may summarize change counts and
 staging state, but they do not duplicate the changed-file roster. Detailed

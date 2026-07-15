@@ -1,23 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  useRevertGitPatchesMutation,
-  useStageGitPathsMutation,
-  useUnstageGitPathsMutation,
-} from "@anyharness/sdk-react";
+import { useRevertGitPatchesMutation } from "@anyharness/sdk-react";
 import { GitPanelHeader } from "./GitPanelHeader";
 import { SkeletonBlock, shimmerDelay } from "@/components/feedback/Skeleton";
-import { GitReviewFileTree } from "./GitReviewFileTree";
 import { GitPanelReviewBody } from "./GitPanelReviewBody";
 import { formatGitPanelUndoError } from "./GitPanelReviewChrome";
-import { PaneSideOverlay } from "@/components/workspace/pane/PaneSideOverlay";
+import { useWorkspaceShellActions } from "@/components/workspace/shell/providers/WorkspaceShellActionsContext";
 import { useDiffReviewMeasurement } from "@/hooks/workspaces/ui/files/use-diff-review-measurement";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/facade/files/use-workspace-file-actions";
 import { useWorkspaceFileContext } from "@/hooks/workspaces/derived/files/use-workspace-file-context";
 import { useGitPanelState } from "@/hooks/workspaces/derived/use-git-panel-state";
-import {
-  type GitPanelMode,
-  type GitPanelReviewScope,
-} from "@/lib/domain/workspaces/changes/git-panel-diff";
+import { type GitPanelMode } from "@/lib/domain/workspaces/changes/git-panel-diff";
 import {
   resolveDiffDisplayPolicy,
   summarizeDiffDisplayPolicies,
@@ -37,7 +29,6 @@ import {
 import { useGitPanelUiStore } from "@/stores/editor/git-panel-ui-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
-const EMPTY_COLLAPSED_FILE_KEYS = new Set<string>();
 const EMPTY_LAST_TURN_REVERT_PATCHES = {
   entries: [],
   blockedReason: null,
@@ -101,14 +92,12 @@ function GitPanelContent({
 }: {
   diffReviewMeasurement: DiffReviewMeasurementState;
 }) {
-  const [changesFilter, setChangesFilter] = useState<GitPanelMode>("unstaged");
+  const [changesFilter, setChangesFilter] = useState<GitPanelMode>("working_tree_composite");
   const [selectedBaseRef, setSelectedBaseRef] = useState<string | null>(null);
   const [layout, setLayout] = useState<"unified" | "split">("unified");
   const [wrapLongLines, setWrapLongLines] = useState(false);
-  const [fileTreeOpen, setFileTreeOpen] = useState(false);
-  const [collapsedSections, setCollapsedSections] = useState<Set<GitPanelReviewScope>>(new Set());
+  // Files render expanded by default; this set only holds explicit collapses.
   const [collapsedFiles, setCollapsedFiles] = useState<Set<string>>(new Set());
-  const [fileCollapseTouched, setFileCollapseTouched] = useState(false);
   const [settledDiffFetchKeys, setSettledDiffFetchKeys] = useState<Set<string>>(new Set());
   const [undoneTurnIds, setUndoneTurnIds] = useState<ReadonlySet<string>>(() => new Set());
   const fileContext = useWorkspaceFileContext();
@@ -136,10 +125,13 @@ function GitPanelContent({
     statusTimingOptions: diffReviewMeasurement.statusTimingOptions,
     branchDiffFilesTimingOptions: diffReviewMeasurement.branchDiffFilesTimingOptions,
   });
-  const stageMutation = useStageGitPathsMutation({ workspaceId: activeWorkspaceId });
-  const unstageMutation = useUnstageGitPathsMutation({ workspaceId: activeWorkspaceId });
   const revertPatchesMutation = useRevertGitPatchesMutation({ workspaceId: activeWorkspaceId });
   const showToast = useToastStore((state) => state.show);
+  const shellActions = useWorkspaceShellActions();
+  const currentBranch = useMemo(
+    () => branchRefs.find((ref) => ref.isHead && !ref.isRemote)?.name ?? null,
+    [branchRefs],
+  );
   const effectiveLastTurnRevertPatches =
     lastTurnRevertPatches ?? EMPTY_LAST_TURN_REVERT_PATCHES;
   const lastTurnUndoCompleted = Boolean(lastTurn?.turnId && undoneTurnIds.has(lastTurn.turnId));
@@ -152,41 +144,13 @@ function GitPanelContent({
     [sections],
   );
   const hasReviewEntries = reviewEntries.length > 0;
-  const canShowFileTree = fileTreeOpen
-    && !isLoading
-    && !errorMessage
-    && !runtimeBlockedReason
-    && hasReviewEntries;
   const aggregateStats = useMemo(
     () => summarizeGitPanelSectionStats(sections),
     [sections],
   );
-  const autoCollapsedFiles = useMemo<ReadonlySet<string>>(() => {
-    if (fileCollapseTouched) {
-      return EMPTY_COLLAPSED_FILE_KEYS;
-    }
-    const collapsedKeys = reviewEntries.map((entry) => entry.key);
-    return collapsedKeys.length === 0
-      ? EMPTY_COLLAPSED_FILE_KEYS
-      : new Set(collapsedKeys);
-  }, [fileCollapseTouched, reviewEntries]);
-  const effectiveCollapsedFiles = useMemo<ReadonlySet<string>>(() => {
-    if (autoCollapsedFiles.size === 0) {
-      return collapsedFiles;
-    }
-    const next = new Set(collapsedFiles);
-    for (const key of autoCollapsedFiles) {
-      next.add(key);
-    }
-    return next;
-  }, [autoCollapsedFiles, collapsedFiles]);
-  const visibleSections = useMemo(
-    () => sections.filter((section) => !collapsedSections.has(section.scope)),
-    [collapsedSections, sections],
-  );
   const visibleSectionScopes = useMemo(
-    () => new Set(visibleSections.map((section) => section.scope)),
-    [visibleSections],
+    () => new Set(sections.map((section) => section.scope)),
+    [sections],
   );
   const diffPolicySummary = useMemo(
     () => summarizeDiffDisplayPolicies(
@@ -219,21 +183,19 @@ function GitPanelContent({
     return resolvePermittedGitPanelDiffFetchKeys({
       reviewEntries,
       visibleSectionScopes,
-      effectiveCollapsedFiles,
+      effectiveCollapsedFiles: collapsedFiles,
       settledDiffFetchKeys,
     });
-  }, [effectiveCollapsedFiles, reviewEntries, settledDiffFetchKeys, visibleSectionScopes]);
+  }, [collapsedFiles, reviewEntries, settledDiffFetchKeys, visibleSectionScopes]);
   const allFilesCollapsed = reviewEntries.length > 0
-    && reviewEntries.every((entry) => effectiveCollapsedFiles.has(entry.key));
+    && reviewEntries.every((entry) => collapsedFiles.has(entry.key));
 
   useEffect(() => {
     if (!modeRequest) {
       return;
     }
     setChangesFilter(modeRequest.mode);
-    setCollapsedSections(new Set());
     setCollapsedFiles(new Set());
-    setFileCollapseTouched(false);
   }, [modeRequest]);
 
   const handleToggleLayout = useCallback(() => {
@@ -245,7 +207,6 @@ function GitPanelContent({
   }, []);
 
   const handleToggleAllFiles = useCallback(() => {
-    setFileCollapseTouched(true);
     if (allFilesCollapsed) {
       setCollapsedFiles(new Set());
       return;
@@ -253,14 +214,9 @@ function GitPanelContent({
     setCollapsedFiles(new Set(reviewEntries.map((entry) => entry.key)));
   }, [allFilesCollapsed, reviewEntries]);
 
-  const toggleSectionCollapsed = useCallback((scope: GitPanelReviewScope) => {
-    setCollapsedSections((current) => toggleReviewSetValue(current, scope));
-  }, []);
-
   const toggleFileCollapsed = useCallback((key: string) => {
-    setFileCollapseTouched(true);
-    setCollapsedFiles(() => toggleReviewSetValue(new Set(effectiveCollapsedFiles), key));
-  }, [effectiveCollapsedFiles]);
+    setCollapsedFiles((current) => toggleReviewSetValue(current, key));
+  }, []);
 
   const markDiffFetchSettled = useCallback((key: string) => {
     setSettledDiffFetchKeys((current) => {
@@ -274,20 +230,11 @@ function GitPanelContent({
   }, []);
 
   const focusReviewFile = useCallback((entry: GitReviewFileEntry) => {
-    setFileCollapseTouched(true);
-    setCollapsedSections((current) => {
-      if (!current.has(entry.sectionScope)) {
+    setCollapsedFiles((current) => {
+      if (!current.has(entry.key)) {
         return current;
       }
       const next = new Set(current);
-      next.delete(entry.sectionScope);
-      return next;
-    });
-    setCollapsedFiles((current) => {
-      if (!effectiveCollapsedFiles.has(entry.key)) {
-        return current;
-      }
-      const next = new Set(effectiveCollapsedFiles);
       next.delete(entry.key);
       return next;
     });
@@ -297,7 +244,7 @@ function GitPanelContent({
         behavior: "smooth",
       });
     });
-  }, [effectiveCollapsedFiles]);
+  }, []);
 
   const lastTurnUndoDisabledReason = resolveLastTurnUndoDisabledReason({
     mode: changesFilter,
@@ -306,12 +253,6 @@ function GitPanelContent({
     activeWorkspaceId,
     patchCount: effectiveLastTurnRevertPatches.entries.length,
   });
-  const stagePath = useCallback((path: string) => {
-    return stageMutation.mutateAsync([path]);
-  }, [stageMutation]);
-  const unstagePath = useCallback((path: string) => {
-    return unstageMutation.mutateAsync([path]);
-  }, [unstageMutation]);
   const handleUndoLastTurn = useCallback(() => {
     if (
       changesFilter !== "last_turn"
@@ -363,19 +304,19 @@ function GitPanelContent({
         isRuntimeReady={isRuntimeReady}
         branchRefs={branchRefs}
         baseRef={baseRef}
+        currentBranch={currentBranch}
         layout={layout}
         wrapLongLines={wrapLongLines}
-        fileTreeOpen={fileTreeOpen}
         allFilesCollapsed={allFilesCollapsed}
         reviewEntries={reviewEntries}
         onFilterChange={setChangesFilter}
         onBaseRefChange={setSelectedBaseRef}
         onToggleLayout={handleToggleLayout}
         onToggleWrap={handleToggleWrap}
-        onToggleFileTree={() => setFileTreeOpen((value) => !value)}
         onToggleAllFiles={handleToggleAllFiles}
         onFocusFile={focusReviewFile}
         onRefresh={() => void refetch()}
+        onOpenPublish={shellActions ? shellActions.openPublishDialog : null}
       />
 
       <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -391,38 +332,20 @@ function GitPanelContent({
           lastTurnUndoBusy={revertPatchesMutation.isPending}
           diffPolicySummary={diffPolicySummary}
           sections={sections}
-          visibleSectionScopes={visibleSectionScopes}
-          collapsedSections={collapsedSections}
           activeWorkspaceId={activeWorkspaceId}
           layout={layout}
           wrapLongLines={wrapLongLines}
-          effectiveCollapsedFiles={effectiveCollapsedFiles}
+          collapsedFiles={collapsedFiles}
           isRuntimeReady={isRuntimeReady}
           permittedDiffFetchKeys={permittedDiffFetchKeys}
           openFile={openFile}
-          stagePath={stagePath}
-          unstagePath={unstagePath}
           onRefresh={() => void refetch()}
           onUndoLastTurn={handleUndoLastTurn}
-          onToggleSectionCollapsed={toggleSectionCollapsed}
           onToggleFileCollapsed={toggleFileCollapsed}
           onDiffFetchSettled={markDiffFetchSettled}
           diffTimingOptions={diffReviewMeasurement.diffTimingOptions}
           measurementOperationId={diffReviewMeasurement.operationId}
         />
-        <PaneSideOverlay
-          open={canShowFileTree}
-          label="Changed files"
-          widthClassName="w-[min(320px,calc(100%-1rem))]"
-          dataAttribute="git-file-tree-overlay"
-          onClose={() => setFileTreeOpen(false)}
-        >
-          <GitReviewFileTree
-            sections={sections}
-            reviewEntries={reviewEntries}
-            onSelectFile={focusReviewFile}
-          />
-        </PaneSideOverlay>
       </div>
     </div>
   );

@@ -3,7 +3,6 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import {
   Check,
   ChevronDown,
-  ClipboardList,
   Clock,
   FilePen,
   GitBranchIcon,
@@ -11,34 +10,16 @@ import {
 } from "@proliferate/ui/icons";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import type { GitPanelMode } from "@/lib/domain/workspaces/changes/git-panel-diff";
+import {
+  GIT_PANEL_MODE_OPTIONS,
+  type GitPanelMode,
+} from "@/lib/domain/workspaces/changes/git-panel-diff";
 
-type GitReviewBaseMode = Exclude<GitPanelMode, "working_tree_composite">;
+/** Selectable review targets: working tree / branch / last turn. */
+type GitReviewTargetMode = "working_tree_composite" | "branch" | "last_turn";
 
 const GIT_REVIEW_SELECTOR_TRIGGER_CLASS =
   "h-6 min-w-0 gap-1 rounded-lg border border-transparent bg-transparent px-2 py-0 text-sm leading-[18px] text-sidebar-foreground hover:bg-surface-elevated-secondary hover:text-sidebar-foreground data-[state=open]:bg-surface-elevated-secondary data-[state=open]:text-sidebar-foreground";
-
-const GIT_REVIEW_BASE_OPTIONS: {
-  id: GitReviewBaseMode;
-  label: string;
-}[] = [
-  {
-    id: "unstaged",
-    label: "Unstaged",
-  },
-  {
-    id: "staged",
-    label: "Staged",
-  },
-  {
-    id: "branch",
-    label: "Branch",
-  },
-  {
-    id: "last_turn",
-    label: "Last turn",
-  },
-];
 
 export function GitReviewBaseSelector({
   activeMode,
@@ -49,10 +30,10 @@ export function GitReviewBaseSelector({
   changedCount: number;
   onSelect: (mode: GitPanelMode) => void;
 }) {
-  const normalizedMode = normalizeBaseMode(activeMode);
-  const activeOption = GIT_REVIEW_BASE_OPTIONS.find((option) => option.id === normalizedMode)
-    ?? GIT_REVIEW_BASE_OPTIONS[0];
-  const ActiveIcon = iconForBaseMode(normalizedMode);
+  const normalizedMode = normalizeTargetMode(activeMode);
+  const activeOption = GIT_PANEL_MODE_OPTIONS.find((option) => option.id === normalizedMode)
+    ?? GIT_PANEL_MODE_OPTIONS[0];
+  const ActiveIcon = iconForTargetMode(normalizedMode);
 
   return (
     <PopoverButton
@@ -61,7 +42,7 @@ export function GitReviewBaseSelector({
           type="button"
           variant="ghost"
           size="sm"
-          className={`${GIT_REVIEW_SELECTOR_TRIGGER_CLASS} max-w-[7.5rem] flex-[1_1_6.75rem]`}
+          className={`${GIT_REVIEW_SELECTOR_TRIGGER_CLASS} max-w-[8.5rem] flex-[1_1_7.5rem]`}
         >
           <ActiveIcon className="size-3 shrink-0 opacity-75" />
           <span className="min-w-0 truncate text-sidebar-foreground">{activeOption.label}</span>
@@ -74,7 +55,7 @@ export function GitReviewBaseSelector({
     >
       {(close) => (
         <div className="flex flex-col gap-px">
-          {GIT_REVIEW_BASE_OPTIONS.map((option) => {
+          {GIT_PANEL_MODE_OPTIONS.map((option) => {
             const selected = option.id === normalizedMode;
             return (
               <PopoverMenuItem
@@ -127,19 +108,20 @@ function GitReviewBaseOptionContent({
   );
 }
 
-function normalizeBaseMode(mode: GitPanelMode): GitReviewBaseMode {
-  return mode === "working_tree_composite" ? "unstaged" : mode;
+function normalizeTargetMode(mode: GitPanelMode): GitReviewTargetMode {
+  if (mode === "unstaged" || mode === "staged") {
+    return "working_tree_composite";
+  }
+  return mode;
 }
 
-function iconForBaseMode(mode: GitReviewBaseMode): ComponentType<IconProps> {
+function iconForTargetMode(mode: GitReviewTargetMode): ComponentType<IconProps> {
   switch (mode) {
-    case "staged":
-      return ClipboardList;
     case "branch":
       return GitBranchIcon;
     case "last_turn":
       return Clock;
-    case "unstaged":
+    case "working_tree_composite":
       return FilePen;
   }
 }
