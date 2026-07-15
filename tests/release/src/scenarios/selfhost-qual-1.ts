@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { mkdirSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -28,13 +29,24 @@ import {
   type LitellmSpendRow,
 } from "../worlds/selfhost/gateway.js";
 // Imported READ-ONLY from the sibling install scenario (env/world-input resolver
-// + CORS-origin helper) so both self-host scenarios resolve identically.
+// + CORS-origin helper) so both self-host scenarios resolve identically, PLUS
+// the export-only turn machinery SH-BASE-TURN proves (authenticated renderer,
+// cheapest-model pick, bounded turn-completion poll) reused verbatim by the
+// SH-GATEWAY cell's gateway-routed turn.
 import {
   browserOriginsForBox,
+  openAuthenticatedPage,
+  resolveBaseTurnModel,
   resolveSelfHostWorldInputs,
+  waitForTurnCompletion,
   type SelfHostWorldConstructionInputs,
 } from "./selfhost-install-1.js";
-import { claimSelfHostOwner, type SelfHostOwnerActor } from "../fixtures/selfhost-actor.js";
+import {
+  claimSelfHostOwner,
+  inviteAndRegisterMemberViaApi,
+  type SelfHostOwnerActor,
+} from "../fixtures/selfhost-actor.js";
+import { DEFAULT_BYOK_ENV_VAR, waitForDesktopByokSync } from "../fixtures/byok.js";
 import {
   defaultGithubAuthOps,
   resolveGithubOauthConfig,
@@ -45,8 +57,11 @@ import {
   configureAndEnableGatewayProfile,
   observeLitellmImageDigest,
   assertGatewayHealthyOnBox,
+  litellmResolveActorKeyToken,
   litellmSpendRows,
+  selectGatewayRouteForHarness,
   spendWindowUtc,
+  waitForActorEnrollmentSynced,
 } from "../worlds/selfhost/gateway.js";
 
 /**
@@ -93,6 +108,8 @@ export const FIXED_SUBDOMAIN_LABEL = "selfhost-fixed";
 /** Bounded prompt for the SH-GATEWAY cell's one gateway-routed turn. */
 export const GATEWAY_TURN_PROMPT = "Reply with exactly the word: pong";
 const RESTART_HEALTH_TIMEOUT_MS = 180_000;
+/** Bounded ceiling for the one gateway-routed turn (mirrors SH-BASE-TURN's turn budget). */
+const GATEWAY_TURN_TIMEOUT_MS = 300_000;
 
 /**
  * The world-level env the shared self-host world needs (AWS/SSH provisioning
@@ -571,18 +588,7 @@ const defaultGatewayCellOps: GatewayCellOps = {
     return observeLitellmImageDigest(world.control.ssh);
   },
   async enrollActorAndRunTurn(world, owner) {
-    // The full product-path gateway turn on self-host (fresh-actor enrollment →
-    // lazy virtual-key mint → gateway-route selection → Desktop push → one turn
-    // through the instance LiteLLM) is the live proof this cell exists for; it
-    // is threaded through the same runtime turn machinery SH-BASE-TURN uses. The
-    // concrete drive lands with the live EC2 proof (open risk); offline runs
-    // inject a fake op.
-    void world;
-    void owner;
-    throw new Error(
-      "SH-GATEWAY: the live gateway-routed turn drive is threaded but not yet wired to the EC2 proof; " +
-        "inject a fake enrollActorAndRunTurn op for offline runs.",
-    );
+    return enrollActorAndRunGatewayTurn(world, owner);
   },
   async snapshotSpendRows(world) {
     return litellmSpendRows(world.control.ssh, spendWindowUtc());
@@ -598,6 +604,117 @@ const defaultGatewayCellOps: GatewayCellOps = {
     };
   },
 };
+
+/**
+ * The real product-path gateway turn (frozen tier-3 contract §`SH-GATEWAY`): a
+ * FRESH actor is enrolled through the product, the MANAGED gateway route is
+ * selected for claude, the Desktop pushes the rendered gateway source into the
+ * controller-local candidate AnyHarness, and ONE cheap turn runs — routed, by
+ * construction of the pushed source (public `/llm` URL + the actor's scoped
+ * virtual key), through the INSTANCE LiteLLM (which `correlateGatewaySpend`
+ * proves). Reuses SH-BASE-TURN's proven turn machinery verbatim; the only
+ * differences from BYOK are the fresh-actor enrollment (the virtual key is
+ * minted server-side at signup) and the `sourceKind:"gateway"` selection.
+ *
+ * Returns the identifiers the cell's correlation step needs: the actor's product
+ * user id, its PERSONAL virtual-key token on the instance LiteLLM, and the
+ * turn's outcome (ended/error + the model id). Any drive failure is reported as
+ * a bounded `turn.error` (fail closed) rather than thrown, so the cell records a
+ * clean red — never a false green.
+ */
+export async function enrollActorAndRunGatewayTurn(
+  world: ReadySelfHostWorld,
+  owner: SelfHostOwnerActor,
+): Promise<{
+  actorUserId: string;
+  virtualKeyTokenId: string;
+  turn: { ended: boolean; error?: string; modelId: string };
+}> {
+  // 1. Enroll a fresh actor through the product (invitation + register). The
+  //    register/login fires the server's eager gateway enrollment
+  //    (`ensure_user_enrollment` via `signup_hook`), which mints the actor's
+  //    scoped LiteLLM virtual key server-side before the turn.
+  const actor = await inviteAndRegisterMemberViaApi(world, owner);
+
+  // 2. Select the MANAGED gateway route for claude on the LOCAL surface exactly
+  //    the way the product does (`sourceKind:"gateway"`; no api_key material).
+  await selectGatewayRouteForHarness(actor.api, REPRESENTATIVE_HARNESS);
+
+  // 2b. Wait for the actor's server-side enrollment to reach `synced` (its
+  //     virtual key minted) BEFORE the Desktop fetches state. On self-host a
+  //     fresh member is enrolled by the backfill worker (not synchronously at
+  //     register), so this bounds the wait for the key to exist — guaranteeing
+  //     the Desktop's one `/state?surface=local` fetch renders a populated
+  //     gateway source rather than pushing an empty one it never re-fetches.
+  await waitForActorEnrollmentSynced(actor.api);
+
+  // 3. Open the actor's authenticated renderer; the Desktop fetches
+  //    `GET /state?surface=local` for THIS user and pushes the rendered gateway
+  //    source ({kind:"gateway", base_url:<public /llm>, key:<virtual key>}) into
+  //    the controller-local AnyHarness.
+  const page = await openAuthenticatedPage(world, actor);
+  try {
+    // 4. Wait until the pushed gateway route makes claude launchable in the
+    //    controller-local runtime (identical launchability/install-trigger wait
+    //    SH-BASE-TURN uses; only the harness kind matters to it).
+    await waitForDesktopByokSync(world, page, {
+      apiKeyId: "gateway",
+      harnessKind: REPRESENTATIVE_HARNESS,
+      envVarName: DEFAULT_BYOK_ENV_VAR,
+    });
+
+    // 5. Cheapest eligible non-premium claude model (same picker as SH-BASE-TURN).
+    const modelId = await resolveBaseTurnModel(world);
+    if (!modelId) {
+      return {
+        actorUserId: actor.userId,
+        virtualKeyTokenId: "",
+        turn: {
+          ended: false,
+          error: "no launchable claude model was offered by the controller-local AnyHarness",
+          modelId: "",
+        },
+      };
+    }
+
+    // 6. One bounded cheap turn through the controller-local runtime. Because the
+    //    pushed source is the gateway route, the turn rides the INSTANCE LiteLLM.
+    const workspacePath = path.join(world.paths.runDir, "selfhost-gateway-turn-workspace");
+    mkdirSync(workspacePath, { recursive: true });
+    const created = await world.runtime.client.createLocalWorkspace(workspacePath);
+    const session = await world.runtime.client.createSession({
+      workspaceId: created.workspace.id,
+      agentKind: REPRESENTATIVE_HARNESS,
+      modelId,
+    });
+    await world.runtime.client.prompt(session.id, GATEWAY_TURN_PROMPT);
+    const completion = await waitForTurnCompletion(world, session.id, GATEWAY_TURN_TIMEOUT_MS);
+
+    // 7. Resolve the actor's PERSONAL virtual-key token on the instance LiteLLM
+    //    (the `api_key` its spend rows carry) — the key the gateway agent-auth
+    //    state actually rendered, preferred over any co-located org-enrollment
+    //    key. A resolution failure is a bounded fail-closed turn error.
+    let virtualKeyTokenId = "";
+    let tokenError: string | undefined;
+    try {
+      virtualKeyTokenId = await litellmResolveActorKeyToken(world.control.ssh, actor.userId);
+    } catch (error) {
+      tokenError = describe(error);
+    }
+
+    return {
+      actorUserId: actor.userId,
+      virtualKeyTokenId,
+      turn: {
+        ended: completion.ended,
+        error: completion.error ?? tokenError,
+        modelId,
+      },
+    };
+  } finally {
+    await page.close().catch(() => undefined);
+  }
+}
 
 // ── Small shared helpers ────────────────────────────────────────────────────
 

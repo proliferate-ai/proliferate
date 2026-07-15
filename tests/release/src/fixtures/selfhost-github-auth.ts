@@ -1,3 +1,5 @@
+import type { BrowserContext, Page } from "playwright";
+
 import type { ReadySelfHostWorld } from "../worlds/selfhost/world.js";
 import { GATEWAY_DEPLOY_DIR } from "../worlds/selfhost/gateway.js";
 import type { SelfHostOwnerActor } from "./selfhost-actor.js";
@@ -226,22 +228,231 @@ export function parseAdvertisedMethods(body: unknown): string[] {
   return ids;
 }
 
+/** The LoginScreen affordance the product renders when github is advertised
+ * (`AUTH_LOGIN_LABELS.signIn`, apps/packages/product-client/src/copy/auth/auth-copy.ts). */
+const GITHUB_SIGN_IN_LABEL = "Continue with GitHub";
+/** Bounded wait for the login surface to advertise the github affordance. */
+const GITHUB_METHODS_TIMEOUT_MS = 30_000;
+/** Bounded wait for `window.open(authorizationUrl)` to surface the github popup. */
+const GITHUB_POPUP_TIMEOUT_MS = 30_000;
+/** Bounded ceiling for settling the github.com authorize page (never loops past it). */
+const GITHUB_AUTHORIZE_TIMEOUT_MS = 30_000;
+/** Bounded wait for the renderer's recovery poll to land (or not land) a product session. */
+const GITHUB_SIGNIN_SETTLE_MS = 60_000;
+
+/** The shape the desktop web fallback persists under `proliferate.auth.session`. */
+interface PersistedProductSession {
+  access_token: string;
+  user_id: string;
+}
+
 /**
- * Drives the product's Authorize-GitHub control in an already-storage-stated
- * browser context and reports whether the instance admitted the identity. This
- * is the concrete boundary the live proof lands at (origin-partition gap); the
- * offline tests never reach it (they inject a fake `signInWithGithub`).
+ * How a github.com page encountered mid-authorize is classified. `authorize` is
+ * the first-authorize grant page (click through); `authorized` means we have
+ * LEFT github.com (instant redirect / product callback / desktop custom scheme)
+ * so the grant is complete or was never needed; `two_factor` /
+ * `device_verification` / `login_required` are interstitials that cannot be
+ * driven deterministically (fail closed, secret-free); `unknown` is a github.com
+ * page we don't recognize yet (keep waiting within the bound).
+ */
+export type GithubInterstitialKind =
+  | "authorize"
+  | "authorized"
+  | "two_factor"
+  | "device_verification"
+  | "login_required"
+  | "unknown";
+
+/**
+ * Pure classification of a mid-authorize page from its URL + primary heading —
+ * factored out so the interstitial decision logic is unit-tested offline
+ * (the live browser drive injects a fake `signInWithGithub`). Anything that has
+ * left github.com (the product callback, the `proliferate://`/`proliferate-local://`
+ * desktop deep link the browser cannot follow, or a blank/opaque url after the
+ * redirect) counts as `authorized`: the server has already recorded the code and
+ * the renderer's recovery poll completes sign-in.
+ */
+export function classifyGithubInterstitial(rawUrl: string, headingText: string | null): GithubInterstitialKind {
+  let url: URL | undefined;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    url = undefined;
+  }
+  const scheme = url ? url.protocol.replace(/:$/, "").toLowerCase() : "";
+  if (scheme === "proliferate" || scheme === "proliferate-local") {
+    return "authorized";
+  }
+  if (!url || rawUrl === "about:blank" || url.hostname === "") {
+    return "unknown";
+  }
+  const host = url.hostname.toLowerCase();
+  if (!/(^|\.)github\.com$/.test(host)) {
+    // Any http(s) origin that is not github.com == we bounced off github (the
+    // product callback or beyond); the grant completed.
+    return "authorized";
+  }
+  const pathName = url.pathname.toLowerCase();
+  const heading = (headingText ?? "").toLowerCase();
+  if (pathName.includes("/sessions/two-factor") || heading.includes("two-factor") || heading.includes("2fa")) {
+    return "two_factor";
+  }
+  if (
+    pathName.includes("verified-device") ||
+    pathName.includes("verified_device") ||
+    heading.includes("device verification") ||
+    heading.includes("verify your device")
+  ) {
+    return "device_verification";
+  }
+  if (pathName.includes("/login/oauth/authorize") || heading.includes("authorize")) {
+    return "authorize";
+  }
+  if (pathName === "/login" || pathName.startsWith("/session")) {
+    return "login_required";
+  }
+  return "unknown";
+}
+
+/** Reads a page's primary heading text (bounded, best-effort) for interstitial classification. */
+async function readPrimaryHeading(page: Page): Promise<string | null> {
+  return page
+    .locator("h1, h2")
+    .first()
+    .textContent({ timeout: 2_000 })
+    .catch(() => null);
+}
+
+/**
+ * Settles the github.com popup opened by the product's `window.open(authorization
+ * Url)` (web fallback of `openAuthSessionUrl`, apps/desktop/src/lib/access/tauri/
+ * auth.ts). With a pre-authenticated storage state github either instantly
+ * redirects (already-authorized) or shows the first-authorize grant page (click
+ * "Authorize"). Every wait is bounded; any interstitial we cannot drive
+ * deterministically (2FA, device verification, an unexpected re-login) throws a
+ * bounded, secret-free error naming it — it NEVER loops.
+ */
+async function settleGithubAuthorizePopup(popup: Page): Promise<void> {
+  await popup.waitForLoadState("domcontentloaded", { timeout: GITHUB_POPUP_TIMEOUT_MS }).catch(() => undefined);
+  const deadline = Date.now() + GITHUB_AUTHORIZE_TIMEOUT_MS;
+  for (;;) {
+    const classification = classifyGithubInterstitial(popup.url(), await readPrimaryHeading(popup));
+    if (classification === "authorized") {
+      return;
+    }
+    if (classification === "two_factor" || classification === "device_verification" || classification === "login_required") {
+      throw new Error(
+        `SH-GITHUB-AUTH: GitHub presented a "${classification}" interstitial that cannot be driven ` +
+          "deterministically; failing closed (never looping).",
+      );
+    }
+    if (classification === "authorize") {
+      const authorizeButton = popup
+        .locator('button[name="authorize"][value="1"], button:has-text("Authorize"), input[name="authorize"][value="1"]')
+        .first();
+      if (await authorizeButton.isVisible().catch(() => false)) {
+        await authorizeButton.click().catch(() => undefined);
+        await popup.waitForLoadState("domcontentloaded", { timeout: GITHUB_AUTHORIZE_TIMEOUT_MS }).catch(() => undefined);
+        continue;
+      }
+    }
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `SH-GITHUB-AUTH: the GitHub authorize page did not settle within ${GITHUB_AUTHORIZE_TIMEOUT_MS}ms ` +
+          `(last classification="${classification}"); failing closed.`,
+      );
+    }
+    await sleep(500);
+  }
+}
+
+/** Polls the renderer page's persisted product session (bounded); undefined if none lands. */
+async function waitForPersistedSession(page: Page, timeoutMs: number): Promise<PersistedProductSession | undefined> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const raw = await page
+      .evaluate((key) => window.localStorage.getItem(key), BROWSER_AUTH_SESSION_KEY)
+      .catch(() => null);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as Partial<PersistedProductSession>;
+        if (typeof parsed.access_token === "string" && typeof parsed.user_id === "string") {
+          return { access_token: parsed.access_token, user_id: parsed.user_id };
+        }
+      } catch {
+        // Fall through and keep polling: a half-written value is not a session.
+      }
+    }
+    if (Date.now() >= deadline) {
+      return undefined;
+    }
+    await sleep(500);
+  }
+}
+
+/**
+ * Drives the product's real Authorize-GitHub flow in an already-storage-stated
+ * browser context and reports whether the instance admitted the identity.
+ *
+ * The flow is the shipped desktop web path: click the LoginScreen's "Continue
+ * with GitHub" (rendered only once `/auth/desktop/methods` advertises github) →
+ * the renderer POSTs `/auth/desktop/github/start` and `window.open`s the returned
+ * github.com authorization URL → the pre-authenticated storage state authorizes
+ * (instant redirect, or one "Authorize" click) → github redirects to the server
+ * callback, which records the auth code → the renderer's recovery poll
+ * (`pollGitHubDesktopSession`) exchanges it and persists the product session.
+ *
+ * Admission is then resolved over the product API: a signed-in identity with an
+ * ACTIVE membership in the instance's org is admitted (identity A links to the
+ * existing owner by verified email → same user id; an invited identity B is
+ * admitted with its role); an identity that authenticates but holds NO active
+ * membership (uninvited) is reported `admitted:false`. Every wait is bounded;
+ * an undrivable github interstitial throws a bounded, secret-free reason.
  */
 async function driveGithubAuthorize(
   world: ReadySelfHostWorld,
-  context: import("playwright").BrowserContext,
+  context: BrowserContext,
 ): Promise<GithubSignInResult> {
-  void world;
-  void context;
-  throw new Error(
-    "SH-GITHUB-AUTH: the live GitHub-authorize drive is gated on the web renderer reaching the fixed API " +
-      "origin (documented origin-partition gap); inject a fake signInWithGithub op for offline runs.",
+  const page = await context.newPage();
+  await page.goto(world.renderer.baseUrl, { waitUntil: "domcontentloaded" });
+
+  const githubButton = page.getByRole("button", { name: GITHUB_SIGN_IN_LABEL });
+  await githubButton.waitFor({ state: "visible", timeout: GITHUB_METHODS_TIMEOUT_MS });
+
+  // Clicking the affordance opens the github.com authorize URL in a popup (web
+  // fallback of `openAuthSessionUrl`); capture it as it opens.
+  const popupPromise = context.waitForEvent("page", { timeout: GITHUB_POPUP_TIMEOUT_MS });
+  await githubButton.click();
+  const popup = await popupPromise;
+  try {
+    await settleGithubAuthorizePopup(popup);
+  } finally {
+    await popup.close().catch(() => undefined);
+  }
+
+  // The renderer completes sign-in via its recovery poll and persists the
+  // session. No persisted session within the bound == the identity was not
+  // signed in (a real denial for our purposes) — never a loop.
+  const session = await waitForPersistedSession(page, GITHUB_SIGNIN_SETTLE_MS);
+  if (!session) {
+    return { admitted: false };
+  }
+
+  // Admission == an ACTIVE org membership on this instance. Resolve it (and the
+  // role) over the product API with the just-minted bearer (a Node fetch, not a
+  // browser request — no CORS involved).
+  const api = world.api.client.withBearerToken(session.access_token);
+  const orgs = await api.get<{
+    organizations: Array<{ id: string; membership?: { role?: string; status?: string } }>;
+  }>("/v1/organizations");
+  const activeMembership = orgs.organizations.find(
+    (org) => (org.membership?.status ?? "active") === "active" && Boolean(org.membership?.role),
   );
+  if (!activeMembership) {
+    // Signed in but holds no active membership: an uninvited identity.
+    return { admitted: false, userId: session.user_id };
+  }
+  return { admitted: true, userId: session.user_id, memberRole: activeMembership.membership?.role };
 }
 
 /**

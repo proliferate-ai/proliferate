@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 
+import type { ApiClient } from "../../fixtures/http.js";
 import type { SshTransport } from "./world.js";
 import { SELFHOST_DEPLOY_DIR } from "./install.js";
 
@@ -118,6 +119,64 @@ export function resolveGatewayConfig(
       },
     },
   };
+}
+
+// ── Gateway-route auth selection (the product PUT that routes a harness) ─────
+
+/**
+ * The managed-gateway `sourceKind`. The server's ONE selection vocabulary is
+ * `Literal["gateway", "api_key"]`
+ * (server/proliferate/server/cloud/agent_gateway/models.py:33
+ * `AgentAuthSourceKind`). SH-GATEWAY selects the managed route, so the enabled
+ * source is the single `"gateway"` kind — it carries NO `apiKeyId`/`envVarName`
+ * (those belong only to the BYOK `"api_key"` route; the gateway recipe's key +
+ * base URL are minted/rendered server-side from the user's enrollment, see
+ * `materialize/agent_auth.py` `_render_gateway_source`). The per-harness
+ * legality validator (`selection_rules.py`) admits a lone gateway source for
+ * every GATEWAY_CAPABLE_HARNESS (claude included).
+ */
+export const GATEWAY_SOURCE_KIND = "gateway" as const;
+
+export interface GatewayAuthSelectionBody {
+  sources: Array<{ sourceKind: typeof GATEWAY_SOURCE_KIND; enabled: true }>;
+}
+
+/**
+ * Pure builder of the full-desired-state selection PUT body that routes a
+ * harness through the managed gateway — the gateway twin of BYOK's
+ * `{ sourceKind: "api_key", apiKeyId, envVarName, enabled }` payload
+ * (`fixtures/byok.ts`). Offline-testable so the exact wire shape the product
+ * sends is asserted without a live Server.
+ */
+export function gatewayAuthSelectionBody(): GatewayAuthSelectionBody {
+  return { sources: [{ sourceKind: GATEWAY_SOURCE_KIND, enabled: true }] };
+}
+
+/** The product-API side effect of the gateway-route selection, injectable for offline tests. */
+export interface GatewaySelectionTransport {
+  putSelection(api: ApiClient, harnessKind: string, body: GatewayAuthSelectionBody): Promise<void>;
+}
+
+export const defaultGatewaySelectionTransport: GatewaySelectionTransport = {
+  async putSelection(api, harnessKind, body) {
+    await api.put(`/v1/cloud/agent-gateway/selections/${encodeURIComponent(harnessKind)}?surface=local`, body);
+  },
+};
+
+/**
+ * Selects the managed-gateway route for a harness on the LOCAL surface exactly
+ * the way the product does — `PUT /v1/cloud/agent-gateway/selections/{harness}?
+ * surface=local` with the single gateway source. The enrolled actor's own API
+ * client is passed (the selection is per-user; the Desktop later fetches
+ * `GET /state?surface=local` for THIS user and pushes the rendered gateway
+ * source into the controller-local runtime).
+ */
+export async function selectGatewayRouteForHarness(
+  api: ApiClient,
+  harnessKind: string,
+  transport: GatewaySelectionTransport = defaultGatewaySelectionTransport,
+): Promise<void> {
+  await transport.putSelection(api, harnessKind, gatewayAuthSelectionBody());
 }
 
 /**
@@ -291,18 +350,47 @@ async function litellmAdminGet(ssh: SshTransport, path: string): Promise<unknown
   return JSON.parse(out.trim());
 }
 
+/** The LiteLLM key-alias prefix the PERSONAL (per-user) enrollment mints under. */
+export const PERSONAL_ENROLLMENT_KEY_ALIAS_PREFIX = "vk-user-";
+
 /**
- * Resolves the enrolled actor's virtual-key token id on the instance LiteLLM
- * (`/user/info?user_id=user-<uuid>` — the enrollment mints the key under
- * litellm user id `user-<uuid>`, see `enrollment.py`). Returns the first key's
- * token id (`api_key` in spend rows). Throws if the actor has no minted key.
+ * Pure selection of the PERSONAL-enrollment virtual key token from a LiteLLM
+ * user's keys. The self-host agent-auth state renders the gateway source from
+ * the USER enrollment (`get_enrollment_for_user` filters `subject_kind=user`,
+ * db/store/agent_gateway/enrollments.py), whose key alias is `vk-user-<uuid>-…`
+ * (`enrollment.py` `_key_alias` with `subject_label="user-<uuid>"`). A member
+ * who ALSO holds an org enrollment carries a second key under the SAME LiteLLM
+ * user (`user-<uuid>`) aliased `vk-org-…`; that key is never the one the turn
+ * rides, so returning it would break the spend correlation. Prefer the
+ * personal-alias key; fall back to the first token only when no alias is present
+ * (older mints), so a single-key actor still resolves.
+ */
+export function selectPersonalEnrollmentKeyToken(
+  keys: ReadonlyArray<{ token?: string | null; key_alias?: string | null }>,
+): string | undefined {
+  const personal = keys.find(
+    (key) => Boolean(key.token) && (key.key_alias ?? "").startsWith(PERSONAL_ENROLLMENT_KEY_ALIAS_PREFIX),
+  );
+  if (personal?.token) {
+    return personal.token;
+  }
+  return keys.map((key) => key.token).find((value): value is string => Boolean(value));
+}
+
+/**
+ * Resolves the enrolled actor's PERSONAL virtual-key token id on the instance
+ * LiteLLM (`/user/info?user_id=user-<uuid>` — the enrollment mints keys under
+ * litellm user id `user-<uuid>`, see `enrollment.py`). Returns the token id
+ * (`api_key` in spend rows) of the personal enrollment's key (the one the
+ * gateway agent-auth state actually rendered), preferring it over any
+ * co-located org-enrollment key. Throws if the actor has no minted key.
  */
 export async function litellmResolveActorKeyToken(ssh: SshTransport, productUserId: string): Promise<string> {
   const info = (await litellmAdminGet(
     ssh,
     `/user/info?user_id=${encodeURIComponent(`user-${productUserId}`)}`,
-  )) as { keys?: Array<{ token?: string }> };
-  const token = info.keys?.map((key) => key.token).find((value): value is string => Boolean(value));
+  )) as { keys?: Array<{ token?: string | null; key_alias?: string | null }> };
+  const token = selectPersonalEnrollmentKeyToken(info.keys ?? []);
   if (!token) {
     throw new Error(
       "SH-GATEWAY: the enrolled actor has no minted virtual key on the instance LiteLLM (lazy signup mint missing).",
@@ -339,4 +427,85 @@ export async function litellmSpendRows(
 export function spendWindowUtc(now = new Date()): { startDate: string; endDate: string } {
   const day = now.toISOString().slice(0, 10);
   return { startDate: day, endDate: day };
+}
+
+// ── Actor enrollment sync (server-side virtual-key mint) ────────────────────
+
+/** The `enrollmentStatus` value that means the actor's scoped virtual key is minted
+ * (`server/proliferate/constants/agent_gateway.py` `AGENT_GATEWAY_SYNC_STATUS_SYNCED`). */
+export const GATEWAY_ENROLLMENT_STATUS_SYNCED = "synced";
+
+/**
+ * On self-host a FRESH member is NOT enrolled synchronously at register — the
+ * single-org membership policy only adds the org membership; the personal
+ * (per-user) gateway enrollment that the gateway agent-auth state renders from
+ * (`get_enrollment_for_user`) is minted by the backfill worker
+ * (`agent_gateway_backfill_interval_seconds`, default 300s). So the actor's key
+ * can take up to a backfill tick plus its LiteLLM sync to appear. Waiting for
+ * `synced` BEFORE the Desktop fetches `/state?surface=local` guarantees the one
+ * state fetch renders a populated gateway source (rather than pushing an empty
+ * one the Desktop never re-fetches). Generous by design; ~2 backfill ticks.
+ */
+export const DEFAULT_ENROLLMENT_SYNC_TIMEOUT_MS = 10 * 60_000;
+const DEFAULT_ENROLLMENT_SYNC_POLL_MS = 5_000;
+
+/** The gateway capabilities wire shape (`AgentGatewayCapabilitiesResponse`, camelCase aliases). */
+export interface GatewayCapabilities {
+  gatewayEnabled: boolean;
+  publicBaseUrl: string | null;
+  enrollmentStatus: string;
+}
+
+/** Reads the actor's gateway capabilities (injectable so the poll is offline-testable). */
+export interface GatewayEnrollmentTransport {
+  fetchCapabilities(api: ApiClient): Promise<GatewayCapabilities>;
+}
+
+export const defaultGatewayEnrollmentTransport: GatewayEnrollmentTransport = {
+  async fetchCapabilities(api) {
+    return api.get<GatewayCapabilities>("/v1/cloud/agent-gateway/capabilities");
+  },
+};
+
+/** Pure predicate: the actor's gateway enrollment has minted its virtual key. */
+export function enrollmentIsSynced(capabilities: { enrollmentStatus?: string | null }): boolean {
+  return capabilities.enrollmentStatus === GATEWAY_ENROLLMENT_STATUS_SYNCED;
+}
+
+/**
+ * Polls the actor's gateway capabilities until enrollment reaches `synced`
+ * (its scoped virtual key exists server-side), bounded. Fails closed with a
+ * bounded, secret-free reason if the mint never lands within the window.
+ */
+export async function waitForActorEnrollmentSynced(
+  api: ApiClient,
+  options: { timeoutMs?: number; pollMs?: number } = {},
+  transport: GatewayEnrollmentTransport = defaultGatewayEnrollmentTransport,
+): Promise<void> {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_ENROLLMENT_SYNC_TIMEOUT_MS;
+  const pollMs = options.pollMs ?? DEFAULT_ENROLLMENT_SYNC_POLL_MS;
+  const deadline = Date.now() + timeoutMs;
+  let last = "none";
+  for (;;) {
+    try {
+      const capabilities = await transport.fetchCapabilities(api);
+      last = capabilities.enrollmentStatus || "none";
+      if (enrollmentIsSynced(capabilities)) {
+        return;
+      }
+    } catch (error) {
+      last = `capabilities read failed (${error instanceof Error ? error.name : "unknown"})`;
+    }
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `SH-GATEWAY: the enrolled actor's gateway enrollment did not reach "synced" within ${timeoutMs}ms ` +
+          `(last status: ${last}); the backfill worker may not have minted its virtual key yet.`,
+      );
+    }
+    await gatewaySleep(pollMs);
+  }
+}
+
+function gatewaySleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

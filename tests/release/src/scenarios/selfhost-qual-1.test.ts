@@ -27,10 +27,14 @@ import type { SelfHostWorldCleanupEvidence } from "../worlds/selfhost/cleanup-ki
 import type { SelfHostOwnerActor } from "../fixtures/selfhost-actor.js";
 import {
   correlateGatewaySpend,
+  enrollmentIsSynced,
+  gatewayAuthSelectionBody,
   resolveGatewayConfig,
+  selectPersonalEnrollmentKeyToken,
   type GatewayEnvSource,
 } from "../worlds/selfhost/gateway.js";
 import {
+  classifyGithubInterstitial,
   parseAdvertisedMethods,
   resolveGithubOauthConfig,
   type GithubAuthOps,
@@ -562,6 +566,69 @@ test("resolveGatewayConfig: falls back to the A upstream key", () => {
 test("resolveGatewayConfig: fails closed with no upstream key", () => {
   const result = resolveGatewayConfig({ get: () => undefined }, "https://box.example.com");
   assert.equal(result.ok, false);
+});
+
+test("enrollmentIsSynced: true only for the literal synced status", () => {
+  assert.equal(enrollmentIsSynced({ enrollmentStatus: "synced" }), true);
+  assert.equal(enrollmentIsSynced({ enrollmentStatus: "pending" }), false);
+  assert.equal(enrollmentIsSynced({ enrollmentStatus: "failed" }), false);
+  assert.equal(enrollmentIsSynced({}), false);
+  assert.equal(enrollmentIsSynced({ enrollmentStatus: null }), false);
+});
+
+test("gatewayAuthSelectionBody: a single enabled gateway source, no api_key material", () => {
+  assert.deepEqual(gatewayAuthSelectionBody(), {
+    sources: [{ sourceKind: "gateway", enabled: true }],
+  });
+});
+
+test("selectPersonalEnrollmentKeyToken: prefers the personal (vk-user-) alias over a co-located org key", () => {
+  const token = selectPersonalEnrollmentKeyToken([
+    { token: "org-token", key_alias: "vk-org-org1-user-u1-abcd1234" },
+    { token: "personal-token", key_alias: "vk-user-u1-abcd1234" },
+  ]);
+  assert.equal(token, "personal-token");
+});
+
+test("selectPersonalEnrollmentKeyToken: falls back to the first token when no alias is present", () => {
+  assert.equal(selectPersonalEnrollmentKeyToken([{ token: "only-token" }]), "only-token");
+  assert.equal(
+    selectPersonalEnrollmentKeyToken([{ token: "first", key_alias: null }, { token: "second" }]),
+    "first",
+  );
+});
+
+test("selectPersonalEnrollmentKeyToken: undefined when there are no usable tokens", () => {
+  assert.equal(selectPersonalEnrollmentKeyToken([]), undefined);
+  assert.equal(selectPersonalEnrollmentKeyToken([{ token: "", key_alias: "vk-user-x" }]), undefined);
+});
+
+test("classifyGithubInterstitial: the first-authorize grant page is drivable", () => {
+  assert.equal(
+    classifyGithubInterstitial("https://github.com/login/oauth/authorize?client_id=iv1.abc", "Authorize Proliferate"),
+    "authorize",
+  );
+});
+
+test("classifyGithubInterstitial: leaving github.com (callback or desktop scheme) reads as authorized", () => {
+  assert.equal(
+    classifyGithubInterstitial("https://selfhost-fixed.qualification.proliferate.com/auth/github/callback?code=x", null),
+    "authorized",
+  );
+  assert.equal(classifyGithubInterstitial("proliferate://auth/callback?code=x&state=y", null), "authorized");
+  assert.equal(classifyGithubInterstitial("proliferate-local://auth/callback?code=x", null), "authorized");
+});
+
+test("classifyGithubInterstitial: 2FA and device-verification fail closed by name", () => {
+  assert.equal(classifyGithubInterstitial("https://github.com/sessions/two-factor/app", null), "two_factor");
+  assert.equal(classifyGithubInterstitial("https://github.com/x", "Two-factor authentication"), "two_factor");
+  assert.equal(classifyGithubInterstitial("https://github.com/sessions/verified-device", null), "device_verification");
+});
+
+test("classifyGithubInterstitial: an unexpected re-login is login_required; unknown otherwise", () => {
+  assert.equal(classifyGithubInterstitial("https://github.com/login", null), "login_required");
+  assert.equal(classifyGithubInterstitial("https://github.com/dashboard", "Home"), "unknown");
+  assert.equal(classifyGithubInterstitial("about:blank", null), "unknown");
 });
 
 test("resolveGithubOauthConfig: names every missing var", () => {

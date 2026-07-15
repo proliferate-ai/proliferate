@@ -1043,8 +1043,13 @@ async function openIsolatedPage(world: ReadySelfHostWorld): Promise<ProductPage>
   return wrapPage(context, page);
 }
 
-/** Opens an isolated page with a real product session pre-installed and reloaded authenticated. */
-async function openAuthenticatedPage(
+/**
+ * Opens an isolated page with a real product session pre-installed and reloaded
+ * authenticated. Exported (export-only, no behavior change) so the sibling
+ * SELFHOST-QUAL-1 `SH-GATEWAY` cell opens the freshly-enrolled actor's renderer
+ * with the identical machinery SH-BASE-TURN uses.
+ */
+export async function openAuthenticatedPage(
   world: ReadySelfHostWorld,
   actor: { session: unknown },
 ): Promise<ProductPage> {
@@ -1238,8 +1243,13 @@ async function reopenAndReadTranscriptInRenderer(page: ProductPage, workspaceId:
  * is the anthropic-api curation default, so it is guaranteed launchable), then
  * any remaining real model, skipping the "default" sentinel and costly [1m]
  * long-context variants.
+ *
+ * Exported (export-only, no behavior change) so the SELFHOST-QUAL-1 `SH-GATEWAY`
+ * cell picks the same cheapest-eligible non-premium claude model for its one
+ * gateway-routed turn (the "default" sentinel is launchable through the gateway,
+ * but the cheapest real tier keeps the turn cheap either way).
  */
-async function resolveBaseTurnModel(world: ReadySelfHostWorld): Promise<string | undefined> {
+export async function resolveBaseTurnModel(world: ReadySelfHostWorld): Promise<string | undefined> {
   const options = await world.runtime.client.getAgentLaunchOptions();
   const entry = options.find((agent) => agent.kind === REPRESENTATIVE_HARNESS);
   const ids = (entry?.models ?? []).map((model) => model.id);
@@ -1256,8 +1266,13 @@ async function resolveBaseTurnModel(world: ReadySelfHostWorld): Promise<string |
   );
 }
 
-/** Polls AnyHarness's session event stream until the turn ends or errors. */
-async function waitForTurnCompletion(
+/**
+ * Polls AnyHarness's session event stream until the turn ends or errors.
+ * Exported (export-only, no behavior change) so the SELFHOST-QUAL-1 `SH-GATEWAY`
+ * cell drives its one gateway-routed turn to completion with the identical
+ * bounded machinery.
+ */
+export async function waitForTurnCompletion(
   world: ReadySelfHostWorld,
   sessionId: string,
   timeoutMs: number,
