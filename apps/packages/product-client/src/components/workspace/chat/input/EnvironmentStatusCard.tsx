@@ -14,6 +14,7 @@ import {
 } from "#product/lib/domain/chat/session-controls/composer-config-submenu-presentation";
 import {
   worktreeGitStatusView,
+  worktreeInventoryTotalMeta,
   worktreeRowLabel,
   worktreeRowSearchText,
   worktreeSizeMeta,
@@ -31,129 +32,78 @@ export type EnvironmentCardActions = Pick<
   "pruneOrphan" | "purgeWorkspace"
 >;
 
-/** Show the filter field only when the list is long enough to need it. */
-const SEARCH_THRESHOLD = 10;
+/** Hover-card list caps at this many worktrees; the modal shows the rest. */
+const HOVER_ITEM_CAP = 12;
 
 /**
  * The environment surface behind the composer's pressure ring, in the shared
- * status-card anatomy (StatusCardPrimitives): a Runtime section (cloud CPU/RAM),
- * a Worktrees section (one row per checkout, hover detail, hover-delete), and
- * the session's advanced config controls — one section per control, options
- * click-to-select WITHOUT closing the surface (multi-adjust, same contract the
- * old overflow menu had). Replaces both the worktree table modal and the
- * composer's "..." overflow popover.
+ * status-card anatomy (StatusCardPrimitives). The card stays compact: a
+ * Resources section with summary rows ("N worktrees" · total size, cloud
+ * CPU/RAM) — hover shows the per-worktree list, click opens the searchable
+ * worktrees modal — plus the session's advanced config controls inline, one
+ * section per control, options click-to-select WITHOUT closing the surface
+ * (multi-adjust, same contract the old "..." overflow menu had).
  */
 export function EnvironmentStatusCard({
   targetState,
   advancedControls,
   agentKind,
-  onRequestPurge,
-  onDeleteOrphan,
+  onOpenWorktrees,
 }: {
   targetState: RuntimePressureTargetState | null;
   advancedControls: LiveSessionControlDescriptor[];
   agentKind: string | null;
-  onRequestPurge: (workspaceId: string, label: string) => void;
-  onDeleteOrphan: (path: string) => void;
+  /** Resources rows are summaries — clicking one opens the searchable modal. */
+  onOpenWorktrees: () => void;
 }) {
+  const inventory = targetState?.inventory ?? [];
+  const isCloud = targetState?.target.location === "cloud";
+  const worktreeHoverItems: WorkspaceStatusDetailItem[] = inventory
+    .slice(0, HOVER_ITEM_CAP)
+    .map((row) => {
+      const status = worktreeGitStatusView(row.gitStatus);
+      return {
+        key: row.id,
+        name: worktreeRowLabel(row),
+        state: statusToDetailState(status.tone),
+        detail: [status.label, status.detail].filter(Boolean).join(" · ") || undefined,
+        meta: worktreeSizeMeta(row.storage),
+      };
+    });
+
   return (
-    // Same codex card surface as the workspace-status card, a step wider so
-    // worktree names + sizes breathe.
+    // Same codex card surface as the workspace-status card.
     <ComposerPopoverSurface
       variant="summary"
-      className="w-[min(340px,calc(100vw-1rem))] overflow-hidden rounded-[1.25rem] p-0 pt-2.5 ring-0 shadow-[0_0_0_0.5px_var(--color-popover-ring),0_3px_7.5px_rgba(0,0,0,0.25),0_0_20px_rgba(0,0,0,0.28)]"
+      className="w-[min(300px,calc(100vw-1rem))] overflow-hidden rounded-[1.25rem] p-0 pt-2.5 ring-0 shadow-[0_0_0_0.5px_var(--color-popover-ring),0_3px_7.5px_rgba(0,0,0,0.25),0_0_20px_rgba(0,0,0,0.28)]"
       data-telemetry-mask
     >
       <div className="flex max-h-[min(34rem,calc(100vh-8rem))] flex-col gap-3 overflow-y-auto pb-3">
-        <EnvironmentCardSections
-          targetState={targetState}
-          advancedControls={advancedControls}
-          agentKind={agentKind}
-          onRequestPurge={onRequestPurge}
-          onDeleteOrphan={onDeleteOrphan}
-        />
-      </div>
-    </ComposerPopoverSurface>
-  );
-}
-
-/** The card's section stack without the popover surface — the settings
- * worktree dialog hosts the same sections inside a ModalShell. */
-export function EnvironmentCardSections({
-  targetState,
-  advancedControls,
-  agentKind,
-  onRequestPurge,
-  onDeleteOrphan,
-}: {
-  targetState: RuntimePressureTargetState | null;
-  advancedControls: LiveSessionControlDescriptor[];
-  agentKind: string | null;
-  onRequestPurge: (workspaceId: string, label: string) => void;
-  onDeleteOrphan: (path: string) => void;
-}) {
-  const [filter, setFilter] = useState("");
-
-  const inventory = targetState?.inventory ?? [];
-  const showSearch = inventory.length > SEARCH_THRESHOLD;
-  const visibleRows = useMemo(() => {
-    const needle = filter.trim().toLowerCase();
-    if (!needle) {
-      return inventory;
-    }
-    return inventory.filter((row) => worktreeRowSearchText(row).includes(needle));
-  }, [filter, inventory]);
-
-  const isCloud = targetState?.target.location === "cloud";
-  const worktreesDetail = targetState && !isCloud
-    ? `${targetState.worktreeCount} of ${targetState.idealWorktreeCount}`
-    : null;
-
-  return (
-    <>
-      {isCloud && targetState && (
-          <StatusSection title={targetState.target.label}>
-            <StatusRow
-              label="CPU"
-              meta={formatPercent(targetState.resourcePressure?.cpu?.normalizedPercent)}
-            />
-            <StatusRow
-              label="Memory"
-              meta={formatPercent(targetState.resourcePressure?.memory?.percent)}
-            />
-          </StatusSection>
-        )}
-
         {targetState && (
-          <StatusSection title="Worktrees" detail={worktreesDetail}>
-            {showSearch && (
-              <div className="pb-1">
-                <PopoverSearchField
-                  value={filter}
-                  onChange={setFilter}
-                  placeholder="Filter by name, branch..."
+          <StatusSection
+            title="Resources"
+            detail={!isCloud
+              ? `${targetState.worktreeCount} of ${targetState.idealWorktreeCount}`
+              : null}
+          >
+            <StatusRow
+              icon={<GitBranch className="size-4" />}
+              label={`${inventory.length} ${inventory.length === 1 ? "worktree" : "worktrees"}`}
+              meta={worktreeInventoryTotalMeta(inventory)}
+              hoverItems={worktreeHoverItems}
+              onSelect={onOpenWorktrees}
+            />
+            {isCloud && (
+              <>
+                <StatusRow
+                  label="CPU"
+                  meta={formatPercent(targetState.resourcePressure?.cpu?.normalizedPercent)}
                 />
-              </div>
-            )}
-            {targetState.inventoryLoading ? (
-              <StatusRow icon={<GitBranch className="size-4" />} label="Loading worktrees..." disabled />
-            ) : targetState.inventoryError ? (
-              <StatusRow icon={<GitBranch className="size-4" />} label="Runtime inventory is unavailable" disabled />
-            ) : visibleRows.length === 0 ? (
-              <StatusRow
-                icon={<GitBranch className="size-4" />}
-                label={inventory.length === 0 ? "No worktrees" : "No matches"}
-                disabled
-              />
-            ) : (
-              visibleRows.map((row) => (
-                <WorktreeStatusRow
-                  key={row.id}
-                  row={row}
-                  onRequestPurge={onRequestPurge}
-                  onDeleteOrphan={onDeleteOrphan}
+                <StatusRow
+                  label="Memory"
+                  meta={formatPercent(targetState.resourcePressure?.memory?.percent)}
                 />
-              ))
+              </>
             )}
           </StatusSection>
         )}
@@ -185,6 +135,84 @@ export function EnvironmentCardSections({
             ))}
           </StatusSection>
         ))}
+      </div>
+    </ComposerPopoverSurface>
+  );
+}
+
+/** The worktrees detail (always-searchable list + hover-delete rows) — the
+ * modal body behind the card's summary row and the settings dialog. */
+export function EnvironmentCardSections({
+  targetState,
+  onRequestPurge,
+  onDeleteOrphan,
+}: {
+  targetState: RuntimePressureTargetState | null;
+  onRequestPurge: (workspaceId: string, label: string) => void;
+  onDeleteOrphan: (path: string) => void;
+}) {
+  const [filter, setFilter] = useState("");
+
+  const inventory = targetState?.inventory ?? [];
+  const visibleRows = useMemo(() => {
+    const needle = filter.trim().toLowerCase();
+    if (!needle) {
+      return inventory;
+    }
+    return inventory.filter((row) => worktreeRowSearchText(row).includes(needle));
+  }, [filter, inventory]);
+
+  const isCloud = targetState?.target.location === "cloud";
+  const worktreesDetail = targetState && !isCloud
+    ? `${targetState.worktreeCount} of ${targetState.idealWorktreeCount}`
+    : null;
+
+  return (
+    <>
+      {isCloud && targetState && (
+          <StatusSection title={targetState.target.label}>
+            <StatusRow
+              label="CPU"
+              meta={formatPercent(targetState.resourcePressure?.cpu?.normalizedPercent)}
+            />
+            <StatusRow
+              label="Memory"
+              meta={formatPercent(targetState.resourcePressure?.memory?.percent)}
+            />
+          </StatusSection>
+        )}
+
+        {targetState && (
+          <StatusSection title="Worktrees" detail={worktreesDetail}>
+            <div className="pb-1">
+              <PopoverSearchField
+                value={filter}
+                onChange={setFilter}
+                placeholder="Filter by name, branch..."
+              />
+            </div>
+            {targetState.inventoryLoading ? (
+              <StatusRow icon={<GitBranch className="size-4" />} label="Loading worktrees..." disabled />
+            ) : targetState.inventoryError ? (
+              <StatusRow icon={<GitBranch className="size-4" />} label="Runtime inventory is unavailable" disabled />
+            ) : visibleRows.length === 0 ? (
+              <StatusRow
+                icon={<GitBranch className="size-4" />}
+                label={inventory.length === 0 ? "No worktrees" : "No matches"}
+                disabled
+              />
+            ) : (
+              visibleRows.map((row) => (
+                <WorktreeStatusRow
+                  key={row.id}
+                  row={row}
+                  onRequestPurge={onRequestPurge}
+                  onDeleteOrphan={onDeleteOrphan}
+                />
+              ))
+            )}
+          </StatusSection>
+        )}
     </>
   );
 }

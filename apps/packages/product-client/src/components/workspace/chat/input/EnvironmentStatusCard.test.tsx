@@ -171,6 +171,8 @@ describe("RuntimeEnvironmentControl", () => {
     );
     openCard();
 
+    // Card shows the compact summary row; the detail lives in the modal.
+    fireEvent.click(screen.getByText("1 worktree"));
     expect(screen.getByText("Thread One")).toBeTruthy();
     expect(screen.getByText("~34 MB")).toBeTruthy();
 

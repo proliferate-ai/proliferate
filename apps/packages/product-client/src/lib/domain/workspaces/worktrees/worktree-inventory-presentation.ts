@@ -109,6 +109,29 @@ export function formatWorktreeStorageDetail(
   return parts.length > 0 ? parts.join(" + ") : null;
 }
 
+/** Compact total across an inventory — the environment card's summary-row
+ * meta ("~1.2 GB"); undefined when no row reported any estimate. */
+export function worktreeInventoryTotalMeta(
+  rows: ReadonlyArray<Pick<WorktreeInventoryRow, "storage">>,
+): string | undefined {
+  let total = 0;
+  let seen = false;
+  for (const row of rows) {
+    for (const value of [
+      row.storage?.totalBytes,
+      ...(typeof row.storage?.totalBytes === "number"
+        ? []
+        : [row.storage?.worktreeBytes, row.storage?.sqliteBytes]),
+    ]) {
+      if (typeof value === "number" && Number.isFinite(value)) {
+        total += value;
+        seen = true;
+      }
+    }
+  }
+  return seen ? `~${formatBytes(total)}` : undefined;
+}
+
 /** Compact size for status-card rows: total when reported, otherwise the
  * checkout + logs sum; undefined when the runtime gave no estimate at all. */
 export function worktreeSizeMeta(

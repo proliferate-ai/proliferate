@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
-import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import {
   type RuntimePressureTargetState,
@@ -12,6 +11,7 @@ import {
   EnvironmentStatusCard,
   type EnvironmentCardActions,
 } from "#product/components/workspace/chat/input/EnvironmentStatusCard";
+import { RuntimePressureDetailsDialog } from "#product/components/workspace/chat/input/RuntimePressureDetailsDialog";
 
 /**
  * The composer's environment control: the pressure ring stays the trigger,
@@ -61,10 +61,7 @@ export function RuntimeEnvironmentControl({
   advancedControls: LiveSessionControlDescriptor[];
   agentKind: string | null;
 }) {
-  const [confirmPurge, setConfirmPurge] = useState<{
-    workspaceId: string;
-    label: string;
-  } | null>(null);
+  const [worktreesOpen, setWorktreesOpen] = useState(false);
 
   const tooltip = targetState
     ? compactPressureTooltip(targetState)
@@ -93,36 +90,26 @@ export function RuntimeEnvironmentControl({
         offset={8}
         className="w-auto border-0 bg-transparent p-0 shadow-none"
       >
-        {() => (
+        {(close) => (
           <EnvironmentStatusCard
             targetState={targetState}
             advancedControls={advancedControls}
             agentKind={agentKind}
-            onRequestPurge={(workspaceId, label) => setConfirmPurge({ workspaceId, label })}
-            onDeleteOrphan={(path) => {
-              if (targetState) {
-                actions.pruneOrphan(targetState.target, { path });
-              }
+            onOpenWorktrees={() => {
+              close();
+              setWorktreesOpen(true);
             }}
           />
         )}
       </PopoverButton>
-      <ConfirmationDialog
-        open={confirmPurge !== null}
-        title={`Delete runtime history for ${confirmPurge?.label ?? "this workspace"}?`}
-        description="This permanently deletes the AnyHarness runtime workspace record, chats, raw events, normalized events, checkout, and local agent artifacts for this runtime. Git commits, branches, pull requests, and Cloud product records are preserved."
-        confirmLabel="Delete"
-        confirmVariant="destructive"
-        onClose={() => setConfirmPurge(null)}
-        onConfirm={() => {
-          const pending = confirmPurge;
-          if (!pending || !targetState) {
-            return;
-          }
-          setConfirmPurge(null);
-          actions.purgeWorkspace(targetState.target, pending.workspaceId);
-        }}
-      />
+      {targetState && (
+        <RuntimePressureDetailsDialog
+          open={worktreesOpen}
+          targetState={targetState}
+          actions={actions}
+          onClose={() => setWorktreesOpen(false)}
+        />
+      )}
     </>
   );
 }

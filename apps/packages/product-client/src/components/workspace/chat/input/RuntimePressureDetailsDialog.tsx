@@ -3,9 +3,11 @@ import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialo
 import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
 import type {
   RuntimePressureTargetState,
-  useRuntimePressureControlState,
 } from "#product/hooks/workspaces/facade/use-runtime-pressure-control-state";
-import { EnvironmentCardSections } from "#product/components/workspace/chat/input/EnvironmentStatusCard";
+import {
+  EnvironmentCardSections,
+  type EnvironmentCardActions,
+} from "#product/components/workspace/chat/input/EnvironmentStatusCard";
 
 /**
  * Settings-pane worktree dialog: the same section/row anatomy as the
@@ -21,7 +23,7 @@ export function RuntimePressureDetailsDialog({
 }: {
   open: boolean;
   targetState: RuntimePressureTargetState;
-  actions: ReturnType<typeof useRuntimePressureControlState>["actions"];
+  actions: EnvironmentCardActions;
   onClose: () => void;
 }) {
   const [confirmDelete, setConfirmDelete] = useState<{
@@ -42,8 +44,6 @@ export function RuntimePressureDetailsDialog({
       >
         <EnvironmentCardSections
           targetState={targetState}
-          advancedControls={[]}
-          agentKind={null}
           onRequestPurge={(workspaceId, label) => setConfirmDelete({ workspaceId, label })}
           onDeleteOrphan={(path) => actions.pruneOrphan(targetState.target, { path })}
         />
