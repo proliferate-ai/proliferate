@@ -266,6 +266,139 @@ R2 (the two new bridge ports) is entangled: `use-connect-server` also pulls the
 pull moved `@/lib/domain/*` + cloud-access modules. They are cheapest to land
 alongside the proliferate-api / auth-transport reroutes, not in isolation.
 
+## F3 stage — repair to green (forward-seam resolution)
+
+F3 resolved the mechanically-clean forward-seam cohorts. Package `tsc` errors
+fell **79 → 47** (all 47 remaining are unresolved seams; 0 non-seam);
+`check_frontend_boundaries.py` `PRODUCT_CLIENT_FORBIDDEN_IMPORT` fell **77 → 50**.
+Five commits on top of the F2 head (`2ebc787f2`):
+
+1. `473ba5a7c` **cloud client-factory side-effect hooks** — moved the 5 split
+   hooks (`use-automations`, `use-agent-run-configs`, `use-auth-viewer`,
+   `use-cloud-exposed-workspaces`, `use-cloud-visible-workspaces`) into the
+   package; dropped the bare `@/lib/access/cloud/client` side-effect (host
+   bootstraps the Cloud client via `ProductHost.cloud.client`); agent-run-config
+   type import → `@proliferate/cloud-sdk/types`.
+2. `08d296b5a` **auth-probe promotion + auth workflow seams** — promoted the 3
+   public probes (`getDesktopAuthMethods` / `discoverDesktopSso` /
+   `getGitHubDesktopAuthAvailability`) into product-owned cloud access
+   (`src/lib/access/cloud/auth-probes.ts`) with all callers passing the
+   deployment base URL explicitly; moved the 3 probe hooks + `use-github-sign-in`
+   into the package. Relocated the pure auth transport primitives
+   (`AuthRequestError`, `isAbortError`, `fetchAuthResponse`, `parseAuthError`,
+   `isDefinitiveAuthRejection`, …) to `src/lib/access/cloud/auth-transport.ts` so
+   host and product share one instanceof-stable `AuthRequestError` (host
+   `proliferate-auth-transport` keeps only `buildAuthUrl` and re-exports the rest
+   via `internal/*`). Relocated `GitHubDesktopSignInOptions` /
+   `DesktopSsoSignInOptions` (`src/lib/domain/auth/sign-in-options.ts`, host
+   re-exports) and the product-only `buildGitHubOAuthAppSettingsUrl`.
+3. `be6537a30` **proliferate-api deployment seam** — product-owned pure
+   `src/lib/infra/proliferate-api.ts` (URL/origin/official-host helpers, base URL
+   required); moved consumers source it from `host.deployment.apiBaseUrl`; host
+   orchestration callers pass `getProliferateApiBaseUrl()` explicitly. Runtime
+   bootstrap + default resolution stay in the retained host module.
+4. `027d1f891` **bridge-based tauri-access hooks** — relocated the
+   `shell` / `credentials` / `workspace-scratch` subtrees (`use-available-editors`,
+   `use-local-agent-credentials`, `use-workspace-scratch-pad` + mutations +
+   query-keys/tests). These were **already** bridge-based
+   (`host.desktop.files/.localCredentials/.scratch`); their `retain` was a stale
+   bucket default. Pure relocation, no host consumers, no behavior change.
+
+Every resolution routes through an **existing** ProductHost/DesktopBridge
+capability or a ledger-named seam — **no new capability was introduced.** All
+promoted fetchers/URL helpers were made base-URL-explicit (no host-config
+default in the package); host callers pass `getProliferateApiBaseUrl()`,
+behavior-identical to the prior default.
+
+### F3 STOP — the remaining 47 seams need owner rulings (green is unreachable without them)
+
+Round-2's R1/R2/R3 resolved the three prior STOP items (measurement, two bridge
+ports, reverse seam). The **remaining** package `tsc` errors resolve to files
+that are `retain` in the ledger yet product-consumed, or that need a **new host
+capability** — decisions absent from BOTH the ledger and rounds 1–2. Per the
+contract's stop conditions ("ownership decision absent from the ledger → STOP";
+"the move requires a new ProductHost capability → STOP"), these are surfaced
+rather than resolved by inventing capabilities or changing behavior:
+
+**(A) Genuine capability / ownership gaps — need a ruling (23 errors):**
+
+- **Updater cluster** (`use-updater` 11, `use-app-version` 4, `updater-dev-mock`
+  1 = 16). `hooks/access/tauri/**` = `retain`, but these are product-consumed
+  **stateful** hooks (the store already moved to the package). Unlike the bridge
+  hooks above, they still reach raw host **telemetry** (`trackProductEvent` /
+  `captureTelemetryException` from `@/lib/integrations/telemetry/client`) and
+  **persistence** (`persistValue` / `readPersistedValue` from
+  `@/lib/infra/persistence/preferences-persistence`) from **module-level**
+  functions (the auto-check scheduler), not from a hook. Resolution needs a
+  ruling to move them + a mechanism for the telemetry→`host.telemetry` and
+  persistence→`host.storage` seams through the module-level scheduler (DI). Both
+  target capabilities exist; the risk is behavior-sensitive (event names, metadata
+  keys, check-interval scheduler state) and unverifiable without running the app.
+- **Anonymous-telemetry install id** (`anonymous-storage` 2:
+  `use-repository-settings`, `use-add-repo`). They send
+  `loadAnonymousTelemetryBootstrap().installId` as `desktopInstallId`. This id is
+  a `crypto.randomUUID()` persisted via the Tauri `bootstrap_anonymous_telemetry`
+  command (or `localStorage`) — **provably distinct** from the worker install id
+  (`get_desktop_install_id`, exposed as `host.desktop.worker.getInstallId()`), so
+  the bridge is not a behavior-safe substitute. Needs a **new host capability**
+  (an anonymous-telemetry-id accessor).
+- **Native render diagnostics** (`native-diagnostics` 1: `AppErrorBoundary`).
+  `reportReactRenderError` writes to the raw-Tauri renderer diagnostic log with
+  dedup/fingerprint (`@/lib/access/tauri/diagnostics`). `host.telemetry.captureException`
+  would send render errors to Sentry instead of the native log — a behavior
+  change. `host.desktop.diagnostics.logEvent` is a narrow lifecycle marker, not
+  the full error diagnostic. Needs a capability or a ruling accepting the delta.
+- **Cloud access-token holdout** (`@/lib/access/cloud/client` 3:
+  `cloud-sandbox-gateway` + test). `getDesktopCloudAccessToken` is host
+  access-token transport (F1 deferred it to the auth-transport reroute). Needs a
+  `host.auth` access-token accessor or a bridge method.
+- **`use-window-actions`** (1: `MacWindowControlsSafeArea`). Raw
+  `apply_macos_window_chrome` Tauri op; no `DesktopNativeUiBridge` method covers
+  it. Needs a new `nativeUi` bridge method (or a ruling to no-op it off-Desktop).
+
+**(B) Landable without new rulings, but behavior-sensitive + coupled — deferred
+to land as a coherent unit with the (A) rulings (24 errors incl. cascades):**
+
+- **R2 bridge ports** (`use-connect-server` 3, `use-dev-desktop-handoff` 1,
+  `lib/access/cloud/dev-desktop-handoff` 1). Ruled (R2): add the connect-server
+  meta + dev-handoff window bridge ports, move the hooks, thread `apiBaseUrl` into
+  `dev-desktop-handoff`. Entangled (connect-server also pulls proliferate-api +
+  `@/copy/*`).
+- **`use-organization-join-invitation-flow`** (1: `AccountPane`). Split row; move
+  the product part (its host copy's promoted-fetcher call was already fixed in F3
+  commit 2).
+- **`DesktopProductLifecycleRoot`** (1: `ProductLifecycleRoot`). Ledger split —
+  the capability-gated product subtree moves; residual raw-tauri stays host.
+- **`ensure-desktop-worker`** (`telemetry/client` 1). DI a `captureException` into
+  `EnsureDesktopWorkerDeps` + `teardownDesktopWorker`, caller passes
+  `useProductTelemetry().captureException` (established DI pattern, but touches 2
+  callers).
+- **auth-store test doubles** (`@/stores/auth/auth-store` 6: `AuthGate.test`,
+  `use-organization-join-auth-launch.test`, `WorkflowsPage.test`). `auth-store` is
+  correctly `retain` (host-only at runtime); the 3 package tests import it to seed
+  auth state. The ledger row names the fix — "a host-store test double at the
+  package boundary" — and a partial `authStoreBridgedHost` fixture already exists.
+  R5 test-infra: build a product auth-store double + rewrite the 3 tests. Behavior
+  -sensitive (auth-gate assertions).
+
+### Build/test matrix at the F3 head
+
+| Command | Result |
+| --- | --- |
+| `pnpm --filter @proliferate/product-client typecheck` | **RED 47** (was 79; all unresolved seams, 0 non-seam) |
+| `python3 scripts/check_frontend_boundaries.py` (`PRODUCT_CLIENT_FORBIDDEN_IMPORT`) | **50** (was 77) |
+| `pnpm --filter @proliferate/product-client build` / `test` | RED — gated on the 47 seams (no dist) |
+| `pnpm --filter proliferate build` (desktop) | RED — gated on package dist |
+| `pnpm --dir apps/desktop exec vitest run` | not run — gated on package dist + R5 test infra |
+| `node scripts/verify-product-client-qualification.mjs` | RED — gated on package dist |
+| `git diff --check` | clean |
+
+R5 (`vitest resolve.dedupe`, 18-file allowlist re-scope) and the desktop/vitest/
+qualification matrix are downstream of the package build, which is gated on the
+(A) rulings. The `AutomationRunLocationSelector` dedupe fix and the documented
+6 pre-existing failures (`keyboard-resolution` 4, `navigation` 2 at base
+`1d0043756`) are recorded for that pass but unverifiable until dist emits.
+
 ## Blocked: the S2 seam architecture (three owner rulings required)
 
 The 18 pending split rows are the entire remaining seam. Green (package
