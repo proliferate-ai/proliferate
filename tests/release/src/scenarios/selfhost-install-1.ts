@@ -98,9 +98,13 @@ const EXPECTED_TURN_REPLY_PATTERN = /pong/i;
  * SHR-004b: known LiteLLM/gateway env var names
  * (`tests/release/src/config/env-manifest.ts`). SH-BASE-TURN's world is
  * BYOK-only — `SELFHOST_REQUIRED_ENV` above carries no gateway input — so
- * observing their absence from the controller's own ambient env is part of the
- * "world was constructed with no LiteLLM env configured" half of
- * `no_litellm_spend`.
+ * observing their absence from the SCRUBBED candidate child env (the env the
+ * candidate AnyHarness actually receives) is part of the "world was constructed
+ * with no LiteLLM env configured" half of `no_litellm_spend`. The check is
+ * scoped to the candidate env, not the test runner's ambient env: the full
+ * strict lane sources one qualification-infra.env for all scenarios, so the
+ * runner legitimately carries the gateway inputs the sibling SELFHOST-QUAL-1
+ * cell needs — the allowlisting candidateChildEnvironment drops them here.
  */
 const LITELLM_GATEWAY_ENV_VARS = [
   "RELEASE_E2E_GATEWAY_TEST_KEY",
@@ -662,7 +666,7 @@ export async function runBaseTurnCell(
     const gatewayEnvVar = ops.detectGatewayEnvVar();
     if (gatewayEnvVar) {
       return failedBaseTurn(
-        `SH-BASE-TURN: the world's controller env carries "${gatewayEnvVar}"; a BYOK-only self-host run must configure no LiteLLM gateway input.`,
+        `SH-BASE-TURN: the world's scrubbed candidate child env carries "${gatewayEnvVar}"; a BYOK-only self-host run must configure no LiteLLM gateway input.`,
       );
     }
     const authSourceKinds = ops.readAuthSourceKinds(world, selection.harnessKind);
@@ -732,7 +736,18 @@ export const defaultBaseTurnCellOps: BaseTurnCellOps = {
   reloadTranscript: (world, page, workspaceId) => reloadTranscriptProductNative(world, page, workspaceId),
   fetchCapabilities: (world) => fetchServerCapabilities(world),
   readAuthSourceKinds: (world, harnessKind) => readRuntimeAuthSourceKinds(world.paths.runtimeHome, harnessKind),
-  detectGatewayEnvVar: () => LITELLM_GATEWAY_ENV_VARS.find((name) => process.env[name]?.trim()),
+  detectGatewayEnvVar: () => {
+    // Assert on the SCRUBBED candidate child env (what the candidate AnyHarness
+    // actually receives via candidateChildEnvironment), not the test runner's
+    // ambient process.env. The full self-host strict lane sources ONE
+    // qualification-infra.env for all scenarios, so the runner env legitimately
+    // carries AGENT_GATEWAY_LITELLM_* for the sibling SELFHOST-QUAL-1 gateway
+    // cell; the allowlisting candidateChildEnvironment drops those before they
+    // could reach the BYOK-only candidate runtime, which is exactly what
+    // no_litellm_spend must prove. Mirrors the E2B-key guard's scope.
+    const candidateEnv = candidateChildEnvironment(process.env);
+    return LITELLM_GATEWAY_ENV_VARS.find((name) => candidateEnv[name]?.trim());
+  },
   detectE2bEnvKey: () => Object.keys(candidateChildEnvironment(process.env)).find((key) => /e2b/i.test(key)),
 };
 

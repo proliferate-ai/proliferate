@@ -10,6 +10,7 @@ import {
   SH_INVITEE,
   attachCleanupEvidence,
   browserOriginsForBox,
+  defaultBaseTurnCellOps,
   parseRepoRootLogicalWorkspaceId,
   resolveSelfHostWorldInputs,
   runBaseTurnCell,
@@ -573,6 +574,26 @@ test("runBaseTurnCell: an agentGateway=true capability advertisement fails no_li
   const result = await runBaseTurnCell(baseTurnWorld(), FAKE_OWNER, ops);
   assert.equal(result.status, "failed");
   assert.match(result.reason?.message ?? "", /capabilities\.agentGateway=true/);
+});
+
+test("defaultBaseTurnCellOps.detectGatewayEnvVar: scrubs a gateway var present in the runner env", () => {
+  // The full strict lane sources ONE qualification-infra.env for all scenarios,
+  // so the test runner legitimately carries the sibling SELFHOST-QUAL-1 gateway
+  // inputs. The real detector must scope to the SCRUBBED candidate child env
+  // (candidateChildEnvironment), where the gateway var never survives — so a
+  // BYOK-only run stays green even with the var set on the runner.
+  const key = "AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL";
+  const previous = process.env[key];
+  process.env[key] = "https://staging-gateway.example.com";
+  try {
+    assert.equal(defaultBaseTurnCellOps.detectGatewayEnvVar(), undefined);
+  } finally {
+    if (previous === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = previous;
+    }
+  }
 });
 
 test("runBaseTurnCell: a 'gateway' auth source (LiteLLM route) on a BYOK-direct turn fails", async () => {
