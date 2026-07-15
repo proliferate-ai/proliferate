@@ -16,6 +16,8 @@ import {
   defaultLocalWorldSmokeDriver,
 } from "../local-world-smoke-1.js";
 import { bootLocalFunctionalWorld, isWorldBackedRun, resolveLocalFunctionalWorldInputs } from "./world-boot.js";
+import { captureLocalDriverFailure } from "./debug-capture.js";
+import { resolveLocalWorkspaceSessionId } from "./local-session.js";
 import type {
   LocalCleanupV1,
   LocalHarnessKind,
@@ -177,12 +179,13 @@ export interface LocalRouteDriver {
     world: ReadyLocalWorld,
     page: ProductPage,
     expectedRoute: LocalRoute,
+    repoPath: string,
   ): Promise<{ workspaceId: string; sessionId: string; reply: string }>;
 
   reopenAndVerify(
     world: ReadyLocalWorld,
     page: ProductPage,
-    expect: { workspaceId: string; sessionId: string; modelId: string; harness: LocalHarnessKind; route: LocalRoute },
+    expect: { workspaceId: string; sessionId: string; modelId: string; harness: LocalHarnessKind; route: LocalRoute; repoPath: string },
   ): Promise<void>;
 
   /** Gateway correlation (LOCAL-2/LOCAL-6 gateway leg): the smoke's snapshot →
@@ -326,7 +329,7 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
     return { route, modelId, providerId: directProviderId(modelId) };
   },
   selectModelInUi: (page, modelId) => defaultLocalWorldSmokeDriver.selectModelInUi(page, modelId),
-  async sendBoundedTurn(world, page, _expectedRoute) {
+  async sendBoundedTurn(world, page, _expectedRoute, repoPath) {
     const p = page.page;
     const editor = p.locator("[data-home-composer-editor]").first();
     await editor.waitFor({ state: "visible", timeout: 15_000 });
@@ -339,8 +342,12 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
       .locator('[data-workspace-shell][data-pending-workspace="false"]')
       .first()
       .waitFor({ state: "attached", timeout: WORKSPACE_SETTLE_TIMEOUT_MS });
+    // `data-workspace-ui-key` is the LOGICAL workspace id (repo-remote keyed);
+    // the AnyHarness session keys off the CONCRETE runtime workspace at the repo
+    // clone path (see local-session.ts). Keep the ui-key for shell selectors, but
+    // resolve the session from the runtime's own local workspace.
     const workspaceId = await readWorkspaceUiKey(p);
-    const sessionId = await resolveAnyharnessSessionId(world, workspaceId, WORKSPACE_SETTLE_TIMEOUT_MS);
+    const sessionId = await resolveLocalWorkspaceSessionId(world, repoPath, WORKSPACE_SETTLE_TIMEOUT_MS);
     const completion = await waitForTurnCompletion(world, sessionId, TURN_TIMEOUT_MS);
     if (completion.error) {
       throw new Error(`sendBoundedTurn: assistant turn errored: ${completion.error}`);
@@ -358,7 +365,7 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
       .locator(`[data-workspace-shell][data-workspace-ui-key="${cssAttr(expect.workspaceId)}"]`)
       .first();
     await shell.waitFor({ state: "attached", timeout: 60_000 });
-    const sessionId = await resolveAnyharnessSessionId(world, expect.workspaceId, 30_000).catch(() => null);
+    const sessionId = await resolveLocalWorkspaceSessionId(world, expect.repoPath, 30_000).catch(() => null);
     if (sessionId !== expect.sessionId) {
       throw new Error(
         `reopenAndVerify: session "${expect.sessionId}" did not remain active after reopen (saw "${sessionId ?? ""}").`,
@@ -622,7 +629,7 @@ async function runLocal2GatewayCell(
       await driver.selectModelInUi(page, selection.modelId);
       const before = await driver.snapshotGatewaySpend(world, actor);
       const windowStartedAt = new Date().toISOString();
-      const turn = await driver.sendBoundedTurn(world, page, "gateway");
+      const turn = await driver.sendBoundedTurn(world, page, "gateway", repo.path);
       if (!turn.reply.trim()) {
         throw new Error("empty assistant reply");
       }
@@ -633,6 +640,7 @@ async function runLocal2GatewayCell(
         modelId: selection.modelId,
         harness,
         route: "gateway",
+        repoPath: repo.path,
       });
       const gatewaySpend = await driver.correlateGatewaySpend(world, {
         actor,
@@ -656,6 +664,9 @@ async function runLocal2GatewayCell(
           routeChange: null,
         },
       };
+    } catch (uiError) {
+      await captureLocalDriverFailure(page, `${cell.cell_id}-ui-failure`);
+      throw uiError;
     } finally {
       await page.close().catch(() => undefined);
     }
@@ -692,7 +703,7 @@ async function runLocal3UserKeyCell(
       assertOpencodeProviderSource(harness, "user_key", selection);
       await driver.selectModelInUi(page, selection.modelId);
       const windowStartedAt = new Date().toISOString();
-      const turn = await driver.sendBoundedTurn(world, page, "user_key");
+      const turn = await driver.sendBoundedTurn(world, page, "user_key", repo.path);
       if (!turn.reply.trim()) {
         throw new Error("empty assistant reply");
       }
@@ -703,6 +714,7 @@ async function runLocal3UserKeyCell(
         modelId: selection.modelId,
         harness,
         route: "user_key",
+        repoPath: repo.path,
       });
       const isolation = await driver.assertNoManagedSpend(world, { actor, windowStartedAt, windowFinishedAt });
       return {
@@ -720,6 +732,9 @@ async function runLocal3UserKeyCell(
           routeChange: null,
         },
       };
+    } catch (uiError) {
+      await captureLocalDriverFailure(page, `${cell.cell_id}-ui-failure`);
+      throw uiError;
     } finally {
       await page.close().catch(() => undefined);
     }
@@ -753,7 +768,7 @@ async function runLocal6RouteChangeCell(
       await driver.selectRepoAndWorkLocally(page, repo);
       const userKeySelection = await driver.resolveRouteModel(world, page, harness, "user_key");
       await driver.selectModelInUi(page, userKeySelection.modelId);
-      const userKeyTurn = await driver.sendBoundedTurn(world, page, "user_key");
+      const userKeyTurn = await driver.sendBoundedTurn(world, page, "user_key", repo.path);
       if (!userKeyTurn.reply.trim()) {
         throw new Error("empty assistant reply on the user-key session");
       }
@@ -763,6 +778,7 @@ async function runLocal6RouteChangeCell(
         modelId: userKeySelection.modelId,
         harness,
         route: "user_key",
+        repoPath: repo.path,
       });
 
       // 2) Switch the selected route to gateway; a NEW session launches on it.
@@ -771,7 +787,7 @@ async function runLocal6RouteChangeCell(
       await driver.selectModelInUi(page, gatewaySelection.modelId);
       const before = await driver.snapshotGatewaySpend(world, actor);
       const windowStartedAt = new Date().toISOString();
-      const gatewayTurn = await driver.sendBoundedTurn(world, page, "gateway");
+      const gatewayTurn = await driver.sendBoundedTurn(world, page, "gateway", repo.path);
       if (!gatewayTurn.reply.trim()) {
         throw new Error("empty assistant reply on the gateway session");
       }
@@ -785,6 +801,7 @@ async function runLocal6RouteChangeCell(
         modelId: gatewaySelection.modelId,
         harness,
         route: "gateway",
+        repoPath: repo.path,
       });
       const gatewaySpend = await driver.correlateGatewaySpend(world, {
         actor,
@@ -814,6 +831,9 @@ async function runLocal6RouteChangeCell(
           },
         },
       };
+    } catch (uiError) {
+      await captureLocalDriverFailure(page, `${cell.cell_id}-ui-failure`);
+      throw uiError;
     } finally {
       await page.close().catch(() => undefined);
     }
@@ -1020,27 +1040,6 @@ async function readWorkspaceUiKey(page: Page): Promise<string> {
     await sleep(500);
   }
   throw new Error(`readWorkspaceUiKey: workspace ui-key never settled (workspace="${workspaceId}").`);
-}
-
-/** Resolves the AnyHarness native session id for a materialized local workspace
- * by polling the runtime's session list (the stable, correlatable identity). */
-async function resolveAnyharnessSessionId(
-  world: ReadyLocalWorld,
-  workspaceId: string,
-  timeoutMs: number,
-): Promise<string> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const sessions = await world.runtime.client.listSessions().catch(() => []);
-    const forWorkspace = sessions.filter((session) => session.workspaceId === workspaceId);
-    if (forWorkspace.length > 0) {
-      return forWorkspace[forWorkspace.length - 1]!.id;
-    }
-    await sleep(1_000);
-  }
-  throw new Error(
-    `resolveAnyharnessSessionId: no AnyHarness session for workspace "${workspaceId}" within ${timeoutMs}ms.`,
-  );
 }
 
 /** Polls AnyHarness's session event stream until the turn ends or errors. */

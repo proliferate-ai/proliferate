@@ -10,6 +10,7 @@ import { preparedRepository, type PreparedRepository } from "../../fixtures/prep
 import { productPage, type ProductPage } from "../../fixtures/product-page.js";
 import { defaultLocalWorldSmokeDriver } from "../local-world-smoke-1.js";
 import { bootLocalFunctionalWorld, isWorldBackedRun, resolveLocalFunctionalWorldInputs } from "./world-boot.js";
+import { captureLocalDriverFailure } from "./debug-capture.js";
 
 /**
  * LOCAL-1 (repository to workspace) under `T3-WT-1/local` and `T3-REPO-1/local`
@@ -217,6 +218,9 @@ export async function collectLocal1WorkspaceCell(
       }
       // LOCAL-1 carries no evidence (no LLM turn); green status is the proof.
       return { cellId: cell.cell_id, status: "green" };
+    } catch (uiError) {
+      await captureLocalDriverFailure(page, `${cell.cell_id}-ui-failure`);
+      throw uiError;
     } finally {
       await page.close().catch(() => undefined);
     }

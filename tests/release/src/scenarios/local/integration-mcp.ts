@@ -8,6 +8,8 @@ import {
   bootLocalFunctionalWorld,
   resolveLocalFunctionalWorldInputs,
 } from "./world-boot.js";
+import { captureLocalDriverFailure } from "./debug-capture.js";
+import { resolveLocalWorkspaceSessionId } from "./local-session.js";
 import type { ReadyLocalWorld } from "../../worlds/local-workspace/world.js";
 import type { LocalWorldCleanupEvidence } from "../../worlds/local-workspace/cleanup.js";
 import { authenticatedActor, type AuthenticatedActor } from "../../fixtures/authenticated-actor.js";
@@ -68,7 +70,7 @@ export interface LocalMcpDriver {
   /** Create a FRESH session (so startup MCP injection runs) and drive one agent
    * turn on the cheapest eligible model, prompted to call an integration tool
    * through the `proliferate_integrations` MCP. Returns the ids + tool name. */
-  runIntegrationTurn(world: ReadyLocalWorld, page: ProductPage, harness: LocalHarnessKind, namespace: string): Promise<{ workspaceId: string; sessionId: string; modelId: string; toolName: string }>;
+  runIntegrationTurn(world: ReadyLocalWorld, page: ProductPage, harness: LocalHarnessKind, namespace: string, repoPath: string): Promise<{ workspaceId: string; sessionId: string; modelId: string; toolName: string }>;
 
   /** Read back the `cloud_integration_tool_call_event` audit row via the reused
    * DB probe seam and assert ok=true for this namespace/tool. Returns its id. */
@@ -181,7 +183,7 @@ export const defaultLocalMcpDriver: LocalMcpDriver = {
     await clickByRole(p, "button", /^Runtime:/, "home Runtime picker trigger");
     await clickMenuItemByText(p, "Work locally", '"Work locally" runtime option');
   },
-  async runIntegrationTurn(world, page, harness, namespace) {
+  async runIntegrationTurn(world, page, harness, namespace, repoPath) {
     const actor = actorsByHarness.get(harness);
     if (!actor) {
       throw new Error(`runIntegrationTurn: no actor was created for harness "${harness}" before this call.`);
@@ -239,8 +241,11 @@ export const defaultLocalMcpDriver: LocalMcpDriver = {
       .locator('[data-workspace-shell][data-pending-workspace="false"]')
       .first()
       .waitFor({ state: "attached", timeout: WORKSPACE_SETTLE_TIMEOUT_MS });
+    // `data-workspace-ui-key` is the LOGICAL workspace id; resolve the session
+    // from the CONCRETE runtime local workspace at the repo clone path (see
+    // local-session.ts).
     const workspaceId = await readWorkspaceUiKey(p);
-    const sessionId = await resolveAnyharnessSessionId(world, workspaceId, WORKSPACE_SETTLE_TIMEOUT_MS);
+    const sessionId = await resolveLocalWorkspaceSessionId(world, repoPath, WORKSPACE_SETTLE_TIMEOUT_MS);
     const completion = await waitForTurnCompletion(world, sessionId, TURN_TIMEOUT_MS);
     if (completion.error) {
       throw new Error(`runIntegrationTurn: assistant turn errored: ${completion.error}`);
@@ -329,7 +334,7 @@ export async function runLocal7McpCellsAgainstWorld(
         await driver.ensureHarnessReady(world, page, harness);
         await driver.connectIntegration(page, namespace);
         await driver.selectRepoAndWorkLocally(page, repo);
-        const turn = await driver.runIntegrationTurn(world, page, harness, namespace);
+        const turn = await driver.runIntegrationTurn(world, page, harness, namespace, repo.path);
         const audit = await driver.assertAuditRow(actor, namespace, turn.toolName);
         entries.push({
           cell,
@@ -341,6 +346,9 @@ export async function runLocal7McpCellsAgainstWorld(
           toolName: turn.toolName,
           auditEventId: audit.auditEventId,
         });
+      } catch (uiError) {
+        await captureLocalDriverFailure(page, `${cell.cell_id}-ui-failure`);
+        throw uiError;
       } finally {
         await page.close().catch(() => undefined);
       }
@@ -554,23 +562,6 @@ async function readWorkspaceUiKey(page: Page): Promise<string> {
     await sleep(500);
   }
   throw new Error(`readWorkspaceUiKey: workspace ui-key never settled (workspace="${workspaceId}").`);
-}
-
-async function resolveAnyharnessSessionId(
-  world: ReadyLocalWorld,
-  workspaceId: string,
-  timeoutMs: number,
-): Promise<string> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const sessions = await world.runtime.client.listSessions().catch(() => []);
-    const forWorkspace = sessions.filter((session) => session.workspaceId === workspaceId);
-    if (forWorkspace.length > 0) {
-      return forWorkspace[forWorkspace.length - 1]!.id;
-    }
-    await sleep(1_000);
-  }
-  throw new Error(`resolveAnyharnessSessionId: no AnyHarness session for workspace "${workspaceId}" within ${timeoutMs}ms.`);
 }
 
 async function waitForTurnCompletion(

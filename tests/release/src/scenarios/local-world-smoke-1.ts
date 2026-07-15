@@ -24,6 +24,7 @@ import {
   type LocalWorldPorts,
   type ReadyLocalWorld,
 } from "../worlds/local-workspace/world.js";
+import { resolveLocalWorkspaceSessionId } from "./local/local-session.js";
 
 /**
  * LOCAL-WORLD-SMOKE-1 (spec "The single test cell"). A provisional
@@ -177,12 +178,13 @@ export interface LocalWorldSmokeDriver {
     world: ReadyLocalWorld,
     page: ProductPage,
     prompt: string,
+    repoPath: string,
   ): Promise<{ workspaceId: string; sessionId: string; reply: string }>;
   /** Reloads the page and asserts workspace/session/transcript/model survive. */
   reopenAndVerify(
     world: ReadyLocalWorld,
     page: ProductPage,
-    expectations: { workspaceId: string; sessionId: string; modelId: string; harnessKind: string },
+    expectations: { workspaceId: string; sessionId: string; modelId: string; harnessKind: string; repoPath: string },
   ): Promise<void>;
   snapshotSpend(
     world: ReadyLocalWorld,
@@ -370,7 +372,7 @@ export const defaultLocalWorldSmokeDriver: LocalWorldSmokeDriver = {
         `${MODEL_PICKER_TIMEOUT_MS}ms. Last available options: ${JSON.stringify(lastAvailable)}.`,
     );
   },
-  async sendPromptAndMaterialize(world, page, prompt) {
+  async sendPromptAndMaterialize(world, page, prompt, repoPath) {
     const p = page.page;
     const editor = p.locator("[data-home-composer-editor]").first();
     await editor.waitFor({ state: "visible", timeout: 15_000 });
@@ -387,13 +389,13 @@ export const defaultLocalWorldSmokeDriver: LocalWorldSmokeDriver = {
       .first()
       .waitFor({ state: "attached", timeout: WORKSPACE_SETTLE_TIMEOUT_MS });
     const workspaceId = await readWorkspaceUiKey(p);
-    // The DOM's `data-workspace-session-id` is the Desktop client's own
-    // (ephemeral) session id, not AnyHarness's native session id — and it is
-    // regenerated on reload. Turn completion and reopen persistence must key off
-    // the AnyHarness session id, which we resolve from the runtime's own session
-    // list for the just-materialized workspace (which holds exactly this turn's
-    // session).
-    const sessionId = await resolveAnyharnessSessionId(world, workspaceId, WORKSPACE_SETTLE_TIMEOUT_MS);
+    // The DOM's `data-workspace-ui-key` is the LOGICAL workspace id (repo-remote
+    // keyed, e.g. `remote:github:owner:repo:HEAD`), and `data-workspace-session-id`
+    // is the Desktop client's own ephemeral id — neither is AnyHarness's session
+    // identity. Turn completion and reopen persistence key off the AnyHarness
+    // session id, resolved from the runtime's CONCRETE local workspace at the repo
+    // clone path (see local/local-session.ts).
+    const sessionId = await resolveLocalWorkspaceSessionId(world, repoPath, WORKSPACE_SETTLE_TIMEOUT_MS);
     // Turn completion is asserted from AnyHarness's own event stream (robust,
     // not DOM-timing-flaky). A session-level error is surfaced as a real
     // failure rather than a hang.
@@ -418,9 +420,10 @@ export const defaultLocalWorldSmokeDriver: LocalWorldSmokeDriver = {
     const shell = p.locator(`[data-workspace-shell][data-workspace-ui-key="${cssAttr(expectations.workspaceId)}"]`).first();
     await shell.waitFor({ state: "attached", timeout: 60_000 });
     // Session persistence is asserted on AnyHarness's stable native session id
-    // (resolved from the runtime), not the Desktop client's ephemeral,
+    // (resolved from the runtime's concrete local workspace at the repo clone
+    // path), not the DOM's logical ui-key or the Desktop client's ephemeral,
     // reload-regenerated `data-workspace-session-id`.
-    const sessionId = await resolveAnyharnessSessionId(world, expectations.workspaceId, 30_000)
+    const sessionId = await resolveLocalWorkspaceSessionId(world, expectations.repoPath, 30_000)
       .catch(() => null);
     if (sessionId !== expectations.sessionId) {
       throw new Error(
@@ -538,13 +541,14 @@ export async function runLocalWorldSmokeCell(
         world,
         page,
         DETERMINISTIC_PROMPT,
+        repo.path,
       );
       if (!reply.trim()) {
         throw new Error("empty assistant reply");
       }
       const windowFinishedAt = new Date().toISOString();
 
-      await driver.reopenAndVerify(world, page, { workspaceId, sessionId, modelId, harnessKind });
+      await driver.reopenAndVerify(world, page, { workspaceId, sessionId, modelId, harnessKind, repoPath: repo.path });
 
       const correlated = await driver.correlateTurn(world, {
         actor,
@@ -894,34 +898,6 @@ async function readWorkspaceUiKey(page: Page): Promise<string> {
     await sleep(500);
   }
   throw new Error(`readWorkspaceUiKey: workspace ui-key never settled (workspace="${workspaceId}").`);
-}
-
-/**
- * Resolves the AnyHarness native session id for a just-materialized local
- * workspace by polling the runtime's session list. The workspace holds exactly
- * one session (this turn's), so its id is unambiguous. This is the stable,
- * correlatable identity — unlike the Desktop client's ephemeral
- * `data-workspace-session-id`, which is regenerated on reload.
- */
-async function resolveAnyharnessSessionId(
-  world: ReadyLocalWorld,
-  workspaceId: string,
-  timeoutMs: number,
-): Promise<string> {
-  const deadline = Date.now() + timeoutMs;
-  let seen = "";
-  while (Date.now() < deadline) {
-    const sessions = await world.runtime.client.listSessions().catch(() => []);
-    const forWorkspace = sessions.filter((session) => session.workspaceId === workspaceId);
-    if (forWorkspace.length > 0) {
-      seen = forWorkspace[forWorkspace.length - 1]!.id;
-      return seen;
-    }
-    await sleep(1_000);
-  }
-  throw new Error(
-    `resolveAnyharnessSessionId: no AnyHarness session for workspace "${workspaceId}" within ${timeoutMs}ms.`,
-  );
 }
 
 /**

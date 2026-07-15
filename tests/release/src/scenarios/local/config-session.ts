@@ -19,6 +19,8 @@ import {
 } from "../../evidence/schema.js";
 import { resolveWorldConstructionInputs } from "../local-world-smoke-1.js";
 import { bootLocalFunctionalWorld, type LocalFunctionalWorldInputs } from "./world-boot.js";
+import { captureLocalDriverFailure } from "./debug-capture.js";
+import { resolveLocalWorkspaceSessionId } from "./local-session.js";
 
 /**
  * LOCAL-4 (live configuration matrix, per harness) under `T3-CFG-1/local`, and
@@ -87,7 +89,7 @@ export interface LocalConfigDriver {
 
   /** Runs the harness's cheap baseline turn first (contract: config only after
    * a real turn), returning the materialized workspace/session ids + model. */
-  runBaselineTurn(world: ReadyLocalWorld, page: ProductPage, harness: LocalHarnessKind): Promise<{ workspaceId: string; sessionId: string; modelId: string }>;
+  runBaselineTurn(world: ReadyLocalWorld, page: ProductPage, harness: LocalHarnessKind, repoPath: string): Promise<{ workspaceId: string; sessionId: string; modelId: string }>;
 
   /** Enumerates the session's live-probe controls (reuses the runtime's
    * `GET /v1/sessions/{id}/live-config` `normalizedControls`, the t3-cfg-1 seam). */
@@ -157,7 +159,7 @@ export const defaultLocalConfigDriver: LocalConfigDriver = {
   openPage: (world, actor) => productPage(world, actor),
   ensureHarnessReady: (world, page, harness) => ensureHarnessReady(world, page, harness),
   selectRepoAndWorkLocally: (page, repo) => selectRepoAndWorkLocally(page, repo),
-  runBaselineTurn: (world, page, harness) => runBaselineTurn(world, page, harness),
+  runBaselineTurn: (world, page, harness, repoPath) => runBaselineTurn(world, page, harness, repoPath),
   async enumerateControls(world, sessionId) {
     const live = await world.runtime.client.getLiveConfig(sessionId);
     return Object.values(live.normalizedControls).map((control) => ({
@@ -264,7 +266,7 @@ export async function collectLocal4ConfigCells(
       try {
         await driver.ensureHarnessReady(world, page, harness);
         await driver.selectRepoAndWorkLocally(page, repo);
-        const { workspaceId, sessionId, modelId } = await driver.runBaselineTurn(world, page, harness);
+        const { workspaceId, sessionId, modelId } = await driver.runBaselineTurn(world, page, harness, repo.path);
         const controls = await driver.enumerateControls(world, sessionId);
         const { recorded, known1063 } = await cycleConfigControls(page, controls, driver);
         collected.push({
@@ -272,10 +274,12 @@ export async function collectLocal4ConfigCells(
           outcome: { kind: "ok", harness, modelId, workspaceId, sessionId, controls: recorded, known1063 },
         });
       } catch (error) {
+        await captureLocalDriverFailure(page, `${cell.cell_id}-ui-failure`);
         collected.push({ cell, outcome: { kind: "failed", message: describe(error) } });
       }
     }
   } catch (error) {
+    await captureLocalDriverFailure(page, `${cells[0]?.scenario_id ?? "T3-CFG-1"}-setup-failure`);
     setupError = describe(error);
   } finally {
     if (page) {
@@ -472,6 +476,7 @@ export async function collectLocal5SessionTabsCell(
 
     cellData = { workspaceId: empty.workspaceId, sessionIds: dedupe(sessionIds) };
   } catch (error) {
+    await captureLocalDriverFailure(page, `${cell.cell_id}-ui-failure`);
     failure = describe(error);
   } finally {
     if (page) {
@@ -757,6 +762,7 @@ async function runBaselineTurn(
   world: ReadyLocalWorld,
   page: ProductPage,
   harness: LocalHarnessKind,
+  repoPath: string,
 ): Promise<{ workspaceId: string; sessionId: string; modelId: string }> {
   const preflight = await world.gateway.preflight();
   const probe = (await world.runtime.client.getGatewayModels(harness).catch(() => [])).map((model) => model.id);
@@ -778,8 +784,12 @@ async function runBaselineTurn(
     .locator('[data-workspace-shell][data-pending-workspace="false"]')
     .first()
     .waitFor({ state: "attached", timeout: WORKSPACE_SETTLE_TIMEOUT_MS });
+  // `data-workspace-ui-key` is the LOGICAL workspace id; the AnyHarness session
+  // keys off the CONCRETE runtime workspace at the repo clone path (see
+  // local-session.ts). Keep the ui-key for the caller/DOM, resolve the session
+  // from the runtime's own local workspace.
   const workspaceId = await readRequiredAttr(p, "[data-workspace-shell]", "data-workspace-ui-key");
-  const sessionId = await resolveSessionId(world, workspaceId, WORKSPACE_SETTLE_TIMEOUT_MS);
+  const sessionId = await resolveLocalWorkspaceSessionId(world, repoPath, WORKSPACE_SETTLE_TIMEOUT_MS);
   const completion = await waitForTurnCompletion(world, sessionId, TURN_TIMEOUT_MS);
   if (completion.error) {
     throw new Error(`runBaselineTurn: assistant turn errored: ${completion.error}`);
@@ -1040,19 +1050,6 @@ async function waitForAttrChange(
     await sleep(500);
   }
   throw new Error(`waitForAttrChange: attribute "${attr}" on "${selector}" never changed from "${from}"`);
-}
-
-async function resolveSessionId(world: ReadyLocalWorld, workspaceId: string, timeoutMs: number): Promise<string> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const sessions = await world.runtime.client.listSessions().catch(() => []);
-    const forWorkspace = sessions.filter((session) => session.workspaceId === workspaceId);
-    if (forWorkspace.length > 0) {
-      return forWorkspace[forWorkspace.length - 1]!.id;
-    }
-    await sleep(1_000);
-  }
-  throw new Error(`resolveSessionId: no AnyHarness session for workspace "${workspaceId}" within ${timeoutMs}ms`);
 }
 
 /** Resolves the AnyHarness native session id backing the currently-active chat.
