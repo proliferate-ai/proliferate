@@ -11,17 +11,29 @@ from sqlalchemy import Select, exists, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.cloud.workspaces import CloudWorkspace
+from proliferate.db.models.cloud.workspaces import (
+    CLOUD_WORKSPACE_REPOSITORY_WORKTREE,
+    CLOUD_WORKSPACE_SCRATCH,
+    CloudWorkspace,
+)
 from proliferate.utils.time import utcnow
 
 CloudWorkspaceLifecycle = Literal["active", "archived", "all"]
+CloudWorkspaceKind = Literal["repository_worktree", "scratch"]
+
+# Scratch workspaces (managed Workflow runs) have no repository backing: their
+# branch is always ``main``. Display naming is a product derivation owned by the
+# workspace domain (``server/cloud/workspaces/domain/naming.py``); the store only
+# inserts the already-decided value.
+SCRATCH_WORKSPACE_GIT_BRANCH = "main"
 
 
 @dataclass(frozen=True)
 class CloudWorkspaceValue:
     id: UUID
     owner_user_id: UUID
-    repo_environment_id: UUID
+    workspace_kind: CloudWorkspaceKind
+    repo_environment_id: UUID | None
     display_name: str
     git_branch: str
     git_base_branch: str | None
@@ -35,6 +47,7 @@ def cloud_workspace_value(row: CloudWorkspace) -> CloudWorkspaceValue:
     return CloudWorkspaceValue(
         id=row.id,
         owner_user_id=row.owner_user_id,
+        workspace_kind=_normalize_kind(row.workspace_kind),
         repo_environment_id=row.repo_environment_id,
         display_name=row.display_name,
         git_branch=row.git_branch,
@@ -43,6 +56,14 @@ def cloud_workspace_value(row: CloudWorkspace) -> CloudWorkspaceValue:
         created_at=row.created_at,
         updated_at=row.updated_at,
         archived_at=row.archived_at,
+    )
+
+
+def _normalize_kind(value: str | None) -> CloudWorkspaceKind:
+    return (
+        CLOUD_WORKSPACE_SCRATCH
+        if value == CLOUD_WORKSPACE_SCRATCH
+        else (CLOUD_WORKSPACE_REPOSITORY_WORKTREE)
     )
 
 
@@ -136,10 +157,14 @@ async def create_cloud_workspace(
     git_base_branch: str | None,
     anyharness_workspace_id: str | None = None,
 ) -> CloudWorkspaceValue | None:
-    """Create a workspace row; returns None when the active branch is taken."""
+    """Create a repository-worktree workspace row.
+
+    Returns None when the active repository branch is already taken.
+    """
     now = utcnow()
     workspace = CloudWorkspace(
         owner_user_id=user_id,
+        workspace_kind=CLOUD_WORKSPACE_REPOSITORY_WORKTREE,
         repo_environment_id=repo_environment_id,
         display_name=display_name,
         git_branch=git_branch,
@@ -154,6 +179,36 @@ async def create_cloud_workspace(
             await db.flush()
     except IntegrityError:
         return None
+    return cloud_workspace_value(workspace)
+
+
+async def create_scratch_cloud_workspace(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    display_name: str,
+    anyharness_workspace_id: str | None = None,
+) -> CloudWorkspaceValue:
+    """Create a scratch (repository-less) workspace row for a managed run.
+
+    Scratch workspaces forbid a ``repo_environment_id`` and always use the
+    ``main`` branch with no base branch; repository branch uniqueness does not
+    apply to them.
+    """
+    now = utcnow()
+    workspace = CloudWorkspace(
+        owner_user_id=user_id,
+        workspace_kind=CLOUD_WORKSPACE_SCRATCH,
+        repo_environment_id=None,
+        display_name=display_name,
+        git_branch=SCRATCH_WORKSPACE_GIT_BRANCH,
+        git_base_branch=None,
+        anyharness_workspace_id=anyharness_workspace_id,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(workspace)
+    await db.flush()
     return cloud_workspace_value(workspace)
 
 

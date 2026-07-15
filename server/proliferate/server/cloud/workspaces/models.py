@@ -10,6 +10,11 @@ from pydantic import BaseModel, Field
 CloudWorkspaceStatus = Literal["pending", "materializing", "ready", "archived", "error"]
 CloudRuntimeStatus = Literal["pending", "running", "paused", "error", "disabled"]
 
+# Placement-neutral backing kind. A repository worktree carries frozen real
+# repository metadata; a scratch workspace has no repository backing and
+# serializes ``repo``/``repoEnvironmentId`` as null (never fabricated).
+CloudWorkspaceBackingKind = Literal["repositoryWorktree", "scratch"]
+
 
 class CreateCloudWorkspaceRequest(BaseModel):
     git_provider: Literal["github"] = Field(default="github", alias="gitProvider")
@@ -74,9 +79,15 @@ class WorkspaceCloudAccessSummary(BaseModel):
 class WorkspaceSummary(BaseModel):
     id: str
     target_id: str | None = Field(default=None, serialization_alias="targetId")
-    repo_environment_id: str = Field(serialization_alias="repoEnvironmentId")
+    # The frozen response requires current servers to ALWAYS emit these three:
+    # ``workspaceKind`` non-null, and ``repo``/``repoEnvironmentId`` required but
+    # nullable for scratch (never omittable). They carry no default so the
+    # OpenAPI schema keeps them in the required set; older-server compatibility
+    # is expressed in the deliberately optional public projection type, not here.
+    workspace_kind: CloudWorkspaceBackingKind = Field(serialization_alias="workspaceKind")
+    repo_environment_id: str | None = Field(serialization_alias="repoEnvironmentId")
     display_name: str = Field(serialization_alias="displayName")
-    repo: RepoRef
+    repo: RepoRef | None
     status: CloudWorkspaceStatus
     workspace_status: CloudWorkspaceStatus = Field(serialization_alias="workspaceStatus")
     product_lifecycle: Literal["active", "archived"] = Field(

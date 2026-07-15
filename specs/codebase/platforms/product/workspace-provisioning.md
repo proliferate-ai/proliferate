@@ -48,7 +48,8 @@ repository preparation failure.
 defines `cloud_workspace`. It owns:
 
 - the product workspace id and owner;
-- `repo_environment_id`;
+- a placement-neutral `workspace_kind` (`repository_worktree | scratch`);
+- a nullable `repo_environment_id`;
 - display name, Git branch, and optional base branch;
 - the optional `anyharness_workspace_id`; and
 - archive timestamps.
@@ -56,6 +57,40 @@ defines `cloud_workspace`. It owns:
 It does not own a sandbox id, runtime session state, runtime path, or runtime
 events. An AnyHarness workspace id is a reference to runtime truth, not a copy
 of that truth in Cloud.
+
+### Placement-neutral identity
+
+The row is placement-neutral so it can back either a repository worktree or a
+repository-less scratch workspace, without inventing repository metadata for
+scratch:
+
+- `repository_worktree` (the backfilled default for every pre-existing row)
+  requires a real `repo_environment_id` and preserves the existing
+  repository/branch behavior; its API response carries `workspaceKind =
+  repositoryWorktree` with a populated `repo` and `repoEnvironmentId`.
+- `scratch` (managed Workflow runs) forbids a `repo_environment_id`, uses the
+  `main` branch with no base branch, and serializes `repo`/`repoEnvironmentId`
+  and `runtime.environmentId` as `null` — never fabricated. Repository branch
+  uniqueness (the active partial index) applies only to repository worktrees, so
+  scratch rows freely share `main`.
+
+Two check constraints enforce this: `workspace_kind` is restricted to the two
+values, and a repo-environment presence constraint ties a non-null
+`repo_environment_id` to `repository_worktree` and forbids one for `scratch`.
+The migration is `c3a7b8d9e0f1_cloud_workspace_backing_kind`.
+
+Current servers always emit `workspaceKind`, `repo`, and `repoEnvironmentId`
+(the latter two nullable for scratch, never omitted); the shared client type
+keeps them optional only so responses from older servers that predate the
+migration are read as `repositoryWorktree`.
+
+Scope note: the mounted human `POST /workspaces` flow below remains
+repository-only — it always creates a `repository_worktree` bound to a resolved
+cloud repo environment. There is no current mounted route that creates a
+`scratch` workspace; managed scratch creation and execution are downstream in
+Managed Cloud Execution (5b), not current behavior. This slice (5a) delivers
+only the placement-neutral identity, its migration, the serialized fields, and
+the shared display derivation.
 
 ## Mounted API
 
@@ -199,6 +234,9 @@ Use these focused tests as the code-level proof:
 - `server/tests/unit/test_sandbox_materialization.py`
 - `server/tests/unit/test_cloud_workspace_status.py`
 - `server/tests/unit/test_cloud_sandbox_gateway_access.py`
+- `server/tests/integration/test_cloud_workspace_backing_kind.py`
+- `server/tests/integration/test_cloud_workspace_backing_kind_migration.py`
+- `server/tests/integration/test_cloud_workspace_identity_payload.py`
 
 For incident diagnosis, use
 [`cloud-provisioning-failure.md`](../../../developing/operating/cloud-provisioning-failure.md).

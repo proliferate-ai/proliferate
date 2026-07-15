@@ -54,10 +54,19 @@ export function useAutomationTargetSelection({
   );
   const scopedCloudWorkspaces = isOrganization ? EMPTY_CLOUD_WORKSPACES : cloudWorkspaces;
   const effectiveRepoConfigs = isOrganization ? EMPTY_REPO_CONFIGS : repoConfigs;
+  // Automation targets are repository-only: scratch workspaces (repo = null)
+  // are never target candidates.
+  const repositoryCloudWorkspaces = useMemo(
+    () => scopedCloudWorkspaces.filter(
+      (workspace): workspace is typeof workspace & { repo: NonNullable<typeof workspace.repo> } =>
+        workspace.repo != null,
+    ),
+    [scopedCloudWorkspaces],
+  );
 
   const targetState = useMemo(() => buildAutomationTargetState({
     repoConfigs: effectiveRepoConfigs,
-    cloudWorkspaces: scopedCloudWorkspaces,
+    cloudWorkspaces: repositoryCloudWorkspaces,
     sshTargets: computeTargets.sshTargetOptions,
     repositories,
     selectedTarget,
@@ -85,7 +94,7 @@ export function useAutomationTargetSelection({
     organizationId,
     effectiveRepoConfigs,
     repositories,
-    scopedCloudWorkspaces,
+    repositoryCloudWorkspaces,
     computeTargets.sshTargetOptions,
     selectedTarget,
   ]);

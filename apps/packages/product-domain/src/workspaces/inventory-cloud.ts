@@ -1,5 +1,6 @@
 import type { CloudWorkspaceSummary } from "@proliferate/cloud-sdk";
 
+import { workspaceRepoRef } from "./backing-kind";
 import {
   recentWorkCloudAccessLabel,
   recentWorkCommandabilityLabel,
@@ -288,23 +289,20 @@ function workspaceExposureLabel(
 }
 
 function repoLabel(workspace: CloudWorkspaceSummary): string {
-  return `${workspace.repo.owner}/${workspace.repo.name}`;
+  const repo = workspaceRepoRef(workspace);
+  return repo ? `${repo.owner}/${repo.name}` : "";
 }
 
 function workspaceBranchLabel(workspace: CloudWorkspaceSummary): string {
-  return (
-    nonEmptyText(workspace.repo.branch) ??
-    nonEmptyText(workspace.repo.baseBranch) ??
-    "main"
-  );
+  const repo = workspaceRepoRef(workspace);
+  return nonEmptyText(repo?.branch) ?? nonEmptyText(repo?.baseBranch) ?? "main";
 }
 
 function workspaceDisplayLabel(workspace: CloudWorkspaceSummary): string {
   return (
     nonEmptyText(workspace.displayName) ??
-    nonEmptyText(workspace.repo.name) ??
-    workspaceBranchLabel(workspace) ??
-    repoLabel(workspace)
+    nonEmptyText(workspaceRepoRef(workspace)?.name) ??
+    workspaceBranchLabel(workspace)
   );
 }
 

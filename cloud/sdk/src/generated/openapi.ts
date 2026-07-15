@@ -1740,6 +1740,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/worker/download/{target}/{version}/{asset}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Worker Artifact Versioned Download Endpoint
+         * @description 302 to the worker binary at an EXACT version (R9R-001).
+         *
+         *     The version-specific path a supervisor-owned Worker resolves for an update
+         *     request: the server resolves the requested version or fails closed (404) —
+         *     it never falls back to the rolling ``stable`` path, so a B-pinned sandbox is
+         *     never handed an A-labelled artifact.
+         */
+        get: operations["worker_artifact_versioned_download_endpoint_v1_cloud_worker_download__target___version___asset__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/runtime/download/{target}/{version}/{asset}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Runtime Artifact Versioned Download Endpoint
+         * @description 302 to the AnyHarness binary at an EXACT version (R9R-001).
+         *
+         *     The runtime parallel of the versioned worker download: exact-version
+         *     resolution, fail closed on an unpublished version, no rolling fallback.
+         */
+        get: operations["runtime_artifact_versioned_download_endpoint_v1_cloud_runtime_download__target___version___asset__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workers/admin/sandboxes/{cloud_sandbox_id}/desired-versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Sandbox Desired Versions Endpoint */
+        put: operations["set_sandbox_desired_versions_endpoint_v1_cloud_workers_admin_sandboxes__cloud_sandbox_id__desired_versions_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/integration-gateway/mcp": {
         parameters: {
             query?: never;
@@ -5466,6 +5531,28 @@ export interface components {
             /** Enabled */
             enabled: boolean;
         };
+        /**
+         * SetSandboxDesiredVersionsRequest
+         * @description Admin setter body for a sandbox's target-scoped desired versions.
+         *
+         *     ``None`` (the default, and the JSON explicit ``null``) clears the
+         *     override so the target inherits the global pin again.
+         */
+        SetSandboxDesiredVersionsRequest: {
+            /** Desiredanyharnessversion */
+            desiredAnyharnessVersion?: string | null;
+            /** Desiredworkerversion */
+            desiredWorkerVersion?: string | null;
+        };
+        /** SetSandboxDesiredVersionsResponse */
+        SetSandboxDesiredVersionsResponse: {
+            /** Cloudsandboxid */
+            cloudSandboxId: string;
+            /** Desiredanyharnessversion */
+            desiredAnyharnessVersion: string | null;
+            /** Desiredworkerversion */
+            desiredWorkerVersion: string | null;
+        };
         /** SsoDiscoveryResponse */
         SsoDiscoveryResponse: {
             /** Enabled */
@@ -6247,6 +6334,36 @@ export interface components {
             /** Heartbeatintervalseconds */
             heartbeatIntervalSeconds: number;
             desiredVersions: components["schemas"]["WorkerDesiredVersions"];
+            /** Desiredtopology */
+            desiredTopology?: string | null;
+            supervisorBridge?: components["schemas"]["WorkerSupervisorBridge"] | null;
+        };
+        /**
+         * WorkerSupervisorBridge
+         * @description Server-materialized D5 bridge inputs for an already-provisioned legacy
+         *     target (R9R-002).
+         *
+         *     A legacy Worker's persisted config carries none of the supervisor-owned
+         *     fields, so without these it could never bridge. The server delivers the
+         *     Supervisor config TOML + a supervisor-owned Worker config TOML and the paths
+         *     to write them through the live heartbeat channel; the legacy Worker
+         *     materializes both, starts the Supervisor, and hands the box off. Absent for
+         *     Supervisor-first provisions (their on-disk config already carries the inputs)
+         *     and for every non-flag-enabled target.
+         */
+        WorkerSupervisorBridge: {
+            /** Supervisorbinarypath */
+            supervisorBinaryPath: string;
+            /** Supervisorconfigpath */
+            supervisorConfigPath: string;
+            /** Supervisorconfigtoml */
+            supervisorConfigToml: string;
+            /** Workerconfigpath */
+            workerConfigPath: string;
+            /** Workerconfigtoml */
+            workerConfigToml: string;
+            /** Markerdir */
+            markerDir: string;
         };
         /** WorkflowDefinitionCreateRequest */
         WorkflowDefinitionCreateRequest: {
@@ -6498,11 +6615,16 @@ export interface components {
             id: string;
             /** Targetid */
             targetId?: string | null;
+            /**
+             * Workspacekind
+             * @enum {string}
+             */
+            workspaceKind: "repositoryWorktree" | "scratch";
             /** Repoenvironmentid */
-            repoEnvironmentId: string;
+            repoEnvironmentId: string | null;
             /** Displayname */
             displayName: string;
-            repo: components["schemas"]["RepoRef"];
+            repo: components["schemas"]["RepoRef"] | null;
             /**
              * Status
              * @enum {string}
@@ -6653,11 +6775,16 @@ export interface components {
             id: string;
             /** Targetid */
             targetId?: string | null;
+            /**
+             * Workspacekind
+             * @enum {string}
+             */
+            workspaceKind: "repositoryWorktree" | "scratch";
             /** Repoenvironmentid */
-            repoEnvironmentId: string;
+            repoEnvironmentId: string | null;
             /** Displayname */
             displayName: string;
-            repo: components["schemas"]["RepoRef"];
+            repo: components["schemas"]["RepoRef"] | null;
             /**
              * Status
              * @enum {string}
@@ -10338,6 +10465,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    worker_artifact_versioned_download_endpoint_v1_cloud_worker_download__target___version___asset__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target: string;
+                version: string;
+                asset: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    runtime_artifact_versioned_download_endpoint_v1_cloud_runtime_download__target___version___asset__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target: string;
+                version: string;
+                asset: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_sandbox_desired_versions_endpoint_v1_cloud_workers_admin_sandboxes__cloud_sandbox_id__desired_versions_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cloud_sandbox_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetSandboxDesiredVersionsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetSandboxDesiredVersionsResponse"];
                 };
             };
             /** @description Validation Error */

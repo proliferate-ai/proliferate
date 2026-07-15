@@ -109,7 +109,7 @@ export function useWorkspaceCollectionsMutationCache(runtimeUrl: string) {
             displayName: workspace.displayName,
             repo: {
               ...candidate.repo,
-              branch: workspace.repo.branch,
+              branch: workspace.repo?.branch ?? candidate.repo.branch,
             },
             updatedAt: workspace.updatedAt,
           }

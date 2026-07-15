@@ -79,9 +79,13 @@ export function sidebarEntryDisplayName(entry: SidebarWorkspaceEntry): string {
 export function cloudSidebarEntryDefaultDisplayName(
   entry: CloudSidebarWorkspaceEntry,
 ): string {
-  return entry.workspace.repo.branch?.trim()
-    ? humanizeBranchName(entry.workspace.repo.branch)
-    : entry.workspace.repo.name;
+  const repo = entry.workspace.repo;
+  if (!repo) {
+    return entry.workspace.displayName?.trim() || "Workspace";
+  }
+  return repo.branch?.trim()
+    ? humanizeBranchName(repo.branch)
+    : repo.name;
 }
 
 export function sidebarEntryUpdatedAt(entry: SidebarWorkspaceEntry): string {
@@ -96,11 +100,12 @@ export function sidebarEntryGitMetadata(
   entry: SidebarWorkspaceEntry,
 ): SidebarEntryGitMetadata {
   if (entry.source === "cloud") {
+    const repo = entry.workspace.repo;
     return {
-      provider: entry.workspace.repo.provider,
-      owner: entry.workspace.repo.owner,
-      repoName: entry.workspace.repo.name,
-      branchName: entry.workspace.repo.branch,
+      provider: repo?.provider ?? null,
+      owner: repo?.owner ?? null,
+      repoName: repo?.name ?? null,
+      branchName: repo?.branch ?? null,
     };
   }
 
@@ -124,7 +129,9 @@ export function sidebarEntryIsCloud(
 
 function sidebarEntryGroupName(entry: SidebarWorkspaceEntry): string {
   if (entry.source === "cloud") {
-    return entry.workspace.repo.name;
+    return entry.workspace.repo?.name
+      ?? entry.workspace.displayName?.trim()
+      ?? "Workspace";
   }
 
   return entry.workspace.path.split("/").filter(Boolean).pop()

@@ -239,7 +239,7 @@ export function MobileChatScreen({
   const subtitle = workspace?.repo
     ? `${workspace.repo.owner}/${workspace.repo.name}`
     : chat.repoLabel;
-  const branchLabel = workspace?.repo.branch ?? workspace?.repo.baseBranch ?? chat.branchLabel;
+  const branchLabel = workspace?.repo?.branch ?? workspace?.repo?.baseBranch ?? chat.branchLabel;
   const commandMessage =
     pendingPromptStatus ??
     (!session && !canStartNewSession ? workspaceHarnessAvailability.message : null) ??
