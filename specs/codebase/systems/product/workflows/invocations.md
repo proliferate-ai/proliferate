@@ -1,7 +1,5 @@
 # Portable Invocation and Target Resolution
 
-Status: authoritative implementation contract, revision `1.0`.
-
 Owner: Cloud Workflow invocations and AnyHarness Workflow target resolution.
 
 Read with [`definitions.md`](definitions.md), [`runs.md`](runs.md),
@@ -16,7 +14,7 @@ resolves model, mode, and optional effort against one existing workspace once,
 stores the concrete plan before effects, and uses the existing
 `WorkflowRunRuntime` to execute it.
 
-This PR proves manual/test transfer. It does not own automated delivery,
+This contract covers manual/test transfer. It does not own automated delivery,
 background work, target custody, workspace creation/materialization,
 cancellation, takeover, UI, Desktop, goals, multiple steps/stages, grants, MCP,
 subagents, schedules, retry, recovery, a generalized compiler/resolver, a new
@@ -253,7 +251,8 @@ workflow_invocation
 
 Reparse and RFC-8785-canonicalize stored typed `creation_request_json` for
 replay; never use JSONB equality. `invocation_json` is the immutable response
-and later delivery payload. This PR adds no delivery/execution status.
+and later delivery payload. The invocation record adds no delivery/execution
+status.
 
 AnyHarness keeps `workflow_runs.invocation_json`; replay identity becomes
 `(schema_version, canonical invocation_json)`. Add nullable
@@ -390,12 +389,3 @@ change launch defaults -> replay same plan, no second session/prompt/turn
 ```
 
 Scripted/fake agent execution is sufficient here. Real-agent Tier 3 is later.
-
-## Handoff metadata
-
-| Field | Value |
-| --- | --- |
-| Spec revision | `1.0` |
-| Base SHA | `0eab251fd35d26022165f7f0852db2885a8c4093` |
-| Predecessor | PR #1158 |
-| Founder approval | 2026-07-14 |

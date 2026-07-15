@@ -1,7 +1,5 @@
 # Cloud Workspace Provisioning
 
-Status: current
-
 This platform is the current read path for configuring a cloud repository and
 creating a Cloud product workspace backed by an AnyHarness worktree. Cloud
 owns the product row; AnyHarness owns runtime workspace and session truth.

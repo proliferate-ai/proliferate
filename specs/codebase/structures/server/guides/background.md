@@ -1,9 +1,5 @@
 # Background Work
 
-Status: authoritative for non-HTTP background work — the Celery substrate under
-`server/proliferate/background/**` and the worker-facing service logic under
-`server/<domain>/**` that tasks call.
-
 Background work is everything the product does outside the request lifecycle:
 periodic polls, drift reconciliation, and durable jobs triggered by a state
 change. There is **one execution model** for all of it — a Celery task — and the

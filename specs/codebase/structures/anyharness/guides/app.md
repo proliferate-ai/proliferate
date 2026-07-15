@@ -1,7 +1,5 @@
 # AnyHarness App Composition
 
-Status: authoritative for `anyharness-lib/src/app/**`.
-
 ## Purpose
 
 `app/` is the composition root for the AnyHarness runtime.

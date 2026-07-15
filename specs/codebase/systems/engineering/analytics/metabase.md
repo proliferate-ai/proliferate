@@ -1,7 +1,5 @@
 # Metabase And Durable Analytics Views
 
-Status: current system contract
-
 Metabase is an optional read-only presentation layer over durable analytics
 facts in Postgres. Repository law is the checked-in schema, views, ingestion
 code, and infrastructure inputs. A dashboard, card, connection, or freshness

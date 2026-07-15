@@ -2,11 +2,6 @@
 
 - [Support Loop](support-loop.md) — target contract for support ingestion,
   issue resolution, attribution, releases, and changelog communication.
-- [Private Support Feed](private-support-feed.md) — active deployment contract
-  for the authenticated completed-report feed consumed by the tracker.
-- [Production Runtime Evidence](production-runtime-evidence.md) — frozen B2
-  contract for bounded runtime/Sentry identity, exact E2B build stamping, and
-  the fresh-sandbox proof.
 - [Observability](../observability/README.md) owns Sentry and structured-log
   event production, scrubbing, and correlation before evidence enters this
   system.

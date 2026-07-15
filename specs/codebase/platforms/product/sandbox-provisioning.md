@@ -1,7 +1,5 @@
 # Cloud Sandbox Provisioning
 
-Status: current
-
 This platform owns the personal managed-cloud sandbox row and the just-in-time
 connection from Proliferate Cloud to E2B and AnyHarness. It does not own
 workspaces, repository configuration, or AnyHarness runtime state.

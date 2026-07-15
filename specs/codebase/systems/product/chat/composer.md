@@ -1,7 +1,5 @@
 # Chat Composer Standards
 
-Status: authoritative for the chat composer area (`apps/desktop/src/components/workspace/chat/input/**`, the panels above the input, and the Claude plan card in the transcript). Owner rev 2026-07-02.
-
 Scope:
 
 - `apps/desktop/src/components/workspace/chat/input/**`

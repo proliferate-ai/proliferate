@@ -1,7 +1,5 @@
 # Agent Catalog And Readiness
 
-Status: authoritative for AnyHarness agent catalog/readiness truth sources.
-
 ## Goal
 
 The agents domain answers one product question:

@@ -1,8 +1,5 @@
 # Organization Invitations
 
-Status: authoritative for organization invite links, pending invitation grants,
-and desktop join behavior.
-
 Date: 2026-06-24.
 
 Scope:

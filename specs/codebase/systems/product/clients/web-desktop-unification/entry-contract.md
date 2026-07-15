@@ -1,25 +1,11 @@
 # ProductClient application-entry contract
 
-Status: **Recorded contract (mechanics PR).** The reserved real files below are
-created by the later mechanical move, not by this PR.
+This is the required application-entry shape for the mechanical extraction of
+the Desktop product into `@proliferate/product-client`. The landed
+qualification canary proves the signature, export subpath, provider envelope,
+and build behavior before the real source move.
 
-This records the approved future application-entry contract for
-`@proliferate/product-client` so the mechanical move performs it from a checked
-contract rather than agent judgment. It is qualified in this PR by a
-qualification-only build canary (see "Qualification canary" below); no
-placeholder product and no Desktop import is added.
-
-Founder decisions 8–9 (approved 2026-07-14) are the source of truth for the
-signature, export subpath, and provider envelope.
-
-> Location note: the contract's Required-artifacts table names only
-> `web-desktop-product-client-move-ledger.md` as an owned doc. The
-> application-entry contract is a required artifact without a mandated file, so
-> it is recorded here as a dedicated doc. It may be folded into the move-ledger
-> doc when that lands (ledger/docs stage); if so, this file is superseded and
-> should be deleted rather than left as a forwarding stub.
-
-## Reserved future source paths (created by the move PR — do NOT create now)
+## Reserved source paths
 
 ```text
 apps/packages/product-client/src/ProductClient.tsx
@@ -29,8 +15,8 @@ apps/packages/product-client/src/app/AuthenticatedProductClient.tsx
 - `ProductClient.tsx` is the only public product entry.
 - `AuthenticatedProductClient.tsx` is internal and lazy-loaded from
   `#product/app/AuthenticatedProductClient`.
-- Neither file may exist in this mechanics PR. Creating either is a stop
-  condition.
+- Neither file exists in the landed mechanics proof. The mechanical extraction
+  creates both from the existing Desktop product.
 
 ## Public export subpath
 
@@ -46,9 +32,9 @@ The only public product entry is exported as
 }
 ```
 
-The move PR emits `dist/ProductClient.{js,d.ts}` and adds this export. This
-mechanics PR instead carries a **temporary** public canary export that stands in
-for it and is deleted when the real entry lands:
+The mechanical extraction emits `dist/ProductClient.{js,d.ts}` and adds this
+export. Until then, the package carries a **temporary** public canary export
+that stands in for it and is deleted when the real entry lands:
 
 ```json
 {
@@ -134,10 +120,10 @@ the real Desktop product.
 
 - `src/ProductClient.tsx` and `src/app/AuthenticatedProductClient.tsx` are
   reserved names owned by the mechanical move.
-- The mechanics PR must not create them, must not export `./ProductClient`, and
-  must not import Desktop source into the package.
+- The landed mechanics proof does not create them, export `./ProductClient`,
+  or import Desktop source into the package.
 
-## Qualification canary (this PR)
+## Landed qualification canary
 
 The contract is qualified — without moving the product — by:
 

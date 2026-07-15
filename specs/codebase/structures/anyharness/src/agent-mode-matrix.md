@@ -1,8 +1,5 @@
 # Agent Session Mode Matrix
 
-Status: source-of-truth note for session permission / collaboration mode
-variants by agent family, scoped to what the repo supports today.
-
 This doc exists to answer one question: "for a given agent kind, what
 `mode_id` / `collaboration_mode` values can cowork actually send, and which
 one is the most permissive?"

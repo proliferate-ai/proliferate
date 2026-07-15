@@ -1,7 +1,5 @@
 # Anonymous Telemetry
 
-Status: current system contract
-
 Anonymous telemetry is the first-party install-level path for version,
 activation, and low-cardinality usage records. It is independent of PostHog
 and contains no replay data.

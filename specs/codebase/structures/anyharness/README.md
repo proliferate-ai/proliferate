@@ -1,7 +1,5 @@
 # AnyHarness Standards
 
-Status: authoritative for AnyHarness runtime code in this repo.
-
 Scope:
 
 - `anyharness/crates/anyharness/**`

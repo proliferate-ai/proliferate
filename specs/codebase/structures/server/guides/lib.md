@@ -1,7 +1,5 @@
 # Server Lib
 
-Status: authoritative for reusable cross-domain logic under `server/proliferate/lib/**`.
-
 `lib/**` is reusable cross-domain logic — the product concerns, integration capabilities, and generic machinery that more than one domain needs, that no single domain owns, that are not raw vendor clients, and that own no durable state and no product policy. It is the smallest layer: almost everything has a more specific home, so `lib/` is the last resort, not the default.
 
 ## Placement

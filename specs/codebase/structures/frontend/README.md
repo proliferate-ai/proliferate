@@ -1,7 +1,5 @@
 # Frontend Standards
 
-Status: authoritative for Desktop, Web, Mobile, and shared frontend packages.
-
 ## Scope
 
 These standards apply to all frontend app logic and shared frontend packages:

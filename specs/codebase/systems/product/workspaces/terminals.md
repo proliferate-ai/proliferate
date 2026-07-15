@@ -1,10 +1,5 @@
 # Terminals
 
-Status: authoritative for user-facing workspace terminal behavior on Desktop.
-Runtime terminal internals (PTY lifecycle, output sinks, command runs) are
-owned by the AnyHarness structure specs under
-[../../../structures/anyharness/README.md](../../../structures/anyharness/README.md).
-
 ## Surfaces
 
 - Right panel terminal pane: `apps/desktop/src/components/workspace/terminals/`

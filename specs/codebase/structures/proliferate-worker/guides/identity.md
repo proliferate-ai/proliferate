@@ -1,8 +1,5 @@
 # Worker Identity
 
-Status: authoritative for `anyharness/crates/proliferate-worker/src/identity/**`
-and `integration_gateway.rs`.
-
 The Worker has a one-time bootstrap credential and one durable Cloud identity:
 
 ```text

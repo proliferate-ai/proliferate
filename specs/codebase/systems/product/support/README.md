@@ -1,7 +1,5 @@
 # Support reporting
 
-Status: authoritative for the currently shipped support-capture path.
-
 Support reporting captures private customer feedback and diagnostic evidence.
 It does not own issue triage, automated repair, release tracking, or reporter
 outreach. The authoritative downstream issue, attribution, release, and
