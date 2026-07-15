@@ -1,7 +1,5 @@
 # AnyHarness Domains
 
-Status: authoritative for durable/product code under `anyharness-lib/src/domains/**`.
-
 Read [mental-model.md](mental-model.md) first: it owns the eight jobs, the
 use-case pipeline, the mapping/error doctrines, and the placement algorithm
 this guide applies to domains.

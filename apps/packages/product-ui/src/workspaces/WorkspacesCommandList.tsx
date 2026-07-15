@@ -17,7 +17,8 @@
  * headings are 13px/500 foreground with the item count in `--faint`. An
  * optional dashed "Create" row closes the list with a ⌘N hint.
  */
-import { ChevronRight, FolderPlus, GitBranch, GitPullRequest } from "lucide-react";
+import { ChevronRight, FolderPlus, GitPullRequest } from "lucide-react";
+import { GitBranchIcon } from "@proliferate/ui/icons";
 import type { ReactNode } from "react";
 import { Spinner } from "@proliferate/ui/primitives/Spinner";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
@@ -234,7 +235,7 @@ function WorkspaceRowGlyph({
     return <GitPullRequest className="!size-3" aria-hidden />;
   }
   if (branch) {
-    return <GitBranch className="!size-3" aria-hidden />;
+    return <GitBranchIcon className="!size-3" aria-hidden />;
   }
   return null;
 }

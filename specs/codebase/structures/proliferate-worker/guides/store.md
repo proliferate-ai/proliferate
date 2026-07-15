@@ -1,7 +1,5 @@
 # Worker Store
 
-Status: authoritative for `anyharness/crates/proliferate-worker/src/store/**`.
-
 Worker-local SQLite contains only restart-critical Worker state. It is not
 Cloud workspace state, AnyHarness runtime state, or a copy of server truth.
 

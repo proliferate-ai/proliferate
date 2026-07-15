@@ -32,11 +32,25 @@ export function useHomeNextModeSelection({
   const agentKind = modelSelection?.kind ?? null;
   const catalogQuery = useCloudAgentCatalog(Boolean(agentKind));
 
+  const modelId = modelSelection?.modelId ?? null;
   const catalogModeOptions = useMemo(() => {
     const agent = catalogQuery.data?.agents.find((candidate) => candidate.kind === agentKind);
     const control = agent?.launchControls?.find((candidate) => candidate.key === "mode") ?? null;
-    return launchControlToConfiguredSessionControlValues(agentKind, control);
-  }, [agentKind, catalogQuery.data?.agents]);
+    const options = launchControlToConfiguredSessionControlValues(agentKind, control);
+    // Scope to the modes the SELECTED model actually supports. The agent-level
+    // `mode` vocabulary is a superset (e.g. it includes `auto`), but gateway /
+    // bedrock models reject modes outside their per-model vocabulary at session
+    // creation. Without this, the composer would default to (and offer) a mode
+    // the model can't use — e.g. `auto` for a gateway Claude model.
+    const model = agent?.models.find((candidate) =>
+      candidate.id === modelId || (candidate.aliases ?? []).includes(modelId ?? ""));
+    const modeValues = model?.modeValues ?? null;
+    if (!modeValues || modeValues.length === 0) {
+      return options;
+    }
+    const supported = options.filter((option) => modeValues.includes(option.value));
+    return supported.length > 0 ? supported : options;
+  }, [agentKind, catalogQuery.data?.agents, modelId]);
 
   const modeOptions = useMemo(
     () => catalogModeOptions.length > 0

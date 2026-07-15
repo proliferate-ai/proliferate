@@ -1,7 +1,5 @@
 # Engineering Analytics
 
-Status: current system contract
-
 Engineering Analytics owns product and adoption measurement. It owns the
 first-party daily-activity and anonymous-telemetry records, the PostHog client
 adapters, and the durable Postgres analytics objects that Metabase may read.

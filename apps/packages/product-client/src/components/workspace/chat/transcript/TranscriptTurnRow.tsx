@@ -147,6 +147,9 @@ export function TranscriptTurnRow({
   // that frontier and swaps from empty to copy/timestamp controls on completion.
   // Tool-only, stopped, and errored completions have no copyable prose, so
   // their last row keeps the empty footer instead of dropping 24px at handoff.
+  // The end-of-turn diff panel is completion-only and renders BELOW the final
+  // prose, directly above that footer — it appears in the same paint as the
+  // footer swap, so nothing shifts under a live stream.
   const assistantFooterMode = resolveTurnAssistantFooterMode({
     rowIsLastTurnRow: row.isLastTurnRow,
     turnCompleted: !!turn.completedAt,
@@ -227,24 +230,6 @@ export function TranscriptTurnRow({
           workspaceId={selectedWorkspaceId}
           onOpenArtifact={onOpenArtifact}
           onHandOffPlanToNewSession={onHandOffPlanToNewSession}
-          beforeFrontier={diffPanelKind === "current" ? (
-            <TurnDiffPanel
-              turn={turn}
-              transcript={transcript}
-              workspaceId={selectedWorkspaceId}
-              onOpenFile={onOpenFile}
-              onOpenReviewPane={onOpenTurnChanges}
-              onUndoTurnChanges={undoDisabledReason ? undefined : handleUndoTurnChanges}
-              undoDisabledReason={undoDisabledReason}
-              undoBusy={revertPatchesMutation.isPending}
-            />
-          ) : diffPanelKind === "transcript" ? (
-            <TranscriptPatchTurnDiffPanel
-              turn={turn}
-              transcript={transcript}
-              onOpenFile={onOpenFile}
-            />
-          ) : null}
         />
         {trailingStatus && (
           <div data-turn-frontier-status>{trailingStatus}</div>
@@ -255,6 +240,24 @@ export function TranscriptTurnRow({
             <div className="w-full border-t border-current/20" />
           </div>
         )}
+        {diffPanelKind === "current" ? (
+          <TurnDiffPanel
+            turn={turn}
+            transcript={transcript}
+            workspaceId={selectedWorkspaceId}
+            onOpenFile={onOpenFile}
+            onOpenReviewPane={onOpenTurnChanges}
+            onUndoTurnChanges={undoDisabledReason ? undefined : handleUndoTurnChanges}
+            undoDisabledReason={undoDisabledReason}
+            undoBusy={revertPatchesMutation.isPending}
+          />
+        ) : diffPanelKind === "transcript" ? (
+          <TranscriptPatchTurnDiffPanel
+            turn={turn}
+            transcript={transcript}
+            onOpenFile={onOpenFile}
+          />
+        ) : null}
         <TurnAssistantActionRow
           content={tailAssistantCopyContent}
           showCopyButton={assistantFooterMode === "copy"}

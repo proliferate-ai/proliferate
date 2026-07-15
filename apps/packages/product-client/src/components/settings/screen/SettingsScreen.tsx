@@ -6,8 +6,8 @@ import {
   TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION,
   type SettingsSection,
 } from "#product/config/settings";
-import { SettingsContentBoundary } from "#product/components/settings/screen/SettingsContentBoundary";
-import { renderSettingsSection } from "#product/components/settings/screen/render-settings-section";
+import { SettingsContentBoundary } from "./SettingsContentBoundary";
+import { renderSettingsSection } from "./render-settings-section";
 import {
   type SettingsRepositoryEntry,
 } from "#product/lib/domain/settings/repositories";
@@ -32,6 +32,12 @@ import { SettingsScopeTabs } from "@proliferate/product-ui/settings/SettingsScop
 import { ArrowLeft } from "lucide-react";
 import { SETTINGS_COPY } from "#product/copy/settings/settings-copy";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+import { useResize } from "#product/hooks/ui/layout/use-resize";
+import {
+  WORKSPACE_SIDEBAR_MAX_WIDTH,
+  WORKSPACE_SIDEBAR_MIN_WIDTH,
+} from "#product/lib/domain/preferences/workspace-ui/sidebar";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { useUpdater } from "#product/hooks/access/tauri/use-updater";
 import { useIsAdmin } from "#product/hooks/access/cloud/organizations/use-is-admin";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
@@ -105,6 +111,18 @@ export function SettingsScreen({
     onSelectSection(SETTINGS_DEFAULT_SECTION);
   }, [activeSection, onSelectSection, shouldRedirectAdminSection]);
 
+  // The settings sidebar shares the main sidebar's persisted width, so
+  // resizing either surface keeps both in step.
+  const sidebarWidth = useWorkspaceUiStore((s) => s.sidebarWidth);
+  const setSidebarWidth = useWorkspaceUiStore((s) => s.setSidebarWidth);
+  const onSidebarSeparatorDown = useResize({
+    direction: "horizontal",
+    size: sidebarWidth,
+    onResize: setSidebarWidth,
+    min: WORKSPACE_SIDEBAR_MIN_WIDTH,
+    max: WORKSPACE_SIDEBAR_MAX_WIDTH,
+  });
+
   const activeScope = getSettingsScopeForSection(effectiveActiveSection);
   const handleScopeChange = (scope: typeof activeScope) => {
     if (scope === activeScope) {
@@ -157,27 +175,41 @@ export function SettingsScreen({
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <SettingsSidebar
-          activeScope={activeScope}
-          activeSection={effectiveActiveSection}
-          adminAccess={{
-            isAdmin: admin.isAdmin,
-            isLoading: admin.isLoading,
-          }}
-          onSelectSection={onSelectSection}
-          disabledSections={{
-            integrations: !cloudEnabled,
-            "organization-integrations": !cloudEnabled,
-            "agent-api-keys": !cloudEnabled,
-            "organization-secrets": !cloudEnabled,
-            "organization-sso": !cloudEnabled,
-            "personal-secrets": !cloudEnabled,
-          }}
-          onCheckForUpdates={() => { void checkNow(); }}
-          updateActionState={{
-            phase,
-            updatesSupported,
-          }}
+        <div
+          id="settings-sidebar"
+          className="flex shrink-0 flex-col overflow-hidden border-r border-border"
+          style={{ width: sidebarWidth }}
+        >
+          <SettingsSidebar
+            activeScope={activeScope}
+            activeSection={effectiveActiveSection}
+            adminAccess={{
+              isAdmin: admin.isAdmin,
+              isLoading: admin.isLoading,
+            }}
+            onSelectSection={onSelectSection}
+            disabledSections={{
+              integrations: !cloudEnabled,
+              "organization-integrations": !cloudEnabled,
+              "agent-api-keys": !cloudEnabled,
+              "organization-secrets": !cloudEnabled,
+              "organization-sso": !cloudEnabled,
+              "personal-secrets": !cloudEnabled,
+            }}
+            onCheckForUpdates={() => { void checkNow(); }}
+            updateActionState={{
+              phase,
+              updatesSupported,
+            }}
+          />
+        </div>
+
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-controls="settings-sidebar"
+          onMouseDown={onSidebarSeparatorDown}
+          className="relative z-10 -ml-1 flex w-1 shrink-0 cursor-col-resize items-center justify-center transition-colors hover:bg-primary/30 active:bg-primary/50"
         />
 
         <div className="relative min-w-0 flex-1 bg-background">

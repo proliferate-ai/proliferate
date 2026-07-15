@@ -32,17 +32,22 @@ export function SidebarNavRow({
       active={active}
       disabled={disabled}
       onPress={onPress}
-      className={`min-h-[calc(1lh+0.5rem)] gap-2 px-2 py-1 text-ui leading-5 focus-visible:outline-offset-[-2px] ${className}`}
+      className={`h-[28px] gap-2 px-2 py-1 text-ui leading-5 focus-visible:outline-offset-[-2px] ${className}`}
       {...props}
     >
-      <div className="flex size-4 shrink-0 items-center justify-center text-sidebar-muted-foreground transition-colors group-hover:text-sidebar-foreground group-focus-visible:text-sidebar-foreground group-data-[active=true]:text-sidebar-foreground [&>svg]:size-full [&>svg]:shrink-0">
+      {/* Codex parity: the icon carries the row ink, not a dimmer tier, and
+          scales with the label (codex runs 16px icons on 14px text — 1.15em).
+          The well matches the icon exactly — a fixed w-4 well leaves more
+          slack around smaller icons, silently widening the icon→label gap on
+          smaller-text surfaces (settings) vs the main sidebar. */}
+      <div className="flex w-[1.15em] shrink-0 items-center justify-center text-current [&>svg]:size-[1.15em] [&>svg]:shrink-0">
         {icon}
       </div>
-      <div className="flex min-w-0 flex-1 items-center text-ui leading-5 text-current">
+      <div className="flex min-w-0 flex-1 items-center text-current">
         <span className="truncate">{label}</span>
       </div>
       {status ? (
-        <span className="ml-auto shrink-0 text-xs leading-4 text-sidebar-muted-foreground">
+        <span className="ml-auto shrink-0 text-ui-sm text-sidebar-muted-foreground">
           {status}
         </span>
       ) : shortcutLabel ? (

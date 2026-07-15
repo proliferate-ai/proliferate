@@ -1,8 +1,5 @@
 # AnyHarness Live Runtime
 
-Status: authoritative for long-lived in-memory runtime systems under
-`anyharness-lib/src/live/**`.
-
 Session manager, handle, actor, driver, sink, interaction rendezvous,
 background work, and replay live under `live/sessions/**`. Remaining `acp/**`
 files are shared permission, payload, and provider-error helpers, not

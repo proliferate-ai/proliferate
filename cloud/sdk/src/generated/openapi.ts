@@ -788,6 +788,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/repositories/{git_owner}/{git_repo_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Repo Config Endpoint */
+        patch: operations["update_repo_config_endpoint_v1_cloud_repositories__git_owner___git_repo_name__patch"];
+        trace?: never;
+    };
     "/v1/cloud/repositories/{git_owner}/{git_repo_name}/environment": {
         parameters: {
             query?: never;
@@ -2045,6 +2062,23 @@ export interface paths {
         put?: never;
         /** Generate Workspace Name Endpoint */
         post: operations["generate_workspace_name_endpoint_v1_ai_magic_workspace_names_generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ai_magic/commit-messages/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate Commit Message Endpoint */
+        post: operations["generate_commit_message_endpoint_v1_ai_magic_commit_messages_generate_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4278,6 +4312,22 @@ export interface components {
              */
             received: boolean;
         };
+        /** GenerateCommitMessageRequest */
+        GenerateCommitMessageRequest: {
+            /** Difftext */
+            diffText: string;
+            /** Gitowner */
+            gitOwner?: string | null;
+            /** Gitreponame */
+            gitRepoName?: string | null;
+            /** Branchname */
+            branchName?: string | null;
+        };
+        /** GenerateCommitMessageResponse */
+        GenerateCommitMessageResponse: {
+            /** Message */
+            message: string;
+        };
         /** GenerateSessionTitleRequest */
         GenerateSessionTitleRequest: {
             /** Prompttext */
@@ -5282,6 +5332,8 @@ export interface components {
             gitOwner: string;
             /** Gitreponame */
             gitRepoName: string;
+            /** Commitinstructions */
+            commitInstructions: string;
             /** Environments */
             environments: components["schemas"]["RepoEnvironmentResponse"][];
         };
@@ -6031,6 +6083,14 @@ export interface components {
         UpdateCloudWorkspaceDisplayNameRequest: {
             /** Displayname */
             displayName?: string | null;
+        };
+        /** UpdateRepoConfigRequest */
+        UpdateRepoConfigRequest: {
+            /**
+             * Commitinstructions
+             * @default
+             */
+            commitInstructions: string;
         };
         /** UsageSummary */
         UsageSummary: {
@@ -8090,6 +8150,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RepoBranchesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_repo_config_endpoint_v1_cloud_repositories__git_owner___git_repo_name__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                git_owner: string;
+                git_repo_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRepoConfigRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepoConfigResponse"];
                 };
             };
             /** @description Validation Error */
@@ -11009,6 +11105,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GenerateWorkspaceNameResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_commit_message_endpoint_v1_ai_magic_commit_messages_generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerateCommitMessageRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerateCommitMessageResponse"];
                 };
             };
             /** @description Validation Error */

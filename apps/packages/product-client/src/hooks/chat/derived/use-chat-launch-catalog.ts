@@ -75,6 +75,10 @@ export function useChatLaunchCatalog({
       agentCatalog.agentsByKind,
       selectedCloudRuntime.connectionInfo?.readyAgentKinds ?? null,
       Boolean(selectedCloudRuntime.connectionInfo && runtimeLaunchOptions.data?.agents.length),
+      // Local-target launch readiness: kinds the runtime's launch options list
+      // with models (an enrolled gateway route supplies the launch credential
+      // even when the vendor CLI itself is not logged in).
+      buildLaunchReadyKinds(runtimeLaunchOptions.data?.agents ?? null),
     ),
     [
       agentCatalog.agentsByKind,
@@ -153,17 +157,29 @@ export function useChatLaunchCatalog({
   };
 }
 
+function buildLaunchReadyKinds(
+  runtimeAgents: ReadonlyArray<{ kind: string; models: ReadonlyArray<unknown> }> | null,
+): ReadonlySet<string> | null {
+  if (!runtimeAgents || runtimeAgents.length === 0) {
+    return null;
+  }
+  return new Set(
+    runtimeAgents.filter((agent) => agent.models.length > 0).map((agent) => agent.kind),
+  );
+}
+
 function orderLaunchAgents(
   agents: readonly DesktopAgentLaunchAgent[],
   agentsByKind: ReadonlyMap<string, { readiness: string }>,
   cloudReadyAgentKinds: readonly string[] | null,
   runtimeOptionsAreAuthoritative = false,
+  launchReadyKinds: ReadonlySet<string> | null = null,
 ): DesktopAgentLaunchAgent[] {
   const targetReadyAgents = runtimeOptionsAreAuthoritative
     ? agents.filter((agent) => agent.models.length > 0)
     : cloudReadyAgentKinds
     ? filterCloudReadyLaunchAgents(agents, cloudReadyAgentKinds)
-    : filterTargetReadyLaunchAgents(agents, agentsByKind);
+    : filterTargetReadyLaunchAgents(agents, agentsByKind, launchReadyKinds);
 
   return targetReadyAgents
     .sort((left, right) =>

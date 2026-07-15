@@ -10,7 +10,6 @@ function resetContentSearchStore() {
     open: false,
     query: "",
     surface: "chat",
-    scope: "diffs",
     activeMatchIndex: 0,
     activeMatchId: null,
     unitsById: {},
@@ -36,7 +35,6 @@ describe("SessionContentSearchOverlay", () => {
     useContentSearchStore.setState({
       open: true,
       surface: "file",
-      scope: "diffs",
     });
 
     render(

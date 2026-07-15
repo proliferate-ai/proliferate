@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { createElement } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   fileViewerTarget,
@@ -160,7 +160,6 @@ describe("FileEditorView", () => {
       open: false,
       query: "",
       surface: "chat",
-      scope: "diffs",
       activeMatchIndex: 0,
       activeMatchId: null,
       unitsById: {},
@@ -202,7 +201,7 @@ describe("FileEditorView", () => {
     expect(screen.queryByLabelText("Find in file")).toBeNull();
   });
 
-  it("renders source files with the read-only source viewer", () => {
+  it("renders source files with the read-only source viewer", async () => {
     const target = fileViewerTarget("package.json");
     const targetKey = viewerTargetKey(target);
     useWorkspaceViewerTabsStore.setState({
@@ -241,7 +240,8 @@ describe("FileEditorView", () => {
     expect(container.querySelector(".file-source-line-number")?.textContent).toBe("1");
     expect(container.querySelector(".file-source-scroll")).toBeTruthy();
     fireEvent.click(screen.getByLabelText("File viewer options"));
-    expect(screen.getByText("Word wrap")).toBeTruthy();
+    // Native menu resolves unavailable async before the DOM fallback opens.
+    expect(await screen.findByText("Word wrap")).toBeTruthy();
     fireEvent.click(screen.getByText("Copy content"));
     expect(writeTextMock).toHaveBeenCalledWith("{\"ok\":true}");
   });
@@ -405,7 +405,6 @@ describe("FileEditorView", () => {
     expect(screen.queryByLabelText("Search files")).toBeNull();
     fireEvent.click(screen.getByLabelText("Find in file"));
     expect(useContentSearchStore.getState().open).toBe(true);
-    expect(useContentSearchStore.getState().scope).toBe("diffs");
     expect(useContentSearchStore.getState().surface).toBe("file");
     expect(container.querySelector('[data-content-search-surface="file"]')).toBeTruthy();
     expect(screen.getByPlaceholderText("Search file…")).toBeTruthy();
@@ -479,5 +478,38 @@ describe("FileEditorView", () => {
 
     expect(useWorkspaceViewerTabsStore.getState().modeByTargetKey[targetKey]).toBe("source");
     expect(useContentSearchStore.getState().surface).toBe("file");
+  });
+
+  it("leaves the rich preview when file search opens via the shortcut path", () => {
+    const target = fileViewerTarget("README.md");
+    const targetKey = viewerTargetKey(target);
+    useWorkspaceViewerTabsStore.setState({
+      materializedWorkspaceId: "workspace-1",
+    });
+    useWorkspaceViewerTabsStore.getState().openTarget(target);
+    readWorkspaceFileQuery.mockReturnValue({
+      data: {
+        content: "# Hello\n",
+        isText: true,
+        path: "README.md",
+        sizeBytes: 8,
+        tooLarge: false,
+        versionToken: "v1",
+      },
+      error: null,
+      isLoading: false,
+    });
+    render(createElement(FileEditorView, {
+      filePath: "README.md",
+      targetKey,
+    }));
+
+    // Markdown defaults to the rendered view; Cmd+F opens search through the
+    // store without going through the toolbar handler.
+    act(() => {
+      useContentSearchStore.getState().openSearch("file");
+    });
+
+    expect(useWorkspaceViewerTabsStore.getState().modeByTargetKey[targetKey]).toBe("source");
   });
 });

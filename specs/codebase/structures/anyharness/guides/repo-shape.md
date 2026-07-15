@@ -1,7 +1,5 @@
 # AnyHarness Repo Shape
 
-Status: authoritative for file/module shape in AnyHarness code.
-
 ## File Size
 
 Use these thresholds for Rust source under `anyharness/crates/**`:

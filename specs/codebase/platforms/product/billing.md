@@ -1,7 +1,5 @@
 # Billing
 
-Status: current
-
 Billing owns the shared accounting, authorization, and product contracts for
 managed compute and managed LLM usage. It combines plan and subscription state,
 grants or credit balances, billing holds, two independent usage ledgers, and

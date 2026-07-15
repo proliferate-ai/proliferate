@@ -61,5 +61,9 @@ export function useComposerWorkspaceActivityModel() {
     model,
     runtimeBlockedReason,
     hasExistingPullRequest: currentPullRequestQuery.data?.pullRequest != null,
+    // Raw inputs for consumers that compose their own shape (the workspace
+    // status card) without re-running the PR reconciliation above.
+    gitStatus: gitStatusQuery.data ?? null,
+    pullRequest,
   };
 }

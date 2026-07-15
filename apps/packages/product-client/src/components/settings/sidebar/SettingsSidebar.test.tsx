@@ -275,10 +275,10 @@ describe("SettingsSidebar layout and shortcuts", () => {
     expect(onCheckForUpdates).not.toHaveBeenCalled();
   });
 
-  it("uses the settings sidebar rail width", () => {
+  it("fills its parent rail width", () => {
     const { container } = renderSettingsSidebar();
 
-    expect(container.firstElementChild?.className).toContain("w-[240px]");
+    expect(container.firstElementChild?.className).toContain("w-full");
   });
 
   it("numbers the active scope's sections for Cmd shortcuts", async () => {

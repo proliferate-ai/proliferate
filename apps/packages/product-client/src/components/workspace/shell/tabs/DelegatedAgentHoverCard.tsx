@@ -15,7 +15,7 @@ import {
 import { createPortal } from "react-dom";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { POPOVER_FRAME_CLASS } from "@proliferate/ui/primitives/PopoverButton";
-import { Robot } from "@proliferate/ui/icons";
+import { DelegatedAgentIdenticon } from "#product/components/workspace/delegated-work/DelegatedAgentIdenticon";
 import type { DelegatedWorkTabIdentity } from "#product/lib/domain/delegated-work/model";
 
 const VIEWPORT_MARGIN = 12;
@@ -112,7 +112,10 @@ export const DelegatedAgentHoverCard = forwardRef<HTMLDivElement, DelegatedAgent
     const card = (
       <div>
         <div className="flex min-w-0 items-center gap-2">
-          <Robot className={`size-4 shrink-0 ${agent.identity.textColorClassName}`} />
+          <DelegatedAgentIdenticon
+            identity={agent.identity}
+            className={`size-4 shrink-0 ${agent.identity.textColorClassName}`}
+          />
           <div className="min-w-0">
             <div className="truncate text-sm font-medium text-foreground">
               {agent.identity.displayName}

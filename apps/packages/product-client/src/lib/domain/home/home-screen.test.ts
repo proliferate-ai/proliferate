@@ -11,6 +11,7 @@ const githubRepository = {
   gitProvider: "github",
   gitOwner: "proliferate-ai",
   gitRepoName: "proliferate",
+  commitInstructions: "",
 };
 
 const gitlabRepository = {
@@ -18,6 +19,7 @@ const gitlabRepository = {
   gitProvider: "gitlab",
   gitOwner: "proliferate-ai",
   gitRepoName: "elsewhere",
+  commitInstructions: "",
 };
 
 const configuredRepoConfig: RepoConfigResponse = {
@@ -25,6 +27,7 @@ const configuredRepoConfig: RepoConfigResponse = {
   gitProvider: "github",
   gitOwner: "proliferate-ai",
   gitRepoName: "proliferate",
+  commitInstructions: "",
   environments: [{
     id: "env-proliferate-cloud",
     repoConfigId: "repo-proliferate",

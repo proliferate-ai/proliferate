@@ -1,11 +1,5 @@
-# Prove ProductClient Extraction Mechanics (D1g)
+# ProductClient Extraction Mechanics Evidence
 
-Status: **current implementation scope**.
-
-- Exact implementation base:
-  `f93afce8190bba943277d588c9bfb0d051c615c9`
-- Prior completed implementation: PR #1182 (D1f), merge
-  `f93afce8190bba943277d588c9bfb0d051c615c9`
 - Parent architecture:
   [`web-desktop-client-unification.md`](../README.md)
 - Application-entry contract:
@@ -14,11 +8,8 @@ Status: **current implementation scope**.
   [`web-desktop-product-client-move-ledger.md`](../move-ledger.md)
 - Pipeline ledger:
   [`../../developing/deploying/web-desktop-unification-rollout.md`](../../../../../../developing/deploying/web-desktop-unification-rollout.md)
-- Approved contract:
-  `03 - Prove ProductClient Extraction Mechanics.md` (founder-approved r3;
-  decisions 8–9 approved 2026-07-14)
 
-This is the landed-mechanics record for proving that
+This is the landed record proving that
 `@proliferate/product-client`'s toolchain can compile and ship every import and
 resource shape the Desktop product needs — from both a Desktop host and a
 minimal browser host — and that the later source move can run from a checked,
@@ -29,7 +20,7 @@ created; they are owned by the next slice (the mechanical move).
 
 ## Observable outcome
 
-At this slice's head, on base `f93afce81`:
+The landed implementation proves that:
 
 - the approved application-entry contract (signature, export subpath, provider
   envelope, package-private `#product/*` mechanism, public-shell/lazy-authenticated

@@ -28,6 +28,8 @@ export interface ComposerWorkspaceActivityModel {
     stagedFiles: number;
     unstagedFiles: number;
     conflictedFiles: number;
+    additions: number;
+    deletions: number;
     ahead: number;
     behind: number;
     changeLabel: string;
@@ -87,6 +89,8 @@ function buildGitDetail(
     stagedFiles,
     unstagedFiles,
     conflictedFiles: status.summary.conflictedFiles,
+    additions: status.summary.additions,
+    deletions: status.summary.deletions,
     ahead: status.ahead,
     behind: status.behind,
     changeLabel,

@@ -22,12 +22,15 @@ import { t3Sh2 } from "./selfhost/t3-sh-2.js";
 import { t3Sh3 } from "./selfhost/t3-sh-3.js";
 import { t3Sh4 } from "./selfhost/t3-sh-4.js";
 import { t3Sh5 } from "./selfhost/t3-sh-5.js";
+import { localWorldSmoke1 } from "./local-world-smoke-1.js";
 
 /**
  * The tier-3 first wave (specs/developing/testing/scenarios.md#tier-3--first-wave),
  * the self-hosting battery under `selfhost/` (specs/developing/testing/self-hosting.md),
- * and the tier-4 upgrade-path scenarios under `upgrade/`. T3-FIXTURE is
- * infrastructure (src/fixtures/identity.ts), not a registered scenario.
+ * the tier-4 upgrade-path scenarios under `upgrade/`, and the provisional
+ * LOCAL-WORLD-SMOKE-1 local-world infrastructure proof (see
+ * `local-world-smoke-1.ts` — not the canonical LOCAL-2 guarantee). T3-FIXTURE
+ * is infrastructure (src/fixtures/identity.ts), not a registered scenario.
  */
 export const SCENARIOS: readonly ScenarioDefinition[] = [
   t3Prov1,
@@ -53,6 +56,7 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
   t4Desktop1,
   t4Sh1,
   t4Sh2,
+  localWorldSmoke1,
 ];
 
 export function allScenarioIds(): string[] {

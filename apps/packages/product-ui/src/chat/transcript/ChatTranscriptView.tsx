@@ -4,15 +4,18 @@ import type {
   ChatTranscriptViewProps,
 } from "./ChatTranscriptViewTypes";
 import { ChatTranscriptRows } from "./ChatTranscriptRows";
+import { ChatContentSearchQueryContext } from "./ChatContentSearchContext";
 import { useChatTranscriptCopySelection } from "./useChatTranscriptCopySelection";
 import { useChatTranscriptRowRenderer } from "./useChatTranscriptRowRenderer";
 import { useChatTranscriptViewModel } from "./useChatTranscriptViewModel";
 
 export type {
+  ChatTranscriptContentSearch,
   ChatTranscriptGoalEventRenderInput,
   ChatTranscriptOutboxActions,
   ChatTranscriptPendingPromptRenderInput,
   ChatTranscriptPendingStatusInput,
+  ChatTranscriptScrollHandle,
   ChatTranscriptTurnRowRenderInput,
   ChatTranscriptTurnStatusInput,
   ChatTranscriptViewProps,
@@ -33,8 +36,11 @@ export function ChatTranscriptView({
   renderPendingPromptTrailingStatus,
   renderTurnTrailingStatus,
   renderGoalEventRow,
+  contentSearch,
+  scrollHandleRef,
 }: ChatTranscriptViewProps) {
   const selectionRootRef = useRef<HTMLDivElement>(null);
+  const searchQuery = contentSearch?.query.trim() ? contentSearch.query.trim() : null;
   const model = useChatTranscriptViewModel({
     state,
     renderPendingPromptTrailingStatus,
@@ -67,26 +73,29 @@ export function ChatTranscriptView({
   });
 
   return (
-    <ChatTranscriptRows
-      rowListKey={`${model.selectedWorkspaceId ?? "workspace"}:${model.activeSessionId}`}
-      rows={model.virtualRows}
-      selectionRootRef={selectionRootRef}
-      hasOlderHistory={model.hasOlderHistory}
-      isLoadingOlderHistory={model.isLoadingOlderHistory}
-      olderHistoryCursor={model.olderHistoryCursor}
-      bottomInsetPx={model.bottomInsetPx}
-      nonDisplacingBottomInsetPx={model.nonDisplacingBottomInsetPx}
-      selectedWorkspaceId={model.selectedWorkspaceId}
-      activeSessionId={model.activeSessionId}
-      isSessionBusy={
-        model.sessionViewState === "working" || model.sessionViewState === "needs_input"
-      }
-      pendingPromptText={model.visibleOptimisticPrompt?.text ?? null}
-      onLoadOlderHistory={model.onLoadOlderHistory}
-      onScrollSample={onScrollSample}
-      renderRow={renderVirtualRow}
-      columnClassName={model.columnClassName}
-      gutterClassName={model.gutterClassName}
-    />
+    <ChatContentSearchQueryContext.Provider value={searchQuery}>
+      <ChatTranscriptRows
+        rowListKey={`${model.selectedWorkspaceId ?? "workspace"}:${model.activeSessionId}`}
+        rows={model.virtualRows}
+        selectionRootRef={selectionRootRef}
+        hasOlderHistory={model.hasOlderHistory}
+        isLoadingOlderHistory={model.isLoadingOlderHistory}
+        olderHistoryCursor={model.olderHistoryCursor}
+        bottomInsetPx={model.bottomInsetPx}
+        nonDisplacingBottomInsetPx={model.nonDisplacingBottomInsetPx}
+        selectedWorkspaceId={model.selectedWorkspaceId}
+        activeSessionId={model.activeSessionId}
+        isSessionBusy={
+          model.sessionViewState === "working" || model.sessionViewState === "needs_input"
+        }
+        pendingPromptText={model.visibleOptimisticPrompt?.text ?? null}
+        onLoadOlderHistory={model.onLoadOlderHistory}
+        onScrollSample={onScrollSample}
+        renderRow={renderVirtualRow}
+        columnClassName={model.columnClassName}
+        gutterClassName={model.gutterClassName}
+        scrollHandleRef={scrollHandleRef}
+      />
+    </ChatContentSearchQueryContext.Provider>
   );
 }

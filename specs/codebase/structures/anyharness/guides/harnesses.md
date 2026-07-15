@@ -1,8 +1,5 @@
 # AnyHarness Harness Docs
 
-Status: authoritative for provider-specific harness documentation under
-`specs/codebase/structures/anyharness/harnesses/**`.
-
 ## Purpose
 
 Harness docs explain provider-specific runtime behavior that a developer must

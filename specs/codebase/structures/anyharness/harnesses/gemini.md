@@ -1,7 +1,5 @@
 # Gemini Harness
 
-Status: authoritative for Gemini-specific AnyHarness adapter behavior.
-
 ## Live Model Control
 
 Gemini exposes session model state through ACP `models`, not necessarily through

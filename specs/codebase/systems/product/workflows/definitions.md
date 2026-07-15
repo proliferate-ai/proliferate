@@ -1,7 +1,5 @@
 # Workflows
 
-Status: authoritative for Workflows V1 definition authoring.
-
 Workflows are reusable, validated definitions for ordered agent work. The
 first V1 slice owns only authoring and durable storage. It deliberately proves
 the definition contract before adding execution, session takeover, grants,

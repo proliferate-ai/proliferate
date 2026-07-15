@@ -68,6 +68,18 @@ impl SessionEventSink {
                 // Adapter-tagged chunks are protocol vocabulary that must stay
                 // out of the transcript; they are offered to observers instead.
                 if is_non_transcript_chunk(payload.meta.as_ref()) {
+                    // A goal_updated arriving with no turn open is the start
+                    // of engine-initiated pursuit (set confirmation or a
+                    // continuation tick): open the engine turn now so the
+                    // observer-persisted goal event — and the continuation
+                    // items that follow — land in their own turn group. The
+                    // matching close happens in publish_persisted_events when
+                    // the goal quiesces.
+                    if non_transcript_chunk_event(payload.meta.as_ref())
+                        == Some("goal_updated")
+                    {
+                        self.ensure_open_turn();
+                    }
                     outcome
                         .observations
                         .push(SinkObservation::NonTranscriptChunk(payload));
@@ -243,10 +255,14 @@ const NON_TRANSCRIPT_CHUNK_EVENTS: &[&str] = &[
 ];
 
 fn is_non_transcript_chunk(meta: Option<&serde_json::Value>) -> bool {
+    non_transcript_chunk_event(meta)
+        .is_some_and(|event| NON_TRANSCRIPT_CHUNK_EVENTS.contains(&event))
+}
+
+fn non_transcript_chunk_event(meta: Option<&serde_json::Value>) -> Option<&str> {
     meta.and_then(|meta| meta.get("anyharness"))
         .and_then(|anyharness| anyharness.get("transcriptEvent"))
         .and_then(serde_json::Value::as_str)
-        .is_some_and(|event| NON_TRANSCRIPT_CHUNK_EVENTS.contains(&event))
 }
 
 fn serialize_content_block(content: &acp::schema::ContentBlock) -> serde_json::Value {

@@ -1,7 +1,5 @@
 # Session Engine
 
-Status: authoritative for the core AnyHarness session engine mental model.
-
 ## Core Flow
 
 ```text

@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useState } from "react";
-import { ChevronRight, CloudIcon, FolderClosedFilled, FolderFilled, Globe, Plus, Settings, Trash } from "@proliferate/ui/icons";
+import { ChevronRight, CloudIcon, FolderClosedFilled, FolderFilled, FolderRemote, Plus, Settings, Trash } from "@proliferate/ui/icons";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
@@ -236,24 +236,14 @@ function RepoGroupEnvironmentIcon({
   kind: RepoGroupEnvironmentKind;
   expanded: boolean;
 }) {
+  // Codex parity: remote-capable repos use the fused folder+globe glyph —
+  // one icon, never a badge overlay.
+  if (kind === "cloud" || kind === "local_cloud") {
+    return <FolderRemote className="size-4 shrink-0" />;
+  }
+
   const FolderIcon = expanded ? FolderFilled : FolderClosedFilled;
-
-  if (kind === "cloud") {
-    return <CloudIcon className="size-3.5 shrink-0" />;
-  }
-
-  if (kind === "local_cloud") {
-    return (
-      <span className="relative flex size-4 shrink-0 items-center justify-center">
-        <FolderIcon className="size-3.5 shrink-0" />
-        <span className="absolute -bottom-0.5 -right-0.5 flex size-2.5 items-center justify-center rounded-full bg-sidebar text-sidebar-muted-foreground">
-          <Globe className="size-2" />
-        </span>
-      </span>
-    );
-  }
-
-  return <FolderIcon className="size-3.5 shrink-0" />;
+  return <FolderIcon className="size-4 shrink-0" />;
 }
 
 function RepoContextMenuContent({

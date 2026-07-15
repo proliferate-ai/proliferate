@@ -1,39 +1,36 @@
 import { create } from "zustand";
 import { normalizeContentSearchQuery } from "#product/lib/domain/content-search/content-search";
 
-export type ContentSearchScope = "chat" | "diffs";
 export type ContentSearchSurface = "chat" | "file";
 
 export interface ContentSearchUnitRegistration {
   unitId: string;
   surface?: ContentSearchSurface;
-  scope: ContentSearchScope;
   query: string;
   matchIds: readonly string[];
+  orderKey?: number;
 }
 
 interface ContentSearchUnit {
   unitId: string;
   surface: ContentSearchSurface;
-  scope: ContentSearchScope;
   query: string;
   matchIds: string[];
   order: number;
+  orderKey: number | null;
 }
 
 interface ContentSearchState {
   open: boolean;
   query: string;
   surface: ContentSearchSurface;
-  scope: ContentSearchScope;
   activeMatchIndex: number;
   activeMatchId: string | null;
   unitsById: Record<string, ContentSearchUnit>;
   nextUnitOrder: number;
-  openSearch: (scope?: ContentSearchScope, surface?: ContentSearchSurface) => void;
+  openSearch: (surface?: ContentSearchSurface) => void;
   closeSearch: () => void;
   setQuery: (query: string) => void;
-  setScope: (scope: ContentSearchScope) => void;
   goToNextMatch: () => void;
   goToPreviousMatch: () => void;
   registerUnit: (registration: ContentSearchUnitRegistration) => void;
@@ -44,18 +41,16 @@ export const useContentSearchStore = create<ContentSearchState>((set) => ({
   open: false,
   query: "",
   surface: "chat",
-  scope: "diffs",
   activeMatchIndex: 0,
   activeMatchId: null,
   unitsById: {},
   nextUnitOrder: 0,
 
-  openSearch: (scope, surface = "chat") => {
+  openSearch: (surface = "chat") => {
     set((state) => resolveActiveMatch({
       ...state,
       open: true,
       surface,
-      scope: scope ?? state.scope,
     }, 0));
   },
 
@@ -67,13 +62,6 @@ export const useContentSearchStore = create<ContentSearchState>((set) => ({
     set((state) => resolveActiveMatch({
       ...state,
       query,
-    }, 0));
-  },
-
-  setScope: (scope) => {
-    set((state) => resolveActiveMatch({
-      ...state,
-      scope,
     }, 0));
   },
 
@@ -91,12 +79,13 @@ export const useContentSearchStore = create<ContentSearchState>((set) => ({
       const matchIds = [...registration.matchIds];
       const previous = state.unitsById[registration.unitId];
       const surface = registration.surface ?? "chat";
+      const orderKey = registration.orderKey ?? null;
 
       if (
         previous
         && previous.surface === surface
-        && previous.scope === registration.scope
         && previous.query === query
+        && previous.orderKey === orderKey
         && stringArraysEqual(previous.matchIds, matchIds)
       ) {
         return state;
@@ -110,10 +99,10 @@ export const useContentSearchStore = create<ContentSearchState>((set) => ({
           [registration.unitId]: {
             unitId: registration.unitId,
             surface,
-            scope: registration.scope,
             query,
             matchIds,
             order: previous?.order ?? state.nextUnitOrder,
+            orderKey,
           },
         },
       };
@@ -139,7 +128,7 @@ export const useContentSearchStore = create<ContentSearchState>((set) => ({
 
 export function selectVisibleContentSearchMatchIds(state: Pick<
   ContentSearchState,
-  "query" | "surface" | "scope" | "unitsById"
+  "query" | "surface" | "unitsById"
 >): string[] {
   const query = normalizeContentSearchQuery(state.query);
   if (!query) {
@@ -147,16 +136,30 @@ export function selectVisibleContentSearchMatchIds(state: Pick<
   }
 
   return Object.values(state.unitsById)
-    .filter((unit) =>
-      unit.surface === state.surface && unit.scope === state.scope && unit.query === query
-    )
-    .sort((left, right) => left.order - right.order)
+    .filter((unit) => unit.surface === state.surface && unit.query === query)
+    .sort(compareContentSearchUnits)
     .flatMap((unit) => unit.matchIds);
+}
+
+// Units with an explicit orderKey sort first, ascending. Units without one
+// (e.g. inline diffs that can't cheaply learn their row index) fall after all
+// keyed units, in registration order among themselves.
+function compareContentSearchUnits(left: ContentSearchUnit, right: ContentSearchUnit): number {
+  if (left.orderKey !== null && right.orderKey !== null) {
+    return left.orderKey - right.orderKey || left.order - right.order;
+  }
+  if (left.orderKey !== null) {
+    return -1;
+  }
+  if (right.orderKey !== null) {
+    return 1;
+  }
+  return left.order - right.order;
 }
 
 function resolveActiveMatch<State extends Pick<
   ContentSearchState,
-  "query" | "surface" | "scope" | "unitsById"
+  "query" | "surface" | "unitsById"
 >>(
   state: State,
   requestedIndex: number,

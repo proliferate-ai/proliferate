@@ -340,3 +340,83 @@ fn parse_numstat_parts(additions: &str, deletions: &str) -> DiffStats {
         binary: false,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_numstat_z_map_reads_plain_entries() {
+        // `git diff --numstat -z`: "add\tdel\tpath\0" per plain entry.
+        let raw = "3\t1\tsrc/lib.rs\00\t2\tREADME.md\0";
+        let stats = parse_numstat_z_map(raw);
+
+        let lib = stats
+            .get(&(None, "src/lib.rs".to_string()))
+            .expect("lib entry");
+        assert_eq!(lib.additions, 3);
+        assert_eq!(lib.deletions, 1);
+        assert!(!lib.binary);
+
+        let readme = stats
+            .get(&(None, "README.md".to_string()))
+            .expect("readme entry");
+        assert_eq!(readme.additions, 0);
+        assert_eq!(readme.deletions, 2);
+    }
+
+    #[test]
+    fn parse_numstat_z_map_reads_rename_entries_keyed_by_new_path() {
+        // `git diff --numstat -z` rename form: "add\tdel\t\0old\0new\0".
+        let raw = "1\t0\t\0old.txt\0new.txt\0";
+        let stats = parse_numstat_z_map(raw);
+
+        let renamed = stats
+            .get(&(Some("old.txt".to_string()), "new.txt".to_string()))
+            .expect("renamed entry");
+        assert_eq!(renamed.additions, 1);
+        assert_eq!(renamed.deletions, 0);
+        assert!(!renamed.binary);
+    }
+
+    #[test]
+    fn parse_numstat_z_map_reads_nested_rename_entries() {
+        // Renames within a shared directory prefix still arrive as two full
+        // paths in `-z` mode (the "prefix/{old => new}/suffix" contraction is
+        // only in the non-z human-readable output).
+        let raw = "2\t2\t\0src/old/file.txt\0src/new/file.txt\0";
+        let stats = parse_numstat_z_map(raw);
+
+        let renamed = stats
+            .get(&(
+                Some("src/old/file.txt".to_string()),
+                "src/new/file.txt".to_string(),
+            ))
+            .expect("renamed entry");
+        assert_eq!(renamed.additions, 2);
+        assert_eq!(renamed.deletions, 2);
+    }
+
+    #[test]
+    fn parse_numstat_z_map_marks_binary_entries() {
+        let raw = "-\t-\tassets/logo.png\0";
+        let stats = parse_numstat_z_map(raw);
+
+        let binary = stats
+            .get(&(None, "assets/logo.png".to_string()))
+            .expect("binary entry");
+        assert_eq!(binary.additions, 0);
+        assert_eq!(binary.deletions, 0);
+        assert!(binary.binary);
+    }
+
+    #[test]
+    fn parse_numstat_summary_totals_and_flags_binary() {
+        let raw = "3\t1\ta.txt\n-\t-\tb.bin\n2\t0\tc.txt\n";
+        let summary = parse_numstat_summary(raw);
+
+        assert_eq!(summary.additions, 5);
+        assert_eq!(summary.deletions, 1);
+        assert!(summary.binary);
+    }
+}

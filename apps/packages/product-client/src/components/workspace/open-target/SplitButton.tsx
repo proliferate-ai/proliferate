@@ -54,40 +54,37 @@ export function SplitButton({
   }
 
   return (
-    <OpenTargetMenu
-      targets={targets}
-      onTargetClick={onTargetClick}
-      align="right"
-      trigger={({ toggle, isOpen }) => (
-        <div className="flex">
+    <div className="flex">
+      <Button
+        type="button"
+        variant="unstyled"
+        size="unstyled"
+        onClick={onClick}
+        title={label}
+        aria-label={label}
+        className={`${primaryClassName} workspace-shell-split-button-left ${showLabel ? "flex-1 justify-start" : ""}`}
+      >
+        {content}
+      </Button>
+      <OpenTargetMenu
+        targets={targets}
+        onTargetClick={onTargetClick}
+        align="end"
+        trigger={(
           <Button
             type="button"
             variant="unstyled"
             size="unstyled"
-            onClick={onClick}
-            title={label}
-            aria-label={label}
-            className={`${primaryClassName} workspace-shell-split-button-left ${showLabel ? "flex-1 justify-start" : ""}`}
-          >
-            {content}
-          </Button>
-          <Button
-            type="button"
-            variant="unstyled"
-            size="unstyled"
-            onClick={toggle}
             aria-haspopup="menu"
-            aria-expanded={isOpen}
-            data-state={isOpen ? "open" : "closed"}
             title={`Choose ${label}`}
             aria-label={`Choose ${label}`}
             className="workspace-shell-icon-button workspace-shell-split-button-right inline-flex items-center justify-center whitespace-nowrap"
           >
             <ChevronDown className="size-3" />
           </Button>
-        </div>
-      )}
-    />
+        )}
+      />
+    </div>
   );
 }
 

@@ -2356,7 +2356,10 @@ the `` ```ledger-amendments `` block below and applies each `src -> new_class`
 override before checking, so the completion proof tracks these owner-blessed
 relocations without silently editing the binding rows.
 
-Every amendment below is `retain -> move`. The evidence is uniform: post-#1168
+Every amendment below is `retain -> move` (except the trailing five
+`move -> delete` rows added during the origin/main post-merge reconciliation —
+files the git-review-v2 / status-card PRs deleted on main; see their per-row
+evidence). The `retain -> move` evidence is uniform: post-#1168
 each of these modules is a **pure `host.desktop.*` / product-facade consumer**
 (local agent credentials, native shell/editors, workspace scratch, the updater
 cluster, and macOS window chrome), not a raw-Tauri or host-transport importer.
@@ -2392,6 +2395,11 @@ hooks/access/tauri/workspace-scratch/query-keys.ts	move	pure host.desktop.scratc
 hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad-mutations.ts	move	pure host.desktop.scratch consumer (F3 relocation); retain was a stale bucket default
 hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad.test.tsx	move	test of the relocated scratch hook; runs in the package vitest lane
 hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad.ts	move	pure host.desktop.scratch consumer (F3 relocation); retain was a stale bucket default
+components/workspace/git/GitReviewFileTree.tsx	delete	main merge (post-merge reconciliation): deleted on origin/main by the git-review-v2 PR #1214 (flat Codex-style review document replaces the tree/stage/badge components); source gone from apps/desktop/src, no product target
+components/workspace/git/GitReviewStageAction.tsx	delete	main merge: deleted on origin/main by git-review-v2 PR #1214; replaced by the flat review document
+components/workspace/git/GitReviewStatusBadge.tsx	delete	main merge: deleted on origin/main by git-review-v2 PR #1214; replaced by the flat review document
+hooks/chat/ui/use-composer-ultra-emphasis.ts	delete	main merge: deleted on origin/main by the workspace-status-card PR #1210 (composer ultra-emphasis removed)
+lib/domain/workspaces/changes/git-file-status-presentation.ts	delete	main merge: deleted on origin/main by git-review-v2 PR #1214 (git-file-status presentation folded into the new review model)
 ```
 
 ## Codemod evidence (S5)

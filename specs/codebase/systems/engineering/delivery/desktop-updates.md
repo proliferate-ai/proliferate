@@ -1,9 +1,5 @@
 # Desktop Updates And Release Notices
 
-Status: authoritative for the packaged Desktop updater, its sidebar release
-notice, and the version-specific metadata published on the Desktop downloads
-CDN.
-
 Read this spec with
 [`releases.md`](../../../../developing/deploying/releases.md) and
 [`desktop-update-testing.md`](../../../../developing/testing/desktop-update-testing.md).

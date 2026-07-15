@@ -34,7 +34,7 @@ export function FileSearchResultsTree({
 
   if (results.length === 0) {
     return (
-      <p className="px-3 py-3 text-[13px] text-sidebar-muted-foreground">
+      <p className="px-3 py-3 text-[length:var(--text-message)] text-sidebar-muted-foreground">
         {searchQuery.isLoading ? "Searching…" : "No matching files"}
       </p>
     );

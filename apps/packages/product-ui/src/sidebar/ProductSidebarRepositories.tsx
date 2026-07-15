@@ -37,11 +37,11 @@ export function ProductSidebarRepoGroupHeader({
     <SidebarRowSurface
       onPress={onToggleCollapsed}
       aria-expanded={!collapsed}
-      className={`group/folder-row h-[30px] justify-between overflow-x-hidden py-1 text-sm leading-4 focus-visible:outline-offset-[-2px] ${className}`}
+      className={`group/folder-row h-[28px] justify-between overflow-x-hidden py-1 text-sidebar-nav focus-visible:outline-offset-[-2px] ${className}`}
       {...props}
     >
       <div className="flex min-w-0 flex-1 items-center gap-1 pl-1">
-        <span className="relative flex h-6 w-6 items-center justify-center text-sidebar-muted-foreground">
+        <span className="relative flex h-6 w-6 items-center justify-center text-current">
           {visibleIcon ? (
             <span className="flex items-center justify-center group-hover/folder-row:opacity-0">
               {visibleIcon}
@@ -51,12 +51,12 @@ export function ProductSidebarRepoGroupHeader({
             {hoverIconNode}
           </span>
         </span>
-        <span className="min-w-0 flex-1 truncate text-ui leading-5 text-current">
+        <span className="min-w-0 flex-1 truncate text-current">
           {label}
         </span>
 
         <div className="relative ml-auto size-6 shrink-0">
-          <span className={`absolute inset-0 flex items-center justify-center font-mono text-sm text-sidebar-muted-foreground transition-opacity ${hasAction ? "group-hover/folder-row:opacity-0" : ""
+          <span className={`absolute inset-0 flex items-center justify-center font-mono text-ui-sm text-sidebar-muted-foreground transition-opacity ${hasAction ? "group-hover/folder-row:opacity-0" : ""
             }`}>
             {count}
           </span>
@@ -140,7 +140,7 @@ export function ProductSidebarWorkspaceRow({
     <SidebarRowSurface
       active={active}
       onPress={onSelect}
-      className={`${hasSubtitle ? "h-[42px]" : "h-[30px]"} px-2 py-1 text-sm leading-4 focus-visible:outline-offset-[-2px] ${className}`}
+      className={`${hasSubtitle ? "h-[40px]" : "h-[28px]"} px-2 py-1 text-sidebar-row focus-visible:outline-offset-[-2px] ${className}`}
       {...props}
     >
       {hoverAction ? (
@@ -148,7 +148,7 @@ export function ProductSidebarWorkspaceRow({
           {hoverAction}
         </div>
       ) : null}
-      <div className="flex h-full w-full items-center text-sm leading-4">
+      <div className="flex h-full w-full items-center">
         <div className="flex w-4 shrink-0 items-center justify-center">
           {status ?? (
             <PrStatusIconOverlay status={prStatus}>
@@ -164,7 +164,7 @@ export function ProductSidebarWorkspaceRow({
         ) : null}
 
         <div className={`${attentionStatus ? "ml-1" : "ml-1.5"} flex min-w-0 flex-1 items-center gap-2 pl-0.5`}>
-          <div className={`flex min-w-0 flex-1 self-stretch ${hasSubtitle ? "flex-col items-start justify-center gap-0.5" : "items-center gap-2"} text-ui leading-5 ${archived ? "text-sidebar-muted-foreground/60" : "text-sidebar-foreground"
+          <div className={`flex min-w-0 flex-1 self-stretch ${hasSubtitle ? "flex-col items-start justify-center gap-0.5" : "items-center gap-2"} ${archived ? "text-sidebar-muted-foreground/60" : "text-sidebar-foreground"
             }`}>
             <span
               className={`${hasSubtitle ? "max-w-full" : "min-w-0 flex-1"} truncate select-none`}
@@ -173,7 +173,7 @@ export function ProductSidebarWorkspaceRow({
               {label}
             </span>
             {hasSubtitle ? (
-              <span className="max-w-full truncate text-xs leading-3 text-sidebar-muted-foreground select-none" draggable={false}>
+              <span className="max-w-full truncate text-ui-sm text-sidebar-muted-foreground select-none" draggable={false}>
                 {subtitle}
               </span>
             ) : null}
@@ -213,7 +213,7 @@ export function ProductSidebarWorkspaceRow({
                 />
               </Tooltip>
             ) : trailingLabel ? (
-              <div className={`col-start-1 row-start-1 flex items-center justify-end overflow-visible truncate whitespace-nowrap text-right text-ui-sm tabular-nums text-faint transition-opacity duration-150 ${shortcutLabel && shortcutRevealVisible
+              <div className={`col-start-1 row-start-1 flex items-center justify-end overflow-visible truncate whitespace-nowrap text-right text-ui tabular-nums text-faint transition-opacity duration-150 ${shortcutLabel && shortcutRevealVisible
                   ? "opacity-0"
                   : "group-hover:opacity-0 group-focus-within:opacity-0"
                 }`}>

@@ -1,9 +1,13 @@
 import { useState } from "react";
 import type { GitBranchRef } from "@anyharness/sdk";
-import { GitReviewOptionsMenu } from "#product/components/workspace/git/GitReviewOptionsMenu";
-import { GitReviewBaseSelector } from "#product/components/workspace/git/GitReviewBaseSelector";
-import { GitReviewTargetSelector } from "#product/components/workspace/git/GitReviewTargetSelector";
-import { CollapseAll, Columns2, ExpandAll, FolderTree, Search } from "@proliferate/ui/icons";
+import { GitReviewOptionsMenu } from "./GitReviewOptionsMenu";
+import { GitReviewBaseSelector } from "./GitReviewBaseSelector";
+import { GitReviewTargetSelector } from "./GitReviewTargetSelector";
+import {
+  CollapseAll,
+  ExpandAll,
+  Search,
+} from "@proliferate/ui/icons";
 import { PaneIconButton } from "@proliferate/ui/layout/PaneIconButton";
 import { PopoverButton, POPOVER_SURFACE_CLASS } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
@@ -21,14 +25,12 @@ interface GitPanelHeaderProps {
   baseRef: string | null;
   layout: "unified" | "split";
   wrapLongLines: boolean;
-  fileTreeOpen: boolean;
   allFilesCollapsed: boolean;
   reviewEntries: readonly GitReviewFileEntry[];
   onFilterChange: (mode: GitPanelMode) => void;
   onBaseRefChange: (baseRef: string | null) => void;
   onToggleLayout: () => void;
   onToggleWrap: () => void;
-  onToggleFileTree: () => void;
   onToggleAllFiles: () => void;
   onFocusFile: (entry: GitReviewFileEntry) => void;
   onRefresh: () => void;
@@ -44,14 +46,12 @@ export function GitPanelHeader({
   baseRef,
   layout,
   wrapLongLines,
-  fileTreeOpen,
   allFilesCollapsed,
   reviewEntries,
   onFilterChange,
   onBaseRefChange,
   onToggleLayout,
   onToggleWrap,
-  onToggleFileTree,
   onToggleAllFiles,
   onFocusFile,
   onRefresh,
@@ -60,63 +60,49 @@ export function GitPanelHeader({
 
   return (
     <div
-      className="z-20 grid min-h-10 shrink-0 [container-name:review-header] [container-type:inline-size] grid-cols-[minmax(0,1fr)_auto] items-center gap-1 border-b border-sidebar-border/70 bg-sidebar-background px-2 py-1 text-sidebar-muted-foreground"
+      className="z-20 flex shrink-0 flex-col [container-name:review-header] [container-type:inline-size] border-b border-sidebar-border/70 bg-sidebar-background px-2 py-1 text-sidebar-muted-foreground"
     >
-      <div className="flex w-full min-w-0 flex-col overflow-hidden text-base">
-        <div className="flex min-w-0 items-center gap-1 overflow-hidden">
-          <GitReviewBaseSelector
-            activeMode={changesFilter}
-            changedCount={visibleChangedCount}
-            onSelect={onFilterChange}
+      <div className="flex min-h-7 min-w-0 items-center gap-1">
+        <GitReviewBaseSelector
+          activeMode={changesFilter}
+          changedCount={visibleChangedCount}
+          onSelect={onFilterChange}
+        />
+        {showTargetSelector && (
+          <GitReviewTargetSelector
+            mode={changesFilter}
+            baseRef={baseRef}
+            branchRefs={branchRefs}
+            isRuntimeReady={isRuntimeReady}
+            onSelect={onBaseRefChange}
           />
-          {showTargetSelector && (
-            <GitReviewTargetSelector
-              mode={changesFilter}
-              baseRef={baseRef}
-              branchRefs={branchRefs}
-              isRuntimeReady={isRuntimeReady}
-              onSelect={onBaseRefChange}
-            />
-          )}
-          <GitPanelAggregateStats additions={additions} deletions={deletions} />
+        )}
+        <GitPanelAggregateStats additions={additions} deletions={deletions} />
+        <div className="ms-auto flex shrink-0 items-center gap-px">
+          <PaneIconButton
+            label={allFilesCollapsed ? "Expand all diffs" : "Collapse all diffs"}
+            aria-pressed={allFilesCollapsed}
+            onClick={onToggleAllFiles}
+          >
+            {allFilesCollapsed
+              ? <ExpandAll className="size-3.5" />
+              : <CollapseAll className="size-3.5" />}
+          </PaneIconButton>
+          <GitReviewJumpToFileMenu
+            reviewEntries={reviewEntries}
+            onFocusFile={onFocusFile}
+          />
+          <GitReviewOptionsMenu
+            allFilesCollapsed={allFilesCollapsed}
+            wrapLongLines={wrapLongLines}
+            layout={layout}
+            isRuntimeReady={isRuntimeReady}
+            onToggleAllFiles={onToggleAllFiles}
+            onToggleWrap={onToggleWrap}
+            onToggleLayout={onToggleLayout}
+            onRefresh={onRefresh}
+          />
         </div>
-      </div>
-      <div className="flex shrink-0 items-center gap-px">
-        <PaneIconButton
-          label={allFilesCollapsed ? "Expand all diffs" : "Collapse all diffs"}
-          aria-pressed={allFilesCollapsed}
-          onClick={onToggleAllFiles}
-        >
-          {allFilesCollapsed
-            ? <ExpandAll className="size-3.5" />
-            : <CollapseAll className="size-3.5" />}
-        </PaneIconButton>
-        <GitReviewJumpToFileMenu
-          reviewEntries={reviewEntries}
-          onFocusFile={onFocusFile}
-        />
-        <GitReviewOptionsMenu
-          allFilesCollapsed={allFilesCollapsed}
-          wrapLongLines={wrapLongLines}
-          isRuntimeReady={isRuntimeReady}
-          onToggleAllFiles={onToggleAllFiles}
-          onToggleWrap={onToggleWrap}
-          onRefresh={onRefresh}
-        />
-        <PaneIconButton
-          label={layout === "split" ? "Use unified diff" : "Use split diff"}
-          onClick={onToggleLayout}
-        >
-          <Columns2 className="size-3.5" />
-        </PaneIconButton>
-        <PaneIconButton
-          label={fileTreeOpen ? "Hide files" : "Show files"}
-          aria-pressed={fileTreeOpen}
-          active={fileTreeOpen}
-          onClick={onToggleFileTree}
-        >
-          <FolderTree className="size-3.5" />
-        </PaneIconButton>
       </div>
     </div>
   );
@@ -183,7 +169,7 @@ function GitReviewJumpToFileMenu({
                       <span className="flex min-w-0 items-baseline gap-1.5">
                         <span className="truncate">{baseName}</span>
                         {dirPath && (
-                          <span className="min-w-0 truncate text-base text-muted-foreground">
+                          <span className="min-w-0 truncate text-muted-foreground">
                             {dirPath}
                           </span>
                         )}
@@ -220,7 +206,7 @@ function GitPanelAggregateStats({
 }) {
   return (
     <div
-      className="flex shrink-0 items-center gap-1 text-sm font-medium leading-none tabular-nums"
+      className="flex shrink-0 items-center gap-1 text-ui leading-none tabular-nums tracking-tight"
       aria-label={`${additions} additions, ${deletions} deletions`}
     >
       <span className={additions > 0 ? "text-git-green" : "text-sidebar-muted-foreground/70"}>

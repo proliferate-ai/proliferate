@@ -1,7 +1,5 @@
 # Mobility
 
-Status: authoritative for the retained AnyHarness workspace mobility substrate.
-
 `anyharness-lib/src/domains/mobility/**`,
 `anyharness-lib/src/api/http/mobility.rs`, and the repo-root mobility helpers
 own target-local workspace safety, clean archive export, exact destination

@@ -58,7 +58,7 @@ describe("ChatLaunchIntentPane", () => {
     const bottomInset = container.querySelector("[data-chat-launch-intent-bottom-inset]");
     const overlayInset = container.querySelector("[data-chat-launch-intent-overlay-inset]");
 
-    expect(anchorFrame?.className).toContain("mt-auto");
+    expect(anchorFrame?.className ?? "").not.toContain("mt-auto");
     expect(anchorFrame?.parentElement?.className).toContain("flex");
     expect(anchorFrame?.parentElement?.className).toContain("min-h-full");
     expect(turn?.className).toContain("gap-4");

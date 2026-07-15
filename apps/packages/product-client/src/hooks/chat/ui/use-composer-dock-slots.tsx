@@ -8,7 +8,6 @@ import { ConnectedMcpElicitationCard } from "#product/components/workspace/chat/
 import { ConnectedPendingPromptList } from "#product/components/workspace/chat/input/PendingPromptList";
 import { DelegatedWorkComposerPanel } from "#product/components/workspace/chat/input/DelegatedWorkComposerPanel";
 import { DelegatedWorkComposerControl } from "#product/components/workspace/chat/input/delegated-work/DelegatedWorkComposerControl";
-import { ConnectedWorkspaceActivityComposerCard } from "#product/components/workspace/chat/input/workspace-activity/WorkspaceActivityComposerCard";
 import { ConnectedUserInputCard } from "#product/components/workspace/chat/input/UserInputCard";
 import { ConnectedPromptRecoveryPanel } from "#product/components/workspace/chat/input/PromptRecoveryPanel";
 import { SessionActivityBar } from "#product/components/workspace/activity/SessionActivityBar";
@@ -134,30 +133,25 @@ export function useComposerDockSlots(options?: {
       )
       : null
   ), [delegatedWorkComposer, dockSlotResolution.attachedSlot?.delegatedWork]);
-  const workspaceActivitySlot = useMemo<ReactNode | null>(() => (
-    dockSlotResolution.attachedSlot?.workspaceActivity
-      ? <ConnectedWorkspaceActivityComposerCard />
-      : null
-  ), [dockSlotResolution.attachedSlot?.workspaceActivity]);
-  // The workspace cap renders last in the attached stack so it docks against
-  // the composer surface. Existing session-scoped trays keep their order.
+  // The workspace-activity cap retired into the workspace-status card (the
+  // trailing-cluster trigger in ChatInputControlRow) — ambient git/PR state
+  // no longer paints on the composer itself.
   const sessionActivitySlot = useMemo<ReactNode | null>(() => (
     dockSlotResolution.attachedSlot?.sessionGoal || dockSlotResolution.attachedSlot?.sessionActivity
       ? <SessionActivityBar />
       : null
   ), [dockSlotResolution.attachedSlot?.sessionGoal, dockSlotResolution.attachedSlot?.sessionActivity]);
   const attachedSlot = useMemo<ReactNode | null>(() => (
-    ambientContextSlot || delegatedWorkSlot || sessionActivitySlot || workspaceActivitySlot
+    ambientContextSlot || delegatedWorkSlot || sessionActivitySlot
       ? (
       <>
         {ambientContextSlot}
         {delegatedWorkSlot}
         {sessionActivitySlot}
-        {workspaceActivitySlot}
       </>
       )
       : null
-  ), [ambientContextSlot, delegatedWorkSlot, sessionActivitySlot, workspaceActivitySlot]);
+  ), [ambientContextSlot, delegatedWorkSlot, sessionActivitySlot]);
 
   // Queue-placed prompts have one owner: the dock's outbound list. A rollback
   // recovery is workspace-scoped rather than session-scoped and outranks the

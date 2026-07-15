@@ -269,6 +269,48 @@ describe("useHomeNextModelSelection", () => {
       .toEqual(["anthropic/claude-sonnet-4-6"]);
   });
 
+  it("offers a launch-ready gateway agent even when native readiness is login_required", () => {
+    // A gateway-only actor: `GET /v1/agents` reports claude login_required (no
+    // vendor-CLI login), so readyAgents is empty, but the runtime's launch
+    // options list claude with models — the enrolled route supplies the launch
+    // credential. The composer must offer those models rather than "No agents".
+    selectionMocks.agentCatalog.readyAgents = [];
+    selectionMocks.runtimeLaunchOptions.data = {
+      agents: [{
+        kind: "claude",
+        displayName: "Claude",
+        defaultModelId: "claude-haiku-4-5",
+        models: [{
+          id: "claude-haiku-4-5",
+          displayName: "Haiku 4.5",
+          isDefault: true,
+          defaultOptIn: true,
+        }],
+      }],
+    };
+
+    const { result } = renderHook(() => useHomeNextModelSelection({
+      modelSelectionOverride: null,
+    }));
+
+    expect(result.current.modelAvailabilityState).toBe("launchable");
+    expect(result.current.modelGroups.map((group) => group.kind)).toEqual(["claude"]);
+    expect(result.current.modelGroups[0]?.models.map((model) => model.modelId))
+      .toEqual(["claude-haiku-4-5"]);
+  });
+
+  it("does not resurrect an agent absent from launch options (e.g. not installed)", () => {
+    selectionMocks.agentCatalog.readyAgents = [];
+    selectionMocks.runtimeLaunchOptions.data = { agents: [] };
+
+    const { result } = renderHook(() => useHomeNextModelSelection({
+      modelSelectionOverride: null,
+    }));
+
+    expect(result.current.modelAvailabilityState).toBe("no_launchable_model");
+    expect(result.current.modelGroups).toEqual([]);
+  });
+
   it("treats all catalog registries as launchable for cloud launches", () => {
     selectionMocks.agentCatalog.readyAgents = [agent("codex"), agent("claude")];
     selectionMocks.modelRegistriesQuery.data = [registry("codex"), registry("claude")];

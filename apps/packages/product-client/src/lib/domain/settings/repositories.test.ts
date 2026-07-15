@@ -35,6 +35,7 @@ function makeRepoConfig(overrides: Partial<RepoConfigResponse> = {}): RepoConfig
     gitProvider: "github",
     gitOwner: "proliferate-ai",
     gitRepoName: "proliferate",
+    commitInstructions: "",
     environments: [makeRepoEnvironment()],
     ...overrides,
   };

@@ -34,9 +34,17 @@ import {
   type ChatTranscriptGoalEventRenderInput,
   type ChatTranscriptPendingPromptRenderInput,
   type ChatTranscriptPendingStatusInput,
+  type ChatTranscriptScrollHandle,
   type ChatTranscriptTurnRowRenderInput,
   type ChatTranscriptTurnStatusInput,
 } from "@proliferate/product-ui/chat/transcript/ChatTranscriptView";
+import { useContentSearchStore } from "#product/stores/search/content-search-store";
+import { useChatTranscriptContentSearch } from "#product/hooks/chat/lifecycle/use-chat-transcript-content-search";
+import {
+  chatRowKeyFromUnitId,
+  parseChatRowMatchId,
+  scrollActiveChatRowMatchIntoView,
+} from "#product/lib/domain/content-search/chat-row-match-jump";
 import type { ChatTranscriptState } from "@proliferate/product-domain/chats/transcript/chat-transcript-state";
 import { collectToolCallIdsWithProposedPlan } from "@proliferate/product-domain/chats/transcript/transcript-rendering";
 import {
@@ -151,6 +159,67 @@ export function MessageList({
   const effectiveTranscriptViewState = typingActive
     ? deferredTranscriptViewState
     : transcriptViewState;
+
+  // Chat content search (Cmd+F). The index hook owns match counts/navigation;
+  // the paint prop + scroll handle drive highlighting and jump-to-match. All of
+  // it is inert unless search is open on the chat surface.
+  const contentSearchOpen = useContentSearchStore((state) => state.open);
+  const contentSearchSurface = useContentSearchStore((state) => state.surface);
+  const contentSearchQuery = useContentSearchStore((state) => state.query);
+  const contentSearchActiveMatchId = useContentSearchStore((state) => state.activeMatchId);
+  const chatSearchActive = contentSearchOpen && contentSearchSurface === "chat";
+  const deferredContentSearchQuery = useDeferredValue(contentSearchQuery);
+  const transcriptScrollHandleRef = useRef<ChatTranscriptScrollHandle | null>(null);
+
+  useChatTranscriptContentSearch({
+    transcript,
+    activeSessionId,
+    optimisticPrompt,
+    outboxEntries,
+    goalEvents,
+  });
+
+  const contentSearchPaint = useMemo(
+    () =>
+      chatSearchActive && deferredContentSearchQuery.trim().length > 0
+        ? { query: deferredContentSearchQuery }
+        : null,
+    [chatSearchActive, deferredContentSearchQuery],
+  );
+
+  useEffect(() => {
+    if (!chatSearchActive) {
+      return;
+    }
+    const target = parseChatRowMatchId(contentSearchActiveMatchId);
+    if (!target) {
+      return;
+    }
+    transcriptScrollHandleRef.current?.scrollToRowKey(
+      chatRowKeyFromUnitId(target.rowUnitId),
+    );
+
+    // First attempt synchronously — the target row is usually already mounted
+    // (marks exist), so the active highlight lands in the same tick. The rAF
+    // retries only cover the virtualized case where the row mounts after the
+    // scroll above.
+    if (scrollActiveChatRowMatchIntoView(target)) {
+      return;
+    }
+    let frame = 0;
+    let rafId = 0;
+    const tick = () => {
+      if (scrollActiveChatRowMatchIntoView(target)) {
+        return;
+      }
+      frame += 1;
+      if (frame <= 10) {
+        rafId = window.requestAnimationFrame(tick);
+      }
+    };
+    rafId = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(rafId);
+  }, [chatSearchActive, contentSearchActiveMatchId]);
 
   // Transcript-wide ExitPlanMode suppression index (the plan-doubling fix):
   // a proposed_plan item can land in a different turn than the ExitPlanMode
@@ -294,6 +363,8 @@ export function MessageList({
                   renderGoalEventRow={renderGoalEventRow}
                   renderPendingPromptTrailingStatus={renderPendingPromptTrailingStatusRow}
                   renderTurnTrailingStatus={renderTurnTrailingStatusRow}
+                  contentSearch={contentSearchPaint}
+                  scrollHandleRef={transcriptScrollHandleRef}
                 />
               </DebugProfiler>
             </ProposedPlanToolCallIdsProvider>

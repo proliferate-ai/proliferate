@@ -58,6 +58,10 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
   );
+  // Stable qualification hook (attributes only): exposes the active session id
+  // on the shell root so the local-world smoke driver can extract/reopen the
+  // exact session without a private API. No behavior change.
+  const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);
   const { layout, data } = useMainScreenState();
   const actions = useMainScreenActions({
     layout,
@@ -216,6 +220,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
               className={`h-screen flex overflow-hidden ${chromeClasses.root}`}
               data-workspace-shell
               data-workspace-ui-key={selectedLogicalWorkspaceId ?? selectedWorkspaceId ?? ""}
+              data-workspace-session-id={activeSessionId ?? ""}
               data-pending-workspace={pendingWorkspaceEntry ? "true" : "false"}
               data-pending-workspace-attempt-id={pendingWorkspaceEntry?.attemptId ?? undefined}
               data-telemetry-block

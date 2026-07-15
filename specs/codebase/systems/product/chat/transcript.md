@@ -4,6 +4,9 @@ Read this doc when a change touches session streams, transcript replay,
 transcript row models, pending/outbox prompt rows, long-history loading, or
 chat transcript rendering performance.
 
+In-app find (Cmd+F) over transcript prose is documented separately in
+[`../../../features/content-search.md`](../../../features/content-search.md).
+
 ## Stream And Transcript Rules
 
 - SSE events should be batched into at most one Zustand store write per
@@ -251,11 +254,12 @@ re-show while pinned, a short pre-paint rAF "glue" loop holds the viewport at th
 true bottom until row measurement settles, collapsing the resume backlog into one
 jump instead of a visible crawl.
 
-When the transcript is shorter than the viewport, both row-list paths use a
-bottom-anchored flex frame (`mt-auto` content above the structural composer
-inset). This preserves the same composer-relative frontier even when
-`scrollTop` must clamp to zero; unused viewport height belongs above the
-conversation, never between its frontier and composer.
+When the transcript is shorter than the viewport, both row-list paths
+top-align the conversation (no `mt-auto` bottom anchor): a fresh conversation
+reads from the top like Codex, and unused viewport height sits below it,
+between the last row and the composer. Content grows downward until it fills
+the viewport; only from that point on does the composer-relative frontier
+contract above take over (pinning, re-stick, stable frontier coordinates).
 
 When the user is unpinned, a completing turn that splits one row into
 `completed-history` + `content` (a new, unmeasured row inserted above the anchor)
@@ -319,9 +323,10 @@ Additional dependencies:
   frame. Do not wrap one path in an additional non-flex `h-6`; the indicator is
   taller than the slot and divergent overflow alignment creates a visible
   handoff nudge.
-- The pre-workspace `ChatLaunchIntentPane` uses the same bottom-anchored
+- The pre-workspace `ChatLaunchIntentPane` uses the same top-aligned
   `TurnShell` sequence, copyable user-message geometry, `gap-4` frontier, and
-  empty footer as the projected pending row. It also uses the transcript's
+  empty footer as the projected pending row (its `pt-4` matches
+  `TRANSCRIPT_TOP_PADDING_PX` so the handoff does not nudge). It also uses the transcript's
   stable structural inset and separate non-displacing overlay range, not the
   smaller auto-scroll inset. Launch -> pending -> materialized is an ownership
   handoff, not a layout transition.

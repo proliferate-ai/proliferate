@@ -5,16 +5,14 @@ import { Input } from "@proliferate/ui/primitives/Input";
 import {
   Check,
   ChevronDown,
-  FilePen,
   GitBranchIcon,
-  GitCommit,
   Search,
 } from "@proliferate/ui/icons";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import type { GitPanelMode } from "#product/lib/domain/workspaces/changes/git-panel-diff";
 
 const GIT_REVIEW_TARGET_TRIGGER_CLASS =
-  "h-6 min-w-0 max-w-[8rem] flex-[1_1_7.25rem] gap-1 rounded-lg border border-transparent bg-transparent px-2 py-0 text-sm leading-[18px] text-sidebar-foreground hover:bg-surface-elevated-secondary hover:text-sidebar-foreground data-[state=open]:bg-surface-elevated-secondary data-[state=open]:text-sidebar-foreground";
+  "h-6 min-w-0 w-fit max-w-[9rem] shrink-0 gap-1 rounded-lg border border-transparent bg-transparent px-1.5 py-0 text-ui leading-[16px] text-sidebar-foreground hover:bg-surface-elevated-secondary hover:text-sidebar-foreground data-[state=open]:bg-surface-elevated-secondary data-[state=open]:text-sidebar-foreground";
 
 export function GitReviewTargetSelector({
   mode,
@@ -50,7 +48,6 @@ export function GitReviewTargetSelector({
   }, [activeRef, branchRefs, search]);
 
   if (localTarget) {
-    const TargetIcon = localTarget.icon;
     return (
       <Button
         type="button"
@@ -59,7 +56,6 @@ export function GitReviewTargetSelector({
         disabled
         className={`${GIT_REVIEW_TARGET_TRIGGER_CLASS} cursor-default opacity-100 disabled:opacity-100`}
       >
-        <TargetIcon className="size-3 shrink-0 opacity-75" />
         <span className="min-w-0 truncate text-sidebar-foreground">{localTarget.label}</span>
       </Button>
     );
@@ -75,9 +71,8 @@ export function GitReviewTargetSelector({
           disabled={!isRuntimeReady}
           className={GIT_REVIEW_TARGET_TRIGGER_CLASS}
         >
-          <GitBranchIcon className="size-3 shrink-0 opacity-75" />
           <span className="min-w-0 truncate text-sidebar-foreground">{activeRef}</span>
-          <ChevronDown className="size-2.5 shrink-0 opacity-70" />
+          <ChevronDown className="size-3 shrink-0 text-sidebar-muted-foreground" />
         </Button>
       }
       align="start"
@@ -91,12 +86,12 @@ export function GitReviewTargetSelector({
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search branches"
-              className="h-full border-0 bg-transparent px-0 text-xs focus:ring-0"
+              className="h-full border-0 bg-transparent px-0 text-ui focus:ring-0"
             />
           </div>
           <div className="max-h-64 overflow-y-auto">
             {branchOptions.length === 0 ? (
-              <p className="px-2 py-2 text-xs text-muted-foreground">No branches</p>
+              <p className="px-2 py-2 text-ui text-muted-foreground">No branches</p>
             ) : (
               branchOptions.map((branch) => (
                 <Button
@@ -108,7 +103,7 @@ export function GitReviewTargetSelector({
                     onSelect(branch.name);
                     close();
                   }}
-                  className={`h-7 w-full justify-between rounded-lg px-2 py-0 text-xs hover:bg-accent ${
+                  className={`h-7 w-full justify-between rounded-lg px-2 py-0 text-ui hover:bg-accent ${
                     branch.name === activeRef ? "text-foreground" : "text-muted-foreground"
                   }`}
                 >
@@ -118,7 +113,7 @@ export function GitReviewTargetSelector({
                   </span>
                   <span className="ml-2 flex shrink-0 items-center gap-2">
                     {branch.isDefault && (
-                      <span className="rounded bg-muted px-1.5 py-px text-[9px] font-medium leading-none text-muted-foreground">
+                      <span className="rounded bg-muted px-1.5 py-px text-ui-sm font-medium leading-none text-muted-foreground">
                         default
                       </span>
                     )}
@@ -138,10 +133,10 @@ export function GitReviewTargetSelector({
 
 function localTargetForMode(mode: GitPanelMode) {
   if (mode === "staged") {
-    return { label: "HEAD", icon: GitCommit };
+    return { label: "HEAD" };
   }
   if (mode === "unstaged" || mode === "working_tree_composite") {
-    return { label: "Working tree", icon: FilePen };
+    return { label: "Working tree" };
   }
   return null;
 }

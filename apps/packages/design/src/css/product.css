@@ -202,7 +202,9 @@
   /* -- Sidebar (one step darker than the content surface) -- */
   --color-sidebar: #1d1d1d;
   --color-sidebar-background: #181818;
-  --color-sidebar-foreground: #ffffff;
+  /* Row ink sits one step below the wordmark/primary white (codex: nav rows
+     run at an 85% foreground mix; only the brand row is full-strength). */
+  --color-sidebar-foreground: color-mix(in oklab, #ffffff 85%, transparent);
   --color-sidebar-primary: #ffffff;
   --color-sidebar-primary-foreground: #ffffff;
   --color-sidebar-muted-foreground: rgba(255, 255, 255, 0.481);
@@ -317,8 +319,10 @@
   --diffs-line-height: calc(var(--diffs-font-size, 12px) * 1.8);
   --scratch-font-family: var(--font-sans);
   --scratch-code-font-family: var(--font-mono);
-  --scratch-font-size: var(--text-chat, 10px);
-  --scratch-line-height: var(--text-chat--line-height, 18px);
+  /* Scratch prose reads at the same size as transcript message prose
+     (--text-message), not the smaller --text-chat chrome size. */
+  --scratch-font-size: var(--text-message, var(--text-composer, 12px));
+  --scratch-line-height: var(--text-message--line-height, var(--text-composer--line-height, 20px));
   --scratch-list-marker-leading-space: 0.48em;
   --scratch-task-box-size: 0.82em;
   --readable-code-font-size: 0.5625rem;
@@ -903,6 +907,55 @@ mark.codex-thread-find-active {
   background-color: var(--diffs-bg-context-override);
 }
 
+/* -- Git review document (sidebar Changes pane) --
+   Flat Codex-style review: unchanged lines sit on the plain pane background
+   (only +/- rows carry a tint), and hunk-gap separators render as a slim
+   strip inset from the pane edges with rounded ends instead of a full-width
+   band. Scoped to the review scroll container so chat-transcript diffs keep
+   their own treatment. */
+[data-git-review-document] {
+  --diffs-bg-context-override: var(--color-background);
+  --codex-diffs-context-number: var(--color-background);
+  /* Separator cells draw their strip via ::before below; the cell itself must
+     stay transparent or the strip reads as a full-width band. This var feeds
+     the later .composer-diff-simple-line [data-separator] background rule. */
+  --diffs-bg-separator-override: transparent;
+}
+
+[data-git-review-document] [data-separator] {
+  background: transparent;
+  position: relative;
+}
+
+[data-git-review-document] [data-separator]::before {
+  content: "";
+  position: absolute;
+  inset: 3px 0;
+  background: var(--codex-diffs-separator-surface);
+  pointer-events: none;
+}
+
+/* Gutter cells cap the left end of the strip; content cells (gap-expander,
+   gap-info, collapsed-context rows) cap the right end. Between them the two
+   ::before segments meet edge-to-edge, so the strip reads as one slim pill
+   inset from the pane edges — Codex's [data-separator='line-info'] look. */
+[data-git-review-document] .diff-gutter-cell[data-separator]::before {
+  left: 6px;
+  border-radius: 6px 0 0 6px;
+}
+
+[data-git-review-document] .diff-content-cell[data-separator]::before,
+[data-git-review-document] [data-separator="gap-expander"]::before,
+[data-git-review-document] [data-separator="gap-info"]::before {
+  right: 6px;
+  border-radius: 0 6px 6px 0;
+}
+
+/* Keep separator labels and expand controls above the ::before strip. */
+[data-git-review-document] [data-separator] > * {
+  position: relative;
+}
+
 .composer-diff-simple-line [data-line-type="change-addition"] {
   background-color: var(--diffs-bg-addition-override);
 }
@@ -1175,44 +1228,17 @@ body {
    "max": the session sits at the highest reasoning level its model offers —
    the bars take the app accent, nothing else changes. "ultra": that top level
    is the ultra tier, which only frontier models expose (GPT-5.6 Sol/Terra
-   today) — the bars chip gets an animated spectrum ring + fill and the whole
-   composer border picks up a faint drifting tint of the same gradient.
-   Non-ultra models never show the spectrum, even at their own max.
-   Desaturated via color-mix so it reads as a shimmer, not a Conductor-style
-   paint job; bar wave is compositor-only (transform/opacity); gradient drift
-   animates background-position on two low-cost elements. */
+   today) — the chip names the tier ("Ultra") in foreground-weight text, the
+   bars keep the accent, and the lit bars run the compositor-only wave. The
+   word is the signal: no gradient paints, no composer-wide ring.
+   Non-ultra models never get the ultra treatment, even at their own max. */
 .composer-level-bars-max,
 .composer-level-bars-ultra {
   color: var(--color-special);
 }
 
-.composer-level-bars-ultra {
-  color: var(--color-foreground);
-}
-
 .composer-level-bars-button-ultra {
-  --ultra-spectrum: linear-gradient(
-    100deg,
-    color-mix(in oklab, #ef4343 62%, var(--color-composer-background)),
-    color-mix(in oklab, #f76808 62%, var(--color-composer-background)),
-    color-mix(in oklab, #21c45d 62%, var(--color-composer-background)),
-    color-mix(in oklab, #07b6d5 62%, var(--color-composer-background)),
-    color-mix(in oklab, #e014ff 62%, var(--color-composer-background)),
-    color-mix(in oklab, #ef4343 62%, var(--color-composer-background))
-  );
-  border: 1px solid transparent;
-  background:
-    linear-gradient(
-      color-mix(in oklab, var(--color-special) 12%, var(--color-composer-background)),
-      color-mix(in oklab, var(--color-special) 12%, var(--color-composer-background))
-    ) padding-box,
-    var(--ultra-spectrum) border-box;
-  background-size: 100% 100%, 300% 100%;
-  /* background-position is a paint (not compositor) property; steps(60) caps
-     the repaint rate to 10fps instead of every frame. See the fuller note on
-     @keyframes composer-ultra-drift below for why this is the chosen
-     mitigation over converting to a child-element transform-drift. */
-  animation: composer-ultra-drift 6s steps(60) infinite;
+  color: var(--color-foreground);
 }
 
 /* Bars are plain HTML spans now (see LevelBarsIcon in LevelBarsButton.tsx) —
@@ -1235,113 +1261,8 @@ body {
   }
 }
 
-/* Shared stop list for the ultra ring pseudo-elements below, defined once on
-   the composer column so both the input surface and the docked
-   workspace-activity cap (a sibling, not a descendant, of the surface) can
-   read the same gradient via inheritance instead of repeating the stops. */
-[data-chat-composer-column] {
-  --ultra-ring-spectrum: linear-gradient(
-    100deg,
-    color-mix(in oklab, #ef4343 38%, transparent),
-    color-mix(in oklab, #f76808 38%, transparent),
-    color-mix(in oklab, #21c45d 38%, transparent),
-    color-mix(in oklab, #07b6d5 38%, transparent),
-    color-mix(in oklab, #e014ff 38%, transparent),
-    color-mix(in oklab, #ef4343 38%, transparent)
-  );
-}
-
-/* Composer-wide ultra tint: the surface paints its border via the first
-   box-shadow ring, so overlay a 1px gradient ring in a masked pseudo-element
-   instead of touching the shadow stack. */
-.chat-composer-surface[data-ultra-emphasis]::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: var(--ultra-ring-spectrum);
-  background-size: 300% 100%;
-  -webkit-mask:
-    linear-gradient(#fff 0 0) content-box,
-    linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask:
-    linear-gradient(#fff 0 0) content-box,
-    linear-gradient(#fff 0 0);
-  mask-composite: exclude;
-  pointer-events: none;
-  /* steps(60) — see the note on @keyframes composer-ultra-drift below. */
-  animation: composer-ultra-drift 6s steps(60) infinite;
-}
-
-/* When the workspace-activity cap is docked flush on top of the surface, the
-   surface loses its top rounding and the surface ring's top segment would
-   draw a seam directly under the cap. The surface clips overflow, so pushing
-   the pseudo's top edge above the box is enough to clip that segment away —
-   the cap grows its own ring below to cover the top+side edges instead. */
-[data-chat-composer-column]:has([data-workspace-activity-trigger])
-  .chat-composer-surface[data-ultra-emphasis]::after {
-  top: -2px;
-}
-
-/* The cap has no default position, so give it one only when it needs to host
-   the absolutely-positioned ring pseudo below. */
-[data-chat-composer-column]:has(.chat-composer-surface[data-ultra-emphasis])
-  [data-workspace-activity-trigger] {
-  position: relative;
-}
-
-/* Cap's half of the continuous ring: covers the top and side edges only
-   (bottom padding is 0) so it hands off to the surface ring below without a
-   doubled line at the cap/surface seam. */
-[data-chat-composer-column]:has(.chat-composer-surface[data-ultra-emphasis])
-  [data-workspace-activity-trigger]::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px 1px 0 1px;
-  background: var(--ultra-ring-spectrum);
-  background-size: 300% 100%;
-  -webkit-mask:
-    linear-gradient(#fff 0 0) content-box,
-    linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask:
-    linear-gradient(#fff 0 0) content-box,
-    linear-gradient(#fff 0 0);
-  mask-composite: exclude;
-  pointer-events: none;
-  /* steps(60) — see the note on @keyframes composer-ultra-drift below. */
-  animation: composer-ultra-drift 6s steps(60) infinite;
-}
-
-/* background-position is a paint (not compositor) property, so this drift
-   used to repaint every frame for its 6s-infinite lifetime across three
-   elements: the chip's border-box gradient and the two 1px-perimeter masked
-   ring pseudo-elements above. None of the three can hold a real child (the
-   pseudos can't have children at all; the chip's gradient is painted via the
-   border-box/padding-box layering trick, not a discrete node), which rules
-   out the usual "300%-wide child + translateX" compositor rewrite without a
-   markup change. steps(60) over the 6s loop instead caps repaint at 10fps —
-   imperceptible for a slow ambient drift — for a 6x cut in paint frequency
-   with no structural change. */
-@keyframes composer-ultra-drift {
-  from {
-    background-position: 0% 50%;
-  }
-  to {
-    background-position: 300% 50%;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .composer-level-bar-wave,
-  .composer-level-bars-button-ultra,
-  .chat-composer-surface[data-ultra-emphasis]::after,
-  [data-chat-composer-column]:has(.chat-composer-surface[data-ultra-emphasis])
-    [data-workspace-activity-trigger]::after {
+  .composer-level-bar-wave {
     animation: none;
   }
 }
@@ -1985,6 +1906,10 @@ body {
   background-color: var(--right-panel-tab-surface);
   flex-shrink: 0;
   box-sizing: border-box;
+  /* Tab drag-reorder is pointer-event driven; without this WebKit starts a
+     text selection mid-drag and paints the whole bar (and anything the sweep
+     crosses) blue. */
+  user-select: none;
 }
 
 .right-panel-tab-system .editor-panel-tab-bar-tab-cluster {

@@ -1,7 +1,5 @@
 # Server Standards
 
-Status: authoritative for Proliferate backend/control-plane code in this repo.
-
 ## Scope
 
 These standards apply to backend/control-plane code under:

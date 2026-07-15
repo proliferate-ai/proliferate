@@ -4,7 +4,11 @@ import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-clou
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { applyAgentAuthState } from "#product/lib/access/anyharness/agent-auth";
 import { getProliferateApiOrigin } from "#product/lib/infra/proliferate-api";
-import { planLocalAuthStatePush, stampIssuingServerOrigin } from "#product/lib/domain/agents/local-auth-state";
+import {
+  planLocalAuthStatePush,
+  shouldSyncLocalAuthState,
+  stampIssuingServerOrigin,
+} from "#product/lib/domain/agents/local-auth-state";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
 /**
@@ -21,18 +25,24 @@ import { useHarnessConnectionStore } from "#product/stores/sessions/harness-conn
  * change — the runtime keeps launching against its last persisted state.
  */
 export function useLocalAuthStateSync() {
-  const { cloudActive } = useCloudAvailabilityState();
+  // The local agent-auth push must NOT be gated on cloud COMPUTE (the old
+  // `cloudActive` coupling): the local surface state carries gateway + BYOK
+  // routes for LOCAL sessions, which a gateway-enabled, compute-less server
+  // still needs. Gate on authenticated + reachable instead (see
+  // `shouldSyncLocalAuthState`).
+  const { cloudEnabled, authStatus } = useCloudAvailabilityState();
   const apiBaseUrl = useProductHost().deployment.apiBaseUrl;
+  const authenticated = authStatus === "authenticated";
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const connectionState = useHarnessConnectionStore((state) => state.connectionState);
-  const stateQuery = useAgentAuthState("local", cloudActive);
+  const stateQuery = useAgentAuthState("local", authenticated && cloudEnabled);
   const lastPushedRef = useRef<string | null>(null);
 
   const state = stateQuery.data;
   const runtimeHealthy = connectionState === "healthy" && runtimeUrl.trim().length > 0;
 
   useEffect(() => {
-    if (!cloudActive || !runtimeHealthy) {
+    if (!shouldSyncLocalAuthState({ authenticated, serverReachable: cloudEnabled, runtimeHealthy })) {
       return;
     }
     // Wait until the server state has settled before deciding anything.
@@ -47,10 +57,7 @@ export function useLocalAuthStateSync() {
       return;
     }
     let cancelled = false;
-    const stamped = stampIssuingServerOrigin(
-      state,
-      getProliferateApiOrigin(apiBaseUrl),
-    );
+    const stamped = stampIssuingServerOrigin(state, getProliferateApiOrigin(apiBaseUrl));
     applyAgentAuthState({ runtimeUrl }, stamped)
       .then(() => {
         if (!cancelled) {
@@ -63,5 +70,5 @@ export function useLocalAuthStateSync() {
     return () => {
       cancelled = true;
     };
-  }, [cloudActive, runtimeHealthy, runtimeUrl, state]);
+  }, [authenticated, cloudEnabled, runtimeHealthy, runtimeUrl, state]);
 }

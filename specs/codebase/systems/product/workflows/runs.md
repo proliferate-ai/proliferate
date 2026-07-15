@@ -1,6 +1,4 @@
-# One-Prompt Workflow Execution in an Existing Workspace (C2a)
-
-Status: frozen implementation specification, revision `C2a.3`.
+# One-Prompt Workflow Execution in an Existing Workspace
 
 Owner: AnyHarness workflow runs.
 
@@ -23,23 +21,6 @@ Read with:
   for nonblocking session extensions; and
 - [`../../../../developing/testing/README.md`](../../../../developing/testing/README.md)
   for test tiers.
-
-## Handoff metadata
-
-This table records implementation custody. It is not part of the wire,
-persistence, or product contract.
-
-| Field | Value |
-| --- | --- |
-| Repository | `proliferate-ai/proliferate` |
-| Spec revision | `C2a.3` |
-| Base SHA | `2ec15eaf8cfc870cbdbb42c225a5f1428e5282b4` |
-| Stage | frozen; implementation handoff ready |
-| Implementation head | none |
-| Founder approval | 2026-07-13 |
-
-An implementation based on a later revision must first reconcile this spec
-against that revision. The base SHA never appears in product data.
 
 ## 1. Outcome
 
@@ -110,7 +91,8 @@ Acceptance requires one real prompt to complete while proving:
   step trait, plugin registry, command bus, placement hierarchy, retry
   framework, or `live/workflows` subsystem.
 
-Later slices extend this domain; they do not expand this PR.
+Later work may extend this domain without changing the boundary documented
+here.
 
 ## 3. Invocation and API
 
@@ -245,7 +227,7 @@ to the direct-attach JWT allowlist.
 ### 4.1 Ownership
 
 The server's existing `workflow_definition` Postgres table remains the
-authored workflow source. This PR adds no Postgres run table. Future Cloud
+authored workflow source. This execution contract adds no Postgres run table. Future Cloud
 delivery or product history may own a separate invocation/projection record.
 
 AnyHarness SQLite is authoritative for execution.
@@ -642,7 +624,7 @@ the completed `SessionRuntime` is injected into `WorkflowRunRuntime`.
 - Parallel lanes earn durable lane identity and a live coordinator only when
   real concurrent execution exists.
 
-None of those future seams are created in this PR.
+None of those future seams are part of this execution contract.
 
 ## 8. Verification
 

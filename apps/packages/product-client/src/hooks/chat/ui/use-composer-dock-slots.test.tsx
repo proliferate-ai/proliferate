@@ -3,7 +3,7 @@
 import { cleanup, render, renderHook, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { useComposerDockSlots } from "#product/hooks/chat/ui/use-composer-dock-slots";
+import { useComposerDockSlots } from "./use-composer-dock-slots";
 
 const workspaceStatusPanelState = vi.hoisted(() => ({
   value: { kind: "pending" } as unknown,
@@ -101,10 +101,6 @@ vi.mock("#product/components/workspace/chat/input/delegated-work/DelegatedWorkCo
   DelegatedWorkComposerControl: () => <div data-testid="delegated-work-control" />,
 }));
 
-vi.mock("#product/components/workspace/chat/input/workspace-activity/WorkspaceActivityComposerCard", () => ({
-  ConnectedWorkspaceActivityComposerCard: () => <div data-testid="workspace-activity-card" />,
-}));
-
 vi.mock("#product/components/workspace/chat/input/PendingPromptList", () => ({
   ConnectedPendingPromptList: () => <div data-testid="pending-prompt-list" />,
 }));
@@ -183,7 +179,10 @@ describe("useComposerDockSlots", () => {
     expect(screen.getByTestId("prompt-recovery-panel")).not.toBeNull();
   });
 
-  it("keeps delegated work and the workspace activity cap in the same stack", () => {
+  // The git/PR cap retired into the workspace-status card (trailing-cluster
+  // trigger in ChatInputControlRow) — the attached stack no longer renders
+  // any workspace-activity surface.
+  it("keeps delegated work in the attached stack without a workspace activity cap", () => {
     delegatedWorkState.value = {};
     selectedWorkspaceState.value = "workspace-1";
     const { result } = renderHook(() => useComposerDockSlots());
@@ -191,6 +190,6 @@ describe("useComposerDockSlots", () => {
     render(<>{result.current.attachedSlot}</>);
 
     expect(screen.getByTestId("delegated-work-control")).not.toBeNull();
-    expect(screen.getByTestId("workspace-activity-card")).not.toBeNull();
+    expect(screen.queryByTestId("workspace-activity-card")).toBeNull();
   });
 });

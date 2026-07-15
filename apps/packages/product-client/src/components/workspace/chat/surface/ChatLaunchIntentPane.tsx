@@ -102,7 +102,7 @@ export function ChatLaunchIntentPane({
         contentClassName={`${CHAT_SURFACE_GUTTER_CLASSNAME} relative flex min-h-full flex-col`}
       >
         <div
-          className="mt-auto pt-4"
+          className="pt-4"
           data-chat-launch-intent-anchor-frame
         >
           <div

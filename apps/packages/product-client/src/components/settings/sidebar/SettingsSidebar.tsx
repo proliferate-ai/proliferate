@@ -63,7 +63,7 @@ interface SettingsSidebarProps {
 }
 
 const SETTINGS_SIDEBAR_ROOT_CLASS =
-  "flex h-full w-[240px] shrink-0 select-none flex-col border-r border-border bg-background text-foreground";
+  "flex h-full w-full select-none flex-col bg-background text-foreground";
 const SETTINGS_NAV_CLASS = "flex-1 overflow-y-auto px-3 pb-5 pt-4";
 const SETTINGS_GROUPS_CLASS = "flex flex-col";
 const SETTINGS_GROUP_CLASS = "flex flex-col gap-0.5";
@@ -308,7 +308,7 @@ export function SettingsSidebar({
               <Fragment key={item.id}>{renderNavRow(item)}</Fragment>
             ))}
             {appVersion ? (
-              <div className="px-2.5 py-2 text-base text-muted-foreground">
+              <div className="px-2.5 py-2 text-ui-sm text-muted-foreground">
                 Proliferate v{appVersion}
               </div>
             ) : null}

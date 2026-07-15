@@ -52,6 +52,14 @@ const WorkspaceStatusPlaygroundPage = import.meta.env.DEV
     )
   : null
 
+const GitReviewPlaygroundPage = import.meta.env.DEV
+  ? lazy(() =>
+      import("#product/pages/GitReviewPlaygroundPage").then((m) => ({
+        default: m.GitReviewPlaygroundPage,
+      })),
+    )
+  : null
+
 const AuthPlaygroundPage = import.meta.env.DEV
   ? lazy(() =>
       import("#product/pages/AuthPlaygroundPage").then((m) => ({
@@ -142,6 +150,16 @@ export function App({ RoutesComponent }: AppProps) {
               element={
                 <Suspense fallback={null}>
                   <WorkspaceStatusPlaygroundPage />
+                </Suspense>
+              }
+            />
+          )}
+          {import.meta.env.DEV && GitReviewPlaygroundPage && (
+            <Route
+              path="/playground/git-review"
+              element={
+                <Suspense fallback={null}>
+                  <GitReviewPlaygroundPage />
                 </Suspense>
               }
             />

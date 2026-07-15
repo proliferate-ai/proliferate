@@ -6,10 +6,11 @@
   "scripts": {
     "release-e2e": "tsx src/cli/run.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/**/*.test.ts"
+    "test": "tsx --test \"src/**/*.test.ts\""
   },
   "devDependencies": {
     "@types/node": "^24.13.2",
+    "playwright": "^1.61.0",
     "tsx": "^4.22.4",
     "typescript": "^5.7.0"
   }

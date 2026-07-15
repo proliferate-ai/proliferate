@@ -1,4 +1,4 @@
-import { GitBranchIcon } from "@proliferate/ui/icons";
+import { PrBranchGlyph, PrMergedGlyph } from "@proliferate/ui/icons";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import type { SidebarGitGlyph } from "#product/lib/domain/workspaces/git-status/pr-status-presentation";
 import type { PrStatusView } from "@proliferate/product-ui/workspaces/PrStatusBadge";
@@ -9,16 +9,28 @@ interface SidebarWorkspaceGitGlyphProps {
 }
 
 /**
- * Compact git/PR glyph for the sidebar detail cluster. The branch shape
- * matches the Home target picker; status is expressed through the glyph tone
- * instead of adding a second dot on top of it.
+ * Compact git/PR glyph for the sidebar detail cluster, codex-style: three
+ * visual states only. Merged gets its own purple merge glyph; a PR with a
+ * problem (failing checks, closed, conflicts) is the muted branch glyph with
+ * a red dot baked into the SVG; every other real PR is the plain muted
+ * branch glyph. Finer states (draft/pending/review) live in the tooltip,
+ * not in color.
  */
 export function SidebarWorkspaceGitGlyph({ glyph, status }: SidebarWorkspaceGitGlyphProps) {
+  const hasIssue = glyph.conflicted
+    || status.kind === "checks_failing"
+    || status.kind === "closed";
+
   const icon = (
     <span role="img" aria-label={glyph.tooltip ?? "Pull request"}>
-      <GitBranchIcon
-        className={`size-3.5 ${glyph.conflicted ? "text-destructive" : gitStatusTone(status.kind)}`}
-      />
+      {status.kind === "merged" ? (
+        <PrMergedGlyph className="size-3.5 text-pr-merged" />
+      ) : (
+        <PrBranchGlyph
+          dot={hasIssue}
+          className="size-3.5 text-sidebar-muted-foreground [--pr-status-dot-color:var(--color-destructive)]"
+        />
+      )}
     </span>
   );
 
@@ -34,22 +46,4 @@ export function SidebarWorkspaceGitGlyph({ glyph, status }: SidebarWorkspaceGitG
       {icon}
     </Tooltip>
   );
-}
-
-function gitStatusTone(kind: PrStatusView["kind"]): string {
-  switch (kind) {
-    case "open":
-      return "text-success";
-    case "merged":
-      return "text-pr-merged";
-    case "pending":
-    case "changes_requested":
-      return "text-warning";
-    case "checks_failing":
-    case "closed":
-      return "text-destructive";
-    case "draft":
-    default:
-      return "text-sidebar-muted-foreground";
-  }
 }

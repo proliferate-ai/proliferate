@@ -949,6 +949,24 @@
   description: When true, the server fails closed (raises at release-ID construction) instead of emitting a degraded `0.0.0-dev`/SHA-less release. Production task definitions set this so a build shipped without a stamped version/SHA cannot emit a non-deterministic release
   tags: [production]
 
+- name: PROLIFERATE_BUILD_VERSION
+  secret: false
+  default: ""
+  description: Canonical runtime version stamped into the AnyHarness/worker/supervisor binaries at build time (from `anyharness/sdk/package.json`). The immutable E2B template build (`scripts/build-template.mjs --rebuild-runtime`) sets it; when set, a missing/malformed `PROLIFERATE_BUILD_SHA` fails the build so the release ID carries a deterministic SHA. Unset dev/test builds fall back to the crate `Cargo.toml` version
+  tags: [ci]
+
+- name: PROLIFERATE_BUILD_SHA
+  secret: false
+  default: ""
+  description: Full 40-character source SHA of the exact checkout, stamped (truncated to 12) into the runtime binaries' release ID. Set by the immutable E2B template build; rejected if missing/malformed when `PROLIFERATE_BUILD_VERSION` is set
+  tags: [ci]
+
+- name: PROLIFERATE_RUNTIME_ENV
+  secret: false
+  default: ""
+  description: Bounded runtime environment for a cloud sandbox (`e2b`), emitted by the server bootstrap into the runtime processes. It is the single env-like Sentry tag (`runtime_env`) preserved through worker/supervisor scrubbing; every other env-like tag stays redacted
+  tags: [production]
+
 - name: SIGNUPS_SLACK_WEBHOOK_URL
   secret: true
   default: ""

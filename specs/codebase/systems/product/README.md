@@ -1,7 +1,5 @@
 # Product Systems
 
-Status: authoritative index for user-facing product systems.
-
 Product system specs own complete user workflows, UI surface behavior,
 acceptance matrices, copy-level product semantics, and end-to-end smoke
 expectations. They reference structure and platform specs rather than

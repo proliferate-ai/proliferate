@@ -183,14 +183,16 @@ export function ScratchPadPanel({ workspaceKey }: ScratchPadPanelProps) {
       <PaneHeader
         left={(
           <div className="flex min-w-0 items-center px-1">
-            <span className="truncate text-xs font-medium text-sidebar-foreground">
+            {/* Header reads at the same size as the scratch content
+                (--text-message), not the smaller chrome scales. */}
+            <span className="truncate text-[length:var(--text-message)] font-medium text-sidebar-foreground">
               Scratch
             </span>
           </div>
         )}
         right={(
           <>
-            <span className="max-w-20 truncate text-base text-sidebar-muted-foreground">
+            <span className="max-w-24 truncate text-[length:var(--text-message)] text-sidebar-muted-foreground">
               {saveStatus}
             </span>
             <ScratchPadOptionsMenu

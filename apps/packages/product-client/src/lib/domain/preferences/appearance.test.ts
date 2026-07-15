@@ -106,6 +106,9 @@ describe("appearance preferences", () => {
       xl: { fontSize: "1rem", lineHeight: "1.5rem" },
       title: { fontSize: "18px", lineHeight: "22px" },
       hero: { fontSize: "25px", lineHeight: "33px" },
+      sidebarNav: { fontSize: "12px", lineHeight: "17px" },
+      sidebarRow: { fontSize: "12px", lineHeight: "17px" },
+      sidebarBrand: { fontSize: "15px", lineHeight: "22px" },
     });
   });
 
@@ -123,6 +126,9 @@ describe("appearance preferences", () => {
         xl: { fontSize: "0.90625rem", lineHeight: "1.3125rem" },
         title: { fontSize: "15px", lineHeight: "19px" },
         hero: { fontSize: "22px", lineHeight: "30px" },
+        sidebarNav: { fontSize: "10.5px", lineHeight: "15.5px" },
+        sidebarRow: { fontSize: "10.5px", lineHeight: "15.5px" },
+        sidebarBrand: { fontSize: "13.5px", lineHeight: "20.5px" },
       },
       xsmall: {
         xs: { fontSize: "0.40625rem", lineHeight: "0.6875rem" },
@@ -136,6 +142,9 @@ describe("appearance preferences", () => {
         xl: { fontSize: "0.9375rem", lineHeight: "1.375rem" },
         title: { fontSize: "16px", lineHeight: "20px" },
         hero: { fontSize: "23px", lineHeight: "31px" },
+        sidebarNav: { fontSize: "11px", lineHeight: "16px" },
+        sidebarRow: { fontSize: "11px", lineHeight: "16px" },
+        sidebarBrand: { fontSize: "14px", lineHeight: "21px" },
       },
       small: {
         xs: { fontSize: "0.4375rem", lineHeight: "0.6875rem" },
@@ -149,6 +158,9 @@ describe("appearance preferences", () => {
         xl: { fontSize: "0.96875rem", lineHeight: "1.4375rem" },
         title: { fontSize: "17px", lineHeight: "21px" },
         hero: { fontSize: "24px", lineHeight: "32px" },
+        sidebarNav: { fontSize: "11.5px", lineHeight: "16.5px" },
+        sidebarRow: { fontSize: "11.5px", lineHeight: "16.5px" },
+        sidebarBrand: { fontSize: "14.5px", lineHeight: "21.5px" },
       },
       default: {
         xs: { fontSize: "0.4375rem", lineHeight: "0.6875rem" },
@@ -162,6 +174,9 @@ describe("appearance preferences", () => {
         xl: { fontSize: "1rem", lineHeight: "1.5rem" },
         title: { fontSize: "18px", lineHeight: "22px" },
         hero: { fontSize: "25px", lineHeight: "33px" },
+        sidebarNav: { fontSize: "12px", lineHeight: "17px" },
+        sidebarRow: { fontSize: "12px", lineHeight: "17px" },
+        sidebarBrand: { fontSize: "15px", lineHeight: "22px" },
       },
       large: {
         xs: { fontSize: "0.46875rem", lineHeight: "0.75rem" },
@@ -175,6 +190,9 @@ describe("appearance preferences", () => {
         xl: { fontSize: "1.0625rem", lineHeight: "1.625rem" },
         title: { fontSize: "19px", lineHeight: "23px" },
         hero: { fontSize: "26.5px", lineHeight: "34.5px" },
+        sidebarNav: { fontSize: "13px", lineHeight: "18px" },
+        sidebarRow: { fontSize: "13px", lineHeight: "18px" },
+        sidebarBrand: { fontSize: "16px", lineHeight: "23px" },
       },
       xlarge: {
         xs: { fontSize: "0.5rem", lineHeight: "0.75rem" },
@@ -188,6 +206,9 @@ describe("appearance preferences", () => {
         xl: { fontSize: "1.125rem", lineHeight: "1.75rem" },
         title: { fontSize: "20px", lineHeight: "24px" },
         hero: { fontSize: "28px", lineHeight: "36px" },
+        sidebarNav: { fontSize: "14px", lineHeight: "19px" },
+        sidebarRow: { fontSize: "14px", lineHeight: "19px" },
+        sidebarBrand: { fontSize: "17px", lineHeight: "24px" },
       },
       xxlarge: {
         xs: { fontSize: "0.5625rem", lineHeight: "0.875rem" },
@@ -201,6 +222,9 @@ describe("appearance preferences", () => {
         xl: { fontSize: "1.1875rem", lineHeight: "1.875rem" },
         title: { fontSize: "21px", lineHeight: "25px" },
         hero: { fontSize: "29.5px", lineHeight: "37.5px" },
+        sidebarNav: { fontSize: "15px", lineHeight: "20px" },
+        sidebarRow: { fontSize: "15px", lineHeight: "20px" },
+        sidebarBrand: { fontSize: "18px", lineHeight: "25px" },
       },
       xxxlarge: {
         xs: { fontSize: "0.625rem", lineHeight: "1rem" },
@@ -214,6 +238,9 @@ describe("appearance preferences", () => {
         xl: { fontSize: "1.25rem", lineHeight: "2rem" },
         title: { fontSize: "22px", lineHeight: "26px" },
         hero: { fontSize: "31px", lineHeight: "39px" },
+        sidebarNav: { fontSize: "16px", lineHeight: "21px" },
+        sidebarRow: { fontSize: "16px", lineHeight: "21px" },
+        sidebarBrand: { fontSize: "19px", lineHeight: "26px" },
       },
     });
   });

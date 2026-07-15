@@ -1,5 +1,6 @@
 import {
   CollapseAll,
+  Columns2,
   ExpandAll,
   RefreshCw,
   WrapText,
@@ -10,16 +11,20 @@ import { PaneOptionsMenu } from "#product/components/workspace/pane/PaneOptionsM
 export function GitReviewOptionsMenu({
   allFilesCollapsed,
   wrapLongLines,
+  layout,
   isRuntimeReady,
   onToggleAllFiles,
   onToggleWrap,
+  onToggleLayout,
   onRefresh,
 }: {
   allFilesCollapsed: boolean;
   wrapLongLines: boolean;
+  layout: "unified" | "split";
   isRuntimeReady: boolean;
   onToggleAllFiles: () => void;
   onToggleWrap: () => void;
+  onToggleLayout: () => void;
   onRefresh: () => void;
 }) {
   return (
@@ -31,6 +36,14 @@ export function GitReviewOptionsMenu({
             icon={allFilesCollapsed ? <ExpandAll /> : <CollapseAll />}
             onClick={() => {
               onToggleAllFiles();
+              close();
+            }}
+          />
+          <PaneOptionsMenuItem
+            label={layout === "split" ? "Use unified diff" : "Use split diff"}
+            icon={<Columns2 />}
+            onClick={() => {
+              onToggleLayout();
               close();
             }}
           />

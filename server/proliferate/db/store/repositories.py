@@ -39,6 +39,7 @@ class RepoConfigValue:
     git_provider: str
     git_owner: str
     git_repo_name: str
+    commit_instructions: str
     created_at: datetime
     updated_at: datetime
     environments: tuple[RepoEnvironmentValue, ...]
@@ -123,6 +124,7 @@ async def _repo_value(db: AsyncSession, row: RepoConfig) -> RepoConfigValue:
         git_provider=_enum_value(row.git_provider),
         git_owner=row.git_owner,
         git_repo_name=row.git_repo_name,
+        commit_instructions=row.commit_instructions,
         created_at=row.created_at,
         updated_at=row.updated_at,
         environments=tuple(_environment_value(item, row) for item in environments),
@@ -169,6 +171,28 @@ async def get_repo_config_by_id_for_user(
         )
     ).scalar_one_or_none()
     return await _repo_value(db, row) if row is not None else None
+
+
+async def update_repo_config_commit_instructions(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    git_provider: str,
+    git_owner: str,
+    git_repo_name: str,
+    commit_instructions: str,
+) -> RepoConfigValue:
+    repo = await _ensure_repo_config(
+        db,
+        user_id=user_id,
+        git_provider=git_provider,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+    )
+    repo.commit_instructions = commit_instructions
+    repo.updated_at = utcnow()
+    await db.flush()
+    return await _repo_value(db, repo)
 
 
 async def get_cloud_repo_environment(

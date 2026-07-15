@@ -1,4 +1,5 @@
-import { Cloud, GitBranch } from "lucide-react";
+import { Cloud } from "lucide-react";
+import { GitBranchIcon } from "@proliferate/ui/icons";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { EmptyState } from "@proliferate/ui/layout/EmptyState";
 import { Badge } from "@proliferate/ui/primitives/Badge";
@@ -77,7 +78,7 @@ export function CloudWorkspaceList({
           </div>
           <div className="mt-4 flex flex-wrap gap-2 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1">
-              <GitBranch size={13} />
+              <GitBranchIcon className="size-[13px]" />
               {workspace.branchLabel}
             </span>
             <span className="rounded-md border border-border px-2 py-1">

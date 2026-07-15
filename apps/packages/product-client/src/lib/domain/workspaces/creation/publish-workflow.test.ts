@@ -329,7 +329,7 @@ describe("buildPublishViewState", () => {
     expect(result.workflowSteps.some((step) => step.kind === "create_pull_request")).toBe(false);
   });
 
-  it("previews an existing PR branch update while validation blocks commit", () => {
+  it("keeps a blank summary submittable for generation on an existing PR update", () => {
     const result = view({
       intent: "pull_request",
       summary: "",
@@ -343,8 +343,10 @@ describe("buildPublishViewState", () => {
         draft: false,
       },
     });
-    expect(result.disabledReason).toBe("Enter a commit message.");
+    // Blank summaries stay valid: the workflow generates the message from
+    // the pending diff at submit time (leave-blank-to-generate).
+    expect(result.disabledReason).toBeNull();
     expect(result.primaryLabel).toBe("Commit and push");
-    expect(result.workflowSteps).toEqual([]);
+    expect(result.workflowSteps.map((step) => step.kind)).toEqual(["commit", "push"]);
   });
 });

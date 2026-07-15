@@ -1,7 +1,5 @@
 # AnyHarness Persistence
 
-Status: authoritative for SQLite and store ownership in AnyHarness.
-
 ## Layer Split
 
 There are two persistence concerns:

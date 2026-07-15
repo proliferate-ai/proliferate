@@ -6,17 +6,26 @@ function printUsage() {
   console.log(`Smoke-test a built E2B cloud template.
 
 Usage:
-  node scripts/smoke-cloud-template.mjs --template <template-ref>
+  node scripts/smoke-cloud-template.mjs --template <template-ref> [--expected-version <version>] [--expected-sha <sha>]
 
 Options:
-  --template <template-ref>  Exact template ref to create from, usually
-                             <family>:<tag>.
-  --help                     Show this help text.
+  --template <template-ref>    Exact template ref to create from, usually
+                               <family>:<tag>.
+  --expected-version <version> Canonical runtime version all three binaries must
+                               report. When set, a mismatch fails the smoke test
+                               before any rolling reference is moved.
+  --expected-sha <sha>         Source SHA (12+ hex chars; truncated to 12) whose
+                               build stamp must be embedded in all three
+                               binaries. When set, an unstamped or differently
+                               stamped binary fails the smoke test.
+  --help                       Show this help text.
 `);
 }
 
 function parseArgs(argv) {
   let templateRef = "";
+  let expectedVersion = "";
+  let expectedSha = "";
   let help = false;
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -24,6 +33,14 @@ function parseArgs(argv) {
     switch (arg) {
       case "--template":
         templateRef = argv[i + 1] || "";
+        i += 1;
+        break;
+      case "--expected-version":
+        expectedVersion = argv[i + 1] || "";
+        i += 1;
+        break;
+      case "--expected-sha":
+        expectedSha = argv[i + 1] || "";
         i += 1;
         break;
       case "--help":
@@ -38,8 +55,24 @@ function parseArgs(argv) {
   if (!help && !templateRef) {
     throw new Error("--template is required.");
   }
+  if (expectedSha) {
+    const normalized = expectedSha.trim().toLowerCase();
+    if (normalized.length < 12 || !/^[0-9a-f]+$/.test(normalized)) {
+      throw new Error("--expected-sha must be at least 12 lowercase hex characters.");
+    }
+    expectedSha = normalized.slice(0, 12);
+  }
 
-  return { templateRef, help };
+  return { templateRef, expectedVersion, expectedSha, help };
+}
+
+// Match the worker self-update gate: split `--version` output on whitespace and
+// accept an exact token (optionally `v`-prefixed). Substrings never match, so
+// `0.3.0` does not satisfy an expected `0.3.0-rc1`.
+function versionOutputMatches(output, expected) {
+  return output
+    .split(/\s+/)
+    .some((token) => token === expected || token.replace(/^v/, "") === expected);
 }
 
 function assertSuccessful(result, message) {
@@ -97,6 +130,71 @@ async function main() {
     );
     assertSuccessful(binaryCheck, "Runtime bundle binaries were not executable in the template");
     console.log(`Runtime bundle:\n${binaryCheck.stdout.trim()}`);
+
+    // Prove all three binaries report the expected canonical version before any
+    // rolling reference is moved. A stale-stamp bundle (e.g. Cargo `0.1.0`)
+    // fails here, so `_deploy-e2b.yml` never promotes an unidentified build.
+    if (parsed.expectedVersion) {
+      const versionCheck = await sandbox.commands.run(
+        [
+          'echo "anyharness=$(/home/user/anyharness --version)"',
+          'echo "proliferate-worker=$(/home/user/.proliferate/bin/proliferate-worker --version)"',
+          'echo "proliferate-supervisor=$(/home/user/.proliferate/bin/proliferate-supervisor --version)"',
+        ].join("\n"),
+        { timeoutMs: 30_000 }
+      );
+      assertSuccessful(versionCheck, "Runtime binaries did not report --version");
+      const reported = new Map(
+        versionCheck.stdout
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .map((line) => {
+            const separator = line.indexOf("=");
+            return [line.slice(0, separator), line.slice(separator + 1)];
+          })
+      );
+      for (const binary of ["anyharness", "proliferate-worker", "proliferate-supervisor"]) {
+        const output = reported.get(binary) || "";
+        if (!versionOutputMatches(output, parsed.expectedVersion)) {
+          throw new Error(
+            `${binary} reported version ${JSON.stringify(output)}, expected ${JSON.stringify(
+              parsed.expectedVersion
+            )}`
+          );
+        }
+      }
+      console.log(`All three binaries report expected version ${parsed.expectedVersion}.`);
+    }
+
+    // Prove the expected source SHA was stamped into all three binaries.
+    // `--version` deliberately reports only the version token (the worker
+    // self-update/anyharness-update preflights exact-match it against pins),
+    // and the contract adds no build-info endpoint, so the stamped
+    // PROLIFERATE_STAMPED_GIT_SHA literal — compiled into each binary and the
+    // source of its `<component>@<version>+<sha>` Sentry release — is asserted
+    // directly in the binary image. The immutable `sha-<12>` template tag
+    // remains the canonical source-revision binding.
+    if (parsed.expectedSha) {
+      const shaCheck = await sandbox.commands.run(
+        [
+          "set -eu",
+          `sha="${parsed.expectedSha}"`,
+          'for bin in /home/user/anyharness /home/user/.proliferate/bin/proliferate-worker /home/user/.proliferate/bin/proliferate-supervisor; do',
+          '  if ! grep -a -q "$sha" "$bin"; then',
+          '    echo "missing stamped sha in $bin" >&2',
+          "    exit 1",
+          "  fi",
+          "done",
+        ].join("\n"),
+        { timeoutMs: 60_000 }
+      );
+      assertSuccessful(
+        shaCheck,
+        `Runtime binaries do not carry the expected stamped source SHA ${parsed.expectedSha}`
+      );
+      console.log(`All three binaries carry the stamped source SHA ${parsed.expectedSha}.`);
+    }
 
     const installCheck = await sandbox.commands.run(
       "/home/user/anyharness install-agents --agent claude --agent codex",

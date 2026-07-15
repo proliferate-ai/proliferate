@@ -54,7 +54,6 @@ describe("useWorkspaceContentShortcuts", () => {
       open: false,
       query: "",
       surface: "chat",
-      scope: "diffs",
       activeMatchIndex: 0,
       activeMatchId: null,
       unitsById: {},
@@ -220,7 +219,6 @@ describe("useWorkspaceContentShortcuts", () => {
     expect(runShortcutHandler("workspace.find-content", { source: "keyboard" })).toBe(true);
     expect(useContentSearchStore.getState().open).toBe(true);
     expect(useContentSearchStore.getState().surface).toBe("chat");
-    expect(useContentSearchStore.getState().scope).toBe("diffs");
   });
 
   it("routes content search to the file viewer when file viewer owns focus", () => {
@@ -241,7 +239,6 @@ describe("useWorkspaceContentShortcuts", () => {
     expect(runShortcutHandler("workspace.find-content", { source: "keyboard" })).toBe(true);
     expect(useContentSearchStore.getState().open).toBe(true);
     expect(useContentSearchStore.getState().surface).toBe("file");
-    expect(useContentSearchStore.getState().scope).toBe("diffs");
   });
 
   it("declines content search when the terminal owns focus", () => {

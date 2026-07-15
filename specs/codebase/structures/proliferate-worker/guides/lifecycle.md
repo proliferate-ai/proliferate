@@ -1,9 +1,5 @@
 # Worker Lifecycle And Convergence
 
-Status: authoritative for
-`anyharness/crates/proliferate-worker/src/lifecycle/**`, `catalog_sync.rs`,
-`self_update.rs`, and `anyharness_update.rs`.
-
 The Worker heartbeat is both its liveness signal and the carrier for desired
 catalog and binary versions.
 

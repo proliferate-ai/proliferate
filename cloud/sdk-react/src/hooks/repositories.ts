@@ -2,9 +2,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   listRepositories,
   saveRepoEnvironment,
+  updateRepoConfig,
+  type RepoConfigResponse,
   type RepoConfigsListResponse,
   type RepoEnvironmentResponse,
   type SaveRepoEnvironmentRequest,
+  type UpdateRepoConfigRequest,
 } from "@proliferate/cloud-sdk";
 import {
   actorRepositoriesKey,
@@ -24,6 +27,24 @@ export function useRepositories(enabled = true, authCacheScope?: string) {
       : repositoriesKey(),
     queryFn: () => listRepositories(client),
     enabled,
+  });
+}
+
+export interface UpdateRepoConfigInput {
+  gitOwner: string;
+  gitRepoName: string;
+  body: UpdateRepoConfigRequest;
+}
+
+export function useUpdateRepoConfig() {
+  const client = useCloudClient();
+  const queryClient = useQueryClient();
+  return useMutation<RepoConfigResponse, Error, UpdateRepoConfigInput>({
+    mutationFn: ({ gitOwner, gitRepoName, body }) =>
+      updateRepoConfig(gitOwner, gitRepoName, body, client),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: repositoriesKey() });
+    },
   });
 }
 

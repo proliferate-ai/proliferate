@@ -14,6 +14,19 @@ impl SessionEventSink {
         turn_id: Option<String>,
         item_id: Option<String>,
     ) {
+        // Anything emitted into an open engine-initiated turn (beyond its own
+        // start/end boundaries) marks it non-empty for the post-dispatch
+        // sweep (see `sweep_empty_engine_turn`).
+        if self.engine_initiated_turn
+            && turn_id.is_some()
+            && turn_id == self.current_turn_id
+            && !matches!(
+                event,
+                SessionEvent::TurnStarted(_) | SessionEvent::TurnEnded(_)
+            )
+        {
+            self.engine_turn_has_events = true;
+        }
         let envelope = publish_session_event(
             &self.session_id,
             &mut self.next_seq,

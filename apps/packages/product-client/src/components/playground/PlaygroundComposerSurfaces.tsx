@@ -17,16 +17,38 @@ import type { PlaygroundReplayState } from "#product/hooks/playground/lifecycle/
 import {
   createPlaygroundModelSelectorProps,
   createPlaygroundSessionConfigControls,
+  createPlaygroundUltraSessionConfigControls,
   PLAYGROUND_LONG_COMPOSER_DRAFT,
   PLAYGROUND_SLASH_COMMANDS,
 } from "#product/lib/domain/chat/__fixtures__/playground/composer-surface-fixtures";
 import type { SessionSlashCommandViewModel } from "#product/lib/domain/chat/composer/session-slash-command-policy";
 import { noop } from "#product/components/playground/PlaygroundComposerActions";
+import { WorkspaceStatusComposerControl } from "#product/components/workspace/chat/input/workspace-status/WorkspaceStatusComposerControl";
+import { createPlaygroundWorkspaceStatusModel } from "#product/lib/domain/chat/__fixtures__/playground/workspace-status-fixtures";
 
 export function renderComposerSurfaceForScenario(scenario: ScenarioKey): ReactNode {
   switch (scenario) {
     case "composer-long-input":
       return <PlaygroundLongInputComposerSurface />;
+    case "composer-ultra":
+      return <PlaygroundComposerSurface ultra />;
+    case "workspace-status-card":
+      return (
+        <PlaygroundComposerSurface
+          statusControl={(
+            <WorkspaceStatusComposerControl
+              model={createPlaygroundWorkspaceStatusModel()}
+              actions={{
+                onOpenChanges: noop,
+                onCommitOrPush: noop,
+                onCompareBranch: noop,
+                onViewChecks: noop,
+                onOpenAgentSession: noop,
+              }}
+            />
+          )}
+        />
+      );
     case "slash-command-search":
       return <PlaygroundSlashCommandComposerSurface commands={PLAYGROUND_SLASH_COMMANDS} />;
     case "slash-command-empty":
@@ -36,7 +58,13 @@ export function renderComposerSurfaceForScenario(scenario: ScenarioKey): ReactNo
   }
 }
 
-export function PlaygroundComposerSurface() {
+export function PlaygroundComposerSurface({
+  ultra = false,
+  statusControl,
+}: {
+  ultra?: boolean;
+  statusControl?: ReactNode;
+}) {
   return (
     <ChatComposerSurface>
       <form className="relative flex flex-col">
@@ -53,7 +81,7 @@ export function PlaygroundComposerSurface() {
             className="min-h-0 px-0 py-0 text-base leading-relaxed text-foreground placeholder:text-muted-foreground/70"
           />
         </div>
-        <PlaygroundComposerControlRow />
+        <PlaygroundComposerControlRow ultra={ultra} statusControl={statusControl} />
       </form>
     </ChatComposerSurface>
   );
@@ -129,13 +157,22 @@ function PlaygroundSlashCommandComposerSurface({
   );
 }
 
-function PlaygroundComposerControlRow() {
+function PlaygroundComposerControlRow({
+  ultra = false,
+  statusControl,
+}: {
+  ultra?: boolean;
+  statusControl?: ReactNode;
+}) {
   return (
     <ChatInputControlRow
       runtimeControlsDisabled={false}
       modelSelectorProps={createPlaygroundModelSelectorProps()}
       agentKind="codex"
-      sessionConfigControls={createPlaygroundSessionConfigControls()}
+      statusControl={statusControl}
+      sessionConfigControls={ultra
+        ? createPlaygroundUltraSessionConfigControls()
+        : createPlaygroundSessionConfigControls()}
       isEditingQueuedPrompt={false}
       chatDisabled={false}
       isSubmitting={false}

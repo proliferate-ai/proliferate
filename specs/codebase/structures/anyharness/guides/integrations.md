@@ -1,7 +1,5 @@
 # AnyHarness Integrations
 
-Status: authoritative for external protocol/vendor mechanics.
-
 Integration code lives under `anyharness-lib/src/integrations/**`.
 
 ## Purpose

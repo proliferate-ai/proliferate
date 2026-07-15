@@ -8,19 +8,13 @@ import {
 } from "@anyharness/sdk-react";
 import { DiffViewer } from "#product/components/content/ui/DiffViewer";
 import type { UnifiedDiffHunkActions } from "#product/components/content/ui/diff/UnifiedDiffViewer";
-import { FileDiffCard } from "#product/components/content/ui/FileDiffCard";
-import {
-  CircleAlert,
-  FileIcon,
-  RefreshCw,
-} from "@proliferate/ui/icons";
+import { CircleAlert, FileIcon, RefreshCw } from "@proliferate/ui/icons";
 import {
   DiffDisplayPolicyPlaceholder,
   formatEmptyDiffState,
   GitReviewInlineEmptyState,
 } from "#product/components/workspace/git/GitReviewInlineState";
-import { GitReviewStageAction } from "#product/components/workspace/git/GitReviewStageAction";
-import { GitReviewStatusBadge } from "#product/components/workspace/git/GitReviewStatusBadge";
+import { GitReviewFileSectionShell } from "#product/components/workspace/git/GitReviewFileSectionShell";
 import { useLazyDiffFileLines } from "#product/hooks/ui/diff/use-lazy-diff-file-lines";
 import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import { extractHunkPatch, isHunkActionEligible } from "#product/lib/domain/files/hunk-patch";
@@ -34,11 +28,13 @@ import type {
   GitPanelReviewScope,
 } from "#product/lib/domain/workspaces/changes/git-panel-diff";
 
-type StagePath = (path: string) => Promise<unknown>;
 type OpenFile = (path: string) => Promise<void>;
 
+// The review document renders each file as a flat section on the plain pane
+// background — unchanged diff lines carry no tint (the [data-git-review-document]
+// rules in design product.css flatten the context surface to match).
 const SIDEBAR_DIFF_SURFACE_STYLE = {
-  "--codex-diffs-surface-override": "var(--color-diff-surface)",
+  "--codex-diffs-surface-override": "var(--color-background)",
 } as CSSProperties;
 
 // Header row (min-h-9 + py) height estimate for content-visibility sizing.
@@ -83,11 +79,10 @@ export function GitReviewFileRow({
   collapsed,
   isRuntimeReady,
   fetchDiff,
+  showStagedChip = false,
   onToggleCollapsed,
   onDiffFetchSettled,
   openFile,
-  stagePath,
-  unstagePath,
   diffTimingOptions,
   measurementOperationId,
 }: {
@@ -101,11 +96,11 @@ export function GitReviewFileRow({
   collapsed: boolean;
   isRuntimeReady: boolean;
   fetchDiff: boolean;
+  /** Disambiguates staged-scope rows when the composite view lists a partially staged file twice. */
+  showStagedChip?: boolean;
   onToggleCollapsed: () => void;
   onDiffFetchSettled: () => void;
   openFile: OpenFile;
-  stagePath: StagePath;
-  unstagePath: StagePath;
   diffTimingOptions?: AnyHarnessQueryTimingOptions;
   measurementOperationId?: MeasurementOperationId | null;
 }) {
@@ -280,7 +275,7 @@ export function GitReviewFileRow({
       id={id}
       data-review-path={file.path}
       data-diff-row-virtualization={virtualizeDiffRows ? "" : undefined}
-      className="scroll-mt-2"
+      className="scroll-mt-0"
       style={{
         ...SIDEBAR_DIFF_SURFACE_STYLE,
         ...reviewCardVirtualizationStyle({
@@ -289,31 +284,19 @@ export function GitReviewFileRow({
         }),
       }}
     >
-      <FileDiffCard
-        filePath={file.displayPath}
+      <GitReviewFileSectionShell
+        file={file}
         additions={additions}
         deletions={deletions}
-        metadata={currentDiff && additions === 0 && deletions === 0 ? (
-          <GitReviewStatusBadge status={currentDiff.status} />
-        ) : null}
-        isExpanded={!collapsed}
-        onToggleExpand={onToggleCollapsed}
+        binary={Boolean(diffQuery.data?.binary || currentDiff?.binary)}
+        showStagedChip={showStagedChip}
+        collapsed={collapsed}
+        onToggleCollapsed={onToggleCollapsed}
         onOpenFile={() => void openFile(file.path)}
-        surface="sidebar"
-        actions={!isBranchMode && !isLastTurnMode && (
-          <GitReviewStageAction
-            displayPath={file.displayPath}
-            path={file.path}
-            shouldUnstage={shouldUnstage}
-            disabled={!isRuntimeReady}
-            stagePath={stagePath}
-            unstagePath={unstagePath}
-          />
-        )}
       >
         {!currentDiff ? (
           <GitReviewInlineEmptyState
-            icon={<FileIcon className="size-4" />}
+            icon={<FileIcon className="size-3.5" />}
             title="No current diff"
             description="This file was touched, but there are no current changes to review against the selected base."
             onOpenFile={() => void openFile(file.path)}
@@ -326,7 +309,7 @@ export function GitReviewFileRow({
           />
         ) : waitingForDiffPermit ? (
           <GitReviewInlineEmptyState
-            icon={<RefreshCw className="size-4" />}
+            icon={<RefreshCw className="size-3.5" />}
             title="Waiting to load diff"
             description="This file will load when review capacity is available."
           />
@@ -338,7 +321,7 @@ export function GitReviewFileRow({
           />
         ) : diffErrorMessage ? (
           <GitReviewInlineEmptyState
-            icon={<CircleAlert className="size-4" />}
+            icon={<CircleAlert className="size-3.5" />}
             title="Diff unavailable"
             description={diffErrorMessage}
             onOpenFile={() => void openFile(file.path)}
@@ -381,7 +364,7 @@ export function GitReviewFileRow({
             onOpenFile={() => void openFile(file.path)}
           />
         ) : null}
-      </FileDiffCard>
+      </GitReviewFileSectionShell>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import { Robot } from "@proliferate/ui/icons";
 import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 import { DelegatedAgentHoverCard } from "#product/components/workspace/shell/tabs/DelegatedAgentHoverCard";
+import { DelegatedAgentIdenticon } from "#product/components/workspace/delegated-work/DelegatedAgentIdenticon";
 import { useTranscriptOpenSession } from "#product/components/workspace/chat/transcript/TranscriptContexts";
 import type {
   SubagentMcpReceiptPresentation,
@@ -13,7 +14,7 @@ import {
   delegatedWorkStatusCategoryFromLabel,
 } from "#product/lib/domain/delegated-work/presentation";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
-import type { ToolActionStatus } from "#product/components/workspace/chat/tool-calls/ToolActionRow";
+import type { ToolActionStatus } from "./ToolActionRow";
 
 const CHAT_ACTION_TEXT_CLASS =
   "text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)]";
@@ -69,7 +70,10 @@ export function SubagentToolActionRow({
 
   const identityContent = (
     <span className="inline-flex min-w-0 max-w-full items-center gap-1 align-baseline">
-      <Robot className={`size-3 shrink-0 ${identity.textColorClassName}`} />
+      <DelegatedAgentIdenticon
+        identity={identity}
+        className={`size-3 shrink-0 ${identity.textColorClassName}`}
+      />
       <span className={`truncate font-medium ${identity.textColorClassName}`}>
         {identity.displayName}
       </span>

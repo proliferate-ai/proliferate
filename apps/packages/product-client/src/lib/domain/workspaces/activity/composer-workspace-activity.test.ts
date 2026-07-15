@@ -76,6 +76,8 @@ describe("buildComposerWorkspaceActivityModel", () => {
       "PR #381 checks failing",
       "4 changes",
     ]);
+    expect(model?.git?.additions).toBe(20);
+    expect(model?.git?.deletions).toBe(3);
   });
 
   it("counts partial files in staged and unstaged detail", () => {

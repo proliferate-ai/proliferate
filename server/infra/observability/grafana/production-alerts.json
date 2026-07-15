@@ -1,0 +1,633 @@
+{
+  "schemaVersion": 1,
+  "phase": "e1-phase1",
+  "description": "Safe, normalized definitions for the six existing production Grafana alert rules: immutable identity (UID, title, severity), the approved label/annotation overlay (log annotations only on bfrmh7e7x2k8wd), and the complete query/expression model captured 2026-07-14 via a read-only (GET-only) ruler read with the dedicated Viewer credential. queryChecksum is sha256 of the canonical JSON serialization of queryModel; scripts/ops/grafana-alerting.mjs check verifies checksum consistency offline and detects drift against a live export. This file never contains a token, webhook credential, dashboard cookie, or unrelated exported workspace object.",
+  "target": {
+    "awsAccount": "157466816238",
+    "awsRegion": "us-east-1",
+    "grafanaWorkspaceId": "g-e532d030d8",
+    "grafanaWorkspaceName": "proliferate-ops",
+    "grafanaVersion": "10.4"
+  },
+  "component": "proliferate-server",
+  "runbook": "specs/developing/operating/production-alerts.md",
+  "runbookUrlBase": "https://github.com/proliferate-ai/proliferate/blob/main/specs/developing/operating/production-alerts.md",
+  "rules": [
+    {
+      "uid": "dfrmh7bc4yqrkf",
+      "title": "ALB 5xx > 10 in 5m",
+      "severity": "critical",
+      "labels": {
+        "proliferate_rule_uid": "dfrmh7bc4yqrkf",
+        "proliferate_component": "proliferate-server",
+        "severity": "critical"
+      },
+      "annotations": {
+        "runbook_url": "https://github.com/proliferate-ai/proliferate/blob/main/specs/developing/operating/production-alerts.md#alb-5xx-errors-dfrmh7bc4yqrkf"
+      },
+      "queryModel": {
+        "title": "ALB 5xx > 10 in 5m",
+        "condition": "threshold",
+        "data": [
+          {
+            "refId": "A",
+            "queryType": "",
+            "relativeTimeRange": {
+              "from": 600,
+              "to": 0
+            },
+            "datasourceUid": "cfrbuwtvlfsowb",
+            "model": {
+              "dimensions": {
+                "LoadBalancer": "app/proliferate-prod-alb/785b2edd521cc351"
+              },
+              "intervalMs": 1000,
+              "maxDataPoints": 43200,
+              "metricName": "HTTPCode_Target_5XX_Count",
+              "namespace": "AWS/ApplicationELB",
+              "period": "300",
+              "queryMode": "Metrics",
+              "refId": "A",
+              "region": "us-east-1",
+              "statistics": [
+                "Sum"
+              ]
+            }
+          },
+          {
+            "refId": "B",
+            "queryType": "",
+            "relativeTimeRange": {
+              "from": 600,
+              "to": 0
+            },
+            "datasourceUid": "__expr__",
+            "model": {
+              "expression": "A",
+              "intervalMs": 1000,
+              "maxDataPoints": 43200,
+              "reducer": "last",
+              "refId": "B",
+              "settings": {
+                "mode": "dropNN"
+              },
+              "type": "reduce"
+            }
+          },
+          {
+            "refId": "threshold",
+            "queryType": "",
+            "relativeTimeRange": {
+              "from": 600,
+              "to": 0
+            },
+            "datasourceUid": "__expr__",
+            "model": {
+              "conditions": [
+                {
+                  "evaluator": {
+                    "params": [
+                      10
+                    ],
+                    "type": "gt"
+                  },
+                  "operator": {
+                    "type": "and"
+                  },
+                  "reducer": {
+                    "type": "last"
+                  }
+                }
+              ],
+              "expression": "B",
+              "intervalMs": 1000,
+              "maxDataPoints": 43200,
+              "refId": "threshold",
+              "type": "threshold"
+            }
+          }
+        ],
+        "noDataState": "OK",
+        "execErrState": "Alerting",
+        "for": "0s",
+        "ruleGroup": "production-alerts",
+        "folderUID": "ops-folder",
+        "isPaused": false
+      },
+      "queryChecksum": "e1ab03fefbc7119ae9be42a3c1b93fc70425d708997183c09c22964298d928cd"
+    },
+    {
+      "uid": "bfrmh7c7ecbnkb",
+      "title": "API p95 Latency > 5s for 10m",
+      "severity": "critical",
+      "labels": {
+        "proliferate_rule_uid": "bfrmh7c7ecbnkb",
+        "proliferate_component": "proliferate-server",
+        "severity": "critical"
+      },
+      "annotations": {
+        "runbook_url": "https://github.com/proliferate-ai/proliferate/blob/main/specs/developing/operating/production-alerts.md#api-p95-latency-bfrmh7c7ecbnkb"
+      },
+      "queryModel": {
+        "title": "API p95 Latency > 5s for 10m",
+        "condition": "threshold",
+        "data": [
+          {
+            "refId": "A",
+            "queryType": "",
+            "relativeTimeRange": {
+              "from": 600,
+              "to": 0
+            },
+            "datasourceUid": "cfrbuwtvlfsowb",
+            "model": {
+              "dimensions": {
+                "LoadBalancer": "app/proliferate-prod-alb/785b2edd521cc351"
+              },
+              "intervalMs": 1000,
+              "maxDataPoints": 43200,
+              "metricName": "TargetResponseTime",
+              "namespace": "AWS/ApplicationELB",
+              "period": "300",
+              "queryMode": "Metrics",
+              "refId": "A",
+              "region": "us-east-1",
+              "statistics": [
+                "p95"
+              ]
+            }
+          },
+          {
+            "refId": "B",
+            "queryType": "",
+            "relativeTimeRange": {
+              "from": 600,
+              "to": 0
+            },
+            "datasourceUid": "__expr__",
+            "model": {
+              "expression": "A",
+              "intervalMs": 1000,
+              "maxDataPoints": 43200,
+              "reducer": "last",
+              "refId": "B",
+              "settings": {
+                "mode": "dropNN"
+              },
+              "type": "reduce"
+            }
+          },
+          {
+            "refId": "threshold",
+            "queryType": "",
+            "relativeTimeRange": {
+              "from": 600,
+              "to": 0
+            },
+            "datasourceUid": "__expr__",
+            "model": {
+              "conditions": [
+                {
+                  "evaluator": {
+                    "params": [
+                      5
+                    ],
+                    "type": "gt"
+                  },
+                  "operator": {
+                    "type": "and"
+                  },
+                  "reducer": {
+                    "type": "last"
+                  }
+                }
+              ],
+              "expression": "B",
+              "intervalMs": 1000,
+              "maxDataPoints": 43200,
+              "refId": "threshold",
+              "type": "threshold"
+            }
+          }
+        ],
+        "noDataState": "OK",
+        "execErrState": "Alerting",
+        "for": "10m",
+        "ruleGroup": "production-alerts",
+        "folderUID": "ops-folder",
+        "isPaused": false
+      },
+      "queryChecksum": "0e1aca32091a82c24e1d6210f41fe03ae1448de612a3e783b7ad67c0df025fba"
+    },
+    {
+      "uid": "cfrmh7d7od8g0c",
+      "title": "ECS CPU > 90% for 15m",
+      "severity": "critical",
+      "labels": {
+        "proliferate_rule_uid": "cfrmh7d7od8g0c",
+        "proliferate_component": "proliferate-server",
+        "severity": "critical"
+      },
+      "annotations": {
+        "runbook_url": "https://github.com/proliferate-ai/proliferate/blob/main/specs/developing/operating/production-alerts.md#ecs-cpu-saturation-cfrmh7d7od8g0c"
+      },
+      "queryModel": {
+        "title": "ECS CPU > 90% for 15m",
+        "condition": "threshold",
+        "data": [
+          {
+            "refId": "A",
+            "queryType": "",
+            "relativeTimeRange": {
+              "from": 600,
+              "to": 0
+            },
+            "datasourceUid": "cfrbuwtvlfsowb",
+            "model": {
+              "dimensions": {
+                "ClusterName": "proliferate-prod",
+                "ServiceName": "proliferate-prod-server"
+              },
+              "intervalMs": 1000,
+              "maxDataPoints": 43200,
+              "metricName": "CPUUtilization",
+              "namespace": "AWS/ECS",
+              "period": "300",
+              "queryMode": "Metrics",
+              "refId": "A",
+              "region": "us-east-1",
+              "statistics": [
+                "Average"
+              ]
+            }
+          },
+          {
+            "refId": "B",
+            "queryType": "",
+            "relativeTimeRange": {
+              "from": 600,
+              "to": 0
+            },
+            "datasourceUid": "__expr__",
+            "model": {
+              "expression": "A",
+              "intervalMs": 1000,
+              "maxDataPoints": 43200,
+              "reducer": "last",
+              "refId": "B",
+              "settings": {
+                "mode": "dropNN"
+              },
+              "type": "reduce"
+            }
+          },
+          {
+            "refId": "threshold",
+            "queryType": "",
+            "relativeTimeRange": {
+              "from": 600,
+              "to": 0
+            },
+            "datasourceUid": "__expr__",
+            "model": {
+              "conditions": [
+                {
+                  "evaluator": {
+                    "params": [
+                      90
+                    ],
+                    "type": "gt"
+                  },
+                  "operator": {
+                    "type": "and"
+                  },
+                  "reducer": {
+                    "type": "last"
+                  }
+                }
+              ],
+              "expression": "B",
+              "intervalMs": 1000,
+              "maxDataPoints": 43200,
+              "refId": "threshold",
+              "type": "threshold"
+            }
+          }
+        ],
+        "noDataState": "OK",
+        "execErrState": "Alerting",
+        "for": "15m",
+        "ruleGroup": "production-alerts",
+        "folderUID": "ops-folder",
+        "isPaused": false
+      },
+      "queryChecksum": "11a10654f11f98d917e6b9a2ee84b57eaccf966ddcb4008d61b20a48146e80bd"
+    },
+    {
+      "uid": "bfrmh7e7x2k8wd",
+      "title": "CRITICAL_FAILURE in prod logs",
+      "severity": "critical",
+      "labels": {
+        "proliferate_rule_uid": "bfrmh7e7x2k8wd",
+        "proliferate_component": "proliferate-server",
+        "severity": "critical"
+      },
+      "annotations": {
+        "runbook_url": "https://github.com/proliferate-ai/proliferate/blob/main/specs/developing/operating/production-alerts.md#critical_failure-in-prod-logs-bfrmh7e7x2k8wd",
+        "proliferate_log_group": "/ecs/proliferate-prod",
+        "proliferate_log_filter_pattern": "CRITICAL_FAILURE",
+        "proliferate_log_region": "us-east-1"
+      },
+      "queryModel": {
+        "title": "CRITICAL_FAILURE in prod logs",
+        "condition": "threshold",
+        "data": [
+          {
+            "refId": "A",
+            "queryType": "",
+            "relativeTimeRange": {
+              "from": 600,
+              "to": 0
+            },
+            "datasourceUid": "cfrbuwtvlfsowb",
+            "model": {
+              "dimensions": {},
+              "intervalMs": 1000,
+              "maxDataPoints": 43200,
+              "metricName": "CriticalFailureCount",
+              "namespace": "Proliferate/Prod",
+              "period": "300",
+              "queryMode": "Metrics",
+              "refId": "A",
+              "region": "us-east-1",
+              "statistics": [
+                "Sum"
+              ]
+            }
+          },
+          {
+            "refId": "B",
+            "queryType": "",
+            "relativeTimeRange": {
+              "from": 600,
+              "to": 0
+            },
+            "datasourceUid": "__expr__",
+            "model": {
+              "expression": "A",
+              "intervalMs": 1000,
+              "maxDataPoints": 43200,
+              "reducer": "last",
+              "refId": "B",
+              "settings": {
+                "mode": "dropNN"
+              },
+              "type": "reduce"
+            }
+          },
+          {
+            "refId": "threshold",
+            "queryType": "",
+            "relativeTimeRange": {
+              "from": 600,
+              "to": 0
+            },
+            "datasourceUid": "__expr__",
+            "model": {
+              "conditions": [
+                {
+                  "evaluator": {
+                    "params": [
+                      0
+                    ],
+                    "type": "gt"
+                  },
+                  "operator": {
+                    "type": "and"
+                  },
+                  "reducer": {
+                    "type": "last"
+                  }
+                }
+              ],
+              "expression": "B",
+              "intervalMs": 1000,
+              "maxDataPoints": 43200,
+              "refId": "threshold",
+              "type": "threshold"
+            }
+          }
+        ],
+        "noDataState": "OK",
+        "execErrState": "Alerting",
+        "for": "0s",
+        "ruleGroup": "production-alerts",
+        "folderUID": "ops-folder",
+        "isPaused": false
+      },
+      "queryChecksum": "e7b19c541f7adc5fe3c75891af176c45661e12838b69ed889cc795550e8a8304"
+    },
+    {
+      "uid": "cfrmh7f2sbe2od",
+      "title": "Analytics ingest errors",
+      "severity": "critical",
+      "labels": {
+        "proliferate_rule_uid": "cfrmh7f2sbe2od",
+        "proliferate_component": "proliferate-server",
+        "severity": "critical"
+      },
+      "annotations": {
+        "runbook_url": "https://github.com/proliferate-ai/proliferate/blob/main/specs/developing/operating/production-alerts.md#analytics-ingest-errors-cfrmh7f2sbe2od"
+      },
+      "queryModel": {
+        "title": "Analytics ingest errors",
+        "condition": "threshold",
+        "data": [
+          {
+            "refId": "A",
+            "queryType": "",
+            "relativeTimeRange": {
+              "from": 600,
+              "to": 0
+            },
+            "datasourceUid": "cfrbuwtvlfsowb",
+            "model": {
+              "dimensions": {},
+              "intervalMs": 1000,
+              "maxDataPoints": 43200,
+              "metricName": "AnalyticsIngestErrors",
+              "namespace": "Proliferate/Prod",
+              "period": "300",
+              "queryMode": "Metrics",
+              "refId": "A",
+              "region": "us-east-1",
+              "statistics": [
+                "Sum"
+              ]
+            }
+          },
+          {
+            "refId": "B",
+            "queryType": "",
+            "relativeTimeRange": {
+              "from": 600,
+              "to": 0
+            },
+            "datasourceUid": "__expr__",
+            "model": {
+              "expression": "A",
+              "intervalMs": 1000,
+              "maxDataPoints": 43200,
+              "reducer": "last",
+              "refId": "B",
+              "settings": {
+                "mode": "dropNN"
+              },
+              "type": "reduce"
+            }
+          },
+          {
+            "refId": "threshold",
+            "queryType": "",
+            "relativeTimeRange": {
+              "from": 600,
+              "to": 0
+            },
+            "datasourceUid": "__expr__",
+            "model": {
+              "conditions": [
+                {
+                  "evaluator": {
+                    "params": [
+                      0
+                    ],
+                    "type": "gt"
+                  },
+                  "operator": {
+                    "type": "and"
+                  },
+                  "reducer": {
+                    "type": "last"
+                  }
+                }
+              ],
+              "expression": "B",
+              "intervalMs": 1000,
+              "maxDataPoints": 43200,
+              "refId": "threshold",
+              "type": "threshold"
+            }
+          }
+        ],
+        "noDataState": "OK",
+        "execErrState": "Alerting",
+        "for": "0s",
+        "ruleGroup": "production-alerts",
+        "folderUID": "ops-folder",
+        "isPaused": false
+      },
+      "queryChecksum": "b9a3d8b2e5da676d1c2f1dc52ffafdd44406a5a7e3bf73175b85a32e9cd835ec"
+    },
+    {
+      "uid": "cfrmh7fttw4jke",
+      "title": "Server error rate > 10 in 10m",
+      "severity": "warning",
+      "labels": {
+        "proliferate_rule_uid": "cfrmh7fttw4jke",
+        "proliferate_component": "proliferate-server",
+        "severity": "warning"
+      },
+      "annotations": {
+        "runbook_url": "https://github.com/proliferate-ai/proliferate/blob/main/specs/developing/operating/production-alerts.md#server-error-rate-cfrmh7fttw4jke"
+      },
+      "queryModel": {
+        "title": "Server error rate > 10 in 10m",
+        "condition": "threshold",
+        "data": [
+          {
+            "refId": "A",
+            "queryType": "",
+            "relativeTimeRange": {
+              "from": 600,
+              "to": 0
+            },
+            "datasourceUid": "cfrbuwtvlfsowb",
+            "model": {
+              "dimensions": {},
+              "intervalMs": 1000,
+              "maxDataPoints": 43200,
+              "metricName": "ServerErrorLines",
+              "namespace": "Proliferate/Prod",
+              "period": "600",
+              "queryMode": "Metrics",
+              "refId": "A",
+              "region": "us-east-1",
+              "statistics": [
+                "Sum"
+              ]
+            }
+          },
+          {
+            "refId": "B",
+            "queryType": "",
+            "relativeTimeRange": {
+              "from": 600,
+              "to": 0
+            },
+            "datasourceUid": "__expr__",
+            "model": {
+              "expression": "A",
+              "intervalMs": 1000,
+              "maxDataPoints": 43200,
+              "reducer": "last",
+              "refId": "B",
+              "settings": {
+                "mode": "dropNN"
+              },
+              "type": "reduce"
+            }
+          },
+          {
+            "refId": "threshold",
+            "queryType": "",
+            "relativeTimeRange": {
+              "from": 600,
+              "to": 0
+            },
+            "datasourceUid": "__expr__",
+            "model": {
+              "conditions": [
+                {
+                  "evaluator": {
+                    "params": [
+                      10
+                    ],
+                    "type": "gt"
+                  },
+                  "operator": {
+                    "type": "and"
+                  },
+                  "reducer": {
+                    "type": "last"
+                  }
+                }
+              ],
+              "expression": "B",
+              "intervalMs": 1000,
+              "maxDataPoints": 43200,
+              "refId": "threshold",
+              "type": "threshold"
+            }
+          }
+        ],
+        "noDataState": "OK",
+        "execErrState": "Alerting",
+        "for": "0s",
+        "ruleGroup": "production-alerts",
+        "folderUID": "ops-folder",
+        "isPaused": false
+      },
+      "queryChecksum": "845d22464989c1572f6ee2899b60082d33fb9336b18d4df3ebba2dd2518bb1c5"
+    }
+  ]
+}

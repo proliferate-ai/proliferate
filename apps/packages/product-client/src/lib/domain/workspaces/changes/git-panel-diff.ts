@@ -50,13 +50,23 @@ export interface ResolveGitPanelBaseRefInput {
   suggestedBaseBranch?: string | null;
 }
 
+// Selectable review targets. `unstaged`/`staged` remain valid data modes
+// (the composite view is built from them, and external mode requests may
+// still name them) but are no longer offered as top-level filters — the
+// review pane shows one target dropdown: working tree / branch / last turn.
 export const GIT_PANEL_MODE_OPTIONS: { id: GitPanelMode; label: string }[] = [
   { id: "working_tree_composite", label: "Working tree" },
-  { id: "unstaged", label: "Unstaged" },
-  { id: "staged", label: "Staged" },
-  { id: "branch", label: "This branch" },
+  { id: "branch", label: "Branch" },
   { id: "last_turn", label: "Last turn" },
 ];
+
+const GIT_PANEL_MODE_LABELS: Record<GitPanelMode, string> = {
+  working_tree_composite: "Working tree",
+  unstaged: "Unstaged",
+  staged: "Staged",
+  branch: "Branch",
+  last_turn: "Last turn",
+};
 
 export function buildGitPanelFiles({
   mode,
@@ -147,7 +157,7 @@ export function resolveGitPanelBaseRef({
 }
 
 export function gitPanelModeLabel(mode: GitPanelMode): string {
-  return GIT_PANEL_MODE_OPTIONS.find((option) => option.id === mode)?.label ?? "Unstaged";
+  return GIT_PANEL_MODE_LABELS[mode];
 }
 
 export function gitPanelEmptyMessage(mode: GitPanelMode): string {
