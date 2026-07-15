@@ -220,6 +220,7 @@ def build_worker_config(
     runtime_context: SandboxRuntimeContext,
     runtime_bearer_token: str | None = None,
     supervisor_owned: bool = False,
+    supervisor_config_toml: str | None = None,
 ) -> str:
     worker_dir = f"{runtime_context.home_dir}/.proliferate/worker"
     values: dict[str, str | int | bool] = {
@@ -245,6 +246,13 @@ def build_worker_config(
         values["supervisor_binary_path"] = supervisor_binary_path(runtime_context)
         values["supervisor_config_path"] = supervisor_config_path(runtime_context)
         values["supervisor_bridge_marker_dir"] = supervisor_bridge_marker_dir(runtime_context)
+        # Carry the Supervisor config TOML so the D5 bridge on an
+        # already-provisioned box (which has no Supervisor config on disk yet)
+        # can materialize one before spawning the Supervisor (R9-007). A
+        # Supervisor-first provision has the config on disk already; the value is
+        # just carried and only used if that Worker ever bridges.
+        if supervisor_config_toml is not None:
+            values["supervisor_config_toml"] = supervisor_config_toml
     else:
         # Local import to avoid a module-load cycle (sandbox_exec imports
         # nothing from bootstrap, but keeping the launcher-path helper's home
@@ -315,6 +323,15 @@ def build_supervisor_config(
         **_target_sentry_env(),
         **_identity_env(organization_id=organization_id, sandbox_id=sandbox_id, user_id=user_id),
     }
+    # The Supervisor spawns the Worker child with `process_env`, but that child
+    # is not a descendant of the runtime launcher, so it does not inherit
+    # PROLIFERATE_ANYHARNESS_VERSION. Carry it explicitly (in lockstep with the
+    # anyharness launch env) so the Worker's `versions::anyharness_version()`
+    # reports the runtime it runs alongside and the server row converges
+    # (R9-006). Absent on unstamped deployments, matching the absent pin.
+    anyharness_version = anyharness_env.get("PROLIFERATE_ANYHARNESS_VERSION")
+    if anyharness_version:
+        process_env["PROLIFERATE_ANYHARNESS_VERSION"] = anyharness_version
     values = {
         "anyharness_binary": runtime_context.runtime_binary_path,
         "worker_binary": worker_binary_path(runtime_context),

@@ -331,6 +331,31 @@ class TestSetSandboxDesiredVersionsRoute:
         assert response.status_code == 422, response.text
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "unsafe",
+        ["../evil", "a/b", "..", "", "with space", "semi;colon"],
+    )
+    async def test_rejects_unsafe_version_identifier(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        unsafe: str,
+    ) -> None:
+        # A desired version becomes a path-embedded identifier (CDN redirect +
+        # mailbox request), so an unsafe value must 422 at the edge, not just be
+        # length-bounded (R9-013).
+        sandbox = await _seed_sandbox(db_session, prefix="setter-unsafe")
+        auth = await create_user_and_login(client, db_session, email_prefix="setter-unsafe")
+        await _make_instance_admin(db_session, user_id=auth.user_id, role=ORGANIZATION_ROLE_ADMIN)
+
+        response = await client.put(
+            f"/v1/cloud/workers/admin/sandboxes/{sandbox.id}/desired-versions",
+            headers=auth.headers,
+            json={"desiredAnyharnessVersion": unsafe},
+        )
+        assert response.status_code == 422, response.text
+
+    @pytest.mark.asyncio
     async def test_unknown_sandbox_is_not_found(
         self,
         client: AsyncClient,

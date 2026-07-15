@@ -242,3 +242,45 @@ class TestBuildWorkerConfigFence:
         # The legacy in-place swap paths must never be emitted alongside a fence.
         assert "anyharness_binary_path" not in config
         assert "anyharness_launcher_path" not in config
+
+    def test_supervisor_owned_carries_supervisor_config_toml_when_provided(self) -> None:
+        # R9-007: the Worker config carries the Supervisor config TOML so the D5
+        # bridge on an already-provisioned box can materialize it before spawn.
+        runtime_context = _runtime_context()
+        config = build_worker_config(
+            cloud_base_url="http://cloud.test",
+            enrollment_token="tok",
+            runtime_context=runtime_context,
+            supervisor_owned=True,
+            supervisor_config_toml='anyharness_binary = "/x"\n',
+        )
+        assert "supervisor_config_toml" in config
+
+
+class TestSupervisorConfigProcessEnv:
+    def test_process_env_carries_anyharness_version(self) -> None:
+        # R9-006: the Supervisor spawns the Worker child with process_env, which
+        # must carry PROLIFERATE_ANYHARNESS_VERSION so the child reports the
+        # runtime version it runs alongside (the child does not inherit it).
+        from proliferate.server.cloud.runtime.bootstrap import build_supervisor_config
+
+        runtime_context = _runtime_context()
+        provider = _FakeProvider()
+        config = build_supervisor_config(
+            provider,
+            runtime_context,
+            {"PROLIFERATE_ANYHARNESS_VERSION": "9.9.9", "OTHER": "x"},
+        )
+        assert "[process_env]" in config
+        process_section = config.split("[process_env]", 1)[1]
+        assert 'PROLIFERATE_ANYHARNESS_VERSION = "9.9.9"' in process_section
+
+    def test_process_env_omits_version_when_unstamped(self) -> None:
+        # An unstamped deployment exports no version; process_env carries none,
+        # matching the absent pin.
+        from proliferate.server.cloud.runtime.bootstrap import build_supervisor_config
+
+        runtime_context = _runtime_context()
+        provider = _FakeProvider()
+        config = build_supervisor_config(provider, runtime_context, {})
+        assert "PROLIFERATE_ANYHARNESS_VERSION" not in config

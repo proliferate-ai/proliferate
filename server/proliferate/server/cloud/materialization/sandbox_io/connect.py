@@ -351,17 +351,6 @@ async def _launch_supervisor_owned_runtime(
 
     cloud_base_url = worker_cloud_base_url()
     enrollment_token = await mint_cloud_sandbox_worker_enrollment(sandbox_record) or ""
-    await provider.write_file(
-        provider_sandbox,
-        worker_config_path(runtime_context),
-        build_worker_config(
-            cloud_base_url=cloud_base_url,
-            enrollment_token=enrollment_token,
-            runtime_context=runtime_context,
-            runtime_bearer_token=runtime_token,
-            supervisor_owned=True,
-        ),
-    )
 
     anyharness_env = build_runtime_env(
         runtime_token,
@@ -370,18 +359,52 @@ async def _launch_supervisor_owned_runtime(
         sandbox_id=provider_sandbox_id,
         user_id=sandbox_record.owner_user_id,
     )
+    # Build the Supervisor config first so its TOML can be carried in the Worker
+    # config (the D5 bridge on an already-provisioned box materializes it before
+    # spawning the Supervisor — R9-007).
+    supervisor_config_toml = build_supervisor_config(
+        provider,
+        runtime_context,
+        anyharness_env,
+        organization_id=organization_id,
+        sandbox_id=provider_sandbox_id,
+        user_id=sandbox_record.owner_user_id,
+    )
+    worker_config_file = worker_config_path(runtime_context)
+    supervisor_config_file = supervisor_config_path(runtime_context)
     await provider.write_file(
         provider_sandbox,
-        supervisor_config_path(runtime_context),
-        build_supervisor_config(
-            provider,
-            runtime_context,
-            anyharness_env,
-            organization_id=organization_id,
-            sandbox_id=provider_sandbox_id,
-            user_id=sandbox_record.owner_user_id,
+        worker_config_file,
+        build_worker_config(
+            cloud_base_url=cloud_base_url,
+            enrollment_token=enrollment_token,
+            runtime_context=runtime_context,
+            runtime_bearer_token=runtime_token,
+            supervisor_owned=True,
+            supervisor_config_toml=supervisor_config_toml,
         ),
     )
+    await provider.write_file(
+        provider_sandbox,
+        supervisor_config_file,
+        supervisor_config_toml,
+    )
+    # Both config files carry secrets (bearer/data-key/enrollment tokens); lock
+    # them down to 0600 after writing, the same way the launcher is chmod 700
+    # (R9-009). `chmod` on a plain file already skips the exec bit.
+    chmod_config_result = await run_sandbox_command_logged(
+        provider,
+        provider_sandbox,
+        workspace_id=sandbox_record.id,
+        label="materialization_chmod_supervisor_configs",
+        command=(
+            f"chmod 600 {shlex.quote(worker_config_file)} "
+            f"{shlex.quote(supervisor_config_file)}"
+        ),
+        runtime_context=runtime_context,
+        timeout_seconds=30,
+    )
+    assert_command_succeeded(chmod_config_result, "Supervisor config chmod failed")
 
     start_result = await run_sandbox_command_logged(
         provider,

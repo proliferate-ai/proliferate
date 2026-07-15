@@ -5,8 +5,28 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
+
+# A desired version flows into CDN redirect paths (runtime/stable/<pin>/...) and
+# into the Supervisor mailbox request as a path-embedded identifier, so it must
+# be a safe filename fragment — not merely bounded in length. Mirrors the
+# protocol crate's `validate_identifier` admission (alphanumeric plus . _ - +,
+# never empty / "." / "..").
+_VERSION_IDENTIFIER_EXTRA = frozenset("._-+")
+
+
+def _validate_version_identifier(value: str | None) -> str | None:
+    if value is None:
+        return None
+    if value in ("", ".", "..") or not all(
+        char.isascii() and (char.isalnum() or char in _VERSION_IDENTIFIER_EXTRA)
+        for char in value
+    ):
+        raise ValueError(
+            "desired version must be a safe identifier (alphanumeric and . _ - +)"
+        )
+    return value
 
 
 class _CamelModel(BaseModel):
@@ -83,6 +103,11 @@ class SetSandboxDesiredVersionsRequest(_CamelModel):
 
     desired_anyharness_version: str | None = Field(default=None, max_length=64)
     desired_worker_version: str | None = Field(default=None, max_length=64)
+
+    @field_validator("desired_anyharness_version", "desired_worker_version")
+    @classmethod
+    def _safe_identifier(cls, value: str | None) -> str | None:
+        return _validate_version_identifier(value)
 
 
 class SetSandboxDesiredVersionsResponse(_CamelModel):
