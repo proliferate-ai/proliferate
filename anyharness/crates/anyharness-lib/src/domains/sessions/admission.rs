@@ -78,6 +78,7 @@ pub enum SessionMutationKind {
     SubagentWake,
     ReplayAdvance,
     WorkspacePurge,
+    WorkspaceRetire,
     Mobility,
     /// The owning workflow's terminal run+step CAS (completion, failure,
     /// cancellation) — always a trusted source; named so conflict logs and
@@ -105,6 +106,7 @@ impl SessionMutationKind {
             Self::SubagentWake => "subagent_wake",
             Self::ReplayAdvance => "replay_advance",
             Self::WorkspacePurge => "workspace_purge",
+            Self::WorkspaceRetire => "workspace_retire",
             Self::Mobility => "mobility",
             Self::WorkflowTerminal => "workflow_terminal",
         }

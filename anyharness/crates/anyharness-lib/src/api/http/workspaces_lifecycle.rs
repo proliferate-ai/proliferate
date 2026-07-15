@@ -1,3 +1,5 @@
+use crate::api::http::workspaces_purge::admit_all_workspace_sessions;
+use crate::domains::sessions::admission::SessionMutationKind;
 use anyharness_contract::v1::{
     Workspace, WorkspaceRetireBlocker, WorkspaceRetireBlockerCode, WorkspaceRetireBlockerSeverity,
     WorkspaceRetireOutcome, WorkspaceRetirePreflightResponse, WorkspaceRetireResponse,
@@ -38,6 +40,7 @@ pub async fn retire_workspace_preflight(
     path = "/v1/workspaces/{workspace_id}/retire",
     params(("workspace_id" = String, Path, description = "Workspace ID")),
     responses(
+        (status = 409, description = "Session execution is controlled by an active workflow run", body = anyharness_contract::v1::ProblemDetails),
         (status = 200, description = "Retire workspace result", body = WorkspaceRetireResponse),
         (status = 404, description = "Workspace not found", body = anyharness_contract::v1::ProblemDetails),
     ),
@@ -47,6 +50,13 @@ pub async fn retire_workspace(
     State(state): State<AppState>,
     Path(workspace_id): Path<String>,
 ) -> Result<Json<WorkspaceRetireResponse>, ApiError> {
+    // Spec 2b RETIRE-01 ruling (option B): retirement can dematerialize the
+    // workspace a controlled session is running in, so it fails closed like
+    // purge — sorted permits for every workspace session are held across the
+    // whole retirement.
+    let _admission_permits =
+        admit_all_workspace_sessions(&state, &workspace_id, SessionMutationKind::WorkspaceRetire)
+            .await?;
     let current = state
         .workspace_runtime
         .get_workspace(&workspace_id)

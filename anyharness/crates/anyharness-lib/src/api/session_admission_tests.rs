@@ -286,6 +286,15 @@ async fn purge_and_mobility_fail_closed_while_controlled() {
     );
     assert_eq!(payload["code"], "SESSION_CONTROLLED_BY_WORKFLOW");
 
+    // RETIRE-01 ruling B: retirement fails closed exactly like purge.
+    let (status, payload) = call(&state, "POST", format!("/v1/workspaces/{WS}/retire"), None).await;
+    assert_eq!(
+        status,
+        StatusCode::CONFLICT,
+        "retire must fail closed while a workflow controls a session (got {status}: {payload})"
+    );
+    assert_eq!(payload["code"], "SESSION_CONTROLLED_BY_WORKFLOW");
+
     let (status, payload) = call(
         &state,
         "POST",

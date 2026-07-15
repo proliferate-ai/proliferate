@@ -5,7 +5,10 @@ Every HTTP route handler reachable through a mutating method (post/put/patch/
 delete) in the AnyHarness API must be CLASSIFIED in
 scripts/session_mutation_admission.txt. Classes:
 
-  fenced           handler must call an admit_* helper before side effects
+  fenced           handler must call an admit_* helper, and that call must
+                   appear BEFORE any of the enumerated effect surfaces
+                   (syntactic ordering; the behavioral before-side-effect
+                   guarantee is proven by the admission conflict-matrix tests)
   derived-safe     handler (or its engine seam) carries an
                    "admission:derived-safe" justification comment
   read-like        mutating verb but no session-execution effect (exports,
@@ -37,6 +40,24 @@ CLASSIFICATION_PATH = REPO_ROOT / "scripts/session_mutation_admission.txt"
 ROUTER_FILES = [API_DIR / "router.rs", API_DIR / "router" / "pending_prompt_routes.rs"]
 MUTATING = ("post", "put", "patch", "delete")
 ADMIT_RE = re.compile(r"admit_session_mutation|admit_review_parent_session|admit_plan_session|admit_all_workspace_sessions")
+# The enumerated effect surfaces a fenced handler may only touch AFTER
+# admission. This is a syntactic ordering ratchet over known runtime/service
+# fields, not a full effect analysis — the behavioral proof is the admission
+# test battery. Extend this list when a new effectful surface appears in a
+# fenced handler.
+EFFECT_TOKENS = (
+    ".session_runtime.",
+    ".goal_runtime.",
+    ".loop_runtime.",
+    ".plan_runtime.",
+    ".review_runtime.",
+    ".workspace_purge_service.",
+    ".mobility_service.",
+    ".subagent_service.",
+    ".workspace_runtime.",
+    ".workspace_setup_runtime.",
+    ".session_service.",
+)
 HANDLER_REF_RE = re.compile(r"\b(post|put|patch|delete)\(\s*([a-z_0-9]+)::([a-z_0-9]+)\s*[),]")
 CLASS_LINE_RE = re.compile(r"^([a-z_0-9]+::[a-z_0-9]+)\s+(fenced|derived-safe|read-like|cosmetic|creation|workspace-scoped|workflow-plane)\s+(.+)$")
 
@@ -102,8 +123,24 @@ def main() -> int:
         if body is None:
             failures.append(f"{key}: classified but handler source not found")
             continue
-        if cls == "fenced" and not ADMIT_RE.search(body):
-            failures.append(f"{key}: classified 'fenced' but no admit_* call in the handler")
+        if cls == "fenced":
+            # rustfmt splits field chains across lines, so ordering is checked
+            # on a whitespace-collapsed view of the handler body.
+            flat = re.sub(r"\s+", "", body)
+            admit = ADMIT_RE.search(flat)
+            if not admit:
+                failures.append(
+                    f"{key}: classified 'fenced' but no admit_* call in the handler"
+                )
+            else:
+                for token in EFFECT_TOKENS:
+                    effect_idx = flat.find(token)
+                    if 0 <= effect_idx < admit.start():
+                        failures.append(
+                            f"{key}: effect surface '{token}' appears BEFORE the "
+                            f"admission call — admission must come first"
+                        )
+                        break
 
     for key in sorted(classification):
         if key not in handlers:

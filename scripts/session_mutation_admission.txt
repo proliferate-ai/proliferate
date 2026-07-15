@@ -4,10 +4,11 @@
 # Classes: fenced | derived-safe | read-like | cosmetic | creation |
 #          workspace-scoped | workflow-plane
 #
-# 'fenced' handlers must call an admit_* helper before their first side
-# effect (verified by check_session_mutation_admission.py). Every NEW
-# mutating route must be added here with a decided class — an unclassified
-# mutation path fails CI.
+# 'fenced' handlers must call an admit_* helper, and the checker enforces
+# that the call appears BEFORE the enumerated effect surfaces (syntactic
+# ordering ratchet; the behavioral before-side-effect guarantee is proven by
+# the admission conflict-matrix tests). Every NEW mutating route must be
+# added here with a decided class — an unclassified mutation path fails CI.
 
 # ── fenced: session execution mutations ──
 sessions_prompt::prompt_session fenced foreign prompt submission
@@ -41,6 +42,7 @@ reviews::send_review_feedback fenced review mutation against the run's parent se
 reviews::mark_review_revision_ready fenced review mutation against the run's parent session
 workspaces_purge::purge_workspace fenced fail-closed: holds sorted permits for every workspace session
 mobility::export_workspace_mobility_archive fenced fail-closed removal/detach: holds sorted permits for every workspace session
+workspaces_lifecycle::retire_workspace fenced fail-closed (RETIRE-01 ruling B): retirement can dematerialize a controlled session's workspace; holds sorted permits for every workspace session
 
 # ── cosmetic (ruling 2: store-only, cannot affect actor execution) ──
 sessions_config::update_session_title cosmetic store-only title column write via service/title.rs
@@ -85,8 +87,8 @@ terminals::resize_terminal workspace-scoped workspace terminal lifecycle
 terminals::start_terminal_command workspace-scoped workspace terminal lifecycle
 terminals::update_terminal_title workspace-scoped workspace terminal cosmetic
 workspaces::update_workspace_display_name workspace-scoped workspace cosmetic rename
-workspaces_lifecycle::retire_workspace workspace-scoped workspace retirement (existing retire preflight owns session checks)
-workspaces_lifecycle::retry_retire_cleanup workspace-scoped retirement cleanup retry
+# (moved to fenced per RETIRE-01 ruling B)
+workspaces_lifecycle::retry_retire_cleanup workspace-scoped cleanup retry of an already-admitted retirement (mirrors purge retry)
 workspaces_purge::retry_purge_workspace workspace-scoped purge retry of an already-admitted purge
 workspaces_setup::start_setup workspace-scoped workspace setup script
 workspaces_setup::rerun_setup workspace-scoped workspace setup script
