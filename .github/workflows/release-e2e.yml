@@ -494,9 +494,12 @@ jobs:
           USE_EXISTING_REDIS: "1"
           LOCAL_PGHOST: 127.0.0.1
           CI: "true"
-          # Stripe TEST key from the protected Qualification environment. Missing
-          # in trusted CI = fail (boot blocks every financial cell). Never live.
-          TIER2_BILLING_STRIPE_SECRET_KEY: ${{ secrets.TIER2_BILLING_STRIPE_SECRET_KEY }}
+          # Stripe TEST key from the protected Qualification environment
+          # (secret name STRIPE_TEST_SECRET_KEY). The harness generates its own
+          # webhook secret and idempotently provisions test-mode price IDs, so
+          # the key is the only external input. Missing in trusted CI = fail
+          # (boot blocks every financial cell). Never live.
+          TIER2_BILLING_STRIPE_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
           TIER2_INTENT_SKIP_RUNTIME: "1"
         run: |
           set -euo pipefail
