@@ -23,13 +23,18 @@ export function ConnectedWorkspaceStatusComposerControl() {
       ? () => shellActions.openPublishDialog("commit")
       : undefined,
     // "View PR" opens the PR itself; without a PR, Compare branch opens the
-    // provider's base...current compare page. The publish-dialog PR flow is
-    // the fallback when there is no remote to link.
+    // provider's base...current compare page (window.open covers browser dev
+    // where the tauri open_external command is unavailable). With neither,
+    // the row is dimmed — never the publish modal.
     onCompareBranch: compareOpensPr
       ? shellActions?.openPullRequest
       : compareUrl
-        ? () => void openExternal(compareUrl)
-        : shellActions?.openPullRequest,
+        ? () => {
+          void openExternal(compareUrl).catch(() => {
+            window.open(compareUrl, "_blank", "noopener,noreferrer");
+          });
+        }
+        : undefined,
     // "View" on the checks row opens the PR itself (ruled 2026-07-14).
     onViewChecks: shellActions?.openPullRequest,
     onOpenAgentSession: openAgentSession ?? undefined,

@@ -111,15 +111,6 @@ export function useWorkspaceStatusModel() {
     return rows;
   }, [reviewsQuery.data?.reviews, subagentStrip?.rows]);
 
-  const model = useMemo(() => buildWorkspaceStatusModel({
-    gitStatus,
-    pullRequest,
-    hasExistingPullRequest,
-    agents,
-    activity,
-    nowMs,
-  }), [activity, agents, gitStatus, hasExistingPullRequest, nowMs, pullRequest]);
-
   const { repoRoot } = useSelectedRepoRoot();
   // Compare branch opens the hosting provider's base...current compare page.
   const compareUrl = useMemo(() => {
@@ -138,6 +129,24 @@ export function useWorkspaceStatusModel() {
     }
     return `https://github.com/${repoRoot.remoteOwner}/${repoRoot.remoteRepoName}/compare/${encodeURIComponent(base)}...${encodeURIComponent(branch)}`;
   }, [gitStatus?.currentBranch, gitStatus?.suggestedBaseBranch, repoRoot]);
+
+  const model = useMemo(() => buildWorkspaceStatusModel({
+    gitStatus,
+    pullRequest,
+    hasExistingPullRequest,
+    compareUrl,
+    agents,
+    activity,
+    nowMs,
+  }), [
+    activity,
+    agents,
+    compareUrl,
+    gitStatus,
+    hasExistingPullRequest,
+    nowMs,
+    pullRequest,
+  ]);
 
   useChecksWatch(pullRequest?.checks ?? "none");
 

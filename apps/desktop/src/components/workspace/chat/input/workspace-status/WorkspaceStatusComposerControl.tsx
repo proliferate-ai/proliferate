@@ -78,6 +78,8 @@ export interface WorkspaceStatusModel {
     compareMeta: string | null;
     /** True when the row is "View PR" — the action opens the PR itself. */
     compareOpensPr: boolean;
+    /** No PR and no compare page to link — the row dims. */
+    compareDisabled: boolean;
     checks: {
       label: string;
       state: "failing" | "pending" | "passing";
@@ -175,11 +177,14 @@ export function WorkspaceStatusCard({
               icon={<GitPullRequest className="size-4" />}
               label={model.environment.compareLabel}
               meta={model.environment.compareMeta ?? undefined}
-              trailing={(
-                <span className="shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/status-row:opacity-100 group-focus-visible/status-row:opacity-100">
-                  <ArrowUpRight className="size-3.5" />
-                </span>
-              )}
+              disabled={model.environment.compareDisabled}
+              trailing={model.environment.compareDisabled
+                ? undefined
+                : (
+                  <span className="shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/status-row:opacity-100 group-focus-visible/status-row:opacity-100">
+                    <ArrowUpRight className="size-3.5" />
+                  </span>
+                )}
               onSelect={run(actions.onCompareBranch)}
             />
             {model.environment.checks && (

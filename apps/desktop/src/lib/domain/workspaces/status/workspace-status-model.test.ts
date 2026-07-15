@@ -52,6 +52,7 @@ function baseInput(overrides: Partial<WorkspaceStatusModelInput> = {}): Workspac
       reviewDecision: "none",
     },
     hasExistingPullRequest: true,
+    compareUrl: "https://github.com/proliferate-ai/proliferate/compare/main...feature%2Fstatus",
     agents: [],
     activity: { agents: [], loops: [], processes: [] },
     nowMs: NOW_MS,
@@ -71,6 +72,7 @@ describe("buildWorkspaceStatusModel", () => {
       compareLabel: "View PR",
       compareMeta: "#1042",
       compareOpensPr: true,
+      compareDisabled: false,
       checks: {
         label: "Checks failing",
         state: "failing",
@@ -90,6 +92,7 @@ describe("buildWorkspaceStatusModel", () => {
     expect(model?.environment?.compareMeta).toBeNull();
     expect(model?.environment?.compareLabel).toBe("Compare branch");
     expect(model?.environment?.compareOpensPr).toBe(false);
+    expect(model?.environment?.compareDisabled).toBe(false);
     expect(model?.environment?.reviewChangesLabel).toBe("Review 12 changes");
   });
 
@@ -112,6 +115,16 @@ describe("buildWorkspaceStatusModel", () => {
     expect(model?.environment?.reviewChangesLabel).toBe("No changes");
     expect(model?.environment?.commitOrPushMeta).toBeNull();
     expect(model?.environment?.commitOrPushDisabled).toBe(true);
+  });
+
+  it("dims the compare row without a PR or a compare page", () => {
+    const model = buildWorkspaceStatusModel(baseInput({
+      pullRequest: null,
+      hasExistingPullRequest: false,
+      compareUrl: null,
+    }));
+
+    expect(model?.environment?.compareDisabled).toBe(true);
   });
 
   it("buckets our agents by working state and keeps session targets", () => {

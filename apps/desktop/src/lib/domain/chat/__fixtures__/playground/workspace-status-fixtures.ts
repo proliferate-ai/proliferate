@@ -14,6 +14,7 @@ export function createPlaygroundWorkspaceStatusModel(): WorkspaceStatusModel {
       compareLabel: "View PR",
       compareMeta: "#1042",
       compareOpensPr: true,
+      compareDisabled: false,
       checks: {
         label: "1 failing check",
         state: "failing",

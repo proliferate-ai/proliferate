@@ -41,6 +41,8 @@ export interface WorkspaceStatusModelInput {
   gitStatus: GitStatusSnapshot | null;
   pullRequest: WorkspaceActivityPullRequest | null;
   hasExistingPullRequest: boolean;
+  /** Provider base...branch compare page, when one exists to link. */
+  compareUrl: string | null;
   agents: WorkspaceStatusAgentSource[];
   activity: {
     agents: ActivitySubagentWire[];
@@ -71,6 +73,7 @@ function buildEnvironment({
   gitStatus,
   pullRequest,
   hasExistingPullRequest,
+  compareUrl,
 }: WorkspaceStatusModelInput): WorkspaceStatusModel["environment"] {
   if (!gitStatus) {
     return null;
@@ -98,6 +101,10 @@ function buildEnvironment({
       ? `#${pullRequest.number}`
       : null,
     compareOpensPr: hasExistingPullRequest,
+    // No PR and no compare page (e.g. sitting on the base branch, or no
+    // GitHub remote): the row has nowhere to go — dim it, never fall back
+    // to the publish modal.
+    compareDisabled: !hasExistingPullRequest && !compareUrl,
     checks: buildChecks(pullRequest),
   };
 }
