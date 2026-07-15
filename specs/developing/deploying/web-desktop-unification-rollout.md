@@ -55,6 +55,65 @@ product) and emits **no separate font/image assets** (`index.css` imports only
 `@proliferate/design/dom.css`). These are the numbers phase 6 compares the
 replacement browser-host build against.
 
+## Phase-6 first-load budget measurement (optimized candidate)
+
+The replacement browser host was measured against the binding baseline with a
+runtime `/login` request collector (headless Chromium, fresh cache, ProductClient
+readiness marker, `document.fonts.ready`, bounded network-idle settle; gzip
+level 9 for JS/CSS, emitted bytes for pre-compressed assets — the contract's
+metric). Two eager-shell regressions were root-caused and fixed on
+`codex/wdu-login-budget`:
+
+- **Turn-end audio** (`use-turn-end-sound.ts`): eager `new Audio(ding)` above
+  the auth gate fetched 58.8 KB on the public login shell. Fixed by
+  lazy-constructing the clip on first turn-end.
+- **xterm terminal CSS** (`product-client/src/index.css` → `use-xterm-surface.ts`):
+  the eager ProductClient entry pulled `@xterm/xterm/css/xterm.css` (~1.9 KB
+  gzip) into the login bundle — a named contract violation (login/callback must
+  not eagerly load xterm/terminal CSS). Fixed by co-locating the stylesheet with
+  the lazily imported xterm runtime so it rides the `AuthenticatedProductClient`
+  chunk. Verified against the built manifest: eager entry CSS has zero xterm
+  rules.
+
+| Readiness point | Legacy baseline (gzip-9) | Optimized candidate (gzip-9) | Delta | Rule | Result |
+| --- | ---: | ---: | ---: | --- | --- |
+| `/login` requested JS | 471,212 B | 482,329 B | +11,117 B (+2.4%) | No regression | **Over** |
+| `/login` requested CSS | 24,226 B | 65,097 B | +40,871 B (+169%) | No regression | **Over** |
+| `/login` fonts/images/audio | 0 B | 0 B | 0 | No regression | Pass |
+| `/login` total | 495,438 B | 547,426 B | +51,988 B (+10.5%) | No regression | **Over** |
+
+**Why the residual gap is structural, not an unshipped optimization.** The
+legacy `/login` numbers are those of a small standalone app that did no code
+splitting; the candidate `/login` numbers are the *shell* of the unified shared
+product (the full authenticated app is lazy-split into a separate
+`AuthenticatedProductClient` chunk, ~746 KB gzip, not requested on `/login`).
+
+- **CSS floor probe.** Tailwind v4 emits utilities from `@source` scanning all
+  four shared package trees (`ui`, `product-ui`, `product-surfaces`,
+  `product-client`) into one eager stylesheet. Re-scoping `@source` to only the
+  login/auth shell sources and rebuilding floors the eager CSS at **35.4 KB
+  gzip — still +46% over the 24.2 KB baseline.** The residual is the shared
+  design-system token + base + login-utility layer, which is inherently larger
+  than legacy Web's minimal standalone login stylesheet. Reaching no-regression
+  would require a second parallel Tailwind pipeline for the login surface,
+  duplicating tokens and risking cross-host visual drift.
+- **JS.** The eager entry is the shared shell (React, router, query, cloud SDK,
+  product providers, login, telemetry). Login-only modules were verified absent
+  of authenticated-only editor/terminal/Monaco/Shiki code; the +2.4% is the
+  richer shared shell, not stray authenticated chunks.
+
+**Founder budget decision required.** The pre-approved contract formula for
+`/login` is *no regression vs the legacy baseline*, and the contract forbids
+silently raising a ceiling. The smallest verified split still materially exceeds
+that ceiling for reasons intrinsic to unifying onto one shared design system and
+one shared app shell — the intended, already-accepted cost of the program, but a
+specific byte ceiling that was never explicitly waived. This is the single
+evidence-backed founder gate for phase 6: either accept a revised `/login`
+ceiling that reflects the shared shell (recommended: CSS ≤ ~66 KB gzip, JS
+≤ ~485 KB gzip, one-time and browser-cacheable) or direct further optimization
+before cutover. Qualification does not mutate any production producer until this
+gate is resolved.
+
 ## Hosted Web cutover gate
 
 Before hosted Web cutover, inventory every external producer of a hosted Web
