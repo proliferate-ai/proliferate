@@ -266,6 +266,9 @@ export function resolveNewWorkspaceCommandTarget(
   if (cloudRepoAction.kind === "loading") {
     return disabledTarget("cloud", "Cloud repository settings are loading.");
   }
+  if (cloudRepoAction.kind === "configure") {
+    return disabledTarget("cloud", cloudRepoAction.label);
+  }
 
   return {
     commandKind: "cloud",

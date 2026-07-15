@@ -265,7 +265,7 @@ export function HomeNextScreen() {
                   onClick={() => configureCloud()}
                   className="h-auto px-0 py-0 text-foreground underline underline-offset-4 hover:text-muted-foreground"
                 >
-                  Configure
+                  {homeNext.cloudRepoAction.label}
                 </Button>
               ) : null
             }

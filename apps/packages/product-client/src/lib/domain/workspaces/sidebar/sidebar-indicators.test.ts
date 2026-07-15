@@ -324,6 +324,12 @@ describe("sidebar indicators", () => {
     });
 
     expect(groups[0]?.items[0]?.statusIndicator?.kind).toBe("iterating");
+    expect(groups[0]?.items[0]?.detailIndicators).toContainEqual(
+      expect.objectContaining({ kind: "materialization", variant: "cloud" }),
+    );
+    expect(groups[0]?.items[0]?.detailIndicators).not.toContainEqual(
+      expect.objectContaining({ kind: "cloud_exposure" }),
+    );
   });
 
   it("shows cloud workspace errors in the left status channel", () => {

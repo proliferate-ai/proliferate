@@ -816,7 +816,8 @@ export interface paths {
         /** Save Repo Environment Endpoint */
         put: operations["save_repo_environment_endpoint_v1_cloud_repositories__git_owner___git_repo_name__environment_put"];
         post?: never;
-        delete?: never;
+        /** Remove Cloud Repo Environment Endpoint */
+        delete: operations["remove_cloud_repo_environment_endpoint_v1_cloud_repositories__git_owner___git_repo_name__environment_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -8223,6 +8224,36 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RepoEnvironmentResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_cloud_repo_environment_endpoint_v1_cloud_repositories__git_owner___git_repo_name__environment_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                git_owner: string;
+                git_repo_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from sqlalchemy import select
@@ -201,10 +202,44 @@ async def get_cloud_repo_environment(
     user_id: UUID,
     git_owner: str,
     git_repo_name: str,
+    lock_mode: Literal["key_share", "update"] | None = None,
 ) -> RepoEnvironmentValue | None:
+    statement = (
+        select(RepoEnvironment, RepoConfig)
+        .join(RepoConfig, RepoEnvironment.repo_config_id == RepoConfig.id)
+        .where(
+            RepoConfig.user_id == user_id,
+            RepoConfig.git_provider == GitProvider.github,
+            RepoConfig.git_owner == git_owner,
+            RepoConfig.git_repo_name == git_repo_name,
+            RepoConfig.deleted_at.is_(None),
+            RepoEnvironment.environment_kind == RepoEnvironmentKind.cloud,
+            RepoEnvironment.deleted_at.is_(None),
+        )
+    )
+    if lock_mode == "key_share":
+        statement = statement.with_for_update(read=True, key_share=True)
+    elif lock_mode == "update":
+        statement = statement.with_for_update()
+    row = (await db.execute(statement)).one_or_none()
+    if row is None:
+        return None
+    environment, repo = row
+    return _environment_value(environment, repo)
+
+
+async def remove_cloud_repo_environment(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    git_owner: str,
+    git_repo_name: str,
+) -> bool:
+    """Soft-delete one user's active Cloud environment; missing is idempotent."""
+
     row = (
         await db.execute(
-            select(RepoEnvironment, RepoConfig)
+            select(RepoEnvironment)
             .join(RepoConfig, RepoEnvironment.repo_config_id == RepoConfig.id)
             .where(
                 RepoConfig.user_id == user_id,
@@ -216,11 +251,15 @@ async def get_cloud_repo_environment(
                 RepoEnvironment.deleted_at.is_(None),
             )
         )
-    ).one_or_none()
+    ).scalar_one_or_none()
     if row is None:
-        return None
-    environment, repo = row
-    return _environment_value(environment, repo)
+        return False
+
+    now = utcnow()
+    row.deleted_at = now
+    row.updated_at = now
+    await db.flush()
+    return True
 
 
 async def get_repo_environment_by_id(

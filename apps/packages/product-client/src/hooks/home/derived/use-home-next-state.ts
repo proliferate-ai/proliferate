@@ -86,7 +86,7 @@ export function useHomeNextState({
         return "Loading cloud configuration";
       }
       if (repository.cloudRepoAction.kind === "configure") {
-        return "Configure cloud for this repository";
+        return repository.cloudRepoAction.label;
       }
       if (repository.cloudRepoAction.kind !== "create") {
         return "Cloud is unavailable for this repository";

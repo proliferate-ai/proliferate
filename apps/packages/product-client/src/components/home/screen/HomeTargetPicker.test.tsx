@@ -110,15 +110,18 @@ describe("HomeTargetPicker", () => {
     expect(callbacks.onSelectRuntime).toHaveBeenCalledWith("local");
   });
 
-  it("routes unconfigured cloud choices to cloud setup", () => {
+  it("routes repository-access gates to cloud setup with precise copy", () => {
     const callbacks = renderPicker({
       cloudActionBySourceRoot: {
-        [keystoneRepository.sourceRoot]: { kind: "configure", label: "Configure cloud" },
+        [keystoneRepository.sourceRoot]: {
+          kind: "configure",
+          label: "Grant repository access",
+        },
       },
     });
 
     fireEvent.click(screen.getByRole("button", { name: /New worktree/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Set up cloud/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Grant repository access/i }));
 
     expect(callbacks.onConfigureCloud).toHaveBeenCalledWith(keystoneRepository);
     expect(callbacks.onSelectRuntime).not.toHaveBeenCalledWith("cloud");

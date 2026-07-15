@@ -49,7 +49,11 @@ export function detailIndicatorsForWorkspace(
 ): SidebarDetailIndicator[] {
   const creator = creatorDetailIndicator(workspace);
   const cloudAccess = cloudAccessDetailIndicator(workspace);
-  const cloudExposure = cloudExposureDetailIndicator(workspace);
+  // Managed Cloud already has a materialization indicator. Exposure only describes
+  // a locally running workspace that is separately reachable through Cloud.
+  const cloudExposure = workspace.effectiveOwner === "cloud"
+    ? null
+    : cloudExposureDetailIndicator(workspace);
   const origin = originDetailIndicator(workspace, creator);
   return [
     ...(creator ? [creator] : []),

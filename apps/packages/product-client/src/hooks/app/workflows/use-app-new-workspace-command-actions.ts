@@ -14,8 +14,8 @@ import { useWorkspaceNavigationWorkflow } from "#product/hooks/workspaces/workfl
 import { buildCloudRepoSettingsHref } from "#product/lib/domain/settings/navigation";
 import {
   buildConfiguredCloudRepoKeys,
-  resolveCloudRepoActionState,
 } from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
+import { useCloudRepoActionState } from "#product/hooks/cloud/derived/use-cloud-repo-action-state";
 import {
   buildRepositoryNewWorkspaceCommandScope,
   buildSelectedWorkspaceNewWorkspaceCommandScope,
@@ -117,18 +117,12 @@ export function useAppNewWorkspaceCommandActions(): AppNewWorkspaceCommandAction
     activeNewWorkspaceScope
     ?? homeNewWorkspaceScope
     ?? selectedNewWorkspaceScope;
-  const commandCloudRepoAction = useMemo(
-    () => resolveCloudRepoActionState({
-      repoTarget: newWorkspaceCommandScope?.cloudRepoTarget ?? null,
-      configuredRepoKeys: configuredCloudRepoKeys,
-      isInitialConfigLoad: cloudRepoConfigsInitialLoading,
-    }),
-    [
-      cloudRepoConfigsInitialLoading,
-      configuredCloudRepoKeys,
-      newWorkspaceCommandScope?.cloudRepoTarget,
-    ],
-  );
+  const commandCloudRepoAction = useCloudRepoActionState({
+    repoTarget: newWorkspaceCommandScope?.cloudRepoTarget ?? null,
+    configuredRepoKeys: configuredCloudRepoKeys,
+    isInitialConfigLoad: cloudRepoConfigsInitialLoading,
+    cloudConnected: cloudActive,
+  });
 
   const showDisabledShortcutToast = useCallback((
     invocation: AppCommandInvocation,

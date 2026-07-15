@@ -1,6 +1,12 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import {
   listRepositories,
+  removeCloudRepoEnvironment,
   saveRepoEnvironment,
   updateRepoConfig,
   type RepoConfigResponse,
@@ -86,6 +92,47 @@ export function useSaveRepoEnvironment() {
           queryKey: workspaceCloudSecretsKey(gitOwner, gitRepoName),
         });
       }
+    },
+  });
+}
+
+export interface RemoveCloudRepoEnvironmentInput {
+  gitOwner: string;
+  gitRepoName: string;
+}
+
+export function invalidateCloudRepoEnvironmentRemoval(
+  queryClient: Pick<QueryClient, "invalidateQueries">,
+  clientBaseUrl: string,
+  input: RemoveCloudRepoEnvironmentInput,
+) {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: repositoriesKey() }),
+    queryClient.invalidateQueries({ queryKey: cloudGitRepositoriesRootKey() }),
+    queryClient.invalidateQueries({ queryKey: githubAppRootKey(clientBaseUrl) }),
+    queryClient.invalidateQueries({
+      queryKey: workspaceCloudSecretsKey(input.gitOwner, input.gitRepoName),
+    }),
+  ]);
+}
+
+export function useRemoveCloudRepoEnvironment() {
+  const client = useCloudClient();
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, RemoveCloudRepoEnvironmentInput>({
+    mutationFn: ({ gitOwner, gitRepoName }) =>
+      removeCloudRepoEnvironment(gitOwner, gitRepoName, client),
+    onSuccess: (_, { gitOwner, gitRepoName }) => {
+      queryClient.removeQueries({
+        queryKey: repoEnvironmentKey(gitOwner, gitRepoName, "cloud"),
+        exact: true,
+      });
+    },
+    onSettled: (_, __, { gitOwner, gitRepoName }) => {
+      return invalidateCloudRepoEnvironmentRemoval(queryClient, client.baseUrl, {
+        gitOwner,
+        gitRepoName,
+      });
     },
   });
 }

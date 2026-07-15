@@ -1,7 +1,7 @@
 import { memo, useCallback, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
-import { useRepositories } from "@proliferate/cloud-sdk-react";
+import { useRemoveCloudRepoEnvironment, useRepositories } from "@proliferate/cloud-sdk-react";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { SidebarAccountFooter } from "#product/components/app/sidebar/SidebarAccountFooter";
@@ -21,6 +21,7 @@ import {
   isDefaultSidebarWorkspaceTypes,
 } from "#product/lib/domain/workspaces/sidebar/sidebar-workspace-types";
 import { buildConfiguredCloudRepoKeys } from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
+import { cloudRepositoryKey } from "#product/lib/domain/settings/repositories";
 import {
   titleForStartBlockReason,
 } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
@@ -76,6 +77,7 @@ export const MainSidebar = memo(function MainSidebar() {
     isPending: isRepoConfigsPending,
   } = useRepositories(cloudActive);
   const showToast = useToastStore((state) => state.show);
+  const removeCloudRepoEnvironment = useRemoveCloudRepoEnvironment();
   const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
   const {
     sidebarOpen,
@@ -112,7 +114,6 @@ export const MainSidebar = memo(function MainSidebar() {
   const archiveWorkspace = useWorkspaceUiStore((s) => s.archiveWorkspace);
   const hideRepoRoot = useWorkspaceUiStore((s) => s.hideRepoRoot);
   const unarchiveWorkspace = useWorkspaceUiStore((s) => s.unarchiveWorkspace);
-  const unarchiveWorkspaces = useWorkspaceUiStore((s) => s.unarchiveWorkspaces);
   const { updateWorkspaceDisplayName } = useWorkspaceDisplayNameActions();
   const handleRenameWorkspace = useCallback(
     (workspaceId: string, displayName: string | null) =>
@@ -150,16 +151,28 @@ export const MainSidebar = memo(function MainSidebar() {
     selectedLogicalWorkspaceId,
   });
 
-  const handleRemoveRepo = useCallback((sourceRoot: string) => {
+  const handleRemoveRepo = useCallback(async (sourceRoot: string) => {
     const group = groups.find((g) => g.sourceRoot === sourceRoot);
-    if (group) {
-      unarchiveWorkspaces(group.allLogicalWorkspaceIds);
-      if (group.repoRootId) {
-        hideRepoRoot(group.repoRootId);
-      }
+    if (!group) {
+      return;
+    }
+    if (group.cloudRepoTarget && configuredCloudRepoKeys.has(cloudRepositoryKey(
+      group.cloudRepoTarget.gitOwner,
+      group.cloudRepoTarget.gitRepoName,
+    ))) {
+      await removeCloudRepoEnvironment.mutateAsync(group.cloudRepoTarget);
+    }
+    if (group.repoRootId) {
+      hideRepoRoot(group.repoRootId);
     }
     clearRepoGroupShowMore(sourceRoot);
-  }, [clearRepoGroupShowMore, groups, hideRepoRoot, unarchiveWorkspaces]);
+  }, [
+    clearRepoGroupShowMore,
+    configuredCloudRepoKeys,
+    groups,
+    hideRepoRoot,
+    removeCloudRepoEnvironment,
+  ]);
 
   const resolveArchiveTargetForSidebarItem = useCallback((
     workspaceId: string,
@@ -325,6 +338,7 @@ export const MainSidebar = memo(function MainSidebar() {
               onToggleRepoShowMore={handleToggleRepoShowMore}
               configuredCloudRepoKeys={configuredCloudRepoKeys}
               cloudRepoConfigsInitialLoading={cloudRepoConfigsInitialLoading}
+              cloudConnected={cloudActive}
               cloudWorkspaceEnabled={cloudActive && !cloudWorkspaceBlocked}
               cloudWorkspaceTooltip={cloudWorkspaceTooltip}
               onCreateWorktreeWorkspace={actions.handleCreateWorktreeWorkspace}

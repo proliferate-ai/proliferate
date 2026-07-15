@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, exists, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -84,6 +84,22 @@ async def list_active_workspace_branches_for_repo_environment(
         )
     )
     return {value for value in rows.scalars().all() if value}
+
+
+async def repo_environment_has_workspaces(
+    db: AsyncSession,
+    *,
+    repo_environment_id: UUID,
+) -> bool:
+    """Return whether any active or archived workspace still owns this environment."""
+
+    return bool(
+        await db.scalar(
+            select(
+                exists().where(CloudWorkspace.repo_environment_id == repo_environment_id)
+            )
+        )
+    )
 
 
 async def get_cloud_workspace_for_user(

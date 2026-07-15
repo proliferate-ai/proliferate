@@ -222,11 +222,10 @@ describe("new workspace command targets", () => {
     expect(resolveNewWorkspaceCommandTarget({
       commandKind: "cloud",
       scope,
-      cloudRepoAction: { kind: "configure", label: "Configure cloud" },
-    })).toMatchObject({
+      cloudRepoAction: { kind: "configure", label: "Install Proliferate GitHub App" },
+    })).toEqual({
       commandKind: "cloud",
-      cloudActionKind: "configure",
-      disabledReason: null,
+      disabledReason: "Install Proliferate GitHub App",
     });
 
     expect(resolveNewWorkspaceCommandTarget({

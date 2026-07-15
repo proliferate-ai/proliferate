@@ -66,6 +66,7 @@ GET /v1/cloud/repositories/catalog
 GET /v1/cloud/repositories
 GET /v1/cloud/repositories/{owner}/{repo}/branches
 PUT /v1/cloud/repositories/{owner}/{repo}/environment
+DELETE /v1/cloud/repositories/{owner}/{repo}/environment
 ```
 
 Workspace routes:
@@ -96,6 +97,21 @@ after the request transaction commits.
 That scheduled task is best-effort process-local work. Its persisted status
 and `last_error` are evidence; saving the environment successfully is not by
 itself evidence that the repository exists in E2B.
+
+## Remove A Cloud Repository Environment
+
+The repository environment `DELETE` route is user-scoped and idempotent. It
+soft-deletes only the active Cloud `repo_environment`; local environments,
+repository preferences, local files, and workspaces are not deleted. Removal
+is rejected with `cloud_repository_in_use` while any active or archived Cloud
+workspace, automation, or automation-run snapshot still references the
+environment, because hiding an environment that those records need would make
+the removal state untruthful. Workspace creation holds a key-share lock on the
+environment while removal holds an update lock, so a concurrent create cannot
+race the dependency check. Clients
+must keep removal pending until the request succeeds and invalidate repository,
+catalog, GitHub-authority, and workspace-secret queries after it settles so all
+surfaces converge on server truth.
 
 ## Create A Workspace
 
