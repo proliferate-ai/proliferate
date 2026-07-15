@@ -134,7 +134,7 @@ export interface LocalRouteDriver {
    * `world-boot`. A construction failure throws; the collector maps it to a
    * clean `failed` batch rather than a throw out of `runCells`.
    */
-  buildWorld(ctx: ScenarioRunContext): Promise<ReadyLocalWorld>;
+  buildWorld(ctx: ScenarioRunContext, worldId: string): Promise<ReadyLocalWorld>;
   createGatewayActor(world: ReadyLocalWorld, harness: LocalHarnessKind): Promise<AuthenticatedActor>;
   /** Fresh user-key actor: registered, its repo prepared, NO gateway route selected. */
   createUserKeyActor(world: ReadyLocalWorld, harness: LocalHarnessKind): Promise<AuthenticatedActor>;
@@ -213,12 +213,12 @@ const ASSISTANT_REPLY_TIMEOUT_MS = 20_000;
 const SETTINGS_STEP_TIMEOUT_MS = 30_000;
 
 export const defaultLocalRouteDriver: LocalRouteDriver = {
-  async buildWorld(ctx) {
+  async buildWorld(ctx, worldId) {
     const inputs = resolveLocalFunctionalWorldInputs(ctx);
     if (!inputs.ok) {
       throw new Error(inputs.reason);
     }
-    return bootLocalFunctionalWorld(inputs.value);
+    return bootLocalFunctionalWorld(inputs.value, worldId);
   },
   createGatewayActor: (world, harness) =>
     authenticatedActor(world, "owner", { harnessKind: harness, selectGatewayRoute: true }),
@@ -513,7 +513,8 @@ async function runRouteBatch(
 
   let world: ReadyLocalWorld;
   try {
-    world = await driver.buildWorld(ctx);
+    // One world per scenario, keyed by scenario id for its isolated subdir.
+    world = await driver.buildWorld(ctx, cells[0]?.scenario_id ?? "route");
   } catch (error) {
     return cells.map((cell) => ({
       cellId: cell.cell_id,
@@ -677,9 +678,15 @@ async function runLocal3UserKeyCell(
     const repo = await driver.prepareRepo(world, actor, cell.cell_id);
     const page = await driver.openPage(world, actor);
     try {
-      await driver.ensureHarnessReady(world, page, harness);
+      // Store + SELECT the user key FIRST (decision #3): on the api_key route a
+      // harness only surfaces models in its launch-options once the provider key
+      // is stored AND the api_key route selected, so `ensureHarnessReady`
+      // (launchable = launch-options carry models) can only pass after that.
+      // Gating readiness before selection is what timed out in run-1
+      // ("never became launchable ... credentialState=ready").
       await driver.storeAndSelectUserKeyRoute(page, harness);
       await driver.waitForRouteSync(world, page, harness, "user_key");
+      await driver.ensureHarnessReady(world, page, harness);
       await driver.selectRepoAndWorkLocally(page, repo);
       const selection = await driver.resolveRouteModel(world, page, harness, "user_key");
       assertOpencodeProviderSource(harness, "user_key", selection);
@@ -736,11 +743,13 @@ async function runLocal6RouteChangeCell(
     const repo = await driver.prepareRepo(world, actor, cell.cell_id);
     const page = await driver.openPage(world, actor);
     try {
-      await driver.ensureHarnessReady(world, page, harness);
-
-      // 1) Start + prove the user-key session (the original route).
+      // 1) Start + prove the user-key session (the original route). Store +
+      // select the user key BEFORE gating readiness (decision #3): the api_key
+      // route's launch-options only carry models after the key is stored and
+      // selected, so `ensureHarnessReady` must follow the user-key route sync.
       await driver.storeAndSelectUserKeyRoute(page, harness);
       await driver.waitForRouteSync(world, page, harness, "user_key");
+      await driver.ensureHarnessReady(world, page, harness);
       await driver.selectRepoAndWorkLocally(page, repo);
       const userKeySelection = await driver.resolveRouteModel(world, page, harness, "user_key");
       await driver.selectModelInUi(page, userKeySelection.modelId);

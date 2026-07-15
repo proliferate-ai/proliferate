@@ -76,8 +76,9 @@ type ScenarioCellOutcomeWithEvidence = ScenarioCellOutcome & { evidence?: LocalC
 /** Every privileged/UI step LOCAL-4 performs, faked in offline unit tests. */
 export interface LocalConfigDriver {
   /** Boots the candidate world from resolved inputs (production →
-   * `bootLocalFunctionalWorld`); faked entirely in unit tests. */
-  buildWorld(inputs: LocalFunctionalWorldInputs): Promise<ReadyLocalWorld>;
+   * `bootLocalFunctionalWorld`); faked entirely in unit tests. `worldId` scopes
+   * the world's isolated subdir (world-per-scenario, serialized). */
+  buildWorld(inputs: LocalFunctionalWorldInputs, worldId: string): Promise<ReadyLocalWorld>;
   createActor(world: ReadyLocalWorld, harness: LocalHarnessKind): Promise<AuthenticatedActor>;
   prepareRepo(world: ReadyLocalWorld, actor: AuthenticatedActor, cellId: string): Promise<PreparedRepository>;
   openPage(world: ReadyLocalWorld, actor: AuthenticatedActor): Promise<ProductPage>;
@@ -117,7 +118,7 @@ export interface LocalConfigControl {
 
 /** Every privileged/UI step LOCAL-5 performs, faked in offline unit tests. */
 export interface LocalSessionTabsDriver {
-  buildWorld(inputs: LocalFunctionalWorldInputs): Promise<ReadyLocalWorld>;
+  buildWorld(inputs: LocalFunctionalWorldInputs, worldId: string): Promise<ReadyLocalWorld>;
   createActor(world: ReadyLocalWorld): Promise<AuthenticatedActor>;
   prepareRepo(world: ReadyLocalWorld, actor: AuthenticatedActor, cellId: string): Promise<PreparedRepository>;
   openPage(world: ReadyLocalWorld, actor: AuthenticatedActor): Promise<ProductPage>;
@@ -150,7 +151,7 @@ export interface LocalSessionTabsDriver {
 // ── Production drivers: real world/fixtures/browser/runtime ──────────────────
 
 export const defaultLocalConfigDriver: LocalConfigDriver = {
-  buildWorld: (inputs) => bootLocalFunctionalWorld(inputs),
+  buildWorld: (inputs, worldId) => bootLocalFunctionalWorld(inputs, worldId),
   createActor: (world) => authenticatedActor(world, "owner"),
   prepareRepo: (world, actor, cellId) => preparedRepository(world, actor, { cellId }),
   openPage: (world, actor) => productPage(world, actor),
@@ -173,7 +174,7 @@ export const defaultLocalConfigDriver: LocalConfigDriver = {
 };
 
 export const defaultLocalSessionTabsDriver: LocalSessionTabsDriver = {
-  buildWorld: (inputs) => bootLocalFunctionalWorld(inputs),
+  buildWorld: (inputs, worldId) => bootLocalFunctionalWorld(inputs, worldId),
   createActor: (world) => authenticatedActor(world, "owner"),
   prepareRepo: (world, actor, cellId) => preparedRepository(world, actor, { cellId }),
   openPage: (world, actor) => productPage(world, actor),
@@ -226,7 +227,7 @@ export async function collectLocal4ConfigCells(
 
   let world: ReadyLocalWorld;
   try {
-    world = await driver.buildWorld(inputs.value);
+    world = await driver.buildWorld(inputs.value, cells[0]?.scenario_id ?? "T3-CFG-1");
   } catch (error) {
     return cells.map((cell) => failedOutcome(cell.cell_id, `world construction failed: ${describe(error)}`));
   }
@@ -407,7 +408,7 @@ export async function collectLocal5SessionTabsCell(
 
   let world: ReadyLocalWorld;
   try {
-    world = await driver.buildWorld(inputs.value);
+    world = await driver.buildWorld(inputs.value, cell.scenario_id);
   } catch (error) {
     return failedOutcome(cell.cell_id, `world construction failed: ${describe(error)}`);
   }

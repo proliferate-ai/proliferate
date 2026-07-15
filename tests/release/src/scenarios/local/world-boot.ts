@@ -1,7 +1,14 @@
+import path from "node:path";
+
 import type { ScenarioRunContext } from "../types.js";
 import type { CandidateBuildMapV1 } from "../../artifacts/build-map.js";
 import type { RunIdentityV1 } from "../../runner/identity.js";
-import { constructLocalWorld, type LocalWorldPorts, type ReadyLocalWorld } from "../../worlds/local-workspace/world.js";
+import {
+  constructLocalWorld,
+  type ConstructLocalWorldOptions,
+  type LocalWorldPorts,
+  type ReadyLocalWorld,
+} from "../../worlds/local-workspace/world.js";
 import { resolveWorldConstructionInputs, type QualificationLiteLlmConfigLike } from "../local-world-smoke-1.js";
 
 /**
@@ -25,6 +32,24 @@ import { resolveWorldConstructionInputs, type QualificationLiteLlmConfigLike } f
  * (a diagnostic invocation with no candidate map), it returns a typed failure
  * the collector maps to a clean `blocked`/`failed` cell — never a throw out of
  * `runCells` that would lose sibling results.
+ *
+ * ── Two frozen correctness invariants this seam owns (fix round 1) ────────────
+ *
+ * 1. WORLD-PER-SCENARIO, SERIALIZED. Every functional scenario boots exactly
+ *    ONE `ReadyLocalWorld` shared by all its cells, and scenario-level world
+ *    boots are serialized through the module-level `worldBootMutex` below: the
+ *    mutex is acquired before construction and released only when the world's
+ *    `close()` resolves, so two worlds never run concurrently on the laptop.
+ *
+ * 2. PORTS ARE REUSED FROM THE SIDECAR, NOT RE-ALLOCATED. Each world reuses the
+ *    single `local-world-ports.json` sidecar's ports (threaded verbatim as
+ *    `inputs.ports`) rather than allocating fresh ephemeral ports per boot. This
+ *    is REQUIRED, not an optimization: the candidate renderer dist is built with
+ *    `VITE_PROLIFERATE_API_BASE_URL` baked to the sidecar's API port, so a world
+ *    serving that exact dist must bring the Server up on the sidecar's API port
+ *    (and the renderer on the sidecar's renderer port) or the browser's baked
+ *    API origin will not resolve. Serialization (invariant 1) is what makes
+ *    reusing one fixed port set safe — only one world binds them at a time.
  */
 
 export interface LocalFunctionalWorldInputs {
@@ -57,24 +82,109 @@ export function resolveLocalFunctionalWorldInputs(
 }
 
 /**
+ * A minimal FIFO async mutex: `acquire()` resolves with a single-use `release`
+ * once every earlier acquirer has released. Used to serialize world boots so no
+ * two `ReadyLocalWorld`s are ever live at once (invariant 1 above). Exported for
+ * offline unit tests.
+ */
+export class AsyncMutex {
+  private tail: Promise<void> = Promise.resolve();
+
+  acquire(): Promise<() => void> {
+    const previous = this.tail;
+    let releaseNext!: () => void;
+    this.tail = new Promise<void>((resolve) => {
+      releaseNext = resolve;
+    });
+    // The caller waits for the previous holder to release, then receives its own
+    // one-shot release (idempotence is the caller's concern; we hand back the
+    // resolver directly).
+    return previous.then(() => releaseNext);
+  }
+}
+
+/**
+ * The single process-wide gate every functional world boot passes through. It is
+ * held from just before construction until the world's `close()` resolves, so
+ * serialized scenarios never bind the shared sidecar ports (or a Docker
+ * project/network) concurrently.
+ */
+const worldBootMutex = new AsyncMutex();
+
+/**
+ * Slugifies a scenario id into a filesystem-safe world subdir name
+ * (`T3-AUTHROUTE-1` → `t3-authroute-1`). Exported for offline unit tests.
+ */
+export function worldDirSlug(worldId: string): string {
+  const slug = worldId
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug.length > 0 ? slug : "world";
+}
+
+/** Injectable constructor seam (defaults to the real world) so the mutex/
+ * world-root wiring is unit-testable without booting a container/browser. */
+export type ConstructLocalWorldFn = (options: ConstructLocalWorldOptions) => Promise<ReadyLocalWorld>;
+
+/**
  * Boots one `ReadyLocalWorld` for a functional local scenario from resolved
- * inputs, via `constructLocalWorld`. The caller owns `world.close()` in a
- * `finally` exactly once, and folds the returned cleanup evidence into each
+ * inputs, via `constructLocalWorld`, under the world-boot mutex. `worldId` (the
+ * scenario id) scopes the world's mutable subdir to
+ * `<runDir>/worlds/<slug>` so its teardown never deletes the shared
+ * `<runDir>/artifacts` source or a sibling scenario's world. The mutex is held
+ * until the returned world's `close()` resolves. The caller owns `world.close()`
+ * in a `finally` exactly once, and folds the returned cleanup evidence into each
  * green cell's kind-scoped evidence.
  */
-export function bootLocalFunctionalWorld(inputs: LocalFunctionalWorldInputs): Promise<ReadyLocalWorld> {
-  // Identical world construction to `LOCAL-WORLD-SMOKE-1`'s `buildWorld` default:
-  // the exact candidate three-artifact bytes, resolved LiteLLM access, run
-  // identity, run/shard dir, and pre-allocated ports. Reuse — never fork — the
-  // merged world code so a functional scenario's world is byte-identical to the
-  // proven smoke world.
-  return constructLocalWorld({
-    run: inputs.run,
-    map: inputs.map,
-    litellm: inputs.litellm,
-    runDir: inputs.runDir,
-    ports: inputs.ports,
-  });
+export async function bootLocalFunctionalWorld(
+  inputs: LocalFunctionalWorldInputs,
+  worldId: string,
+  construct: ConstructLocalWorldFn = constructLocalWorld,
+): Promise<ReadyLocalWorld> {
+  const release = await worldBootMutex.acquire();
+  let world: ReadyLocalWorld;
+  try {
+    // Identical world construction to `LOCAL-WORLD-SMOKE-1`'s `buildWorld`
+    // default (the exact candidate three-artifact bytes, resolved LiteLLM
+    // access, run identity, and the SIDECAR ports — see invariant 2), plus a
+    // per-scenario `worldRoot` so world-per-scenario teardown is isolated. The
+    // shared `<runDir>/artifacts` source stays read-only.
+    world = await construct({
+      run: inputs.run,
+      map: inputs.map,
+      litellm: inputs.litellm,
+      runDir: inputs.runDir,
+      worldRoot: path.join(inputs.runDir, "worlds", worldDirSlug(worldId)),
+      ports: inputs.ports,
+    });
+  } catch (error) {
+    // Construction failed: release the gate immediately so the next serialized
+    // scenario can boot, then surface the failure to the collector.
+    release();
+    throw error;
+  }
+
+  // Hold the mutex until this world is fully torn down. Wrap `close()` so the
+  // release happens exactly once, whether close resolves or throws.
+  const realClose = world.close.bind(world);
+  let released = false;
+  const releaseOnce = (): void => {
+    if (!released) {
+      released = true;
+      release();
+    }
+  };
+  return {
+    ...world,
+    close: async () => {
+      try {
+        return await realClose();
+      } finally {
+        releaseOnce();
+      }
+    },
+  };
 }
 
 /**

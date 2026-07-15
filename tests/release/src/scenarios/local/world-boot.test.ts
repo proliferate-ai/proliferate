@@ -1,10 +1,21 @@
 import assert from "node:assert/strict";
+import path from "node:path";
 import { test } from "node:test";
 
-import { isWorldBackedRun, resolveLocalFunctionalWorldInputs } from "./world-boot.js";
+import {
+  AsyncMutex,
+  bootLocalFunctionalWorld,
+  isWorldBackedRun,
+  resolveLocalFunctionalWorldInputs,
+  worldDirSlug,
+  type ConstructLocalWorldFn,
+  type LocalFunctionalWorldInputs,
+} from "./world-boot.js";
 import type { ScenarioRunContext } from "../types.js";
 import type { CandidateBuildMapV1 } from "../../artifacts/build-map.js";
 import type { EnvResolution } from "../../config/env-resolution.js";
+import type { ReadyLocalWorld } from "../../worlds/local-workspace/world.js";
+import type { LocalWorldCleanupEvidence } from "../../worlds/local-workspace/cleanup.js";
 
 // ── Fakes (offline: no world, browser, container, or network) ────────────────
 
@@ -117,4 +128,122 @@ test("resolveLocalFunctionalWorldInputs: absent run identity / run dir / ports e
     const resolution = resolveLocalFunctionalWorldInputs(fakeCtx(override));
     assert.equal(resolution.ok, false);
   }
+});
+
+// ── worldDirSlug ─────────────────────────────────────────────────────────────
+
+test("worldDirSlug: slugifies a scenario id into a filesystem-safe subdir name", () => {
+  assert.equal(worldDirSlug("T3-WT-1"), "t3-wt-1");
+  assert.equal(worldDirSlug("T3-AUTHROUTE-1"), "t3-authroute-1");
+  assert.equal(worldDirSlug("T3/CHAT 1!!"), "t3-chat-1");
+  assert.equal(worldDirSlug("///"), "world"); // never empty
+});
+
+// ── AsyncMutex ───────────────────────────────────────────────────────────────
+
+test("AsyncMutex: serializes holders FIFO — the next acquirer waits for release", async () => {
+  const mutex = new AsyncMutex();
+  const order: string[] = [];
+  const releaseA = await mutex.acquire();
+  const bAcquired = mutex.acquire().then((release) => {
+    order.push("B-acquired");
+    return release;
+  });
+  // B cannot acquire while A holds the lock, even after microtask flushes.
+  await Promise.resolve();
+  order.push("A-holds");
+  assert.deepEqual(order, ["A-holds"]);
+  releaseA();
+  const releaseB = await bAcquired;
+  assert.deepEqual(order, ["A-holds", "B-acquired"]);
+  releaseB();
+});
+
+// ── bootLocalFunctionalWorld (mutex + worldRoot wiring) ───────────────────────
+
+function fakeWorldInputs(runDir = "/tmp/run-x"): LocalFunctionalWorldInputs {
+  return {
+    map: fakeCandidateMap(),
+    litellm: { adminBaseUrl: "http://admin", publicBaseUrl: "http://public", masterKey: "sk-master" },
+    run: {
+      run_id: "local-run-1",
+      shard_id: "shard-0",
+      attempt: 1,
+      source_sha: "a".repeat(40),
+      origin: { kind: "local", github_run_id: null, github_job: null },
+    },
+    runDir,
+    ports: { server: 1, postgres: 2, redis: 3, anyharness: 4, renderer: 5 },
+  };
+}
+
+function fakeReadyWorld(onClose: () => void): ReadyLocalWorld {
+  return {
+    kind: "local-workspace",
+    close: async () => {
+      onClose();
+      return {} as LocalWorldCleanupEvidence;
+    },
+  } as unknown as ReadyLocalWorld;
+}
+
+test("bootLocalFunctionalWorld: passes a per-scenario worldRoot under <runDir>/worlds/<slug>", async () => {
+  let capturedWorldRoot: string | undefined;
+  const construct: ConstructLocalWorldFn = async (opts) => {
+    capturedWorldRoot = opts.worldRoot;
+    return fakeReadyWorld(() => undefined);
+  };
+  const world = await bootLocalFunctionalWorld(fakeWorldInputs(), "T3-WT-1", construct);
+  assert.equal(capturedWorldRoot, path.join("/tmp/run-x", "worlds", "t3-wt-1"));
+  await world.close(); // release the module mutex for the next test
+});
+
+test("bootLocalFunctionalWorld: serializes world boots — never two worlds live at once", async () => {
+  let active = 0;
+  let maxActive = 0;
+  const worldRoots: string[] = [];
+  const construct: ConstructLocalWorldFn = async (opts) => {
+    worldRoots.push(opts.worldRoot!);
+    active += 1;
+    maxActive = Math.max(maxActive, active);
+    return fakeReadyWorld(() => {
+      active -= 1;
+    });
+  };
+
+  const p1 = bootLocalFunctionalWorld(fakeWorldInputs(), "T3-WT-1", construct);
+  const p2 = bootLocalFunctionalWorld(fakeWorldInputs(), "T3-CHAT-1", construct);
+
+  const w1 = await p1;
+  // Second world must NOT have constructed while the first is still live.
+  assert.equal(active, 1);
+  assert.deepEqual(worldRoots, [path.join("/tmp/run-x", "worlds", "t3-wt-1")]);
+
+  await w1.close(); // releasing the first world lets the second boot
+  const w2 = await p2;
+  assert.equal(active, 1);
+  assert.deepEqual(worldRoots, [
+    path.join("/tmp/run-x", "worlds", "t3-wt-1"),
+    path.join("/tmp/run-x", "worlds", "t3-chat-1"),
+  ]);
+  await w2.close();
+  assert.equal(active, 0);
+  assert.equal(maxActive, 1); // the mutex kept the two boots from overlapping
+});
+
+test("bootLocalFunctionalWorld: releases the mutex when construction throws", async () => {
+  await assert.rejects(
+    bootLocalFunctionalWorld(fakeWorldInputs(), "T3-WT-1", async () => {
+      throw new Error("docker load failed");
+    }),
+    /docker load failed/,
+  );
+  // A subsequent boot must proceed — proving the failed boot released the gate.
+  let constructed = false;
+  const world = await bootLocalFunctionalWorld(fakeWorldInputs(), "T3-CHAT-1", async () => {
+    constructed = true;
+    return fakeReadyWorld(() => undefined);
+  });
+  assert.equal(constructed, true);
+  await world.close();
 });

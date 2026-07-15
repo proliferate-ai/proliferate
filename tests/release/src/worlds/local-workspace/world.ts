@@ -132,8 +132,27 @@ export interface ConstructLocalWorldOptions {
   run: RunIdentityV1;
   map: CandidateBuildMapV1;
   litellm: QualificationLiteLlmConfig;
-  /** Run/shard-scoped root; all world state lives under here. */
+  /**
+   * Run/shard-scoped root. The candidate artifacts (`server.tar`,
+   * `anyharness`, `renderer.tar.gz`) the map's locators point at live directly
+   * under `<runDir>/artifacts` — this constructor treats that shared artifacts
+   * directory as READ-ONLY and never registers it for deletion, so several
+   * serialized worlds can each materialize from the same source bytes without
+   * one world's teardown removing another world's source (the run-1 dominant
+   * failure: `copyfile server.tar ENOENT` after the first world deleted the
+   * shared `<runDir>/artifacts`).
+   */
   runDir: string;
+  /**
+   * Per-world mutable root — runtime home, secrets, extracted renderer,
+   * materialized artifact copies, setup token, and the cleanup ledger all live
+   * under here, and the `run_directory` cleanup releaser deletes ONLY this
+   * subdir. Defaults to `runDir` (the single-world `LOCAL-WORLD-SMOKE-1` shape,
+   * unchanged). Functional runs pass a scenario-scoped
+   * `<runDir>/worlds/<scenario-id-slug>` so world-per-scenario teardown never
+   * touches the shared `<runDir>/artifacts` source or a sibling world's subdir.
+   */
+  worldRoot?: string;
   /** Pre-allocated non-conflicting ports for server/postgres/redis/anyharness/renderer. */
   ports: LocalWorldPorts;
   timeoutMs?: number;
@@ -182,17 +201,22 @@ export async function constructLocalWorld(options: ConstructLocalWorldOptions): 
   await gateway.preflight();
 
   const runDir = options.runDir;
-  const artifactsDir = path.join(runDir, "artifacts");
-  const rendererDir = path.join(runDir, "renderer");
-  const runtimeHome = path.join(runDir, "runtime-home");
-  const repositoriesDir = path.join(runDir, "repositories");
-  const logsDir = path.join(runDir, "logs");
-  for (const dir of [runDir, artifactsDir, rendererDir, runtimeHome, repositoriesDir, logsDir]) {
+  // Per-world mutable root (defaults to runDir for the single-world smoke). All
+  // materialized copies, runtime home, secrets, renderer extraction, setup
+  // token, and ledger live under here; the shared `<runDir>/artifacts` source
+  // the map locators point at stays outside it and is never deleted.
+  const worldRoot = options.worldRoot ?? runDir;
+  const artifactsDir = path.join(worldRoot, "artifacts");
+  const rendererDir = path.join(worldRoot, "renderer");
+  const runtimeHome = path.join(worldRoot, "runtime-home");
+  const repositoriesDir = path.join(worldRoot, "repositories");
+  const logsDir = path.join(worldRoot, "logs");
+  for (const dir of [worldRoot, artifactsDir, rendererDir, runtimeHome, repositoriesDir, logsDir]) {
     await mkdir(dir, { recursive: true });
   }
 
   const ledger = await openCleanupLedger({
-    runDir,
+    runDir: worldRoot,
     runId: options.run.run_id,
     shardId: options.run.shard_id,
     mirror: deps.ledgerMirror,
@@ -211,7 +235,10 @@ export async function constructLocalWorld(options: ConstructLocalWorldOptions): 
   try {
     // Register durable-path + reservation releasers first so they tear down
     // LAST (reverse order), after every container/process that lives under them.
-    await register("run_directory", runDir, () => rm(runDir, { recursive: true, force: true }));
+    // The releaser targets the WORLD's own subdir (`worldRoot`), never the
+    // shared `<runDir>/artifacts` source the map materializes from — so a
+    // world-per-scenario teardown cannot delete another world's source bytes.
+    await register("run_directory", worldRoot, () => rm(worldRoot, { recursive: true, force: true }));
     await register(
       "port_registration",
       [options.ports.server, options.ports.postgres, options.ports.redis, options.ports.anyharness, options.ports.renderer].join(","),
@@ -232,13 +259,13 @@ export async function constructLocalWorld(options: ConstructLocalWorldOptions): 
     // Server (gateway enabled, SINGLE_ORG_MODE, short backfill interval).
     const naming = dockerNaming(options.run.run_id, options.run.shard_id);
     const serverEnv = buildServerEnv(naming, options.litellm, options.ports.renderer);
-    const setupTokenHostPath = path.join(runDir, SETUP_TOKEN_FILENAME);
+    const setupTokenHostPath = path.join(worldRoot, SETUP_TOKEN_FILENAME);
     const server = await startDockerStack({
       naming,
       ports: { server: options.ports.server, postgres: options.ports.postgres, redis: options.ports.redis },
       serverArtifact,
       serverEnv,
-      runDir,
+      runDir: worldRoot,
       // The real Server mints the first-run token at boot and writes the
       // plaintext to SETUP_TOKEN_FILE inside the container; the world copies it
       // out to <runDir>/setup-token so the actor fixture claims through the real
@@ -297,7 +324,10 @@ export async function constructLocalWorld(options: ConstructLocalWorldOptions): 
       runtime: { baseUrl: anyharness.baseUrl, client: new LocalRuntimeClient({ baseUrl: anyharness.baseUrl }) },
       renderer: { baseUrl: served.baseUrl, browser },
       gateway,
-      paths: { runDir, runtimeHome, repositoriesDir },
+      // `runDir` here is the per-world root: fixtures read the world's setup
+      // token at `<paths.runDir>/setup-token`, which the world copied out under
+      // `worldRoot`. (Same value as `runDir` for the single-world smoke.)
+      paths: { runDir: worldRoot, runtimeHome, repositoriesDir },
       registerCleanup: register,
       trackActorSubjects: (actor) => trackActorSubjects(stack, gateway, actor),
       close: () => stack.runAll(),

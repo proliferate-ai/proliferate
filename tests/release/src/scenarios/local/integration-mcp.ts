@@ -284,7 +284,8 @@ export async function collectLocal7McpCells(
 
   let world: ReadyLocalWorld;
   try {
-    world = await bootLocalFunctionalWorld(inputs.value);
+    // One world per scenario, keyed by scenario id for its isolated subdir.
+    world = await bootLocalFunctionalWorld(inputs.value, cells[0]?.scenario_id ?? "T3-INT-1");
   } catch (error) {
     return cells.map((cell) => failedOutcome(cell, `world construction failed: ${describeError(error)}`));
   }

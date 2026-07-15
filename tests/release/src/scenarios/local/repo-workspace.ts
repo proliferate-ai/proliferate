@@ -43,7 +43,7 @@ export interface LocalRepoWorkspaceDriver {
    * `world-boot`. A construction failure throws; the collector maps it to a
    * clean `failed` cell rather than a throw out of the leaf's `run`.
    */
-  buildWorld(ctx: ScenarioRunContext): Promise<ReadyLocalWorld>;
+  buildWorld(ctx: ScenarioRunContext, worldId: string): Promise<ReadyLocalWorld>;
   createActor(world: ReadyLocalWorld): Promise<AuthenticatedActor>;
   prepareRepo(world: ReadyLocalWorld, actor: AuthenticatedActor, cellId: string): Promise<PreparedRepository>;
   openPage(world: ReadyLocalWorld, actor: AuthenticatedActor): Promise<ProductPage>;
@@ -62,12 +62,12 @@ export interface LocalRepoWorkspaceDriver {
 }
 
 export const defaultLocalRepoWorkspaceDriver: LocalRepoWorkspaceDriver = {
-  async buildWorld(ctx) {
+  async buildWorld(ctx, worldId) {
     const inputs = resolveLocalFunctionalWorldInputs(ctx);
     if (!inputs.ok) {
       throw new Error(inputs.reason);
     }
-    return bootLocalFunctionalWorld(inputs.value);
+    return bootLocalFunctionalWorld(inputs.value, worldId);
   },
   createActor: (world) => authenticatedActor(world, "owner"),
   prepareRepo: (world, actor, cellId) => preparedRepository(world, actor, { cellId }),
@@ -168,7 +168,7 @@ export async function collectLocal1WorkspaceCell(
 
   let world: ReadyLocalWorld;
   try {
-    world = await driver.buildWorld(ctx);
+    world = await driver.buildWorld(ctx, cell.scenario_id);
   } catch (error) {
     return {
       cellId: cell.cell_id,
