@@ -30,6 +30,7 @@ from proliferate.server.cloud.repositories.models import (
 )
 from proliferate.server.cloud.repositories.service import (
     list_repositories,
+    remove_cloud_repo_environment,
     repo_config_response,
     repo_environment_response,
     save_repo_environment,
@@ -135,3 +136,24 @@ async def save_repo_environment_endpoint(
         body=body,
     )
     return await repo_environment_response(db, user_id=user.id, environment=value)
+
+
+@router.delete(
+    "/repositories/{git_owner}/{git_repo_name}/environment",
+    status_code=204,
+)
+async def remove_cloud_repo_environment_endpoint(
+    git_owner: str,
+    git_repo_name: str,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> None:
+    try:
+        await remove_cloud_repo_environment(
+            db,
+            user_id=user.id,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)

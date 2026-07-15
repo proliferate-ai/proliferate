@@ -142,6 +142,7 @@ async def create_cloud_workspace_for_user(
         user_id=user.id,
         git_owner=git_owner,
         git_repo_name=git_repo_name,
+        lock_mode="key_share",
     )
     if repo_environment is None:
         raise CloudApiError(

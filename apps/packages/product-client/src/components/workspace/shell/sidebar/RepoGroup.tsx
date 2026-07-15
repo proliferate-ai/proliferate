@@ -33,7 +33,7 @@ interface RepoGroupProps {
   cloudWorkspaceLabel?: string;
   cloudWorkspaceEnabled?: boolean;
   cloudWorkspaceTooltip?: string;
-  onRemoveRepo?: () => void;
+  onRemoveRepo?: () => Promise<void> | void;
   onOpenSettings?: () => void;
 }
 
@@ -59,18 +59,28 @@ export function RepoGroup({
   onOpenSettings,
 }: RepoGroupProps) {
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
+  const [removePending, setRemovePending] = useState(false);
+  const [removeError, setRemoveError] = useState<string | null>(null);
   const setActiveNewWorkspaceScope = useNewWorkspaceCommandScopeStore((state) => state.setActiveScope);
   const clearActiveNewWorkspaceScope = useNewWorkspaceCommandScopeStore((state) => state.clearActiveScope);
   const handleRequestRemove = () => requestRepoRemovalConfirmation(
     () => setRemoveConfirmOpen(true),
   );
-  const handleConfirmRemove = () => {
-    confirmRepoRemoval({
-      closeConfirmation: () => setRemoveConfirmOpen(false),
-      removeRepo: onRemoveRepo,
-    });
+  const handleConfirmRemove = async () => {
+    setRemovePending(true);
+    setRemoveError(null);
+    try {
+      await confirmRepoRemoval({
+        closeConfirmation: () => setRemoveConfirmOpen(false),
+        removeRepo: onRemoveRepo,
+      });
+    } catch (error) {
+      setRemoveError(error instanceof Error ? error.message : "Could not remove repository.");
+    } finally {
+      setRemovePending(false);
+    }
   };
-  const removeConfirmationCopy = repoRemovalConfirmationCopy(name);
+  const removeConfirmationCopy = repoRemovalConfirmationCopy(name, environmentKind !== "local");
   const { onContextMenuCapture } = useRepoGroupNativeContextMenu({
     canOpenSettings: !!onOpenSettings,
     canRemoveRepo: !!onRemoveRepo,
@@ -216,11 +226,18 @@ export function RepoGroup({
       <ConfirmationDialog
         open={removeConfirmOpen}
         title={removeConfirmationCopy.title}
-        description={removeConfirmationCopy.description}
+        description={removeError
+          ? `${removeConfirmationCopy.description} ${removeError}`
+          : removeConfirmationCopy.description}
         confirmLabel={removeConfirmationCopy.confirmLabel}
         confirmVariant={removeConfirmationCopy.confirmVariant}
-        onClose={() => setRemoveConfirmOpen(false)}
-        onConfirm={handleConfirmRemove}
+        disableClose={removePending}
+        loading={removePending}
+        onClose={() => {
+          setRemoveConfirmOpen(false);
+          setRemoveError(null);
+        }}
+        onConfirm={() => void handleConfirmRemove()}
       />
 
       {/* Workspace items */}

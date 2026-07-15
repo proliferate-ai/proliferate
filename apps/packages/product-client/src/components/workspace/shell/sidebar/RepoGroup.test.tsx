@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RepoGroup } from "#product/components/workspace/shell/sidebar/RepoGroup";
@@ -58,7 +58,24 @@ vi.mock("@proliferate/ui/primitives/PopoverMenuItem", () => ({
 }));
 
 vi.mock("@proliferate/ui/primitives/ConfirmationDialog", () => ({
-  ConfirmationDialog: () => null,
+  ConfirmationDialog: ({
+    description,
+    loading,
+    onConfirm,
+    open,
+  }: {
+    description: string;
+    loading?: boolean;
+    onConfirm: () => void;
+    open: boolean;
+  }) => open ? (
+    <div role="dialog">
+      <span>{description}</span>
+      <button type="button" disabled={loading} onClick={onConfirm}>
+        {loading ? "Removing repository" : "Confirm removal"}
+      </button>
+    </div>
+  ) : null,
 }));
 
 vi.mock("@proliferate/ui/layout/ShortcutBadge", () => ({
@@ -159,5 +176,54 @@ describe("RepoGroup new workspace command scope", () => {
     );
 
     expect(document.querySelector('[data-icon="folder-remote"]')).toBeTruthy();
+  });
+
+  it("keeps removal pending until the Cloud mutation settles", async () => {
+    let resolveRemoval!: () => void;
+    const removal = new Promise<void>((resolve) => {
+      resolveRemoval = resolve;
+    });
+    render(
+      <RepoGroup
+        name="Repo A"
+        count={0}
+        collapsed={false}
+        environmentKind="cloud"
+        onToggleCollapsed={vi.fn()}
+        onRemoveRepo={() => removal}
+      >
+        <div />
+      </RepoGroup>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove repository" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm removal" }));
+    expect(
+      screen.getByRole("button", { name: "Removing repository" }).hasAttribute("disabled"),
+    ).toBe(true);
+
+    resolveRemoval();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("keeps removal failure visible for retry", async () => {
+    render(
+      <RepoGroup
+        name="Repo A"
+        count={0}
+        collapsed={false}
+        environmentKind="cloud"
+        onToggleCollapsed={vi.fn()}
+        onRemoveRepo={() => Promise.reject(new Error("Repository is still in use."))}
+      >
+        <div />
+      </RepoGroup>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove repository" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm removal" }));
+
+    expect(await screen.findByText(/Repository is still in use\./)).toBeTruthy();
+    expect(screen.getByRole("dialog")).toBeTruthy();
   });
 });

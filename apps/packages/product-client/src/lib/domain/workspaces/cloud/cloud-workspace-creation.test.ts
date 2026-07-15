@@ -65,25 +65,59 @@ describe("cloud workspace creation helpers", () => {
       repoTarget: null,
       configuredRepoKeys: new Set(),
       isInitialConfigLoad: false,
-    })).toEqual({ kind: "hidden", label: null });
+    })).toEqual({ kind: "hidden", label: null, accessState: "hidden" });
 
     expect(resolveCloudRepoActionState({
       repoTarget: { gitOwner: "acme", gitRepoName: "rocket" },
       configuredRepoKeys: new Set(),
       isInitialConfigLoad: true,
-    })).toEqual({ kind: "loading", label: "Loading cloud..." });
+    })).toEqual({ kind: "loading", label: "Loading cloud...", accessState: "loading" });
 
     expect(resolveCloudRepoActionState({
       repoTarget: { gitOwner: "acme", gitRepoName: "rocket" },
       configuredRepoKeys: new Set(),
       isInitialConfigLoad: false,
-    })).toEqual({ kind: "configure", label: "Configure cloud" });
+    })).toEqual({
+      kind: "configure",
+      label: "Configure cloud",
+      accessState: "repository_not_configured",
+    });
 
     expect(resolveCloudRepoActionState({
       repoTarget: { gitOwner: "acme", gitRepoName: "rocket" },
       configuredRepoKeys: new Set(["acme::rocket"]),
       isInitialConfigLoad: false,
-    })).toEqual({ kind: "create", label: "New cloud workspace" });
+    })).toEqual({ kind: "create", label: "New cloud workspace", accessState: "ready" });
+  });
+
+  it.each([
+    ["missing_user_authorization", "Connect GitHub App", "github_app_missing"],
+    ["expired_user_authorization", "Reconnect GitHub App", "github_app_expired"],
+    ["missing_installation", "Install Proliferate GitHub App", "github_app_not_installed"],
+    ["repo_not_covered", "Grant repository access", "repository_not_granted"],
+  ] as const)("gates configured repositories for %s", (status, label, accessState) => {
+    expect(resolveCloudRepoActionState({
+      repoTarget: { gitOwner: "acme", gitRepoName: "rocket" },
+      configuredRepoKeys: new Set(["acme::rocket"]),
+      isInitialConfigLoad: false,
+      repoAuthority: { authorized: false, status, action: null, message: null },
+    })).toEqual({ kind: "configure", label, accessState });
+  });
+
+  it("does not offer creation while repository authority is loading or failed", () => {
+    const base = {
+      repoTarget: { gitOwner: "acme", gitRepoName: "rocket" },
+      configuredRepoKeys: new Set(["acme::rocket"]),
+      isInitialConfigLoad: false,
+    };
+    expect(resolveCloudRepoActionState({
+      ...base,
+      isInitialAuthorityLoad: true,
+    })).toEqual({ kind: "loading", label: "Checking GitHub access...", accessState: "loading" });
+    expect(resolveCloudRepoActionState({
+      ...base,
+      authorityError: true,
+    })).toEqual({ kind: "configure", label: "Check GitHub access", accessState: "error" });
   });
 
   it("builds cloud action state independently for each repository row", () => {
@@ -110,9 +144,17 @@ describe("cloud workspace creation helpers", () => {
       isInitialConfigLoad: false,
     });
 
-    expect(actions["/repos/rocket"]).toEqual({ kind: "create", label: "New cloud workspace" });
-    expect(actions["/repos/draft"]).toEqual({ kind: "configure", label: "Configure cloud" });
-    expect(actions["/repos/local-only"]).toEqual({ kind: "hidden", label: null });
+    expect(actions["/repos/rocket"]).toEqual({
+      kind: "create",
+      label: "New cloud workspace",
+      accessState: "ready",
+    });
+    expect(actions["/repos/draft"]).toEqual({
+      kind: "configure",
+      label: "Configure cloud",
+      accessState: "repository_not_configured",
+    });
+    expect(actions["/repos/local-only"]).toEqual({ kind: "hidden", label: null, accessState: "hidden" });
   });
 
   it("derives taken slugs from the active branch prefix only", () => {

@@ -49,3 +49,18 @@ export async function saveRepoEnvironment(
     body,
   });
 }
+
+export async function removeCloudRepoEnvironment(
+  gitOwner: string,
+  gitRepoName: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<void> {
+  await client.requestJson<unknown>({
+    method: "DELETE",
+    path: "/v1/cloud/repositories/{git_owner}/{git_repo_name}/environment",
+    pathParams: {
+      git_owner: gitOwner,
+      git_repo_name: gitRepoName,
+    },
+  });
+}

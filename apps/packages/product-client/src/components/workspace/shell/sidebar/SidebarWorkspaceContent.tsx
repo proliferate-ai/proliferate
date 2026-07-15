@@ -1,6 +1,7 @@
-import {
-  resolveCloudRepoActionState,
-  type CloudWorkspaceRepoTarget,
+import type { ReactNode } from "react";
+import type {
+  CloudRepoActionState,
+  CloudWorkspaceRepoTarget,
 } from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import { cloudRepositoryKey } from "#product/lib/domain/settings/repositories";
 import {
@@ -16,6 +17,7 @@ import { useWorkspaceCopyActions } from "#product/hooks/workspaces/workflows/use
 import { RepoGroup, type RepoGroupEnvironmentKind } from "#product/components/workspace/shell/sidebar/RepoGroup";
 import { SidebarShowToggleRow } from "#product/components/workspace/shell/sidebar/SidebarShowToggleRow";
 import { WorkspaceItem } from "#product/components/workspace/shell/sidebar/WorkspaceItem";
+import { useCloudRepoActionState } from "#product/hooks/cloud/derived/use-cloud-repo-action-state";
 
 interface SidebarWorkspaceContentProps {
   emptyState: SidebarEmptyState;
@@ -27,6 +29,7 @@ interface SidebarWorkspaceContentProps {
   onToggleRepoShowMore: (sourceRoot: string) => void;
   configuredCloudRepoKeys: ReadonlySet<string>;
   cloudRepoConfigsInitialLoading: boolean;
+  cloudConnected: boolean;
   cloudWorkspaceEnabled: boolean;
   cloudWorkspaceTooltip: string;
   onCreateWorktreeWorkspace: (repoRootId: string | null, repoGroupKeyToExpand: string) => void;
@@ -49,7 +52,7 @@ interface SidebarWorkspaceContentProps {
     workspaceId: string,
     displayName: string | null,
   ) => Promise<unknown>;
-  onRemoveRepo: (sourceRoot: string) => void;
+  onRemoveRepo: (sourceRoot: string) => Promise<void>;
   onOpenRepoSettings: (sourceRoot: string) => void;
 }
 
@@ -74,6 +77,7 @@ export function SidebarWorkspaceContent({
   onToggleRepoShowMore,
   configuredCloudRepoKeys,
   cloudRepoConfigsInitialLoading,
+  cloudConnected,
   cloudWorkspaceEnabled,
   cloudWorkspaceTooltip,
   onCreateWorktreeWorkspace,
@@ -138,11 +142,6 @@ export function SidebarWorkspaceContent({
       : isShownMore
         ? "Show less"
         : "Show more";
-    const cloudRepoAction = resolveCloudRepoActionState({
-      repoTarget: group.cloudRepoTarget,
-      configuredRepoKeys: configuredCloudRepoKeys,
-      isInitialConfigLoad: cloudRepoConfigsInitialLoading,
-    });
     const cloudRepoTarget = group.cloudRepoTarget;
     const hasArchivedHiddenItems =
       group.items.length === 0 && group.allLogicalWorkspaceIds.length > 0;
@@ -154,8 +153,15 @@ export function SidebarWorkspaceContent({
     });
 
     return (
-      <RepoGroup
+      <CloudRepoActionGate
         key={`${group.sourceRoot}:${group.repoRootId ?? "no-repo-root"}:${groupIndex}`}
+        repoTarget={group.cloudRepoTarget}
+        configuredRepoKeys={configuredCloudRepoKeys}
+        isInitialConfigLoad={cloudRepoConfigsInitialLoading}
+        cloudConnected={cloudConnected}
+      >
+        {(cloudRepoAction) => (
+      <RepoGroup
         name={group.name}
         count={group.items.length}
         collapsed={collapsedRepoGroupKeys.has(group.sourceRoot)}
@@ -256,8 +262,32 @@ export function SidebarWorkspaceContent({
           </>
         )}
       </RepoGroup>
+        )}
+      </CloudRepoActionGate>
     );
   });
+}
+
+function CloudRepoActionGate({
+  repoTarget,
+  configuredRepoKeys,
+  isInitialConfigLoad,
+  cloudConnected,
+  children,
+}: {
+  repoTarget: CloudWorkspaceRepoTarget | null;
+  configuredRepoKeys: ReadonlySet<string>;
+  isInitialConfigLoad: boolean;
+  cloudConnected: boolean;
+  children: (state: CloudRepoActionState) => ReactNode;
+}) {
+  const state = useCloudRepoActionState({
+    repoTarget,
+    configuredRepoKeys,
+    isInitialConfigLoad,
+    cloudConnected,
+  });
+  return children(state);
 }
 
 function resolveRepoGroupEnvironmentKind(

@@ -122,6 +122,10 @@ vi.mock("#product/hooks/cloud/facade/use-cloud-billing", () => ({
 }));
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
+  useRemoveCloudRepoEnvironment: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
   useRepositories: () => ({ data: { repositories: [] }, isPending: false }),
 }));
 
