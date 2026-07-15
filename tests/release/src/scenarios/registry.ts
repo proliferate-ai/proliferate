@@ -31,6 +31,7 @@ import { selfhostInstall1 } from "./selfhost-install-1.js";
 import { cloudProvision1 } from "./cloud-provision-1.js";
 import { selfhostIsolation1 } from "./selfhost-isolation-1.js";
 import { selfhostQual1 } from "./selfhost-qual-1.js";
+import { selfhostCfn1 } from "./selfhost-cfn-1.js";
 
 /**
  * The tier-3 first wave (specs/developing/testing/scenarios.md#tier-3--first-wave),
@@ -83,6 +84,7 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
   cloudProvision1,
   selfhostIsolation1,
   selfhostQual1,
+  selfhostCfn1,
 ];
 
 export function allScenarioIds(): string[] {

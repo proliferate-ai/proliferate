@@ -659,6 +659,39 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     lanes: ["selfhost"],
   },
   {
+    name: "RELEASE_E2E_SELFHOST_CFN_BUCKET",
+    description:
+      "S3 bucket SELFHOST-CFN-1's SH-CFN-WRAPPER cell uploads the candidate proliferate-deploy.tar.gz + its " +
+      "self-hosted-assets.SHA256SUMS into (key prefix qualification/<run-id>/<shard-id>/), then presigns bounded " +
+      "GET URLs it passes to the shipped CloudFormation template as DeployBundleUrl/DeployBundleChecksumUrl. The " +
+      "scenario registers each s3_object cleanup intent BEFORE upload and deletes them on teardown. Absent -> the " +
+      "cell fails CLOSED (a required case is green or red, never a silent skip). Pending founder provisioning.",
+    whereItLives:
+      "A dedicated qualification S3 bucket (private, lifecycle-expiring) in the RELEASE_E2E_SELFHOST_REGION account. " +
+      "Local: `~/.proliferate-local/dev/qualification-infra.env` (mode 0600). CI: the `Qualification` environment's " +
+      "`RELEASE_E2E_SELFHOST_CFN_BUCKET` variable.",
+    secret: false,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_CFN_IMAGE_REPO",
+    description:
+      "GHCR container repo (ghcr.io/<org>/<name>, e.g. ghcr.io/proliferate-ai/proliferate-server-qualification) " +
+      "SELFHOST-CFN-1 pushes the docker-loaded candidate server image to under a run-scoped immutable tag " +
+      "(<run-id>-<shard-id>), then passes as the template's ServerImageRepository. The scenario registers the " +
+      "ghcr_package_version cleanup intent BEFORE the push and deletes the version by tag on teardown (gh api DELETE " +
+      "/orgs/{org}/packages/container/{name}/versions/{id}). docker login is assumed ambient (gh auth token); no " +
+      "credential is ever printed. Absent -> the cell fails CLOSED. Pending founder provisioning. NOTE (live proof): " +
+      "the template's default InstanceType is Graviton (arm64), so the candidate server image must be built for " +
+      "linux/arm64 to boot on it.",
+    whereItLives:
+      "A dedicated qualification GHCR package under the proliferate-ai org (the ambient gh token must be able to push " +
+      "and delete package versions). Local: `~/.proliferate-local/dev/qualification-infra.env` (mode 0600). CI: the " +
+      "`Qualification` environment's `RELEASE_E2E_SELFHOST_CFN_IMAGE_REPO` variable.",
+    secret: false,
+    lanes: ["selfhost"],
+  },
+  {
     name: "RELEASE_E2E_SELFHOST_SSH_USER",
     description:
       "SSH login user on the box's Ubuntu AMI. Optional; defaults to \"ubuntu\" when unset (the standard " +
