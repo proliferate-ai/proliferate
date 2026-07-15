@@ -132,12 +132,12 @@ Limits** pane using real usage and limit hooks. It shows separate compute and
 LLM balances and timeseries, organization-member usage and drill-down, and an
 editor for organization-wide or per-member limits for either meter and either
 UTC window. Its principal owners are
-[`OrganizationBudgetsPane.tsx`](../../../../apps/desktop/src/components/settings/panes/OrganizationBudgetsPane.tsx)
+[`OrganizationBudgetsPane.tsx`](../../../../apps/packages/product-client/src/components/settings/panes/OrganizationBudgetsPane.tsx)
 and
-[`OrganizationLimitsEditor.tsx`](../../../../apps/desktop/src/components/settings/panes/OrganizationLimitsEditor.tsx).
+[`OrganizationLimitsEditor.tsx`](../../../../apps/packages/product-client/src/components/settings/panes/OrganizationLimitsEditor.tsx).
 
 When usage metering is enabled and a usage summary exists, the compact
-[`SidebarConsumptionCard`](../../../../apps/desktop/src/components/app/sidebar/SidebarConsumptionCard.tsx)
+[`SidebarConsumptionCard`](../../../../apps/packages/product-client/src/components/app/sidebar/SidebarConsumptionCard.tsx)
 renders above the account footer. It is not part of an account popover.
 
 ## Known Gaps
