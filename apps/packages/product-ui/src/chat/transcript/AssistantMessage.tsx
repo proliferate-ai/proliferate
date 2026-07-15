@@ -112,6 +112,7 @@ function AssistantMessageContent({
           renderLink={renderLink}
           renderInlineCode={renderInlineCode}
           renderCodeBlock={renderCodeBlock}
+          enableContentSearch
         />
       )}
       {splitContent.liveContent && (
@@ -124,6 +125,7 @@ function AssistantMessageContent({
             renderCodeBlock={renderCodeBlock}
             revealText={isStreaming}
             revealedUpTo={revealedUpTo}
+            enableContentSearch
           />
         </div>
       )}

@@ -93,7 +93,7 @@ export function useWorkspaceContentShortcuts(
       return false;
     }
 
-    openContentSearch("diffs", surface);
+    openContentSearch(surface);
     return true;
   }, { enabled });
 }

@@ -4,6 +4,9 @@ Read this doc when a change touches session streams, transcript replay,
 transcript row models, pending/outbox prompt rows, long-history loading, or
 chat transcript rendering performance.
 
+In-app find (Cmd+F) over transcript prose is documented separately in
+[`../../../features/content-search.md`](../../../features/content-search.md).
+
 ## Stream And Transcript Rules
 
 - SSE events should be batched into at most one Zustand store write per

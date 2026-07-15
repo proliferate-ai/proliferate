@@ -21,6 +21,12 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ProviderLinkMention } from "./ProviderLinkMention";
 import { MarkdownCodeBlockShell } from "./MarkdownCodeBlock";
+import {
+  ChatContentSearchQueryContext,
+  useChatContentSearchPaint,
+  type ChatContentSearchPaint,
+} from "./ChatContentSearchContext";
+import { markSearchChildren } from "./MarkdownContentSearchMarks";
 
 interface MarkdownBodyProps {
   content: string;
@@ -32,6 +38,13 @@ interface MarkdownBodyProps {
   revealText?: boolean;
   /** Character offset into the source string: text before this was already rendered. */
   revealedUpTo?: number;
+  /**
+   * Opt this body into the chat content-search paint layer. Only the
+   * conversation prose (user/assistant messages) sets this; secondary chrome
+   * (tool detail bodies, plan cards) leaves it false so its text isn't
+   * highlighted and never appears in the search index.
+   */
+  enableContentSearch?: boolean;
 }
 
 /**
@@ -114,11 +127,14 @@ const LI_CLASSNAME = `pl-0.5 ${PROSE_TEXT}`;
 // component via useContext — the component identity stays stable, and the
 // context value flows from MarkdownBody's provider without rebuilding the map.
 
-// Factory: creates a stable component that reads reveal context and delegates.
+// Factory: creates a stable component that reads reveal + search context and
+// delegates. Both are read via useContext so the component identity stays
+// stable across renders (see the identity comment above).
 function mdComponent(tag: MdTag, className: string) {
   return (props: MdElementProps) => {
     const ctx = useContext(MarkdownRevealContext);
-    return mdHtmlElement(tag, className, props, ctx);
+    const searchPaint = useChatContentSearchPaint();
+    return mdHtmlElement(tag, className, props, ctx, searchPaint);
   };
 }
 
@@ -301,6 +317,7 @@ export const MarkdownBody = memo(function MarkdownBody({
   taskListItems = "inline",
   revealText = false,
   revealedUpTo = 0,
+  enableContentSearch = false,
 }: MarkdownBodyProps) {
   const markdownClassName = [
     `${PROSE_TEXT} text-foreground break-words`,
@@ -337,7 +354,7 @@ export const MarkdownBody = memo(function MarkdownBody({
     [revealText, revealedUpTo],
   );
 
-  return (
+  const body = (
     <MarkdownRevealContext.Provider value={revealState}>
       <div className={markdownClassName}>
         <ReactMarkdown
@@ -350,6 +367,19 @@ export const MarkdownBody = memo(function MarkdownBody({
       </div>
     </MarkdownRevealContext.Provider>
   );
+
+  // Secondary chrome (tool detail bodies, plan cards) reuses MarkdownBody but
+  // must stay out of chat content-search. Shadow the query context to null so
+  // the highlighter is inert regardless of the ambient transcript query.
+  if (!enableContentSearch) {
+    return (
+      <ChatContentSearchQueryContext.Provider value={null}>
+        {body}
+      </ChatContentSearchQueryContext.Provider>
+    );
+  }
+
+  return body;
 });
 
 function MarkdownCode({
@@ -413,6 +443,7 @@ function mdHtmlElement(
   baseClassName: string,
   props: MdElementProps,
   ctx: MarkdownRevealState | null = null,
+  searchPaint: ChatContentSearchPaint | null = null,
 ) {
   const {
     children,
@@ -430,8 +461,13 @@ function mdHtmlElement(
       dangerouslySetInnerHTML,
     });
   }
-  const finalChildren = ctx?.enabled
-    ? revealChildren(children, node as HastNode | undefined, ctx)
-    : children;
+  // Content-search highlighting takes precedence over the streaming reveal:
+  // search runs on settled content, so the reveal fade is irrelevant while a
+  // query is active.
+  const finalChildren = searchPaint
+    ? markSearchChildren(children, searchPaint.query, searchPaint.rowUnitId)
+    : ctx?.enabled
+      ? revealChildren(children, node as HastNode | undefined, ctx)
+      : children;
   return createElement(tag, { ...rest, className: mergedClassName }, finalChildren);
 }

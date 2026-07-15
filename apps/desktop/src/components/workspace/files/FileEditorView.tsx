@@ -1,4 +1,6 @@
 import {
+  useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -82,7 +84,7 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
       setTargetMode(targetKey, "source");
     }
 
-    openContentSearch("diffs", "file");
+    openContentSearch("file");
   };
   const toggleRichPreview = () => {
     setTargetMode(
@@ -103,6 +105,25 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
     void openFile(path);
   };
   const canFindInFile = !activeDiffTarget && Boolean(read?.isText && !read.tooLarge);
+
+  // Marks only paint in source view, so entering file search must leave the
+  // rich preview — from every entry point (toolbar icon, Cmd+F shortcut).
+  // Only on the open transition: toggling rich preview back on mid-search is
+  // an explicit user choice we don't fight.
+  const searchOpen = useContentSearchStore((s) => s.open);
+  const searchSurface = useContentSearchStore((s) => s.surface);
+  const fileSearchActive = searchOpen && searchSurface === "file";
+  const prevFileSearchActiveRef = useRef(fileSearchActive);
+  useEffect(() => {
+    const activated = fileSearchActive && !prevFileSearchActiveRef.current;
+    prevFileSearchActiveRef.current = fileSearchActive;
+    if (!activated || !canFindInFile) {
+      return;
+    }
+    if (normalizedEffectiveMode === "rendered") {
+      setTargetMode(targetKey, "source");
+    }
+  }, [fileSearchActive, canFindInFile, normalizedEffectiveMode, setTargetMode, targetKey]);
 
   const renderPaneContent = (content: ReactNode) => (
     <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">

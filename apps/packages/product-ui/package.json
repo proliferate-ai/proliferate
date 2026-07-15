@@ -203,6 +203,14 @@
       "types": "./dist/chat/transcript/AssistantMessage.d.ts",
       "import": "./dist/chat/transcript/AssistantMessage.js"
     },
+    "./chat/transcript/ChatContentSearchContext": {
+      "types": "./dist/chat/transcript/ChatContentSearchContext.d.ts",
+      "import": "./dist/chat/transcript/ChatContentSearchContext.js"
+    },
+    "./chat/transcript/MarkdownContentSearchMarks": {
+      "types": "./dist/chat/transcript/MarkdownContentSearchMarks.d.ts",
+      "import": "./dist/chat/transcript/MarkdownContentSearchMarks.js"
+    },
     "./chat/transcript/CloudChatTranscriptRowItems": {
       "types": "./dist/chat/transcript/CloudChatTranscriptRowItems.d.ts",
       "import": "./dist/chat/transcript/CloudChatTranscriptRowItems.js"

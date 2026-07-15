@@ -2,6 +2,7 @@ import type { ReactNode, RefObject } from "react";
 import { ChevronDown, Spinner } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import type { TranscriptVirtualRow } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
+import type { ChatTranscriptScrollHandle } from "./ChatTranscriptViewTypes";
 
 export const TRANSCRIPT_TOP_PADDING_PX = 16;
 // Stick-to-bottom engine tuning (see useTranscriptStickToBottom).
@@ -55,6 +56,7 @@ export interface TranscriptRowListBaseProps {
   renderRow: (row: TranscriptVirtualRow, rowIndex: number) => ReactNode;
   columnClassName?: string;
   gutterClassName?: string;
+  scrollHandleRef?: RefObject<ChatTranscriptScrollHandle | null>;
 }
 
 export function resolveTranscriptBottomInsets(

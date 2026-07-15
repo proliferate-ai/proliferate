@@ -1,11 +1,14 @@
 import {
   useCallback,
   useEffect,
+  useImperativeHandle,
   useLayoutEffect,
   memo,
+  useMemo,
   useRef,
   type ReactNode,
 } from "react";
+import { ChatTranscriptRowProvider } from "./ChatContentSearchContext";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import type { TranscriptVirtualizationMode } from "@proliferate/product-domain/chats/transcript/transcript-virtualization-config";
 import {
@@ -54,6 +57,7 @@ export function FullTranscriptRowList({
   gutterClassName = DEFAULT_CHAT_SURFACE_GUTTER_CLASSNAME,
   fallbackReason,
   virtualizationMode,
+  scrollHandleRef,
 }: FullTranscriptRowListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -78,6 +82,15 @@ export function FullTranscriptRowList({
     onScrollSample,
     autoFollowBottomInsetPx: effectiveNonDisplacingBottomInsetPx,
   });
+
+  // Content-search jump-to-match. The full list mounts every row, so the
+  // overlay can scroll the target mark into view directly; we only release the
+  // stick-to-bottom pin so that scroll isn't immediately fought back.
+  useImperativeHandle(scrollHandleRef, () => ({
+    scrollToRowKey: () => {
+      setPinned(false);
+    },
+  }), [setPinned]);
 
   const logPrefetchDecision = useCallback((
     trigger: HistoryPrefetchTrigger,
@@ -305,13 +318,19 @@ const MemoizedFullTranscriptRow = memo(function MemoizedFullTranscriptRow({
   rowIndex: number;
   renderRow: TranscriptRowRenderer;
 }) {
+  const rowContext = useMemo(
+    () => ({ rowUnitId: `chatrow:${row.key}`, rowIndex }),
+    [row.key, rowIndex],
+  );
   return (
     <div
       data-transcript-virtual-row="true"
       data-index={rowIndex}
       className="w-full"
     >
-      {renderRow(row, rowIndex)}
+      <ChatTranscriptRowProvider value={rowContext}>
+        {renderRow(row, rowIndex)}
+      </ChatTranscriptRowProvider>
     </div>
   );
 }, (prev, next) =>

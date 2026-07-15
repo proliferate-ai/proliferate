@@ -43,6 +43,7 @@ import {
 } from "@/hooks/ui/diff/use-gap-expansion";
 import type { HighlightedToken } from "@/lib/infra/editor/highlighting";
 import { useContentSearchStore } from "@/stores/search/content-search-store";
+import { useChatTranscriptRow } from "@proliferate/product-ui/chat/transcript/ChatContentSearchContext";
 
 const CHAT_DIFF_PRE_STYLE = {
   color: "var(--diffs-fg)",
@@ -476,6 +477,13 @@ export function ChatDiffViewer({
     () => contentSearchUnitIdProp ?? `diff:${fallbackContentSearchUnitId}:${filePath ?? "inline"}`,
     [contentSearchUnitIdProp, fallbackContentSearchUnitId, filePath],
   );
+  // Interleave inline diff matches with the surrounding transcript-row prose
+  // matches: a diff sits just after its row's prose (rowIndex * 2 + 1). Outside
+  // a transcript row (no context) the unit stays unkeyed and sorts last.
+  const transcriptRow = useChatTranscriptRow();
+  const contentSearchRowOrderKey = transcriptRow
+    ? transcriptRow.rowIndex * 2 + 1
+    : undefined;
   const contentSearchMatchIds = useMemo(
     () => {
       const normalizedQuery = normalizeContentSearchQuery(contentSearchQuery);
@@ -542,15 +550,16 @@ export function ChatDiffViewer({
     registerContentSearchUnit({
       unitId: contentSearchUnitId,
       surface: "chat",
-      scope: "diffs",
       query: contentSearchQuery,
       matchIds: contentSearchMatchIds,
+      orderKey: contentSearchRowOrderKey,
     });
 
     return () => unregisterContentSearchUnit(contentSearchUnitId);
   }, [
     contentSearchMatchIds,
     contentSearchQuery,
+    contentSearchRowOrderKey,
     contentSearchUnitId,
     registerContentSearchUnit,
     unregisterContentSearchUnit,

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 import type {
   ChatTranscriptState,
   PendingPromptEntry,
@@ -57,6 +57,20 @@ export interface ChatTranscriptGoalEventRenderInput {
   event: GoalTranscriptEvent;
 }
 
+/** Active chat content-search state driving the prose paint layer. */
+export interface ChatTranscriptContentSearch {
+  query: string;
+}
+
+/**
+ * Imperative handle exposed by ChatTranscriptView so the content-search
+ * jump-to-match can bring an off-screen (virtualized) row into view before the
+ * mark it targets can be found in the DOM.
+ */
+export interface ChatTranscriptScrollHandle {
+  scrollToRowKey: (rowKey: string) => void;
+}
+
 export interface ChatTranscriptViewProps {
   state: ChatTranscriptState;
   outboxActions?: ChatTranscriptOutboxActions;
@@ -67,4 +81,12 @@ export interface ChatTranscriptViewProps {
   renderTurnTrailingStatus?: (input: ChatTranscriptTurnStatusInput) => ReactNode;
   /** Omitted surfaces (e.g. the cloud preview transcript) render no goal rows. */
   renderGoalEventRow?: (input: ChatTranscriptGoalEventRenderInput) => ReactNode;
+  /**
+   * Chat content search. When set (search open on the chat surface), the
+   * transcript prose is highlighted for `query`. Null/undefined disables the
+   * paint layer entirely (zero cost).
+   */
+  contentSearch?: ChatTranscriptContentSearch | null;
+  /** Ref to the imperative scroll handle for content-search jump-to-match. */
+  scrollHandleRef?: RefObject<ChatTranscriptScrollHandle | null>;
 }

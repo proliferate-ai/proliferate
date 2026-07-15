@@ -9,7 +9,6 @@ function resetStore() {
     open: false,
     query: "",
     surface: "chat",
-    scope: "diffs",
     activeMatchIndex: 0,
     activeMatchId: null,
     unitsById: {},
@@ -20,32 +19,72 @@ function resetStore() {
 describe("content search store", () => {
   afterEach(resetStore);
 
-  it("filters visible matches by normalized query and active scope", () => {
+  it("filters visible matches by normalized query and active surface", () => {
     resetStore();
     useContentSearchStore.getState().setQuery("  foo  ");
     useContentSearchStore.getState().registerUnit({
-      unitId: "diff-a",
+      unitId: "chat-diff",
       surface: "chat",
-      scope: "diffs",
       query: "foo",
-      matchIds: ["diff-a:0", "diff-a:1"],
+      matchIds: ["chat-diff:0", "chat-diff:1"],
     });
     useContentSearchStore.getState().registerUnit({
-      unitId: "chat-a",
-      surface: "chat",
-      scope: "chat",
+      unitId: "file-source",
+      surface: "file",
       query: "foo",
-      matchIds: ["chat-a:0"],
+      matchIds: ["file-source:0"],
     });
 
     expect(selectVisibleContentSearchMatchIds(useContentSearchStore.getState())).toEqual([
-      "diff-a:0",
-      "diff-a:1",
+      "chat-diff:0",
+      "chat-diff:1",
     ]);
 
-    useContentSearchStore.getState().setScope("chat");
+    useContentSearchStore.getState().openSearch("file");
+    expect(useContentSearchStore.getState().surface).toBe("file");
     expect(selectVisibleContentSearchMatchIds(useContentSearchStore.getState())).toEqual([
-      "chat-a:0",
+      "file-source:0",
+    ]);
+  });
+
+  it("orders keyed units by orderKey ascending and unkeyed units last", () => {
+    resetStore();
+    useContentSearchStore.getState().setQuery("foo");
+    // Register out of visual order to prove sorting is by orderKey, not
+    // registration order.
+    useContentSearchStore.getState().registerUnit({
+      unitId: "unkeyed-diff",
+      surface: "chat",
+      query: "foo",
+      matchIds: ["unkeyed-diff:0"],
+    });
+    useContentSearchStore.getState().registerUnit({
+      unitId: "row-2",
+      surface: "chat",
+      query: "foo",
+      matchIds: ["row-2:0"],
+      orderKey: 4,
+    });
+    useContentSearchStore.getState().registerUnit({
+      unitId: "row-0",
+      surface: "chat",
+      query: "foo",
+      matchIds: ["row-0:0"],
+      orderKey: 0,
+    });
+    useContentSearchStore.getState().registerUnit({
+      unitId: "row-0-diff",
+      surface: "chat",
+      query: "foo",
+      matchIds: ["row-0-diff:0"],
+      orderKey: 1,
+    });
+
+    expect(selectVisibleContentSearchMatchIds(useContentSearchStore.getState())).toEqual([
+      "row-0:0",
+      "row-0-diff:0",
+      "row-2:0",
+      "unkeyed-diff:0",
     ]);
   });
 
@@ -53,48 +92,47 @@ describe("content search store", () => {
     resetStore();
     useContentSearchStore.getState().setQuery("foo");
     useContentSearchStore.getState().registerUnit({
-      unitId: "diff-a",
+      unitId: "chat-a",
       surface: "chat",
-      scope: "diffs",
       query: "foo",
-      matchIds: ["diff-a:0", "diff-a:1"],
+      matchIds: ["chat-a:0", "chat-a:1"],
+      orderKey: 0,
     });
 
-    expect(useContentSearchStore.getState().activeMatchId).toBe("diff-a:0");
+    expect(useContentSearchStore.getState().activeMatchId).toBe("chat-a:0");
 
     useContentSearchStore.getState().goToNextMatch();
-    expect(useContentSearchStore.getState().activeMatchId).toBe("diff-a:1");
+    expect(useContentSearchStore.getState().activeMatchId).toBe("chat-a:1");
 
     useContentSearchStore.getState().goToNextMatch();
-    expect(useContentSearchStore.getState().activeMatchId).toBe("diff-a:0");
+    expect(useContentSearchStore.getState().activeMatchId).toBe("chat-a:0");
 
     useContentSearchStore.getState().goToPreviousMatch();
-    expect(useContentSearchStore.getState().activeMatchId).toBe("diff-a:1");
+    expect(useContentSearchStore.getState().activeMatchId).toBe("chat-a:1");
   });
 
   it("keeps chat and file search surfaces isolated", () => {
     resetStore();
     useContentSearchStore.getState().setQuery("foo");
     useContentSearchStore.getState().registerUnit({
-      unitId: "chat-diff",
+      unitId: "chat-row",
       surface: "chat",
-      scope: "diffs",
       query: "foo",
-      matchIds: ["chat-diff:0"],
+      matchIds: ["chat-row:0"],
+      orderKey: 0,
     });
     useContentSearchStore.getState().registerUnit({
       unitId: "file-source",
       surface: "file",
-      scope: "diffs",
       query: "foo",
       matchIds: ["file-source:0"],
     });
 
     expect(selectVisibleContentSearchMatchIds(useContentSearchStore.getState())).toEqual([
-      "chat-diff:0",
+      "chat-row:0",
     ]);
 
-    useContentSearchStore.getState().openSearch("diffs", "file");
+    useContentSearchStore.getState().openSearch("file");
     expect(useContentSearchStore.getState().surface).toBe("file");
     expect(selectVisibleContentSearchMatchIds(useContentSearchStore.getState())).toEqual([
       "file-source:0",
