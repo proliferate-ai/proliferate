@@ -26,9 +26,11 @@ bridge window (see decision 7 in the frozen delivery spec for this change).
 The mailbox-write module described below (`supervisor_bridge.rs`, its
 `WorkerConfig` fields, and the `HeartbeatResponse.desired_topology` field) is
 implemented, unit-tested, and wired into the heartbeat loop.
-`runtime.rs::heartbeat_and_converge` branches on
+`runtime.rs::heartbeat_and_converge` first runs `maybe_run_bridge` (the D5 bridge
+on the `supervisor_owned` topology signal, reachable from BOTH branches so an
+already-provisioned legacy Worker migrates too), then branches on
 `supervisor_bridge::is_supervisor_owned(config)` (mailbox dir set): supervisor-owned
-targets route to `converge_supervisor_owned` (D5 bridge + mailbox write) instead
+targets route to `converge_via_mailbox` (the mailbox write) instead
 of the legacy `converge_anyharness_runtime` + `self_update` swap, which stays
 byte-for-byte unchanged for non-supervisor targets. The "Current Process"
 outline below describes running behavior. The live E2B N-1→N proof is deferred

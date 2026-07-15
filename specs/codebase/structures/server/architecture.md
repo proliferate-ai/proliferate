@@ -270,11 +270,13 @@ the start; do not infer either topology for a given target without checking
 the flag and how that target was provisioned.
 
 The `connect.py` branch that issues the Supervisor-first launch is
-implemented, but as of this note it cannot be exercised: it depends on the
-`proliferate-supervisor` binary building, and that crate's update-mailbox
-consumer is not finished (see
+implemented, and the `proliferate-supervisor` update-mailbox consumer it
+depends on is now implemented too (verify → bounded download → re-verify →
+stage → atomic activate → dependency-ordered restart → health-gate → rollback;
+see
 [`proliferate-supervisor/README.md`](../proliferate-supervisor/README.md#implementation-status-this-pr)).
-Do not flip this flag on before that gap closes.
+The remaining gate is operational, not a build gap: do not flip
+`supervisor_owned_runtime` on before the live E2B N-1→N proof passes.
 
 The optional Worker has one heartbeat loop, not a product-command channel:
 
@@ -313,7 +315,10 @@ A legacy Worker on an already-provisioned target that receives
 crash-safe bridge: write Supervisor config, start Supervisor detached, confirm
 it took ownership, then exit so Supervisor's own Worker child takes over. That
 bridge logic lives in `supervisor_bridge.rs` and is reached from
-`runtime.rs::converge_supervisor_owned` (see `proliferate-worker/README.md`).
+`runtime.rs::maybe_run_bridge`, which runs on the `supervisor_owned` topology
+signal from BOTH the supervisor-owned and the legacy branch so an
+already-provisioned legacy Worker migrates too (see
+`proliferate-worker/README.md`).
 The live bridge and live N-1→N proof are deferred to the post-merge Tier 4
 pass.
 

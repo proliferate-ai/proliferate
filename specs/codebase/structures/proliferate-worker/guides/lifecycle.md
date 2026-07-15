@@ -36,8 +36,9 @@ failures are logged and retried on a later heartbeat.
 
 `heartbeat_and_converge` in `runtime.rs` branches on
 `supervisor_bridge::is_supervisor_owned(config)` (whether
-`supervisor_update_request_dir` is set). Supervisor-owned targets route to
-`converge_supervisor_owned` (the mailbox write and D5 bridge described below)
+`supervisor_update_request_dir` is set). The D5 bridge (`maybe_run_bridge`) runs
+first on the `supervisor_owned` topology signal from either branch; then
+supervisor-owned targets route to `converge_via_mailbox` (the mailbox write)
 instead of `converge_anyharness_runtime` + the legacy `self_update` swap;
 non-supervisor targets keep the legacy path unchanged. The module, its config
 fields, and its inline tests are in place and the wiring is live.

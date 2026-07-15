@@ -46,7 +46,9 @@ AnyHarness and Worker itself. See
 [`server/architecture.md`](../specs/codebase/structures/server/architecture.md#5-managed-runtime-and-worker-detailed)
 for the current default and
 [`proliferate-supervisor/README.md`](../specs/codebase/structures/proliferate-supervisor/README.md#implementation-status-this-pr)
-for what Supervisor owns once it is the parent, and its current build gap.
+for what Supervisor owns once it is the parent. The mailbox consumer is
+implemented; the remaining gate is operational — do not flip
+`supervisor_owned_runtime` on before the live E2B proof passes.
 
 ## Environment Variables
 

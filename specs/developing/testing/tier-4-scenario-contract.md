@@ -521,11 +521,12 @@ The agreed contract is not implemented today:
   `supervisor_bridge.rs` (mailbox request write, D5 bridge, crash-safety
   markers) and the `WorkerConfig`/`HeartbeatResponse` fields it needs all exist
   with passing inline tests, and the legacy in-place swap logs a one-time
-  deprecation warning. `runtime.rs::heartbeat_and_converge` branches on
-  `supervisor_bridge::is_supervisor_owned` and routes supervisor-owned targets
-  to `converge_supervisor_owned` (which calls `maybe_bridge_to_supervisor` and
-  the mailbox write) instead of the legacy swap; the legacy path is byte-for-byte
-  unchanged for non-supervisor targets;
+  deprecation warning. `runtime.rs::heartbeat_and_converge` runs
+  `maybe_run_bridge` (D5 bridge on the `supervisor_owned` signal, from both
+  branches) then branches on `supervisor_bridge::is_supervisor_owned` and routes
+  supervisor-owned targets to `converge_via_mailbox` (the mailbox write) instead
+  of the legacy swap; the legacy path is byte-for-byte unchanged for
+  non-supervisor targets;
 - ~~Supervisor can verify/stage artifacts but does not consume requests,
   activate, health-gate, or orchestrate rollback~~ — **implemented and
   unit-tested**: `RollbackPlan::apply` (restore `.prev` over the active path),
@@ -551,9 +552,9 @@ The agreed contract is not implemented today:
   ownership confirmation, `bridge.started`/`bridge.done` markers,
   no-double-Supervisor liveness gate) is implemented with deterministic tests
   for idempotency, marker-file crash recovery, and the no-double-Supervisor
-  invariant, and is called from `runtime.rs::converge_supervisor_owned`. The
-  live bridge run against a real production N-1 target remains deferred with the
-  rest of Tier 4.
+  invariant, and is called from `runtime.rs::maybe_run_bridge` (reachable from
+  both the supervisor-owned and the legacy branch). The live bridge run against a
+  real production N-1 target remains deferred with the rest of Tier 4.
 
 None of the above closes a manifest row or this document's own scenario
 contract: `T4-RUNTIME-1`'s baseline/upgrade/assertions and the Cloud evidence
