@@ -14,26 +14,27 @@ import {
 import { buildSettingsHref } from "#product/lib/domain/settings/navigation";
 
 /**
- * The single composer integrations control. Hidden when nothing is connected;
- * a quiet plug + count when every connected integration is healthy; and the
- * old reauth chip's urgent warning presentation the moment one needs
- * re-authentication. Clicking (in any visible state) opens a popover listing
- * the connected providers, each with a health dot and — when it needs
- * re-authentication — a Reconnect affordance that deep-links to Settings.
+ * The single composer integrations control. Always present: an icon-only plug
+ * when nothing is connected, a quiet plug + count when every connected
+ * integration is healthy, and the old reauth chip's urgent warning
+ * presentation the moment one needs re-authentication. Clicking opens a
+ * popover listing the connected providers (just the Manage entry when there
+ * are none), each with a health dot and — when it needs re-authentication —
+ * a Reconnect affordance that deep-links to Settings.
  */
 export function ComposerIntegrationsControl() {
   const navigate = useNavigate();
   const { mode, connectedCount, providers, reauthLabel } = useComposerIntegrationsState();
 
-  if (mode === "hidden") {
-    return null;
-  }
-
   const goToIntegrations = () =>
     navigate(buildSettingsHref({ section: "integrations" }));
 
   const isUrgent = mode === "urgent" && reauthLabel !== null;
-  const triggerLabel = isUrgent ? reauthLabel : String(connectedCount);
+  const triggerLabel = isUrgent
+    ? reauthLabel
+    : connectedCount > 0
+      ? String(connectedCount)
+      : "Integrations";
   const triggerAriaLabel = isUrgent
     ? `${reauthLabel}. Open connected integrations.`
     : `${connectedCount} connected ${connectedCount === 1 ? "integration" : "integrations"}. Open connected integrations.`;
@@ -46,6 +47,7 @@ export function ComposerIntegrationsControl() {
       className="w-auto border-0 bg-transparent p-0 shadow-none"
       trigger={(
         <ComposerControlButton
+          iconOnly={connectedCount === 0 && !isUrgent}
           label={triggerLabel}
           aria-label={triggerAriaLabel}
           icon={
@@ -63,19 +65,21 @@ export function ComposerIntegrationsControl() {
     >
       {(close) => (
         <ComposerPopoverSurface className="w-72 p-1.5">
-          <div className="space-y-0.5">
-            {providers.map((provider) => (
-              <ProviderRow
-                key={provider.definitionId}
-                provider={provider}
-                onReconnect={() => {
-                  goToIntegrations();
-                  close();
-                }}
-              />
-            ))}
-          </div>
-          <div className="mt-1 border-t border-border pt-1">
+          {providers.length > 0 && (
+            <div className="space-y-0.5">
+              {providers.map((provider) => (
+                <ProviderRow
+                  key={provider.definitionId}
+                  provider={provider}
+                  onReconnect={() => {
+                    goToIntegrations();
+                    close();
+                  }}
+                />
+              ))}
+            </div>
+          )}
+          <div className={providers.length > 0 ? "mt-1 border-t border-border pt-1" : ""}>
             <PopoverMenuItem
               icon={<Settings className="size-4" />}
               label="Manage integrations"

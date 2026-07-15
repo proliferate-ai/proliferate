@@ -190,7 +190,9 @@
   --color-composer-control-foreground: var(--color-muted-foreground);
   --color-composer-control-active-foreground: var(--color-foreground);
   --color-composer-control-muted-foreground: var(--color-faint);
-  --color-composer-control-hover: var(--color-muted);
+  /* Not var(--color-muted): that equals the composer surface (#212121), so the
+     hover chip would be invisible. Mix a visible step above the surface. */
+  --color-composer-control-hover: color-mix(in oklab, var(--color-foreground) 9%, transparent);
   --color-composer-send-background: var(--color-foreground);
   --color-composer-send-foreground: var(--color-background);
   --color-composer-shadow: var(--shadow-composer);
@@ -1264,6 +1266,88 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .composer-level-bar-wave {
     animation: none;
+  }
+}
+
+/* Reasoning-level label swap (ComposerReasoningEffortBars): when the level
+   steps, the new label slides in from above while the old one slides out
+   below, clipped by the swap container. Compositor rule: transform/opacity
+   only. */
+/* display block, not inline-block: an inline-block with overflow hidden
+   baseline-aligns on its bottom edge, which would hoist the label a few px
+   the moment the swap wrapper first mounts. */
+.composer-reasoning-level-swap {
+  position: relative;
+  display: block;
+  overflow: hidden;
+}
+
+.composer-reasoning-level-enter {
+  display: inline-block;
+  animation: composer-reasoning-level-enter 240ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.composer-reasoning-level-exit {
+  position: absolute;
+  inset: 0;
+  display: inline-block;
+  white-space: nowrap;
+  animation: composer-reasoning-level-exit 240ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+
+@keyframes composer-reasoning-level-enter {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes composer-reasoning-level-exit {
+  0% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+/* Ultra "on": a filled purple chip behind the level control (same idea as the
+   fast-mode zap's active background), pinned through hover so it stays lit. */
+.composer-reasoning-ultra-chip {
+  background-color: color-mix(in oklab, var(--color-pr-merged) 15%, transparent);
+}
+
+.composer-reasoning-ultra-chip:hover {
+  background-color: color-mix(in oklab, var(--color-pr-merged) 22%, transparent) !important;
+}
+
+/* Sol (codex frontier) ultra tier: the level name sweeps special-blue into
+   the ultra purple instead of the flat purple Claude ultra keeps. */
+.composer-reasoning-ultra-sol {
+  background-image: linear-gradient(
+    90deg,
+    var(--color-special),
+    var(--color-pr-merged)
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer-reasoning-level-enter,
+  .composer-reasoning-level-exit {
+    animation: none;
+  }
+
+  .composer-reasoning-level-exit {
+    display: none;
   }
 }
 
