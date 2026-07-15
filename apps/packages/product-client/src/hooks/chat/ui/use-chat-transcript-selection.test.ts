@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createChatTranscriptSelectionHandlers } from "#product/hooks/chat/ui/chat-transcript-selection-handlers";
 import { attachChatTranscriptSelectionListeners } from "#product/hooks/chat/ui/chat-transcript-selection-listeners";
 import {
@@ -35,6 +35,18 @@ function facts(overrides: Partial<TranscriptTargetFacts> = {}): TranscriptTarget
     ...overrides,
   };
 }
+
+// Primary-modifier detection (isPrimarySelectAllEvent) is platform-derived, and
+// the keydown fixtures use Cmd (metaKey). In Node the test navigator reflects the
+// host OS, so pin macOS for deterministic select-all handling on dev machines and
+// Linux CI.
+beforeEach(() => {
+  vi.stubGlobal("navigator", { platform: "MacIntel", userAgent: "Mac OS X" });
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 function keydownEvent(target: EventTarget, overrides: Partial<KeyboardEvent> = {}): KeyboardEvent {
   return {
