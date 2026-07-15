@@ -307,7 +307,7 @@ export interface WaitForSshOptions {
  * gated on the `selfhost-ready` marker the user-data drops plus a working
  * `docker compose`. Throws a bounded error on timeout.
  */
-export async function waitForSshAndCloudInit(_box: Ec2Box, options: WaitForSshOptions): Promise<void> {
+export async function waitForSshAndCloudInit(options: WaitForSshOptions): Promise<void> {
   const log = options.log ?? (() => undefined);
   const timeoutMs = options.timeoutMs ?? 8 * 60_000;
   const intervalMs = options.intervalMs ?? 10_000;

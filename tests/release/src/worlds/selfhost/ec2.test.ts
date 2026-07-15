@@ -165,7 +165,7 @@ test("waitForSshAndCloudInit resolves once the readiness probe succeeds and time
       return "Docker Compose version v2.39.4";
     },
   };
-  await waitForSshAndCloudInit(BOX, { ssh: readySsh, timeoutMs: 1_000, intervalMs: 5 });
+  await waitForSshAndCloudInit({ ssh: readySsh, timeoutMs: 1_000, intervalMs: 5 });
   assert.equal(attempts, 2);
 
   const neverReady: SshRunner = {
@@ -174,7 +174,7 @@ test("waitForSshAndCloudInit resolves once the readiness probe succeeds and time
     },
   };
   await assert.rejects(
-    waitForSshAndCloudInit(BOX, { ssh: neverReady, timeoutMs: 30, intervalMs: 5 }),
+    waitForSshAndCloudInit({ ssh: neverReady, timeoutMs: 30, intervalMs: 5 }),
     /did not become ready/,
   );
 });
@@ -218,15 +218,6 @@ test("two concurrent provisions collide on nothing (distinct key/SG names + inst
     await rm(keyDirB, { recursive: true, force: true });
   }
 });
-
-const BOX = {
-  instanceId: "i-1",
-  securityGroupId: "sg-1",
-  keyName: "k",
-  keyPath: "/tmp/none.pem",
-  publicIp: "203.0.113.1",
-  sshUser: "ubuntu",
-};
 
 /** Wraps a partial exec (SG-error) so create/describe still return sane stdout. */
 function mergeExec(override: Ec2Exec, _keyDir: string): Ec2Exec {

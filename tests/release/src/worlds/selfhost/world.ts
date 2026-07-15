@@ -328,7 +328,7 @@ export async function constructSelfHostWorld(
 
     // Bounded readiness over SSH before any process/browser is launched.
     const ssh = (deps.sshFactory ?? defaultSshFactory)(box, box.keyPath);
-    await waitForSshAndCloudInit(box, { ssh, timeoutMs, log });
+    await waitForSshAndCloudInit({ ssh, timeoutMs, log });
 
     // Controller-local candidate AnyHarness (isolated home, hermetic env — no
     // ambient provider/gateway keys until a BYOK selection pushes one through
