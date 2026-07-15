@@ -7,15 +7,14 @@ import type { AgentAuthStateDocument } from "@anyharness/sdk";
  * surface and pushes it verbatim to the local AnyHarness runtime, which
  * persists it at `<runtime_home>/agent-auth/state.json`.
  *
- * A push happens only when there is something scoped to deliver AND the
- * document differs from the last successful push. Revision-0 documents (the
- * user has no local selections) are never pushed: they carry nothing to
- * render, and the runtime's stale-revision protection would reject them
- * anyway once a scoped document has been persisted.
+ * A synchronization happens only when the rendered document differs from the
+ * last successful operation. A document with no harnesses explicitly clears
+ * the runtime state: native auth is an absence of route state, not a lower
+ * revisioned replacement document.
  */
 
 export interface LocalAuthStatePushPlan {
-  shouldPush: boolean;
+  action: "apply" | "clear" | null;
   fingerprint: string;
 }
 
@@ -53,13 +52,16 @@ export function planLocalAuthStatePush(input: {
   lastPushedFingerprint: string | null;
 }): LocalAuthStatePushPlan {
   const fingerprint = localAuthStateFingerprint(input.state);
-  if (input.state.revision <= 0) {
-    return { shouldPush: false, fingerprint };
-  }
   if (input.lastPushedFingerprint === fingerprint) {
-    return { shouldPush: false, fingerprint };
+    return { action: null, fingerprint };
   }
-  return { shouldPush: true, fingerprint };
+  if (input.state.harnesses.length === 0) {
+    return { action: "clear", fingerprint };
+  }
+  if (input.state.revision <= 0) {
+    return { action: null, fingerprint };
+  }
+  return { action: "apply", fingerprint };
 }
 
 /**
@@ -75,8 +77,7 @@ export function planLocalAuthStatePush(input: {
  * the runtime never received its routes and every gateway harness fell back to
  * "no launchable model". The sync needs only an authenticated session against a
  * reachable server and a healthy local runtime; when there is nothing to
- * deliver the rendered document is revision-0 and `planLocalAuthStatePush`
- * already declines to push it.
+ * deliver the sync explicitly clears any previously persisted route state.
  */
 export function shouldSyncLocalAuthState(input: {
   authenticated: boolean;

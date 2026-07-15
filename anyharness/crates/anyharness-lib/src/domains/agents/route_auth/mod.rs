@@ -38,7 +38,9 @@ use std::path::{Path, PathBuf};
 pub use plan::{GatewayModelPlan, GatewayModelResolve};
 pub use profile::{resolve_profile, AgentRuntimeAuthProfile};
 pub use render::{render_profile, RenderedRouteAuth};
-pub use state::{apply_state_file, load_state_file, state_file_path, AgentAuthState};
+pub use state::{
+    apply_state_file, clear_state_file, load_state_file, state_file_path, AgentAuthState,
+};
 
 /// Errors from the route-auth render plane.
 #[derive(Debug, thiserror::Error)]
@@ -100,6 +102,25 @@ fn current_server_origin() -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
+/// Resolve the auth profile that a launch will actually use, including the
+/// desktop server-origin guard. Catalog classification calls this same seam so
+/// model availability cannot be computed from a route the launcher will ignore.
+pub(crate) fn resolve_launch_auth_profile(
+    runtime_home: &Path,
+    harness_kind: &str,
+) -> Result<AgentRuntimeAuthProfile, RouteAuthError> {
+    let state = load_effective_state(runtime_home, current_server_origin().as_deref())?;
+    resolve_profile(state.as_ref(), harness_kind)
+}
+
+fn load_effective_state(
+    runtime_home: &Path,
+    current_server_origin: Option<&str>,
+) -> Result<Option<AgentAuthState>, RouteAuthError> {
+    Ok(load_state_file(runtime_home)?
+        .filter(|state| state.matches_server_origin(current_server_origin)))
+}
+
 /// End-to-end at launch: load the state file, resolve the profile for
 /// `harness_kind`, resolve the catalog-driven [`GatewayModelPlan`], render its
 /// env delta (PURE), then apply the rendered file specs to disk (materializing
@@ -140,8 +161,7 @@ fn resolve_launch_route_auth_for_server(
     resolver: &dyn GatewayModelResolve,
     current_server_origin: Option<&str>,
 ) -> Result<RenderedRouteAuth, RouteAuthError> {
-    let state = load_state_file(runtime_home)?;
-    let state = state.filter(|state| state.matches_server_origin(current_server_origin));
+    let state = load_effective_state(runtime_home, current_server_origin)?;
     let revision = state.as_ref().map(|state| state.revision).unwrap_or(0);
     let profile = resolve_profile(state.as_ref(), harness_kind)?;
     let plan = resolver.resolve_gateway_models(harness_kind, revision);
@@ -184,7 +204,7 @@ fn launch_route_provides_credentials_for_server(
     harness_kind: &str,
     current_server_origin: Option<&str>,
 ) -> bool {
-    let state = match load_state_file(runtime_home) {
+    let state = match load_effective_state(runtime_home, current_server_origin) {
         Ok(state) => state,
         Err(error) => {
             tracing::debug!(
@@ -195,7 +215,6 @@ fn launch_route_provides_credentials_for_server(
             return false;
         }
     };
-    let state = state.filter(|state| state.matches_server_origin(current_server_origin));
     matches!(
         resolve_profile(state.as_ref(), harness_kind),
         Ok(AgentRuntimeAuthProfile::Sources(_))

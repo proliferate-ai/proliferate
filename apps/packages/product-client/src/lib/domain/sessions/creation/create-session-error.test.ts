@@ -35,7 +35,7 @@ describe("session create failure presentation", () => {
     );
   });
 
-  it("maps gated model errors to unlock guidance with the required contexts", () => {
+  it("maps gated model errors to actionable guidance without internal context ids", () => {
     const error = new AnyHarnessError({
       type: "about:blank",
       title: "Bad request",
@@ -47,16 +47,10 @@ describe("session create failure presentation", () => {
     });
 
     expect(formatSessionCreateFailureMessage(error)).toBe(
-      "This model is locked. Unlock it by signing in with or adding credentials for: anthropic-api, gateway.",
+      "This model is not available for the current authentication method. Choose an available model or change agent authentication in Settings, then try again.",
     );
-  });
-
-  it("maps gated model errors without contexts to generic unlock guidance", () => {
-    const error = anyHarnessError("SESSION_MODEL_GATED", "gated");
-
-    expect(formatSessionCreateFailureMessage(error)).toBe(
-      "This model is locked behind credentials this workspace does not have yet. Sign in, add an API key, or enable the gateway, then try again.",
-    );
+    expect(formatSessionCreateFailureMessage(error)).not.toContain("anthropic-api");
+    expect(formatSessionCreateFailureMessage(error)).not.toContain("gateway");
   });
 
   it("preserves generic errors", () => {

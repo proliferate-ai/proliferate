@@ -110,12 +110,24 @@ describe("deriveEditorState", () => {
 describe("buildDesiredSources", () => {
   it("emits an enabled gateway source when the toggle is on", () => {
     expect(
-      buildDesiredSources({ gatewayEnabled: true, rows: [] }),
+      buildDesiredSources("claude", { gatewayEnabled: true, rows: [] }),
     ).toEqual([{ sourceKind: "gateway", enabled: true }]);
   });
 
+  it("retains a disabled gateway revision marker when the toggle is off", () => {
+    expect(
+      buildDesiredSources("claude", { gatewayEnabled: false, rows: [] }),
+    ).toEqual([{ sourceKind: "gateway", enabled: false }]);
+  });
+
+  it("keeps the native-only cursor desired set empty", () => {
+    expect(
+      buildDesiredSources("cursor", { gatewayEnabled: false, rows: [] }),
+    ).toEqual([]);
+  });
+
   it("wires only complete rows and carries enabled/providerHint through", () => {
-    const sources = buildDesiredSources({
+    const sources = buildDesiredSources("claude", {
       gatewayEnabled: false,
       rows: [
         row({ uid: "a", enabled: true }),
@@ -125,6 +137,10 @@ describe("buildDesiredSources", () => {
     });
 
     expect(sources).toEqual([
+      {
+        sourceKind: "gateway",
+        enabled: false,
+      },
       {
         sourceKind: "api_key",
         apiKeyId: "key-1",

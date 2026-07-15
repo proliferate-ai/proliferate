@@ -32,7 +32,7 @@ describe("planLocalAuthStatePush", () => {
       state: state(),
       lastPushedFingerprint: null,
     });
-    expect(plan.shouldPush).toBe(true);
+    expect(plan.action).toBe("apply");
     expect(plan.fingerprint).toBe(localAuthStateFingerprint(state()));
   });
 
@@ -41,7 +41,7 @@ describe("planLocalAuthStatePush", () => {
       state: state(),
       lastPushedFingerprint: localAuthStateFingerprint(state()),
     });
-    expect(plan.shouldPush).toBe(false);
+    expect(plan.action).toBeNull();
   });
 
   it("re-pushes when content changes without a revision bump", () => {
@@ -55,15 +55,23 @@ describe("planLocalAuthStatePush", () => {
         }),
       ),
     });
-    expect(plan.shouldPush).toBe(true);
+    expect(plan.action).toBe("apply");
   });
 
-  it("never pushes the revision-0 legacy marker", () => {
+  it("clears a previously persisted route for the revision-0 native marker", () => {
     const plan = planLocalAuthStatePush({
       state: state({ revision: 0, harnesses: [] }),
       lastPushedFingerprint: null,
     });
-    expect(plan.shouldPush).toBe(false);
+    expect(plan.action).toBe("clear");
+  });
+
+  it("clears native state even when disabled rows retain a positive revision", () => {
+    const plan = planLocalAuthStatePush({
+      state: state({ revision: 8, harnesses: [] }),
+      lastPushedFingerprint: null,
+    });
+    expect(plan.action).toBe("clear");
   });
 });
 

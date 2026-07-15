@@ -71,16 +71,21 @@ export function deriveEditorState(
 }
 
 /**
- * The full desired-state PUT body (contract §5). Gateway is a single
- * always-enabled-when-present source; only complete api_key rows are wired.
+ * The full desired-state PUT body (contract §5). The gateway row is retained
+ * disabled when native/API-key auth is selected so its `updated_at` remains a
+ * monotonic surface revision marker across gateway -> native transitions.
+ * Only complete api_key rows are wired.
  */
 export function buildDesiredSources(
+  harnessKind: string,
   state: HarnessAuthEditorState,
 ): AgentAuthSource[] {
-  const sources: AgentAuthSource[] = [];
-  if (state.gatewayEnabled) {
-    sources.push({ sourceKind: "gateway", enabled: true });
-  }
+  const sources: AgentAuthSource[] = harnessKind === "cursor"
+    ? []
+    : [{
+      sourceKind: "gateway",
+      enabled: state.gatewayEnabled,
+    }];
   for (const row of state.rows) {
     if (!isRowComplete(row)) {
       continue;

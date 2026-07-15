@@ -17,4 +17,8 @@ export class AgentAuthClient {
       options,
     );
   }
+
+  async clearState(options?: AnyHarnessRequestOptions): Promise<void> {
+    await this.transport.delete("/v1/agent-auth/state", options);
+  }
 }

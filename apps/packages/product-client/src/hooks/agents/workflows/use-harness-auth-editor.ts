@@ -134,7 +134,7 @@ export function useHarnessAuthEditor(
     // A fresh scope starts with no pending selection — the derived state alone
     // drives the radio until the user clicks a method.
     setPendingMethod(null);
-    lastPutSigRef.current = JSON.stringify(buildDesiredSources(derived));
+    lastPutSigRef.current = JSON.stringify(buildDesiredSources(harnessKind, derived));
   }, [selections, scopeKey, harnessKind, surface]);
 
   const localAgent = agentsByKind.get(harnessKind);
@@ -188,7 +188,7 @@ export function useHarnessAuthEditor(
   function commit(next: HarnessAuthEditorState) {
     setGatewayEnabled(next.gatewayEnabled);
     setRows(next.rows);
-    const sources = buildDesiredSources(next);
+    const sources = buildDesiredSources(harnessKind, next);
     const signature = JSON.stringify(sources);
     // De-dupe redundant PUTs (e.g. blur with no effective change).
     if (signature === lastPutSigRef.current) {

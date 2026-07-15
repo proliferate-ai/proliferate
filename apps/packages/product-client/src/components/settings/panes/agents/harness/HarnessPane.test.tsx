@@ -406,7 +406,7 @@ describe("HarnessPane authentication", () => {
         harnessKind: "claude",
         surface: "local",
         body: {
-          sources: [],
+          sources: [{ sourceKind: "gateway", enabled: false }],
         },
       },
       expect.anything(),
