@@ -266,7 +266,10 @@ test("runSelfHostInstallCells: all four cells green with a clean teardown", asyn
   for (const outcome of outcomes) {
     assert.equal(outcome.status, "green", JSON.stringify(outcome));
     assert.ok(outcome.evidence, `${outcome.cellId} is missing evidence`);
-    assert.deepEqual(outcome.evidence!.cleanup.failed, 0);
+    // Every self-host journey kind extends SelfHostEvidenceBaseV1, which carries
+    // `cleanup`; narrow past the widened CellEvidenceV1 union (tier2_billing has
+    // no cleanup block) with a structural cast.
+    assert.deepEqual((outcome.evidence as { cleanup: { failed: number } }).cleanup.failed, 0);
   }
 });
 
