@@ -232,8 +232,11 @@ describe("playground scenarios", () => {
     expect(PLAYGROUND_SLASH_COMMANDS.some((command) => command.group === "MCP")).toBe(true);
 
     const groupedHtml = renderComposerSurfaceMarkup("slash-command-search");
-    expect(groupedHtml).toContain("/compact");
-    expect(groupedHtml).toContain("MCP");
+    // The tray renders the leading slash in its own styled span, so assert the
+    // user-visible text rather than raw markup bytes.
+    const groupedText = groupedHtml.replace(/<[^>]*>/g, "");
+    expect(groupedText).toContain("/compact");
+    expect(groupedText).toContain("MCP");
 
     const emptyHtml = renderComposerSurfaceMarkup("slash-command-empty");
     expect(emptyHtml).toContain("No matching slash commands.");
