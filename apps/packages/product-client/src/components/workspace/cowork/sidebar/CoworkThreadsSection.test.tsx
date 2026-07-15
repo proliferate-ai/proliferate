@@ -160,7 +160,7 @@ describe("CoworkThreadsSection", () => {
       attemptId: "attempt-1",
       selectedWorkspaceId: null,
       source: "cowork-created",
-      displayName: "Cowork thread",
+      displayName: "Untitled chat",
       request: {
         kind: "cowork",
         input: {
@@ -178,7 +178,7 @@ describe("CoworkThreadsSection", () => {
 
     render(<CoworkThreadsSection />);
 
-    expect(screen.getByText("Cowork thread")).not.toBeNull();
+    expect(screen.getByText("Untitled chat")).not.toBeNull();
     // The trailing spinner alone marks the pending row (trailingStatus wins
     // over any trailing label, so the row no longer carries "Setting up").
     expect(screen.getByTestId("status-iterating")).not.toBeNull();
@@ -187,12 +187,12 @@ describe("CoworkThreadsSection", () => {
     expect(screen.queryByTestId("threads-skeleton")).toBeNull();
   });
 
-  it("does not duplicate the pending row after the real cowork thread appears", () => {
+  it("keeps the pending projection and suppresses its real row until handoff completes", () => {
     const pendingEntry = buildSubmittingPendingWorkspaceEntry({
       attemptId: "attempt-2",
       selectedWorkspaceId: null,
       source: "cowork-created",
-      displayName: "Cowork thread",
+      displayName: "Untitled chat",
       request: {
         kind: "cowork",
         input: {
@@ -225,7 +225,135 @@ describe("CoworkThreadsSection", () => {
 
     render(<CoworkThreadsSection />);
 
-    expect(screen.queryByText("Setting up")).toBeNull();
+    expect(screen.getByText("Untitled chat")).not.toBeNull();
+    expect(screen.getByTestId("status-iterating")).not.toBeNull();
+    expect(screen.queryByTestId("real-thread-row")).toBeNull();
+  });
+
+  it("shows the real thread after the pending handoff clears", () => {
+    coworkState.threads = [{
+      id: "thread-1",
+      agentKind: "claude",
+      branchName: "main",
+      createdAt: "2026-01-01T00:00:00Z",
+      lastActivityAt: null,
+      repoRootId: "repo-root-1",
+      requestedModelId: "sonnet",
+      sessionId: "session-1",
+      title: "Real thread",
+      updatedAt: "2026-01-01T00:00:00Z",
+      workspaceDelegationEnabled: false,
+      workspaceId: "workspace-cowork",
+    }];
+
+    render(<CoworkThreadsSection />);
+
+    expect(screen.queryByTestId("thread-row")).toBeNull();
     expect(screen.getByTestId("real-thread-row").textContent).toBe("Real thread");
+  });
+
+  it("keeps the selected error projection when a materialized pending entry fails", () => {
+    const pendingEntry = buildSubmittingPendingWorkspaceEntry({
+      attemptId: "attempt-failed",
+      selectedWorkspaceId: null,
+      source: "cowork-created",
+      displayName: "Untitled chat",
+      request: {
+        kind: "cowork",
+        input: {
+          agentKind: "claude",
+          modelId: "sonnet",
+          sourceWorkspaceId: null,
+        },
+      },
+    });
+    useSessionSelectionStore.setState({
+      pendingWorkspaceEntry: {
+        ...pendingEntry,
+        stage: "failed",
+        workspaceId: "workspace-cowork",
+        errorMessage: "Couldn't apply launch defaults",
+      },
+    });
+    coworkState.threads = [{
+      id: "thread-1",
+      agentKind: "claude",
+      branchName: "main",
+      createdAt: "2026-01-01T00:00:00Z",
+      lastActivityAt: null,
+      repoRootId: "repo-root-1",
+      requestedModelId: "sonnet",
+      sessionId: "session-1",
+      title: "Real thread",
+      updatedAt: "2026-01-01T00:00:00Z",
+      workspaceDelegationEnabled: false,
+      workspaceId: "workspace-cowork",
+    }];
+
+    render(<CoworkThreadsSection />);
+
+    expect(screen.getByTestId("thread-row")).not.toBeNull();
+    expect(screen.getByTestId("status-error")).not.toBeNull();
+    expect(screen.queryByTestId("real-thread-row")).toBeNull();
+  });
+
+  it("shows an error status when creation fails before materialization", () => {
+    const pendingEntry = buildSubmittingPendingWorkspaceEntry({
+      attemptId: "attempt-failed-before-create",
+      selectedWorkspaceId: null,
+      source: "cowork-created",
+      displayName: "Untitled chat",
+      request: {
+        kind: "cowork",
+        input: {
+          agentKind: "claude",
+          modelId: "sonnet",
+          sourceWorkspaceId: null,
+        },
+      },
+    });
+    useSessionSelectionStore.setState({
+      pendingWorkspaceEntry: {
+        ...pendingEntry,
+        stage: "failed",
+        errorMessage: "Couldn't create chat",
+      },
+    });
+
+    render(<CoworkThreadsSection />);
+
+    expect(screen.getByTestId("status-error")).not.toBeNull();
+    expect(screen.queryByTestId("status-iterating")).toBeNull();
+  });
+
+  it("keeps a failed materialized row visible until the real query row arrives", () => {
+    const pendingEntry = buildSubmittingPendingWorkspaceEntry({
+      attemptId: "attempt-failed-awaiting-query",
+      selectedWorkspaceId: null,
+      source: "cowork-created",
+      displayName: "Untitled chat",
+      request: {
+        kind: "cowork",
+        input: {
+          agentKind: "claude",
+          modelId: "sonnet",
+          sourceWorkspaceId: null,
+        },
+      },
+    });
+    useSessionSelectionStore.setState({
+      pendingWorkspaceEntry: {
+        ...pendingEntry,
+        stage: "failed",
+        workspaceId: "workspace-cowork",
+        errorMessage: "Couldn't apply launch defaults",
+      },
+    });
+
+    render(<CoworkThreadsSection />);
+
+    expect(screen.getByTestId("thread-row")).not.toBeNull();
+    expect(screen.getByTestId("status-error")).not.toBeNull();
+    expect(screen.queryByText("No chats yet")).toBeNull();
   });
 });

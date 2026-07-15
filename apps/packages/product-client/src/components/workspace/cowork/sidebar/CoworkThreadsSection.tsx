@@ -39,10 +39,21 @@ export function CoworkThreadsSection() {
   const pendingCoworkUiKey = pendingCoworkEntry
     ? buildPendingWorkspaceUiKey(pendingCoworkEntry)
     : null;
-  const showPendingCoworkThread = Boolean(
-    pendingCoworkEntry
-    && !threads.some((thread) => thread.workspaceId === pendingCoworkEntry.workspaceId),
-  );
+  const pendingCoworkOwnsRow = pendingCoworkEntry !== null;
+  const pendingCoworkWorkspaceIdToSuppress = pendingCoworkOwnsRow
+    ? pendingCoworkEntry?.workspaceId ?? null
+    : null;
+  // The pending row remains the single presentation owner until activation
+  // clears it. Once creation has a real workspace id, suppress that query row
+  // instead of swapping identities partway through materialization. Failed
+  // entries keep owning the row so their selected shell and error state remain
+  // truthful until retry, navigation, or finalization clears the projection.
+  const listedThreads = useMemo(() => (
+    pendingCoworkWorkspaceIdToSuppress
+      ? threads.filter((thread) => thread.workspaceId !== pendingCoworkWorkspaceIdToSuppress)
+      : threads
+  ), [pendingCoworkWorkspaceIdToSuppress, threads]);
+  const showPendingCoworkThread = pendingCoworkOwnsRow;
   const pendingCoworkThreadActive = Boolean(
     pendingCoworkEntry
     && (
@@ -53,7 +64,7 @@ export function CoworkThreadsSection() {
       )
     ),
   );
-  const renderedThreadCount = threads.length + (showPendingCoworkThread ? 1 : 0);
+  const renderedThreadCount = listedThreads.length + (showPendingCoworkThread ? 1 : 0);
 
   const [expandedThreadIds, setExpandedThreadIds] = useState<Set<string>>(new Set());
   const toggleThreadExpanded = useCallback((threadId: string) => {
@@ -65,17 +76,17 @@ export function CoworkThreadsSection() {
     });
   }, []);
 
-  const overLimit = threads.length > DEFAULT_VISIBLE_THREAD_COUNT;
+  const overLimit = listedThreads.length > DEFAULT_VISIBLE_THREAD_COUNT;
   const selectedThreadIndex = useMemo(() => (
     selectedWorkspaceId
-      ? threads.findIndex((thread) => thread.workspaceId === selectedWorkspaceId)
+      ? listedThreads.findIndex((thread) => thread.workspaceId === selectedWorkspaceId)
       : -1
-  ), [selectedWorkspaceId, threads]);
+  ), [listedThreads, selectedWorkspaceId]);
   const forceExpanded = !expanded && selectedThreadIndex >= DEFAULT_VISIBLE_THREAD_COUNT;
   const isEffectivelyExpanded = expanded || forceExpanded;
   const visibleThreads = isEffectivelyExpanded
-    ? threads
-    : threads.slice(0, DEFAULT_VISIBLE_THREAD_COUNT);
+    ? listedThreads
+    : listedThreads.slice(0, DEFAULT_VISIBLE_THREAD_COUNT);
   const toggleLabel: "Show more" | "Show less" | null = !overLimit
     ? null
     : forceExpanded
@@ -125,7 +136,12 @@ export function CoworkThreadsSection() {
               active={pendingCoworkThreadActive}
               trailingStatus={(
                 <SidebarStatusIndicatorView
-                  indicator={{ kind: "iterating", tooltip: "Creating chat" }}
+                  indicator={pendingCoworkEntry.stage === "failed"
+                    ? {
+                        kind: "error",
+                        tooltip: pendingCoworkEntry.errorMessage ?? "Couldn't start chat",
+                      }
+                    : { kind: "iterating", tooltip: "Creating chat" }}
                 />
               )}
               label={pendingCoworkEntry.displayName}
@@ -139,7 +155,7 @@ export function CoworkThreadsSection() {
                 <p className="sr-only">Loading threads</p>
               </div>
             )
-          ) : threads.length === 0 ? (
+          ) : listedThreads.length === 0 ? (
             showPendingCoworkThread ? null : (
               <div className="px-2 py-2 text-xs text-sidebar-muted-foreground">
                 {isCreatingThread ? "Creating chat" : "No chats yet"}

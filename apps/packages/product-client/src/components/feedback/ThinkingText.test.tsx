@@ -127,6 +127,7 @@ describe("StreamingIndicator", () => {
     expect(html).toContain("Thinking");
     expect(html).toContain("34s");
     expect(html).toContain("tabular-nums");
+    expect(html).toContain("items-baseline");
   });
 
   it("threads a context label instead of the universal Thinking", () => {
