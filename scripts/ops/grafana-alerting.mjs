@@ -444,7 +444,8 @@ export async function runExport({ client, receiptPath, repoRoot = REPO_ROOT, now
   return { receiptPath: resolved, checksums };
 }
 
-// Overlay approved metadata and create/update only the tracker contact point.
+// Overlay approved metadata and CREATE the tracker contact point (create-only:
+// a pre-existing tracker receiver is refused; run restore first, then apply).
 export async function runApply({ client, secretResolver, receiptPath, repoRoot = REPO_ROOT }) {
   const receipt = readReceipt(receiptPath, { repoRoot });
   verifyTarget(receipt.target);
@@ -579,7 +580,11 @@ async function main() {
       return;
     }
     default:
-      throw new Error("Usage: grafana-alerting.mjs <check|export|apply|restore> [--receipt <path>] [--snapshot <path>]");
+      throw new Error(
+        "Usage: grafana-alerting.mjs <check|export|apply|restore> [--receipt <path>] [--snapshot <path>]\n" +
+          "apply is create-only for the tracker contact point: it refuses when the receiver already exists\n" +
+          "(run restore to remove the tooling-created receiver first, then re-run apply).",
+      );
   }
 }
 

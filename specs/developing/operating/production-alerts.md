@@ -143,12 +143,23 @@ call happens by accident. Order:
    receipt outside Git, and refuses a public or worktree receipt path.
 2. `apply` re-reads live, hard-rejects any UID/title/query mismatch (it never
    recreates a rule), overlays only the approved labels/annotations while
-   preserving the query model byte-for-byte, creates or updates only the named
+   preserving the query model byte-for-byte, **creates** the named
    `issue-tracker-webhook` contact point (resolving the Bearer credential from
    `issue-tracker/app.grafanaWebhookSecret` at execution time), and verifies the
-   notification policy checksum is unchanged.
-3. `restore` replays the before-export from the receipt to the same
-   target-locked workspace.
+   notification policy checksum is unchanged. Contact-point creation is
+   **create-only**: `apply` refuses when the receiver already exists, because
+   updating in place would require replaying a credential the tooling never
+   retains. To re-apply, first run `restore` (which removes the
+   tooling-created receiver), then `apply`.
+3. `restore` replays the before-export rules from the receipt to the same
+   target-locked workspace and removes only the tooling-created
+   `issue-tracker-webhook` receiver (verifying the route tree and Slack
+   receivers are untouched, and restoring the pre-removal config if that
+   verification fails). It refuses a receipt claiming the receiver pre-existed
+   E1 — exported secure fields are redacted markers and must never be
+   replayed. The retained private receipt from the accepted E1 run is the
+   rollback authority for the created receiver; credential rotation is a
+   later, separately reviewed change.
 
 All live output is bounded to UIDs, metadata names, checksums, and contact-point
 setting names.
