@@ -394,6 +394,22 @@ else
     && ok "installer refuses a wildcard CORS origin" || no "wrong error for wildcard CORS origin"
 fi
 
+# --cors-allow-origins on a RERUN (an .env.static already exists) is REJECTED,
+# not silently ignored: it only merges on a fresh install, so accepting it on a
+# rerun would be a misleading no-op (SHR-F03). CORSROOT was installed fresh above.
+if run_installer "$CORSROOT" "$REL" "0.3.18" --domain api.test --no-start --yes \
+  --cors-allow-origins "https://late.example" >"$SCRATCH/cors-rerun.log" 2>&1; then
+  no "installer should reject --cors-allow-origins on a rerun"
+else
+  grep -qi "cors-allow-origins only applies on a fresh install" "$SCRATCH/cors-rerun.log" \
+    && ok "installer rejects --cors-allow-origins on rerun" || no "wrong error for --cors-allow-origins on rerun"
+fi
+# The rejected rerun must NOT have mutated the preserved CORS config.
+rerun_cors="$(grep -m1 '^CORS_ALLOW_ORIGINS=' "$CORSROOT/server/deploy/.env.static" | cut -d= -f2-)"
+printf '%s' "$rerun_cors" | tr ',' '\n' | grep -qx "https://late.example" \
+  && no "rerun reject must not add the new origin to the preserved config" \
+  || ok "rerun reject leaves the preserved CORS config unchanged"
+
 # ---------------------------------------------------------------------------
 group "8. Release bundle shape + checksum round-trip"
 # ---------------------------------------------------------------------------

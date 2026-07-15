@@ -470,6 +470,13 @@ configure() {
   local example_file="$DEPLOY_DIR/.env.production.example"
 
   if [[ -f "$static_file" ]]; then
+    # --cors-allow-origins only applies on a FRESH install (it is merged into the
+    # generated .env.static then). On a rerun the existing config is preserved, so
+    # silently accepting the flag would be a no-op that misleads the operator into
+    # thinking CORS changed. Reject it explicitly and point at the manual edit.
+    if [[ -n "$CORS_ALLOW_ORIGINS_OVERRIDE" ]]; then
+      die "--cors-allow-origins only applies on a fresh install; $static_file already exists. To change CORS on an existing install, edit CORS_ALLOW_ORIGINS in $static_file (or .env.local) and rerun update.sh."
+    fi
     log "Existing configuration found; preserving $static_file"
     # Only re-pin the image tag on an explicit --version rerun (the installer
     # upgrade path). Everything else the operator set is left untouched.
