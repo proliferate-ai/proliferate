@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AutomationRunLocationSelector } from "#product/components/automations/controls/AutomationRunLocationSelector";
 import type {
@@ -147,9 +147,17 @@ describe("AutomationRunLocationSelector", () => {
     fireEvent.click(screen.getByRole("button", {
       name: "Run location: Team Organization cloud",
     }));
-    expect(screen.getByText("Organization cloud")).toBeTruthy();
+    // "Organization cloud" renders several times (trigger label, Team owner
+    // option detail, section header, and the team target row), so target the
+    // team target row by its exact accessible name to keep the single-match intent.
+    const popover = within(screen.getByRole("dialog"));
+    // The row's accessible name leads with "Organization cloud" (then the repo
+    // label); the Team owner option is "Team Organization cloud", so anchor to
+    // the start to select the row uniquely.
+    const teamRow = popover.getByRole("button", { name: /^Organization cloud/ });
+    expect(teamRow).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: /Organization cloud/ }));
+    fireEvent.click(teamRow);
     expect(onSelectOwner).toHaveBeenCalledWith("organization");
     expect(onSelectTarget).toHaveBeenCalledWith(cloudTarget);
   });

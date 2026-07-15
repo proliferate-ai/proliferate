@@ -105,12 +105,14 @@ describe("settings navigation", () => {
     });
   });
 
-  it("falls parked budget settings links back to general", () => {
+  it("resolves the organization limits admin section", () => {
+    // organization-limits is a live admin section (budget/limits panes), so it
+    // resolves to itself rather than falling back to general.
     expect(resolveSettingsSelection({
       rawSection: "organization-limits",
       repositories: [],
     })).toEqual({
-      activeSection: "general",
+      activeSection: "organization-limits",
       activeRepoSourceRoot: null,
       focus: {},
       joinOrganizationId: null,
@@ -344,14 +346,17 @@ describe("settings navigation", () => {
       joinOrganizationId: null,
     });
 
+    // A recognized focus still redirects: legacy cloud billing links land on
+    // the billing section. (The former target -> agent-authentication redirect
+    // is gone; the Bifrost auth pane was replaced by the API key pool page.)
     expect(resolveSettingsSelection({
       rawSection: "cloud",
-      rawTarget: "target-1",
+      rawFocus: "billing",
       repositories: [],
     })).toEqual({
-      activeSection: "agent-authentication",
+      activeSection: "billing",
       activeRepoSourceRoot: null,
-      focus: { target: "target-1" },
+      focus: {},
       joinOrganizationId: null,
     });
   });
