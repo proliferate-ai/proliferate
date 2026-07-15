@@ -17,12 +17,18 @@
 # check_max_lines.py's own caps, so listing them there would register as stale
 # max-lines entries.
 
-apps/desktop/src/components/content/ui/diff/UnifiedDiffViewer.tsx 414 unified diff viewer pending row-renderer split
-apps/desktop/src/components/workspace/git/GitPanel.tsx 429 git panel pending staged/unstaged section split
-apps/desktop/src/components/workspace/git/GitReviewFileRow.tsx 404 git review file row pending action-cluster split
-apps/desktop/src/components/workspace/shell/sidebar/WorkspaceItem.tsx 414 workspace sidebar item pending indicator/menu split
-apps/desktop/src/hooks/sessions/lifecycle/session-stream-flush-apply.ts 401 session stream flush/apply pending reducer split
 apps/packages/product-domain/src/chats/transcript/transcript-row-model.ts 946 transcript row model pending row-kind module split
-apps/desktop/src/hooks/sessions/workflows/session-creation-materialization.ts 415 injected typed telemetry deps threaded from the calling hook; split deferred
-apps/desktop/src/hooks/sessions/workflows/session-replacement-tombstones.ts 408 async ProductStorage hydration added to the in-memory tombstone model
-apps/desktop/src/hooks/sessions/workflows/use-session-creation-actions.ts 406 product telemetry facade threading into session-creation workflows; split deferred
+# Relocated from apps/desktop/src by the Desktop-product move into product-client
+# (web-desktop-unification slice 04). Same files, same counts/reasons — relocation,
+# not gate-weakening; product-client/src is a structure-report scan root.
+apps/packages/product-client/src/components/content/ui/diff/ChatDiffViewer.tsx 622 chat diff viewer pending row-renderer split
+apps/packages/product-client/src/components/content/ui/diff/SplitDiffViewer.tsx 540 split diff viewer pending row-renderer split
+apps/packages/product-client/src/components/content/ui/diff/UnifiedDiffViewer.tsx 414 unified diff viewer pending row-renderer split
+apps/packages/product-client/src/components/workspace/git/GitPanel.tsx 429 git panel pending staged/unstaged section split
+apps/packages/product-client/src/components/workspace/git/GitReviewFileRow.tsx 404 git review file row pending action-cluster split
+apps/packages/product-client/src/components/workspace/shell/sidebar/WorkspaceItem.tsx 414 workspace sidebar item pending indicator/menu split
+apps/packages/product-client/src/hooks/sessions/lifecycle/session-stream-flush-apply.ts 401 session stream flush/apply pending reducer split
+apps/packages/product-client/src/hooks/sessions/workflows/session-creation-materialization.ts 415 injected typed telemetry deps threaded from the calling hook; split deferred
+apps/packages/product-client/src/hooks/sessions/workflows/session-replacement-tombstones.ts 408 async ProductStorage hydration added to the in-memory tombstone model
+apps/packages/product-client/src/hooks/sessions/workflows/use-session-creation-actions.ts 406 product telemetry facade threading into session-creation workflows; split deferred
+apps/packages/product-client/src/lib/infra/measurement/measurement-port.ts 734 product-owned measurement port barrel (R1 ruling) mirroring the retained measurement surface through a swappable no-op sink; split deferred

@@ -19,6 +19,11 @@ const anyharnessSdkReact = fileURLToPath(
 
 export default defineConfig({
   resolve: {
+    // Force a single React instance across the package boundary. Without this,
+    // a moved component (e.g. AutomationRunLocationSelector) can render against a
+    // second React copy resolved through the package's own node_modules, which
+    // breaks hooks/jsdom rendering in the moved test lane (R5 ruling).
+    dedupe: ["react", "react-dom"],
     alias: [
       { find: /^#product\//, replacement: `${srcDir}/` },
       { find: /^@anyharness\/sdk-react$/, replacement: anyharnessSdkReact },

@@ -1,7 +1,11 @@
 # Move the Desktop Product into ProductClient (D1h)
 
-Status: **current implementation slice — mechanical move landed; blocked at the
-seam architecture pending three owner rulings (contract stop conditions).**
+Status: **current implementation slice — mechanical move + all
+mechanically-clean seam cohorts landed (rounds 1–2 rulings R1–R5 + auth-probe
+promotion executed); package `tsc` 315 → 47. Blocked to green on five NEW
+capability/ownership gaps absent from the ledger and rounds 1–2 (contract stop
+conditions). F4 landed the R5 gate config, ran the full battery/scans, and
+recorded the divergences below.**
 
 - Exact implementation base:
   `1d00437565d4cdce47cf4dc41f2ea19eb2f31f28`
@@ -398,6 +402,119 @@ qualification matrix are downstream of the package build, which is gated on the
 (A) rulings. The `AutomationRunLocationSelector` dedupe fix and the documented
 6 pre-existing failures (`keyboard-resolution` 4, `navigation` 2 at base
 `1d0043756`) are recorded for that pass but unverifiable until dist emits.
+
+## F4 stage — R5 gate config, battery, scans, docs
+
+F4 executed the round-2 R5 mechanical items, ran the full contract battery and
+scans against the F3 head, recorded the divergences, and finalized the docs. No
+product behavior changed; the only code edits are gate configuration.
+
+### Round-2 ruling records (owner rulings, reversible — consolidated)
+
+Recorded here as executed against the tree, with rationale:
+
+- **R1 measurement port** — landed F1 (`src/lib/infra/measurement/measurement-port.ts`,
+  swappable no-op sink, host injects the retained engine at module scope). No
+  ProductHost interface change; Web later = no-op. See "F1 stage".
+- **R2 bridge ports** — **NOT executed.** F3 found the two hook moves
+  (`use-connect-server`, `use-dev-desktop-handoff`) are entangled with the (A)
+  capability gaps and behavior-sensitive; deferred to land as a unit with the (A)
+  rulings. Recorded, not implemented.
+- **R3 reverse seam** — landed F2 (public `./internal/*` export lane; ~123
+  specifiers across 51 host files rewritten). Host-only surface, to be narrowed
+  after the Web replacement.
+- **R4 build emission** — landed F2 (`scripts/copy-product-client-assets.mjs`:
+  catalog → gitignored `src/generated/`, asset/CSS mirror to `dist`). Verifiable
+  only once `tsc` emits.
+- **R5 test infra + gate scope** — landed F4:
+  - **vitest `resolve.dedupe: ["react","react-dom"]`** added to the package
+    vitest config. **Correction to R5's premise:** an A/B run proved the dedupe
+    does **not** resolve the `AutomationRunLocationSelector` failure — with and
+    without it the result is identical (2 passed / 1 failed). That test's real
+    failure is `TestingLibraryElementError: Found multiple elements with the text
+    "Organization cloud"` inside a single render (the file already has explicit
+    `afterEach(cleanup)`), **not** a duplicate-React instance. Root cause is a
+    test-lane rendering/mock-resolution difference, unresolved and gated behind
+    the package build + the full test-infra port. The dedupe is retained as
+    correct package-boundary hygiene, not as the fix for this test.
+  - **`frontend_structure_allowlist.txt`** — the 8 stale `apps/desktop/src`
+    entries (files that moved) removed; the 11 flagged `product-client/src` files
+    re-allowlisted at their new paths (relocation, same counts/reasons). Includes
+    two entries that were max-lines (component-cap) debt at Desktop and are now
+    structure-report debt at the deeper package path (`ChatDiffViewer` 622,
+    `SplitDiffViewer` 540), plus the new R1 `measurement-port.ts` (734, a barrel
+    mirroring the retained surface). `LARGE_FRONTEND_FILE` → **0**.
+  - **`check_max_lines.py`** — added `apps/packages/product-client/src` to
+    `CHECK_ROOTS` (mirroring `apps/desktop/src`, per R5), and relocated the 5
+    still-violating removed Desktop entries + the R1 port into
+    `max_lines_allowlist.txt` (6 entries). `SplitDiffViewer` (540) and
+    `HomeNextScreen.test` (530) fall under the 600 general cap at the deeper path
+    (Desktop's component cap was 500) so were dropped, not moved. Check **passes**.
+  - **structure scan root** — `report_frontend_structure.py` already listed
+    `product-client/src` in `FRONTEND_ROOTS`/`APP_ROOTS`/`DOM_APP_AND_PACKAGE_ROOTS`
+    (added when the package was created); no change needed.
+
+### Battery / scan matrix at the F4 head
+
+| Command | Result |
+| --- | --- |
+| `pnpm --filter @proliferate/product-client typecheck` | **RED 47** (all unresolved seams; 0 non-seam) |
+| `pnpm --filter @proliferate/product-client build` | **RED** — same 47 seams (`tsc` errors; no fresh dist; existing `dist/` is stale) |
+| `pnpm --filter @proliferate/product-client test` (full) | **BLOCKED** — 167 test files fail at collection on seam imports (gated on the build) |
+| `pnpm --filter @proliferate/web build` | **GREEN** (exit 0 — Web untouched, confirmed) |
+| `pnpm --filter proliferate build` (desktop) | **RED (gated)** — deterministic from the absent package dist; not re-run |
+| `pnpm --dir apps/desktop exec vitest run` | **BLOCKED (gated)** — package dist + full test-infra port |
+| `node scripts/verify-product-client-qualification.mjs` | **RED (gated)** — package dist |
+| `python3 scripts/check_frontend_boundaries.py` (`PRODUCT_CLIENT_FORBIDDEN_IMPORT`) | **50** (gated on the 5 rulings) |
+| `python3 scripts/report_frontend_structure.py --strict --summary-only` | **TOTAL 26** — `FORBIDDEN_SHARED_PACKAGE_IMPORT` 26, `LARGE_FRONTEND_FILE` **0** |
+| `python3 scripts/check_max_lines.py` | **PASS** (product-client root added) |
+| `python3 scripts/check_docs.py` | **PASS** |
+| `git diff --check` | **clean** |
+| `node scripts/migrate-desktop-product-client.mjs --check` | **0 rewrites** (second run empty) |
+| `python3 scripts/check-product-client-move-ledger-postmove.py` | **FAIL** — see divergence below |
+
+### Scan results
+
+- **No product leakage in `apps/desktop/src`** (131 files): `pages/` and
+  `components/` are **empty**; remainder = host `lib` (101), `hooks` (18),
+  `providers` (9), the retained `stores/auth/auth-store.ts` (1), `main.tsx`,
+  `assets.d.ts`. No product pages, route tree, or non-auth stores.
+- **No dual code ownership.** Two files share a relative path across the two
+  trees, both intended splits (verified non-identical): `assets.d.ts` (host keeps
+  Sentry/PostHog env + asset-module decls; package split env into `vite-env.d.ts`
+  and kept asset-module decls in `assets.d.ts`) and `lib/infra/proliferate-api.ts`
+  (host bootstrap/default 63 lines vs package pure helpers 32 lines). Minor: the
+  package `assets.d.ts` header still carries the retired-canary comment (stale
+  wording, no effect) — cosmetic cleanup for the seam pass.
+- **Canary gone:** no `ProductClientBuildCanary` reference in the package or host.
+- **`internal/*` lane** present in `package.json` exports (host-only reverse-seam
+  surface; documented in "F2 stage").
+- **Desktop production-build asset proof** (ProductClient lazy chunks / CSS /
+  fonts, public-shell manifest not eagerly loading the authenticated root):
+  **UNVERIFIABLE** — gated on the package dist + Desktop build. Deferred to the
+  post-ruling green pass.
+- **Working-tree cruft:** the `git mv`s left many empty directories under
+  `apps/desktop/src` (git does not track empty dirs, so they are not staged and
+  will not ship). Left in place; removable with `find … -type d -empty -delete`
+  at the seam pass.
+
+### DIVERGENCE — postmove ledger checker fails on 9 rows (F3 relocation vs binding ledger)
+
+`check-product-client-move-ledger-postmove.py` **FAILS** with 9
+`retain source missing` violations. F3 commit `027d1f891` relocated the
+`hooks/access/tauri/{credentials,shell,workspace-scratch}/**` subtrees (9 files)
+into the package, arguing they were already bridge-based (`host.desktop.*`) and
+their `retain` was a "stale bucket default" of `hooks/access/tauri/**`. The
+**binding move-ledger (from main) still classifies these rows `retain`**, so the
+checker correctly reports tree ≠ ledger.
+
+Per the stage rule "binding inputs on main — do not reinterpret" and "an
+ownership decision absent from the ledger → STOP and report," F4 does **not**
+unilaterally rewrite the ledger classifications to paper over the checker. This
+is surfaced as an **owner-ratification item**: either bless the reclassification
+(retain → move for those 9 rows, then the checker passes) or revert F3's
+relocation. It is recorded, not resolved. (The 18 `split` rows remain pending as
+expected — the checker also lists those, blocked on the (A) rulings.)
 
 ## Blocked: the S2 seam architecture (three owner rulings required)
 

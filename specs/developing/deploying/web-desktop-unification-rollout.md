@@ -103,7 +103,7 @@ Current handoff:
 | Route Shared Identity and Navigation Through ProductHost | Read normalized auth identity/operations, deployment base URL, and the single Cloud client through the host; close the ordered-query-pairs and fragment/callback contract gaps; route each inbound deep link through one lossless `ProductEntry` lifecycle and delete the legacy parallel navigation decoder. | [`web-desktop-client-unification-d1e.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1e.md), base `0eab251fd35d26022165f7f0852db2885a8c4093`; PR #1180 merge `06bf880a1b98c6694bcf029badcc9fe5823111de` | Complete |
 | Route Shared Persistence and Telemetry Through ProductHost | Re-back product storage onto the existing Tauri store and route movable product persistence through `host.storage` with zero migration; route product telemetry identity/tags/route-classification/single `screen_viewed`/capture through the typed `host.telemetry` facade; make the Query client product-owned with injected capture; split the mount into host-owned `DesktopHostProviders`, `ProductProviderRoot`, and `ProductLifecycleRoot`. | [`web-desktop-client-unification-d1f.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1f.md), base `06bf880a1b98c6694bcf029badcc9fe5823111de`; PR #1182 merge `f93afce8190bba943277d588c9bfb0d051c615c9` | Complete |
 | Prove ProductClient Extraction Mechanics | Prove the host mount envelope, compiled assets/builds, move ledger/import codemod, minimal browser host, and fail-closed migration boundaries before the source move. | [`web-desktop-client-unification-d1g.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1g.md), base `f93afce8190bba943277d588c9bfb0d051c615c9`; PR #1195 merge `9757e86de` | Complete |
-| Move the Desktop Product into ProductClient | Move the working Desktop product into ProductClient and leave Desktop as a thin native host. | [`web-desktop-client-unification-d1h.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1h.md), base `1d00437565d4cdce47cf4dc41f2ea19eb2f31f28`. Mechanical move landed and proven; blocked at the seam architecture pending three owner rulings — see §9. | Implementation |
+| Move the Desktop Product into ProductClient | Move the working Desktop product into ProductClient and leave Desktop as a thin native host. | [`web-desktop-client-unification-d1h.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1h.md), base `1d00437565d4cdce47cf4dc41f2ea19eb2f31f28`. Mechanical move + all mechanically-clean seam cohorts landed (rounds 1–2 rulings R1/R3/R4/R5 + auth-probe promotion; package `tsc` 315 → 47); blocked to green on five NEW capability/ownership gaps absent from the ledger and rounds 1–2 — see §9. | Implementation |
 | Legacy Web replacement | Delete the duplicate Web product and mount the same ProductClient from a thin browser host with `desktop: null`. | Browser host/auth contract and shared-product proof required. | Directional |
 | Hosted Web qualification and cutover | Qualify both hosts, Web performance, managed-cloud flows, and every external callback/return producer. | §11 external-configuration gate applies. | Directional |
 | Self-hosted Web | Add self-hosted Web configuration, deployment, and documentation after hosted Web is clean. | Separate follow-up contract. | Deferred follow-up |
@@ -372,34 +372,52 @@ record is
 Landed and proven this slice: the pure mechanical move — all 2069 `move` rows
 relocated to `apps/packages/product-client/src` exactly once, the 130 `retain`
 host modules intact, the one `delete` removed, `apps/desktop/src` reduced to a
-host-only tree (149 files; no product pages/route tree/stores beyond the retained
-auth store), the codemod's second run empty, the thin Desktop host mounting the
+host-only tree (131 files at the F4 head — `pages/` and `components/` empty; no
+product pages/route tree/stores beyond the retained auth store), the codemod's
+second run empty, the thin Desktop host mounting the
 real `ProductClient` entry with `InstrumentedRoutes`, and the temporary
 qualification canary deleted. A post-move completion proof
 (`scripts/check-product-client-move-ledger-postmove.py`, added this slice because
 the pre-move ledger checker necessarily fails once the `git mv`s land) reports
 every `move`/`delete`/`retain` row satisfied exactly once.
 
-Blocked at the seam architecture. 18 `split` rows remain, and three items are
-contract stop conditions (a file needing an ownership decision absent from the
-ledger, or a move requiring a new ProductHost/DesktopBridge capability) that were
-not pre-authorized by the stage owner rulings and must be ruled before
-implementation:
+Rounds 1–2 resolved the original three stop conditions above (R1 measurement
+port, R2 bridge ports, R3 reverse seam) and F1–F4 landed the mechanically-clean
+work: R1 (F1), the forward-seam cohorts + auth-probe promotion (F3), R3 + R4 (F2),
+and R5 gate config (F4). Package `tsc` fell **315 → 47** and
+`PRODUCT_CLIENT_FORBIDDEN_IMPORT` **272 → 50**.
 
-1. the host-supplied **measurement facade** mechanism (the ledger reroutes
-   `lib/infra/measurement/**` consumers through it, yet classifies measurement as
-   host-retained and not a ProductHost capability — the mechanism is undefined);
-2. **new DesktopBridge ports** for the raw `connect-server` (`fetchServerMeta`)
-   and `window` (`use-dev-desktop-handoff`) probes; and
-3. the package's **host-facing public export surface** for the reverse seam
-   (~51 retained host files import moved auth/telemetry domain, stores, and
-   config; the package exports only `./host/*` and `./ProductClient`).
+Still blocked to green on **five NEW capability/ownership gaps** absent from both
+the ledger and rounds 1–2 (contract stop conditions — surfaced, not resolved by
+inventing capabilities or changing behavior):
+
+1. **Updater cluster** (`use-updater`/`use-app-version`/`updater-dev-mock`, 16
+   errors) — `retain` yet product-consumed stateful hooks reaching raw host
+   telemetry + persistence from a module-level scheduler; needs a move ruling + DI
+   to `host.telemetry`/`host.storage`.
+2. **Anonymous-telemetry install id** (2) — a `crypto.randomUUID()` provably
+   distinct from the worker install id; needs a new host capability.
+3. **Native render diagnostics** (1) — `AppErrorBoundary` writes the raw-Tauri
+   renderer log; `host.telemetry.captureException` would divert to Sentry
+   (behavior change); needs a capability or an accepted delta.
+4. **Cloud access-token holdout** (3) — `getDesktopCloudAccessToken`; needs a
+   `host.auth` token accessor.
+5. **`use-window-actions`** (1) — raw `apply_macos_window_chrome`; needs a
+   `nativeUi` bridge method or an off-Desktop no-op ruling.
+
+Coupled, landable-once-ruled but behavior-sensitive and deferred to the same unit:
+R2 bridge ports, `use-organization-join-invitation-flow`, `DesktopProductLifecycleRoot`,
+`ensure-desktop-worker` DI, and the auth-store test doubles.
 
 Until these are ruled and built, package typecheck/build, the Desktop build, the
-qualification verify, and the frontend boundary/structure scans stay red on the
-unresolved seams; the mechanical-move portion is complete and independently
-proven. The auth-probe promotion the stage authorized is coupled to (3) and is
-executed with the reverse-seam ruling, not in isolation.
+qualification verify, `apps/desktop` vitest, and the frontend boundary/structure
+boundary scans stay red on the unresolved seams; Web build stays green (untouched)
+and the mechanical move + clean cohorts are complete and proven. **Open divergence
+(owner ratification):** F3 relocated the bridge-based
+`hooks/access/tauri/{credentials,shell,workspace-scratch}/**` subtrees (9 files),
+but the binding ledger still classifies them `retain`, so
+`check-product-client-move-ledger-postmove.py` fails on those 9 rows — bless the
+reclassification or revert the relocation.
 
 ## 10. Remaining migration map and gates
 
