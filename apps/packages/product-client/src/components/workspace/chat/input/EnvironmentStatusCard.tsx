@@ -19,6 +19,7 @@ import {
   worktreeSizeMeta,
 } from "#product/lib/domain/workspaces/worktrees/worktree-inventory-presentation";
 import {
+  DetailStateGlyph,
   StatusRow,
   StatusSection,
   type WorkspaceStatusDetailItem,
@@ -214,8 +215,10 @@ export function EnvironmentCardSections({
   );
 }
 
-/** One checkout: name · size, branch/status/chats in the hover card, delete
- * (orphan prune or history purge) revealed on hover like codex row actions. */
+/** One checkout, in the exact anatomy of the card's hover list (StatusRow
+ * tooltip items) so moving from hover card to modal doesn't change the UI:
+ * status glyph, name over a status detail line, size meta — plus a delete
+ * (orphan prune or history purge) revealed on hover. */
 function WorktreeStatusRow({
   row,
   onRequestPurge,
@@ -228,7 +231,6 @@ function WorktreeStatusRow({
   const status = worktreeGitStatusView(row.gitStatus);
   const label = worktreeRowLabel(row);
   const primaryWorkspace = row.associatedWorkspaces[0] ?? null;
-  const branchLabel = row.branch ?? primaryWorkspace?.branch ?? null;
   const canDeleteOrphan = row.state === "orphan_checkout"
     && row.availableActions.includes("delete_orphan_checkout");
   const deletableWorkspace = row.state !== "conflict"
@@ -241,42 +243,41 @@ function WorktreeStatusRow({
       ? () => onRequestPurge(deletableWorkspace.id, deletableWorkspace.displayName ?? label)
       : null;
 
-  const hoverItems: WorkspaceStatusDetailItem[] = [
-    {
-      key: "status",
-      name: branchLabel ?? label,
-      state: statusToDetailState(status.tone),
-      detail: [status.label, status.detail].filter(Boolean).join(" · ") || undefined,
-      meta: row.totalSessionCount > 0
-        ? `${row.totalSessionCount} ${row.totalSessionCount === 1 ? "chat" : "chats"}`
-        : undefined,
-    },
-  ];
+  const detailLine = [
+    status.label,
+    status.detail,
+    row.totalSessionCount > 0
+      ? `${row.totalSessionCount} ${row.totalSessionCount === 1 ? "chat" : "chats"}`
+      : null,
+  ].filter(Boolean).join(" · ");
 
   return (
-    <StatusRow
-      icon={<GitBranch className="size-4" />}
-      label={label}
-      meta={worktreeSizeMeta(row.storage)}
-      hoverItems={hoverItems}
-      trailing={onDelete
-        ? (
-          <Button
-            type="button"
-            variant="unstyled"
-            size="unstyled"
-            aria-label={`Delete ${label}`}
-            onClick={(event) => {
-              event.stopPropagation();
-              onDelete();
-            }}
-            className="shrink-0 rounded-sm p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover/status-row:opacity-100 group-focus-visible/status-row:opacity-100"
-          >
-            <X className="size-3.5" />
-          </Button>
-        )
-        : undefined}
-    />
+    <div className="group/worktree-row relative isolate flex min-w-0 items-start gap-2 rounded-md py-1.5 before:absolute before:inset-y-0 before:-inset-x-2 before:-z-10 before:rounded-md before:content-[''] hover:before:bg-list-hover">
+      <span className="flex h-4 w-[18px] shrink-0 items-center justify-start">
+        <DetailStateGlyph state={statusToDetailState(status.tone)} emphasizeFailing />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="truncate text-ui text-foreground" title={label}>{label}</span>
+        {detailLine ? (
+          <span className="line-clamp-2 text-ui-sm leading-4 text-muted-foreground">
+            {detailLine}
+          </span>
+        ) : null}
+      </span>
+      <span className="shrink-0 text-ui-sm text-faint">{worktreeSizeMeta(row.storage)}</span>
+      {onDelete && (
+        <Button
+          type="button"
+          variant="unstyled"
+          size="unstyled"
+          aria-label={`Delete ${label}`}
+          onClick={onDelete}
+          className="shrink-0 rounded-sm p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover/worktree-row:opacity-100 focus-visible:opacity-100"
+        >
+          <X className="size-3.5" />
+        </Button>
+      )}
+    </div>
   );
 }
 
