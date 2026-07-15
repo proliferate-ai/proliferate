@@ -2,6 +2,10 @@ export const CHAT_COLUMN_CLASSNAME = "mx-auto w-full max-w-3xl";
 export const CHAT_SURFACE_GUTTER_CLASSNAME = "px-4";
 
 export const CHAT_SCROLL_BASE_BOTTOM_PADDING_PX = 40;
+// Resting gap between the pinned live tail and the top of the composer stack.
+// Deliberately tighter than the canvas padding above: the streaming frontier
+// should sit just clear of the dock, not float a full padding band above it.
+export const CHAT_SCROLL_STICKY_BOTTOM_GAP_PX = 16;
 export const CHAT_COMPOSER_SURFACE_SCROLL_OVERLAP_RATIO = 1 / 3;
 export const CHAT_COMPOSER_SURFACE_BACKDROP_START_RATIO = 1 / 2;
 export const CHAT_DOCK_LOWER_BACKDROP_FADE_HEIGHT_PX = 48;
@@ -38,7 +42,7 @@ export function computeChatStableBottomInsetPx({
   const surfaceHeight = Math.max(0, Math.ceil(composerSurfaceHeightPx));
   const footerHeight = Math.max(0, Math.ceil(composerFooterHeightPx));
 
-  return surfaceOffsetTop + surfaceHeight + footerHeight + CHAT_SCROLL_BASE_BOTTOM_PADDING_PX;
+  return surfaceOffsetTop + surfaceHeight + footerHeight + CHAT_SCROLL_STICKY_BOTTOM_GAP_PX;
 }
 
 export function computeChatDockLowerBackdropTopPx({

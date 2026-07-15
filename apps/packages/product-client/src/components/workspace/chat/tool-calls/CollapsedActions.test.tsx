@@ -329,10 +329,34 @@ describe("CollapsedActions", () => {
 
     const html = document.body.innerHTML;
     expect(html).toContain("data-collapsed-actions-ledger");
-    expect(html).toContain("Read read.ts");
+    const ledger = document.querySelector("[data-collapsed-actions-ledger]");
+    expect(ledger?.textContent).toContain("Read");
+    expect(ledger?.querySelector("[data-file-reference-badge='inline']")?.textContent)
+      .toContain("read.ts");
     expect(html).toContain("overflow-y-auto overflow-x-hidden");
     expect(html).toContain("max-h-[7.5rem]");
     expect(html).not.toContain("pl-4");
+  });
+
+  it("renders read ledger rows as clickable file references", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      read: toolItem("read", "turn-1", 1, "file_read"),
+    };
+
+    render(
+      <CollapsedActions
+        itemIds={["read"]}
+        transcript={transcript}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Read files/i }));
+
+    const readRow = screen.getByText("Read").parentElement;
+    const badge = readRow?.querySelector("[data-file-reference-badge='inline']");
+    expect(badge?.textContent).toContain("read.ts");
+    expect(badge?.className).toContain("decoration-dotted");
+    expect(badge?.className).toContain("[&>span:first-child]:hidden");
   });
 
   it("uses the same Codex ink for command and plain ledger rows", () => {
@@ -351,9 +375,9 @@ describe("CollapsedActions", () => {
     fireEvent.click(screen.getByRole("button", { name: /command/i }));
 
     const commandRow = screen.getByRole("button", { name: /Ran pnpm test/i });
-    const readRow = screen.getByText("Read read.ts");
+    const readRow = screen.getByText("Read").parentElement;
     expect(commandRow.className).toContain("text-foreground/60");
-    expect(readRow.parentElement?.className).toContain("text-foreground/60");
+    expect(readRow?.className).toContain("text-foreground/60");
   });
 
   it("starts grouped edit cards closed inside the expanded action batch", () => {
@@ -418,8 +442,10 @@ describe("CollapsedActions", () => {
     fireEvent.click(screen.getByRole("button", { name: /Read files, ran a command/i }));
 
     const searchRow = screen.getByText("Searched for anchor").parentElement;
-    const readRow = screen.getByText("Read README.md").parentElement;
+    const readRow = screen.getByText("Read").parentElement;
     const commandRow = screen.getByText("Ran pnpm test").parentElement;
+    expect(readRow?.querySelector("[data-file-reference-badge='inline']")?.textContent)
+      .toContain("README.md");
     const searchIcon = searchRow?.querySelector("svg");
     const readIcon = readRow?.querySelector("svg");
     const commandIcon = commandRow?.querySelector("svg");

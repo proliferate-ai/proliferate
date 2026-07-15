@@ -103,11 +103,24 @@ export function deriveGenericToolOutput(item: ToolCallItem): string {
 }
 
 export function deriveReadPath(item: ToolCallItem): string {
+  return deriveReadPathTarget(item).displayName;
+}
+
+/**
+ * Raw path + display name for a read-style tool call without structured
+ * `file_read` parts. `rawPath` is null when the input names no file (URL-only
+ * or untitled reads), so callers know a file-open affordance has no target.
+ */
+export function deriveReadPathTarget(
+  item: ToolCallItem,
+): { rawPath: string | null; displayName: string } {
   const rawInput = asRecord(item.rawInput);
-  const path = readString(rawInput?.file_path)
-    ?? readString(rawInput?.path)
-    ?? readString(rawInput?.url);
-  return basename(path ?? item.title ?? item.nativeToolName ?? "file");
+  const path = readString(rawInput?.file_path) ?? readString(rawInput?.path);
+  if (path) {
+    return { rawPath: path, displayName: basename(path) };
+  }
+  const fallback = readString(rawInput?.url) ?? item.title ?? item.nativeToolName ?? "file";
+  return { rawPath: null, displayName: basename(fallback) };
 }
 
 export function formatParsedCommandLabel(

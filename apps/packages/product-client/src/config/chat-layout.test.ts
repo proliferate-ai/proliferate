@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CHAT_SCROLL_BASE_BOTTOM_PADDING_PX,
+  CHAT_SCROLL_STICKY_BOTTOM_GAP_PX,
   computeChatDockLowerBackdropTopPx,
   computeChatStableBottomInsetPx,
   computeChatSurfaceBottomInsetPx,
@@ -46,11 +47,11 @@ describe("chat layout", () => {
     })).toBeNull();
   });
 
-  it("keeps sticky transcript scrolling above the full composer dock reserve", () => {
+  it("keeps sticky transcript scrolling just clear of the full composer dock reserve", () => {
     expect(computeChatStableBottomInsetPx({
       composerSurfaceHeightPx: 120,
       composerSurfaceOffsetTopPx: 80,
       composerFooterHeightPx: 24,
-    })).toBe(264);
+    })).toBe(80 + 120 + 24 + CHAT_SCROLL_STICKY_BOTTOM_GAP_PX);
   });
 });
