@@ -268,7 +268,11 @@ export async function buildSelfHostQualificationCandidates(options, deps = {}) {
   mkdirSync(runDir, { recursive: true });
   writeFileSync(candidateBuildMapPath, `${JSON.stringify(map, null, 2)}\n`, "utf8");
 
-  const portsPath = path.join(runDir, "selfhost-world-ports.json");
+  // Must match LOCAL_WORLD_PORTS_FILENAME ("local-world-ports.json") — the CLI's
+  // readLocalWorldPortsFile derives ctx.ports from exactly this sibling name
+  // (same reader PR 1 wired). A run-specific name here leaves ctx.ports null and
+  // the self-host world fails closed on "no pre-allocated local-world ports".
+  const portsPath = path.join(runDir, "local-world-ports.json");
   writeFileSync(portsPath, `${JSON.stringify(ports, null, 2)}\n`, "utf8");
 
   return {
