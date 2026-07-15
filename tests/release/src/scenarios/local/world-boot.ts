@@ -1,8 +1,8 @@
 import type { ScenarioRunContext } from "../types.js";
 import type { CandidateBuildMapV1 } from "../../artifacts/build-map.js";
 import type { RunIdentityV1 } from "../../runner/identity.js";
-import type { LocalWorldPorts, ReadyLocalWorld } from "../../worlds/local-workspace/world.js";
-import type { QualificationLiteLlmConfigLike } from "../local-world-smoke-1.js";
+import { constructLocalWorld, type LocalWorldPorts, type ReadyLocalWorld } from "../../worlds/local-workspace/world.js";
+import { resolveWorldConstructionInputs, type QualificationLiteLlmConfigLike } from "../local-world-smoke-1.js";
 
 /**
  * Shared local-functional world boot (BRIEF §"World lifecycle").
@@ -46,12 +46,14 @@ export type LocalFunctionalWorldResolution =
  * the caller can finalize a clean non-green cell.
  */
 export function resolveLocalFunctionalWorldInputs(
-  _ctx: ScenarioRunContext,
+  ctx: ScenarioRunContext,
 ): LocalFunctionalWorldResolution {
-  throw new Error(
-    "not implemented: builders-ci owns resolveLocalFunctionalWorldInputs (BRIEF §World lifecycle) — " +
-      "delegate to resolveWorldConstructionInputs from local-world-smoke-1.ts.",
-  );
+  // Single-source the required-env / map / identity / dir / ports checks against
+  // the smoke's resolver so every functional scenario derives world inputs
+  // identically. The smoke's value shape (`{ map, litellm, run, runDir, ports }`)
+  // is exactly `LocalFunctionalWorldInputs`, and its failure branch is the same
+  // typed `{ ok: false; reason }` a collector maps to a clean non-green cell.
+  return resolveWorldConstructionInputs(ctx);
 }
 
 /**
@@ -60,11 +62,19 @@ export function resolveLocalFunctionalWorldInputs(
  * `finally` exactly once, and folds the returned cleanup evidence into each
  * green cell's kind-scoped evidence.
  */
-export function bootLocalFunctionalWorld(_inputs: LocalFunctionalWorldInputs): Promise<ReadyLocalWorld> {
-  throw new Error(
-    "not implemented: builders-ci owns bootLocalFunctionalWorld (BRIEF §World lifecycle) — " +
-      "wrap constructLocalWorld from worlds/local-workspace/world.ts.",
-  );
+export function bootLocalFunctionalWorld(inputs: LocalFunctionalWorldInputs): Promise<ReadyLocalWorld> {
+  // Identical world construction to `LOCAL-WORLD-SMOKE-1`'s `buildWorld` default:
+  // the exact candidate three-artifact bytes, resolved LiteLLM access, run
+  // identity, run/shard dir, and pre-allocated ports. Reuse — never fork — the
+  // merged world code so a functional scenario's world is byte-identical to the
+  // proven smoke world.
+  return constructLocalWorld({
+    run: inputs.run,
+    map: inputs.map,
+    litellm: inputs.litellm,
+    runDir: inputs.runDir,
+    ports: inputs.ports,
+  });
 }
 
 /**

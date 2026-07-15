@@ -981,25 +981,21 @@ async function openSettings(page: Page): Promise<void> {
 
 /** Selects a harness's auth route (`gateway`/`api_key`/`native`) via
  * `HarnessAuthSection`'s route options, then waits for the selected-route
- * readback to reflect it. */
+ * readback to reflect it. The renderer's `data-harness-selected-route` carries
+ * the selection as whitespace-separated `<kind>:<route>` tokens (a multi-source
+ * harness like opencode can have several routes active at once), so the
+ * readback is the exact-token `~=` attribute match — a strict equality on the
+ * just-selected route, not a substring heuristic. */
 async function selectHarnessRoute(page: Page, harness: string, route: "gateway" | "api_key" | "native"): Promise<void> {
   await page
     .locator(`[data-harness-auth-section="${cssAttr(harness)}"]`)
     .first()
     .waitFor({ state: "visible", timeout: SETTINGS_STEP_TIMEOUT_MS });
   await page.locator(`[data-harness-route-option="${cssAttr(`${harness}:${route}`)}"]`).first().click();
-  // `data-harness-selected-route="<kind>"` reflects the current selection; wait
-  // for it to carry the just-selected route as its content (readback).
-  const selected = page.locator(`[data-harness-selected-route="${cssAttr(harness)}"]`).first();
-  await selected.waitFor({ state: "attached", timeout: SETTINGS_STEP_TIMEOUT_MS });
-  const deadline = Date.now() + SETTINGS_STEP_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    const value = ((await selected.textContent().catch(() => "")) ?? "").trim();
-    if (value.includes(route)) {
-      return;
-    }
-    await sleep(500);
-  }
+  await page
+    .locator(`[data-harness-selected-route~="${cssAttr(`${harness}:${route}`)}"]`)
+    .first()
+    .waitFor({ state: "attached", timeout: SETTINGS_STEP_TIMEOUT_MS });
 }
 
 /** Reads the settled workspace ui-key off the workspace shell (briefly retried). */

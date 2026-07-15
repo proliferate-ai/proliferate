@@ -117,10 +117,19 @@ test("runCells: a world-backed run dispatches to the LOCAL-7 functional collecto
   });
   const cells = [fakeCell("claude")];
 
-  // world-boot.ts (builders-ci's file) has not landed its real implementation
-  // yet in this worktree — resolveLocalFunctionalWorldInputs still throws
-  // "not implemented". That the dispatch REACHES it (rather than running the
-  // legacy durable-user lane, which would instead return a clean blocked
-  // outcome) is exactly what proves the isWorldBackedRun(ctx) branch fired.
-  await assert.rejects(() => t3Int1.runCells(ctx, cells), /not implemented/);
+  // world-boot.ts's real implementation has landed: a world-backed run resolves
+  // its world-construction inputs through the shared boot seam
+  // (resolveLocalFunctionalWorldInputs) and dispatches to the LOCAL-7 functional
+  // collector. With no AGENT_GATEWAY_LITELLM_* env in this fake context the
+  // resolver returns a typed failure, so the collector yields a clean per-cell
+  // blocked outcome keyed on that missing gateway env — NOT the legacy
+  // durable-user lane's RELEASE_E2E_SERVER_URL/DURABLE_USER blocked message. That
+  // the outcome reflects the world-boot resolver is exactly what proves the
+  // isWorldBackedRun(ctx) branch fired.
+  const outcomes = await t3Int1.runCells(ctx, cells);
+  assert.equal(outcomes.length, 1);
+  assert.equal(outcomes[0]!.status, "blocked");
+  assert.equal(outcomes[0]!.reason?.code, "scenario_blocked");
+  assert.match(outcomes[0]!.reason!.message, /AGENT_GATEWAY_LITELLM/);
+  assert.doesNotMatch(outcomes[0]!.reason!.message, /RELEASE_E2E_SERVER_URL|DURABLE_USER/);
 });
