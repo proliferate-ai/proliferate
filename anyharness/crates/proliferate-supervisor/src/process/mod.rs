@@ -68,11 +68,23 @@ async fn supervise_generation<S: SuperviseSeam>(seam: &mut S, poll: Duration) ->
 
 pub async fn run(config: SupervisorConfig) -> Result<(), SupervisorError> {
     let poll = Duration::from_secs(config.update_poll_interval_seconds.max(1));
+    // R9R-004: BEFORE the first spawn, reconcile any activation that a crash
+    // interrupted between the two renames, so `active` is never missing when we
+    // try to spawn — otherwise the loop would livelock on a missing binary
+    // (spawn fails -> sleep -> retry, forever, without ever draining the
+    // mailbox). Best-effort: a reconcile failure logs and we still try to spawn.
+    if let Err(error) = update::activate::reconcile_activation_journal(&config) {
+        warn!(?error, "failed to reconcile activation journal at startup");
+    }
     loop {
         let mut anyharness = match spawn_anyharness(&config) {
             Ok(child) => child,
             Err(error) => {
                 warn!(?error, "failed to start anyharness");
+                // Defend against a livelock on a missing binary: reconcile the
+                // journal and, failing that, restore last-good from `.prev`
+                // before backing off (R9R-004).
+                recover_missing_anyharness(&config);
                 sleep(restart::backoff(config.restart_delay_seconds)).await;
                 continue;
             }
@@ -144,6 +156,35 @@ impl SuperviseSeam for LiveSupervise<'_> {
             worker: self.worker,
         };
         update::activate::run_pending(self.config, &mut host).await
+    }
+}
+
+/// Best-effort recovery when AnyHarness fails to spawn because its binary is
+/// missing (R9R-004): reconcile a crash-interrupted activation journal, then, if
+/// the binary is still absent, restore last-good from `.prev`. This guarantees
+/// forward progress instead of a livelock retrying a spawn of a missing path.
+fn recover_missing_anyharness(config: &SupervisorConfig) {
+    if let Err(error) = update::activate::reconcile_activation_journal(config) {
+        warn!(
+            ?error,
+            "activation journal reconcile failed during spawn recovery"
+        );
+    }
+    let active = &config.anyharness_binary;
+    if !active.exists() {
+        let mut previous = active.as_os_str().to_os_string();
+        previous.push(".prev");
+        let previous = std::path::PathBuf::from(previous);
+        if previous.exists() {
+            if let Err(error) = std::fs::rename(&previous, active) {
+                warn!(
+                    ?error,
+                    "failed to restore anyharness from .prev during recovery"
+                );
+            } else {
+                warn!("restored anyharness from .prev after a missing active binary");
+            }
+        }
     }
 }
 
@@ -237,6 +278,31 @@ impl ActivationHost for LiveHost<'_> {
     async fn worker_alive(&mut self) -> bool {
         health::worker_alive(self.worker)
     }
+
+    async fn worker_reports_version(&mut self, expected: &str) -> Option<bool> {
+        // Probe the ACTIVE worker binary on disk (a fresh `--version`
+        // subprocess), not the running child, so the answer reflects the
+        // just-activated bytes rather than the request label (R9R-001).
+        let output = std::process::Command::new(&self.config.worker_binary)
+            .arg("--version")
+            .output()
+            .ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        let reported = String::from_utf8_lossy(&output.stdout);
+        Some(version_output_matches(&reported, expected))
+    }
+}
+
+/// `--version` prints e.g. `proliferate-worker 0.3.0`; match on whitespace
+/// tokens (tolerating a leading `v`) rather than the exact line so the check
+/// survives formatting changes. Mirrors the Worker crate's `self_update`
+/// matcher so the two agree on what "reports this version" means.
+fn version_output_matches(output: &str, expected: &str) -> bool {
+    output
+        .split_whitespace()
+        .any(|token| token == expected || token.strip_prefix('v') == Some(expected))
 }
 
 #[cfg(test)]
@@ -326,6 +392,9 @@ mod tests {
         async fn worker_alive(&mut self) -> bool {
             true
         }
+        async fn worker_reports_version(&mut self, _expected: &str) -> Option<bool> {
+            None
+        }
     }
 
     /// A supervise seam whose children never exit (healthy) for the first calls:
@@ -398,15 +467,15 @@ mod tests {
         assert_eq!(exit, GenerationExit::Worker);
         // The request that arrived while children were healthy was drained on a
         // poll tick and activated.
-        assert!(result_exists(&config.update_request_dir, &request.request_id));
-        let result: UpdateResultV1 = proliferate_runtime_update_protocol::read_result(
-            &config
-                .update_request_dir
-                .join(proliferate_runtime_update_protocol::result_file_name(
-                    &request.request_id,
-                )),
-        )
-        .expect("read result");
+        assert!(result_exists(
+            &config.update_request_dir,
+            &request.request_id
+        ));
+        let result: UpdateResultV1 =
+            proliferate_runtime_update_protocol::read_result(&config.update_request_dir.join(
+                proliferate_runtime_update_protocol::result_file_name(&request.request_id),
+            ))
+            .expect("read result");
         assert_eq!(result.outcome, UpdateOutcome::Activated);
         assert_eq!(std::fs::read(&config.anyharness_binary).unwrap(), new_bytes);
     }
