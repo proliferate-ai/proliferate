@@ -199,6 +199,13 @@ export function MessageList({
       chatRowKeyFromUnitId(target.rowUnitId),
     );
 
+    // First attempt synchronously — the target row is usually already mounted
+    // (marks exist), so the active highlight lands in the same tick. The rAF
+    // retries only cover the virtualized case where the row mounts after the
+    // scroll above.
+    if (scrollActiveChatRowMatchIntoView(target)) {
+      return;
+    }
     let frame = 0;
     let rafId = 0;
     const tick = () => {
