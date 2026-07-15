@@ -766,17 +766,26 @@ function bundleSha256SumsPath(materializedBundlePath: string): string {
 }
 
 /**
- * ASSUMPTION (disclosed): the materialized `server/linux/<arch>` artifact's
- * `version` field carries the candidate image reference as `<repo>:<tag>` (the
- * exact string `docker save`/`docker load` round-trip on); the docker-loaded
- * candidate tag must never be `stable`/`latest`. Falls back to a fixed
- * candidate repo name when no colon is present.
+ * The docker repo the self-host candidate builder
+ * (`scripts/ci-cd/build-selfhost-qualification-candidates.mjs`) tags the server
+ * image with (`docker save`/`docker load` round-trips on `<repo>:<version>`).
+ * The candidate map carries a bare `<version>` for the `server/linux/<arch>`
+ * artifact (clean semver so evidence `server_version` stays honest), so the
+ * loaded image ref is this fixed repo plus that version.
+ */
+const CANDIDATE_SERVER_IMAGE_REPO = "proliferate-server-qualification";
+
+/**
+ * Derives the `<repo>:<tag>` the box's `docker load` restores from the server
+ * artifact's version. A colon-bearing version is honored verbatim; a bare
+ * version (the builder's normal output) pairs with the fixed candidate repo
+ * above. The docker-loaded candidate tag must never be `stable`/`latest`.
  */
 function splitCandidateImageRef(serverImage: { version: string }): { repo: string; tag: string } {
   const value = serverImage.version;
   const lastColon = value.lastIndexOf(":");
   if (lastColon <= 0 || lastColon === value.length - 1) {
-    return { repo: "proliferate-server-candidate", tag: value };
+    return { repo: CANDIDATE_SERVER_IMAGE_REPO, tag: value };
   }
   return { repo: value.slice(0, lastColon), tag: value.slice(lastColon + 1) };
 }
