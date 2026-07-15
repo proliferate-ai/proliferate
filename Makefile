@@ -854,6 +854,11 @@ qualification-candidate-handoff-smoke:
 # protected `staging` environment's secrets/vars — this target does not read
 # or expect the local file there.
 QUALIFICATION_INFRA_ENV ?= $(HOME)/.proliferate-local/dev/qualification-infra.env
+# Dev provisioning env (RELEASE_E2E_INTEGRATION_API_KEY, RELEASE_E2E_LOCAL_DATABASE_URL,
+# and the BYOK provider keys) written by the local provisioning scripts. Sourced
+# by qualification-local-functional AFTER qualification-infra.env when present —
+# local only; in Actions the protected Qualification environment supplies these.
+RELEASE_E2E_ENV ?= $(HOME)/.proliferate-local/dev/release-e2e.env
 QUALIFICATION_LOCAL_WORLD_BASE_DIR ?= $(CURDIR)/tests/release/.output/local-world
 qualification-local-workspace:
 	@test -n "$(PROFILE)" || { \
@@ -1011,6 +1016,7 @@ qualification-local-functional:
 	else \
 		set -a; \
 		. "$(QUALIFICATION_INFRA_ENV)"; \
+		[ ! -f "$(RELEASE_E2E_ENV)" ] || . "$(RELEASE_E2E_ENV)"; \
 		: "$${AGENT_GATEWAY_LITELLM_BASE_URL:=$$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL}"; \
 		set +a; \
 		export AGENT_GATEWAY_LITELLM_BASE_URL; \
