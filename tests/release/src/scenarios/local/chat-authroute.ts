@@ -98,15 +98,6 @@ export const HARNESSES_WITHOUT_GATEWAY_AUTH_SLOT: ReadonlySet<LocalHarnessKind> 
   "cursor",
 ]);
 
-/** The provider-key row (Settings ApiKeysPane) each user-key harness stores its
- * bounded BYOK key under. Cursor is absent (account key, not a provider key). */
-const PROVIDER_KEY_ROW_BY_HARNESS: Readonly<Record<Exclude<LocalHarnessKind, "cursor">, string>> = {
-  claude: "anthropic",
-  codex: "openai",
-  grok: "xai",
-  opencode: "anthropic",
-};
-
 /**
  * How a harness selects its model on each route (BRIEF §"BYOK input mapping"):
  *  - gateway: cheapest eligible non-Fable Claude model from the intersection of
@@ -239,8 +230,7 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
     defaultLocalWorldSmokeDriver.ensureHarnessReady(world, page, harness),
   async storeAndSelectUserKeyRoute(page, harness) {
     const envVar = BYOK_ENV_BY_HARNESS[harness as Exclude<LocalHarnessKind, "cursor">];
-    const provider = PROVIDER_KEY_ROW_BY_HARNESS[harness as Exclude<LocalHarnessKind, "cursor">];
-    if (!envVar || !provider) {
+    if (!envVar) {
       throw new Error(`storeAndSelectUserKeyRoute: harness "${harness}" has no BYOK provider mapping.`);
     }
     const key = process.env[envVar];
@@ -248,23 +238,51 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
       throw new Error(`storeAndSelectUserKeyRoute: required provider key env "${envVar}" is not set.`);
     }
     const p = page.page;
-    await openSettings(p);
-    // Store the provider key (ApiKeysPane row for this provider).
-    await p.locator("[data-api-keys-pane]").first().waitFor({ state: "visible", timeout: SETTINGS_STEP_TIMEOUT_MS });
-    const input = p.locator(`[data-api-key-input="${cssAttr(provider)}"]`).first();
-    await input.waitFor({ state: "visible", timeout: SETTINGS_STEP_TIMEOUT_MS });
-    await input.fill(key);
-    await p.locator(`[data-api-key-save="${cssAttr(provider)}"]`).first().click();
-    // Readback: the pane reflects that the provider key is stored.
+    // The api_key route lives on the per-harness settings pane (fix round 3).
+    await openHarnessSettings(p, harness);
+    // Select the api_key method card. On a single-source harness this only
+    // highlights the card + reveals the api-key details block ("Add API key");
+    // it does not itself open the create modal (product: HarnessAuthSection).
     await p
-      .locator(`[data-api-key-saved="${cssAttr(provider)}"]`)
+      .locator(`[data-harness-route-option="${cssAttr(`${harness}:api_key`)}"]`)
+      .first()
+      .click();
+    // Open the "Create and bind" modal from the api-key details block. The button
+    // text is stable product copy (HARNESS_PANE_COPY.addApiKey).
+    const addKey = p.getByRole("button", { name: "Add API key", exact: false }).first();
+    await addKey.waitFor({ state: "visible", timeout: SETTINGS_STEP_TIMEOUT_MS });
+    await addKey.click();
+    // The modal prefills the env-var name from the harness suggestion and stamps
+    // the value input / save button with the provider hint. Target by attribute
+    // presence (one modal is open) rather than a hardcoded provider so opencode's
+    // derived provider hint is handled too.
+    const valueInput = p.locator("[data-api-key-input]").first();
+    await valueInput.waitFor({ state: "visible", timeout: SETTINGS_STEP_TIMEOUT_MS });
+    await valueInput.fill(key);
+    // The vault key needs a human title (showTitleField=true).
+    await p.locator("#api-key-title").first().fill(`qual-${harness}-user-key`);
+    await p.locator("[data-api-key-save]").first().click();
+    // A wired+enabled row appears (create+bind autosaves the selection via
+    // PUT /agent-auth selections), and the harness's selected route flips to
+    // api_key. Both are the product's own readbacks.
+    await p
+      .locator("[data-api-key-saved]")
       .first()
       .waitFor({ state: "attached", timeout: SETTINGS_STEP_TIMEOUT_MS });
-    // Select the user-key ("api_key") route for the harness.
-    await selectHarnessRoute(p, harness, "api_key");
+    await p
+      .locator(`[data-harness-selected-route~="${cssAttr(`${harness}:api_key`)}"]`)
+      .first()
+      .waitFor({ state: "attached", timeout: SETTINGS_STEP_TIMEOUT_MS });
+    // Return to the home composer for the repo-selection / send flow.
+    await returnToAppHome(p);
   },
   async switchSelectedRouteToGateway(world, page, harness) {
-    await selectHarnessRoute(page.page, harness, "gateway");
+    const p = page.page;
+    // The route switch is a settings action; the page is on the workspace shell
+    // after the user-key turn, so navigate back to the harness pane first.
+    await openHarnessSettings(p, harness);
+    await selectHarnessRoute(p, harness, "gateway");
+    await returnToAppHome(p);
     await this.waitForRouteSync(world, page, harness, "gateway");
   },
   async waitForRouteSync(world, _page, harness, route) {
@@ -999,13 +1017,110 @@ function cssAttr(value: string): string {
   return value.replace(/["\\]/g, "\\$&");
 }
 
-/** Opens the product Settings surface (best-effort: a Settings control by role).
- * The route-store/route-select testids are asserted by the caller afterwards. */
-async function openSettings(page: Page): Promise<void> {
-  const trigger = page.getByRole("button", { name: /settings/i }).first();
-  if (await trigger.count().catch(() => 0)) {
-    await trigger.click().catch(() => undefined);
+/**
+ * Thrown when the per-harness auth / integration UI is unreachable because the
+ * desktop's `cloudActive` is false (server capability `cloudWorkspaces` off — no
+ * cloud-compute provisioning). A truthful, actionable fail-closed signal for the
+ * LOCAL-3/6 cells: the navigation + selectors are correct, but the surface is
+ * product-gated in the local qualification world. Surfaced for a ruling — never a
+ * silently-weakened assertion.
+ */
+export class CloudSurfaceGatedError extends Error {}
+
+/** The Agents-scope settings sidebar label for each harness (fix round 3: the
+ * user-key surface lives on the per-harness settings pane, reached via the
+ * account menu → Settings → Agents scope → this row — NOT the workspace-scoped
+ * "Repo's settings" button the round-2 driver clicked, and NOT the cloud-gated
+ * `agent-api-keys` ApiKeysPane, which is a titled key vault, not the api_key
+ * route surface). Verified against the live renderer DOM (fix round 3). */
+const HARNESS_SETTINGS_LABEL: Readonly<Record<LocalHarnessKind, string>> = {
+  claude: "Claude Code",
+  codex: "Codex",
+  grok: "Grok",
+  opencode: "OpenCode",
+  cursor: "Cursor",
+};
+
+/**
+ * Opens the real app Settings surface: the sidebar account block's "Open account
+ * menu" button → the "Settings" menu item (`navigate("/settings?section=account")`).
+ * The workspace-scoped "Repo's settings" control the round-2 driver matched with
+ * `getByRole(button, /settings/i)` is a DIFFERENT surface and never shows the
+ * harness auth cards — hence the round-2 timeout.
+ */
+async function openAppSettings(page: Page): Promise<void> {
+  // The main sidebar starts collapsed on a fresh renderer; the account block that
+  // owns the "Settings" entry lives in it. Expand it first if the "Show sidebar"
+  // toggle is present (verified against the live DOM, fix round 3).
+  await ensureSidebarOpen(page);
+  await page.getByRole("button", { name: "Open account menu" }).first().click();
+  // The account popover's "Settings" row is a native button; its accessible name
+  // includes the trailing shortcut hint, so match on the leading label.
+  const settingsItem = page.getByRole("button", { name: /^settings/i }).first();
+  await settingsItem.waitFor({ state: "visible", timeout: SETTINGS_STEP_TIMEOUT_MS });
+  await settingsItem.click();
+  // The settings screen renders its scope tablist and a "Back to app" control.
+  await page.getByRole("button", { name: /back to app/i }).first().waitFor({ state: "visible", timeout: SETTINGS_STEP_TIMEOUT_MS });
+}
+
+/**
+ * Navigates to a harness's per-agent settings pane (Agents scope → harness row)
+ * and waits for its authentication method cards to render. Fails closed if the
+ * auth section never appears — that is the live signal that the cloud surface is
+ * gated (cloudActive false), reported by the caller as a product-config gap
+ * rather than silently passing.
+ */
+async function openHarnessSettings(page: Page, harness: LocalHarnessKind): Promise<void> {
+  await openAppSettings(page);
+  await page.getByRole("tab", { name: /agents/i }).first().click();
+  const label = HARNESS_SETTINGS_LABEL[harness];
+  await page.getByRole("button", { name: label, exact: false }).first().click();
+  const authSection = page.locator(`[data-harness-auth-section="${cssAttr(harness)}"]`).first();
+  // Race the expected auth cards against the cloud sign-in gate so a gated build
+  // fails closed with a precise reason instead of an opaque waitFor timeout.
+  const gate = page.getByText("Sign in to Proliferate Cloud", { exact: false }).first();
+  const deadline = Date.now() + SETTINGS_STEP_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    if (await authSection.isVisible().catch(() => false)) {
+      return;
+    }
+    if (await gate.isVisible().catch(() => false)) {
+      throw new CloudSurfaceGatedError(
+        `[${harness}] the per-harness auth surface is gated behind "Sign in to Proliferate Cloud" ` +
+          "(cloudActive=false). The api_key/gateway model-auth UI requires cloudActive, which the desktop " +
+          "derives from the server capability contract's cloudWorkspaces flag " +
+          "(server: cloud_provisioning_configured, i.e. E2B cloud-compute configured). The local qualification " +
+          "world configures no cloud compute, so cloudWorkspaces=false → cloudActive=false and this surface " +
+          "cannot be driven. Resolution is a ruling: either the qual world declares cloud provisioning so " +
+          "cloudActive is true, or the product decouples model-auth/integration UI from the cloud-compute gate.",
+      );
+    }
+    await sleep(500);
   }
+  throw new Error(`openHarnessSettings: [${harness}] the harness auth section never rendered.`);
+}
+
+/** Expands the main sidebar if it is collapsed (the "Show sidebar" toggle is
+ * only present while collapsed). Best-effort; a no-op when already open. */
+async function ensureSidebarOpen(page: Page): Promise<void> {
+  const toggle = page.getByRole("button", { name: "Show sidebar" }).first();
+  if (await toggle.count().catch(() => 0)) {
+    await toggle.click({ timeout: SETTINGS_STEP_TIMEOUT_MS }).catch(() => undefined);
+  }
+  await page
+    .getByRole("button", { name: "Open account menu" })
+    .first()
+    .waitFor({ state: "visible", timeout: SETTINGS_STEP_TIMEOUT_MS });
+}
+
+/** Returns from the settings surface to the home composer so the subsequent
+ * repo-selection / send flow runs on the home screen. */
+async function returnToAppHome(page: Page): Promise<void> {
+  await page.getByRole("button", { name: /back to app/i }).first().click();
+  await page
+    .locator("[data-home-composer-editor]")
+    .first()
+    .waitFor({ state: "visible", timeout: SETTINGS_STEP_TIMEOUT_MS });
 }
 
 /** Selects a harness's auth route (`gateway`/`api_key`/`native`) via

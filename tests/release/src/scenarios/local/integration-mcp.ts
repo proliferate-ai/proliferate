@@ -10,6 +10,7 @@ import {
 } from "./world-boot.js";
 import { captureLocalDriverFailure } from "./debug-capture.js";
 import { resolveLocalWorkspaceSessionId } from "./local-session.js";
+import { CloudSurfaceGatedError } from "./chat-authroute.js";
 import type { ReadyLocalWorld } from "../../worlds/local-workspace/world.js";
 import type { LocalWorldCleanupEvidence } from "../../worlds/local-workspace/cleanup.js";
 import { authenticatedActor, type AuthenticatedActor } from "../../fixtures/authenticated-actor.js";
@@ -149,8 +150,13 @@ export const defaultLocalMcpDriver: LocalMcpDriver = {
       throw new Error(`connectIntegration: RELEASE_E2E_INTEGRATION_API_KEY is not set for namespace "${namespace}".`);
     }
     const p = page.page;
+    // The integration connect UI lives on Settings → Integrations (user scope),
+    // reached via the account menu — NOT the workspace "Repo's settings" surface
+    // (fix round 3). Navigate there before touching the connect controls.
+    await openIntegrationsSettings(p, namespace);
     const already = p.locator(`[data-integration-connected="${cssAttr(namespace)}"]`).first();
     if (await already.count().catch(() => 0)) {
+      await returnToAppHome(p);
       return;
     }
     const trigger = p.locator(`[data-integration-connect-trigger="${cssAttr(namespace)}"]`).first();
@@ -164,6 +170,8 @@ export const defaultLocalMcpDriver: LocalMcpDriver = {
       .locator(`[data-integration-connected="${cssAttr(namespace)}"]`)
       .first()
       .waitFor({ state: "attached", timeout: 30_000 });
+    // Return to the home composer for the repo-selection / send flow.
+    await returnToAppHome(p);
   },
   async selectRepoAndWorkLocally(page, repo) {
     const p = page.page;
@@ -483,6 +491,62 @@ function sleep(ms: number): Promise<void> {
 /** Escapes a value for safe interpolation inside a `[attr="…"]` CSS selector. */
 function cssAttr(value: string): string {
   return value.replace(/["\\]/g, "\\$&");
+}
+
+/** Expands the main sidebar if collapsed (the "Show sidebar" toggle only exists
+ * while collapsed); the account block that owns "Settings" lives in it. */
+async function ensureSidebarOpen(page: Page): Promise<void> {
+  const toggle = page.getByRole("button", { name: "Show sidebar" }).first();
+  if (await toggle.count().catch(() => 0)) {
+    await toggle.click({ timeout: 30_000 }).catch(() => undefined);
+  }
+  await page.getByRole("button", { name: "Open account menu" }).first().waitFor({ state: "visible", timeout: 30_000 });
+}
+
+/** Opens the app Settings surface via the sidebar account menu → "Settings". */
+async function openAppSettings(page: Page): Promise<void> {
+  await ensureSidebarOpen(page);
+  await page.getByRole("button", { name: "Open account menu" }).first().click();
+  const settingsItem = page.getByRole("button", { name: /^settings/i }).first();
+  await settingsItem.waitFor({ state: "visible", timeout: 30_000 });
+  await settingsItem.click();
+  await page.getByRole("button", { name: /back to app/i }).first().waitFor({ state: "visible", timeout: 30_000 });
+}
+
+/** Navigates to Settings → Integrations (user scope) and waits for the pane's
+ * connect controls, failing closed with a precise reason if the surface is
+ * gated behind the cloud sign-in state (cloudActive=false). */
+async function openIntegrationsSettings(page: Page, namespace: string): Promise<void> {
+  await openAppSettings(page);
+  // Integrations is a user-scope section (the default landing scope), so no
+  // scope-tab switch is needed; click the sidebar row by its label.
+  await page.getByRole("button", { name: "Integrations", exact: true }).first().click();
+  const trigger = page.locator("[data-integration-connect-trigger], [data-integration-connected]").first();
+  const gate = page.getByText(/Proliferate Cloud|Sign in to/i).first();
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    if (await trigger.isVisible().catch(() => false)) {
+      return;
+    }
+    if (await gate.isVisible().catch(() => false)) {
+      throw new CloudSurfaceGatedError(
+        `the Integrations settings pane is gated behind the cloud sign-in state (cloudActive=false) for ` +
+          `namespace "${namespace}". The desktop derives cloudActive from the server capability contract's ` +
+          "cloudWorkspaces flag (server: cloud_provisioning_configured / E2B cloud-compute). The local " +
+          "qualification world configures no cloud compute, so this UI cannot be driven. Resolution is a " +
+          "ruling: the qual world declares cloud provisioning, or the product decouples the integrations UI " +
+          "from the cloud-compute gate.",
+      );
+    }
+    await sleep(500);
+  }
+  throw new Error(`openIntegrationsSettings: the integrations connect controls never rendered for "${namespace}".`);
+}
+
+/** Returns from Settings to the home composer. */
+async function returnToAppHome(page: Page): Promise<void> {
+  await page.getByRole("button", { name: /back to app/i }).first().click();
+  await page.locator("[data-home-composer-editor]").first().waitFor({ state: "visible", timeout: 30_000 });
 }
 
 async function clickByRole(page: Page, role: "button", name: RegExp, what: string): Promise<void> {
