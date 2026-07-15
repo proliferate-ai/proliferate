@@ -23,7 +23,7 @@ const lifecycleMocks = vi.hoisted(() => ({
 vi.mock("#product/lib/access/anyharness/runtime-bootstrap", () => ({
   bootstrapHarnessRuntime: runtimeMocks.bootstrapHarnessRuntime,
 }));
-vi.mock("@/hooks/access/tauri/use-update-restart-watcher", () => ({
+vi.mock("#product/hooks/access/tauri/use-update-restart-watcher", () => ({
   useUpdateRestartWatcher: lifecycleMocks.useUpdateRestartWatcher,
 }));
 vi.mock("#product/hooks/cloud/lifecycle/use-desktop-worker-enrollment", () => ({

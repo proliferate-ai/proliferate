@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DesktopWorkerBridge } from "@proliferate/product-client/host/desktop-bridge";
 import type { AuthState } from "@proliferate/product-client/host/product-host";
@@ -34,6 +35,12 @@ const worker = {} as DesktopWorkerBridge;
 // harness drives it through rerender rather than the auth store.
 async function loadEnrollmentHarness() {
   vi.resetModules();
+  const { ProductHostProvider } = await import(
+    "@proliferate/product-client/host/ProductHostProvider"
+  );
+  const { makeTestProductHost } = await import(
+    "#product/test/product-host-fixtures"
+  );
   const { useOrganizationStore } = await import("#product/stores/organizations/organization-store");
   const { useToastStore } = await import("#product/stores/toast/toast-store");
   const { useDesktopWorkerEnrollment } = await import("#product/hooks/cloud/lifecycle/use-desktop-worker-enrollment");
@@ -42,11 +49,19 @@ async function loadEnrollmentHarness() {
     activeOrganizationValidated: false,
   });
   useToastStore.setState({ toasts: [] });
+  // The enrollment hook reads captureException through the product telemetry
+  // facade (host boundary), so the harness mounts a ProductHostProvider.
+  // Both provider and hook come from the same post-reset module registry so
+  // they share one ProductHostContext instance.
+  const host = makeTestProductHost();
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <ProductHostProvider host={host}>{children}</ProductHostProvider>
+  );
   const props: EnrollmentAuthProps = { authStatus: "loading", authUserId: null };
   const rendered = renderHook(
     ({ authStatus, authUserId }: EnrollmentAuthProps) =>
       useDesktopWorkerEnrollment(worker, authStatus, authUserId),
-    { initialProps: props },
+    { initialProps: props, wrapper },
   );
   const setProps = (next: EnrollmentAuthProps) => {
     props.authStatus = next.authStatus;

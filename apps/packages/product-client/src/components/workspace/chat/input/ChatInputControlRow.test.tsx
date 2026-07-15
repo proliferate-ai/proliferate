@@ -17,9 +17,6 @@ vi.mock("#product/stores/activity/goal-bar-store", () => ({
 vi.mock("#product/hooks/cloud/derived/use-composer-integrations-state", () => ({
   useComposerIntegrationsState: () => ({ mode: "hidden", connectedCount: 0, providers: [], reauthLabel: null }),
 }));
-vi.mock("@/hooks/sessions/lifecycle/use-runtime-pressure-state", () => ({
-  useRuntimePressureState: () => null,
-}));
 vi.mock("./RuntimePressureIndicator", () => ({
   RuntimePressureIndicator: () => null,
 }));

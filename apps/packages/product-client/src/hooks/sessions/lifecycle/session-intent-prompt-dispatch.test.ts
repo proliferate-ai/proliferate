@@ -27,11 +27,11 @@ vi.mock("#product/lib/access/anyharness/session-runtime", () => ({
   getSessionClientAndWorkspace: mocks.getSessionClientAndWorkspace,
 }));
 
-vi.mock("#product/lib/infra/measurement/measurement-port", () => ({
+vi.mock("#product/lib/infra/measurement/measurement-port", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("#product/lib/infra/measurement/measurement-port")
+  >()),
   logLatency: mocks.logLatency,
-}));
-
-vi.mock("#product/lib/infra/measurement/measurement-port", () => ({
   failLatencyFlow: mocks.failLatencyFlow,
   finishLatencyFlow: mocks.finishLatencyFlow,
   getLatencyFlowRequestHeaders: mocks.getLatencyFlowRequestHeaders,

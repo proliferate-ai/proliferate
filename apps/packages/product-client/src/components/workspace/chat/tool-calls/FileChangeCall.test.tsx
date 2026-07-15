@@ -1,11 +1,14 @@
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup as renderReactToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import type { ProductHost } from "@proliferate/product-client/host/product-host";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import { FileChangeCall } from "#product/components/workspace/chat/tool-calls/FileChangeCall";
+import { makeTestProductHost } from "#product/test/product-host-fixtures";
 
-const webTestHost = { desktop: null } as ProductHost;
+// A complete web host (desktop: null). The moved code block reads
+// useProductHost().clipboard for its copy control, so a bare { desktop: null }
+// cast (no clipboard) crashes; makeTestProductHost supplies every capability.
+const webTestHost = makeTestProductHost({ desktop: null });
 
 function renderToStaticMarkup(ui: ReactElement) {
   return renderReactToStaticMarkup(

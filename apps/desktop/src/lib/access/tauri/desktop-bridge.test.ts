@@ -69,6 +69,9 @@ vi.mock("@/lib/access/tauri/menu", () => ({
 vi.mock("@/lib/access/tauri/window", () => ({
   setRunningAgentCount: mocks.setRunningAgentCount,
   setWebviewZoom: mocks.setWebviewZoom,
+  applyMacWindowChrome: vi.fn(),
+  isMainTauriWebviewAvailable: vi.fn(),
+  revealCurrentWindow: vi.fn(),
 }));
 vi.mock("@/lib/access/tauri/dock", () => ({
   setWorkspaceActivityIndicator: mocks.setWorkspaceActivityIndicator,

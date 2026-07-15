@@ -41,7 +41,7 @@ vi.mock("@/lib/access/tauri/shell", () => ({
 vi.mock("@/lib/access/tauri/deep-link", () => ({
   subscribeDeepLinkUrls: mocks.subscribeDeepLinkUrls,
 }));
-vi.mock("@/lib/integrations/auth/proliferate-sso-auth", () => ({
+vi.mock("@proliferate/product-client/internal/lib/access/cloud/auth-probes", () => ({
   discoverDesktopSso: mocks.discoverDesktopSso,
 }));
 vi.mock("@/lib/integrations/auth/orchestration-callback", () => ({
@@ -324,6 +324,7 @@ describe("createDesktopAuthOperations - startLogin disposition", () => {
       email: "a@example.test",
       organizationId: "org-hint",
       connectionId: "conn-hint",
+      apiBaseUrl: "https://api.example.test",
     });
     expect(actions.signInWithSso).toHaveBeenCalledWith({
       organizationId: "org-resolved",

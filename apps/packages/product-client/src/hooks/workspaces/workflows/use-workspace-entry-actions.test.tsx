@@ -107,14 +107,14 @@ vi.mock("#product/hooks/chat/derived/use-configured-launch-readiness", () => ({
   }),
 }));
 
-vi.mock("#product/lib/infra/measurement/measurement-port", () => ({
+vi.mock("#product/lib/infra/measurement/measurement-port", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("#product/lib/infra/measurement/measurement-port")
+  >()),
   elapsedMs: () => 0,
   elapsedSince: () => 0,
   logLatency: vi.fn(),
   startLatencyTimer: () => 0,
-}));
-
-vi.mock("#product/lib/infra/measurement/measurement-port", () => ({
   annotateLatencyFlow: vi.fn(),
   failLatencyFlow: vi.fn(),
 }));

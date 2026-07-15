@@ -8,7 +8,7 @@ import { SkeletonBlock } from "#product/components/feedback/Skeleton";
 
 const testDir = dirname(fileURLToPath(import.meta.url));
 const domCss = readFileSync(
-  resolve(testDir, "../../../../packages/design/src/css/dom.css"),
+  resolve(testDir, "../../../../../packages/design/src/css/dom.css"),
   "utf8",
 );
 

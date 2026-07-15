@@ -24,6 +24,7 @@ vi.mock("@/lib/access/cloud/client", () => ({
     captured.getProliferateClientCalls += 1;
     return sentinels.cloudClient;
   },
+  getDesktopCloudAccessToken: async () => "test-token",
 }));
 
 vi.mock("@tanstack/react-query", () => ({

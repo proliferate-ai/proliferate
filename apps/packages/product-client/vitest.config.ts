@@ -11,11 +11,18 @@ const srcDir = fileURLToPath(new URL("./src", import.meta.url));
 // public specifiers. Tests run against those packages' source (as the Desktop
 // vitest config did) so they do not require a prior build.
 const anyharnessSdk = fileURLToPath(
-  new URL("../../anyharness/sdk/src/index.ts", import.meta.url),
+  new URL("../../../anyharness/sdk/src/index.ts", import.meta.url),
 );
 const anyharnessSdkReact = fileURLToPath(
-  new URL("../../anyharness/sdk-react/src/index.ts", import.meta.url),
+  new URL("../../../anyharness/sdk-react/src/index.ts", import.meta.url),
 );
+
+// The test lane injects the retained Desktop measurement engine as the sink
+// (see `vitest.setup.ts`, ruling R1). That engine resolves its own `@/*`
+// specifiers against Desktop `src`; map them here for the test lane only.
+// Product-client source itself has zero `@/*` imports (all rewritten to
+// `#product/*`), so this alias only affects the injected Desktop modules.
+const desktopSrc = fileURLToPath(new URL("../../desktop/src", import.meta.url));
 
 export default defineConfig({
   resolve: {
@@ -28,6 +35,7 @@ export default defineConfig({
       { find: /^#product\//, replacement: `${srcDir}/` },
       { find: /^@anyharness\/sdk-react$/, replacement: anyharnessSdkReact },
       { find: /^@anyharness\/sdk$/, replacement: anyharnessSdk },
+      { find: /^@\//, replacement: `${desktopSrc}/` },
     ],
   },
   test: {
@@ -35,5 +43,7 @@ export default defineConfig({
     // `// @vitest-environment jsdom` pragma where a DOM is required.
     environment: "node",
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+    // Inject the retained Desktop measurement engine as the port sink.
+    setupFiles: ["./vitest.setup.ts"],
   },
 });

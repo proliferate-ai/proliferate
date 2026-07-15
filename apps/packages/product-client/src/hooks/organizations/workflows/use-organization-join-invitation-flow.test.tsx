@@ -18,8 +18,16 @@ const connectServerMocks = vi.hoisted(() => ({
 }));
 
 const apiMocks = vi.hoisted(() => ({
-  getRuntimeDesktopAppConfig: vi.fn<() => { apiBaseUrl: string | null }>(),
   isOfficialHostedApiBaseUrl: vi.fn<(_url: string) => boolean>(),
+}));
+
+// The moved hook now sources the current server's base URL from
+// host.deployment.apiBaseUrl (was getRuntimeDesktopAppConfig pre-move); drive it
+// through the bridged test host.
+const deploymentMocks = vi.hoisted(() => ({
+  // "" == Cloud / no configured server (falsy, as the old getRuntimeDesktopAppConfig
+  // null did); host.deployment.apiBaseUrl is a non-null string.
+  apiBaseUrl: "" as string,
 }));
 
 const authMethodsMocks = vi.hoisted(() => ({
@@ -36,7 +44,10 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", async () => {
       authStoreBridgedHost(
         useAuthStore((s) => s.status),
         useAuthStore((s) => s.user),
-        { auth: { startLogin: hostMocks.startLogin } },
+        {
+          auth: { startLogin: hostMocks.startLogin },
+          deployment: { apiBaseUrl: deploymentMocks.apiBaseUrl },
+        },
       ),
   };
 });
@@ -49,12 +60,17 @@ vi.mock("#product/hooks/auth/workflows/use-connect-server", () => ({
   }),
 }));
 
-vi.mock("@/lib/infra/proliferate-api", () => ({
-  getRuntimeDesktopAppConfig: apiMocks.getRuntimeDesktopAppConfig,
+vi.mock("#product/lib/infra/proliferate-api", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("#product/lib/infra/proliferate-api")
+  >()),
   isOfficialHostedApiBaseUrl: apiMocks.isOfficialHostedApiBaseUrl,
 }));
 
-vi.mock("@/lib/integrations/auth/proliferate-auth-password", () => ({
+vi.mock("#product/lib/access/cloud/auth-probes", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("#product/lib/access/cloud/auth-probes")
+  >()),
   getDesktopAuthMethods: authMethodsMocks.getDesktopAuthMethods,
 }));
 
@@ -83,8 +99,7 @@ describe("useOrganizationJoinInvitationFlow", () => {
     connectServerMocks.openForUrl.mockResolvedValue(undefined);
     // Default: current server is Cloud (no configured base URL); GitHub is
     // advertised, so the SSO/GitHub launch path is exercised.
-    apiMocks.getRuntimeDesktopAppConfig.mockReset();
-    apiMocks.getRuntimeDesktopAppConfig.mockReturnValue({ apiBaseUrl: null });
+    deploymentMocks.apiBaseUrl = "";
     apiMocks.isOfficialHostedApiBaseUrl.mockReset();
     apiMocks.isOfficialHostedApiBaseUrl.mockImplementation((url: string) => url.includes("proliferate.com"));
     authMethodsMocks.getDesktopAuthMethods.mockReset();
@@ -149,9 +164,7 @@ describe("useOrganizationJoinInvitationFlow", () => {
   });
 
   it("treats an origin matching the currently-configured server as a normal same-server join", async () => {
-    apiMocks.getRuntimeDesktopAppConfig.mockReturnValue({
-      apiBaseUrl: "https://proliferate.corp.example",
-    });
+    deploymentMocks.apiBaseUrl = "https://proliferate.corp.example";
     const entry =
       "/settings?section=account&joinOrganizationId=org-1&joinServerOrigin=https%3A%2F%2Fproliferate.corp.example";
 

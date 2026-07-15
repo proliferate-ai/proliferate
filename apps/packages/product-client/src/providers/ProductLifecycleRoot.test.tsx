@@ -23,7 +23,7 @@ vi.mock("@/lib/integrations/telemetry/native-diagnostics", () => ({
   reportReactRenderError: vi.fn(),
 }));
 vi.mock("#product/hooks/app/lifecycle/use-debug-session-activity", () => ({ useDebugSessionActivity: vi.fn() }));
-vi.mock("@/hooks/app/lifecycle/use-dev-desktop-handoff", () => ({ useDevDesktopHandoff: vi.fn() }));
+vi.mock("#product/hooks/app/lifecycle/use-dev-desktop-handoff", () => ({ useDevDesktopHandoff: vi.fn() }));
 vi.mock("#product/hooks/app/lifecycle/use-product-entry-routing", () => ({ useProductEntryRouting: vi.fn() }));
 vi.mock("#product/hooks/organizations/lifecycle/use-organization-join-auth-launch", () => ({ useOrganizationJoinAuthLaunch: vi.fn() }));
 vi.mock("#product/hooks/app/lifecycle/use-app-shortcuts", () => ({ useAppShortcuts: vi.fn() }));
@@ -48,18 +48,19 @@ vi.mock("#product/hooks/support/lifecycle/use-support-report-upload-queue", () =
 vi.mock("#product/hooks/sessions/lifecycle/use-turn-end-sound", () => ({ useTurnEndSound: vi.fn() }));
 vi.mock("#product/hooks/workspaces/lifecycle/use-workspace-git-status-persistence", () => ({ useWorkspaceGitStatusPersistence: vi.fn() }));
 vi.mock("#product/hooks/auth/facade/use-product-auth", () => ({ useProductAuthStatus: () => "loading" }));
-vi.mock("#product/lib/infra/measurement/measurement-port", () => ({
+vi.mock("#product/lib/infra/measurement/measurement-port", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("#product/lib/infra/measurement/measurement-port")
+  >()),
   elapsedStartupMs: () => 0,
   logStartupDebug: vi.fn(),
   startStartupTimer: () => 0,
-}));
-vi.mock("#product/lib/infra/measurement/measurement-port", () => ({
   recordBootDiagnostic: vi.fn(),
   recordBootDiagnosticOnce: vi.fn(),
 }));
 
 const desktopLifecycleMountCount = vi.hoisted(() => ({ value: 0 }));
-vi.mock("@/providers/DesktopProductLifecycleRoot", () => ({
+vi.mock("#product/providers/DesktopProductLifecycleRoot", () => ({
   DesktopProductLifecycleRoot: () => {
     desktopLifecycleMountCount.value += 1;
     return <div data-testid="desktop-lifecycle-root" />;
