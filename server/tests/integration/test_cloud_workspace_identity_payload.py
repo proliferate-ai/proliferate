@@ -153,3 +153,49 @@ async def test_scratch_payload_has_no_fabricated_repo(
     assert dumped["runtime"]["environmentId"] is None
     assert dumped["displayName"] == f"Workflow run {invocation_id}"
     assert dumped["anyharnessWorkspaceId"] == "workspace-scratch-1"
+
+
+def _permits_null(prop_schema: dict[str, Any]) -> bool:
+    """True when the OpenAPI property schema allows an explicit ``null``.
+
+    Pydantic emits ``str | None`` and ``RepoRef | None`` as an ``anyOf`` that
+    includes a ``{"type": "null"}`` branch. A non-null default (the regression)
+    would collapse this to a single-type schema with no null branch.
+    """
+    return any(branch.get("type") == "null" for branch in prop_schema.get("anyOf", []))
+
+
+@pytest.mark.parametrize("schema_name", ["WorkspaceSummary", "WorkspaceDetail"])
+def test_identity_fields_are_required_in_openapi_contract(schema_name: str) -> None:
+    """Regression pin for the Pydantic-default identity regression (MC5A-SDK-01).
+
+    The frozen response requires current servers to ALWAYS emit ``workspaceKind``
+    (non-null enum) and ``repo``/``repoEnvironmentId`` (required but nullable).
+    Reintroducing a Pydantic default on any of these would silently drop it from
+    the OpenAPI ``required`` set (and, for the nullable fields, drop the null
+    branch), which is exactly what this contract asserts against.
+    """
+    # Import locally so the module-level serialization proofs above do not depend
+    # on constructing the whole app.
+    from proliferate.main import create_app
+
+    schemas = create_app().openapi()["components"]["schemas"]
+    schema = schemas[schema_name]
+    required = schema.get("required", [])
+    props = schema["properties"]
+
+    # All three identity fields are in the required set (never omittable).
+    assert "workspaceKind" in required
+    assert "repoEnvironmentId" in required
+    assert "repo" in required
+
+    # ``workspaceKind`` is a non-null enum with exactly the two allowed values.
+    workspace_kind = props["workspaceKind"]
+    assert workspace_kind.get("type") == "string"
+    assert not _permits_null(workspace_kind)
+    assert set(workspace_kind["enum"]) == {"repositoryWorktree", "scratch"}
+
+    # ``repoEnvironmentId`` and ``repo`` are required but permit an explicit null
+    # (scratch serializes null; repository worktrees populate them).
+    assert _permits_null(props["repoEnvironmentId"])
+    assert _permits_null(props["repo"])
