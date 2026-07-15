@@ -50,6 +50,37 @@ const SECTION_STYLE = {
 const STICKY_HEADER_CLASS =
   "sticky top-0 z-10 cursor-pointer select-none bg-[color-mix(in_srgb,var(--color-diff-sidebar-file-header-surface)_97%,transparent)]";
 
+// Codex-style hunk-gap separator (diff.html [data-separator='line-info']):
+// not a full-width band — a slim strip inset from the pane edges with 6px
+// radii, drawn as ::before so the gutter and content grid cells form one
+// continuous bar. Playground-scoped; production would restyle
+// ChatGutterSeparatorLine/DiffGapInfoRow instead.
+const GAP_SEPARATOR_CSS = `
+[data-git-review-v2] .diff-gutter-cell[data-separator],
+[data-git-review-v2] [data-separator="gap-info"] {
+  background: transparent;
+  position: relative;
+}
+[data-git-review-v2] [data-separator]::before {
+  content: "";
+  position: absolute;
+  inset: 3px 0;
+  background: var(--codex-diffs-separator-surface);
+  pointer-events: none;
+}
+[data-git-review-v2] .diff-gutter-cell[data-separator]::before {
+  left: 6px;
+  border-radius: 6px 0 0 6px;
+}
+[data-git-review-v2] [data-separator="gap-info"]::before {
+  right: 6px;
+  border-radius: 0 6px 6px 0;
+}
+[data-git-review-v2] [data-separator="gap-info"] > span {
+  position: relative;
+}
+`;
+
 export function GitReviewV2Playground() {
   const [paneWidth, setPaneWidth] = useState<number>(380);
 
@@ -132,7 +163,8 @@ function GitReviewV2Pane() {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div data-git-review-v2="" className="flex h-full min-h-0 flex-col">
+      <style>{GAP_SEPARATOR_CSS}</style>
       <ReviewHeader
         targetLabel={target.label}
         targetId={targetId}
