@@ -143,16 +143,29 @@ async function linkGithubIdentity(userId: string, providerSubject: string): Prom
   );
 }
 
-/** Drive the seat-adjustment pass repeatedly to drain ALL pending adjustments.
- * `process_pending_seat_adjustments` claims with `FOR UPDATE OF subscription
- * SKIP LOCKED`, so at most one adjustment per subscription advances per pass:
- * when several pending adjustments share one subscription (e.g. a non-trivial
- * initial-reconcile from `subscription.created` plus an invite proration — the
- * shape a long-lived org DB produces), each needs its own pass. The background
- * loop achieves this over ticks; a deterministic test drains explicitly. */
-function drainSeatAdjustments(times = 5): void {
-  for (let i = 0; i < times; i++) {
+/** Drive the seat-adjustment pass until no pending/retryable rows remain for the
+ * subject (bounded). `process_pending_seat_adjustments` claims with `FOR UPDATE
+ * OF subscription SKIP LOCKED`, so at most one adjustment per subscription
+ * advances per pass: when several pending adjustments share one subscription
+ * (e.g. a non-trivial initial-reconcile from `subscription.created` plus an
+ * invite proration — the shape a long-lived org DB produces), each needs its own
+ * pass. Polling the pending count between passes also absorbs the brief window
+ * before an accept's adjustment is committed. The background loop achieves this
+ * over ticks; a deterministic test drains explicitly. */
+async function drainSeatAdjustments(subjectId: string, maxPasses = 10): Promise<void> {
+  for (let i = 0; i < maxPasses; i++) {
     b.processSeatAdjustments();
+    const pending = await b.withDb(async (db) => {
+      const r = await db.query(
+        `SELECT count(*)::int AS n FROM billing_seat_adjustment
+           WHERE billing_subject_id = $1 AND status IN ('pending', 'failed_retryable')`,
+        [subjectId],
+      );
+      return r.rows[0].n as number;
+    });
+    if (pending === 0) {
+      return;
+    }
   }
 }
 
@@ -318,7 +331,21 @@ const t2Bill2: Tier2CellHandler = async (ctx: Tier2CellContext): Promise<Tier2Ca
     const r = await db.query(`SELECT amount_usd FROM llm_credit_grant WHERE billing_subject_id = $1 AND source = 'seat_pool' ORDER BY created_at DESC LIMIT 1`, [orgSubject.id]);
     return r.rows[0] ? Number(r.rows[0].amount_usd) : null;
   });
-  assert.equal(llmPoolAmount, seats * 5, "the ruled $5/seat LLM pool");
+  // The pool is $5 x the subscription's ACTUAL seat_quantity, which the
+  // subscription.created handler reconciles to the org's active member count
+  // (not the 3 the checkout requested — the long-lived org DB has more active
+  // members). Assert the ruled $5/seat rule against that reconciled quantity.
+  const seatQuantity = await b.withDb(async (db) => {
+    const r = await db.query(
+      `SELECT seat_quantity FROM billing_subscription
+         WHERE billing_subject_id = $1 AND status IN ('active', 'trialing')
+         ORDER BY created_at DESC LIMIT 1`,
+      [orgSubject.id],
+    );
+    return Number(r.rows[0].seat_quantity);
+  });
+  assert.ok(seatQuantity >= seats, "subscription reconciled to at least the requested seats");
+  assert.equal(llmPoolAmount, seatQuantity * 5, "the ruled $5/seat LLM pool (against the reconciled seat count)");
   ctx.policy.record({ free_grant_usd: 2, llm_per_seat_usd: 5, compute_per_seat_usd: 15 });
   return { status: "green" };
 };
@@ -372,7 +399,7 @@ const t2Bill3: Tier2CellHandler = async (): Promise<Tier2CaseResult> => {
   assert.ok(bump!.grant_quantity >= 1);
 
   const prorationBefore = (await b.listGrants(subject.id)).filter((g) => g.grant_type === "pro_seat_proration").length;
-  drainSeatAdjustments();
+  await drainSeatAdjustments(subject.id);
   adjustments = await b.listSeatAdjustments(subject.id);
   assert.equal(adjustments.at(-1)!.status, "succeeded", "the invite proration seat adjustment converges");
   const prorationAfter = (await b.listGrants(subject.id)).filter((g) => g.grant_type === "pro_seat_proration").length;
@@ -381,14 +408,14 @@ const t2Bill3: Tier2CellHandler = async (): Promise<Tier2CaseResult> => {
   const members = await seed.listMembers(token, organizationId);
   const member = members.find((m) => m.email === email)!;
   await seed.removeMembership(token, organizationId, member.membershipId);
-  drainSeatAdjustments();
+  await drainSeatAdjustments(subject.id);
   adjustments = await b.listSeatAdjustments(subject.id);
   assert.equal(adjustments.at(-1)!.grant_quantity, 0, "removal issues no refund grant");
 
   const reinvite = await seed.inviteMember(token, organizationId, email, "member");
   const reaccept = await seed.acceptCurrentInvitation(memberToken, reinvite.id);
   assert.ok([200, 201].includes(reaccept.status));
-  drainSeatAdjustments();
+  await drainSeatAdjustments(subject.id);
   const prorationFinal = (await b.listGrants(subject.id)).filter((g) => g.grant_type === "pro_seat_proration").length;
   assert.equal(prorationFinal - prorationBefore, 1, "no second proration grant on same-period re-invite (no double grant)");
 
