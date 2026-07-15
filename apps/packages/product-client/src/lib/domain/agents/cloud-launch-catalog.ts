@@ -12,6 +12,7 @@ import type {
 } from "#product/lib/domain/agents/cloud-launch-catalog-types";
 import {
   projectCloudControl,
+  projectModelTuningControlValues,
   projectSessionDefaultControls,
 } from "#product/lib/domain/agents/cloud-launch-controls";
 import { gateModelList, type ActiveAuthContextIds } from "#product/lib/domain/agents/model-availability";
@@ -32,6 +33,7 @@ export type {
   DesktopAgentLaunchModel,
   DesktopLaunchModelRegistry,
   DesktopLaunchModelRegistryModel,
+  DesktopModelTuningControlValues,
   DesktopSessionDefaultControl,
   DesktopSessionDefaultControlValue,
   RuntimeAgentLaunchOptions,
@@ -150,6 +152,7 @@ export function mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
           availability: cloudModel?.availability ?? null,
           sessionDefaultControls: cloudModel?.sessionDefaultControls ?? [],
           modeValues: cloudModel?.modeValues ?? null,
+          tuningControlValues: cloudModel?.tuningControlValues ?? null,
         };
       }),
       launchControls: cloud?.launchControls ?? [],
@@ -338,6 +341,7 @@ function projectCloudModel(
     availability: anyOf.length > 0 ? { anyOf: [...anyOf] } : null,
     sessionDefaultControls: projectSessionDefaultControls(model, sessionControls),
     modeValues: projectModelModeValues(model),
+    tuningControlValues: projectModelTuningControlValues(model),
   };
 }
 
