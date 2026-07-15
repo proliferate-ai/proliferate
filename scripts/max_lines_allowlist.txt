@@ -49,7 +49,7 @@ apps/packages/ui/src/icons/core.tsx 413 existing consolidated icon barrel pendin
 # gate-weakening; product-client/src is now a check_max_lines scan root. Entries
 # that fell under the 600 general cap at the deeper path (SplitDiffViewer 540,
 # HomeNextScreen.test 530 — desktop component cap was 500) are dropped, not moved.
-apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessPane.test.tsx 908 P3 runtime catalog extends All-Models coverage + add-key modal flow + credential refresh + switch disambiguation + surface store mock + ProductHost test-host wiring
+apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessPane.test.tsx 932 P3 runtime catalog extends All-Models coverage + add-key modal flow + credential refresh + switch disambiguation + surface store mock + ProductHost test-host wiring + authenticated-without-cloud-compute BYOK gating cases
 apps/packages/product-client/src/lib/domain/workspaces/cloud/logical-workspaces.test.ts 690 managed sandbox cloud workspace indicators extend existing oversized test file
 apps/packages/product-client/src/lib/domain/workspaces/sidebar/sidebar.test.ts 691 workspace git-status threading extends existing oversized test file
 apps/packages/product-client/src/lib/domain/workspaces/sidebar/sidebar-indicators.test.ts 630 existing desktop oversized test file
