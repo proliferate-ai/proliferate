@@ -398,8 +398,7 @@ async def _launch_supervisor_owned_runtime(
         workspace_id=sandbox_record.id,
         label="materialization_chmod_supervisor_configs",
         command=(
-            f"chmod 600 {shlex.quote(worker_config_file)} "
-            f"{shlex.quote(supervisor_config_file)}"
+            f"chmod 600 {shlex.quote(worker_config_file)} {shlex.quote(supervisor_config_file)}"
         ),
         runtime_context=runtime_context,
         timeout_seconds=30,

@@ -92,9 +92,7 @@ def _install_stubs(monkeypatch: pytest.MonkeyPatch, provider: _FakeProvider) -> 
     async def _mint_enrollment(_sandbox_record: object) -> str:
         return "enrollment-token-stub"
 
-    monkeypatch.setattr(
-        connect_module, "mint_cloud_sandbox_worker_enrollment", _mint_enrollment
-    )
+    monkeypatch.setattr(connect_module, "mint_cloud_sandbox_worker_enrollment", _mint_enrollment)
 
     async def _ok_health(*_a: Any, **_k: Any) -> None:
         return None

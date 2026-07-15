@@ -20,12 +20,9 @@ def _validate_version_identifier(value: str | None) -> str | None:
     if value is None:
         return None
     if value in ("", ".", "..") or not all(
-        char.isascii() and (char.isalnum() or char in _VERSION_IDENTIFIER_EXTRA)
-        for char in value
+        char.isascii() and (char.isalnum() or char in _VERSION_IDENTIFIER_EXTRA) for char in value
     ):
-        raise ValueError(
-            "desired version must be a safe identifier (alphanumeric and . _ - +)"
-        )
+        raise ValueError("desired version must be a safe identifier (alphanumeric and . _ - +)")
     return value
 
 
@@ -81,6 +78,27 @@ class WorkerDesiredVersions(_CamelModel):
     catalog_version: str | None = None
 
 
+class WorkerSupervisorBridge(_CamelModel):
+    """Server-materialized D5 bridge inputs for an already-provisioned legacy
+    target (R9R-002).
+
+    A legacy Worker's persisted config carries none of the supervisor-owned
+    fields, so without these it could never bridge. The server delivers the
+    Supervisor config TOML + a supervisor-owned Worker config TOML and the paths
+    to write them through the live heartbeat channel; the legacy Worker
+    materializes both, starts the Supervisor, and hands the box off. Absent for
+    Supervisor-first provisions (their on-disk config already carries the inputs)
+    and for every non-flag-enabled target.
+    """
+
+    supervisor_binary_path: str
+    supervisor_config_path: str
+    supervisor_config_toml: str
+    worker_config_path: str
+    worker_config_toml: str
+    marker_dir: str
+
+
 class WorkerHeartbeatResponse(_CamelModel):
     worker_id: str
     server_time: datetime
@@ -92,6 +110,11 @@ class WorkerHeartbeatResponse(_CamelModel):
     # Worker that has never seen this field treats it exactly like an absent
     # one (old-worker compat, same shape as `desired_versions`).
     desired_topology: str | None = None
+    # R9R-002: the materialized bridge inputs delivered to an already-provisioned
+    # legacy target the server is migrating. Present only alongside
+    # ``desired_topology == "supervisor_owned"`` for a provisioned cloud-sandbox
+    # target with runtime credentials; absent otherwise. Old-worker compatible.
+    supervisor_bridge: WorkerSupervisorBridge | None = None
 
 
 class SetSandboxDesiredVersionsRequest(_CamelModel):

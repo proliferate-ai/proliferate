@@ -43,8 +43,10 @@ from proliferate.server.cloud.runtime_workers.service import (
     record_heartbeat,
     revoke_desktop_worker,
     runtime_artifact_redirect_url,
+    runtime_artifact_versioned_redirect_url,
     set_sandbox_desired_versions,
     worker_artifact_redirect_url,
+    worker_artifact_versioned_redirect_url,
 )
 
 worker_router = APIRouter(tags=["cloud-runtime-worker"])
@@ -95,6 +97,36 @@ async def runtime_artifact_download_endpoint(target: str, asset: str) -> Redirec
     the sandbox never needs GitHub egress or credentials.
     """
     url = await runtime_artifact_redirect_url(target=target, asset=asset)
+    return RedirectResponse(url=url, status_code=status.HTTP_302_FOUND)
+
+
+@worker_router.get("/worker/download/{target}/{version}/{asset}")
+async def worker_artifact_versioned_download_endpoint(
+    target: str, version: str, asset: str
+) -> RedirectResponse:
+    """302 to the worker binary at an EXACT version (R9R-001).
+
+    The version-specific path a supervisor-owned Worker resolves for an update
+    request: the server resolves the requested version or fails closed (404) —
+    it never falls back to the rolling ``stable`` path, so a B-pinned sandbox is
+    never handed an A-labelled artifact.
+    """
+    url = await worker_artifact_versioned_redirect_url(target=target, version=version, asset=asset)
+    return RedirectResponse(url=url, status_code=status.HTTP_302_FOUND)
+
+
+@worker_router.get("/runtime/download/{target}/{version}/{asset}")
+async def runtime_artifact_versioned_download_endpoint(
+    target: str, version: str, asset: str
+) -> RedirectResponse:
+    """302 to the AnyHarness binary at an EXACT version (R9R-001).
+
+    The runtime parallel of the versioned worker download: exact-version
+    resolution, fail closed on an unpublished version, no rolling fallback.
+    """
+    url = await runtime_artifact_versioned_redirect_url(
+        target=target, version=version, asset=asset
+    )
     return RedirectResponse(url=url, status_code=status.HTTP_302_FOUND)
 
 

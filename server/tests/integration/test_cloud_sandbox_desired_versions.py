@@ -28,7 +28,10 @@ from proliferate.db.models.auth import User
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store import instance_organizations as instance_organization_store
+from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.runtime_workers import service
 from proliferate.server.cloud.runtime_workers.service import create_cloud_sandbox_enrollment
+from proliferate.utils.crypto import encrypt_text
 from tests.e2e.cloud.helpers.auth import create_user_and_login
 
 
@@ -271,9 +274,7 @@ class TestSetSandboxDesiredVersionsRoute:
     ) -> None:
         sandbox = await _seed_sandbox(db_session, prefix="setter-noadmin")
         auth = await create_user_and_login(client, db_session, email_prefix="setter-noadmin")
-        await _make_instance_admin(
-            db_session, user_id=auth.user_id, role=ORGANIZATION_ROLE_MEMBER
-        )
+        await _make_instance_admin(db_session, user_id=auth.user_id, role=ORGANIZATION_ROLE_MEMBER)
 
         response = await client.put(
             f"/v1/cloud/workers/admin/sandboxes/{sandbox.id}/desired-versions",
@@ -370,3 +371,171 @@ class TestSetSandboxDesiredVersionsRoute:
             json={"desiredAnyharnessVersion": "1.0.0"},
         )
         assert response.status_code == 404, response.text
+
+
+class TestVersionedArtifactRedirect:
+    """R9R-001: a version-pinned artifact fetch resolves the EXACT requested
+    version (not the global pin) and fails closed on a rolling/unpinned or
+    unpublished coordinate — never a fallback to rolling ``stable``."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "resolver,path_component",
+        [
+            (service.runtime_artifact_versioned_redirect_url, "runtime"),
+            (service.worker_artifact_versioned_redirect_url, "worker"),
+        ],
+    )
+    async def test_resolves_requested_version_not_global_pin(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        resolver: object,
+        path_component: str,
+    ) -> None:
+        # Global pin is 1.0.0; the sandbox is pinned to 9.9.9. Resolution must
+        # name 9.9.9 (only 9.9.9 is "published" here), never the global pin.
+        monkeypatch.setenv("RUNTIME_VERSION", "1.0.0")
+        monkeypatch.setenv("WORKER_VERSION", "1.0.0")
+        monkeypatch.setattr(service, "downloads_base_url", lambda: "https://cdn.test")
+
+        async def _exists(url: str) -> bool:
+            return "/9.9.9/" in url
+
+        monkeypatch.setattr(service, "versioned_manifest_exists", _exists)
+        asset = "anyharness" if path_component == "runtime" else "proliferate-worker"
+        url = await resolver(target="linux-x86_64", version="9.9.9", asset=asset)
+        assert url == f"https://cdn.test/{path_component}/stable/9.9.9/linux-x86_64/{asset}"
+
+    @pytest.mark.asyncio
+    async def test_unpublished_version_fails_closed_no_rolling_fallback(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(service, "downloads_base_url", lambda: "https://cdn.test")
+
+        async def _never(url: str) -> bool:
+            return False
+
+        monkeypatch.setattr(service, "versioned_manifest_exists", _never)
+        with pytest.raises(CloudApiError) as excinfo:
+            await service.runtime_artifact_versioned_redirect_url(
+                target="linux-x86_64", version="9.9.9", asset="anyharness"
+            )
+        # 404 — NOT a fallback to the rolling `stable` path.
+        assert excinfo.value.status_code == 404
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("rolling", ["stable", "latest", "", "..", "with/slash"])
+    async def test_rolling_or_unsafe_version_is_rejected(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        rolling: str,
+    ) -> None:
+        # A rolling/unpinned or unsafe coordinate is refused up front, before any
+        # CDN probe (so a B-pinned sandbox is never handed a rolling artifact).
+        async def _unexpected(url: str) -> bool:
+            raise AssertionError("must not probe the CDN for a rejected version")
+
+        monkeypatch.setattr(service, "versioned_manifest_exists", _unexpected)
+        monkeypatch.setattr(service, "downloads_base_url", lambda: "https://cdn.test")
+        with pytest.raises(CloudApiError) as excinfo:
+            await service.worker_artifact_versioned_redirect_url(
+                target="linux-x86_64", version=rolling, asset="proliferate-worker"
+            )
+        assert excinfo.value.status_code == 404
+
+
+class _FakeProvider:
+    """A provider whose runtime context is deterministic (paths only) so the
+    heartbeat bridge-input builder can run without a live sandbox."""
+
+    user_home = "/home/user"
+    runtime_workdir = "/home/user/work"
+    runtime_binary_path = "/home/user/.proliferate/bin/anyharness"
+    runtime_port = 8080
+    runtime_endpoint_handles_cors = False
+
+
+class TestSupervisorBridgeDelivery:
+    """R9R-002: the heartbeat materializes + delivers the D5 bridge inputs for an
+    already-provisioned legacy target once the flag is on, so a legacy Worker
+    (whose config carries no bridge fields) can actually bridge."""
+
+    async def _provisioned_sandbox(self, db_session: AsyncSession, *, prefix: str) -> CloudSandbox:
+        owner = await _seed_owner(db_session, prefix=prefix)
+        sandbox = CloudSandbox(
+            owner_user_id=owner.id,
+            provider_sandbox_id=f"e2b-{uuid.uuid4().hex[:8]}",
+            status=CloudSandboxStatus.ready,
+            anyharness_base_url="https://runtime.example.invalid",
+            runtime_token_ciphertext=encrypt_text("runtime-token"),
+            anyharness_data_key_ciphertext=encrypt_text("data-key"),
+        )
+        db_session.add(sandbox)
+        await db_session.commit()
+        return sandbox
+
+    @pytest.mark.asyncio
+    async def test_delivers_bridge_inputs_when_flag_on(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "supervisor_owned_runtime", True)
+        monkeypatch.setattr(service, "get_sandbox_provider", lambda _ref: _FakeProvider())
+        sandbox = await self._provisioned_sandbox(db_session, prefix="bridge-on")
+        worker_token = await _enroll_sandbox_worker(client, db_session, sandbox=sandbox)
+
+        body = await _heartbeat(client, worker_token)
+
+        assert body["desiredTopology"] == "supervisor_owned"
+        bridge = body["supervisorBridge"]
+        assert bridge is not None
+        assert bridge["supervisorBinaryPath"] == (
+            "/home/user/.proliferate/bin/proliferate-supervisor"
+        )
+        assert bridge["supervisorConfigPath"] == "/home/user/.proliferate/supervisor/config.toml"
+        assert bridge["workerConfigPath"] == "/home/user/.proliferate/worker/config.toml"
+        assert bridge["markerDir"] == "/home/user/.proliferate/worker/bridge"
+        # The delivered worker config is the supervisor-owned shape (mailbox +
+        # fence), so the Supervisor's spawned child is a mailbox writer.
+        assert "supervisor_update_request_dir" in bridge["workerConfigToml"]
+        assert "anyharness_update_enabled = false" in bridge["workerConfigToml"]
+        # The supervisor config carries the runtime env (mailbox drain target).
+        assert "update_request_dir" in bridge["supervisorConfigToml"]
+
+    @pytest.mark.asyncio
+    async def test_no_bridge_when_flag_off(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "supervisor_owned_runtime", False)
+        monkeypatch.setattr(service, "get_sandbox_provider", lambda _ref: _FakeProvider())
+        sandbox = await self._provisioned_sandbox(db_session, prefix="bridge-off")
+        worker_token = await _enroll_sandbox_worker(client, db_session, sandbox=sandbox)
+
+        body = await _heartbeat(client, worker_token)
+
+        assert body.get("supervisorBridge") is None
+
+    @pytest.mark.asyncio
+    async def test_no_bridge_when_unprovisioned(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # Flag on but the target has no provider sandbox / runtime credentials:
+        # there is nothing to bridge, so no inputs are delivered.
+        monkeypatch.setattr(settings, "supervisor_owned_runtime", True)
+        monkeypatch.setattr(service, "get_sandbox_provider", lambda _ref: _FakeProvider())
+        sandbox = await _seed_sandbox(db_session, prefix="bridge-unprov")
+        worker_token = await _enroll_sandbox_worker(client, db_session, sandbox=sandbox)
+
+        body = await _heartbeat(client, worker_token)
+
+        assert body["desiredTopology"] == "supervisor_owned"
+        assert body.get("supervisorBridge") is None
