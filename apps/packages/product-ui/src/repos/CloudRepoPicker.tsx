@@ -43,9 +43,16 @@ export interface CloudRepoPickerRepositoryView {
 export interface CloudRepoPickerBlockerView {
   title: string;
   description: string;
+  steps?: readonly CloudRepoPickerSetupStepView[];
   actionLabel?: string | null;
   actionLoading?: boolean;
   onAction?: (() => void) | null;
+}
+
+export interface CloudRepoPickerSetupStepView {
+  label: string;
+  description: string;
+  status: "complete" | "current" | "upcoming";
 }
 
 export interface CloudRepoPickerProps {
@@ -183,7 +190,7 @@ export function CloudRepoPicker({
   );
 }
 
-/** Compact prerequisite state: icon + one-liner + a single primary action. */
+/** Staged prerequisite state with one primary action for the current step. */
 function CloudRepoPickerBlocker({
   blocker,
 }: {
@@ -202,6 +209,37 @@ function CloudRepoPickerBlocker({
           </p>
         </span>
       </div>
+      {blocker.steps?.length ? (
+        <ol className="mt-4 space-y-3" aria-label="GitHub setup progress">
+          {blocker.steps.map((step, index) => (
+            <li
+              key={step.label}
+              className="flex items-start gap-3"
+              aria-current={step.status === "current" ? "step" : undefined}
+            >
+              <span
+                className={[
+                  "flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-medium",
+                  step.status === "complete"
+                    ? "bg-success-subtle text-success"
+                    : step.status === "current"
+                      ? "bg-foreground text-background"
+                      : "bg-surface-control text-muted-foreground",
+                ].join(" ")}
+                aria-hidden
+              >
+                {step.status === "complete" ? <Check size={12} /> : index + 1}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-ui font-medium text-foreground">{step.label}</span>
+                <span className="mt-0.5 block text-ui-sm leading-[1.45] text-muted-foreground">
+                  {step.description}
+                </span>
+              </span>
+            </li>
+          ))}
+        </ol>
+      ) : null}
       {blocker.actionLabel && blocker.onAction ? (
         <div className="mt-4 flex justify-end">
           <Button

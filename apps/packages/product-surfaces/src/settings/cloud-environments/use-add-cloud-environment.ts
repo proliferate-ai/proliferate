@@ -172,6 +172,10 @@ export function useAddCloudEnvironment({
       void installGitHubApp();
     },
     onCopyAdminRequest: copyAdminRequest,
+    returnSurface: githubSetupReturnSurface(
+      userAuthorizationReturnTo,
+      installationReturnTo,
+    ),
   });
 
   const repositoryById = useMemo(() => {
@@ -292,6 +296,16 @@ export function useAddCloudEnvironment({
       }
     },
   };
+}
+
+function githubSetupReturnSurface(
+  userAuthorizationReturnTo: string | null,
+  installationReturnTo: string | null,
+): "desktop" | "web" {
+  const returnTargets = [userAuthorizationReturnTo, installationReturnTo].filter(Boolean);
+  return returnTargets.some((target) => target?.startsWith("proliferate"))
+    ? "desktop"
+    : "web";
 }
 
 function useDebouncedValue(value: string, delayMs: number): string {

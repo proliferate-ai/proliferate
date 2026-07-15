@@ -15,7 +15,9 @@ export interface BillingUnitBalancePresentation {
   availablePercent: number | null;
   topUpLabel: string;
   lowBalanceCopy: string;
-  loading?: boolean;
+  state: "ready" | "loading" | "error" | "unavailable";
+  stateMessage?: string;
+  onRetry?: () => void;
 }
 
 export function BillingUsageUnitsSection({
@@ -55,13 +57,28 @@ function BillingUnitPoolRow({
 }) {
   const percent = balance.availablePercent ?? 0;
 
-  if (balance.loading) {
+  if (balance.state === "loading") {
     return (
       <SettingsRow label={balance.title} description={balance.description}>
         <div className="flex flex-col gap-1.5" role="status" aria-label={`Loading ${balance.title}`}>
           <SkeletonBlock className="h-3 w-32" style={shimmerDelay(0)} />
           <SkeletonBlock className="h-1 w-24 rounded-full" style={shimmerDelay(1)} />
         </div>
+      </SettingsRow>
+    );
+  }
+
+  if (balance.state !== "ready") {
+    return (
+      <SettingsRow
+        label={balance.title}
+        description={balance.stateMessage ?? `${balance.title} are unavailable.`}
+      >
+        {balance.state === "error" && balance.onRetry ? (
+          <Button type="button" variant="secondary" size="sm" onClick={balance.onRetry}>
+            Retry
+          </Button>
+        ) : null}
       </SettingsRow>
     );
   }

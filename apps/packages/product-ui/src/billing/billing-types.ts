@@ -14,6 +14,7 @@ export interface BillingPlanView {
   concurrentSandboxLimit?: number | null;
   activeSandboxCount: number;
   isPaidCloud: boolean;
+  paymentHealthy?: boolean;
   overageEnabled: boolean;
   hostedInvoiceUrl?: string | null;
   startBlocked: boolean;
