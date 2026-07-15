@@ -160,7 +160,6 @@ describe("FileEditorView", () => {
       open: false,
       query: "",
       surface: "chat",
-      scope: "diffs",
       activeMatchIndex: 0,
       activeMatchId: null,
       unitsById: {},
@@ -406,7 +405,6 @@ describe("FileEditorView", () => {
     expect(screen.queryByLabelText("Search files")).toBeNull();
     fireEvent.click(screen.getByLabelText("Find in file"));
     expect(useContentSearchStore.getState().open).toBe(true);
-    expect(useContentSearchStore.getState().scope).toBe("diffs");
     expect(useContentSearchStore.getState().surface).toBe("file");
     expect(container.querySelector('[data-content-search-surface="file"]')).toBeTruthy();
     expect(screen.getByPlaceholderText("Search file…")).toBeTruthy();

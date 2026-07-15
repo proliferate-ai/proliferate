@@ -82,7 +82,7 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
       setTargetMode(targetKey, "source");
     }
 
-    openContentSearch("diffs", "file");
+    openContentSearch("file");
   };
   const toggleRichPreview = () => {
     setTargetMode(
