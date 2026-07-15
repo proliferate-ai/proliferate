@@ -1010,7 +1010,7 @@ qualification-selfhost:
 	shard_id="1"; \
 	run_dir="$(QUALIFICATION_SELFHOST_BASE_DIR)/$$run_id/$$shard_id"; \
 	mkdir -p "$$run_dir"; \
-	api_base_url=$$(cd tests/release && pnpm exec tsx -e 'import { runSubdomainLabel, QUALIFICATION_ZONE } from "./src/worlds/selfhost/dns.js"; const a = process.argv.slice(2); process.stdout.write("https://" + runSubdomainLabel(a[0], a[1]) + "." + QUALIFICATION_ZONE);' "$$run_id" "$$shard_id") || exit $$?; \
+	api_base_url=$$(cd tests/release && pnpm exec tsx src/cli/print-selfhost-run-api-base-url.ts "$$run_id" "$$shard_id") || exit $$?; \
 	build_summary=$$(node scripts/ci-cd/build-selfhost-qualification-candidates.mjs \
 		--run-id "$$run_id" --shard-id "$$shard_id" --run-dir "$$run_dir" \
 		--api-base-url "$$api_base_url") || exit $$?; \
