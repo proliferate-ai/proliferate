@@ -248,6 +248,24 @@ export const defaultSelfHostInstallDriver: SelfHostInstallDriver = {
       corsAllowOrigins: browserOriginsForBox(world),
     });
 
+    // Advertised-version truth (frozen spec: "assert advertised candidate
+    // versions match the map"). The OBSERVED running server version (from /meta
+    // serverVersion) must equal the candidate map's server artifact version, or
+    // the box came up on something other than the exact candidate bytes. Fail
+    // closed BEFORE any claim, like a digest mismatch.
+    const candidateServerVersion = world.artifacts.serverImage.version;
+    if (receipt.serverVersion !== candidateServerVersion) {
+      return {
+        status: "failed",
+        reason: {
+          code: "scenario_failure",
+          message:
+            `SH-INSTALL-CLAIM: the running server advertises version "${receipt.serverVersion}", ` +
+            `but the candidate map pins "${candidateServerVersion}"; refusing to claim a mismatched build.`,
+        },
+      };
+    }
+
     const setupToken = await world.control.readSetupToken();
     const owner = await claimSelfHostOwner(world);
     driverState(world).owner = owner;
@@ -274,6 +292,8 @@ export const defaultSelfHostInstallDriver: SelfHostInstallDriver = {
       kind: "selfhost_install_claim",
       artifact_ids: artifactIds(world),
       server_version: receipt.serverVersion,
+      candidate_server_version: candidateServerVersion,
+      server_version_matches_candidate: true,
       anyharness_version: world.artifacts.anyharness.version,
       harness: "claude",
       api_origin: originOf(world.api.baseUrl),

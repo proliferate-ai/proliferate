@@ -132,6 +132,8 @@ function greenEvidenceFor(cellName: string): CellEvidenceNoCleanup {
       const evidence: CellEvidenceNoCleanup = {
         ...base,
         kind: "selfhost_install_claim",
+        candidate_server_version: "1.2.3",
+        server_version_matches_candidate: true,
         running_image_digest: "sha256:" + "d".repeat(64),
         bundle_sha256: "e".repeat(64),
         setup_token_hash: "f".repeat(64),

@@ -923,6 +923,8 @@ function validSelfHostInstallClaimEvidence(
     harness: "claude",
     api_origin: "sh-run-1.qualification.proliferate.com",
     controller_runtime_origin: "127.0.0.1:8542",
+    candidate_server_version: "0.3.27",
+    server_version_matches_candidate: true,
     running_image_digest: "sha256:" + "d".repeat(64),
     bundle_sha256: "e".repeat(64),
     setup_token_hash: "f".repeat(64),

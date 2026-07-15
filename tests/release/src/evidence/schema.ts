@@ -193,6 +193,14 @@ export interface SelfHostEvidenceBaseV1 {
 
 export interface SelfHostInstallClaimEvidenceV1 extends SelfHostEvidenceBaseV1 {
   kind: "selfhost_install_claim";
+  /**
+   * The candidate map's server artifact version. `server_version` (base) is the
+   * OBSERVED running version read from `/meta`; the two must be equal, witnessed
+   * by `server_version_matches_candidate`.
+   */
+  candidate_server_version: string;
+  /** The observed running server version equalled the candidate map version. */
+  server_version_matches_candidate: true;
   /** Running container image digest asserted on the box == candidate receipt. */
   running_image_digest: string;
   /** SHA-256 of the exact deploy bundle bytes the shipped installer verified. */
@@ -904,6 +912,8 @@ const SELFHOST_BASE_EVIDENCE_KEYS = [
 
 const SELFHOST_INSTALL_CLAIM_EVIDENCE_KEYS = [
   ...SELFHOST_BASE_EVIDENCE_KEYS,
+  "candidate_server_version",
+  "server_version_matches_candidate",
   "running_image_digest",
   "bundle_sha256",
   "setup_token_hash",
@@ -1028,6 +1038,8 @@ function validateSelfHostCellEvidence(
   switch (kind) {
     case "selfhost_install_claim": {
       const e = evidence as SelfHostInstallClaimEvidenceV1;
+      requireSafeEvidenceToken(`${where}.candidate_server_version`, e.candidate_server_version);
+      requireTrue(`${where}.server_version_matches_candidate`, e.server_version_matches_candidate);
       requireSafeEvidenceToken(`${where}.running_image_digest`, e.running_image_digest);
       requireEvidenceHash(`${where}.bundle_sha256`, e.bundle_sha256);
       requireEvidenceHash(`${where}.setup_token_hash`, e.setup_token_hash);
@@ -1421,6 +1433,7 @@ function sanitizeSelfHostCellEvidence(
       return {
         ...cleanedBase,
         kind: "selfhost_install_claim",
+        candidate_server_version: clean(e.candidate_server_version),
         running_image_digest: clean(e.running_image_digest),
         bundle_sha256: clean(e.bundle_sha256),
         setup_token_hash: clean(e.setup_token_hash),
