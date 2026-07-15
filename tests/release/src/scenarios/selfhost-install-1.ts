@@ -774,17 +774,19 @@ function describe(error: unknown): string {
 /**
  * The browser origins the box's API must admit via CORS so the candidate Desktop
  * renderer and the Connect-Server trust probe can drive the API from a browser:
- * the served renderer origin (127.0.0.1 + localhost forms) plus `null` for the
- * pre-trust connect page, which runs an isolated `about:blank` context whose
- * cross-origin `/meta` fetch carries an opaque (`null`) Origin. Comma-joined, no
- * spaces, so it is a single `--cors-allow-origins` argv token.
+ * the served renderer origin (127.0.0.1 + localhost forms). No `null` origin: the
+ * pre-trust Connect-Server probes now run from a page loaded ON the renderer
+ * origin (a real browser origin already admitted by CORS), not an `about:blank`
+ * context, so their cross-origin `/meta` fetches carry the renderer Origin.
+ * These EXTEND the shipped Tauri/localhost defaults on the box (install.sh
+ * merges + dedupes). Comma-joined, no spaces, so it is a single
+ * `--cors-allow-origins` argv token.
  */
 function browserOriginsForBox(world: ReadySelfHostWorld): string {
   const rendererOrigin = originUrl(world.renderer.baseUrl);
   const origins = new Set<string>([
     rendererOrigin,
     rendererOrigin.replace("127.0.0.1", "localhost"),
-    "null",
   ]);
   return [...origins].join(",");
 }
@@ -842,10 +844,21 @@ function splitCandidateImageRef(serverImage: { version: string }): { repo: strin
   return { repo: value.slice(0, lastColon), tag: value.slice(lastColon + 1) };
 }
 
-/** Opens a fresh, unauthenticated isolated page (Connect-Server trust flow, pre-login). */
+/**
+ * Opens a fresh, unauthenticated isolated page (Connect-Server trust flow,
+ * pre-login) and navigates it to the renderer's OWN served origin. The pre-trust
+ * `/meta` probes are `fetch`es issued from this page's document context, so
+ * loading a real renderer-origin document (instead of leaving it on
+ * `about:blank`) means those cross-origin fetches carry the renderer Origin — a
+ * real browser origin already admitted by the box's CORS — rather than an opaque
+ * `null` Origin. That is why the box no longer needs a `null` CORS entry. The
+ * page is unauthenticated (no session in storage), so it sits on the connect
+ * screen and issues no request to the instance origin before the trust probes.
+ */
 async function openIsolatedPage(world: ReadySelfHostWorld): Promise<ProductPage> {
   const context = await world.renderer.browser.newContext();
   const page = await context.newPage();
+  await page.goto(world.renderer.baseUrl, { waitUntil: "domcontentloaded" });
   return wrapPage(context, page);
 }
 
@@ -869,12 +882,11 @@ async function openAuthenticatedPage(
 
 /**
  * Installs a session into an already-open (trusted, pre-login) isolated page and
- * boots it authenticated. The pre-trust page is opened by `openIsolatedPage` and
- * never navigated to the renderer — the Connect-Server trust checks run as
- * document-context `fetch`es from `about:blank` (that is why install.sh admits
- * the `null` origin). So this NAVIGATES to the renderer for the first time
- * (a `reload()` of `about:blank` never boots the app), after installing the
- * session, then waits for authenticated readiness.
+ * boots it authenticated. `openIsolatedPage` already loaded the page on the
+ * renderer origin (that is where the pre-trust `/meta` probes ran from), but with
+ * no session in storage. An `addInitScript` only takes effect on the NEXT
+ * navigation, so this installs the session then re-navigates to the renderer to
+ * boot it authenticated, and waits for authenticated readiness.
  */
 async function installSessionAndReload(
   page: ProductPage,

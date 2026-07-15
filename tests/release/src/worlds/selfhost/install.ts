@@ -129,8 +129,8 @@ export async function runShippedInstaller(inputs: RunInstallerInputs): Promise<I
     "--telemetry-mode",
     "self_managed",
   ];
-  // The CSV carries no spaces (origins + "null"), so it is a single argv token
-  // in the space-joined command; no secret ever rides on argv.
+  // The CSV carries no spaces (renderer origins only), so it is a single argv
+  // token in the space-joined command; no secret ever rides on argv.
   if (inputs.corsAllowOrigins && inputs.corsAllowOrigins.trim().length > 0) {
     installArgs.push("--cors-allow-origins", inputs.corsAllowOrigins.trim());
   }

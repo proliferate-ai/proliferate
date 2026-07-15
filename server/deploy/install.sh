@@ -47,8 +47,9 @@ VERSION_EXPLICIT=0
 EVAL_MODE=0
 TELEMETRY_MODE="self_managed"
 IMAGE_REPO="ghcr.io/proliferate-ai/proliferate-server"
-# Optional extra browser origins allowed to call the API (CORS). Empty leaves
-# the compose/image default (localhost + tauri desktop origins) untouched.
+# Optional extra browser origins allowed to call the API (CORS). Operator origins
+# EXTEND the shipped localhost + Tauri desktop defaults (they are merged and
+# deduped, never replaced). Empty leaves the shipped defaults untouched.
 CORS_ALLOW_ORIGINS_OVERRIDE=""
 ASSUME_YES=0
 DRY_RUN=0
@@ -82,6 +83,8 @@ Options:
                            Extra browser origins allowed to call the API
                            (CORS_ALLOW_ORIGINS). Set this when a browser-based
                            client on a non-default origin must reach the API.
+                           These EXTEND the shipped localhost + Tauri desktop
+                           origins (merged and deduped, never replaced).
       --bundle PATH        Install from a local, checksum-verified deploy bundle
                            (proliferate-deploy.tar.gz) instead of downloading a
                            GitHub release. For air-gapped installs and for
@@ -430,6 +433,26 @@ set_env_key() {
   rm -f "$tmp"
 }
 
+# merge_csv_dedup <csv-a> <csv-b>: concatenate two comma-separated origin lists
+# and print a comma-separated list with duplicates removed, preserving first-seen
+# order. Empty/whitespace-only fields are dropped. Used so operator-provided CORS
+# origins EXTEND the shipped defaults instead of replacing them.
+merge_csv_dedup() {
+  awk -v a="$1" -v b="$2" '
+    BEGIN {
+      n = split(a "," b, parts, ",")
+      out = ""
+      for (i = 1; i <= n; i++) {
+        v = parts[i]
+        gsub(/^[ \t]+|[ \t]+$/, "", v)
+        if (v == "" || (v in seen)) continue
+        seen[v] = 1
+        out = (out == "" ? v : out "," v)
+      }
+      print out
+    }'
+}
+
 configure() {
   local static_file="$DEPLOY_DIR/.env.static"
   local example_file="$DEPLOY_DIR/.env.production.example"
@@ -482,8 +505,15 @@ configure() {
     if [[ "$CORS_ALLOW_ORIGINS_OVERRIDE" == *"*"* ]]; then
       die "--cors-allow-origins must list explicit origins; '*' is unsafe with a credentialed API."
     fi
-    set_env_key "$static_file" CORS_ALLOW_ORIGINS "$CORS_ALLOW_ORIGINS_OVERRIDE"
-    info "CORS_ALLOW_ORIGINS set to $CORS_ALLOW_ORIGINS_OVERRIDE"
+    # Operator origins EXTEND the shipped defaults, never replace them: the
+    # product's normal Tauri/localhost desktop origins must keep working. The
+    # example we just copied into .env.static already carries the shipped default
+    # CORS_ALLOW_ORIGINS; merge the operator list into it and dedupe.
+    local shipped_default merged
+    shipped_default="$(read_env "$static_file" CORS_ALLOW_ORIGINS)"
+    merged="$(merge_csv_dedup "$shipped_default" "$CORS_ALLOW_ORIGINS_OVERRIDE")"
+    set_env_key "$static_file" CORS_ALLOW_ORIGINS "$merged"
+    info "CORS_ALLOW_ORIGINS extended with operator origins (shipped defaults preserved): $merged"
   fi
   set_env_key "$static_file" PROLIFERATE_SERVER_IMAGE "$IMAGE_REPO"
   # Pin the image tag to the resolved release for controlled, reproducible

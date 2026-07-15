@@ -319,6 +319,33 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+group "7b. Installer: --cors-allow-origins extends the shipped defaults"
+# ---------------------------------------------------------------------------
+# Operator origins must EXTEND (merge + dedupe), never replace, the shipped
+# localhost + Tauri desktop defaults. Install fresh with an operator origin plus
+# one that overlaps a shipped default; assert the shipped defaults survive, the
+# operator origin is added, and the overlap is deduped to a single entry.
+CORSROOT="$SCRATCH/cors"
+run_installer "$CORSROOT" "$REL" "0.3.18" --domain api.test --no-start --yes \
+  --cors-allow-origins "https://app.corp.example,tauri://localhost" >/dev/null 2>&1
+cors_line="$(grep -m1 '^CORS_ALLOW_ORIGINS=' "$CORSROOT/server/deploy/.env.static" | cut -d= -f2-)"
+cors_items="$(printf '%s' "$cors_line" | tr ',' '\n')"
+echo "$cors_items" | grep -qx "tauri://localhost" && ok "CORS merge keeps a shipped default (tauri://localhost)" || no "CORS merge dropped the shipped tauri default: $cors_line"
+echo "$cors_items" | grep -qx "http://localhost:1420" && ok "CORS merge keeps another shipped default (localhost:1420)" || no "CORS merge dropped a shipped default: $cors_line"
+echo "$cors_items" | grep -qx "https://app.corp.example" && ok "CORS merge adds the operator origin" || no "CORS merge missing the operator origin: $cors_line"
+[[ "$(echo "$cors_items" | grep -cx "tauri://localhost")" -eq 1 ]] && ok "CORS merge dedupes the overlapping default" || no "CORS merge duplicated tauri://localhost: $cors_line"
+
+# A wildcard is refused: the API pairs allow_origins with allow_credentials=true,
+# so '*' would reflect any credentialed origin (open CORS on an authed API).
+if run_installer "$SCRATCH/cors-wild" "$REL" "0.3.18" --domain api.test --no-start --yes \
+  --cors-allow-origins "https://ok.example,*" >"$SCRATCH/cors-wild.log" 2>&1; then
+  no "installer should refuse a wildcard CORS origin"
+else
+  grep -qi "cors-allow-origins must list explicit origins" "$SCRATCH/cors-wild.log" \
+    && ok "installer refuses a wildcard CORS origin" || no "wrong error for wildcard CORS origin"
+fi
+
+# ---------------------------------------------------------------------------
 group "8. Release bundle shape + checksum round-trip"
 # ---------------------------------------------------------------------------
 # Rebuild the bundle exactly like server-ci and assert its shape.
