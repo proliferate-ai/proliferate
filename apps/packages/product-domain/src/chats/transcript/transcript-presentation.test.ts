@@ -125,11 +125,11 @@ describe("buildTurnPresentation", () => {
     ]);
   });
 
-  it("keeps native Agent calls with nested child work as normal item blocks", () => {
+  it("keeps native Agent calls with nested child work as normal item blocks ONLY while running", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
       agent: {
-        ...toolItem("agent", "turn-1", 1, "subagent"),
+        ...toolItem("agent", "turn-1", 1, "subagent", "in_progress"),
         nativeToolName: "Agent",
       },
       childRead: {
@@ -142,10 +142,107 @@ describe("buildTurnPresentation", () => {
 
     const presentation = buildTurnPresentation(turn, transcript);
 
+    // Running native Agent items produce normal item blocks (the renderer
+    // hides them with an early-return).
     expect(presentation.childrenByParentId.get("agent")).toEqual(["childRead"]);
     expect(presentation.displayBlocks).toEqual([
       { kind: "item", itemId: "agent" },
       { kind: "item", itemId: "final" },
+    ]);
+  });
+
+  it("routes finished foreground native Agent subagents to subagent_creations blocks", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      agent: {
+        ...toolItem("agent", "turn-1", 1, "subagent", "completed"),
+        nativeToolName: "Agent",
+        rawOutput: { summary: "Task completed." },
+      },
+      final: assistantItem("final", "turn-1", 2),
+    };
+    const turn = turnRecord(["agent", "final"]);
+
+    const presentation = buildTurnPresentation(turn, transcript);
+
+    // Finished foreground native Agent items route to subagent_creations
+    // blocks (rendered via SubagentCreationGroupBlock as quiet done-lines).
+    expect(presentation.displayBlocks).toEqual([
+      {
+        kind: "subagent_creations",
+        blockId: "agent-agent",
+        itemIds: ["agent"],
+      },
+      { kind: "item", itemId: "final" },
+    ]);
+  });
+
+  it("routes finished background native Agent subagents to subagent_creations blocks", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      agent: {
+        ...toolItem("agent", "turn-1", 1, "subagent", "completed"),
+        nativeToolName: "Agent",
+        rawInput: { run_in_background: true },
+        rawOutput: {
+          summary: "Background work finished.",
+          _anyharness: {
+            backgroundWork: {
+              trackerKind: "claude_async_agent",
+              state: "completed",
+            },
+          },
+        },
+      },
+      final: assistantItem("final", "turn-1", 2),
+    };
+    const turn = turnRecord(["agent", "final"]);
+
+    const presentation = buildTurnPresentation(turn, transcript);
+
+    // Finished background native Agent items also route to subagent_creations
+    // blocks.
+    expect(presentation.displayBlocks).toEqual([
+      {
+        kind: "subagent_creations",
+        blockId: "agent-agent",
+        itemIds: ["agent"],
+      },
+      { kind: "item", itemId: "final" },
+    ]);
+  });
+
+  it("keeps running background native Agent subagents as normal item blocks", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      agent: {
+        ...toolItem("agent", "turn-1", 1, "subagent", "completed"),
+        nativeToolName: "Agent",
+        rawInput: { run_in_background: true },
+        rawOutput: {
+          _anyharness: {
+            backgroundWork: {
+              trackerKind: "claude_async_agent",
+              state: "pending",
+            },
+          },
+        },
+        contentParts: [
+          {
+            type: "tool_result_text",
+            text: "Async agent launched successfully.\nThe agent is working in the background.",
+          },
+        ],
+      },
+    };
+    const turn = turnRecord(["agent"]);
+
+    const presentation = buildTurnPresentation(turn, transcript);
+
+    // Background launches with pending state are still running, so they
+    // produce normal item blocks (the renderer hides them).
+    expect(presentation.displayBlocks).toEqual([
+      { kind: "item", itemId: "agent" },
     ]);
   });
 
@@ -272,6 +369,29 @@ describe("buildTurnPresentation", () => {
     });
   });
 
+  it("keeps late tool receipts above final prose in a completed turn", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      user: userItem("user", "turn-1", 1),
+      final: assistantItem("final", "turn-1", 2),
+      edit: toolItem("edit", "turn-1", 3, "file_change"),
+    };
+    const turn = turnRecord(
+      ["user", "final", "edit"],
+      "2026-04-04T00:00:10Z",
+    );
+
+    const presentation = buildTurnPresentation(turn, transcript);
+
+    expect(presentation.rootIds).toEqual(["user", "final", "edit"]);
+    expect(presentation.completedHistoryRootIds).toEqual(["edit"]);
+    expect(presentation.displayBlocks).toEqual([
+      { kind: "item", itemId: "user" },
+      { kind: "collapsed_actions", blockId: "edit-edit", itemIds: ["edit"] },
+      { kind: "item", itemId: "final" },
+    ]);
+  });
+
   it("excludes transient thoughts from transcript presentation", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
@@ -358,7 +478,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["read"], transcript),
-    )).toBe("Explored 1 file");
+    )).toBe("Read files");
   });
 
   it("splits completed action groups around assistant prose", () => {
@@ -400,7 +520,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["read-1", "read-2", "grep-1", "edit-1"], transcript),
-    )).toBe("Explored 2 files, 1 search, edited 1 file");
+    )).toBe("Edited a file, read files");
   });
 
   it("keeps active tools in the existing collapsed action block as they stream", () => {
@@ -493,7 +613,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["list", "find", "command"], transcript),
-    )).toBe("Explored 1 listing, 1 search, ran 1 command");
+    )).toBe("Searched files, ran a command");
   });
 
   it("keeps raw grep/read command batches with later active commands", () => {
@@ -516,7 +636,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["grep", "read", "command"], transcript),
-    )).toBe("Explored 1 file, 1 search, ran 1 command");
+    )).toBe("Read files, ran a command");
   });
 
   it("keeps active terminal calls in a subtle inline row while command details stream in", () => {
@@ -540,7 +660,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["command"], transcript),
-    )).toBe("Explored 1 search");
+    )).toBe("Searched files");
 
     transcript.itemsById.command = {
       ...transcript.itemsById.command as ToolCallItem,
@@ -552,7 +672,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["command"], transcript),
-    )).toBe("Explored 1 listing");
+    )).toBe("Listed files");
 
     transcript.itemsById.command = {
       ...transcript.itemsById.command as ToolCallItem,
@@ -587,7 +707,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["read", "search", "command"], transcript),
-    )).toBe("Explored 1 file, 2 searches");
+    )).toBe("Read files");
   });
 
   it("keeps completed terminal calls without commands in collapsed command history", () => {
@@ -633,7 +753,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["scan"], transcript),
-    )).toBe("Explored 1 file, 2 searches");
+    )).toBe("Read files");
   });
 
   it("expands active Codex ops shell batches into read and search rows", () => {
@@ -659,7 +779,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["scan"], transcript),
-    )).toBe("Explored 1 file, 2 searches");
+    )).toBe("Read files");
   });
 
   it("keeps active parsed real commands in the existing block when exploration follows", () => {
@@ -703,7 +823,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["sqlite", "ps", "read"], transcript),
-    )).toBe("Explored 1 file, ran 2 commands");
+    )).toBe("Read files, ran commands");
   });
 });
 

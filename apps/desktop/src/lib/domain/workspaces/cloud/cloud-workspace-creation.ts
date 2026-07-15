@@ -219,3 +219,41 @@ export function isCloudWorkspaceBranchConflictError(error: unknown): boolean {
   return code === "github_branch_already_exists"
     || code === "cloud_branch_already_exists";
 }
+
+function cloudWorkspaceErrorCode(error: unknown): string | null {
+  const code = error instanceof Error ? (error as { code?: unknown }).code : null;
+  return typeof code === "string" ? code : null;
+}
+
+// Stable server-side codes for a routine billing gate on the cloud start path
+// (see server billing/authorization.py). Includes the legacy pre-split code so
+// an older server still surfaces a useful message.
+const CLOUD_WORKSPACE_BILLING_BLOCK_CODES = new Set<string>([
+  "billing_credits_exhausted",
+  "billing_start_blocked",
+  "billing_resume_blocked",
+]);
+
+export function isCloudWorkspaceBillingBlockError(error: unknown): boolean {
+  const code = cloudWorkspaceErrorCode(error);
+  return code !== null && CLOUD_WORKSPACE_BILLING_BLOCK_CODES.has(code);
+}
+
+/**
+ * Resolve the user-facing message for a failed cloud workspace creation.
+ *
+ * The server already returns a clear message on a billing gate (a 402 with a
+ * human message + stable code); we surface that verbatim instead of a generic
+ * "interrupted" string. When the block is specifically "out of included hours"
+ * we append an actionable pointer to Settings → Billing.
+ */
+export function resolveCloudWorkspaceCreateFailureMessage(
+  error: unknown,
+  fallback: string,
+): string {
+  const base = error instanceof Error && error.message ? error.message : fallback;
+  if (cloudWorkspaceErrorCode(error) === "billing_credits_exhausted") {
+    return `${base} Upgrade your plan in Settings → Billing.`;
+  }
+  return base;
+}

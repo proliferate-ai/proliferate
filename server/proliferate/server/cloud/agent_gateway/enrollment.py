@@ -224,8 +224,11 @@ async def ensure_org_enrollment(
         db,
         enrollment=enrollment,
         team_alias=f"org-{organization_id}",
-        litellm_user_id=None,
-        subject_label=f"org-{organization_id}",
+        # Per-member attribution (spec §2.3): the member's key is minted under
+        # their own LiteLLM user, matching their personal enrollment, so org
+        # spend rows stay attributable to the member who spent them.
+        litellm_user_id=f"user-{user_id}",
+        subject_label=f"org-{organization_id}-user-{user_id}",
         budget_raw=budget_raw,
     )
 

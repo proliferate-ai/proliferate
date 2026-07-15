@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use super::fork::validate_fork_parent;
@@ -33,6 +32,7 @@ fn resolved_agent(kind: AgentKind, native_path: Option<&str>) -> ResolvedAgent {
         status: ResolvedAgentStatus::Ready,
         credential_state: CredentialState::Ready,
         auth_slots: Vec::new(),
+        cli_auth_state: None,
         native: native_path.map(|path| ResolvedArtifact {
             role: ArtifactRole::NativeCli,
             installed: true,
@@ -292,30 +292,6 @@ fn build_session_launch_env_ignores_other_agents() {
     .expect("build env");
 
     assert!(env.is_empty());
-}
-
-#[test]
-fn build_session_launch_env_carries_gemini_model() {
-    let runtime_home = TempDirGuard::new("gemini-model-runtime");
-    let env = build_session_launch_env(
-        &resolved_agent(AgentKind::Gemini, Some("/tmp/managed/gemini")),
-        runtime_home.path(),
-        Some("gemini-3-pro-preview"),
-    )
-    .expect("build env");
-
-    assert_eq!(
-        env.get("GEMINI_MODEL").map(String::as_str),
-        Some("gemini-3-pro-preview")
-    );
-
-    let no_model = build_session_launch_env(
-        &resolved_agent(AgentKind::Gemini, Some("/tmp/managed/gemini")),
-        runtime_home.path(),
-        None,
-    )
-    .expect("build env");
-    assert!(no_model.is_empty());
 }
 
 #[test]

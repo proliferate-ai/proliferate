@@ -1,4 +1,6 @@
 import type { Session } from "@anyharness/sdk";
+import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
+import type { CloudSandboxGatewayUrlSource } from "@/lib/access/cloud/cloud-sandbox-gateway";
 import type { useSetSessionConfigOptionMutation } from "@anyharness/sdk-react";
 import {
   getAuthoritativeConfigValue,
@@ -26,6 +28,8 @@ import { logLatency } from "@/lib/infra/measurement/debug-latency";
 type SetSessionConfigOptionMutation = ReturnType<typeof useSetSessionConfigOptionMutation>;
 
 export interface ConfigIntentDispatchDeps {
+  ssh?: DesktopSshBridge | null;
+  cloudClient: CloudSandboxGatewayUrlSource | null;
   getWorkspaceSurface: (
     workspaceId: string | null | undefined,
   ) => Parameters<typeof persistDefaultSessionModePreference>[0]["workspaceSurface"];
@@ -33,7 +37,6 @@ export interface ConfigIntentDispatchDeps {
   upsertWorkspaceSessionRecord: (
     workspaceId: string,
     session: Session,
-    options?: { runtimeUrl?: string },
   ) => void;
 }
 
@@ -51,8 +54,10 @@ export async function dispatchConfigIntent(
     dispatchedAt: new Date().toISOString(),
   });
   try {
-    const { connection, workspaceId, materializedSessionId } = await getSessionClientAndWorkspace(
+    const { workspaceId, materializedSessionId } = await getSessionClientAndWorkspace(
       intent.clientSessionId,
+      deps.ssh ?? null,
+      deps.cloudClient,
     );
     useSessionIntentStore.getState().bindMaterializedSession(
       intent.clientSessionId,
@@ -64,9 +69,7 @@ export async function dispatchConfigIntent(
       request: { configId: intent.configId, value: intent.value },
     });
     if (workspaceId) {
-      deps.upsertWorkspaceSessionRecord(workspaceId, response.session, {
-        runtimeUrl: connection.runtimeUrl,
-      });
+      deps.upsertWorkspaceSessionRecord(workspaceId, response.session);
     }
     const latestSlot = getSessionRecord(intent.clientSessionId);
     const responseLiveConfig = response.liveConfig ?? response.session.liveConfig ?? null;

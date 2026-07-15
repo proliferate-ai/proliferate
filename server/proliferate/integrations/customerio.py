@@ -8,16 +8,13 @@ from typing import Any
 
 import httpx
 
+from proliferate.auth.sso.policy import email_domain
 from proliferate.config import settings
+from proliferate.constants.organizations import PUBLIC_EMAIL_DOMAINS
 
 CIO_TRACK_BASE = "https://track.customer.io/api/v1"
-CIO_APP_BASE = "https://api.customer.io/v1"
 CUSTOMERIO_TIMEOUT_SECONDS = 5.0
 DESKTOP_AUTHENTICATED_EVENT = "desktop_authenticated"
-# Cap message_data string fields before sending. The Customer.io Liquid
-# template owns escaping, but capping length here bounds the blast radius of
-# any future template that forgets to escape display_name / github_login.
-_MESSAGE_DATA_MAX_LEN = 256
 
 logger = logging.getLogger(__name__)
 
@@ -26,12 +23,16 @@ def _customerio_enabled() -> bool:
     return bool(settings.customerio_site_id and settings.customerio_api_key)
 
 
-def customerio_welcome_email_enabled() -> bool:
-    return bool(
-        settings.customerio_app_api_key
-        and settings.customerio_welcome_transactional_message_id
-        and settings.customerio_from_email
-    )
+def derive_email_type(email: str | None) -> str:
+    """Classify an email as 'company' or 'personal'.
+
+    Personal = domain in PUBLIC_EMAIL_DOMAINS (or missing/malformed domain).
+    Company = any other domain.
+    """
+    domain = email_domain(email)
+    if domain is None or domain in PUBLIC_EMAIL_DOMAINS:
+        return "personal"
+    return "company"
 
 
 def _warn_customerio_failure(message: str, exc: BaseException) -> None:
@@ -62,6 +63,7 @@ async def identify_customerio_user(
         "desktop_authenticated": True,
         "desktop_auth_provider": "github",
         "product_ready": True,
+        "email_type": derive_email_type(email),
     }
     if display_name:
         payload["display_name"] = display_name
@@ -106,48 +108,27 @@ async def track_customerio_desktop_authenticated(
         _warn_customerio_failure("Failed to track Customer.io desktop authentication event", exc)
 
 
-async def send_customerio_welcome_email(
+async def push_user_attributes(
     *,
     user_id: str,
-    email: str,
-    display_name: str | None,
-    github_login: str | None,
+    attributes: dict[str, Any],
 ) -> bool:
-    """Send the welcome transactional email via Customer.io App API.
+    """Push attributes to a Customer.io user profile via the Track API.
 
-    Returns True when the API accepted the send, False on transient/network
-    failure (the caller may clear the dedupe claim and retry on next auth).
-    Callers should gate on `customerio_welcome_email_enabled()` first; this
-    function does not re-check, so it raises an `AssertionError` if invoked
-    without config.
+    Returns True on success, False on failure.
     """
-    assert customerio_welcome_email_enabled(), (
-        "send_customerio_welcome_email called without App API config"
-    )
-
-    message_data: dict[str, Any] = {}
-    if display_name:
-        message_data["display_name"] = display_name[:_MESSAGE_DATA_MAX_LEN]
-    if github_login:
-        message_data["github_login"] = github_login[:_MESSAGE_DATA_MAX_LEN]
-
-    payload: dict[str, Any] = {
-        "transactional_message_id": settings.customerio_welcome_transactional_message_id,
-        "to": email,
-        "from": settings.customerio_from_email,
-        "identifiers": {"id": user_id},
-        "message_data": message_data,
-    }
+    if not _customerio_enabled():
+        return False
 
     try:
         async with httpx.AsyncClient(timeout=CUSTOMERIO_TIMEOUT_SECONDS) as client:
-            response = await client.post(
-                f"{CIO_APP_BASE}/send/email",
-                headers={"Authorization": f"Bearer {settings.customerio_app_api_key}"},
-                json=payload,
+            response = await client.put(
+                f"{CIO_TRACK_BASE}/customers/{user_id}",
+                auth=(settings.customerio_site_id, settings.customerio_api_key),
+                json=attributes,
             )
             response.raise_for_status()
     except Exception as exc:
-        _warn_customerio_failure("Failed to send Customer.io welcome email", exc)
+        _warn_customerio_failure("Failed to push Customer.io user attributes", exc)
         return False
     return True

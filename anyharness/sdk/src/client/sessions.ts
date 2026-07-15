@@ -3,6 +3,7 @@ import type {
   SessionRawNotificationEnvelope,
 } from "../types/events.js";
 import type {
+  ClearSessionGoalResponse,
   CreateSessionRequest,
   EditPendingPromptRequest,
   ForkSessionRequest,
@@ -12,13 +13,20 @@ import type {
   McpElicitationUrlRevealResponse,
   PromptSessionRequest,
   PromptSessionResponse,
+  ReorderPendingPromptsRequest,
   ResolveInteractionRequest,
   ResumeSessionRequest,
   ScheduleSubagentWakeRequest,
   ScheduleSubagentWakeResponse,
   SetSessionConfigOptionRequest,
   SetSessionConfigOptionResponse,
+  SetSessionGoalRequest,
+  SetSessionLoopRequest,
   Session,
+  SessionGoalResponse,
+  SessionLoopResponse,
+  SessionLoopsResponse,
+  ClearSessionLoopsResponse,
   SessionSubagentsResponse,
   UpdateSessionTitleRequest,
 } from "../types/sessions.js";
@@ -101,6 +109,88 @@ export class SessionsClient {
       input,
       withTimingCategory(options, "session.title.update"),
     ));
+  }
+
+  async setGoal(
+    sessionId: string,
+    input: SetSessionGoalRequest,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<SessionGoalResponse> {
+    return this.transport.put<SessionGoalResponse>(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/goal`,
+      input,
+      withTimingCategory(options, "session.goal.set"),
+    );
+  }
+
+  async clearGoal(
+    sessionId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<ClearSessionGoalResponse> {
+    return this.transport.deleteJson<ClearSessionGoalResponse>(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/goal`,
+      withTimingCategory(options, "session.goal.clear"),
+    );
+  }
+
+  /** Arm a loop: native cron (Claude) or emulated schedule (Codex). */
+  async setLoop(
+    sessionId: string,
+    input: SetSessionLoopRequest,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<SessionLoopResponse> {
+    return this.transport.put<SessionLoopResponse>(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/loops`,
+      input,
+      withTimingCategory(options, "session.loop.set"),
+    );
+  }
+
+  /** Edit an existing loop (emulated loops only). */
+  async editLoop(
+    sessionId: string,
+    loopId: string,
+    input: SetSessionLoopRequest,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<SessionLoopResponse> {
+    return this.transport.put<SessionLoopResponse>(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/loops/${encodeURIComponent(loopId)}`,
+      input,
+      withTimingCategory(options, "session.loop.edit"),
+    );
+  }
+
+  async listLoops(
+    sessionId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<SessionLoopsResponse> {
+    return this.transport.get<SessionLoopsResponse>(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/loops`,
+      withTimingCategory(options, "session.loop.list"),
+    );
+  }
+
+  /** Clear all loops for the session. */
+  async clearLoops(
+    sessionId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<ClearSessionLoopsResponse> {
+    return this.transport.deleteJson<ClearSessionLoopsResponse>(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/loops`,
+      withTimingCategory(options, "session.loop.clear"),
+    );
+  }
+
+  /** Clear a single loop by id. */
+  async clearLoop(
+    sessionId: string,
+    loopId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<ClearSessionLoopsResponse> {
+    return this.transport.deleteJson<ClearSessionLoopsResponse>(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/loops/${encodeURIComponent(loopId)}`,
+      withTimingCategory(options, "session.loop.clear_one"),
+    );
   }
 
   async getLiveConfig(
@@ -215,6 +305,34 @@ export class SessionsClient {
     return normalizeSession(
       await this.transport.deleteJson<Session>(
         `/v1/sessions/${encodeURIComponent(sessionId)}/pending-prompts/${encodeURIComponent(String(seq))}`,
+        options,
+      ),
+    );
+  }
+
+  async reorderPendingPrompts(
+    sessionId: string,
+    input: ReorderPendingPromptsRequest,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<Session> {
+    return normalizeSession(
+      await this.transport.put<Session>(
+        `/v1/sessions/${encodeURIComponent(sessionId)}/pending-prompts/order`,
+        input,
+        options,
+      ),
+    );
+  }
+
+  async steerPendingPrompt(
+    sessionId: string,
+    seq: number,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<Session> {
+    return normalizeSession(
+      await this.transport.post<Session>(
+        `/v1/sessions/${encodeURIComponent(sessionId)}/pending-prompts/${encodeURIComponent(String(seq))}/steer`,
+        {},
         options,
       ),
     );

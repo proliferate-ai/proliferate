@@ -4,6 +4,7 @@ import { useRef } from "react";
 import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
 
 export function useActiveSessionId(): string | null {
   return useSessionSelectionStore((state) => state.activeSessionId);
@@ -14,6 +15,14 @@ export function useActiveSessionWorkspaceId(): string | null {
   return useSessionDirectoryStore((state) =>
     activeSessionId ? state.entriesById[activeSessionId]?.workspaceId ?? null : null
   );
+}
+
+export function useSelectedWorkspaceUiKey(): string | null {
+  const selectedLogicalWorkspaceId = useSessionSelectionStore(
+    (state) => state.selectedLogicalWorkspaceId,
+  );
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  return resolveWorkspaceUiKey(selectedLogicalWorkspaceId, selectedWorkspaceId);
 }
 
 export function useActiveSessionPromptCapabilities(): PromptCapabilities | null {

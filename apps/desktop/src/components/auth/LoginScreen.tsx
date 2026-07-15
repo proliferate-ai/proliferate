@@ -1,9 +1,11 @@
 import { ProliferateLivingMark } from "@proliferate/product-ui/brand/ProliferateLivingMark";
 import { AuthAppearanceBoundary } from "@/components/auth/AuthAppearanceBoundary";
+import { ConnectServerDialog } from "@/components/auth/ConnectServerDialog";
 import { PasswordSignInForm } from "@/components/auth/PasswordSignInForm";
+import { useConnectServer } from "@/hooks/auth/workflows/use-connect-server";
 import { ArrowRight, GitHub } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { AUTH_LOGIN_LABELS } from "@/copy/auth/auth-copy";
+import { AUTH_LOGIN_LABELS, CONNECT_SERVER_LABELS } from "@/copy/auth/auth-copy";
 
 interface LoginScreenProps {
   submitting: boolean;
@@ -39,6 +41,7 @@ export function LoginScreen({
   const showPasswordForm = passwordSignInAvailable
     && !githubSignInChecking
     && !githubSignInAvailable;
+  const connectServer = useConnectServer();
   return (
     <AuthAppearanceBoundary
       className="flex min-h-screen flex-col items-center justify-center bg-background p-8"
@@ -110,6 +113,39 @@ export function LoginScreen({
           )}
         </div>
       </div>
+
+      {connectServer.available && (
+        <div className="fixed inset-x-0 bottom-6 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+          {connectServer.connectedServerHost ? (
+            <>
+              <span>
+                {CONNECT_SERVER_LABELS.connectedPrefix} {connectServer.connectedServerHost}
+              </span>
+              <span aria-hidden>·</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => void connectServer.resetToDefaultServer()}
+                className="inline h-auto px-0 py-0 text-muted-foreground underline underline-offset-4 hover:text-foreground"
+              >
+                {CONNECT_SERVER_LABELS.reset}
+              </Button>
+            </>
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={connectServer.open}
+              className="inline h-auto px-0 py-0 text-muted-foreground underline underline-offset-4 hover:text-foreground"
+            >
+              {CONNECT_SERVER_LABELS.connectAffordance}
+            </Button>
+          )}
+        </div>
+      )}
+      <ConnectServerDialog controller={connectServer} />
     </AuthAppearanceBoundary>
   );
 }

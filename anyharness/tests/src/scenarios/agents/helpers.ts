@@ -13,12 +13,12 @@ import { expect } from "vitest";
 
 import type { RuntimeHarness } from "../../harness/runtime-harness.js";
 
-export const REQUIRED_AGENTS = ["claude", "codex", "gemini"] as const;
-const DEFAULT_READY_AGENTS = ["claude", "codex", "gemini"] as const;
+export const REQUIRED_AGENTS = ["claude", "codex"] as const;
+const DEFAULT_READY_AGENTS = ["claude", "codex"] as const;
 
 export const READY_AGENTS = getReadyAgents();
 export const PLANNING_MODE_AGENTS = READY_AGENTS.filter(
-  (agentKind): agentKind is "claude" | "gemini" => agentKind === "claude" || agentKind === "gemini",
+  (agentKind): agentKind is "claude" => agentKind === "claude",
 );
 export const AGENT_SETUP_TIMEOUT_MS = 600_000;
 const DEFAULT_PLANNING_PROMPT_TIMEOUT_MS = process.env.CI ? 150_000 : 90_000;
@@ -44,17 +44,10 @@ export const PLANNING_CASES = [
     prompt:
       "Before doing anything else, create a concise 3-step implementation plan for adding a /health endpoint to a FastAPI app using your update_plan capability. Do not implement anything or use other tools.",
   },
-  {
-    agentKind: "gemini",
-    usesPlanningMode: true,
-    expectedPlanSource: "behavior_only",
-    prompt:
-      "Create a concise 3-step implementation plan for adding a /health endpoint to a FastAPI app. Stay in planning mode and use the runtime's structured planning mechanism if available.",
-  },
 ] as const satisfies ReadonlyArray<{
   agentKind: string;
   usesPlanningMode: boolean;
-  expectedPlanSource: "mode_switch" | "structured_plan" | "behavior_only";
+  expectedPlanSource: "mode_switch" | "structured_plan";
   prompt: string;
 }>;
 
@@ -110,10 +103,6 @@ export function getToolCalls(transcript: TranscriptState): ToolCallItem[] {
   return getSortedItems(transcript).filter((item): item is ToolCallItem => item.kind === "tool_call");
 }
 
-export function hasGeminiPlanningBehavior(transcript: TranscriptState): boolean {
-  return hasPlanFileWrite(transcript) || hasPlanLikeAssistantResponse(transcript);
-}
-
 export function findClaudeModeSwitchTool(transcript: TranscriptState): ToolCallItem | null {
   return getToolCalls(transcript).find((item) =>
     item.sourceAgentKind === "claude"
@@ -140,20 +129,6 @@ export function isPlanEnvelope(
   return (
     (envelope.event.type === "item_started" || envelope.event.type === "item_completed")
     && envelope.event.item?.kind === "plan"
-  );
-}
-
-export function isBehaviorOnlyPlanningCompletion(
-  envelope: { event: { type: string; item?: { kind?: string } } },
-): boolean {
-  return (
-    envelope.event.type === "item_completed"
-    && (
-      envelope.event.item?.kind === "assistant_message"
-      || envelope.event.item?.kind === "tool_invocation"
-      || envelope.event.item?.kind === "plan"
-      || envelope.event.item?.kind === "proposed_plan"
-    )
   );
 }
 
@@ -245,18 +220,6 @@ export function hasPlanFileWrite(transcript: TranscriptState): boolean {
       return targets.includes("plan") && targets.includes(".md");
     })
   );
-}
-
-function hasPlanLikeAssistantResponse(transcript: TranscriptState): boolean {
-  return getAssistantTexts(transcript).some((text) => {
-    const normalized = text.toLowerCase();
-    return (
-      normalized.includes("plan")
-      && /(?:^|\n)\s*(?:#{1,6}\s*)?(?:step\s*)?1[.)\s:-]/i.test(text)
-      && /(?:^|\n)\s*(?:#{1,6}\s*)?(?:step\s*)?2[.)\s:-]/i.test(text)
-      && /(?:^|\n)\s*(?:#{1,6}\s*)?(?:step\s*)?3[.)\s:-]/i.test(text)
-    );
-  });
 }
 
 function getSortedItems(transcript: TranscriptState): TranscriptItem[] {

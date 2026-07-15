@@ -46,7 +46,6 @@
           "enum": [
             "claude",
             "codex",
-            "gemini",
             "cursor",
             "opencode",
             "grok"
@@ -480,7 +479,6 @@
             "none",
             "claude",
             "codex",
-            "gemini",
             "opencode",
             "cursor",
             "grok"

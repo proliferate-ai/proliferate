@@ -1,16 +1,24 @@
-//! The declarative agent-auth state file contract.
+//! The declarative agent-auth state file contract (state.json v2, AUTH-ONLY).
 //!
 //! Both delivery surfaces (the cloud materialization worker and the desktop
 //! dispatch worker) write the SAME file at `<anyharness home>/agent-auth/
 //! state.json` (mode 0600); AnyHarness reads it fresh at every session launch
-//! and renders per-harness launch profiles from it (spec §5). There is no
-//! watch/refresh — the render plane re-reads on demand.
+//! and renders per-harness launch profiles from it. There is no watch/refresh —
+//! the render plane re-reads on demand.
+//!
+//! v2 shape (contract §3): a `harnesses[]` list, each entry carrying the
+//! ENABLED `sources[]` for one harness. A source is either a `gateway`
+//! (base_url + key) or an `api_key` (env_var_name + value). No slots, no
+//! providers, no model catalog — the server validated legality before emitting
+//! the sources, so the render plane just composes whatever list it is handed.
 //!
 //! Tolerance model:
-//! - file absent          -> `None` (legacy / native behavior; local desktop
-//!   without cloud state keeps working)
+//! - file absent          -> `None` (native behavior; local desktop without
+//!   cloud state keeps working)
 //! - file present, valid  -> `Some(AgentAuthState)`
 //! - file present, broken -> typed [`RouteAuthError::MalformedStateFile`]
+//!   (this includes a v1 / version-less file: no users exist, so there is no
+//!   back-compat — an old-shape file is simply malformed to this render plane)
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -21,6 +29,13 @@ use super::RouteAuthError;
 
 /// Well-known relative path of the state file under the AnyHarness home.
 pub const STATE_FILE_RELATIVE_PATH: &[&str] = &["agent-auth", "state.json"];
+
+/// The only wire schema version this render plane understands.
+pub const STATE_VERSION: i64 = 2;
+
+/// Source discriminants on the wire (contract §3).
+pub const SOURCE_KIND_GATEWAY: &str = "gateway";
+pub const SOURCE_KIND_API_KEY: &str = "api_key";
 
 /// Resolve the absolute path of the agent-auth state file for a given
 /// AnyHarness runtime home. Single source of truth for the layout so delivery
@@ -33,107 +48,108 @@ pub fn state_file_path(runtime_home: &Path) -> PathBuf {
     path
 }
 
-/// Which route pays for a harness's LLM calls (spec §1). `native` is local-only
-/// (the harness's own auth; we detect + leave alone) and carries no rendered
-/// credentials.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum AuthRoute {
-    Native,
-    ApiKey,
-    Gateway,
+/// A single credential source for a harness (contract §3). `kind` is kept as a
+/// raw string (not a serde-tagged enum) so an unrecognized kind surfaces a
+/// typed error at resolve time rather than a blanket parse failure: unknown
+/// `kind` → typed error, structurally-broken JSON → `MalformedStateFile`.
+///
+/// The per-kind fields are optional at the serde layer and validated when the
+/// source is resolved:
+/// - `gateway`: `base_url` + `key`
+/// - `api_key`: `env_var_name` + `value`
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuthSource {
+    pub kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub env_var_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
 }
 
-impl AuthRoute {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Native => "native",
-            Self::ApiKey => "api_key",
-            Self::Gateway => "gateway",
+/// One harness's enabled sources (contract §3). Composition is just "a list of
+/// sources": single-source harnesses carry at most one, OpenCode may carry a
+/// gateway plus any number of api_key rows — the server already enforced which
+/// combinations are legal.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HarnessAuth {
+    pub harness_kind: String,
+    #[serde(default)]
+    pub sources: Vec<AuthSource>,
+    /// Per-harness advanced settings (persisted toggle values). Keys are
+    /// setting keys declared in the agent catalog; values are JSON primitives
+    /// (booleans for v1). Absent/null when no settings are configured.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settings: Option<serde_json::Map<String, serde_json::Value>>,
+}
+
+/// The whole declarative state file (contract §3, v2).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentAuthState {
+    /// Wire schema version. Must equal [`STATE_VERSION`]; any other value (or a
+    /// version-less v1 file) is rejected as malformed on load.
+    pub version: i64,
+    /// Monotonic revision. Any selection/key mutation bumps it; used for
+    /// stale-push protection ([`apply_state_file`]) and revision-keyed
+    /// materialization dirs.
+    pub revision: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_id: Option<String>,
+    /// The origin (`scheme://host[:port]`) of the control-plane server that
+    /// produced this document, stamped by the desktop write path at push time
+    /// (`use-local-auth-state-sync.ts`). `None` for cloud-materialized state
+    /// (no desktop server-switch concern there) and for files written before
+    /// this field existed — [`Self::matches_server_origin`] treats an absent
+    /// stamp as a match, so single-server users see no behavior change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub issuing_server_origin: Option<String>,
+    #[serde(default)]
+    pub harnesses: Vec<HarnessAuth>,
+}
+
+impl AgentAuthState {
+    /// The enabled sources for a harness kind. Absent harness → empty slice
+    /// (the render plane treats this as native — no rendered credentials).
+    pub fn sources_for(&self, harness_kind: &str) -> &[AuthSource] {
+        self.harnesses
+            .iter()
+            .find(|entry| entry.harness_kind == harness_kind)
+            .map(|entry| entry.sources.as_slice())
+            .unwrap_or(&[])
+    }
+
+    /// Guards against injecting a PREVIOUS server's gateway tokens after a
+    /// desktop server switch: the worker may push a fresh document for the new
+    /// server before the app re-enrolls, but a launch racing that window must
+    /// not use the just-abandoned server's still-cached state.
+    ///
+    /// - both origins present and equal (case-insensitively, ignoring a
+    ///   trailing slash) → match.
+    /// - both present and different → mismatch (the caller treats the state
+    ///   as absent, i.e. native/no-injection, until a fresh push lands).
+    /// - either side absent (no stamp on the file, or no current-origin
+    ///   signal from the caller, e.g. a cloud sandbox) → match. This is the
+    ///   backward-compat path: it never regresses a single-server install.
+    pub fn matches_server_origin(&self, current_server_origin: Option<&str>) -> bool {
+        match (&self.issuing_server_origin, current_server_origin) {
+            (Some(stamped), Some(current)) => normalize_origin(stamped) == normalize_origin(current),
+            _ => true,
         }
     }
 }
 
-/// The default slot: the one selection of a single-source harness.
-pub const SLOT_PRIMARY: &str = "primary";
-
-fn default_slot() -> String {
-    SLOT_PRIMARY.to_string()
-}
-
-/// A single (harness, slot) selection materialized by the control plane. The
-/// optional fields carry only what a route needs: `key`/`base_url`/`provider`
-/// for api_key/gateway, `model_catalog` for OpenCode's explicit models map.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AuthSelection {
-    /// Harness kind string, e.g. `"claude"`, `"codex"` (matches
-    /// [`AgentKind::as_str`](crate::domains::agents::model::AgentKind::as_str)).
-    pub harness: String,
-    pub route: AuthRoute,
-    /// Composition axis (spec §3.3): single-source harnesses carry exactly one
-    /// `"primary"` entry; OpenCode carries one entry per slot (`"gateway"` +
-    /// direct provider slots), merged into one additive launch profile.
-    /// Defaults keep pre-slot state files parsing.
-    #[serde(default = "default_slot")]
-    pub slot: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub provider: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub base_url: Option<String>,
-    /// The rendered credential (virtual key for gateway, raw provider key for
-    /// api_key). Never logged.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub key: Option<String>,
-    /// Explicit model ids for adapters that require them in-config (OpenCode).
-    /// Populated by the catalog (PR 7); absent means the adapter falls back to
-    /// a static minimal list.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub model_catalog: Option<Vec<String>>,
-}
-
-/// The whole declarative state file (spec §5).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AgentAuthState {
-    /// Monotonic revision. `0` means "no scoped selections yet" (legacy /
-    /// native behavior); `> 0` engages fail-closed semantics for harnesses
-    /// without a selection.
-    pub revision: i64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub user_id: Option<String>,
-    #[serde(default)]
-    pub selections: Vec<AuthSelection>,
-}
-
-impl AgentAuthState {
-    /// The selection for a harness kind, if any (first match; use
-    /// [`Self::selections_for`] where multiple slots are legal).
-    pub fn selection_for(&self, harness_kind: &str) -> Option<&AuthSelection> {
-        self.selections
-            .iter()
-            .find(|selection| selection.harness == harness_kind)
-    }
-
-    /// Every selection for a harness kind, in state-file order. OpenCode may
-    /// carry several (one per slot); single-source harnesses must not.
-    pub fn selections_for(&self, harness_kind: &str) -> Vec<&AuthSelection> {
-        self.selections
-            .iter()
-            .filter(|selection| selection.harness == harness_kind)
-            .collect()
-    }
-
-    /// Whether the state engages fail-closed semantics (a scoped launch, spec
-    /// §3): the file exists with a real revision, so a harness with no
-    /// selection must error rather than fall through to ambient credentials.
-    pub fn is_scoped(&self) -> bool {
-        self.revision > 0
-    }
+fn normalize_origin(origin: &str) -> String {
+    origin.trim().trim_end_matches('/').to_ascii_lowercase()
 }
 
 /// Read + parse the state file on demand. Returns:
-/// - `Ok(None)` when the file is absent (legacy behavior),
-/// - `Ok(Some(state))` when present and valid,
-/// - `Err(RouteAuthError::MalformedStateFile)` when present but unparseable.
+/// - `Ok(None)` when the file is absent (native behavior),
+/// - `Ok(Some(state))` when present and a valid v2 document,
+/// - `Err(RouteAuthError::MalformedStateFile)` when present but unparseable or
+///   not v2 (a v1 / version-less file counts as malformed — no back-compat).
 pub fn load_state_file(runtime_home: &Path) -> Result<Option<AgentAuthState>, RouteAuthError> {
     let path = state_file_path(runtime_home);
     load_state_from_path(&path)
@@ -193,6 +209,15 @@ pub(super) fn load_state_from_path(path: &Path) -> Result<Option<AgentAuthState>
             path: path.to_path_buf(),
             detail: format!("failed to parse state file JSON: {error}"),
         })?;
+    if state.version != STATE_VERSION {
+        return Err(RouteAuthError::MalformedStateFile {
+            path: path.to_path_buf(),
+            detail: format!(
+                "unsupported agent-auth state version {} (expected {STATE_VERSION})",
+                state.version
+            ),
+        });
+    }
     Ok(Some(state))
 }
 
@@ -201,6 +226,26 @@ mod tests {
     use super::*;
     use crate::domains::agents::route_auth::test_support::TempHome;
 
+    fn gateway_source(base_url: &str, key: &str) -> AuthSource {
+        AuthSource {
+            kind: SOURCE_KIND_GATEWAY.into(),
+            base_url: Some(base_url.into()),
+            key: Some(key.into()),
+            env_var_name: None,
+            value: None,
+        }
+    }
+
+    fn api_key_source(env_var_name: &str, value: &str) -> AuthSource {
+        AuthSource {
+            kind: SOURCE_KIND_API_KEY.into(),
+            base_url: None,
+            key: None,
+            env_var_name: Some(env_var_name.into()),
+            value: Some(value.into()),
+        }
+    }
+
     #[test]
     fn state_file_path_uses_well_known_layout() {
         let path = state_file_path(Path::new("/home/x/.proliferate/anyharness"));
@@ -208,7 +253,7 @@ mod tests {
     }
 
     #[test]
-    fn missing_file_is_legacy_none() {
+    fn missing_file_is_native_none() {
         let home = TempHome::new("state-missing");
         let state = load_state_file(home.path()).expect("load");
         assert!(state.is_none());
@@ -223,109 +268,154 @@ mod tests {
     }
 
     #[test]
-    fn round_trip_serde_preserves_selection_fields() {
+    fn v1_file_is_rejected_as_malformed() {
+        // A v1 document (no `version`, `selections` instead of `harnesses`) has
+        // no trustworthy shape for this render plane: reject as malformed.
+        let home = TempHome::new("state-v1");
+        home.write_state_raw(
+            br#"{ "revision": 3, "selections": [ { "harness": "claude", "route": "native" } ] }"#,
+        );
+        let error = load_state_file(home.path()).expect_err("v1 rejected");
+        assert!(matches!(error, RouteAuthError::MalformedStateFile { .. }));
+    }
+
+    #[test]
+    fn wrong_version_is_rejected_as_malformed() {
+        let home = TempHome::new("state-badver");
+        home.write_state_json(&serde_json::json!({
+            "version": 1,
+            "revision": 3,
+            "harnesses": []
+        }));
+        let error = load_state_file(home.path()).expect_err("bad version");
+        assert!(matches!(error, RouteAuthError::MalformedStateFile { .. }));
+    }
+
+    #[test]
+    fn round_trip_serde_preserves_sources() {
         let state = AgentAuthState {
+            version: STATE_VERSION,
             revision: 42,
             user_id: Some("user-1".into()),
-            selections: vec![
-                AuthSelection {
-                    harness: "claude".into(),
-                    route: AuthRoute::Gateway,
-                    slot: SLOT_PRIMARY.into(),
-                    provider: None,
-                    base_url: Some("https://llm.proliferate.ai".into()),
-                    key: Some("sk-virtual".into()),
-                    model_catalog: None,
+            issuing_server_origin: None,
+            harnesses: vec![
+                HarnessAuth {
+                    harness_kind: "claude".into(),
+                    sources: vec![gateway_source("https://llm.proliferate.ai", "sk-vk")],
+                    settings: None,
                 },
-                AuthSelection {
-                    harness: "opencode".into(),
-                    route: AuthRoute::Gateway,
-                    slot: "gateway".into(),
-                    provider: None,
-                    base_url: Some("https://llm.proliferate.ai".into()),
-                    key: Some("sk-virtual".into()),
-                    model_catalog: Some(vec!["claude-haiku-4-5-20251001".into()]),
+                HarnessAuth {
+                    harness_kind: "opencode".into(),
+                    sources: vec![
+                        gateway_source("https://llm.proliferate.ai", "sk-vk"),
+                        api_key_source("ANTHROPIC_API_KEY", "sk-ant"),
+                    ],
+                    settings: None,
                 },
             ],
         };
         let json = serde_json::to_string(&state).expect("serialize");
         let parsed: AgentAuthState = serde_json::from_str(&json).expect("parse");
         assert_eq!(state, parsed);
-        // camelCase-insensitive: routes serialize snake_case.
-        assert!(json.contains("\"gateway\""));
+        // gateway source drops the api_key-only fields on the wire.
+        assert!(!json.contains("\"env_var_name\":null"));
     }
 
     #[test]
-    fn selection_lookup_and_scoping() {
+    fn sources_lookup() {
         let state = AgentAuthState {
+            version: STATE_VERSION,
             revision: 5,
             user_id: None,
-            selections: vec![AuthSelection {
-                harness: "codex".into(),
-                route: AuthRoute::ApiKey,
-                slot: SLOT_PRIMARY.into(),
-                provider: Some("openai".into()),
-                base_url: None,
-                key: Some("sk-raw".into()),
-                model_catalog: None,
+            issuing_server_origin: None,
+            harnesses: vec![HarnessAuth {
+                harness_kind: "codex".into(),
+                sources: vec![api_key_source("OPENAI_API_KEY", "sk-raw")],
+                settings: None,
             }],
         };
-        assert!(state.is_scoped());
+        assert_eq!(state.sources_for("codex").len(), 1);
+        assert_eq!(state.sources_for("codex")[0].kind, SOURCE_KIND_API_KEY);
+        // Absent harness → empty slice (native).
+        assert!(state.sources_for("claude").is_empty());
+    }
+
+    #[test]
+    fn empty_harnesses_field_defaults() {
+        let json = r#"{ "version": 2, "revision": 0 }"#;
+        let state: AgentAuthState = serde_json::from_str(json).expect("parse");
+        assert!(state.harnesses.is_empty());
+        // No stamp on this (legacy) shape either.
+        assert!(state.issuing_server_origin.is_none());
+    }
+
+    #[test]
+    fn issuing_server_origin_round_trips_and_is_absent_by_default() {
+        let json = r#"{ "version": 2, "revision": 0, "issuing_server_origin": "https://proliferate.corp.example" }"#;
+        let state: AgentAuthState = serde_json::from_str(json).expect("parse");
         assert_eq!(
-            state.selection_for("codex").unwrap().route,
-            AuthRoute::ApiKey
+            state.issuing_server_origin,
+            Some("https://proliferate.corp.example".to_string())
         );
-        assert!(state.selection_for("claude").is_none());
-
-        let legacy = AgentAuthState {
-            revision: 0,
-            user_id: None,
-            selections: vec![],
-        };
-        assert!(!legacy.is_scoped());
-    }
-
-    #[test]
-    fn tolerates_minimal_native_selection() {
-        let json =
-            r#"{ "revision": 3, "selections": [ { "harness": "claude", "route": "native" } ] }"#;
-        let state: AgentAuthState = serde_json::from_str(json).expect("parse");
-        let selection = state.selection_for("claude").expect("selection");
-        assert_eq!(selection.route, AuthRoute::Native);
-        assert!(selection.key.is_none());
-    }
-
-    #[test]
-    fn missing_slot_defaults_to_primary_and_round_trips() {
-        // Pre-slot state files (no "slot" key) parse with the primary default.
-        let json = r#"{
-            "revision": 4,
-            "selections": [
-                { "harness": "claude", "route": "gateway",
-                  "base_url": "https://gw", "key": "sk-vk" }
-            ]
-        }"#;
-        let state: AgentAuthState = serde_json::from_str(json).expect("parse");
-        assert_eq!(state.selection_for("claude").unwrap().slot, SLOT_PRIMARY);
-
-        // And the default survives a serialize→parse round trip.
         let serialized = serde_json::to_string(&state).expect("serialize");
-        let parsed: AgentAuthState = serde_json::from_str(&serialized).expect("reparse");
-        assert_eq!(state, parsed);
+        assert!(serialized.contains("\"issuing_server_origin\":\"https://proliferate.corp.example\""));
+    }
+
+    fn stamped_state(origin: Option<&str>) -> AgentAuthState {
+        AgentAuthState {
+            version: STATE_VERSION,
+            revision: 1,
+            user_id: None,
+            issuing_server_origin: origin.map(str::to_string),
+            harnesses: vec![],
+        }
+    }
+
+    #[test]
+    fn matches_server_origin_when_both_stamps_agree() {
+        let state = stamped_state(Some("https://proliferate.corp.example"));
+        assert!(state.matches_server_origin(Some("https://proliferate.corp.example")));
+    }
+
+    #[test]
+    fn matches_server_origin_is_case_and_trailing_slash_insensitive() {
+        let state = stamped_state(Some("https://Proliferate.Corp.Example/"));
+        assert!(state.matches_server_origin(Some("https://proliferate.corp.example")));
+    }
+
+    #[test]
+    fn matches_server_origin_rejects_a_real_mismatch() {
+        let state = stamped_state(Some("https://old-server.example"));
+        assert!(!state.matches_server_origin(Some("https://new-server.example")));
+    }
+
+    #[test]
+    fn matches_server_origin_treats_legacy_unstamped_file_as_a_match() {
+        // Backward compat (task requirement): a file written before this field
+        // existed must not suddenly start losing its gateway credentials.
+        let state = stamped_state(None);
+        assert!(state.matches_server_origin(Some("https://proliferate.corp.example")));
+    }
+
+    #[test]
+    fn matches_server_origin_treats_absent_current_origin_signal_as_a_match() {
+        // No current-origin signal (e.g. a cloud sandbox launch, which never
+        // sets the env var this is sourced from) -> never second-guess the
+        // state file.
+        let state = stamped_state(Some("https://proliferate.corp.example"));
+        assert!(state.matches_server_origin(None));
     }
 
     fn state_with_revision(revision: i64) -> AgentAuthState {
         AgentAuthState {
+            version: STATE_VERSION,
             revision,
             user_id: Some("user-1".into()),
-            selections: vec![AuthSelection {
-                harness: "claude".into(),
-                route: AuthRoute::Native,
-                slot: SLOT_PRIMARY.into(),
-                provider: None,
-                base_url: None,
-                key: None,
-                model_catalog: None,
+            issuing_server_origin: None,
+            harnesses: vec![HarnessAuth {
+                harness_kind: "claude".into(),
+                sources: vec![api_key_source("ANTHROPIC_API_KEY", "sk-raw")],
+                settings: None,
             }],
         }
     }
@@ -371,7 +461,7 @@ mod tests {
         apply_state_file(home.path(), &state_with_revision(5)).expect("apply");
         // Equal revision: content is authoritative (vkey rotation case).
         let mut rotated = state_with_revision(5);
-        rotated.selections[0].harness = "codex".into();
+        rotated.harnesses[0].harness_kind = "codex".into();
         apply_state_file(home.path(), &rotated).expect("equal revision");
         apply_state_file(home.path(), &state_with_revision(6)).expect("higher revision");
         let loaded = load_state_file(home.path()).expect("load").expect("state");
@@ -385,24 +475,5 @@ mod tests {
         apply_state_file(home.path(), &state_with_revision(3)).expect("heal");
         let loaded = load_state_file(home.path()).expect("load").expect("state");
         assert_eq!(loaded.revision, 3);
-    }
-
-    #[test]
-    fn multiple_entries_per_harness_are_representable() {
-        let json = r#"{
-            "revision": 9,
-            "selections": [
-                { "harness": "opencode", "route": "gateway", "slot": "gateway",
-                  "base_url": "https://gw", "key": "sk-vk" },
-                { "harness": "opencode", "route": "api_key", "slot": "anthropic",
-                  "provider": "anthropic", "key": "sk-ant" }
-            ]
-        }"#;
-        let state: AgentAuthState = serde_json::from_str(json).expect("parse");
-        let selections = state.selections_for("opencode");
-        assert_eq!(selections.len(), 2);
-        assert_eq!(selections[0].slot, "gateway");
-        assert_eq!(selections[1].slot, "anthropic");
-        assert!(state.selections_for("claude").is_empty());
     }
 }

@@ -386,3 +386,143 @@ async def test_gateway_disabled_makes_budget_always_available(
     monkeypatch.setattr(settings, "agent_gateway_enabled", False)
     user_id = await _create_user(db_session)
     assert await is_gateway_budget_available(db_session, user_id) is True
+
+
+@pytest.mark.asyncio
+async def test_exhausted_budget_withholds_gateway_key_from_state_render(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    stub_litellm: StubLiteLLM,
+) -> None:
+    """The second enforcement wall: state.json stops carrying the virtual key.
+
+    Even if the LiteLLM key-disable (first wall) lagged or failed, an
+    exhausted subject's agent-auth state render must drop the gateway source,
+    so the runtime fails closed at launch.
+    """
+    from proliferate.db.store.agent_gateway import DesiredAuthSource
+    from proliferate.db.store.agent_gateway.selections import put_auth_selections
+    from proliferate.server.cloud.materialization.materialize.agent_auth import (
+        build_agent_auth_state,
+    )
+
+    monkeypatch.setattr(settings, "agent_gateway_enabled", True)
+    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    monkeypatch.setattr(
+        settings,
+        "agent_gateway_litellm_public_base_url",
+        "https://llm.proliferate.ai",
+    )
+    user_id = await _create_user(db_session)
+    await _link_github_identity(db_session, user_id=user_id)
+    enrollment = await ensure_user_enrollment(db_session, user_id)
+    assert enrollment.virtual_key_id is not None
+
+    await put_auth_selections(
+        db_session,
+        user_id=user_id,
+        harness_kind="claude",
+        surface="local",
+        sources=[DesiredAuthSource(source_kind="gateway")],
+    )
+
+    # With credit remaining, the render hands out the gateway key.
+    state, _ = await build_agent_auth_state(db_session, user_id, surface="local")
+    sources = [s for h in state["harnesses"] for s in h["sources"]]
+    assert any(s["kind"] == "gateway" and s.get("key") for s in sources)
+
+    # Drain the grant; simulate the first wall failing by NOT relying on the
+    # key-disable — the render alone must now withhold the key.
+    stub_litellm.spend_rows = [
+        _spend_row(
+            request_id="req-wall2",
+            api_key=enrollment.virtual_key_id,
+            spend=6.0,
+            occurred_at=datetime(2026, 7, 1, 12, 0, tzinfo=UTC),
+        )
+    ]
+    await run_usage_import(db_session, now=datetime(2026, 7, 1, 12, 10, tzinfo=UTC))
+    assert await is_gateway_budget_available(db_session, user_id) is False
+
+    state, _ = await build_agent_auth_state(db_session, user_id, surface="local")
+    sources = [s for h in state["harnesses"] for s in h["sources"]]
+    assert not any(s["kind"] == "gateway" for s in sources)
+
+
+@pytest.mark.asyncio
+async def test_exhausted_budget_blocks_gateway_catalog_refresh_with_402(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    stub_litellm: StubLiteLLM,
+) -> None:
+    from proliferate.server.cloud.agent_gateway import catalog as catalog_service
+    from proliferate.server.cloud.errors import CloudApiError
+
+    monkeypatch.setattr(settings, "agent_gateway_enabled", True)
+    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    user_id = await _create_user(db_session)
+    await _link_github_identity(db_session, user_id=user_id)
+    enrollment = await ensure_user_enrollment(db_session, user_id)
+    assert enrollment.virtual_key_id is not None
+
+    stub_litellm.spend_rows = [
+        _spend_row(
+            request_id="req-catalog-drain",
+            api_key=enrollment.virtual_key_id,
+            spend=6.0,
+            occurred_at=datetime(2026, 7, 1, 12, 0, tzinfo=UTC),
+        )
+    ]
+    await run_usage_import(db_session, now=datetime(2026, 7, 1, 12, 10, tzinfo=UTC))
+
+    with pytest.raises(CloudApiError) as excinfo:
+        await catalog_service.refresh_catalog(
+            db_session,
+            user_id=user_id,
+            harness_kind="claude",
+            surface="local",
+            route="gateway",
+            models_json=None,
+        )
+    assert excinfo.value.code == "agent_gateway_credits_exhausted"
+    assert excinfo.value.status_code == 402
+
+
+@pytest.mark.asyncio
+async def test_available_budget_leaves_state_render_and_no_grant_unblocked(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    stub_litellm: StubLiteLLM,
+) -> None:
+    """A no-grant subject (default-budget) is never blocked by the ledger gate."""
+    from proliferate.db.store.agent_gateway import DesiredAuthSource
+    from proliferate.db.store.agent_gateway.selections import put_auth_selections
+    from proliferate.server.cloud.materialization.materialize.agent_auth import (
+        build_agent_auth_state,
+    )
+
+    monkeypatch.setattr(settings, "agent_gateway_enabled", True)
+    # Free credits disabled: enrollment has no grant, LiteLLM default budget
+    # is the only guardrail; the ledger gate must not block.
+    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "0")
+    monkeypatch.setattr(
+        settings,
+        "agent_gateway_litellm_public_base_url",
+        "https://llm.proliferate.ai",
+    )
+    user_id = await _create_user(db_session)
+    await _link_github_identity(db_session, user_id=user_id)
+    enrollment = await ensure_user_enrollment(db_session, user_id)
+    assert enrollment.virtual_key_id is not None
+
+    await put_auth_selections(
+        db_session,
+        user_id=user_id,
+        harness_kind="claude",
+        surface="local",
+        sources=[DesiredAuthSource(source_kind="gateway")],
+    )
+    assert await is_gateway_budget_available(db_session, user_id) is True
+    state, _ = await build_agent_auth_state(db_session, user_id, surface="local")
+    sources = [s for h in state["harnesses"] for s in h["sources"]]
+    assert any(s["kind"] == "gateway" and s.get("key") for s in sources)

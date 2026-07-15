@@ -41,10 +41,19 @@ pub struct SessionTurnFinishedContext {
     pub workspace: WorkspaceRecord,
     pub session_id: String,
     pub turn_id: String,
+    /// The workflow-owned prompt id when present; used for exact prompt-identity
+    /// matching by workflow completion. `None` for prompts with no id.
+    pub prompt_id: Option<String>,
     pub outcome: SessionTurnOutcome,
     pub stop_reason: Option<String>,
     pub last_event_seq: i64,
     pub error_details: Option<ErrorEventDetails>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SessionStartedContext {
+    pub session_id: String,
+    pub agent_kind: String,
 }
 
 #[derive(Debug, Clone)]
@@ -65,6 +74,8 @@ pub trait SessionExtension: Send + Sync {
     ) -> anyhow::Result<SessionLaunchExtras> {
         Ok(SessionLaunchExtras::default())
     }
+
+    fn on_session_started(&self, _ctx: SessionStartedContext) {}
 
     fn on_turn_finished(&self, _ctx: SessionTurnFinishedContext) {}
 

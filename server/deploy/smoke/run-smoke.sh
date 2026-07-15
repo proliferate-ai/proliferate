@@ -83,9 +83,10 @@ fi
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/proliferate-smoke.XXXXXX")"
 STACK_DIR="$WORK_DIR/deploy"
 BIN_DIR="$WORK_DIR/bin"
+GITHUB_APP_SECRETS_DIR="$WORK_DIR/github-app-secrets"
 
 cp -R "$DEPLOY_DIR" "$STACK_DIR"
-mkdir -p "$BIN_DIR"
+mkdir -p "$BIN_DIR" "$GITHUB_APP_SECRETS_DIR"
 
 # Drop any env state copied from a previously bootstrapped checkout.
 find "$STACK_DIR" -maxdepth 1 -name ".env*" ! -name ".env.production.example" -exec rm -f {} +
@@ -151,6 +152,7 @@ PROLIFERATE_PUBLIC_HEALTHCHECK_URL=http://localhost:${HTTP_PORT}/health
 PROLIFERATE_SERVER_IMAGE=${IMAGE_REPOSITORY}
 PROLIFERATE_SERVER_IMAGE_TAG=${IMAGE_TAG}
 PROLIFERATE_HOST_BIN_DIR=${BIN_DIR}
+GITHUB_APP_PRIVATE_KEY_HOST_PATH=${GITHUB_APP_SECRETS_DIR}
 PROLIFERATE_SMOKE_HTTP_PORT=${HTTP_PORT}
 PROLIFERATE_SMOKE_API_PORT=${API_PORT}
 PROLIFERATE_ANONYMOUS_TELEMETRY_DISABLED=true

@@ -35,6 +35,12 @@ The Proliferate Worker binary follows the same staging/bundling model, but it
 is not the AnyHarness sidecar. It is launched on demand by desktop dispatch
 logic in `commands/cloud_worker.rs`.
 
+Desktop worker config must set `runtime_base_url` from the current
+`SharedSidecar.info.url`. The sidecar normally uses a dynamically selected
+loopback port (and may use `ANYHARNESS_DEV_URL` in development), so the worker
+must not rely on its sandbox-oriented `127.0.0.1:8457` default when connecting
+to the local runtime for catalog convergence or command delivery.
+
 ## Boot Flow
 
 1. `lib.rs` calls `sidecar::create_sidecar_with_auto_port()`.

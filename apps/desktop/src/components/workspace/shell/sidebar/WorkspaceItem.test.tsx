@@ -2,13 +2,19 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
+import type { ProductHost } from "@proliferate/product-client/host/product-host";
+import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import type { WorkspaceGitStatus } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
 import { WorkspaceItem } from "./WorkspaceItem";
 
-vi.mock("@/lib/access/tauri/context-menu", () => ({
-  canShowNativeContextMenu: () => false,
-  showNativeContextMenu: vi.fn(),
-}));
+const webTestHost = { desktop: null } as ProductHost;
+
+function renderWithProductHost(ui: ReactElement) {
+  return render(
+    <ProductHostProvider host={webTestHost}>{ui}</ProductHostProvider>,
+  );
+}
 
 function makeGitStatus(overrides: Partial<WorkspaceGitStatus> = {}): WorkspaceGitStatus {
   return {
@@ -41,7 +47,7 @@ describe("WorkspaceItem", () => {
   it("keeps the delete workspace context menu open after right-clicking", async () => {
     const onSelect = vi.fn();
 
-    render(
+    renderWithProductHost(
       <WorkspaceItem
         name="Feature worktree"
         variant="worktree"
@@ -64,7 +70,7 @@ describe("WorkspaceItem", () => {
     const onSelect = vi.fn();
     const onMarkDone = vi.fn();
 
-    render(
+    renderWithProductHost(
       <WorkspaceItem
         name="Feature worktree"
         variant="worktree"
@@ -88,7 +94,7 @@ describe("WorkspaceItem", () => {
     const onCopyWorkspacePath = vi.fn();
     const onCopyBranchName = vi.fn();
 
-    render(
+    renderWithProductHost(
       <WorkspaceItem
         name="Feature worktree"
         variant="worktree"
@@ -111,8 +117,8 @@ describe("WorkspaceItem", () => {
     expect(onCopyBranchName).toHaveBeenCalledTimes(1);
   });
 
-  it("renders the PR status dot on the leading git glyph", () => {
-    render(
+  it("renders PR status as a compact git detail glyph", () => {
+    renderWithProductHost(
       <WorkspaceItem
         name="Feature worktree"
         variant="worktree"
@@ -123,8 +129,8 @@ describe("WorkspaceItem", () => {
     expect(screen.getByRole("img", { name: "PR #805 · Open" })).toBeTruthy();
   });
 
-  it("renders the activity indicator in the right slot, keeping the PR glyph", () => {
-    render(
+  it("renders activity and PR state together in the right-side details", () => {
+    renderWithProductHost(
       <WorkspaceItem
         name="Feature worktree"
         variant="worktree"
@@ -134,12 +140,12 @@ describe("WorkspaceItem", () => {
     );
 
     expect(screen.getByRole("img", { name: "Iterating" })).toBeTruthy();
-    // The status no longer evicts the PR glyph + dot from the leading well.
+    // Live activity does not evict the compact PR detail glyph.
     expect(screen.getByRole("img", { name: "PR #805 · Open" })).toBeTruthy();
   });
 
-  it("renders no leading glyph for an authoritative no-PR branch", () => {
-    const { container } = render(
+  it("renders no git glyph for an authoritative no-PR branch", () => {
+    const { container } = renderWithProductHost(
       <WorkspaceItem
         name="Feature worktree"
         variant="worktree"
@@ -156,12 +162,12 @@ describe("WorkspaceItem", () => {
     );
 
     expect(screen.queryByRole("img")).toBeNull();
-    // No branch-glyph fallback: the leading well stays empty.
+    // No branch-glyph fallback is shown without a PR.
     expect(container.querySelector("svg")).toBeNull();
   });
 
-  it("renders no leading glyph when PR data is unknown", () => {
-    const { container } = render(
+  it("renders no git glyph when PR data is unknown", () => {
+    const { container } = renderWithProductHost(
       <WorkspaceItem
         name="Feature worktree"
         variant="worktree"
@@ -174,7 +180,7 @@ describe("WorkspaceItem", () => {
   });
 
   it("shows the unread dot in the right slot when the row needs review", () => {
-    render(
+    renderWithProductHost(
       <WorkspaceItem
         name="Feature worktree"
         variant="worktree"
@@ -186,7 +192,7 @@ describe("WorkspaceItem", () => {
   });
 
   it("lets an activity indicator beat the unread dot in the right slot", () => {
-    render(
+    renderWithProductHost(
       <WorkspaceItem
         name="Feature worktree"
         variant="worktree"
@@ -202,7 +208,7 @@ describe("WorkspaceItem", () => {
   it("opens the pull request from the context menu", () => {
     const onOpenPullRequest = vi.fn();
 
-    render(
+    renderWithProductHost(
       <WorkspaceItem
         name="Feature worktree"
         variant="worktree"

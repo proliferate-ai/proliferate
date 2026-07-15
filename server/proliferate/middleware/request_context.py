@@ -99,6 +99,21 @@ def with_correlation_context(**fields: object) -> Iterator[None]:
             context_var.reset(token)
 
 
+def bind_background_correlation_context(**fields: str | None) -> list[Token[str | None]]:
+    """Bind correlation context vars for background work (workers, Celery tasks).
+
+    Returns tokens for resetting. Caller should reset in reverse order when done,
+    or use ``with_correlation_context`` for scoped binding.
+    """
+    tokens: list[Token[str | None]] = []
+    for key, value in fields.items():
+        context_var = _CORRELATION_VARS.get(key)
+        if context_var is None:
+            continue
+        tokens.append(context_var.set(str(value) if value is not None else None))
+    return tokens
+
+
 class RequestContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self,

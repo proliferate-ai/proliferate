@@ -1,27 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  copyPath as copyPathToClipboard,
-  listOpenTargets,
-  openTarget as execOpenTarget,
-  type OpenTarget,
-} from "@/lib/access/tauri/shell";
+import type {
+  DesktopFilesBridge,
+  OpenTarget,
+} from "@proliferate/product-client/host/desktop-bridge";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { resolvePreferredOpenTarget } from "@/lib/domain/chat/composer/preference-resolvers";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { splitPathLineSuffix } from "@/lib/domain/files/path-detection";
 
 /**
- * Module-level cache so every chat message doesn't re-query the editor list.
- * `listOpenTargets()` is a Tauri call that enumerates installed editors;
- * the result is stable for the session.
+ * Per-bridge cache so every chat message doesn't re-query the installed editor
+ * list. The concrete Desktop bridge is stable for the host session.
  */
-let cachedTargetsPromise: Promise<OpenTarget[]> | null = null;
+const cachedTargetsPromises = new WeakMap<DesktopFilesBridge, Promise<OpenTarget[]>>();
 const EMPTY_OPEN_TARGETS: OpenTarget[] = [];
 
-function loadFileTargets(): Promise<OpenTarget[]> {
-  if (!cachedTargetsPromise) {
-    cachedTargetsPromise = listOpenTargets("file").catch(() => [] as OpenTarget[]);
+function loadFileTargets(files: DesktopFilesBridge): Promise<OpenTarget[]> {
+  let targetsPromise = cachedTargetsPromises.get(files);
+  if (!targetsPromise) {
+    targetsPromise = files.listOpenTargets("file").catch(() => [] as OpenTarget[]);
+    cachedTargetsPromises.set(files, targetsPromise);
   }
-  return cachedTargetsPromise;
+  return targetsPromise;
 }
 
 interface UseOpenInDefaultEditorResult {
@@ -51,9 +51,11 @@ interface UseOpenInDefaultEditorResult {
  *  - Falls back through the product default target, Finder, then the first
  *    available target (matches `resolvePreferredOpenTarget` semantics).
  *  - Strips any `:line[:col]` suffix before invoking the shell command,
- *    because the underlying Tauri commands take a plain path.
+ *    because Desktop open-target commands take a plain path.
  */
 export function useOpenInDefaultEditor(): UseOpenInDefaultEditorResult {
+  const host = useProductHost();
+  const files = host.desktop?.files ?? null;
   const [targets, setTargets] = useState<OpenTarget[] | null>(null);
   const defaultOpenInTargetId = useUserPreferencesStore(
     (state) => state.defaultOpenInTargetId,
@@ -66,38 +68,51 @@ export function useOpenInDefaultEditor(): UseOpenInDefaultEditorResult {
 
   useEffect(() => {
     let cancelled = false;
-    void loadFileTargets().then((loaded) => {
+    if (!files) {
+      setTargets([]);
+      return;
+    }
+    void loadFileTargets(files).then((loaded) => {
       if (!cancelled) setTargets(loaded);
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [files]);
 
   const openInDefaultEditor = useCallback(
     async (absolutePath: string) => {
-      const list = targets ?? (await loadFileTargets());
+      if (!files) {
+        throw new Error("Local file access is not available.");
+      }
+      const list = targets ?? (await loadFileTargets(files));
       const preferred = resolvePreferredOpenTarget(openableTargets(list), { defaultOpenInTargetId });
       if (!preferred) return;
       const { path } = splitPathLineSuffix(absolutePath);
-      await execOpenTarget(preferred.id, path).catch(() => {});
+      await files.openTarget(preferred.id, path).catch(() => {});
     },
-    [targets, defaultOpenInTargetId],
+    [files, targets, defaultOpenInTargetId],
   );
 
   const copyPath = useCallback(async (path: string) => {
-    await copyPathToClipboard(path);
-  }, []);
+    await host.clipboard.writeText(path);
+  }, [host.clipboard]);
 
   const openTarget = useCallback(async (targetId: string, absolutePath: string) => {
+    if (!files) {
+      throw new Error("Local file access is not available.");
+    }
     const { path } = splitPathLineSuffix(absolutePath);
-    await execOpenTarget(targetId, path).catch(() => {});
-  }, []);
+    await files.openTarget(targetId, path).catch(() => {});
+  }, [files]);
 
   const revealInFinder = useCallback(async (absolutePath: string) => {
+    if (!files) {
+      throw new Error("Local file access is not available.");
+    }
     const { path } = splitPathLineSuffix(absolutePath);
-    await execOpenTarget("finder", path).catch(() => {});
-  }, []);
+    await files.openTarget("finder", path).catch(() => {});
+  }, [files]);
 
   return {
     openInDefaultEditor,

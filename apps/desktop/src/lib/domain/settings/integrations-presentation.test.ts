@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  filterIntegrationsByQuery,
+  INTEGRATIONS_SEARCH_THRESHOLD,
   integrationAuthKindLabel,
   integrationHealthBadge,
+  integrationMatchesQuery,
   integrationOauthReturnToast,
   integrationRowActions,
+  integrationSearchState,
   integrationToolCountLabel,
 } from "@/lib/domain/settings/integrations-presentation";
 
@@ -76,6 +80,75 @@ describe("integrationRowActions", () => {
       reconnect: false,
       disconnect: true,
     });
+  });
+});
+
+describe("integrationMatchesQuery", () => {
+  const linear = { displayName: "Linear", namespace: "linear" };
+
+  it("matches on display name, case-insensitively", () => {
+    expect(integrationMatchesQuery(linear, "lin")).toBe(true);
+    expect(integrationMatchesQuery(linear, "LIN")).toBe(true);
+  });
+
+  it("matches on namespace", () => {
+    expect(integrationMatchesQuery({ displayName: "Custom Tool", namespace: "acme-crm" }, "acme")).toBe(true);
+  });
+
+  it("rejects non-matching queries", () => {
+    expect(integrationMatchesQuery(linear, "slack")).toBe(false);
+  });
+
+  it("treats an empty or whitespace query as matching everything", () => {
+    expect(integrationMatchesQuery(linear, "")).toBe(true);
+    expect(integrationMatchesQuery(linear, "   ")).toBe(true);
+  });
+});
+
+describe("filterIntegrationsByQuery", () => {
+  const items = [
+    { displayName: "Linear", namespace: "linear" },
+    { displayName: "Slack", namespace: "slack" },
+    { displayName: "Acme CRM", namespace: "acme-crm" },
+  ];
+
+  it("narrows the list to matches", () => {
+    expect(filterIntegrationsByQuery(items, "crm")).toEqual([
+      { displayName: "Acme CRM", namespace: "acme-crm" },
+    ]);
+  });
+
+  it("returns everything for an empty query", () => {
+    expect(filterIntegrationsByQuery(items, "")).toEqual(items);
+  });
+
+  it("returns an empty array when nothing matches", () => {
+    expect(filterIntegrationsByQuery(items, "notfound")).toEqual([]);
+  });
+});
+
+describe("integrationSearchState", () => {
+  it("hides the input and keeps the raw query while the list is short", () => {
+    expect(integrationSearchState(INTEGRATIONS_SEARCH_THRESHOLD, "")).toEqual({
+      showSearch: false,
+      activeQuery: "",
+    });
+  });
+
+  it("shows the input and filters by the query once the list is long", () => {
+    expect(integrationSearchState(INTEGRATIONS_SEARCH_THRESHOLD + 1, "linear")).toEqual({
+      showSearch: true,
+      activeQuery: "linear",
+    });
+  });
+
+  it("resets the effective query when a filtered list shrinks below the threshold", () => {
+    // The bar was visible with a query set; the list then shrinks so the input
+    // hides. The effective query must drop to empty so the shrunk list is not
+    // filtered behind a gone input (the phantom "No integrations found" bug).
+    const shrunk = integrationSearchState(2, "no-match-xyz");
+    expect(shrunk.showSearch).toBe(false);
+    expect(shrunk.activeQuery).toBe("");
   });
 });
 

@@ -12,6 +12,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MAX_LINES_ALLOWLIST_PATH = REPO_ROOT / "scripts" / "max_lines_allowlist.txt"
+FRONTEND_STRUCTURE_ALLOWLIST_PATH = REPO_ROOT / "scripts" / "frontend_structure_allowlist.txt"
 
 FRONTEND_ROOTS = [
     REPO_ROOT / "apps" / "desktop" / "src",
@@ -22,12 +23,16 @@ FRONTEND_ROOTS = [
     REPO_ROOT / "apps" / "packages" / "product-domain" / "src",
     REPO_ROOT / "apps" / "packages" / "product-ui" / "src",
     REPO_ROOT / "apps" / "packages" / "product-surfaces" / "src",
+    REPO_ROOT / "apps" / "packages" / "product-client" / "src",
 ]
 
 APP_ROOTS = [
     REPO_ROOT / "apps" / "desktop" / "src",
     REPO_ROOT / "apps" / "web" / "src",
     REPO_ROOT / "apps" / "mobile" / "src",
+    # product-client is app-shaped (components/, hooks/, stores/), so the
+    # component-.tsx-only and hook-responsibility-folder rules apply to it too.
+    REPO_ROOT / "apps" / "packages" / "product-client" / "src",
 ]
 
 DOM_APP_AND_PACKAGE_ROOTS = [
@@ -35,6 +40,7 @@ DOM_APP_AND_PACKAGE_ROOTS = [
     REPO_ROOT / "apps" / "web" / "src",
     REPO_ROOT / "apps" / "packages" / "product-ui" / "src",
     REPO_ROOT / "apps" / "packages" / "product-surfaces" / "src",
+    REPO_ROOT / "apps" / "packages" / "product-client" / "src",
 ]
 
 PACKAGE_ROOTS = {
@@ -43,6 +49,7 @@ PACKAGE_ROOTS = {
     "product-domain": REPO_ROOT / "apps" / "packages" / "product-domain" / "src",
     "product-ui": REPO_ROOT / "apps" / "packages" / "product-ui" / "src",
     "product-surfaces": REPO_ROOT / "apps" / "packages" / "product-surfaces" / "src",
+    "product-client": REPO_ROOT / "apps" / "packages" / "product-client" / "src",
 }
 
 EXTENSIONS = {".ts", ".tsx"}
@@ -233,6 +240,42 @@ def load_max_lines_allowlist_paths() -> set[str]:
         if len(parts) == 3:
             paths.add(parts[0])
     return paths
+
+
+@dataclass(frozen=True)
+class LargeFileAllowlistEntry:
+    path: str
+    max_lines: int
+    reason: str
+
+
+def load_large_file_allowlist() -> dict[str, LargeFileAllowlistEntry]:
+    entries: dict[str, LargeFileAllowlistEntry] = {}
+    if not FRONTEND_STRUCTURE_ALLOWLIST_PATH.exists():
+        return entries
+    relative_allowlist = FRONTEND_STRUCTURE_ALLOWLIST_PATH.relative_to(REPO_ROOT)
+    for line_number, raw_line in enumerate(
+        FRONTEND_STRUCTURE_ALLOWLIST_PATH.read_text().splitlines(), start=1
+    ):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split(maxsplit=2)
+        if len(parts) != 3:
+            raise ValueError(f"{relative_allowlist}:{line_number}: expected path max_lines reason")
+        entry_path, raw_max_lines, reason = parts
+        try:
+            max_lines = int(raw_max_lines)
+        except ValueError as exc:
+            raise ValueError(
+                f"{relative_allowlist}:{line_number}: max_lines must be an integer"
+            ) from exc
+        if max_lines < 1:
+            raise ValueError(f"{relative_allowlist}:{line_number}: max_lines must be positive")
+        if entry_path in entries:
+            raise ValueError(f"{relative_allowlist}:{line_number}: duplicate allowlist entry")
+        entries[entry_path] = LargeFileAllowlistEntry(entry_path, max_lines, reason)
+    return entries
 
 
 def line_is_comment(line: str) -> bool:
@@ -543,6 +586,14 @@ def forbidden_import_reason(package_name: str, statement: ImportStatement) -> st
             )
         return None
 
+    if package_name == "product-client":
+        # product-client is the shared connected product. It may depend in the
+        # correct direction on shared packages and SDKs, but must never reach
+        # into either host (apps/desktop, apps/web) or Tauri. The generic checks
+        # above already reject app-root aliases, app-internal imports, Tauri
+        # packages, and React Native for every package.
+        return None
+
     return None
 
 
@@ -585,11 +636,18 @@ def find_forbidden_shared_package_imports(files: Iterable[Path]) -> list[Violati
 def find_large_frontend_files(files: Iterable[Path]) -> list[Violation]:
     violations: list[Violation] = []
     documented_large_files = load_max_lines_allowlist_paths()
+    allowlist = load_large_file_allowlist()
+    observed: dict[str, int] = {}
     for path in files:
-        if relative(path) in documented_large_files:
+        relative_path = relative(path)
+        if relative_path in documented_large_files:
             continue
         line_count = count_lines(path)
+        observed[relative_path] = line_count
         if line_count <= LINE_SOFT_THRESHOLD:
+            continue
+        entry = allowlist.get(relative_path)
+        if entry is not None and line_count <= entry.max_lines:
             continue
         if line_count >= LINE_STRONG_REASON_THRESHOLD:
             threshold_note = (
@@ -601,6 +659,8 @@ def find_large_frontend_files(files: Iterable[Path]) -> list[Violation]:
                 f"{line_count} lines; frontend docs prefer splitting before roughly "
                 f"{LINE_SOFT_THRESHOLD} lines"
             )
+        if entry is not None:
+            threshold_note += f" (exceeds allowlisted {entry.max_lines})"
         violations.append(
             Violation(
                 "LARGE_FRONTEND_FILE",
@@ -609,6 +669,41 @@ def find_large_frontend_files(files: Iterable[Path]) -> list[Violation]:
                 threshold_note,
             )
         )
+
+    # Ratchet: an allowlisted file that dropped back under the threshold (or was
+    # deleted) makes its entry stale and must be removed, mirroring the
+    # max_lines_allowlist contract.
+    for entry_path, entry in allowlist.items():
+        line_count = observed.get(entry_path)
+        if line_count is None:
+            if entry_path in documented_large_files:
+                continue
+            if not (REPO_ROOT / entry_path).exists():
+                violations.append(
+                    Violation(
+                        "LARGE_FRONTEND_FILE",
+                        REPO_ROOT / entry_path,
+                        1,
+                        (
+                            "stale frontend-structure allowlist entry; file no longer "
+                            f"scanned/present (allowlisted {entry.max_lines}); remove it"
+                        ),
+                    )
+                )
+            continue
+        if line_count <= LINE_SOFT_THRESHOLD:
+            violations.append(
+                Violation(
+                    "LARGE_FRONTEND_FILE",
+                    REPO_ROOT / entry_path,
+                    1,
+                    (
+                        f"stale frontend-structure allowlist entry; file is now {line_count} "
+                        f"lines (<= {LINE_SOFT_THRESHOLD}) and allowlisted {entry.max_lines}; "
+                        "remove it"
+                    ),
+                )
+            )
     return violations
 
 

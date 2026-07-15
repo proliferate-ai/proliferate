@@ -9,7 +9,7 @@ import {
   useAnyHarnessWorkspaceContext,
   resolveWorkspaceConnectionFromContext,
 } from "../context/AnyHarnessWorkspace.js";
-import { useAnyHarnessRuntimeContext } from "../context/AnyHarnessRuntime.js";
+import { useAnyHarnessCacheScopeKey } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
 import { requestOptionsWithSignal } from "../lib/request-options.js";
 import {
@@ -26,11 +26,6 @@ interface WorkspaceQueryOptions {
   refetchIntervalInBackground?: boolean;
 }
 
-function useWorkspaceRuntimeUrl() {
-  const runtime = useAnyHarnessRuntimeContext();
-  return runtime.runtimeUrl?.trim() ?? "";
-}
-
 function useWorkspaceId(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   return options?.workspaceId ?? workspace.workspaceId;
@@ -38,7 +33,7 @@ function useWorkspaceId(options?: { workspaceId?: string | null }) {
 
 async function invalidateSessionReviews(
   queryClient: ReturnType<typeof useQueryClient>,
-  runtimeUrl: string,
+  cacheScopeKey: string,
   workspaceId: string | null | undefined,
   sessionId: string | null | undefined,
 ) {
@@ -47,13 +42,13 @@ async function invalidateSessionReviews(
   // subagent summary query is the only linked-session hierarchy that changes.
   await Promise.all([
     queryClient.invalidateQueries({
-      queryKey: anyHarnessSessionReviewsKey(runtimeUrl, workspaceId, sessionId),
+      queryKey: anyHarnessSessionReviewsKey(cacheScopeKey, workspaceId, sessionId),
     }),
     queryClient.invalidateQueries({
-      queryKey: anyHarnessSessionSubagentsKey(runtimeUrl, workspaceId, sessionId),
+      queryKey: anyHarnessSessionSubagentsKey(cacheScopeKey, workspaceId, sessionId),
     }),
     queryClient.invalidateQueries({
-      queryKey: anyHarnessSessionsKey(runtimeUrl, workspaceId),
+      queryKey: anyHarnessSessionsKey(cacheScopeKey, workspaceId),
     }),
   ]);
 }
@@ -63,11 +58,11 @@ export function useSessionReviewsQuery(
   options?: WorkspaceQueryOptions,
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = useWorkspaceId(options);
 
   return useQuery({
-    queryKey: anyHarnessSessionReviewsKey(runtimeUrl, workspaceId, sessionId),
+    queryKey: anyHarnessSessionReviewsKey(cacheScopeKey, workspaceId, sessionId),
     enabled: (options?.enabled ?? true) && !!workspaceId && !!sessionId,
     refetchInterval: options?.refetchInterval,
     refetchIntervalInBackground: options?.refetchIntervalInBackground,
@@ -88,12 +83,12 @@ export function useReviewAssignmentCritiqueQuery(
   options?: WorkspaceQueryOptions,
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = useWorkspaceId(options);
 
   return useQuery({
     queryKey: anyHarnessReviewAssignmentCritiqueKey(
-      runtimeUrl,
+      cacheScopeKey,
       workspaceId,
       reviewRunId,
       assignmentId,
@@ -119,7 +114,7 @@ export function useReviewAssignmentCritiqueQuery(
 
 export function useStartPlanReviewMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = useWorkspaceId(options);
   const queryClient = useQueryClient();
 
@@ -136,7 +131,7 @@ export function useStartPlanReviewMutation(options?: { workspaceId?: string | nu
     onSuccess: async (response) => {
       await invalidateSessionReviews(
         queryClient,
-        runtimeUrl,
+        cacheScopeKey,
         workspaceId,
         response.run.parentSessionId,
       );
@@ -146,7 +141,7 @@ export function useStartPlanReviewMutation(options?: { workspaceId?: string | nu
 
 export function useStartCodeReviewMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = useWorkspaceId(options);
   const queryClient = useQueryClient();
 
@@ -162,7 +157,7 @@ export function useStartCodeReviewMutation(options?: { workspaceId?: string | nu
     onSuccess: async (response) => {
       await invalidateSessionReviews(
         queryClient,
-        runtimeUrl,
+        cacheScopeKey,
         workspaceId,
         response.run.parentSessionId,
       );
@@ -172,7 +167,7 @@ export function useStartCodeReviewMutation(options?: { workspaceId?: string | nu
 
 export function useStopReviewMutation(options?: { workspaceId?: string | null }) {
   const workspaceId = useWorkspaceId(options);
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
   const workspace = useAnyHarnessWorkspaceContext();
 
@@ -185,7 +180,7 @@ export function useStopReviewMutation(options?: { workspaceId?: string | null })
     onSuccess: async (response) => {
       await invalidateSessionReviews(
         queryClient,
-        runtimeUrl,
+        cacheScopeKey,
         workspaceId,
         response.run.parentSessionId,
       );
@@ -197,7 +192,7 @@ export function useRetryReviewAssignmentMutation(
   options?: { workspaceId?: string | null },
 ) {
   const workspaceId = useWorkspaceId(options);
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
   const workspace = useAnyHarnessWorkspaceContext();
 
@@ -220,7 +215,7 @@ export function useRetryReviewAssignmentMutation(
     onSuccess: async (response) => {
       await invalidateSessionReviews(
         queryClient,
-        runtimeUrl,
+        cacheScopeKey,
         workspaceId,
         response.run.parentSessionId,
       );
@@ -230,7 +225,7 @@ export function useRetryReviewAssignmentMutation(
 
 export function useSendReviewFeedbackMutation(options?: { workspaceId?: string | null }) {
   const workspaceId = useWorkspaceId(options);
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
   const workspace = useAnyHarnessWorkspaceContext();
 
@@ -243,7 +238,7 @@ export function useSendReviewFeedbackMutation(options?: { workspaceId?: string |
     onSuccess: async (response) => {
       await invalidateSessionReviews(
         queryClient,
-        runtimeUrl,
+        cacheScopeKey,
         workspaceId,
         response.run.parentSessionId,
       );
@@ -255,7 +250,7 @@ export function useMarkReviewRevisionReadyMutation(
   options?: { workspaceId?: string | null },
 ) {
   const workspaceId = useWorkspaceId(options);
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
   const workspace = useAnyHarnessWorkspaceContext();
 
@@ -270,7 +265,7 @@ export function useMarkReviewRevisionReadyMutation(
     onSuccess: async (response) => {
       await invalidateSessionReviews(
         queryClient,
-        runtimeUrl,
+        cacheScopeKey,
         workspaceId,
         response.run.parentSessionId,
       );

@@ -35,7 +35,11 @@ export function WorkspaceShellRightRail({
         />
       )}
       <div
-        className="shrink-0 overflow-hidden transition-[width] duration-150 ease-in-out"
+        // isolate: the separator's 4px hit strip overlaps this edge (z-10 in
+        // the page context). Without a local stacking context, panel internals
+        // with z-index ≥ 10 (viewer toolbar, sticky tab edges) paint over the
+        // dragger.
+        className="isolate shrink-0 overflow-hidden transition-[width] duration-150 ease-in-out"
         style={{ width: open ? width : 0 }}
       >
         <DebugProfiler id="workspace-right-panel">

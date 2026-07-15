@@ -93,14 +93,13 @@ describe("unlockHintForContexts", () => {
     expect(unlockHintForContexts(["openai-api"])).toBe("add an OpenAI API key");
     expect(unlockHintForContexts(["openai-oauth"])).toBe("sign in with ChatGPT/Codex");
     expect(unlockHintForContexts(["gemini-api"])).toBe("add a Gemini API key");
-    expect(unlockHintForContexts(["google-oauth"])).toBe("sign in with Google");
     expect(unlockHintForContexts(["cursor-login"])).toBe("sign in to Cursor");
     expect(unlockHintForContexts(["baseline"])).toBe("available without credentials");
   });
 
   it("joins multiple phrases with ' or '", () => {
-    expect(unlockHintForContexts(["google-oauth", "gemini-api"]))
-      .toBe("sign in with Google or add a Gemini API key");
+    expect(unlockHintForContexts(["anthropic-oauth", "anthropic-api"]))
+      .toBe("sign in with Claude or add an Anthropic API key");
   });
 
   it("composes known and unknown ids", () => {

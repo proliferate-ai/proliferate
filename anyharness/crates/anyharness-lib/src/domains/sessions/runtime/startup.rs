@@ -2,10 +2,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::domains::agents::readiness::service::resolve_agent_with_env;
+use crate::domains::agents::catalog::bundled::bundled_agent_catalog_document;
+use crate::domains::agents::catalog::settings::resolve_settings_deltas;
+use crate::domains::agents::readiness::service::resolve_launch_agent;
 use crate::domains::agents::registry;
 use crate::domains::agents::route_auth::resolve_launch_route_auth;
-use crate::domains::sessions::extensions::SessionTurnFinishedContext;
+use crate::domains::agents::route_auth::state::load_state_file;
+use crate::domains::sessions::extensions::{SessionStartedContext, SessionTurnFinishedContext};
 use crate::domains::sessions::links::model::SessionLinkRelation;
 use crate::domains::sessions::mcp_bindings::assembly::{
     assemble_session_mcp_launch, SessionMcpLaunchAssemblyError,
@@ -311,8 +314,10 @@ impl SessionRuntime {
             .map_err(StartSessionError::Internal)?;
         let readiness_env = workspace_env.clone();
         let agent_resolution_started = Instant::now();
-        let resolved_agent =
-            resolve_agent_with_env(&descriptor, &self.runtime_home, &readiness_env);
+        // Route-aware launch readiness keeps the resolved agent's credential
+        // state consistent with create/launch-options for gateway routes
+        // (issue #1106); the live launch injects the route env below regardless.
+        let resolved_agent = resolve_launch_agent(&descriptor, &self.runtime_home, &readiness_env);
         tracing::info!(
             session_id = %record.id,
             agent_kind = %record.agent_kind,
@@ -329,18 +334,49 @@ impl SessionRuntime {
         // render the route layer for this harness. Absent file = empty layer
         // (legacy/native); a scoped file with no selection fails the launch
         // closed with a typed error (spec §3).
-        let route_auth = resolve_launch_route_auth(&self.runtime_home, &record.agent_kind)
-            .map_err(|error| {
-                tracing::warn!(
-                    session_id = %record.id,
-                    workspace_id = %record.workspace_id,
-                    agent_kind = %record.agent_kind,
-                    code = error.code(),
-                    error = %error,
-                    "agent-auth route resolution failed; refusing launch"
-                );
-                StartSessionError::RouteAuth(error)
-            })?;
+        let route_auth = resolve_launch_route_auth(
+            &self.runtime_home,
+            &record.agent_kind,
+            self.gateway_model_resolver.as_ref(),
+        )
+        .map_err(|error| {
+            tracing::warn!(
+                session_id = %record.id,
+                workspace_id = %record.workspace_id,
+                agent_kind = %record.agent_kind,
+                code = error.code(),
+                error = %error,
+                "agent-auth route resolution failed; refusing launch"
+            );
+            StartSessionError::RouteAuth(error)
+        })?;
+        // Launch-time lazy trigger (spec §2c): if the current revision has no
+        // probe row, kick a background probe so the next launch has fresh data.
+        // Never blocks this launch — it already used seed data above.
+        self.gateway_model_resolver
+            .schedule_launch_probe_if_stale(&record.agent_kind, &self.runtime_home);
+        // Catalog settings: resolve persisted toggle values into launch-time
+        // deltas (extra CLI args, extra env vars). The surface is always "local"
+        // for local runtime launches (cloud sandboxes use their own surface).
+        let settings_deltas = {
+            let catalog = bundled_agent_catalog_document();
+            let catalog_settings = catalog
+                .agents
+                .iter()
+                .find(|a| a.kind == record.agent_kind)
+                .map(|a| a.settings.as_slice())
+                .unwrap_or(&[]);
+            let state = load_state_file(&self.runtime_home).ok().flatten();
+            let persisted_settings = state
+                .as_ref()
+                .and_then(|s| {
+                    s.harnesses
+                        .iter()
+                        .find(|h| h.harness_kind == record.agent_kind)
+                })
+                .and_then(|h| h.settings.as_ref());
+            resolve_settings_deltas(catalog_settings, persisted_settings, "local")
+        };
         let mcp_launch = assemble_session_mcp_launch(
             self.session_data_cipher.as_ref(),
             &self.session_extensions,
@@ -364,6 +400,7 @@ impl SessionRuntime {
             workspace_env,
             session_env: session_launch_env,
             route_auth,
+            settings_deltas,
             mcp_servers: mcp_launch.mcp_servers,
             startup: startup_strategy,
             every_prompt_append: mcp_launch.system_prompt_append,
@@ -379,6 +416,7 @@ impl SessionRuntime {
                             workspace: workspace.clone(),
                             session_id: result.session_id.clone(),
                             turn_id: result.turn_id.clone(),
+                            prompt_id: result.prompt_id.clone(),
                             outcome: result.outcome,
                             stop_reason: result.stop_reason.clone(),
                             last_event_seq: result.last_event_seq,
@@ -403,6 +441,13 @@ impl SessionRuntime {
             total_elapsed_ms = started.elapsed().as_millis(),
             "[workspace-latency] session.runtime.start_live_session.acp_started"
         );
+
+        for extension in &self.session_extensions {
+            extension.on_session_started(SessionStartedContext {
+                session_id: record.id.clone(),
+                agent_kind: record.agent_kind.clone(),
+            });
+        }
 
         Ok((handle, ready.native_session_id))
     }

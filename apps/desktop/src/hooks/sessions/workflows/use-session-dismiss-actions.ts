@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useDismissSessionMutation } from "@anyharness/sdk-react";
 import { useDismissedSessionCleanup } from "@/hooks/sessions/workflows/use-dismissed-session-cleanup";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
@@ -8,6 +9,9 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import { useToastStore } from "@/stores/toast/toast-store";
 
 export function useSessionDismissActions() {
+  const host = useProductHost();
+  const ssh = host.desktop?.ssh ?? null;
+  const cloudClient = host.cloud.client;
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const showToast = useToastStore((state) => state.show);
   const cleanupDismissedSession = useDismissedSessionCleanup();
@@ -26,7 +30,7 @@ export function useSessionDismissActions() {
 
     try {
       const { materializedSessionId, workspaceId: resolvedWorkspaceId } =
-        await getSessionClientAndWorkspace(sessionId);
+        await getSessionClientAndWorkspace(sessionId, ssh, cloudClient);
       await dismissSessionMutation.mutateAsync({
         workspaceId: resolvedWorkspaceId,
         sessionId: materializedSessionId,
@@ -41,6 +45,8 @@ export function useSessionDismissActions() {
     dismissSessionMutation,
     getWorkspaceRuntimeBlockReason,
     showToast,
+    ssh,
+    cloudClient,
   ]);
 
   return { dismissSession };

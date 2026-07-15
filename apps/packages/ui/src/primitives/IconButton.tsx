@@ -21,7 +21,7 @@ interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 const toneClasses: Record<IconButtonTone, string> = {
   default: "text-muted-foreground hover:bg-accent hover:text-foreground",
   sidebar:
-    "text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground",
+    "text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring",
 };
 
 const sizeClasses: Record<IconButtonSize, string> = {

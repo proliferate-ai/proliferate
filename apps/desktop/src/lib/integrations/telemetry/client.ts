@@ -166,6 +166,16 @@ export function setTelemetryTag(key: string, value: string): void {
   setDesktopSentryTag(key, value);
 }
 
+/**
+ * Canonical `<component>@<semver>+<12-hex-sha>` release identifier for this
+ * desktop build (see `getDesktopTelemetryConfig().release`). Used to
+ * populate `SupportReportCreateRequest.clientReleaseId` so support triage
+ * can correlate a report with the exact build that produced it.
+ */
+export function getSupportReportReleaseId(): string {
+  return getDesktopTelemetryConfig().release;
+}
+
 export function getSupportReportTelemetryRefs(): {
   posthogDistinctId?: string;
   posthogSessionId?: string;

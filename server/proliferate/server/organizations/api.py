@@ -173,10 +173,10 @@ async def remove_organization_membership_endpoint(
 
 @router.get("/{organization_id}/invitations", response_model=OrganizationInvitationsResponse)
 async def list_organization_invitations_endpoint(
-    org_user: CurrentOrgUser = Depends(current_path_org_member),
+    org_admin: CurrentOrgUser = Depends(current_path_org_admin),
     db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationInvitationsResponse:
-    invitations = await list_invitations(db, org_user)
+    invitations = await list_invitations(db, org_admin)
     return OrganizationInvitationsResponse(
         invitations=[invitation_response(invitation) for invitation in invitations],
     )

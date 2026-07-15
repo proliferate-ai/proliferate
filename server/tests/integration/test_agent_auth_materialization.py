@@ -1,9 +1,9 @@
 """Integration tests: agent-auth changes schedule cloud sandbox materialization.
 
-The sandbox side is covered by unit tests (mocked ``sandbox_io``); here we
-prove the service-layer wiring — cloud route-selection upserts/clears and key
-revocation invoke the materialization scheduler for the affected user, while
-local-surface changes do not.
+The sandbox side is covered by unit tests (mocked ``sandbox_io``); here we prove
+the service-layer wiring — cloud selection writes invoke the materialization
+scheduler for the affected user, while local-surface writes do not — plus the
+full load → render chain of ``build_agent_auth_state`` against a real DB.
 """
 
 from __future__ import annotations
@@ -16,10 +16,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.db.store import agent_gateway as agent_gateway_store
+from proliferate.db.store.agent_gateway import DesiredAuthSource
 from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
 from proliferate.server.cloud.materialization import service as materialization_service
 from proliferate.server.cloud.materialization.materialize import agent_auth
-from tests.integration.test_agent_gateway_api import _authed_user, _create_key
+from tests.integration.test_agent_gateway_api import _authed_user, _put_selections
 
 
 @pytest.fixture
@@ -39,26 +40,32 @@ def scheduled(monkeypatch: pytest.MonkeyPatch) -> list[uuid.UUID]:
 
 class TestAgentAuthMaterializationTriggers:
     @pytest.mark.asyncio
-    async def test_cloud_selection_upsert_and_clear_trigger_scheduler(
+    async def test_cloud_selection_put_and_clear_trigger_scheduler(
         self,
         client: AsyncClient,
         scheduled: list[uuid.UUID],
     ) -> None:
         user_id, headers = await _authed_user(client)
 
-        upserted = await client.put(
-            "/v1/cloud/agent-gateway/route-selections/claude/cloud",
-            headers=headers,
-            json={"route": "gateway"},
+        put = await _put_selections(
+            client,
+            headers,
+            harness="claude",
+            surface="cloud",
+            sources=[{"sourceKind": "gateway", "enabled": True}],
         )
-        assert upserted.status_code == 200, upserted.text
+        assert put.status_code == 200, put.text
         assert scheduled == [uuid.UUID(user_id)]
 
-        cleared = await client.delete(
-            "/v1/cloud/agent-gateway/route-selections/claude/cloud",
-            headers=headers,
+        # A full-desired-state clear (empty sources) is still a cloud write.
+        cleared = await _put_selections(
+            client,
+            headers,
+            harness="claude",
+            surface="cloud",
+            sources=[],
         )
-        assert cleared.status_code == 204
+        assert cleared.status_code == 200, cleared.text
         assert scheduled == [uuid.UUID(user_id)] * 2
 
     @pytest.mark.asyncio
@@ -69,34 +76,23 @@ class TestAgentAuthMaterializationTriggers:
     ) -> None:
         _, headers = await _authed_user(client)
 
-        upserted = await client.put(
-            "/v1/cloud/agent-gateway/route-selections/claude/local",
-            headers=headers,
-            json={"route": "native"},
+        put = await _put_selections(
+            client,
+            headers,
+            harness="claude",
+            surface="local",
+            sources=[{"sourceKind": "gateway", "enabled": True}],
         )
-        assert upserted.status_code == 200, upserted.text
-        cleared = await client.delete(
-            "/v1/cloud/agent-gateway/route-selections/claude/local",
-            headers=headers,
+        assert put.status_code == 200, put.text
+        cleared = await _put_selections(
+            client,
+            headers,
+            harness="claude",
+            surface="local",
+            sources=[],
         )
-        assert cleared.status_code == 204
+        assert cleared.status_code == 200, cleared.text
         assert scheduled == []
-
-    @pytest.mark.asyncio
-    async def test_api_key_revoke_triggers_scheduler(
-        self,
-        client: AsyncClient,
-        scheduled: list[uuid.UUID],
-    ) -> None:
-        user_id, headers = await _authed_user(client)
-        created = await _create_key(client, headers)
-
-        revoked = await client.delete(
-            f"/v1/cloud/agent-gateway/api-keys/{created['id']}",
-            headers=headers,
-        )
-        assert revoked.status_code == 200, revoked.text
-        assert scheduled == [uuid.UUID(user_id)]
 
 
 async def _register_user_id(client: AsyncClient) -> uuid.UUID:
@@ -105,11 +101,11 @@ async def _register_user_id(client: AsyncClient) -> uuid.UUID:
 
 
 class TestBuildAgentAuthStateSyncedGateway:
-    """End-to-end: a synced enrollment's cloud gateway selection renders.
+    """End-to-end: a synced enrollment's cloud gateway selection renders v2.
 
     Drives ``build_agent_auth_state`` through ``_load_state_inputs`` against a
-    real DB (route-selection rows, enrollment row, encrypted virtual key) rather
-    than the pure ``render_agent_auth_state`` unit path, guarding the full load →
+    real DB (selection rows, enrollment row, encrypted virtual key) rather than
+    the pure ``render_agent_auth_state`` unit path, guarding the full load →
     render chain that materializes the state file for AnyHarness.
     """
 
@@ -125,25 +121,23 @@ class TestBuildAgentAuthStateSyncedGateway:
             "agent_gateway_litellm_public_base_url",
             "https://llm.proliferate.ai",
         )
-        # Register the user through the API so the row exists in the shared DB
-        # the db_session fixture also reads from.
         user_id = await _register_user_id(client)
 
         # A cloud gateway selection (materialized) and a local gateway selection
         # (never materialized on the cloud surface): only the cloud one renders.
-        await agent_gateway_store.upsert_route_selection(
+        await agent_gateway_store.put_auth_selections(
             db_session,
             user_id=user_id,
             harness_kind="claude",
             surface="cloud",
-            route="gateway",
+            sources=[DesiredAuthSource(source_kind="gateway")],
         )
-        await agent_gateway_store.upsert_route_selection(
+        await agent_gateway_store.put_auth_selections(
             db_session,
             user_id=user_id,
             harness_kind="claude",
             surface="local",
-            route="gateway",
+            sources=[DesiredAuthSource(source_kind="gateway")],
         )
 
         subject = await ensure_personal_billing_subject(db_session, user_id)
@@ -166,14 +160,17 @@ class TestBuildAgentAuthStateSyncedGateway:
 
         state, fingerprint = await agent_auth.build_agent_auth_state(db_session, user_id)
 
-        assert state is not None
-        assert state["selections"] == [
+        assert state["version"] == 2
+        assert state["harnesses"] == [
             {
-                "harness": "claude",
-                "route": "gateway",
-                "slot": "primary",
-                "base_url": "https://llm.proliferate.ai",
-                "key": "sk-litellm-vk",
+                "harness_kind": "claude",
+                "sources": [
+                    {
+                        "kind": "gateway",
+                        "base_url": "https://llm.proliferate.ai",
+                        "key": "sk-litellm-vk",
+                    }
+                ],
             }
         ]
         assert fingerprint == agent_auth.agent_auth_state_fingerprint(state)

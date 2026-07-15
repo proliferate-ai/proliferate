@@ -23,6 +23,7 @@ type ProductionSurfacePreview =
   | "download-error";
 
 const PREVIEW_VERSION = "0.1.42";
+const PREVIEW_TITLE = "Introducing Grok";
 const CHECK_ERROR_MESSAGE = "Couldn't reach the update server.";
 const DOWNLOAD_ERROR_MESSAGE = "Couldn't finish downloading the update.";
 const PRODUCTION_SURFACE_PREVIEWS: {
@@ -55,6 +56,7 @@ function setDevUpdaterMockErrorSource(source: UpdaterErrorSource): void {
 function buildProductionSurfaceMock(preview: ProductionSurfacePreview): DevUpdaterMockState {
   const baseState = {
     version: PREVIEW_VERSION,
+    title: PREVIEW_TITLE,
     downloadProgress: null,
     restartPromptOpen: false,
     restartWhenIdle: false,
@@ -148,6 +150,7 @@ export function UpdateUiPlaygroundControls() {
   const {
     phase: livePhase,
     availableVersion: liveVersion,
+    availableTitle: liveTitle,
     errorSource: liveErrorSource,
     downloadProgress: liveDownloadProgress,
     restartWhenIdle: liveRestartWhenIdle,
@@ -295,6 +298,7 @@ export function UpdateUiPlaygroundControls() {
         </div>
         <LiveStateDatum label="Phase" value={livePhase} />
         <LiveStateDatum label="Version" value={liveVersion ?? "—"} />
+        <LiveStateDatum label="Title" value={liveTitle ?? "—"} />
         <LiveStateDatum label="Error source" value={liveErrorSource ?? "—"} />
         <LiveStateDatum
           label="Restart armed"

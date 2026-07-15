@@ -1589,7 +1589,6 @@ pub(crate) fn default_cowork_coding_mode_for_agent(agent_kind: &str) -> Option<&
     match agent_kind.trim().to_ascii_lowercase().as_str() {
         "claude" => Some("bypassPermissions"),
         "codex" => Some("full-access"),
-        "gemini" => Some("yolo"),
         // Grok advertises no ACP modes (probe: modes=null) and its catalog has
         // no `mode` control, so a non-empty mode_id is rejected at
         // create-session. Send none — Grok runs with its own default.
@@ -1833,7 +1832,6 @@ mod tests {
             default_cowork_coding_mode_for_agent("claude"),
             Some("bypassPermissions")
         );
-        assert_eq!(default_cowork_coding_mode_for_agent("gemini"), Some("yolo"));
     }
 
     #[test]

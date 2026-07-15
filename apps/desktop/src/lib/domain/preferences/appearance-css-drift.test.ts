@@ -22,9 +22,9 @@ import { DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES } from "./appearance";
 const testDir = dirname(fileURLToPath(import.meta.url));
 const designCssDir = resolve(testDir, "../../../../../packages/design/src/css");
 
-// Cascade order matters: desktop.css imports dom.css on its first line, so
-// desktop.css's own @theme declarations override dom.css's.
-const DESIGN_CSS_SOURCES = ["dom.css", "desktop.css"] as const;
+// Cascade order matters: product.css imports dom.css on its first line, so
+// product.css's own @theme declarations override dom.css's.
+const DESIGN_CSS_SOURCES = ["dom.css", "product.css"] as const;
 
 function stripCssComments(css: string): string {
   return css.replace(/\/\*[\s\S]*?\*\//g, "");

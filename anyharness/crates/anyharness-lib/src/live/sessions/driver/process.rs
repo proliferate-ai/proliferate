@@ -87,6 +87,7 @@ pub(in crate::live::sessions) fn spawn_agent_process(
     let mut command = tokio::process::Command::new(spawn_program);
     command
         .args(spawn_args)
+        .args(&launch_env.settings_extra_args)
         .envs(&spawn_env)
         .current_dir(spawn_cwd)
         .stdin(std::process::Stdio::piped())
@@ -200,6 +201,7 @@ mod tests {
             status: ResolvedAgentStatus::Ready,
             credential_state: CredentialState::Ready,
             auth_slots: Vec::new(),
+            cli_auth_state: None,
             native: None,
             agent_process: ResolvedArtifact {
                 role: ArtifactRole::AgentProcess,
@@ -342,6 +344,7 @@ mod tests {
                 "ANTHROPIC_API_KEY".to_string(),
                 "CLAUDE_CODE_USE_BEDROCK".to_string(),
             ],
+            ..Default::default()
         };
 
         let merged = merge_spawn_env(&launch_env, None);

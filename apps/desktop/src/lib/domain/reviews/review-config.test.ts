@@ -188,7 +188,6 @@ describe("review setup config", () => {
   it("uses execution mode defaults for selected reviewer harnesses", () => {
     expect(resolveReviewExecutionModeIdForAgent("codex", "read-only")).toBe("full-access");
     expect(resolveReviewExecutionModeIdForAgent("claude", "missing")).toBe("bypassPermissions");
-    expect(resolveReviewExecutionModeIdForAgent("gemini", "missing")).toBe("yolo");
   });
 
   it("hydrates initial reviewer personalities with inherited harness defaults", () => {

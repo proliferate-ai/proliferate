@@ -1,5 +1,7 @@
 use super::*;
-use crate::domains::sessions::model::SessionLiveConfigSnapshotRecord;
+use crate::domains::sessions::model::{
+    PendingPromptReorderOutcome, SessionLiveConfigSnapshotRecord,
+};
 use crate::domains::sessions::prompt::{provenance::PromptProvenance, PromptPayload};
 
 /// Equality proof for the batched list-page queries: the bulk forms must
@@ -9,7 +11,7 @@ use crate::domains::sessions::prompt::{provenance::PromptProvenance, PromptPaylo
 fn batched_page_queries_match_single_session_queries() {
     let db = Db::open_in_memory().expect("open db");
     seed_workspace(&db);
-    let store = SessionStore::new(db);
+    let store = SessionStore::new(db.clone());
 
     let session_ids: Vec<String> = ["session-1", "session-2", "session-3"]
         .iter()
@@ -110,4 +112,166 @@ fn pending_prompt_preserves_internal_provenance_through_load_edit_and_drain() {
         .expect("drain prompt")
         .expect("drained prompt exists");
     assert_eq!(drained.prompt_payload().provenance, payload.provenance);
+}
+
+#[test]
+fn pending_prompts_reorder_atomically_without_changing_entry_identity() {
+    let db = Db::open_in_memory().expect("open db");
+    seed_workspace(&db);
+    let store = SessionStore::new(db);
+    store.insert(&session_record()).expect("insert session");
+
+    for (text, prompt_id) in [
+        ("first", "prompt-1"),
+        ("second", "prompt-2"),
+        ("third", "prompt-3"),
+    ] {
+        store
+            .insert_pending_prompt("session-1", text, Some(prompt_id))
+            .expect("insert pending prompt");
+    }
+
+    let reordered = store
+        .reorder_pending_prompts("session-1", &[1, 2, 3], &[3, 1, 2])
+        .expect("reorder pending prompts");
+    let PendingPromptReorderOutcome::Reordered(reordered) = reordered else {
+        panic!("expected committed reorder");
+    };
+
+    assert_eq!(
+        reordered
+            .iter()
+            .map(|record| (record.seq, record.prompt_id.as_deref()))
+            .collect::<Vec<_>>(),
+        vec![
+            (3, Some("prompt-3")),
+            (1, Some("prompt-1")),
+            (2, Some("prompt-2")),
+        ],
+    );
+    let persisted = store
+        .list_pending_prompts("session-1")
+        .expect("list pending prompts");
+    assert_eq!(
+        persisted
+            .iter()
+            .map(|record| (record.seq, record.prompt_id.as_deref()))
+            .collect::<Vec<_>>(),
+        vec![
+            (3, Some("prompt-3")),
+            (1, Some("prompt-1")),
+            (2, Some("prompt-2")),
+        ],
+    );
+
+    store
+        .update_pending_prompt_text("session-1", 1, "edited first")
+        .expect("edit stable queue id");
+    assert_eq!(
+        store
+            .find_pending_prompt("session-1", 1)
+            .expect("find stable queue id")
+            .expect("queue entry exists")
+            .text,
+        "edited first",
+    );
+}
+
+#[test]
+fn pending_prompt_reorder_rejects_non_permutations_without_mutating_the_queue() {
+    let db = Db::open_in_memory().expect("open db");
+    seed_workspace(&db);
+    let store = SessionStore::new(db);
+    store.insert(&session_record()).expect("insert session");
+    store
+        .insert_pending_prompt("session-1", "first", Some("prompt-1"))
+        .expect("insert prompt");
+    store
+        .insert_pending_prompt("session-1", "second", Some("prompt-2"))
+        .expect("insert prompt");
+
+    for invalid_order in [vec![1], vec![1, 3], vec![1, 1]] {
+        let outcome = store
+            .reorder_pending_prompts("session-1", &[1, 2], &invalid_order)
+            .expect("validation is a typed outcome");
+        assert!(matches!(
+            outcome,
+            PendingPromptReorderOutcome::Invalid { .. }
+        ));
+        let persisted = store
+            .list_pending_prompts("session-1")
+            .expect("list pending prompts");
+        assert_eq!(
+            persisted
+                .iter()
+                .map(|record| (record.seq, record.prompt_id.as_deref()))
+                .collect::<Vec<_>>(),
+            vec![(1, Some("prompt-1")), (2, Some("prompt-2"))],
+        );
+    }
+}
+
+#[test]
+fn pending_prompt_reorder_rejects_stale_same_membership_order() {
+    let db = Db::open_in_memory().expect("open db");
+    seed_workspace(&db);
+    let store = SessionStore::new(db);
+    store.insert(&session_record()).expect("insert session");
+    for text in ["first", "second", "third"] {
+        store
+            .insert_pending_prompt("session-1", text, None)
+            .expect("insert prompt");
+    }
+
+    let first = store
+        .reorder_pending_prompts("session-1", &[1, 2, 3], &[2, 1, 3])
+        .expect("first reorder");
+    assert!(matches!(first, PendingPromptReorderOutcome::Reordered(_)));
+
+    let stale = store
+        .reorder_pending_prompts("session-1", &[1, 2, 3], &[3, 2, 1])
+        .expect("stale reorder is typed");
+    assert_eq!(
+        stale,
+        PendingPromptReorderOutcome::Stale {
+            current_seqs: vec![2, 1, 3],
+        },
+    );
+    assert_eq!(
+        store
+            .list_pending_prompts("session-1")
+            .expect("persisted order")
+            .into_iter()
+            .map(|record| record.seq)
+            .collect::<Vec<_>>(),
+        vec![2, 1, 3],
+    );
+}
+
+#[test]
+fn pending_prompt_sequence_is_not_reused_after_queue_becomes_empty() {
+    let db = Db::open_in_memory().expect("open db");
+    seed_workspace(&db);
+    let store = SessionStore::new(db.clone());
+    store.insert(&session_record()).expect("insert session");
+
+    let old = store
+        .insert_pending_prompt("session-1", "old", None)
+        .expect("insert old prompt");
+    assert_eq!(old.seq, 1);
+    assert!(store
+        .delete_pending_prompt("session-1", old.seq)
+        .expect("delete old prompt"));
+    assert!(store
+        .list_pending_prompts("session-1")
+        .expect("empty queue")
+        .is_empty());
+    drop(store);
+
+    let store = SessionStore::new(db);
+    let replacement = store
+        .insert_pending_prompt("session-1", "replacement", None)
+        .expect("insert replacement prompt");
+    assert_eq!(replacement.seq, 2);
+    assert_ne!(replacement.seq, old.seq);
 }

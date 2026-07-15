@@ -1,9 +1,19 @@
 import { readFileSync } from "node:fs";
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { createElement, type ReactElement } from "react";
+import { renderToStaticMarkup as renderReactToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import type { ProductHost } from "@proliferate/product-client/host/product-host";
+import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import { FileChangesCard } from "./FileChangesCard";
 import { FileDiffCard } from "./FileDiffCard";
+
+const webTestHost = { desktop: null } as ProductHost;
+
+function renderToStaticMarkup(ui: ReactElement) {
+  return renderReactToStaticMarkup(
+    <ProductHostProvider host={webTestHost}>{ui}</ProductHostProvider>,
+  );
+}
 
 describe("FileChangesCard and FileDiffCard", () => {
   it("keeps aggregate headers clean and renders the sidebar-safe shared anatomy", () => {
@@ -38,7 +48,8 @@ describe("FileChangesCard and FileDiffCard", () => {
     expect(html).toContain("codex-review-diff-card");
     expect(html).toContain("--codex-diffs-header-surface:var(--color-diff-sidebar-file-header-surface)");
     expect(html).toContain("--codex-diffs-separator-surface:var(--color-diff-sidebar-file-header-hover-surface)");
-    expect(html).toContain("bg-[var(--codex-diffs-header-surface)]");
+    expect(html).toContain("sticky top-0 bg-[color-mix(in_srgb,var(--codex-diffs-header-surface)_97%,transparent)]");
+    expect(html).not.toContain("backdrop-blur");
     expect(html).not.toContain("#1c1c1c");
     expect(html).toContain("data-app-action-review-file-expanded=\"true\"");
     expect(html).toContain("data-app-action-review-file-toggle=\"\"");
@@ -49,7 +60,7 @@ describe("FileChangesCard and FileDiffCard", () => {
 
   it("keeps diff header theme variables free of hard-coded dark surfaces", () => {
     const desktopCss = readFileSync(
-      new URL("../../../../../packages/design/src/css/desktop.css", import.meta.url),
+      new URL("../../../../../packages/design/src/css/product.css", import.meta.url),
       "utf8",
     );
     const rootDiffVariables =

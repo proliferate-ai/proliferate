@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import type { SessionLatencyFlowOptions } from "@/hooks/sessions/workflows/session-selection-options";
@@ -12,8 +13,16 @@ import { recordMeasurementMetric } from "@/lib/infra/measurement/debug-measureme
 import { parseTargetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import {
+  filterReplacedSessionTombstones,
+} from "@/hooks/sessions/workflows/session-replacement-tombstones";
 
 export function useWorkspaceSessionLoader() {
+  const host = useProductHost();
+  const desktop = host.desktop;
+  const localRuntime = desktop?.runtime ?? null;
+  const ssh = desktop?.ssh ?? null;
+  const cloudClient = host.cloud.client;
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const {
     getWorkspaceSessionCacheSnapshot,
@@ -31,9 +40,9 @@ export function useWorkspaceSessionLoader() {
 
     const runtimeUrl = workspaceUsesResolvedRemoteRuntime(workspaceId)
       ? useHarnessConnectionStore.getState().runtimeUrl
-      : await ensureRuntimeReadyForSessions();
+      : await ensureRuntimeReadyForSessions(localRuntime);
     const requestHeaders = getLatencyFlowRequestHeaders(options?.latencyFlowId);
-    const cacheSnapshot = getWorkspaceSessionCacheSnapshot(workspaceId, { runtimeUrl });
+    const cacheSnapshot = getWorkspaceSessionCacheSnapshot(workspaceId);
     if (options?.measurementOperationId) {
       recordMeasurementMetric({
         type: "cache",
@@ -50,29 +59,39 @@ export function useWorkspaceSessionLoader() {
       && cacheSnapshot.dataUpdatedAt
       && !cacheSnapshot.isInvalidated
     ) {
-      return cacheSnapshot.sessions;
+      return filterReplacedSessionTombstones(
+        workspaceId,
+        cacheSnapshot.sessions,
+      ) ?? [];
     }
 
     // Do not join a possibly hung automatic query for the same selected
     // workspace. Session selection is the owning workflow and must either
     // complete or fail independently so the shell cannot stay on
     // "Preparing workspace" behind an unrelated header/sidebar fetch.
-    const sessions = await fetchWorkspaceSessions(
+    const loadedSessions = await fetchWorkspaceSessions(
       runtimeUrl,
       workspaceId,
-      requestHeaders || options?.measurementOperationId
-        ? {
-          requestHeaders,
-          measurementOperationId: options?.measurementOperationId,
-        }
-        : undefined,
+      {
+        requestHeaders,
+        measurementOperationId: options?.measurementOperationId,
+        ssh,
+        cloudClient,
+      },
     );
-    setWorkspaceSessions(workspaceId, () => sessions, { runtimeUrl });
+    const sessions = filterReplacedSessionTombstones(
+      workspaceId,
+      loadedSessions,
+    ) ?? [];
+    setWorkspaceSessions(workspaceId, () => sessions);
     return sessions;
   }, [
     getWorkspaceRuntimeBlockReason,
     getWorkspaceSessionCacheSnapshot,
+    localRuntime,
     setWorkspaceSessions,
+    ssh,
+    cloudClient,
   ]);
 
   return { ensureWorkspaceSessions };

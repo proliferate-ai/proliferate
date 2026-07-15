@@ -44,9 +44,16 @@ export function useAppShortcuts(actions: AppCommandActions): void {
     actions.openWebApp.execute("shortcut");
   });
 
-  useShortcutHandler("app.open-support", () => {
-    actions.openSupport.execute("shortcut");
-  });
+  // Mirrors the sidebar/palette hiding the support action under
+  // `support.kind === "none"`: the shortcut is unregistered entirely rather
+  // than bound to a no-op, so Cmd+S is inert when nothing is configured.
+  useShortcutHandler(
+    "app.open-support",
+    () => {
+      actions.openSupport.execute("shortcut");
+    },
+    { enabled: !actions.openSupport.hidden },
+  );
 
   useShortcutHandler("app.show-keyboard-shortcuts", () => {
     actions.showKeyboardShortcuts.execute("shortcut");

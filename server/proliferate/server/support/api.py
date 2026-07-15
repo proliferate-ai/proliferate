@@ -14,7 +14,6 @@ from proliferate.server.support.models import (
     SupportReportCompleteResponse,
     SupportReportCreateRequest,
     SupportReportCreateResponse,
-    SupportReportTrackerResponse,
     SupportReportUploadRequest,
     SupportReportUploadResponse,
     SupportReportUploadTargetsRequest,
@@ -25,7 +24,6 @@ from proliferate.server.support.service import (
     create_support_report,
     create_support_report_upload,
     create_support_report_upload_targets,
-    ensure_support_report_tracker,
 )
 
 router = APIRouter(prefix="/support", tags=["support"])
@@ -108,17 +106,4 @@ async def complete_support_report_upload_endpoint(
         sender_display_name=user.display_name,
         report_id=report_id,
         body=body,
-    )
-
-
-@router.post("/reports/{report_id}/tracker", response_model=SupportReportTrackerResponse)
-async def ensure_support_report_tracker_endpoint(
-    report_id: str,
-    user: User = Depends(current_active_user),
-    db: AsyncSession = Depends(get_async_session),
-) -> SupportReportTrackerResponse:
-    return await ensure_support_report_tracker(
-        db=db,
-        sender_user_id=user.id,
-        report_id=report_id,
     )

@@ -8,7 +8,6 @@ import { useNavigate } from "react-router-dom";
 import { useTerminalActions } from "@/hooks/terminals/workflows/use-terminal-actions";
 import {
   parseRightPanelHeaderEntryKey,
-  rightPanelBrowserHeaderKey,
   rightPanelTerminalHeaderKey,
   rightPanelToolHeaderKey,
   terminalIdsFromHeaderOrder,
@@ -17,13 +16,9 @@ import {
   type RightPanelTool,
   type RightPanelWorkspaceState,
 } from "@/lib/domain/workspaces/shell/right-panel-model";
-import { createRightPanelBrowserTabId } from "@/lib/domain/workspaces/shell/right-panel-browser-tabs";
 import {
-  createOrActivateBrowserTabInRightPanelState,
-  removeBrowserTabFromRightPanelState,
   removeTerminalFromRightPanelState,
   reorderHeaderEntryInRightPanelState,
-  updateBrowserTabUrlInRightPanelState,
 } from "@/lib/domain/workspaces/shell/right-panel-state";
 import {
   reconcileRightPanelWorkspaceState,
@@ -58,7 +53,6 @@ interface UseRightPanelEntryActionsOptions {
   reorderViewerTargets: (orderedTargetKeys: readonly ViewerTargetKey[]) => void;
   setActiveViewerTarget: (targetKey: ViewerTargetKey | null) => void;
   clearBuffer: (path: string) => void;
-  onOpenPanel: () => void;
 }
 
 export function useRightPanelEntryActions({
@@ -77,7 +71,6 @@ export function useRightPanelEntryActions({
   reorderViewerTargets,
   setActiveViewerTarget,
   clearBuffer,
-  onOpenPanel,
 }: UseRightPanelEntryActionsOptions) {
   const { createTab, closeTab, renameTab } = useTerminalActions();
   const navigate = useNavigate();
@@ -185,11 +178,6 @@ export function useRightPanelEntryActions({
     [updateState],
   );
 
-  const selectBrowser = useCallback((browserId: string) => {
-    const browserKey = rightPanelBrowserHeaderKey(browserId);
-    updateState((previous) => ({ ...previous, activeEntryKey: browserKey }));
-  }, [updateState]);
-
   const activateRightPanelEntry = useCallback((entryKey: RightPanelHeaderEntryKey) => {
     const entry = parseRightPanelHeaderEntryKey(entryKey);
     if (!entry) {
@@ -204,16 +192,12 @@ export function useRightPanelEntryActions({
       selectTerminal(entry.terminalId);
       return true;
     }
-    if (entry.kind === "browser") {
-      selectBrowser(entry.browserId);
-      return true;
-    }
     if (entry.kind === "viewer") {
       selectViewer(entry.targetKey);
       return true;
     }
     return false;
-  }, [activateTool, selectBrowser, selectTerminal, selectViewer]);
+  }, [activateTool, selectTerminal, selectViewer]);
 
   const handleCloseTerminal = useCallback(
     (terminalId: string) => {
@@ -250,33 +234,6 @@ export function useRightPanelEntryActions({
     }
   }, [renameTab, showToast, workspaceId]);
 
-  const handleCreateBrowser = useCallback(() => {
-    if (!workspaceId || !shouldRenderContent) {
-      return false;
-    }
-    updateState((previous) =>
-      createOrActivateBrowserTabInRightPanelState(
-        previous,
-        createRightPanelBrowserTabId(),
-        isCloudWorkspaceSelected,
-      ),
-    );
-    onOpenPanel();
-    return true;
-  }, [
-    isCloudWorkspaceSelected,
-    onOpenPanel,
-    shouldRenderContent,
-    updateState,
-    workspaceId,
-  ]);
-
-  const handleCloseBrowser = useCallback((browserId: string) => {
-    updateState((previous) =>
-      removeBrowserTabFromRightPanelState(previous, browserId, isCloudWorkspaceSelected)
-    );
-  }, [isCloudWorkspaceSelected, updateState]);
-
   const closeActiveRightPanelEntry = useCallback(() => {
     const entry = parseRightPanelHeaderEntryKey(state.activeEntryKey);
     if (!entry) {
@@ -287,10 +244,6 @@ export function useRightPanelEntryActions({
       handleCloseTerminal(entry.terminalId);
       return true;
     }
-    if (entry.kind === "browser") {
-      handleCloseBrowser(entry.browserId);
-      return true;
-    }
     if (entry.kind === "viewer") {
       handleCloseViewer(entry.targetKey);
       return true;
@@ -298,17 +251,10 @@ export function useRightPanelEntryActions({
 
     return true;
   }, [
-    handleCloseBrowser,
     handleCloseTerminal,
     handleCloseViewer,
     state.activeEntryKey,
   ]);
-
-  const handleUpdateBrowserUrl = useCallback((browserId: string, url: string) => {
-    updateState((previous) =>
-      updateBrowserTabUrlInRightPanelState(previous, browserId, url, isCloudWorkspaceSelected)
-    );
-  }, [isCloudWorkspaceSelected, updateState]);
 
   const handleReorderHeaderEntry = useCallback(
     (
@@ -342,14 +288,11 @@ export function useRightPanelEntryActions({
     activateRightPanelEntry,
     selectTerminal,
     handleCloseTerminal,
-    handleCloseBrowser,
     handleCloseViewer,
     handleRenameTerminal,
     handleCreateTerminal,
-    handleCreateBrowser,
     handleOpenRepoSettings,
     handleReorderHeaderEntry,
-    handleUpdateBrowserUrl,
     closeActiveRightPanelEntry,
   };
 }

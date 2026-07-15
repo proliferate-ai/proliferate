@@ -276,10 +276,10 @@ fn pending_config_rank_treats_synthetic_acp_model_control_as_model() {
 
 #[test]
 fn direct_model_setter_engages_only_without_live_model_control() {
-    // Harnesses that report no live model control (ACP 0.14 drops the legacy
-    // models block, so Gemini surfaces neither a model config option nor
-    // available_models) route a switch through the legacy `session/set_model`
-    // ext call; the agent is the sole authority on validity.
+    // Harnesses that report no live model control (neither a model config
+    // option nor available_models) route a switch through the legacy
+    // `session/set_model` ext call; the agent is the sole authority on
+    // validity.
     let no_model_control = SessionStartupState {
         current_mode_id: None,
         legacy_mode_state: None,
@@ -290,7 +290,7 @@ fn direct_model_setter_engages_only_without_live_model_control() {
     };
     assert!(should_apply_model_via_direct_setter(
         &no_model_control,
-        "gemini-2.5-pro"
+        "grok-4.3"
     ));
 
     // When a live model list IS present, membership is enforced upstream — the
@@ -393,9 +393,9 @@ fn queue_accepts_catalog_authorized_model_value_outside_live_options() {
         prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
     };
 
-    // Same value, same option list — the only difference is the catalog
-    // authorization computed at the runtime seam (decision 10: the catalog
-    // is the switch authority; the harness-advertised list is not a cage).
+    // Same value and option list: only the recorded-context catalog
+    // authorization differs. Catalog authorization allows this value beyond
+    // the harness-advertised list while preserving the same session.
     queue_pending_config_change(
         &store,
         "session-1",

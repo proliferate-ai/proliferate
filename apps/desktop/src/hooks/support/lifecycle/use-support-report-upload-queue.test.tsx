@@ -2,6 +2,10 @@
 
 import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type {
+  SupportReportCompleteRequest,
+  SupportReportCreateRequest,
+} from "@proliferate/cloud-sdk/types";
 import { useSupportReportUploadQueue } from "@/hooks/support/lifecycle/use-support-report-upload-queue";
 import type { SupportReportJob } from "@/lib/domain/support/report-types";
 
@@ -59,19 +63,19 @@ const cloudSupportMocks = vi.hoisted(() => ({
 }));
 
 const diagnosticsMocks = vi.hoisted(() => ({
-  collectSupportDiagnostics: vi.fn(async () => null),
-  logRendererEvent: vi.fn(async () => {}),
+  collectSupportBundle: vi.fn(async () => null),
+  logEvent: vi.fn(async () => {}),
+  deleteAttachment: vi.fn(async () => {}),
+  readAttachment: vi.fn(async () => ""),
 }));
 
 const supportAccessMocks = vi.hoisted(() => ({
-  deleteStagedSupportReportAttachment: vi.fn(async () => {}),
   listenSupportReportJobs: vi.fn(),
   listeners: [] as Array<{
     active: boolean;
     handler: (job: SupportReportJob) => void;
     unlisten: ReturnType<typeof vi.fn>;
   }>,
-  readStagedSupportReportAttachment: vi.fn(async () => ""),
 }));
 
 const uploadWorkflowMocks = vi.hoisted(() => ({
@@ -81,6 +85,7 @@ const uploadWorkflowMocks = vi.hoisted(() => ({
 }));
 
 const telemetryMocks = vi.hoisted(() => ({
+  getSupportReportReleaseId: vi.fn(() => "proliferate-desktop@0.0.0+test"),
   getSupportReportTelemetryRefs: vi.fn(() => ({})),
   trackProductEvent: vi.fn(),
 }));
@@ -101,9 +106,36 @@ vi.mock("@anyharness/sdk-react", () => ({
 
 vi.mock("@proliferate/cloud-sdk/client/support", () => cloudSupportMocks);
 
-vi.mock("@/lib/access/tauri/diagnostics", () => diagnosticsMocks);
+// Stable host so `useProductStorageContext` (memoized on the host identity)
+// yields a stable storage context and the queue effect doesn't re-run per
+// render. The ProductStorage adapter reads/writes the same `window.localStorage`
+// mock the tests seed.
+const productHostMock = {
+  desktop: { diagnostics: diagnosticsMocks },
+  storage: {
+    getItem: async (key: string) => window.localStorage.getItem(key),
+    setItem: async (key: string, value: string) => {
+      window.localStorage.setItem(key, value);
+    },
+    removeItem: async (key: string) => {
+      window.localStorage.removeItem(key);
+    },
+  },
+  telemetry: {
+    track: vi.fn(),
+    captureException: vi.fn(),
+    getSupportContext: () => ({
+      clientReleaseId: "proliferate-desktop@0.0.0+test",
+      telemetryRefs: {},
+    }),
+  },
+};
 
-vi.mock("@/lib/access/tauri/support", () => supportAccessMocks);
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => productHostMock,
+}));
+
+vi.mock("@/lib/access/browser/support-report-job-events", () => supportAccessMocks);
 
 vi.mock("@/lib/access/anyharness/debug-client", () => ({
   createSessionDebugClient: vi.fn(() => ({})),
@@ -186,10 +218,15 @@ describe("useSupportReportUploadQueue", () => {
     listener?.handler(job);
     listener?.handler(job);
 
-    expect(sendingToastCalls()).toHaveLength(1);
+    // Persistence is async; the serialized persist chain dedups the second
+    // delivery so exactly one "Sending report..." toast is shown.
+    await waitFor(() => {
+      expect(sendingToastCalls()).toHaveLength(1);
+    });
     await waitFor(() => {
       expect(cloudSupportMocks.completeSupportReportUpload).toHaveBeenCalledTimes(1);
     });
+    expect(sendingToastCalls()).toHaveLength(1);
   });
 
   it("drops a transient job that has spent its attempt budget", async () => {
@@ -240,7 +277,7 @@ describe("useSupportReportUploadQueue", () => {
     renderHook(() => useSupportReportUploadQueue());
 
     await waitFor(() => {
-      expect(diagnosticsMocks.logRendererEvent).toHaveBeenCalledWith({
+      expect(diagnosticsMocks.logEvent).toHaveBeenCalledWith({
         source: "support_report_upload",
         message: "failed.auth_required",
       });
@@ -289,14 +326,19 @@ describe("useSupportReportUploadQueue", () => {
     });
     activeListeners()[0]?.handler(makeSupportReportJob("job-conflict", recentIso()));
 
+    // Persistence + drain are async; wait for the terminal toast (only shown
+    // after the conflict is handled) rather than an empty store, which is also
+    // momentarily empty before the async persist writes.
+    await waitFor(() => {
+      // Terminal conflict shows the actionable copy, NOT the "already sent" success.
+      expect(toastStoreMocks.show).toHaveBeenCalledWith(
+        "This report can no longer be sent. Start a new report from Help if you still need support.",
+      );
+    });
     await waitFor(() => {
       const raw = window.localStorage.getItem("proliferate.supportReportJobs.v1");
       expect(JSON.parse(raw ?? "[]")).toHaveLength(0);
     });
-    // Terminal conflict shows the actionable copy, NOT the "already sent" success.
-    expect(toastStoreMocks.show).toHaveBeenCalledWith(
-      "This report can no longer be sent. Start a new report from Help if you still need support.",
-    );
   });
 
   it("clears the job quietly when upload-targets reports the report already completed", async () => {
@@ -313,14 +355,46 @@ describe("useSupportReportUploadQueue", () => {
     });
     activeListeners()[0]?.handler(makeSupportReportJob("job-already-done"));
 
+    // Wait for the definitive post-drain toast; the store is also momentarily
+    // empty before the async persist writes.
+    await waitFor(() => {
+      expect(toastStoreMocks.show).toHaveBeenCalledWith(
+        "Report already sent. Support has the details.",
+        "info",
+      );
+    });
     await waitFor(() => {
       const raw = window.localStorage.getItem("proliferate.supportReportJobs.v1");
       expect(JSON.parse(raw ?? "[]")).toHaveLength(0);
     });
-    expect(toastStoreMocks.show).toHaveBeenCalledWith(
-      "Report already sent. Support has the details.",
-      "info",
-    );
+  });
+
+  it("skips diagnostics and completes directly when logs are excluded and there are no attachments", async () => {
+    renderHook(() => useSupportReportUploadQueue());
+
+    await waitFor(() => {
+      expect(activeListeners()).toHaveLength(1);
+    });
+
+    const job = makeSupportReportJob("job-no-logs", recentIso());
+    job.includeLogs = false;
+    activeListeners()[0]?.handler(job);
+
+    await waitFor(() => {
+      expect(cloudSupportMocks.completeSupportReportUpload).toHaveBeenCalledTimes(1);
+    });
+    // No diagnostics collected, no upload targets requested, complete carries no
+    // diagnostics object.
+    expect(uploadWorkflowMocks.buildSupportReportPackage).not.toHaveBeenCalled();
+    expect(cloudSupportMocks.createSupportReportUploadTargets).not.toHaveBeenCalled();
+    const completeArgs = cloudSupportMocks.completeSupportReportUpload.mock.calls[0] as
+      unknown as [string, SupportReportCompleteRequest];
+    expect(completeArgs[1].diagnostics ?? null).toBeNull();
+
+    // Create request declared diagnostics=false.
+    const createArgs = cloudSupportMocks.createSupportReport.mock.calls[0] as
+      unknown as [SupportReportCreateRequest];
+    expect(createArgs[0].expectedClientUploads?.diagnostics).toBe(false);
   });
 
   it("cleans up a queued job when create returns an already completed report", async () => {
@@ -353,7 +427,6 @@ describe("useSupportReportUploadQueue", () => {
       expect(cloudSupportMocks.createSupportReport).toHaveBeenCalledTimes(1);
       expect(cloudSupportMocks.createSupportReportUploadTargets).not.toHaveBeenCalled();
       expect(cloudSupportMocks.completeSupportReportUpload).not.toHaveBeenCalled();
-      expect(cloudSupportMocks.ensureSupportReportTracker).toHaveBeenCalledWith("report-1");
     });
   });
 });
@@ -384,7 +457,9 @@ function makeSupportReportJob(
       kind: "app_only",
       workspaceIds: [],
     },
-    publicContentConsent: true,
+    publicContentConsent: false,
+    kind: "bug",
+    creditConsent: false,
     snapshot: {
       openedAt: "2026-05-31T12:00:00.000Z",
       source: "sidebar",

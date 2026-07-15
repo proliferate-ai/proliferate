@@ -4,6 +4,7 @@ import type {
   TurnRecord,
 } from "@anyharness/sdk";
 import { isSubagentCreationAction } from "../subagents/subagent-tool-presentation";
+import { isSubagentWorkComplete } from "../subagents/subagent-launch";
 import { isKnownModeSwitchToolCall } from "../tools/mode-switch-display";
 
 export type TurnDisplayBlock =
@@ -72,7 +73,21 @@ export function buildTranscriptDisplayBlocks({
     const item = transcript.itemsById[itemId];
     if (!item) continue;
 
+    // Route finished subagents (both MCP create_subagent and native Agent) to
+    // subagent_creations blocks. Running native subagents are hidden by the
+    // renderer (TranscriptAgentGroupBlock returns null), so they never reach
+    // this classification path.
     if (item.kind === "tool_call" && isSubagentCreationAction(item)) {
+      flushActions();
+      pendingSubagentCreationIds.push(itemId);
+      continue;
+    }
+
+    if (
+      item.kind === "tool_call"
+      && isFinishedNativeAgentSubagent(item)
+      && isSubagentWorkComplete(item)
+    ) {
       flushActions();
       pendingSubagentCreationIds.push(itemId);
       continue;
@@ -137,23 +152,35 @@ export function buildTurnPresentation(
     turn.completedAt,
     finalAssistantItemId,
   );
+  // Completion metadata and tool receipts can arrive after the final prose in
+  // runtime sequence order. Presentation still keeps the final assistant item
+  // last so all work grows above the stable transcript frontier.
+  const presentationRootIds = finalAssistantItemId
+    ? [
+      ...rootIds.filter((itemId) => itemId !== finalAssistantItemId),
+      finalAssistantItemId,
+    ]
+    : rootIds;
+
+  const displayBlocks = buildTranscriptDisplayBlocks({
+    rootIds: presentationRootIds,
+    transcript,
+    childrenByParentId,
+    isComplete: !!turn.completedAt,
+  });
+  const completedHistorySummary = summarizeCompletedHistory(
+    completedHistoryRootIds,
+    transcript,
+    childrenByParentId,
+  );
 
   return {
     rootIds,
     childrenByParentId,
-    displayBlocks: buildTranscriptDisplayBlocks({
-      rootIds,
-      transcript,
-      childrenByParentId,
-      isComplete: !!turn.completedAt,
-    }),
+    displayBlocks,
     finalAssistantItemId,
     completedHistoryRootIds,
-    completedHistorySummary: summarizeCompletedHistory(
-      completedHistoryRootIds,
-      transcript,
-      childrenByParentId,
-    ),
+    completedHistorySummary,
   };
 }
 
@@ -207,17 +234,13 @@ function buildCompletedHistoryRootIds(
     return [];
   }
 
-  const finalAssistantIndex = rootIds.indexOf(finalAssistantItemId);
-  if (finalAssistantIndex <= 0) {
-    return [];
-  }
-
-  return rootIds.filter((itemId, index) =>
-    index < finalAssistantIndex && transcript.itemsById[itemId]?.kind !== "user_message"
+  return rootIds.filter((itemId) =>
+    itemId !== finalAssistantItemId
+    && transcript.itemsById[itemId]?.kind !== "user_message"
   );
 }
 
-function summarizeCompletedHistory(
+export function summarizeCompletedHistory(
   rootIds: readonly string[],
   transcript: TranscriptState,
   childrenByParentId: Map<string, string[]>,
@@ -284,4 +307,14 @@ function isCollapsibleAction(
     && item.semanticKind !== "cowork_artifact_create"
     && item.semanticKind !== "cowork_artifact_update"
     && item.nativeToolName !== "Agent";
+}
+
+function isFinishedNativeAgentSubagent(
+  item: Extract<TranscriptItem, { kind: "tool_call" }>,
+): boolean {
+  // Only native Agent tool calls. MCP subagent communication tools
+  // (send_subagent_message, get_subagent_status, etc.) have semanticKind
+  // "subagent" but are NOT creation actions — they render via their own
+  // blocks (TranscriptMcpSubagentActionBlock).
+  return item.nativeToolName === "Agent";
 }

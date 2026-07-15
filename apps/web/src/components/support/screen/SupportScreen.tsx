@@ -1,6 +1,7 @@
 import { useLocation } from "react-router-dom";
 import { ProductPageShell } from "@proliferate/product-ui/layout/ProductPageShell";
 import { CloudSupportSurface } from "@proliferate/product-surfaces/support/CloudSupportSurface";
+import { getWebTelemetryConfig } from "../../../lib/integrations/telemetry/config";
 
 export function SupportScreen() {
   const location = useLocation();
@@ -18,6 +19,7 @@ export function SupportScreen() {
           intent: "general",
           pathname,
         }}
+        releaseId={getWebTelemetryConfig().release}
       />
     </ProductPageShell>
   );

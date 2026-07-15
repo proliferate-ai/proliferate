@@ -38,6 +38,10 @@ class SupportReport(Base):
             name="ck_support_report_source_surface",
         ),
         CheckConstraint(
+            "kind IN ('bug','feature')",
+            name="ck_support_report_kind",
+        ),
+        CheckConstraint(
             "tracker_status IN "
             "('none','pending','in_progress','partial','completed','failed_retryable',"
             "'failed_permanent','disabled')",
@@ -91,6 +95,27 @@ class SupportReport(Base):
     object_manifest_json: Mapped[str] = mapped_column(Text, default="{}")
     expected_uploads_json: Mapped[str] = mapped_column(Text, default="{}")
     public_content_consent: Mapped[bool] = mapped_column(Boolean, default=False)
+    kind: Mapped[str] = mapped_column(String(32), server_default="bug", default="bug")
+    credit_consent: Mapped[bool] = mapped_column(Boolean, server_default="false", default=False)
+    credit_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # Immutable canonical client release ID (<component>@<semver>+<12-char-sha>)
+    # captured with the report intent. NULL for legacy/malformed values, which
+    # remain feedable with a visible warning.
+    client_release_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Whether the client PROVIDED a release value at create time (regardless of
+    # whether it validated). Distinguishes "legacy client never sent the field"
+    # (accepted with a warning) from "new client sent a value that failed
+    # validation" (rejected at completion when
+    # SUPPORT_REPORT_REQUIRE_CLIENT_RELEASE is on). Rows predating the column
+    # default to false, i.e. legacy-absent.
+    client_release_provided: Mapped[bool] = mapped_column(
+        Boolean, server_default="false", default=False
+    )
+    # Server-produced, scrubbed, bounded (<=240 char) summary derived from the
+    # report message. It never substitutes for the private report body.
+    tracker_summary: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    urgent: Mapped[bool] = mapped_column(Boolean, server_default="false", default=False)
+    notify_me: Mapped[bool] = mapped_column(Boolean, server_default="false", default=False)
     request_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     complete_request_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     request_object_written_at: Mapped[datetime | None] = mapped_column(

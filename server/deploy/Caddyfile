@@ -1,4 +1,19 @@
 {$SITE_ADDRESS} {
-  encode zstd gzip
-  reverse_proxy api:8000
+	encode zstd gzip
+
+	# Agent LLM gateway (optional add-on, AGENT_GATEWAY_ENABLED). handle_path
+	# strips the /llm prefix before proxying, so AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL
+	# should be set to https://<SITE_ADDRESS>/llm — the CLI's
+	# ANTHROPIC_BASE_URL=.../llm/v1/messages then reaches litellm's /v1/messages.
+	# This route always exists; when the gateway profile is not running there is
+	# simply no `litellm` host to resolve, so a request here 502s instead of
+	# affecting the rest of the site. Must stay before the default `handle`
+	# below (Caddy evaluates handle_path/handle in file order, first match wins).
+	handle_path /llm/* {
+		reverse_proxy litellm:4000
+	}
+
+	handle {
+		reverse_proxy api:8000
+	}
 }

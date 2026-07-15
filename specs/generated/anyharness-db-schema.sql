@@ -4,6 +4,42 @@ CREATE TABLE _migrations (
             applied_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
 
+-- table: activity_processes
+CREATE TABLE activity_processes (
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    process_id TEXT NOT NULL,
+    command TEXT NOT NULL,
+    cwd TEXT,
+    status TEXT NOT NULL,
+    exit_code INTEGER,
+    pid INTEGER,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    feed_id TEXT,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (session_id, process_id)
+);
+
+-- table: activity_subagents
+CREATE TABLE activity_subagents (
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    subagent_id TEXT NOT NULL,
+    agent_type TEXT,
+    description TEXT,
+    model TEXT,
+    background INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL,
+    summary TEXT,
+    tokens_used INTEGER,
+    tool_calls INTEGER,
+    duration_seconds INTEGER,
+    feed_id TEXT,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (session_id, subagent_id)
+);
+
 -- table: agent_model_registry_snapshots
 CREATE TABLE agent_model_registry_snapshots (
     id TEXT PRIMARY KEY,
@@ -53,6 +89,70 @@ CREATE TABLE cowork_threads (
     branch_name TEXT NOT NULL,
     created_at TEXT NOT NULL
 , workspace_delegation_enabled INTEGER NOT NULL DEFAULT 1);
+
+-- table: feed_bindings
+CREATE TABLE feed_bindings (
+    feed_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    owner_kind TEXT NOT NULL,
+    owner_id TEXT NOT NULL,
+    transport_kind TEXT NOT NULL,
+    transport_path TEXT,
+    transport_thread_id TEXT,
+    transport_url TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+-- table: gateway_model_probe
+CREATE TABLE gateway_model_probe (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    harness_kind TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    models_json TEXT NOT NULL,
+    probed_at TEXT NOT NULL
+);
+
+-- table: goals
+CREATE TABLE goals (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    objective TEXT NOT NULL,
+    status TEXT NOT NULL,
+    native_status TEXT,
+    token_budget INTEGER,
+    tokens_used INTEGER,
+    time_used_seconds INTEGER,
+    met_reason TEXT,
+    iterations INTEGER,
+    native INTEGER NOT NULL DEFAULT 1,
+    pending_op TEXT,
+    revision INTEGER NOT NULL,
+    native_state_json TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+-- table: loops
+CREATE TABLE loops (
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    loop_id TEXT NOT NULL,
+    prompt TEXT NOT NULL,
+    schedule_kind TEXT NOT NULL,
+    schedule_expr TEXT NOT NULL,
+    recurring INTEGER NOT NULL DEFAULT 1,
+    status TEXT NOT NULL,
+    native INTEGER NOT NULL DEFAULT 1,
+    last_fired_at_ms INTEGER,
+    fire_count INTEGER NOT NULL DEFAULT 0,
+    native_state_json TEXT,
+    created_at TEXT NOT NULL,
+    updated_at_ms INTEGER NOT NULL, max_fires INTEGER, next_fire_at_ms INTEGER,
+    PRIMARY KEY (session_id, loop_id)
+);
 
 -- table: mobility_archive_installs
 CREATE TABLE mobility_archive_installs (
@@ -399,7 +499,7 @@ CREATE TABLE session_pending_prompts (
     seq        INTEGER NOT NULL,
     prompt_id  TEXT,
     text       TEXT NOT NULL,
-    queued_at  TEXT NOT NULL, blocks_json TEXT, provenance_json TEXT,
+    queued_at  TEXT NOT NULL, blocks_json TEXT, provenance_json TEXT, queue_position INTEGER,
     PRIMARY KEY (session_id, seq)
 );
 
@@ -443,7 +543,7 @@ CREATE TABLE sessions (
     updated_at TEXT NOT NULL,
     last_prompt_at TEXT,
     closed_at TEXT
-, thinking_budget_tokens INTEGER, title TEXT, requested_model_id TEXT, current_model_id TEXT, requested_mode_id TEXT, current_mode_id TEXT, dismissed_at TEXT, mcp_bindings_ciphertext TEXT, system_prompt_append TEXT, mcp_binding_summaries_json TEXT, origin_json TEXT, subagents_enabled INTEGER NOT NULL DEFAULT 1, mcp_binding_policy TEXT NOT NULL DEFAULT 'inherit_workspace', action_capabilities_json TEXT, agent_auth_contexts TEXT);
+, thinking_budget_tokens INTEGER, title TEXT, requested_model_id TEXT, current_model_id TEXT, requested_mode_id TEXT, current_mode_id TEXT, dismissed_at TEXT, mcp_bindings_ciphertext TEXT, system_prompt_append TEXT, mcp_binding_summaries_json TEXT, origin_json TEXT, subagents_enabled INTEGER NOT NULL DEFAULT 1, mcp_binding_policy TEXT NOT NULL DEFAULT 'inherit_workspace', action_capabilities_json TEXT, agent_auth_contexts TEXT, pending_prompt_seq_cursor INTEGER NOT NULL DEFAULT 0);
 
 -- table: terminal_command_runs
 CREATE TABLE terminal_command_runs (
@@ -465,6 +565,44 @@ CREATE TABLE terminal_command_runs (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+-- table: workflow_run_steps
+CREATE TABLE workflow_run_steps (
+            run_id TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,
+            stage_index INTEGER NOT NULL,
+            step_index INTEGER NOT NULL,
+            status TEXT NOT NULL CHECK (status IN ('pending','running','completed','failed')),
+            prompt_id TEXT NOT NULL UNIQUE,
+            turn_id TEXT,
+            failure_code TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            started_at TEXT,
+            finished_at TEXT,
+            PRIMARY KEY (run_id, stage_index, step_index)
+        );
+
+-- table: workflow_runs
+CREATE TABLE workflow_runs (
+            id TEXT PRIMARY KEY,
+            schema_version INTEGER NOT NULL CHECK (schema_version IN (1, 2)),
+            invocation_json TEXT NOT NULL CHECK (json_valid(invocation_json)),
+            resolved_plan_json TEXT CHECK (
+                resolved_plan_json IS NULL OR json_valid(resolved_plan_json)
+            ),
+            status TEXT NOT NULL CHECK (status IN ('accepted','running','completed','failed')),
+            workspace_id TEXT NOT NULL,
+            session_id TEXT,
+            failure_code TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            started_at TEXT,
+            finished_at TEXT,
+            CHECK (
+                (schema_version = 1 AND resolved_plan_json IS NULL)
+                OR (schema_version = 2 AND resolved_plan_json IS NOT NULL)
+            )
+        );
 
 -- table: workspace_access_modes
 CREATE TABLE workspace_access_modes (
@@ -544,6 +682,27 @@ CREATE INDEX idx_cowork_threads_session_id ON cowork_threads(session_id);
 
 -- index: idx_cowork_threads_workspace_id
 CREATE INDEX idx_cowork_threads_workspace_id ON cowork_threads(workspace_id);
+
+-- index: idx_feed_bindings_owner
+CREATE UNIQUE INDEX idx_feed_bindings_owner
+    ON feed_bindings(session_id, owner_kind, owner_id);
+
+-- index: idx_gateway_model_probe_lookup
+CREATE INDEX idx_gateway_model_probe_lookup
+    ON gateway_model_probe(harness_kind, revision, probed_at);
+
+-- index: idx_goals_session_created
+CREATE INDEX idx_goals_session_created
+    ON goals(session_id, created_at DESC);
+
+-- index: idx_goals_single_open_per_session
+CREATE UNIQUE INDEX idx_goals_single_open_per_session
+    ON goals(session_id)
+    WHERE status IN ('active', 'paused', 'blocked');
+
+-- index: idx_loops_session_status
+CREATE INDEX idx_loops_session_status
+    ON loops(session_id, status);
 
 -- index: idx_plan_handoffs_plan
 CREATE INDEX idx_plan_handoffs_plan
@@ -652,6 +811,10 @@ WHERE relation = 'review_agent';
 CREATE UNIQUE INDEX idx_session_links_subagent_child_owner
     ON session_links(relation, child_session_id)
     WHERE relation = 'subagent';
+
+-- index: idx_session_pending_prompts_session_position
+CREATE UNIQUE INDEX idx_session_pending_prompts_session_position
+    ON session_pending_prompts (session_id, queue_position);
 
 -- index: idx_session_pending_prompts_session_seq
 CREATE INDEX idx_session_pending_prompts_session_seq

@@ -5,7 +5,6 @@ describe("resolveCoworkDefaultSessionModeId", () => {
   it("returns the vetted cowork default for supported agent families", () => {
     expect(resolveCoworkDefaultSessionModeId("claude")).toBe("bypassPermissions");
     expect(resolveCoworkDefaultSessionModeId("codex")).toBe("full-access");
-    expect(resolveCoworkDefaultSessionModeId("gemini")).toBe("yolo");
   });
 
   it("returns undefined for unresolved agent families", () => {

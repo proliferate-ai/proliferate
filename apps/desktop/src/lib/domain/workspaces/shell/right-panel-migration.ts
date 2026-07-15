@@ -4,12 +4,10 @@ import {
   isRightPanelTool,
   normalizeRightPanelDurableState,
   parseRightPanelHeaderEntryKey,
-  rightPanelBrowserHeaderKey,
   rightPanelTerminalHeaderKey,
   rightPanelToolHeaderKey,
   rightPanelViewerHeaderKey,
   type RightPanelActiveEntryKey,
-  type RightPanelBrowserTabsById,
   type RightPanelDurableState,
   type RightPanelHeaderEntryKey,
   type RightPanelMaterializedState,
@@ -64,9 +62,6 @@ export function migrateLegacyRightPanelWorkspaceState(args: {
     {
       activeEntryKey,
       headerOrder: reconstructedHeaderOrder,
-      browserTabsById: isRecord(rawState.browserTabsById)
-        ? rawState.browserTabsById as RightPanelBrowserTabsById
-        : {},
     },
     { isCloudWorkspaceSelected: args.isCloudWorkspaceSelected },
   );
@@ -113,9 +108,7 @@ function uniqueLegacyHeaderEntries(value: readonly unknown[]): RightPanelHeaderE
       ? rightPanelToolHeaderKey(entry.tool)
       : entry.kind === "terminal"
         ? rightPanelTerminalHeaderKey(entry.terminalId)
-        : entry.kind === "browser"
-          ? rightPanelBrowserHeaderKey(entry.browserId)
-          : rightPanelViewerHeaderKey(entry.target);
+        : rightPanelViewerHeaderKey(entry.target);
     if (!next.includes(key)) {
       next.push(key);
     }

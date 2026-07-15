@@ -1,16 +1,16 @@
+import { useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   type CreateWorktreeWorkspaceResponse,
   type RepoRoot,
   type ResolveWorkspaceResponse,
   type Workspace,
 } from "@anyharness/sdk";
-import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
-import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useWorkspaceCollectionsInvalidationActions } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
+import { useWorkspaceCollectionsMutationCacheActions } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { getHomeDir } from "@/lib/access/tauri/shell";
 import {
   createWorkspace,
   createWorktreeWorkspace,
@@ -21,12 +21,10 @@ import {
 } from "@/lib/domain/workspaces/creation/workspace-slug";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { isCloudWorkspaceId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import {
-  captureTelemetryException,
-  trackProductEvent,
-} from "@/lib/integrations/telemetry/client";
+import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
 import type { SetupScriptTelemetryStatus } from "@/lib/domain/telemetry/events";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import type { AuthUser } from "@/lib/domain/auth/auth-user";
+import { useProductAuthUser } from "@/hooks/auth/facade/use-product-auth";
 import {
   type CreateWorktreeWorkspaceInput,
   type ResolvedWorktreeCreation,
@@ -47,18 +45,42 @@ interface CreateWorktreeMutationInput {
   latencyFlowId?: string | null;
 }
 
+interface RuntimeBoundResult<T> {
+  result: T;
+  runtimeUrl: string;
+}
+
 export function useWorkspaceActions() {
-  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
-  const { upsertLocalWorkspace } = useWorkspaceCollectionsMutationCache(runtimeUrl);
-  const invalidateWorkspaceCollections = useWorkspaceCollectionsInvalidation(runtimeUrl);
+  const desktop = useProductHost().desktop;
+  const telemetry = useProductTelemetry();
+  const localRuntime = desktop?.runtime ?? null;
+  const files = desktop?.files ?? null;
+  // Worktree resolution runs outside render; read the latest signed-in identity
+  // through a ref so the returned action object stays stable. Only the branch
+  // prefix (github login) is consumed downstream, so the normalized host user
+  // maps losslessly onto the AuthUser shape the domain helper expects.
+  const hostAuthUser = useProductAuthUser();
+  const authUserRef = useRef(hostAuthUser);
+  authUserRef.current = hostAuthUser;
+  const {
+    upsertLocalWorkspaceInWorkspaceCollections,
+  } = useWorkspaceCollectionsMutationCacheActions();
+  const {
+    invalidateWorkspaceCollectionsForRuntime,
+  } = useWorkspaceCollectionsInvalidationActions();
   const { data: workspaceCollections } = useWorkspaces();
   const primeWorkspaceCollections = (
+    runtimeUrl: string,
     workspace: Workspace,
     source: "local_create" | "worktree_create",
     repoRoot?: RepoRoot | null,
   ) => {
     const startedAt = startLatencyTimer();
-    const summary = upsertLocalWorkspace(workspace, repoRoot);
+    const summary = upsertLocalWorkspaceInWorkspaceCollections(
+      runtimeUrl,
+      workspace,
+      repoRoot,
+    );
 
     logLatency("workspace.collections.cache_upsert", {
       source,
@@ -72,17 +94,17 @@ export function useWorkspaceActions() {
   };
 
   const refreshWorkspaceCollections = (
+    runtimeUrl: string,
     source: "local_create" | "worktree_create",
     workspaceId: string,
   ) => {
-    const runtimeUrl = useHarnessConnectionStore.getState().runtimeUrl;
     const startedAt = startLatencyTimer();
     logLatency("workspace.collections.invalidate.start", {
       source,
       workspaceId,
       runtimeUrl,
     });
-    void invalidateWorkspaceCollections().then(() => {
+    void invalidateWorkspaceCollectionsForRuntime(runtimeUrl).then(() => {
       logLatency("workspace.collections.invalidate.success", {
         source,
         workspaceId,
@@ -92,30 +114,42 @@ export function useWorkspaceActions() {
     });
   };
 
-  const createLocalWorkspaceMutation = useMutation<ResolveWorkspaceResponse, Error, string>({
+  const createLocalWorkspaceMutation = useMutation<
+    RuntimeBoundResult<ResolveWorkspaceResponse>,
+    Error,
+    string
+  >({
     meta: {
       telemetryHandled: true,
     },
     mutationFn: async (sourceRoot) => {
-      const readyRuntimeUrl = await ensureRuntimeReady();
+      const readyRuntimeUrl = await ensureRuntimeReady(localRuntime);
       const connection = { runtimeUrl: readyRuntimeUrl };
       const request = {
         path: sourceRoot,
         origin: DESKTOP_ORIGIN,
       };
 
-      return createWorkspace(connection, request);
+      return {
+        result: await createWorkspace(connection, request),
+        runtimeUrl: readyRuntimeUrl,
+      };
     },
-    onSuccess: (response) => {
-      primeWorkspaceCollections(response.workspace, "local_create", response.repoRoot);
-      refreshWorkspaceCollections("local_create", response.workspace.id);
-      trackProductEvent("workspace_created", {
+    onSuccess: ({ result, runtimeUrl }) => {
+      primeWorkspaceCollections(
+        runtimeUrl,
+        result.workspace,
+        "local_create",
+        result.repoRoot,
+      );
+      refreshWorkspaceCollections(runtimeUrl, "local_create", result.workspace.id);
+      telemetry.track("workspace_created", {
         workspace_kind: "local",
         creation_kind: "local",
       });
     },
     onError: (error) => {
-      captureTelemetryException(error, {
+      telemetry.captureException(error, {
         tags: {
           action: "create_local_workspace",
           domain: "workspace",
@@ -126,7 +160,7 @@ export function useWorkspaceActions() {
   });
 
   const createWorktreeMutation = useMutation<
-    CreateWorktreeWorkspaceResponse,
+    RuntimeBoundResult<CreateWorktreeWorkspaceResponse>,
     Error,
     CreateWorktreeMutationInput
   >({
@@ -134,24 +168,27 @@ export function useWorkspaceActions() {
       telemetryHandled: true,
     },
     mutationFn: async ({ params, latencyFlowId }) => {
-      const readyRuntimeUrl = await ensureRuntimeReady();
-      return createWorktreeWorkspace({ runtimeUrl: readyRuntimeUrl }, {
-        repoRootId: params.repoRootId,
-        targetPath: params.targetPath,
-        newBranchName: params.branchName,
-        baseBranch: params.baseRef || undefined,
-        checkoutMode: params.checkoutMode,
-        setupScript: params.setupScript?.trim() || undefined,
-        nameConflictPolicy: params.nameConflictPolicy,
-        origin: DESKTOP_ORIGIN,
-      }, latencyFlowId
-        ? { headers: getLatencyFlowRequestHeaders(latencyFlowId) }
-        : undefined);
+      const readyRuntimeUrl = await ensureRuntimeReady(localRuntime);
+      return {
+        result: await createWorktreeWorkspace({ runtimeUrl: readyRuntimeUrl }, {
+          repoRootId: params.repoRootId,
+          targetPath: params.targetPath,
+          newBranchName: params.branchName,
+          baseBranch: params.baseRef || undefined,
+          checkoutMode: params.checkoutMode,
+          setupScript: params.setupScript?.trim() || undefined,
+          nameConflictPolicy: params.nameConflictPolicy,
+          origin: DESKTOP_ORIGIN,
+        }, latencyFlowId
+          ? { headers: getLatencyFlowRequestHeaders(latencyFlowId) }
+          : undefined),
+        runtimeUrl: readyRuntimeUrl,
+      };
     },
-    onSuccess: (result) => {
-      primeWorkspaceCollections(result.workspace, "worktree_create");
-      refreshWorkspaceCollections("worktree_create", result.workspace.id);
-      trackProductEvent("workspace_created", {
+    onSuccess: ({ result, runtimeUrl }) => {
+      primeWorkspaceCollections(runtimeUrl, result.workspace, "worktree_create");
+      refreshWorkspaceCollections(runtimeUrl, "worktree_create", result.workspace.id);
+      telemetry.track("workspace_created", {
         workspace_kind: "local",
         creation_kind: "worktree",
         setup_script_status: (
@@ -162,7 +199,7 @@ export function useWorkspaceActions() {
       });
     },
     onError: (error) => {
-      captureTelemetryException(error, {
+      telemetry.captureException(error, {
         tags: {
           action: "create_worktree_workspace",
           domain: "workspace",
@@ -199,9 +236,21 @@ export function useWorkspaceActions() {
           workspace.repoRootId === input.repoRootId && workspace.kind === "worktree"
         ) ?? null;
 
-      const homeDir = await getHomeDir();
+      if (!files) {
+        throw new Error("Local file access is not available.");
+      }
+      const homeDir = await files.getHomeDirectory();
       const userPreferences = useUserPreferencesStore.getState();
-      const authUser = useAuthStore.getState().user;
+      const hostUser = authUserRef.current;
+      const authUser: AuthUser | null = hostUser
+        ? {
+            id: hostUser.id,
+            email: hostUser.email ?? "",
+            display_name: hostUser.displayName ?? null,
+            github_login: hostUser.githubLogin ?? null,
+            avatar_url: hostUser.avatarUrl ?? null,
+          }
+        : null;
       const repoPreferences = useRepoPreferencesStore.getState();
 
       const existingWorktreeBasenames = sourceWorkspace
@@ -234,8 +283,8 @@ export function useWorkspaceActions() {
       });
     },
     createLocalWorkspace: async (sourceRoot: string) => {
-      const response = await createLocalWorkspaceMutation.mutateAsync(sourceRoot);
-      return response.workspace;
+      const { result } = await createLocalWorkspaceMutation.mutateAsync(sourceRoot);
+      return result.workspace;
     },
     isCreatingLocalWorkspace: createLocalWorkspaceMutation.isPending,
     createWorktreeWorkspace: (
@@ -244,7 +293,7 @@ export function useWorkspaceActions() {
     ) => createWorktreeMutation.mutateAsync({
       params,
       latencyFlowId: options?.latencyFlowId,
-    }),
+    }).then(({ result }) => result),
     isCreatingWorktreeWorkspace: createWorktreeMutation.isPending,
   };
 }

@@ -110,6 +110,10 @@ WORKSPACE_ACTION_BLOCK_KIND_EXTERNAL_BILLING_HOLD = "external_billing_hold"
 BILLING_DECISION_AUTHORIZE_START = "authorize_start"
 BILLING_DECISION_ENFORCE_ACTIVE_SPEND = "enforce_active_spend"
 BILLING_DECISION_OVERAGE_EXPORT = "overage_export"
+# Org budget-limit (billing_budget_limit) compute-cap pauses, distinct from the
+# grant/overage ``enforce_active_spend`` hold.
+BILLING_DECISION_USER_LIMIT_PAUSE = "user_limit_pause"
+BILLING_DECISION_ORG_LIMIT_PAUSE = "org_limit_pause"
 
 BILLING_USAGE_EXPORT_STATUS_PENDING = "pending"
 BILLING_USAGE_EXPORT_STATUS_OBSERVED = "observed"

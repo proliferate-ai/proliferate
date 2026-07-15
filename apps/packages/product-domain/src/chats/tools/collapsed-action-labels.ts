@@ -135,19 +135,28 @@ export function formatParsedCommandLabel(
     case "fetch":
       return `${active ? "Fetching" : "Fetched"} ${target ?? "resource"}`;
     case "command":
-      return formatRunningCommandLabel(command.command ?? "command");
+      return formatCommandExecutionLabel(command.command ?? "command", item.status);
     case "action":
     default:
-      return formatRunningCommandLabel(command.command ?? target ?? "action");
+      return formatCommandExecutionLabel(command.command ?? target ?? "action", item.status);
   }
 }
 
-export function formatRunningCommandLabel(command: string): string {
+export function formatCommandExecutionLabel(
+  command: string,
+  status: ToolCallItem["status"],
+): string {
   const normalizedCommand = command.trim();
-  if (!normalizedCommand || normalizedCommand === "command") {
-    return "Running command";
+  const genericCommand = !normalizedCommand
+    || normalizedCommand === "command"
+    || normalizedCommand === "action";
+  if (status === "failed") {
+    return genericCommand ? "Command failed" : `Command failed with ${normalizedCommand}`;
   }
-  return `Running: ${normalizedCommand}`;
+  if (status === "in_progress") {
+    return genericCommand ? "Running command" : `Running: ${normalizedCommand}`;
+  }
+  return genericCommand ? "Ran command" : `Ran ${normalizedCommand}`;
 }
 
 export function formatEditVerb(operation: FileChangeContentPart["operation"]): string {

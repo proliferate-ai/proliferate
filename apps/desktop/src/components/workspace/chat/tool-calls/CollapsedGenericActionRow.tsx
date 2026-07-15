@@ -3,7 +3,6 @@ import type {
   ToolCallContentPart,
   ToolCallItem,
 } from "@anyharness/sdk";
-import { Settings } from "@proliferate/ui/icons";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import { describeToolCallDisplay } from "@proliferate/product-domain/chats/tools/tool-call-display";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
@@ -12,6 +11,7 @@ import {
   ActionDisclosureRow,
   PlainActionRow,
 } from "./CollapsedActionRowPrimitives";
+import { CollapsedActionIcon } from "./CollapsedActionIcon";
 
 export function GenericActionRow({ item }: { item: ToolCallItem }) {
   const [expanded, setExpanded] = useState(false);
@@ -32,7 +32,7 @@ export function GenericActionRow({ item }: { item: ToolCallItem }) {
       <div>
         <ActionDisclosureRow
           label={display.hint ? `${label} ${display.hint}` : label}
-          icon={<Settings />}
+          icon={<CollapsedActionIcon kind="action" />}
           expanded={expanded}
           failed={item.status === "failed"}
           onToggle={() => setExpanded((value) => !value)}
@@ -59,6 +59,7 @@ export function GenericActionRow({ item }: { item: ToolCallItem }) {
 
   return (
     <PlainActionRow
+      icon={<CollapsedActionIcon kind="action" />}
       tone={item.status === "failed" ? "failed" : "normal"}
       label={display.hint ? `${label} ${display.hint}` : label}
     />

@@ -12,7 +12,7 @@ import { getCloudWorkspaceConnectionWithRetry } from "@/lib/access/cloud/workspa
 import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
+import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
 import {
   clearCloudDisplayNameBackfillSuppression,
   suppressCloudDisplayNameBackfill,
@@ -24,7 +24,11 @@ import {
 } from "@/lib/infra/measurement/debug-measurement";
 import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
-import { withFreshCloudSandboxGatewayAccessToken } from "@/lib/access/cloud/cloud-sandbox-gateway";
+import {
+  type CloudSandboxGatewayUrlSource,
+  withFreshCloudSandboxGatewayAccessToken,
+} from "@/lib/access/cloud/cloud-sandbox-gateway";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 
 interface UpdateWorkspaceDisplayNameInput {
   /** Logical workspace id. */
@@ -38,6 +42,8 @@ export function useWorkspaceDisplayNameActions() {
   const invalidateWorkspaceCollections = useWorkspaceCollectionsInvalidation(runtimeUrl);
   const { logicalWorkspaces } = useLogicalWorkspaces();
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
+  const cloudClient = useProductHost().cloud.client;
+  const telemetry = useProductTelemetry();
 
   const updateMutation = useMutation<void, Error, UpdateWorkspaceDisplayNameInput>({
     meta: {
@@ -62,6 +68,7 @@ export function useWorkspaceDisplayNameActions() {
             cloudWorkspaceId,
             operationId,
             selectedCloudRuntime,
+            cloudClient,
           });
         }
 
@@ -116,7 +123,7 @@ export function useWorkspaceDisplayNameActions() {
       void invalidateWorkspaceCollections();
     },
     onError: (error) => {
-      captureTelemetryException(error, {
+      telemetry.captureException(error, {
         tags: {
           action: "update_workspace_display_name",
           domain: "workspace",
@@ -136,13 +143,14 @@ async function clearCloudRuntimeWorkspaceDisplayName(input: {
   cloudWorkspaceId: string;
   operationId: MeasurementOperationId | null;
   selectedCloudRuntime: ReturnType<typeof useSelectedCloudRuntimeState>;
+  cloudClient: CloudSandboxGatewayUrlSource | null;
 }): Promise<void> {
   try {
     const connectionInfo =
       input.selectedCloudRuntime.cloudWorkspaceId === input.cloudWorkspaceId
         && input.selectedCloudRuntime.connectionInfo
         ? input.selectedCloudRuntime.connectionInfo
-        : await getCloudWorkspaceConnectionWithRetry(input.cloudWorkspaceId);
+        : await getCloudWorkspaceConnectionWithRetry(input.cloudWorkspaceId, input.cloudClient);
     if (!connectionInfo?.anyharnessWorkspaceId) {
       return;
     }

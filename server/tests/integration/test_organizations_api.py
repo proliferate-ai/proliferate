@@ -560,6 +560,45 @@ async def test_invitation_accept_adds_membership_when_user_already_has_team(
 
 
 @pytest.mark.asyncio
+async def test_list_invitations_requires_admin_role(
+    client: AsyncClient,
+) -> None:
+    owner = await _create_user_and_get_tokens(client, email="owner-invites@acme.dev")
+    member = await _create_user_and_get_tokens(client, email="member-invites@acme.dev")
+
+    await _create_organization_for_user(user_id=owner["user_id"])
+    organization_id = (await _default_organization(client, owner))["id"]
+
+    response = await client.post(
+        f"/v1/organizations/{organization_id}/invitations",
+        headers=_headers(owner),
+        json={"email": "member-invites@acme.dev", "role": "member"},
+    )
+    assert response.status_code == 201
+
+    response = await client.post(
+        "/v1/organizations/invitations/accept",
+        headers=_headers(member),
+        json={"organizationId": organization_id},
+    )
+    assert response.status_code == 200
+
+    response = await client.get(
+        f"/v1/organizations/{organization_id}/invitations",
+        headers=_headers(member),
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "organization_permission_denied"
+
+    response = await client.get(
+        f"/v1/organizations/{organization_id}/invitations",
+        headers=_headers(owner),
+    )
+    assert response.status_code == 200
+    assert response.json()["invitations"][0]["email"] == "member-invites@acme.dev"
+
+
+@pytest.mark.asyncio
 async def test_invitation_accept_requires_matching_authenticated_email(
     client: AsyncClient,
 ) -> None:

@@ -23,7 +23,10 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 
 // Facade for the composer model selector: derived catalog/readiness state plus
 // the workflow callbacks needed by selector items and launch controls.
-export function useChatModelSelectorState(options?: { suppressActiveSessionState?: boolean }) {
+export function useChatModelSelectorState(options?: {
+  suppressActiveSessionState?: boolean;
+  replacementSessionId?: string | null;
+}) {
   const suppressActiveSessionState = options?.suppressActiveSessionState ?? false;
   const connectionState = useHarnessConnectionStore((state) => state.connectionState);
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
@@ -58,7 +61,10 @@ export function useChatModelSelectorState(options?: { suppressActiveSessionState
     scopedActiveSessionId,
     suppressActiveSessionState,
   ]);
-  const { handleLaunchSelect } = useChatLaunchActions({ suppressActiveSessionState });
+  const { handleLaunchSelect } = useChatLaunchActions({
+    suppressActiveSessionState,
+    replacementSessionId: options?.replacementSessionId ?? null,
+  });
   const configuredLaunch = useConfiguredLaunchReadiness(scopedLaunchIdentity ?? launchIntentIdentity);
   const launchCatalog = useChatLaunchCatalog({
     activeSelection: scopedLaunchIdentity ?? launchIntentIdentity ?? configuredLaunch.selection,

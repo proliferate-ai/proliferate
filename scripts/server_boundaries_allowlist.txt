@@ -7,4 +7,5 @@
 # count, update this file in the same PR.
 
 DOMAIN_FORBIDDEN_IMPORT server/proliferate/server/cloud/agent_run_config/domain/resolve.py 1 transitional agent run config resolver imports product constants
+INTEGRATION_PRODUCT_IMPORT server/proliferate/integrations/sentry.py 1 sentry init reads server_version for release tagging; version helper pending move out of the product server layer
 PRODUCT_RAW_HTTP_IMPORT server/proliferate/server/cloud/gateway/proxy.py 1 managed sandbox gateway owns temporary HTTP/WS proxy transport until gateway access moves below product service layer

@@ -297,6 +297,88 @@
         }
       }
     },
+    "/v1/agents/{kind}/catalog/gateway-models": {
+      "get": {
+        "tags": [
+          "catalogs"
+        ],
+        "operationId": "get_gateway_models",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "Agent kind identifier",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resolved gateway model plan (probe or seed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayModelsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agents/{kind}/catalog/refresh-gateway": {
+      "post": {
+        "tags": [
+          "catalogs"
+        ],
+        "operationId": "refresh_gateway_models",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "Agent kind identifier",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Gateway re-probed and recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshGatewayResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No gateway selection for this harness",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Gateway probe failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/agents/{kind}/install": {
       "post": {
         "tags": [
@@ -2032,6 +2114,116 @@
         }
       }
     },
+    "/v1/sessions/{session_id}/goal": {
+      "put": {
+        "tags": [
+          "goals"
+        ],
+        "operationId": "set_session_goal",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSessionGoalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Goal set through the native mechanism and confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionGoalResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session cannot take goal mutations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "goals"
+        ],
+        "operationId": "clear_session_goal",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Goal cleared through the native mechanism",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClearSessionGoalResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session cannot take goal mutations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sessions/{session_id}/interactions/{request_id}/mcp-url/reveal": {
       "post": {
         "tags": [
@@ -2196,6 +2388,344 @@
         }
       }
     },
+    "/v1/sessions/{session_id}/loops": {
+      "get": {
+        "tags": [
+          "loops"
+        ],
+        "operationId": "list_session_loops",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The session's active loops",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionLoopsResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "loops"
+        ],
+        "operationId": "set_session_loop",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSessionLoopRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Loop armed (native cron set, or emulated loop scheduled)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionLoopResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session cannot take loop mutations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "loops"
+        ],
+        "operationId": "clear_session_loops",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "All loops cleared",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClearSessionLoopsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session cannot take loop mutations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{session_id}/loops/{loop_id}": {
+      "put": {
+        "tags": [
+          "loops"
+        ],
+        "operationId": "edit_session_loop",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "loop_id",
+            "in": "path",
+            "description": "Loop ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSessionLoopRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Loop edited (emulated loops only)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionLoopResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session or loop not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session cannot take loop mutations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "loops"
+        ],
+        "operationId": "clear_session_loop",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "loop_id",
+            "in": "path",
+            "description": "Loop ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The loop was cleared",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClearSessionLoopsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session cannot take loop mutations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{session_id}/pending-prompts/order": {
+      "put": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "reorder_pending_prompts",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderPendingPromptsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Pending prompts reordered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid pending prompt order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Pending prompt order changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sessions/{session_id}/pending-prompts/{seq}": {
       "delete": {
         "tags": [
@@ -2215,7 +2745,7 @@
           {
             "name": "seq",
             "in": "path",
-            "description": "Queue row sequence number",
+            "description": "Stable queue-entry sequence identity",
             "required": true,
             "schema": {
               "type": "integer",
@@ -2264,7 +2794,7 @@
           {
             "name": "seq",
             "in": "path",
-            "description": "Queue row sequence number",
+            "description": "Stable queue-entry sequence identity",
             "required": true,
             "schema": {
               "type": "integer",
@@ -2285,6 +2815,57 @@
         "responses": {
           "200": {
             "description": "Pending prompt updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session or pending prompt not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{session_id}/pending-prompts/{seq}/steer": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "steer_pending_prompt",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "seq",
+            "in": "path",
+            "description": "Stable queue-entry sequence identity",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pending prompt promoted to run next",
             "content": {
               "application/json": {
                 "schema": {
@@ -3020,6 +3601,176 @@
           },
           "404": {
             "description": "Terminal not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workflow-runs/{run_id}": {
+      "get": {
+        "tags": [
+          "workflow-runs"
+        ],
+        "operationId": "get_workflow_run",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "description": "Canonical UUID for the workflow run",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Durable run and step status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionedWorkflowRunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Non-canonical run ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Direct-attach token is outside its workspace scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "workflow-runs"
+        ],
+        "operationId": "put_workflow_run",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "description": "Canonical UUID for the workflow run",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionedPutWorkflowRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Exact replay of an identical invocation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionedWorkflowRunResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "New durable acceptance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionedWorkflowRunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid ID, definition, arguments, or rendered prompt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Direct-attach token is outside its workspace scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Same ID with different invocation, or workspace mutation blocked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Portable target cannot be resolved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Acceptance storage failure; no committed run or step",
             "content": {
               "application/json": {
                 "schema": {
@@ -4258,6 +5009,60 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/git/stage-patch": {
+      "post": {
+        "tags": [
+          "git"
+        ],
+        "operationId": "stage_patch",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StagePatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Patch staged"
+          },
+          "400": {
+            "description": "Patch could not be applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/git/status": {
       "get": {
         "tags": [
@@ -4329,6 +5134,60 @@
         "responses": {
           "200": {
             "description": "Files unstaged"
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/git/unstage-patch": {
+      "post": {
+        "tags": [
+          "git"
+        ],
+        "operationId": "unstage_patch",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnstagePatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Patch unstaged"
+          },
+          "400": {
+            "description": "Patch could not be removed from index",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           },
           "404": {
             "description": "Workspace not found",
@@ -5793,6 +6652,168 @@
   },
   "components": {
     "schemas": {
+      "ActivityProcess": {
+        "type": "object",
+        "description": "A harness-owned or client-executed process the agent is running in the\nbackground (Claude background bash, Cursor detached terminals, …).\nRead-only roster element — never externally settable.",
+        "required": [
+          "id",
+          "command",
+          "status",
+          "startedAt"
+        ],
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "cwd": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "endedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "feed": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FeedRef"
+              }
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "pid": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Cursor provides a real pid; Claude does not.",
+            "minimum": 0
+          },
+          "startedAt": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProcessStatus"
+          }
+        }
+      },
+      "ActivityProcessUpsertedPayload": {
+        "type": "object",
+        "required": [
+          "process"
+        ],
+        "properties": {
+          "process": {
+            "$ref": "#/components/schemas/ActivityProcess"
+          }
+        }
+      },
+      "ActivitySubagent": {
+        "type": "object",
+        "description": "A harness-native subagent (Claude Task agent, Codex collab child thread,\nCursor `cursor/task`). Read-only roster element; the ⑂ chip routes to the\nexisting delegated-work surfaces.",
+        "required": [
+          "id",
+          "background",
+          "status"
+        ],
+        "properties": {
+          "agentType": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "background": {
+            "type": "boolean"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "feed": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FeedRef"
+              }
+            ]
+          },
+          "id": {
+            "type": "string",
+            "description": "Claude `task_id` / Codex child `threadId` / Cursor `agentId`."
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/SubagentStatus"
+          },
+          "usage": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityUsage"
+              }
+            ]
+          }
+        }
+      },
+      "ActivitySubagentUpsertedPayload": {
+        "type": "object",
+        "required": [
+          "agent"
+        ],
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/ActivitySubagent"
+          }
+        }
+      },
+      "ActivityUsage": {
+        "type": "object",
+        "properties": {
+          "durationSeconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "tokensUsed": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "toolCalls": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        }
+      },
       "AdvanceReplaySessionResponse": {
         "type": "object",
         "required": [
@@ -5803,6 +6824,15 @@
             "type": "boolean"
           }
         }
+      },
+      "AgentCliAuthState": {
+        "type": "string",
+        "enum": [
+          "authenticated",
+          "expired",
+          "absent",
+          "unsupported"
+        ]
       },
       "AgentCredentialState": {
         "type": "string",
@@ -5842,14 +6872,62 @@
               "null"
             ]
           },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "displayName": {
             "type": "string"
+          },
+          "effort": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ModelEffort"
+              }
+            ]
+          },
+          "fastMode": {
+            "type": [
+              "boolean",
+              "null"
+            ]
           },
           "id": {
             "type": "string"
           },
           "isDefault": {
             "type": "boolean"
+          },
+          "modes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "The permission/agent modes the model supports (joined from the bundled\ncatalog's `controls.mode.values`); absent when the model has no mode\ncontrol (contract §5)."
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ModelCatalogStatus"
+              }
+            ]
           }
         }
       },
@@ -6143,6 +7221,16 @@
         "properties": {
           "agentProcess": {
             "$ref": "#/components/schemas/ArtifactStatus"
+          },
+          "cliAuthState": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentCliAuthState"
+              }
+            ]
           },
           "credentialState": {
             "$ref": "#/components/schemas/AgentCredentialState"
@@ -6448,6 +7536,31 @@
           },
           "wakeScheduled": {
             "type": "boolean"
+          }
+        }
+      },
+      "ClearSessionGoalResponse": {
+        "type": "object",
+        "required": [
+          "cleared"
+        ],
+        "properties": {
+          "cleared": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ClearSessionLoopsResponse": {
+        "type": "object",
+        "required": [
+          "cleared"
+        ],
+        "properties": {
+          "cleared": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many loops were cleared (0 when the target was already gone).",
+            "minimum": 0
           }
         }
       },
@@ -8240,6 +9353,26 @@
                 "type": "string"
               }
             }
+          },
+          {
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "network_connection"
+                ]
+              },
+              "provider": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
           }
         ]
       },
@@ -8300,6 +9433,29 @@
           },
           "requireCleanGitState": {
             "type": "boolean"
+          }
+        }
+      },
+      "FeedKind": {
+        "type": "string",
+        "enum": [
+          "terminal_bytes",
+          "transcript"
+        ]
+      },
+      "FeedRef": {
+        "type": "object",
+        "description": "An opaque handle to a roster element's live content stream. The UI never\nlearns the transport (`tail_file` / `acp_child_demux` / `http_sse`) — that\ndetail stays inside the runtime's `FeedBinding` table and is resolved\nlazily by the `FeedService` only while a panel watches it.",
+        "required": [
+          "feedId",
+          "kind"
+        ],
+        "properties": {
+          "feedId": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/FeedKind"
           }
         }
       },
@@ -8424,6 +9580,107 @@
         "enum": [
           "before_user_message"
         ]
+      },
+      "GatewayModelEntry": {
+        "type": "object",
+        "description": "One enriched gateway model row (spec §1). Catalog-known ids carry the joined\ndisplay metadata; probe-only ids (the proxy serves it but the bundled\ncatalog doesn't know it) emit just `{ id, provider? }`.",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Catalog description; absent when the catalog omits one or for probe-only ids."
+          },
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Catalog display name; absent for probe-only ids."
+          },
+          "effort": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ModelEffort",
+                "description": "The thinking/effort control (`values` + observed `default`); absent when\nthe model has no effort control or is probe-only."
+              }
+            ]
+          },
+          "fastMode": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the model carries a `fast_mode` control; absent for probe-only ids."
+          },
+          "id": {
+            "type": "string",
+            "description": "The gateway model id (always present — the render plane keys on this)."
+          },
+          "modes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "The permission/agent modes the model supports (`controls.mode.values`);\nabsent when the model has no mode control or is probe-only (contract §5)."
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Provider id from the id-prefix matcher (`claude-*`→anthropic, …); absent\nwhen no family matches."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ModelCatalogStatus",
+                "description": "Catalog lifecycle status; absent for probe-only ids."
+              }
+            ]
+          }
+        }
+      },
+      "GatewayModelsResponse": {
+        "type": "object",
+        "description": "Resolved gateway model plan for the local surface.",
+        "required": [
+          "models",
+          "source"
+        ],
+        "properties": {
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GatewayModelEntry"
+            },
+            "description": "The resolved, provider-filtered models — each id enriched with the\nbundled catalog row (or bare `{ id, provider? }` for probe-only ids)."
+          },
+          "probedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "When a probe supplied the list (RFC3339); absent for seed."
+          },
+          "source": {
+            "type": "string",
+            "description": "`\"seed\"` (no probe yet) or `\"probe\"` (a live probe supplied the list)."
+          }
+        }
       },
       "GetSessionLiveConfigResponse": {
         "type": "object",
@@ -8966,6 +10223,136 @@
             "type": "integer",
             "format": "int32",
             "minimum": 0
+          }
+        }
+      },
+      "Goal": {
+        "type": "object",
+        "description": "A session goal: a strict mirror of the native harness goal (Codex\n`ThreadGoal`, Claude `/goal`). Mutations flow only through native\nmechanisms; this record transitions only after the native notification\nround-trips.",
+        "required": [
+          "objective",
+          "status",
+          "native",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string"
+          },
+          "iterations": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Claude only."
+          },
+          "metReason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Claude evaluator reason; always absent for codex (terminal detail is\nin `native_status`)."
+          },
+          "native": {
+            "type": "boolean"
+          },
+          "nativeStatus": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Raw harness status string, verbatim (e.g. codex `budgetLimited`)."
+          },
+          "objective": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bumped on every mirrored edit."
+          },
+          "status": {
+            "$ref": "#/components/schemas/GoalStatus"
+          },
+          "timeUsedSeconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "tokenBudget": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "tokensUsed": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "GoalArmState": {
+        "type": "string",
+        "description": "The externally settable arm states (`_anyharness/goal/set` accepts only\nthese; the remaining statuses are native-origin transitions).",
+        "enum": [
+          "active",
+          "paused"
+        ]
+      },
+      "GoalClearedPayload": {
+        "type": "object",
+        "required": [
+          "goal"
+        ],
+        "properties": {
+          "goal": {
+            "$ref": "#/components/schemas/Goal"
+          }
+        }
+      },
+      "GoalMetPayload": {
+        "type": "object",
+        "required": [
+          "goal"
+        ],
+        "properties": {
+          "goal": {
+            "$ref": "#/components/schemas/Goal"
+          }
+        }
+      },
+      "GoalStatus": {
+        "type": "string",
+        "description": "Normalized goal status across harnesses (GoalPort wire contract v1).\nNon-terminal: `active | paused | blocked`; terminal: `met | failed |\ncleared`. Raw harness detail rides `native_status` verbatim.",
+        "enum": [
+          "active",
+          "paused",
+          "blocked",
+          "met",
+          "failed",
+          "cleared"
+        ]
+      },
+      "GoalUpdatedPayload": {
+        "type": "object",
+        "required": [
+          "goal"
+        ],
+        "properties": {
+          "goal": {
+            "$ref": "#/components/schemas/Goal"
           }
         }
       },
@@ -9554,6 +10941,130 @@
           },
           "program": {
             "type": "string"
+          }
+        }
+      },
+      "Loop": {
+        "type": "object",
+        "description": "A recurring in-session prompt on a schedule: a strict mirror of native\nharness state where it exists (Claude session crons) and a\nruntime-emulated equivalent where it doesn't (Codex — `native: false`).\nUnlike [`super::Goal`], **multiple loops per session are allowed**, keyed\nby `loop_id` (LoopPort wire contract v1).",
+        "required": [
+          "loopId",
+          "prompt",
+          "schedule",
+          "recurring",
+          "status",
+          "native",
+          "fireCount",
+          "updatedAtMs"
+        ],
+        "properties": {
+          "fireCount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastFiredAtMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "loopId": {
+            "type": "string"
+          },
+          "native": {
+            "type": "boolean"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "recurring": {
+            "type": "boolean"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/LoopSchedule"
+          },
+          "status": {
+            "$ref": "#/components/schemas/LoopStatus"
+          },
+          "updatedAtMs": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "LoopFiredPayload": {
+        "type": "object",
+        "required": [
+          "loop",
+          "firedAtMs"
+        ],
+        "properties": {
+          "firedAtMs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "loop": {
+            "$ref": "#/components/schemas/Loop"
+          },
+          "turnId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "LoopRemovedPayload": {
+        "type": "object",
+        "required": [
+          "loopId"
+        ],
+        "properties": {
+          "loopId": {
+            "type": "string"
+          }
+        }
+      },
+      "LoopSchedule": {
+        "type": "object",
+        "required": [
+          "kind",
+          "expr"
+        ],
+        "properties": {
+          "expr": {
+            "type": "string",
+            "description": "`\"5m\"` sugar or a raw cron expression, per `kind`."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/LoopScheduleKind"
+          }
+        }
+      },
+      "LoopScheduleKind": {
+        "type": "string",
+        "enum": [
+          "interval",
+          "cron"
+        ]
+      },
+      "LoopStatus": {
+        "type": "string",
+        "description": "Normalized loop status across harnesses (LoopPort wire contract v1).",
+        "enum": [
+          "active",
+          "cleared"
+        ]
+      },
+      "LoopUpsertedPayload": {
+        "type": "object",
+        "required": [
+          "loop"
+        ],
+        "properties": {
+          "loop": {
+            "$ref": "#/components/schemas/Loop"
           }
         }
       },
@@ -10575,6 +12086,27 @@
           "hidden"
         ]
       },
+      "ModelEffort": {
+        "type": "object",
+        "description": "The thinking/effort control surfaced per model: the values the model\nsupports and the observed default (the runtime joins these from the\nbundled catalog's `controls.effort.{values, observedValue}`).",
+        "required": [
+          "values"
+        ],
+        "properties": {
+          "default": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "NormalizedSessionControl": {
         "type": "object",
         "description": "A product-normalized live session control derived from raw ACP config options.\n\nThis is the product semantics layer used by clients to render consistent\ncontrols such as model, mode, reasoning, effort, and fast mode across\ndifferent harnesses.",
@@ -11052,7 +12584,8 @@
           },
           "seq": {
             "type": "integer",
-            "format": "int64"
+            "format": "int64",
+            "description": "Immutable runtime-owned queue-entry identity. This is monotonic within\na session and is independent from this summary's position in the array."
           },
           "text": {
             "type": "string"
@@ -11094,6 +12627,21 @@
           },
           "text": {
             "type": "string"
+          }
+        }
+      },
+      "PendingPromptsReorderedPayload": {
+        "type": "object",
+        "required": [
+          "pendingPrompts"
+        ],
+        "properties": {
+          "pendingPrompts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PendingPromptSummary"
+            },
+            "description": "Complete authoritative queue in committed order. Entry `seq` values\nretain their immutable identities across the reorder."
           }
         }
       },
@@ -11294,6 +12842,16 @@
               "null"
             ]
           },
+          "requiredContexts": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "RFC 7807 extension member: the auth-context ids that would unlock a\ngated selection (the model's `availability.anyOf`). Only set on\n`SESSION_MODEL_GATED`; absent on every other error, so unrelated responses\nstay byte-identical."
+          },
           "status": {
             "type": "integer",
             "format": "int32",
@@ -11306,6 +12864,45 @@
             "type": "string"
           }
         }
+      },
+      "ProcessStatus": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "running"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "exitCode": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "exited"
+                ]
+              }
+            }
+          }
+        ]
       },
       "PromptAttachmentSource": {
         "type": "string",
@@ -12008,6 +13605,69 @@
           }
         }
       },
+      "PutWorkflowRunRequest": {
+        "type": "object",
+        "description": "`PUT /v1/workflow-runs/{runId}` request body. The `runId` lives in the path\nonly and never appears in the body.",
+        "required": [
+          "schemaVersion",
+          "workspaceId",
+          "definition"
+        ],
+        "properties": {
+          "arguments": {
+            "type": "object",
+            "description": "Concrete scalar argument values keyed by declared input name.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/WorkflowRunArgumentValue"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "definition": {
+            "$ref": "#/components/schemas/WorkflowRunDefinition"
+          },
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PutWorkflowRunRequestV2": {
+        "type": "object",
+        "description": "Schema-v2 portable invocation. Model, mode, and optional effort are target\nintent until AnyHarness resolves and persists a concrete plan.",
+        "required": [
+          "schemaVersion",
+          "workspaceId",
+          "definition"
+        ],
+        "properties": {
+          "arguments": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/WorkflowRunArgumentValue"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "definition": {
+            "$ref": "#/components/schemas/WorkflowRunDefinitionV2"
+          },
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "RawSessionConfigOption": {
         "type": "object",
         "description": "A raw ACP session configuration option as exposed by the active session.\n\nThis is the transport-fidelity layer. It should match the live ACP state as\nclosely as possible without applying product-specific interpretation.",
@@ -12247,6 +13907,27 @@
           "failed"
         ]
       },
+      "RefreshGatewayResponse": {
+        "type": "object",
+        "description": "Result of a manual gateway refresh.",
+        "required": [
+          "models",
+          "probedAt"
+        ],
+        "properties": {
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The freshly probed model ids (unfiltered — exactly what the gateway\nreturned; the resolver applies provider filtering when building plans)."
+          },
+          "probedAt": {
+            "type": "string",
+            "description": "The probe timestamp (RFC3339)."
+          }
+        }
+      },
       "RenameWorkspaceFileEntryRequest": {
         "type": "object",
         "required": [
@@ -12274,6 +13955,31 @@
           },
           "oldPath": {
             "type": "string"
+          }
+        }
+      },
+      "ReorderPendingPromptsRequest": {
+        "type": "object",
+        "required": [
+          "expectedSeqs",
+          "desiredSeqs"
+        ],
+        "properties": {
+          "desiredSeqs": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "Exact permutation to commit when `expected_seqs` still matches."
+          },
+          "expectedSeqs": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "Queue order the caller last observed. The mutation is rejected with a\nconflict if this no longer matches durable state."
           }
         }
       },
@@ -13462,6 +15168,28 @@
           "actionCapabilities": {
             "$ref": "#/components/schemas/SessionActionCapabilities"
           },
+          "activeGoal": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Goal",
+                "description": "Deprecated in favor of `activity.goal` — kept for existing SDK\nconsumers; every write still moves this field too."
+              }
+            ]
+          },
+          "activity": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionActivity",
+                "description": "`SessionActivity` (turn/goal/loops/processes/agents) — the\nsession-activity-architecture aggregate. `None` when the runtime has\nnot yet assembled it for this read path."
+              }
+            ]
+          },
           "agentKind": {
             "type": "string"
           },
@@ -13587,8 +15315,58 @@
           "fork": {
             "type": "boolean"
           },
+          "loopsNative": {
+            "type": "boolean",
+            "description": "Whether loops ride native harness state (Claude session crons) or are\nruntime-emulated (Codex `LoopSchedulerExtension`). Meaningless when\n`supports_loops` is `false`."
+          },
+          "supportsGoals": {
+            "type": "boolean"
+          },
+          "supportsLoops": {
+            "type": "boolean"
+          },
           "targetedFork": {
             "type": "boolean"
+          }
+        }
+      },
+      "SessionActivity": {
+        "type": "object",
+        "description": "One normalized, strictly-typed, per-session aggregate: the single answer\nto \"what is this agent doing right now\" (session-activity-architecture,\nlocked 2026-07-02). Two element classes: mirrors with write paths\n(`goal`, `loops`) and read-only rosters (`processes`, `agents`), each\nroster element carrying an opaque [`FeedRef`] for its live content\nstream — the UI never learns the transport.",
+        "required": [
+          "turn"
+        ],
+        "properties": {
+          "agents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivitySubagent"
+            }
+          },
+          "goal": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Goal"
+              }
+            ]
+          },
+          "loops": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Loop"
+            }
+          },
+          "processes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityProcess"
+            }
+          },
+          "turn": {
+            "$ref": "#/components/schemas/TurnState"
           }
         }
       },
@@ -13958,6 +15736,174 @@
           {
             "allOf": [
               {
+                "$ref": "#/components/schemas/GoalUpdatedPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "goal_updated"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GoalMetPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "goal_met"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GoalClearedPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "goal_cleared"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoopUpsertedPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "loop_upserted"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoopRemovedPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "loop_removed"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoopFiredPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "loop_fired"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ActivityProcessUpsertedPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "process_upserted"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ActivitySubagentUpsertedPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "subagent_upserted"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
                 "$ref": "#/components/schemas/PendingPromptAddedPayload"
               },
               {
@@ -14012,6 +15958,27 @@
                     "type": "string",
                     "enum": [
                       "pending_prompt_removed"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PendingPromptsReorderedPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "pending_prompts_reordered"
                     ]
                   }
                 }
@@ -14152,6 +16119,17 @@
           },
           "updatedAt": {
             "type": "string"
+          }
+        }
+      },
+      "SessionGoalResponse": {
+        "type": "object",
+        "required": [
+          "goal"
+        ],
+        "properties": {
+          "goal": {
+            "$ref": "#/components/schemas/Goal"
           }
         }
       },
@@ -14300,6 +16278,31 @@
           "updatedAt": {
             "type": "string",
             "description": "Timestamp when this snapshot was last updated."
+          }
+        }
+      },
+      "SessionLoopResponse": {
+        "type": "object",
+        "required": [
+          "loop"
+        ],
+        "properties": {
+          "loop": {
+            "$ref": "#/components/schemas/Loop"
+          }
+        }
+      },
+      "SessionLoopsResponse": {
+        "type": "object",
+        "required": [
+          "loops"
+        ],
+        "properties": {
+          "loops": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Loop"
+            }
           }
         }
       },
@@ -14677,6 +16680,63 @@
           }
         }
       },
+      "SetSessionGoalRequest": {
+        "type": "object",
+        "properties": {
+          "objective": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Omitted = status/budget-only patch (codex semantics)."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GoalArmState"
+              }
+            ]
+          },
+          "tokenBudget": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "SetSessionLoopRequest": {
+        "type": "object",
+        "description": "Arm-or-edit a loop through `PUT /v1/sessions/{id}/loops` (create) or\n`PUT /v1/sessions/{id}/loops/{loop_id}` (edit). On native harnesses (Claude\nsession crons) this drives `_anyharness/loop/set`; on emulation-eligible\nharnesses (Codex) it arms a runtime-owned loop (`native: false`) in the\n[`crate::v1`] loop scheduler.",
+        "required": [
+          "prompt",
+          "schedule"
+        ],
+        "properties": {
+          "maxFires": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Optional cap on total fires (emulated loops only). `None` = uncapped."
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "recurring": {
+            "type": "boolean",
+            "description": "Fire indefinitely (default) or once. Native crons are recurring."
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/LoopSchedule"
+          }
+        }
+      },
       "SetupHint": {
         "type": "object",
         "required": [
@@ -14753,6 +16813,18 @@
           "succeeded",
           "failed"
         ]
+      },
+      "StagePatchRequest": {
+        "type": "object",
+        "required": [
+          "patch"
+        ],
+        "properties": {
+          "patch": {
+            "type": "string",
+            "description": "A valid unified diff patch (file headers + hunk) to apply to the index."
+          }
+        }
       },
       "StagePathsRequest": {
         "type": "object",
@@ -15036,6 +17108,58 @@
             "format": "int64"
           }
         }
+      },
+      "SubagentStatus": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "running"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "completed"
+                ]
+              },
+              "summary": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "failed"
+                ]
+              }
+            }
+          }
+        ]
       },
       "SubagentTurnCompletedPayload": {
         "type": "object",
@@ -15467,6 +17591,58 @@
       "TurnStartedEvent": {
         "type": "object"
       },
+      "TurnState": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "turnId",
+              "startedAt",
+              "status"
+            ],
+            "properties": {
+              "startedAt": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "running"
+                ]
+              },
+              "turnId": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "idle"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "UnstagePatchRequest": {
+        "type": "object",
+        "required": [
+          "patch"
+        ],
+        "properties": {
+          "patch": {
+            "type": "string",
+            "description": "A valid unified diff patch (file headers + hunk) to reverse-apply from the index."
+          }
+        }
+      },
       "UnstagePathsRequest": {
         "type": "object",
         "required": [
@@ -15644,6 +17820,652 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "VersionedPutWorkflowRunRequest": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/PutWorkflowRunRequest"
+          },
+          {
+            "$ref": "#/components/schemas/PutWorkflowRunRequestV2"
+          }
+        ],
+        "description": "Operation-level PUT union. API decoding first inspects the required integer\n`schemaVersion`, then strictly decodes the selected member."
+      },
+      "VersionedWorkflowRunResponse": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/WorkflowRunResponse"
+          },
+          {
+            "$ref": "#/components/schemas/WorkflowRunResponseV2"
+          }
+        ]
+      },
+      "WorkflowRun": {
+        "type": "object",
+        "description": "The durable run view.",
+        "required": [
+          "id",
+          "schemaVersion",
+          "definition",
+          "arguments",
+          "status",
+          "workspaceId",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "arguments": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/WorkflowRunArgumentValue"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/WorkflowRunDefinition"
+          },
+          "failureCode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkflowRunFailureCode"
+              }
+            ]
+          },
+          "finishedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sessionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "startedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkflowRunStatus"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkflowRunArgumentValue": {
+        "oneOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "string"
+          }
+        ]
+      },
+      "WorkflowRunDefinition": {
+        "type": "object",
+        "description": "The frozen executable definition: inputs plus exactly one stage.",
+        "required": [
+          "stages"
+        ],
+        "properties": {
+          "inputs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowRunInput"
+            }
+          },
+          "stages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowRunStage"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "WorkflowRunDefinitionV2": {
+        "type": "object",
+        "required": [
+          "stages"
+        ],
+        "properties": {
+          "inputs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowRunInput"
+            }
+          },
+          "stages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowRunStageV2"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "WorkflowRunFailureCode": {
+        "type": "string",
+        "description": "The stable machine failure result on failed runs and steps (spec §6.1).",
+        "enum": [
+          "workspace_unavailable",
+          "session_create_failed",
+          "session_start_failed",
+          "prompt_dispatch_failed",
+          "session_turn_failed",
+          "session_turn_cancelled",
+          "runtime_restarted"
+        ]
+      },
+      "WorkflowRunFailureCodeV2": {
+        "type": "string",
+        "description": "V2 extends, but does not widen, the stable V1 failure-code component.",
+        "enum": [
+          "workspace_unavailable",
+          "session_create_failed",
+          "session_start_failed",
+          "prompt_dispatch_failed",
+          "session_turn_failed",
+          "session_turn_cancelled",
+          "runtime_restarted",
+          "session_config_apply_failed"
+        ]
+      },
+      "WorkflowRunHarnessConfig": {
+        "type": "object",
+        "description": "Harness selection for the stage's session.",
+        "required": [
+          "agentKind",
+          "modelId",
+          "modeId"
+        ],
+        "properties": {
+          "agentKind": {
+            "type": "string"
+          },
+          "modeId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Required key; `null` requests existing `SessionRuntime` mode behavior."
+          },
+          "modelId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Required key; `null` requests the target-default model. The\n`schema(required)` override keeps the generated OpenAPI/SDK in sync\nwith the wire rule (present key, nullable value) that `nullable_string`\nenforces at deserialization."
+          }
+        },
+        "additionalProperties": false
+      },
+      "WorkflowRunHarnessConfigV2": {
+        "type": "object",
+        "required": [
+          "agentKind",
+          "modelSelection",
+          "permissionPolicy"
+        ],
+        "properties": {
+          "agentKind": {
+            "type": "string"
+          },
+          "effort": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "modelSelection": {
+            "$ref": "#/components/schemas/WorkflowRunModelSelection"
+          },
+          "permissionPolicy": {
+            "$ref": "#/components/schemas/WorkflowRunPermissionPolicy"
+          }
+        },
+        "additionalProperties": false
+      },
+      "WorkflowRunInput": {
+        "type": "object",
+        "description": "A declared scalar input.",
+        "required": [
+          "name",
+          "type",
+          "required"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "type": {
+            "$ref": "#/components/schemas/WorkflowRunInputType"
+          }
+        },
+        "additionalProperties": false
+      },
+      "WorkflowRunInputType": {
+        "type": "string",
+        "description": "The only permitted input types (scalars). Defaults, arrays, objects,\nchoices, and secret types are rejected by omission from this enum.",
+        "enum": [
+          "string",
+          "number",
+          "boolean"
+        ]
+      },
+      "WorkflowRunModelSelection": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "targetDefault"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "modelId",
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "exact"
+                ]
+              },
+              "modelId": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      },
+      "WorkflowRunPermissionPolicy": {
+        "type": "string",
+        "enum": [
+          "workflowDefault"
+        ]
+      },
+      "WorkflowRunPromptStep": {
+        "type": "object",
+        "description": "The single `agent.prompt` step.",
+        "required": [
+          "kind",
+          "prompt"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "WorkflowRunResolvedHarnessV2": {
+        "type": "object",
+        "required": [
+          "agentKind",
+          "modelId",
+          "modeId",
+          "effort"
+        ],
+        "properties": {
+          "agentKind": {
+            "type": "string"
+          },
+          "effort": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "modeId": {
+            "type": "string"
+          },
+          "modelId": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkflowRunResponse": {
+        "type": "object",
+        "description": "PUT/GET response envelope.",
+        "required": [
+          "run",
+          "steps"
+        ],
+        "properties": {
+          "run": {
+            "$ref": "#/components/schemas/WorkflowRun"
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowRunStep"
+            }
+          }
+        }
+      },
+      "WorkflowRunResponseV2": {
+        "type": "object",
+        "required": [
+          "run",
+          "steps",
+          "resolvedHarness"
+        ],
+        "properties": {
+          "resolvedHarness": {
+            "$ref": "#/components/schemas/WorkflowRunResolvedHarnessV2"
+          },
+          "run": {
+            "$ref": "#/components/schemas/WorkflowRunV2"
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowRunStepV2"
+            }
+          }
+        }
+      },
+      "WorkflowRunStage": {
+        "type": "object",
+        "description": "Exactly one stage: a harness configuration plus exactly one prompt step.",
+        "required": [
+          "harnessConfig",
+          "steps"
+        ],
+        "properties": {
+          "harnessConfig": {
+            "$ref": "#/components/schemas/WorkflowRunHarnessConfig"
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowRunPromptStep"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "WorkflowRunStageV2": {
+        "type": "object",
+        "required": [
+          "harnessConfig",
+          "steps"
+        ],
+        "properties": {
+          "harnessConfig": {
+            "$ref": "#/components/schemas/WorkflowRunHarnessConfigV2"
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowRunPromptStep"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "WorkflowRunStatus": {
+        "type": "string",
+        "description": "Durable run status.",
+        "enum": [
+          "accepted",
+          "running",
+          "completed",
+          "failed"
+        ]
+      },
+      "WorkflowRunStep": {
+        "type": "object",
+        "description": "The durable materialized step view.",
+        "required": [
+          "stageIndex",
+          "stepIndex",
+          "status",
+          "promptId",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string"
+          },
+          "failureCode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkflowRunFailureCode"
+              }
+            ]
+          },
+          "finishedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "promptId": {
+            "type": "string"
+          },
+          "stageIndex": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "startedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkflowRunStepStatus"
+          },
+          "stepIndex": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "turnId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkflowRunStepStatus": {
+        "type": "string",
+        "description": "Durable step status.",
+        "enum": [
+          "pending",
+          "running",
+          "completed",
+          "failed"
+        ]
+      },
+      "WorkflowRunStepV2": {
+        "type": "object",
+        "required": [
+          "stageIndex",
+          "stepIndex",
+          "status",
+          "promptId",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string"
+          },
+          "failureCode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkflowRunFailureCodeV2"
+              }
+            ]
+          },
+          "finishedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "promptId": {
+            "type": "string"
+          },
+          "stageIndex": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "startedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkflowRunStepStatus"
+          },
+          "stepIndex": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "turnId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkflowRunV2": {
+        "type": "object",
+        "required": [
+          "id",
+          "schemaVersion",
+          "definition",
+          "arguments",
+          "status",
+          "workspaceId",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "arguments": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/WorkflowRunArgumentValue"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/WorkflowRunDefinitionV2"
+          },
+          "failureCode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkflowRunFailureCodeV2"
+              }
+            ]
+          },
+          "finishedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sessionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "startedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkflowRunStatus"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
           }
         }
       },

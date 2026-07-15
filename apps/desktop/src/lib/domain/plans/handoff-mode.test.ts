@@ -11,7 +11,6 @@ describe("plan handoff mode helpers", () => {
   it("returns the vetted handoff defaults for supported agent families", () => {
     expect(resolvePlanHandoffModeId("claude")).toBe("bypassPermissions");
     expect(resolvePlanHandoffModeId("codex")).toBe("full-access");
-    expect(resolvePlanHandoffModeId("gemini")).toBe("yolo");
   });
 
   it("falls back to the first non-plan mode when the static default is unavailable", () => {
@@ -28,11 +27,6 @@ describe("plan handoff mode helpers", () => {
       "auto",
       "dontAsk",
       "bypassPermissions",
-    ]);
-    expect(listPlanHandoffModeOptions("gemini").map((option) => option.value)).toEqual([
-      "default",
-      "autoEdit",
-      "yolo",
     ]);
   });
 

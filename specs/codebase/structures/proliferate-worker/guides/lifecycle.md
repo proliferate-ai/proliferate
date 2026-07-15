@@ -1,84 +1,92 @@
-# Worker Lifecycle
+# Worker Lifecycle And Convergence
 
 Status: authoritative for
-`anyharness/crates/proliferate-worker/src/lifecycle/**`.
+`anyharness/crates/proliferate-worker/src/lifecycle/**`, `catalog_sync.rs`,
+`self_update.rs`, and `anyharness_update.rs`.
 
-`lifecycle/` owns the heartbeat (liveness) and the self-update **request**. The
-worker can only *request* an update; the supervisor *applies* it. The two
-couple through exactly one thing — an atomic file mailbox — so the request
-survives a restart of either process.
-
-```text
-versions/status ── heartbeat ──► Cloud ── response carries DESIRED versions ──►
-  compare desired vs installed ── if stale ──► write desired-update.json (mailbox)
-                                                        │
-                                              SUPERVISOR reads + applies
-```
-
-## Target Shape
+The Worker heartbeat is both its liveness signal and the carrier for desired
+catalog and binary versions.
 
 ```text
-lifecycle/
-  mod.rs
-  heartbeat.rs
-  self_update.rs
-  supervisor_mailbox.rs
+POST /v1/cloud/worker/heartbeat
+  request: status=online, Worker version, current AnyHarness version
+  response: acknowledgement + optional desiredVersions
 ```
 
-## What Goes Where
+The interval is `heartbeat_interval_seconds` from local configuration with a
+10-second minimum. The enrollment response also includes an interval, but the
+current Worker does not apply that response value.
 
-| File | Owns | Must Not Own |
-| --- | --- | --- |
-| `mod.rs` | Facade exposing the heartbeat main-loop step and test-facing types. | Heartbeat payload internals or mailbox format. |
-| `heartbeat.rs` | Heartbeat request construction (versions, status), the `stale/3` cadence, and response interpretation. | Inventory collection; binary management. |
-| `self_update.rs` | Compare Cloud desired versions vs installed; decide which components are stale. | Downloading, swapping, restarting, or rolling back binaries. |
-| `supervisor_mailbox.rs` | Write/clear the `desired-update.json` mailbox atomically and idempotently. | Reading or acting on the mailbox (that is the supervisor's job). |
+Cloud derives liveness from an `online` row with a recent `last_seen_at`. The
+Worker reports `online`; current application code does not transition the row
+to the schema's `offline` status.
 
-## Heartbeat
+## Catalog Convergence
 
-The heartbeat is the worker's liveness ping and the carrier for the self-update
-check — there is no separate version poll.
+When `desiredVersions.catalogVersion` differs from AnyHarness's active
+catalog version:
 
 ```text
-every stale/3 (≥ 10s):
-  POST /heartbeat { versions, status }
-    -> response carries DESIRED versions
-    -> self_update: compare desired vs installed
-    -> if any component is stale: write the mailbox (atomic, idempotent)
+GET AnyHarness /v1/catalogs/agents/version
+  -> GET Cloud /v1/catalogs/agents (ETag-aware)
+  -> PUT the catalog bytes to AnyHarness /v1/catalogs/agents
 ```
 
-Cadence lives here as the worker's main loop; `control` and `tail` are their own
-spawned tasks.
+Catalog state (the last ETag) is in memory. A 404 from the runtime version
+endpoint is treated as an older runtime without catalog-sync support. Other
+failures are logged and retried on a later heartbeat.
 
-## Self-Update Boundary
+## Worker Binary Convergence
 
-Worker may:
+`self_update_enabled` defaults to false. When enabled and the desired Worker
+version differs:
 
-- read Cloud desired versions from the heartbeat response
-- compare desired versions with installed versions
-- write a narrow supervisor update-request mailbox (only the stale components)
-- report update request/status state back to Cloud
+```text
+download public Worker artifact through Cloud redirect
+  -> download sibling .sha256 from the resolved artifact directory
+  -> verify checksum
+  -> stage beside current executable
+  -> preflight --version against the desired version
+  -> atomically rename over the current executable
+  -> exec the new binary with the current arguments
+```
 
-Worker must not:
+The Worker update does not keep a `.prev` health rollback. Failures before the
+rename leave the current binary in place. A version marker carried across
+`exec` prevents repeated swaps for the same pin if the replacement still does
+not report that version.
 
-- download binaries
-- replace binaries
-- restart processes
-- roll back versions
-- decide supervisor lifecycle
+## AnyHarness Binary Convergence
 
-## The Mailbox
+`anyharness_update_enabled` also defaults to false and has independent config
+for the fixed binary, launcher, and working-directory paths. When enabled and
+the desired AnyHarness version differs:
 
-`desired-update.json` is a file, not IPC, on purpose: it survives a restart of
-either the worker or the supervisor. Writes are atomic (temp → fsync → rename)
-and idempotent — writing the same desired state twice is a no-op. The mailbox
-lists only stale components; the supervisor applies them per-component.
+```text
+download + checksum + preflight candidate
+  -> stop only the AnyHarness process identified by the fixed binary path
+  -> move current binary to .prev and candidate to the fixed path
+  -> relaunch through the existing launcher
+  -> require /health to report the desired version
+  -> on failure, restore .prev and relaunch
+```
+
+The store records the last health-verified version. After a relaunch or health
+gate failure it also records the failed pin; that recorded pin is not retried
+until a different desired version supersedes it. Earlier staging, preflight,
+stop, or swap failures are retried on a later heartbeat.
+
+## Launch Policy
+
+Both update gates default to disabled. Desktop owns its bundled binaries and
+leaves them disabled. The current cloud-sandbox sidecar configuration enables
+both. There is no Worker-to-Supervisor update mailbox in this implementation.
 
 ## Hard Rules
 
-- The heartbeat main loop stays boring: build payload, POST, route the
-  self-update check, sleep.
-- The worker requests updates; it never applies them. Binary download,
-  replacement, restart, and rollback belong to the supervisor.
-- Mailbox writes are atomic and idempotent.
-- Identity is ephemeral — the heartbeat reports liveness, not a slot or fence.
+- Treat every convergence action as non-fatal to the heartbeat loop.
+- Verify the artifact and exact desired version before replacing a binary.
+- Keep Worker and AnyHarness update gates independent.
+- Preserve `.prev` rollback for AnyHarness; do not claim equivalent rollback
+  for the Worker's own `exec` update.
+- Do not add Supervisor lifecycle behavior to this crate.

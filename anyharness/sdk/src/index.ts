@@ -43,7 +43,8 @@ export type {
 } from "./types/replay.js";
 
 export type {
-  AgentAuthStateSelection,
+  AgentAuthStateSource,
+  AgentAuthStateHarness,
   AgentAuthStateDocument,
   ApplyAgentAuthStateResponse,
 } from "./types/agent-auth.js";
@@ -51,6 +52,7 @@ export type {
 export type {
   AgentInstallState,
   AgentCredentialState,
+  AgentCliAuthState,
   AgentReadinessState,
   AgentLaunchOptionsResponse,
   ArtifactStatus,
@@ -68,6 +70,14 @@ export type {
   ReconcileAgentResult,
   ReconcileAgentsResponse,
 } from "./types/agents.js";
+
+export type {
+  GatewayModelEntry,
+  GatewayModelSource,
+  GatewayModelsResponse,
+  ModelEffort,
+  RefreshGatewayModelsResponse,
+} from "./types/agent-gateway-catalog.js";
 
 export type {
   RepoRootKind,
@@ -217,6 +227,7 @@ export type {
   ForkChildStartStatus,
   PendingPromptSummary,
   EditPendingPromptRequest,
+  ReorderPendingPromptsRequest,
   SessionSubagentsResponse,
   ScheduleSubagentWakeRequest,
   ScheduleSubagentWakeResponse,
@@ -227,6 +238,29 @@ export type {
   ListSessionEventsOptions,
   McpElicitationUrlRevealResponse,
   ResolveInteractionRequest,
+  Goal,
+  GoalStatus,
+  GoalArmState,
+  SetSessionGoalRequest,
+  SessionGoalResponse,
+  ClearSessionGoalResponse,
+  Loop,
+  LoopSchedule,
+  LoopScheduleKind,
+  LoopStatus,
+  SetSessionLoopRequest,
+  SessionLoopResponse,
+  SessionLoopsResponse,
+  ClearSessionLoopsResponse,
+  SessionActivity,
+  TurnState,
+  ActivityProcess,
+  ProcessStatus,
+  ActivitySubagent,
+  SubagentStatus,
+  ActivityUsage,
+  FeedRef,
+  FeedKind,
 } from "./types/sessions.js";
 
 export type {
@@ -310,9 +344,18 @@ export type {
   SessionStateUpdateEvent,
   SessionInfoUpdateEvent,
   UsageUpdateEvent,
+  GoalUpdatedEvent,
+  GoalMetEvent,
+  GoalClearedEvent,
+  LoopUpsertedEvent,
+  LoopRemovedEvent,
+  LoopFiredEvent,
+  ActivityProcessUpsertedEvent,
+  ActivitySubagentUpsertedEvent,
   PendingPromptAddedEvent,
   PendingPromptUpdatedEvent,
   PendingPromptRemovedEvent,
+  PendingPromptsReorderedEvent,
   PendingPromptRemovalReason,
   InteractionKind,
   InteractionSource,
@@ -432,6 +475,8 @@ export type {
   RenameBranchResponse,
   StagePathsRequest,
   UnstagePathsRequest,
+  StagePatchRequest,
+  UnstagePatchRequest,
   GitRevertPatchEntry,
   GitRevertPatchesRequest,
   GitRevertPatchesResponse,
@@ -491,3 +536,13 @@ export type {
 
 export { streamSession } from "./streams/sessions.js";
 export type { SessionStreamOptions, SessionStreamHandle } from "./streams/sessions.js";
+
+export { connectFeed } from "./streams/feeds.js";
+export type {
+  FeedStreamOptions,
+  FeedStreamHandle,
+  FeedFrame,
+  FeedBytesFrame,
+  FeedTextFrame,
+  FeedWebSocketAuthTransport,
+} from "./streams/feeds.js";

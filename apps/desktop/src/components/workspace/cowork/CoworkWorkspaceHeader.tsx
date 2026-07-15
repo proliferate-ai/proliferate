@@ -1,5 +1,5 @@
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { FileText, SplitPanel } from "@proliferate/ui/icons";
+import { FileText, SplitPanelLeft } from "@proliferate/ui/icons";
 
 interface CoworkWorkspaceHeaderProps {
   title: string;
@@ -30,7 +30,7 @@ export function CoworkWorkspaceHeader({
             title="Show sidebar"
             className="rounded-md"
           >
-            <SplitPanel className="size-4" />
+            <SplitPanelLeft className="size-4" />
           </IconButton>
         )}
         <div className="min-w-0">

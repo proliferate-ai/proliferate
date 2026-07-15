@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useComputeTargetAppearancePreferences } from "@/hooks/settings/workflows/use-ssh-direct-target-profile";
+import { useComputeTargetAppearancePreferences } from "@/hooks/compute/workflows/use-compute-target-appearance-preferences";
 import {
   buildComputeTargetAppearanceById,
   buildSshTargetOptions,

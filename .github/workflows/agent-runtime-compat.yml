@@ -21,11 +21,8 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
       ANYHARNESS_TEST_CLAUDE_PORTABLE_AUTH_JSON: ${{ secrets.ANYHARNESS_TEST_CLAUDE_PORTABLE_AUTH_JSON }}
       ANYHARNESS_TEST_CODEX_AUTH_JSON: ${{ secrets.ANYHARNESS_TEST_CODEX_AUTH_JSON }}
-      GEMINI_OAUTH_CREDS_JSON: ${{ secrets.GEMINI_OAUTH_CREDS_JSON }}
       GITHUB_TOKEN: ${{ secrets.ANYHARNESS_TEST_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
       GH_TOKEN: ${{ secrets.ANYHARNESS_TEST_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
       ANYHARNESS_TEST_FIXTURE_REPO_URL: ${{ vars.ANYHARNESS_TEST_FIXTURE_REPO_URL }}
@@ -64,11 +61,6 @@ jobs:
 
           if [[ -z "${OPENAI_API_KEY:-}" && -z "${CODEX_API_KEY:-}" && -z "${ANYHARNESS_TEST_CODEX_AUTH_JSON:-}" ]]; then
             echo "Codex compatibility requires OPENAI_API_KEY, CODEX_API_KEY, or ANYHARNESS_TEST_CODEX_AUTH_JSON" >&2
-            exit 1
-          fi
-
-          if [[ -z "${GEMINI_API_KEY:-}" && -z "${GOOGLE_API_KEY:-}" && -z "${GEMINI_OAUTH_CREDS_JSON:-}" ]]; then
-            echo "Gemini compatibility requires GEMINI_API_KEY, GOOGLE_API_KEY, or GEMINI_OAUTH_CREDS_JSON" >&2
             exit 1
           fi
 

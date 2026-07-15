@@ -117,6 +117,7 @@ class AgentCatalogModel(BaseModel):
 class AgentCatalogSession(BaseModel):
     model_config = ConfigDict(extra="allow")
 
+    supportsGoals: bool = False
     controls: list[AgentCatalogSessionControl] = []
     models: list[AgentCatalogModel] = []
     defaults: dict[str, str] = {}
@@ -147,7 +148,7 @@ class AgentCatalogAgentProvenance(BaseModel):
 
 
 class AgentCatalogAgent(BaseModel):
-    kind: Literal["claude", "codex", "gemini", "cursor", "opencode", "grok"]
+    kind: Literal["claude", "codex", "cursor", "opencode", "grok"]
     displayName: str
     harness: AgentCatalogHarnessPins
     authContexts: list[AgentCatalogAuthContext] = []
@@ -160,4 +161,5 @@ class AgentCatalogResponse(BaseModel):
     catalogVersion: str
     probedAgainst: AgentCatalogProbedAgainst | None = None
     generatedAt: str
+    defaultAgentKind: str | None = None
     agents: list[AgentCatalogAgent]

@@ -1,4 +1,5 @@
 import type {
+  Goal,
   PendingInteraction,
   Session,
   SessionActionCapabilities,
@@ -21,6 +22,7 @@ export interface SessionSlotSummaryPatch {
   liveConfig: SessionLiveConfigSnapshot | null;
   executionSummary: SessionExecutionSummary | null;
   mcpBindingSummaries: SessionMcpBindingSummary[] | null;
+  activeGoal: Goal | null;
   status: SessionStatus | null;
   lastPromptAt: string | null;
   transcript: TranscriptState;
@@ -48,6 +50,7 @@ export function buildSessionSlotPatchFromSummary(
     liveConfig: session.liveConfig ?? null,
     executionSummary: session.executionSummary ?? null,
     mcpBindingSummaries: session.mcpBindingSummaries ?? null,
+    activeGoal: session.activeGoal ?? null,
     status: resolveStatusFromExecutionSummary(session.executionSummary, session.status),
     lastPromptAt: session.lastPromptAt ?? null,
     transcript: {

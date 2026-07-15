@@ -553,22 +553,22 @@ fn model_entries_from_model_state(
     (!entries.is_empty()).then_some(entries)
 }
 
-/// Best-effort identification of the native CLI the adapter will use:
-/// the CLAUDE_CODE_EXECUTABLE-style env override, else the managed native
-/// artifact. Runs `--version` to record the actual version string.
+/// Best-effort identification of the native CLI the adapter will use. Claude
+/// may use its provider-specific executable override; every other harness uses
+/// only its own managed native artifact. Runs `--version` to record the actual
+/// version string.
 fn detect_native_cli(
     resolved: &crate::domains::agents::model::ResolvedAgent,
 ) -> Option<ProbeNativeCli> {
-    let path = std::env::var("CLAUDE_CODE_EXECUTABLE")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .map(PathBuf::from)
-        .or_else(|| {
-            resolved
-                .native
-                .as_ref()
-                .and_then(|artifact| artifact.path.clone())
-        })?;
+    let kind = &resolved.descriptor.kind;
+    let claude_executable = (kind == &AgentKind::Claude)
+        .then(|| std::env::var("CLAUDE_CODE_EXECUTABLE").ok())
+        .flatten();
+    let managed_native = resolved
+        .native
+        .as_ref()
+        .and_then(|artifact| artifact.path.clone());
+    let path = native_cli_path(kind, managed_native, claude_executable.as_deref())?;
     let version = std::process::Command::new(&path)
         .arg("--version")
         .output()
@@ -579,6 +579,19 @@ fn detect_native_cli(
         path: path.to_string_lossy().into_owned(),
         version,
     })
+}
+
+fn native_cli_path(
+    kind: &AgentKind,
+    managed_native: Option<PathBuf>,
+    claude_executable: Option<&str>,
+) -> Option<PathBuf> {
+    let claude_override = (kind == &AgentKind::Claude)
+        .then(|| claude_executable)
+        .flatten()
+        .filter(|value| !value.trim().is_empty())
+        .map(PathBuf::from);
+    claude_override.or(managed_native)
 }
 
 fn probe_workspace_dir(kind: &AgentKind) -> anyhow::Result<PathBuf> {
@@ -597,58 +610,4 @@ fn probe_workspace_dir(kind: &AgentKind) -> anyhow::Result<PathBuf> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::model_entries_from_model_state;
-    use serde_json::json;
-
-    #[test]
-    fn maps_model_id_name_and_description() {
-        let state = json!({
-            "currentModelId": "grok-build-0.1",
-            "availableModels": [
-                { "modelId": "grok-build-0.1", "name": "Grok Build", "description": "coding" },
-                { "modelId": "grok-4.3", "name": "Grok 4.3" }
-            ]
-        });
-        assert_eq!(
-            model_entries_from_model_state(&state).expect("entries"),
-            vec![
-                (
-                    "grok-build-0.1".to_string(),
-                    "Grok Build".to_string(),
-                    Some("coding".to_string())
-                ),
-                ("grok-4.3".to_string(), "Grok 4.3".to_string(), None),
-            ]
-        );
-    }
-
-    #[test]
-    fn falls_back_to_model_id_when_name_absent() {
-        let state = json!({ "availableModels": [{ "modelId": "grok-4.3" }] });
-        assert_eq!(
-            model_entries_from_model_state(&state).expect("entries"),
-            vec![("grok-4.3".to_string(), "grok-4.3".to_string(), None)]
-        );
-    }
-
-    #[test]
-    fn skips_entries_without_a_model_id() {
-        let state = json!({ "availableModels": [{ "name": "no id" }, { "modelId": "grok-4.3" }] });
-        assert_eq!(
-            model_entries_from_model_state(&state).expect("entries"),
-            vec![("grok-4.3".to_string(), "grok-4.3".to_string(), None)]
-        );
-    }
-
-    #[test]
-    fn none_when_no_usable_models() {
-        assert!(model_entries_from_model_state(&json!({})).is_none());
-        assert!(model_entries_from_model_state(&json!({ "availableModels": [] })).is_none());
-        assert!(model_entries_from_model_state(&json!({ "currentModelId": "x" })).is_none());
-        assert!(
-            model_entries_from_model_state(&json!({ "availableModels": [{ "name": "x" }] }))
-                .is_none()
-        );
-    }
-}
+mod tests;

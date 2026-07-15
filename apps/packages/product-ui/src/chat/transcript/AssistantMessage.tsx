@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   MarkdownBody,
   type MarkdownCodeBlockRenderer,
@@ -31,7 +31,10 @@ export function AssistantMessage({
   renderCodeBlock,
 }: AssistantMessageProps) {
   return (
-    <div className="text-chat leading-[var(--text-chat--line-height)] select-text text-foreground">
+    // Opt this message body into the composer-matched prose size. Both the
+    // stable and live MarkdownBody below inherit --prose-text-size from here,
+    // so the reserved height is identical between streaming and settled states.
+    <div className="[--prose-text-size:var(--text-message)] [--prose-text-line-height:var(--text-message--line-height)] text-[length:var(--prose-text-size)] leading-[var(--prose-text-line-height)] select-text text-foreground">
       <AssistantMessageContent
         content={content}
         isStreaming={isStreaming}
@@ -43,15 +46,22 @@ export function AssistantMessage({
   );
 }
 
-// ANCHOR INVARIANT (owner rule): the newest content must occupy the bottom
-// line the instant it exists — no typewriter reveal, no staggered fade. The
-// previous reveal pacing meant a burst of text (or a reconnect backlog) played
-// back over seconds, so the transcript's visible bottom kept crawling while
-// the true content already existed. Content now renders immediately; the
-// stable/live split is kept purely for markdown-parse efficiency (the stable
-// prefix parses once; only the small live tail re-parses per stream batch).
+// ANCHOR INVARIANT (owner rule): the newest content must occupy its final
+// layout position the INSTANT it exists. The word-level fade (revealText) is
+// opacity-only — layout commits instantly — and React's positional
+// reconciliation keeps previously-mounted word spans stable, so only
+// newly-appended words mount fresh and animate; nothing replays. The
+// stable/live split is kept for markdown-parse efficiency (the stable prefix
+// parses once; only the small live tail re-parses per stream batch).
+//
+// BLIP FIX: `revealedUpTo` tracks how much of the live content was already
+// rendered in a prior frame. When the markdown structure changes (e.g. `**bo`
+// completing to `**bold**`), React may remount word spans. The offset ensures
+// remounted spans for already-seen text render WITHOUT the animation class,
+// preventing the visible opacity blip.
 function AssistantMessageContent({
   content,
+  isStreaming,
   renderLink,
   renderInlineCode,
   renderCodeBlock,
@@ -62,10 +72,30 @@ function AssistantMessageContent({
   renderInlineCode?: MarkdownInlineCodeRenderer;
   renderCodeBlock?: MarkdownCodeBlockRenderer;
 }) {
+  // Track previous total content length to compute revealedUpTo for the live
+  // tree. Since rows are keyed by message id, this component mounts fresh per
+  // message — no cross-message reset needed.
+  const prevContentLengthRef = useRef(0);
+
   const splitContent = useMemo(
     () => splitAssistantContent(content),
     [content],
   );
+
+  // revealedUpTo in live-local coordinates: everything from the live tree that
+  // was already rendered in the previous frame. Handles the live→stable
+  // boundary migration because stableContent.length grows by exactly what
+  // migrated out of the live tree.
+  const revealedUpTo = Math.max(
+    0,
+    prevContentLengthRef.current - splitContent.stableContent.length,
+  );
+
+  // Update the ref AFTER render so next render sees the current length.
+  useEffect(() => {
+    prevContentLengthRef.current = content.length;
+  });
+
   const stableClassName = splitContent.liveContent
     ? "[&>*:first-child]:mt-0"
     : "[&>*:first-child]:mt-0 [&>*:last-child]:mb-0";
@@ -92,6 +122,8 @@ function AssistantMessageContent({
             renderLink={renderLink}
             renderInlineCode={renderInlineCode}
             renderCodeBlock={renderCodeBlock}
+            revealText={isStreaming}
+            revealedUpTo={revealedUpTo}
           />
         </div>
       )}

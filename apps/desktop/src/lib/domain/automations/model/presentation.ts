@@ -6,7 +6,6 @@ import {
 export const AUTOMATION_AGENT_KIND_LABELS: Record<AutomationSupportedAgentKind, string> = {
   claude: "Claude",
   codex: "Codex",
-  gemini: "Gemini",
 };
 
 const AUTOMATION_REASONING_EFFORT_LABELS: Record<

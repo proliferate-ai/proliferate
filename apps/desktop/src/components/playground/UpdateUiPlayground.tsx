@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { UPDATE_PREVIEW_STATES } from "@/config/update-playground";
 import { UpdateDialogContent } from "@/components/feedback/UpdateDialogContent";
+import { ReleaseNoticeCard } from "@/components/workspace/shell/sidebar/ReleaseNoticeCard";
 import { SidebarUpdatePill } from "@/components/workspace/shell/sidebar/SidebarUpdatePill";
 import { UpdateUiPlaygroundControls } from "@/components/playground/UpdateUiPlaygroundControls";
 
@@ -74,8 +75,23 @@ export function UpdateUiPlayground() {
         </PreviewSection>
 
         <PreviewSection
+          title="Release notice card (sidebar footer)"
+          description="The installed-release changelog card shown after an update. This is the production component at its sidebar-width constraint."
+        >
+          <div className="rounded-lg border border-border bg-card/60 p-5">
+            <div className="w-64 rounded-lg bg-sidebar py-2">
+              <ReleaseNoticeCard
+                notice={{ version: "0.1.42", title: "Introducing Grok" }}
+                onDismiss={() => {}}
+                onOpenChangelog={() => {}}
+              />
+            </div>
+          </div>
+        </PreviewSection>
+
+        <PreviewSection
           title="Production Surfaces"
-          description="Live updater components driven by the dev updater mock. The toast renders in the app toast position; the restart dialog renders as the real app modal; the pill below is the real sidebar pill fed by the same mock. Use “+ standard toast” to drop a real app toast beside the update toast and confirm they match."
+          description="Live updater components driven by the dev updater mock. The toast keeps the authored release title while its Download, progress, and Restart states morph in place; the restart dialog renders as the real app modal; the pill below is fed by the same mock. Use “+ standard toast” to confirm the toast treatment matches the rest of the app."
         >
           <UpdateUiPlaygroundControls />
         </PreviewSection>

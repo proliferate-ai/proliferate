@@ -67,7 +67,10 @@ export function resolveSessionStatus(
     || effectivelyStreaming
     || hasActionablePending
   ) {
-    return reconciledStatus === "starting" ? "starting" : "running";
+    if (reconciledStatus === "starting") {
+      return "starting";
+    }
+    return "running";
   }
 
   return reconciledStatus ?? null;

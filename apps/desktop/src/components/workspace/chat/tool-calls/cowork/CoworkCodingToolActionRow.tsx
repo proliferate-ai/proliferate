@@ -3,7 +3,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import {
   ExternalLink,
   FolderPlus,
-  GitBranch,
+  GitBranchIcon,
   Spinner,
 } from "@proliferate/ui/icons";
 import { ProliferateIcon } from "@proliferate/ui/proliferate-icons";
@@ -118,7 +118,7 @@ function CoworkCodingIcon({
     return <FolderPlus className="size-2.5 text-faint" />;
   }
   if (action === "create_session" || action === "send_message" || action === "schedule_wake") {
-    return <GitBranch className="size-2.5 text-faint" />;
+    return <GitBranchIcon className="size-2.5 text-faint" />;
   }
   return <ProliferateIcon className="size-2.5 text-faint" />;
 }

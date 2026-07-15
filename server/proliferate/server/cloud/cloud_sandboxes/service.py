@@ -13,16 +13,38 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.config import settings
 from proliferate.db.store import billing_subjects
 from proliferate.db.store import cloud_sandboxes as sandbox_store
 from proliferate.db.store import runtime_workers as runtime_workers_store
 from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
+from proliferate.server.billing.authorization import (
+    assert_cloud_sandbox_resume_allowed_for_owner,
+)
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.utils.crypto import decrypt_text
 
 
 class _UserWithId(Protocol):
     id: UUID
+
+
+def require_cloud_provisioning_configured() -> None:
+    """Fail cloud-provisioning requests with an actionable error when E2B is
+    half-configured (API key set, template missing).
+
+    This is the request-time peer of the boot-time warning in ``main.py``: the
+    control plane stays up for base features, but explicit cloud-provisioning
+    intents return a specific 503 naming the missing requirement rather than
+    booting the wrong E2B template or surfacing an opaque runtime failure.
+    """
+    config_error = settings.cloud_provisioning_config_error
+    if config_error is not None:
+        raise CloudApiError(
+            "e2b_template_not_configured",
+            config_error,
+            status_code=503,
+        )
 
 
 async def get_cloud_sandbox_detail(
@@ -36,6 +58,16 @@ async def ensure_cloud_sandbox_ready(
     db: AsyncSession,
     user: _UserWithId,
 ) -> CloudSandboxValue:
+    # LIVE billing gate (spec §4.3): an exhausted owner must not wake or ensure a
+    # cloud sandbox. Gate BEFORE ensure_personal_cloud_sandbox_exists stages a
+    # new-row INSERT, since the gate commits its audit row before raising. No-op
+    # unless CLOUD_BILLING_MODE=enforce. wake_cloud_sandbox delegates here, so
+    # both /cloud-sandbox/wake and /cloud-sandbox/ensure inherit this gate; the
+    # GitHub-App trigger path calls ensure_personal_cloud_sandbox_exists directly
+    # and is intentionally left ungated so a brand-new user's initial row still
+    # gets created.
+    require_cloud_provisioning_configured()
+    await assert_cloud_sandbox_resume_allowed_for_owner(db, owner_user_id=user.id)
     return await ensure_personal_cloud_sandbox_exists(db, user_id=user.id)
 
 

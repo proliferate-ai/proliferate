@@ -5,14 +5,15 @@ import type {
   PromptOutboxEntry,
 } from "@proliferate/product-domain/sessions/intents/session-intent-model";
 import {
-  useActivePendingPrompts,
-} from "@/hooks/chat/derived/use-active-pending-session-interactions";
-import {
-  useActiveSessionId,
-} from "@/hooks/chat/derived/use-active-session-identity";
+  derivePendingPromptQueueRow,
+  findNewestEditablePendingPrompt,
+} from "@proliferate/product-domain/chats/pending-prompts/pending-prompt-queue";
+import { useActivePendingPrompts } from "@/hooks/chat/derived/use-active-pending-session-interactions";
+import { useActiveSessionId } from "@/hooks/chat/derived/use-active-session-identity";
 import { useEditPendingPrompt } from "@/hooks/sessions/workflows/use-edit-pending-prompt";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
+import { useToastStore } from "@/stores/toast/toast-store";
 
 export interface VisiblePendingPromptEntry extends PendingPromptEntry {
   isBeingEdited: boolean;
@@ -79,6 +80,18 @@ export function useQueuedPromptEditReader(): {
   return { visiblePendingPrompts, beginEdit };
 }
 
+export function useEditLastQueuedPrompt(disabled: boolean): (() => void) | undefined {
+  const { visiblePendingPrompts, beginEdit } = useQueuedPromptEditReader();
+  const newest = findNewestEditablePendingPrompt(visiblePendingPrompts);
+  const editLastQueuedPrompt = useCallback(() => {
+    if (newest) {
+      beginEdit({ seq: newest.seq, text: newest.text });
+    }
+  }, [beginEdit, newest]);
+
+  return disabled || !newest ? undefined : editLastQueuedPrompt;
+}
+
 export function useQueuedPromptEditStatus(): {
   isEditing: boolean;
 } {
@@ -114,6 +127,7 @@ export function useQueuedPromptEdit(): {
   const setEditDraft = useChatInputStore((state) => state.setEditDraft);
   const setEditingQueueSeq = useChatInputStore((state) => state.setEditingQueueSeq);
   const editPendingPrompt = useEditPendingPrompt();
+  const showToast = useToastStore((state) => state.show);
 
   const isEditing = editingSeq != null;
 
@@ -144,13 +158,32 @@ export function useQueuedPromptEdit(): {
   }, [activeSessionId, setEditDraft, setEditingQueueSeq]);
 
   const commitEdit = useCallback(async () => {
-    if (!activeSessionId || editingSeq == null) return;
+    if (!activeSessionId || editingSeq == null) {
+      return;
+    }
     const trimmed = editDraft.trim();
     if (!trimmed) {
       cancelEdit();
       return;
     }
+
+    // Re-resolve and revalidate at commit time. A local outbox row may have
+    // advanced from waiting to dispatching, or a runtime row may have become a
+    // protected system/structured prompt while the editor was open.
     const editingPrompt = pendingPrompts.find((prompt) => prompt.seq === editingSeq);
+    if (!editingPrompt) {
+      cancelEdit();
+      return;
+    }
+    const currentRow = derivePendingPromptQueueRow({
+      ...editingPrompt,
+      isBeingEdited: true,
+    });
+    if (!currentRow.canEdit) {
+      showToast("This queued message can no longer be edited.");
+      cancelEdit();
+      return;
+    }
     try {
       if (isLocallyEditableOutboxPrompt(editingPrompt)) {
         patchLocalOutboxPrompt(editingPrompt.promptId, trimmed);
@@ -170,6 +203,7 @@ export function useQueuedPromptEdit(): {
     pendingPrompts,
     setEditDraft,
     setEditingQueueSeq,
+    showToast,
   ]);
 
   return {

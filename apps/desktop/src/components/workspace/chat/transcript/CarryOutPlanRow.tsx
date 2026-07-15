@@ -17,7 +17,7 @@ export function CarryOutPlanRow({ plan }: { plan: PromptDisplayPlanPart }) {
       data-telemetry-mask
       className="chip-enter flex min-w-0 items-center gap-2 py-1"
     >
-      <span className="shrink-0 text-ui-sm text-muted-foreground">
+      <span className="shrink-0 text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)] text-muted-foreground">
         {PLAN_IMPLEMENT_HERE_ROW_LABEL}
       </span>
       <PlanReferenceAttachmentCard plan={plan} variant="compact" />

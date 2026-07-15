@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.db import session_ops
 from proliferate.db.store.integrations.accounts import set_account_credentials
 from proliferate.db.store.integrations.oauth_clients import get_oauth_client
 from proliferate.integrations.integration_oauth.tokens import refresh_token
@@ -204,7 +205,6 @@ def _parse_expires_at(raw: object) -> datetime | None:
 
 
 async def _refresh_oauth_bundle(
-    db: AsyncSession,
     *,
     account: IntegrationAccountRecord,
     bundle: dict[str, Any],
@@ -213,6 +213,13 @@ async def _refresh_oauth_bundle(
 
     Returns ``(access_token, expires_at)``. Raises ``integration_reauth_required``
     when no refresh token is available or the provider rejects the refresh.
+
+    Manages its own short-lived DB sessions so no pooled connection is held
+    across the provider round-trip — a slow token endpoint must not pin a
+    connection (and a handful of concurrent refreshes must not exhaust the
+    pool). It also commits the refreshed bundle independently: providers may
+    rotate the refresh token, so the new credential has to persist no matter
+    what the surrounding request does.
     """
     refresh_value = bundle.get("refreshToken")
     token_endpoint = bundle.get("tokenEndpoint")
@@ -228,9 +235,12 @@ async def _refresh_oauth_bundle(
     issuer = bundle.get("issuer")
     redirect_uri = bundle.get("redirectUri")
     if issuer and redirect_uri:
-        oauth_client = await get_oauth_client(
-            db, str(issuer), str(redirect_uri), account.definition_id
-        )
+        # Read (and close) before the network call so the connection is back
+        # in the pool while we wait on the provider.
+        async with session_ops.open_async_session() as read_db:
+            oauth_client = await get_oauth_client(
+                read_db, str(issuer), str(redirect_uri), account.definition_id
+            )
         if oauth_client is not None:
             token_endpoint_auth_method = oauth_client.token_endpoint_auth_method
             if oauth_client.client_secret_ciphertext:
@@ -272,15 +282,19 @@ async def _refresh_oauth_bundle(
         "expiresAt": expires_at.isoformat() if expires_at is not None else None,
         "scopes": list(scopes),
     }
-    await set_account_credentials(
-        db,
-        account_id=account.id,
-        credential_ciphertext=encrypt_json(new_bundle),
-        credential_format="oauth-bundle-v1",
-        auth_status="ready",
-        token_expires_at=expires_at,
-        expected_auth_version=account.auth_version,
-    )
+    # Fresh session for the write: the expected_auth_version optimistic check
+    # guards against a concurrent refresh having won the race.
+    async with session_ops.open_async_session() as write_db:
+        await set_account_credentials(
+            write_db,
+            account_id=account.id,
+            credential_ciphertext=encrypt_json(new_bundle),
+            credential_format="oauth-bundle-v1",
+            auth_status="ready",
+            token_expires_at=expires_at,
+            expected_auth_version=account.auth_version,
+        )
+        await session_ops.commit_session(write_db)
     return access_token, expires_at
 
 
@@ -304,6 +318,10 @@ async def ensure_provider_access(
     - ``oauth2``  -> use the ``oauth-bundle-v1`` access token (refreshing it when
       absent or within the expiry skew) and render config templates, ensuring an
       ``Authorization: Bearer`` header is present.
+
+    ``db`` is kept for signature stability but no longer touched: a token
+    refresh manages its own short-lived sessions (see ``_refresh_oauth_bundle``)
+    so the caller's session never spans the provider round-trip.
     """
     cfg = parse_definition_config(definition_record.config_json)
     auth_kind = definition_record.auth_kind
@@ -316,7 +334,7 @@ async def ensure_provider_access(
         return _api_key_access(cfg, account_record, settings)
 
     if auth_kind == "oauth2":
-        return await _oauth_access(db, cfg, account_record, settings)
+        return await _oauth_access(cfg, account_record, settings)
 
     raise CloudApiError(
         "integration_auth_kind_unsupported",
@@ -341,7 +359,6 @@ def _api_key_access(
 
 
 async def _oauth_access(
-    db: AsyncSession,
     cfg: IntegrationConfig,
     account: IntegrationAccountRecord,
     settings: dict[str, Any],
@@ -356,7 +373,7 @@ async def _oauth_access(
         resolved_expiry = expires_at
     else:
         resolved_token, resolved_expiry = await _refresh_oauth_bundle(
-            db, account=account, bundle=bundle
+            account=account, bundle=bundle
         )
 
     # Expose bundle string fields (plus the resolved access token) as secrets so

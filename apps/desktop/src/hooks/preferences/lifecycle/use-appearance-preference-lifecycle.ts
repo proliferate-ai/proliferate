@@ -3,8 +3,6 @@ import {
   applyAppearancePreference,
   initializeTheme,
 } from "@/config/theme";
-import { setWebviewZoom } from "@/lib/access/tauri/window";
-import { resolveWindowZoomScale } from "@/lib/domain/preferences/appearance";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
 function applyStoredAppearancePreference(): void {
@@ -22,20 +20,11 @@ function applyStoredAppearancePreference(): void {
   });
 }
 
-function applyStoredWindowZoomPreference(): void {
-  const { windowZoomId } = useUserPreferencesStore.getState();
-  const { factor } = resolveWindowZoomScale(windowZoomId);
-  void setWebviewZoom(factor).catch(() => {
-    // Non-critical appearance preference; the CSS tokens still update.
-  });
-}
-
 // Owns applying user appearance preferences to document-level theme tokens.
 export function useAppearancePreferenceLifecycle(): void {
   useEffect(() => {
     initializeTheme();
     applyStoredAppearancePreference();
-    applyStoredWindowZoomPreference();
 
     const unsubscribeAppearance = useUserPreferencesStore.subscribe((state, prev) => {
       if (
@@ -45,9 +34,6 @@ export function useAppearancePreferenceLifecycle(): void {
         || state.windowZoomId !== prev.windowZoomId
       ) {
         applyStoredAppearancePreference();
-      }
-      if (state.windowZoomId !== prev.windowZoomId) {
-        applyStoredWindowZoomPreference();
       }
     });
 

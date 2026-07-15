@@ -1,84 +1,132 @@
-import { useState } from "react";
-import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
-import { CloudIcon, Monitor } from "@proliferate/ui/icons";
-import {
-  SegmentedControl,
-  type SegmentedControlItem,
-} from "@proliferate/ui/primitives/SegmentedControl";
-import { Tabs, type TabItem } from "@proliferate/ui/primitives/Tabs";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
-import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { CloudGuard } from "@/components/cloud/CloudGuard";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { getProviderDisplayName } from "@/lib/domain/agents/provider-display";
+import { useAgentSurfaceStore } from "@/stores/ui/agent-surface-store";
+import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
 import { HarnessAllModelsSection } from "./HarnessAllModelsSection";
-import { HarnessAuthenticationSection } from "./HarnessAuthenticationSection";
+import { HarnessAuthDetailsSection } from "./HarnessAuthDetailsSection";
+import { HarnessAuthSection, deriveSelectedMethod } from "./HarnessAuthSection";
+import { HarnessConfigIssueBanner } from "./HarnessConfigIssueBanner";
 import { HarnessSettingsSection } from "./HarnessSettingsSection";
-import { OpenCodeHarnessAuthSection } from "./OpenCodeHarnessAuthSection";
-
-const SURFACE_ITEMS: readonly SegmentedControlItem<AgentAuthSurface>[] = [
-  { id: "cloud", label: HARNESS_PANE_COPY.surfaceCloud, icon: <CloudIcon /> },
-  { id: "local", label: HARNESS_PANE_COPY.surfaceLocal, icon: <Monitor /> },
-];
-
-const SUBTABS = [
-  { id: "authentication", label: HARNESS_PANE_COPY.tabAuthentication },
-  { id: "models", label: HARNESS_PANE_COPY.tabAllModels },
-] as const satisfies readonly TabItem[];
-
-type HarnessSubtab = (typeof SUBTABS)[number]["id"];
+import { useHarnessAuthEditor } from "@/hooks/agents/workflows/use-harness-auth-editor";
+import { useHarnessInstallAction } from "@/hooks/agents/workflows/use-harness-install-action";
 
 interface HarnessPaneProps {
   harnessKind: string;
 }
 
 export function HarnessPane({ harnessKind }: HarnessPaneProps) {
-  // The surface axis: every section below reads/writes the selected surface.
-  const [surface, setSurface] = useState<AgentAuthSurface>("local");
-  const [subtab, setSubtab] = useState<HarnessSubtab>("authentication");
-  const { agentsByKind } = useAgentCatalog();
+  const surface = useAgentSurfaceStore((state) => state.surface);
+  const { agentsByKind, agentsNeedingSetup } = useAgentCatalog();
 
   const displayName =
     agentsByKind.get(harnessKind)?.displayName ?? getProviderDisplayName(harnessKind);
+  const issueAgent = agentsNeedingSetup.find((agent) => agent.kind === harnessKind);
+  const installAction = useHarnessInstallAction(issueAgent ?? null);
 
   return (
-    <section className="space-y-5">
-      <SettingsPageHeader
-        title={displayName}
-        action={
-          <SegmentedControl
-            items={SURFACE_ITEMS}
-            value={surface}
-            onChange={setSurface}
-          />
-        }
-      />
+    <section className="space-y-6">
+      <SettingsPageHeader title={displayName} />
 
-      <Tabs
-        items={SUBTABS}
-        activeId={subtab}
-        onChange={(id) => setSubtab(id === "models" ? "models" : "authentication")}
-      />
+      {issueAgent ? (
+        <HarnessConfigIssueBanner agent={issueAgent} installAction={installAction} />
+      ) : null}
 
-      {subtab === "authentication" ? (
-        <>
-          {harnessKind === "opencode" ? (
-            <OpenCodeHarnessAuthSection displayName={displayName} surface={surface} />
-          ) : (
-            <HarnessAuthenticationSection
-              harnessKind={harnessKind}
-              displayName={displayName}
-              surface={surface}
-            />
-          )}
-          <HarnessSettingsSection harnessKind={harnessKind} />
-        </>
+      {surface === "cloud" ? (
+        <HarnessSurfaceCloud harnessKind={harnessKind} displayName={displayName} />
       ) : (
-        <HarnessAllModelsSection
-          harnessKind={harnessKind}
-          displayName={displayName}
-          surface={surface}
-        />
+        <HarnessSurfaceLocal harnessKind={harnessKind} displayName={displayName} />
       )}
     </section>
+  );
+}
+
+function HarnessSurfaceCloud({
+  harnessKind,
+  displayName,
+}: {
+  harnessKind: string;
+  displayName: string;
+}) {
+  const editor = useHarnessAuthEditor(harnessKind, displayName, "cloud");
+  const selectedMethod = deriveSelectedMethod(editor);
+
+  return (
+    <CloudGuard>
+      <SettingsSection title={HARNESS_PANE_COPY.signInTitle}>
+        <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-foreground/[0.02]">
+          <HarnessAuthSection
+            harnessKind={harnessKind}
+            displayName={displayName}
+            surface="cloud"
+            editor={editor}
+            variant="panel"
+          />
+
+          <HarnessAuthDetailsSection
+            harnessKind={harnessKind}
+            displayName={displayName}
+            surface="cloud"
+            selectedMethod={selectedMethod}
+            editor={editor}
+            variant="panel"
+          />
+        </div>
+      </SettingsSection>
+
+      <HarnessSettingsSection harnessKind={harnessKind} surface="cloud" variant="section" />
+
+      <HarnessAllModelsSection
+        harnessKind={harnessKind}
+        displayName={displayName}
+        surface="cloud"
+      />
+    </CloudGuard>
+  );
+}
+
+function HarnessSurfaceLocal({
+  harnessKind,
+  displayName,
+}: {
+  harnessKind: string;
+  displayName: string;
+}) {
+  const editor = useHarnessAuthEditor(harnessKind, displayName, "local");
+  const selectedMethod = deriveSelectedMethod(editor);
+
+  return (
+    <>
+      <SettingsSection title={HARNESS_PANE_COPY.signInTitle}>
+        <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-foreground/[0.02]">
+          <HarnessAuthSection
+            harnessKind={harnessKind}
+            displayName={displayName}
+            surface="local"
+            editor={editor}
+            variant="panel"
+          />
+
+          <HarnessAuthDetailsSection
+            harnessKind={harnessKind}
+            displayName={displayName}
+            surface="local"
+            selectedMethod={selectedMethod}
+            editor={editor}
+            variant="panel"
+          />
+        </div>
+      </SettingsSection>
+
+      <HarnessSettingsSection harnessKind={harnessKind} surface="local" variant="section" />
+
+      <HarnessAllModelsSection
+        harnessKind={harnessKind}
+        displayName={displayName}
+        surface="local"
+      />
+    </>
   );
 }

@@ -56,6 +56,7 @@ export function projectCloudAgentCatalogToDesktopLaunchCatalog(
     schemaVersion: catalog.schemaVersion,
     catalogVersion: catalog.catalogVersion,
     generatedAt: catalog.generatedAt,
+    defaultAgentKind: catalog.defaultAgentKind ?? null,
     workspaceId: options.workspaceId ?? null,
     agents: catalog.agents
       .map(projectCloudAgent)
@@ -148,6 +149,7 @@ export function mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
           isDefault: model.isDefault || modelIdCandidates.includes(defaultModelId ?? ""),
           availability: cloudModel?.availability ?? null,
           sessionDefaultControls: cloudModel?.sessionDefaultControls ?? [],
+          modeValues: cloudModel?.modeValues ?? null,
         };
       }),
       launchControls: cloud?.launchControls ?? [],
@@ -335,5 +337,16 @@ function projectCloudModel(
     isDefault: model.id === defaultModelId,
     availability: anyOf.length > 0 ? { anyOf: [...anyOf] } : null,
     sessionDefaultControls: projectSessionDefaultControls(model, sessionControls),
+    modeValues: projectModelModeValues(model),
   };
+}
+
+/**
+ * The per-model `mode` vocabulary from the catalog matrix, if present and
+ * non-empty. `null` means the model has no per-model mode entry and the
+ * agent-level `mode` control applies.
+ */
+function projectModelModeValues(model: CloudAgentCatalogModelInput): string[] | null {
+  const values = model.controls?.mode?.values;
+  return values && values.length > 0 ? [...values] : null;
 }

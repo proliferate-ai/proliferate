@@ -6,6 +6,7 @@ import {
 } from "../context/AnyHarnessWorkspace.js";
 import {
   useAnyHarnessRuntimeContext,
+  useAnyHarnessCacheScopeKey,
   resolveRuntimeConnection,
 } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
@@ -20,18 +21,13 @@ interface WorkspaceQueryOptions {
   enabled?: boolean;
 }
 
-function useWorkspaceRuntimeUrl() {
-  const runtime = useAnyHarnessRuntimeContext();
-  return runtime.runtimeUrl?.trim() ?? "";
-}
-
 export function useCurrentPullRequestQuery(options?: WorkspaceQueryOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useQuery({
-    queryKey: anyHarnessPullRequestKey(runtimeUrl, workspaceId),
+    queryKey: anyHarnessPullRequestKey(cacheScopeKey, workspaceId),
     enabled: (options?.enabled ?? true) && !!workspaceId,
     retry: false,
     queryFn: async ({ signal }) => {
@@ -54,10 +50,11 @@ export function useRepoPullRequestStatusesQuery(options: {
 }) {
   const runtime = useAnyHarnessRuntimeContext();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const repoRootId = options.repoRootId ?? null;
 
   return useQuery({
-    queryKey: anyHarnessRepoRootPullRequestsKey(runtimeUrl, repoRootId),
+    queryKey: anyHarnessRepoRootPullRequestsKey(runtimeUrl, repoRootId, cacheScopeKey),
     enabled: (options.enabled ?? true) && runtimeUrl.length > 0 && !!repoRootId,
     retry: false,
     staleTime: options.staleTime,
@@ -77,7 +74,7 @@ export function useRepoPullRequestStatusesQuery(options: {
 export function useCreatePullRequestMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
@@ -88,7 +85,7 @@ export function useCreatePullRequestMutation(options?: { workspaceId?: string | 
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessPullRequestKey(runtimeUrl, workspaceId),
+        queryKey: anyHarnessPullRequestKey(cacheScopeKey, workspaceId),
       });
     },
   });

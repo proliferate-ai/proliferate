@@ -1,10 +1,11 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": "2026-06-18.5",
+  "catalogVersion": "2026-07-11.2",
   "probedAgainst": {
-    "registryVersion": "2026-06-10.1"
+    "registryVersion": "2026-07-10.1"
   },
-  "generatedAt": "2026-06-18T06:23:46.960Z",
+  "generatedAt": "2026-07-11T00:36:38.653Z",
+  "defaultAgentKind": "claude",
   "agents": [
     {
       "kind": "claude",
@@ -45,14 +46,7 @@
           "id": "bedrock",
           "authSlotId": "anthropic",
           "signals": {
-            "allOf": [
-              {
-                "envFlag": "CLAUDE_CODE_USE_BEDROCK=1"
-              },
-              {
-                "discovery": "aws-credential-chain"
-              }
-            ]
+            "envFlag": "CLAUDE_CODE_USE_BEDROCK=1"
           }
         },
         {
@@ -82,9 +76,18 @@
               }
             ]
           }
+        },
+        {
+          "id": "gateway",
+          "authSlotId": "gateway",
+          "description": "Proliferate LiteLLM gateway (route-engaged; not credential-detected).",
+          "signals": {
+            "route": "gateway"
+          }
         }
       ],
       "session": {
+        "supportsGoals": true,
         "controls": [
           {
             "key": "model",
@@ -142,8 +145,7 @@
             "availability": {
               "anyOf": [
                 "anthropic-api",
-                "anthropic-oauth",
-                "bedrock"
+                "anthropic-oauth"
               ]
             },
             "defaultVisible": true,
@@ -332,8 +334,7 @@
             "availability": {
               "anyOf": [
                 "anthropic-api",
-                "anthropic-oauth",
-                "bedrock"
+                "anthropic-oauth"
               ]
             },
             "defaultVisible": true,
@@ -367,8 +368,7 @@
             "availability": {
               "anyOf": [
                 "anthropic-api",
-                "anthropic-oauth",
-                "bedrock"
+                "anthropic-oauth"
               ]
             },
             "defaultVisible": true,
@@ -416,7 +416,7 @@
           },
           {
             "id": "claude-fable-5",
-            "displayName": "Claude-Fable-5",
+            "displayName": "Fable 5",
             "availability": {
               "anyOf": [
                 "anthropic-api",
@@ -467,14 +467,14 @@
           },
           {
             "id": "claude-opus-4-8",
-            "displayName": "Claude-Opus-4-8",
+            "displayName": "Opus 4.8",
             "availability": {
               "anyOf": [
                 "anthropic-api",
                 "anthropic-oauth"
               ]
             },
-            "defaultVisible": false,
+            "defaultVisible": true,
             "controls": {
               "mode": {
                 "values": [
@@ -882,7 +882,7 @@
           },
           {
             "id": "global.anthropic.claude-fable-5",
-            "displayName": "Global.anthropic.claude-Fable-5",
+            "displayName": "Fable 5",
             "availability": {
               "anyOf": [
                 "bedrock"
@@ -920,17 +920,238 @@
               "observedInAllContexts": false,
               "viaTrialOnly": true
             }
+          },
+          {
+            "id": "claude-sonnet-4-5",
+            "displayName": "Sonnet 4.5",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "default",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "default"
+              }
+            },
+            "status": "active"
+          },
+          {
+            "id": "claude-sonnet-4-5-20250929",
+            "displayName": "Sonnet 4.5 (2025-09-29)",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "default",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "default"
+              }
+            },
+            "status": "active"
+          },
+          {
+            "id": "claude-haiku-4-5",
+            "displayName": "Haiku 4.5",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "default",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "default"
+              }
+            },
+            "status": "active"
+          },
+          {
+            "id": "claude-haiku-4-5-20251001",
+            "displayName": "Haiku 4.5 (2025-10-01)",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "default",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "default"
+              }
+            },
+            "status": "active"
+          },
+          {
+            "id": "claude-opus-4-6",
+            "displayName": "Opus 4.6",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "default",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "default"
+              }
+            },
+            "status": "active"
+          },
+          {
+            "id": "claude-opus-4-6-20260205",
+            "displayName": "Opus 4.6 (2026-02-05)",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "default",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "default"
+              }
+            },
+            "status": "active"
           }
         ],
         "defaults": {
           "anthropic-api": "sonnet",
           "anthropic-oauth": "opus",
-          "bedrock": "us.anthropic.claude-sonnet-4-6"
+          "bedrock": "us.anthropic.claude-sonnet-4-6",
+          "gateway": "claude-sonnet-4-5"
         },
         "observedDefaults": {
           "anthropic-api": "opus",
           "anthropic-oauth": "opus",
           "bedrock": "us.anthropic.claude-opus-4-8"
+        },
+        "gatewayPolicy": {
+          "providers": [
+            "anthropic"
+          ],
+          "roles": {
+            "small_fast": "claude-haiku-4-5-20251001"
+          },
+          "seedModels": [
+            "claude-sonnet-4-5",
+            "claude-sonnet-4-5-20250929",
+            "claude-haiku-4-5",
+            "claude-haiku-4-5-20251001",
+            "claude-opus-4-6",
+            "claude-opus-4-6-20260205"
+          ]
         }
       },
       "provenance": {
@@ -954,40 +1175,56 @@
             "snapshotPath": "generated/claude.bedrock.probe.json"
           }
         ]
-      }
+      },
+      "settings": [
+        {
+          "key": "chrome",
+          "type": "boolean",
+          "label": "Use Claude Code with Chrome",
+          "description": "Allow Claude Code to control your Chrome browser. Requires the Claude Code Chrome extension.",
+          "default": false,
+          "surfaces": [
+            "local"
+          ],
+          "mapping": {
+            "kind": "cli_flag",
+            "flag": "--chrome"
+          }
+        }
+      ]
     },
     {
       "kind": "codex",
       "displayName": "Codex",
       "harness": {
         "agentProcess": {
-          "version": "0.16.0-proliferate.1",
+          "version": "0.17.0-proliferate.1",
           "source": {
             "kind": "git",
             "repo": "https://github.com/proliferate-ai/codex-acp.git",
-            "gitRef": "c66f9f3b9bf4811fa8ebdfc9ad908bf37845e50f",
+            "gitRef": "8baae51210acd4912f5aab9054b124a43287030e",
             "packageSubdir": "npm",
             "executableRelpath": "node_modules/.bin/codex-acp"
           }
         },
         "native": {
-          "version": "rust-v0.141.0",
+          "version": "rust-v0.144.1",
           "source": {
             "kind": "archive",
             "targets": {
               "macos_arm64": {
-                "url": "https://github.com/openai/codex/releases/download/rust-v0.141.0/codex-aarch64-apple-darwin.tar.gz",
-                "sha256": "abdead5feebc259decaaec33465423bbb7904b3049fa28e92209cb924693c0f4",
+                "url": "https://github.com/openai/codex/releases/download/rust-v0.144.1/codex-aarch64-apple-darwin.tar.gz",
+                "sha256": "88e72ac8bd30815f7d18e62dac333dc20ce3ad1cba94be1649a1977dd9bfdbb8",
                 "expectedBinary": "codex-aarch64-apple-darwin"
               },
               "macos_x64": {
-                "url": "https://github.com/openai/codex/releases/download/rust-v0.141.0/codex-x86_64-apple-darwin.tar.gz",
-                "sha256": "7b7398b93dd16a3123c87286e312a7942be3c13f9619fc587dfc05563fcbc888",
+                "url": "https://github.com/openai/codex/releases/download/rust-v0.144.1/codex-x86_64-apple-darwin.tar.gz",
+                "sha256": "0ea72d21c794504342d5fe0d5d057b0221c0a42f4bdf4a48b95af243af2b0c0e",
                 "expectedBinary": "codex-x86_64-apple-darwin"
               },
               "linux_x64": {
-                "url": "https://github.com/openai/codex/releases/download/rust-v0.141.0/codex-x86_64-unknown-linux-musl.tar.gz",
-                "sha256": "f1e2bf9fa0ba6eb82119d621b6b71bc38edd33c06dc2867b31a027052358957d",
+                "url": "https://github.com/openai/codex/releases/download/rust-v0.144.1/codex-x86_64-unknown-linux-musl.tar.gz",
+                "sha256": "84091ae20c65fcc7d4120db97d1bd57d7ff8df9c7609fb781c78c2ebbd4f5a28",
                 "expectedBinary": "codex-x86_64-unknown-linux-musl"
               }
             },
@@ -1030,9 +1267,18 @@
               }
             ]
           }
+        },
+        {
+          "id": "gateway",
+          "authSlotId": "gateway",
+          "description": "Proliferate LiteLLM gateway (route-engaged; not credential-detected).",
+          "signals": {
+            "route": "gateway"
+          }
         }
       ],
       "session": {
+        "supportsGoals": true,
         "controls": [
           {
             "key": "model",
@@ -1055,22 +1301,44 @@
             }
           },
           {
+            "key": "collaboration_mode",
+            "values": [
+              "default",
+              "plan"
+            ],
+            "mapping": {
+              "liveConfigId": "collaboration_mode"
+            }
+          },
+          {
             "key": "reasoning_effort",
             "values": [
               "low",
               "medium",
               "high",
-              "xhigh"
+              "xhigh",
+              "max",
+              "ultra"
             ],
             "mapping": {
               "liveConfigId": "reasoning_effort"
+            }
+          },
+          {
+            "key": "fast_mode",
+            "values": [
+              "off",
+              "on"
+            ],
+            "mapping": {
+              "liveConfigId": "fast_mode"
             }
           }
         ],
         "models": [
           {
             "id": "openai.gpt-oss-120b",
-            "displayName": "Openai.gpt-Oss-120b",
+            "displayName": "GPT-OSS 120B",
             "availability": {
               "anyOf": [
                 "bedrock"
@@ -1085,6 +1353,13 @@
                   "full-access"
                 ],
                 "observedValue": "read-only"
+              },
+              "collaboration_mode": {
+                "values": [
+                  "default",
+                  "plan"
+                ],
+                "observedValue": "default"
               }
             },
             "status": "active",
@@ -1114,6 +1389,13 @@
                   "full-access"
                 ],
                 "observedValue": "read-only"
+              },
+              "collaboration_mode": {
+                "values": [
+                  "default",
+                  "plan"
+                ],
+                "observedValue": "default"
               },
               "reasoning_effort": {
                 "values": [
@@ -1153,6 +1435,13 @@
                 ],
                 "observedValue": "read-only"
               },
+              "collaboration_mode": {
+                "values": [
+                  "default",
+                  "plan"
+                ],
+                "observedValue": "default"
+              },
               "reasoning_effort": {
                 "values": [
                   "low",
@@ -1167,6 +1456,311 @@
             "provenance": {
               "observedIn": [
                 "codex.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "openai.gpt-5.6-sol",
+            "displayName": "GPT-5.6 Sol",
+            "description": "Frontier model for complex coding, research, and real-world work.",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "read-only",
+                  "auto",
+                  "full-access"
+                ],
+                "observedValue": "read-only"
+              },
+              "collaboration_mode": {
+                "values": [
+                  "default",
+                  "plan"
+                ],
+                "observedValue": "default"
+              },
+              "reasoning_effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "medium"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "codex.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "openai.gpt-5.6-terra",
+            "displayName": "GPT-5.6 Terra",
+            "description": "Frontier model for complex coding, research, and real-world work.",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "read-only",
+                  "auto",
+                  "full-access"
+                ],
+                "observedValue": "read-only"
+              },
+              "collaboration_mode": {
+                "values": [
+                  "default",
+                  "plan"
+                ],
+                "observedValue": "default"
+              },
+              "reasoning_effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "medium"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "codex.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "openai.gpt-5.6-luna",
+            "displayName": "GPT-5.6 Luna",
+            "description": "Frontier model for complex coding, research, and real-world work.",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "read-only",
+                  "auto",
+                  "full-access"
+                ],
+                "observedValue": "read-only"
+              },
+              "collaboration_mode": {
+                "values": [
+                  "default",
+                  "plan"
+                ],
+                "observedValue": "default"
+              },
+              "reasoning_effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "medium"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "codex.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "gpt-5.6-sol",
+            "displayName": "GPT-5.6 Sol",
+            "description": "Latest frontier agentic coding model.",
+            "availability": {
+              "anyOf": [
+                "openai-api",
+                "openai-oauth"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "read-only",
+                  "auto",
+                  "full-access"
+                ],
+                "observedValue": "read-only"
+              },
+              "collaboration_mode": {
+                "values": [
+                  "default",
+                  "plan"
+                ],
+                "observedValue": "default"
+              },
+              "reasoning_effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max",
+                  "ultra"
+                ],
+                "observedValue": "low"
+              },
+              "fast_mode": {
+                "values": [
+                  "off",
+                  "on"
+                ],
+                "observedValue": "off"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "codex.openai-api",
+                "codex.openai-oauth"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "gpt-5.6-terra",
+            "displayName": "GPT-5.6 Terra",
+            "description": "Balanced agentic coding model for everyday work.",
+            "availability": {
+              "anyOf": [
+                "openai-api",
+                "openai-oauth"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "read-only",
+                  "auto",
+                  "full-access"
+                ],
+                "observedValue": "read-only"
+              },
+              "collaboration_mode": {
+                "values": [
+                  "default",
+                  "plan"
+                ],
+                "observedValue": "default"
+              },
+              "reasoning_effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max",
+                  "ultra"
+                ],
+                "observedValue": "low"
+              },
+              "fast_mode": {
+                "values": [
+                  "off",
+                  "on"
+                ],
+                "observedValue": "off"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "codex.openai-api",
+                "codex.openai-oauth"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "gpt-5.6-luna",
+            "displayName": "GPT-5.6 Luna",
+            "description": "Fast and affordable agentic coding model.",
+            "availability": {
+              "anyOf": [
+                "openai-api",
+                "openai-oauth"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "read-only",
+                  "auto",
+                  "full-access"
+                ],
+                "observedValue": "read-only"
+              },
+              "collaboration_mode": {
+                "values": [
+                  "default",
+                  "plan"
+                ],
+                "observedValue": "default"
+              },
+              "reasoning_effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "low"
+              },
+              "fast_mode": {
+                "values": [
+                  "off",
+                  "on"
+                ],
+                "observedValue": "off"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "codex.openai-api",
+                "codex.openai-oauth"
               ],
               "observedInAllContexts": false,
               "viaTrialOnly": false
@@ -1192,6 +1786,13 @@
                 ],
                 "observedValue": "read-only"
               },
+              "collaboration_mode": {
+                "values": [
+                  "default",
+                  "plan"
+                ],
+                "observedValue": "default"
+              },
               "reasoning_effort": {
                 "values": [
                   "low",
@@ -1199,7 +1800,14 @@
                   "high",
                   "xhigh"
                 ],
-                "observedValue": "medium"
+                "observedValue": "low"
+              },
+              "fast_mode": {
+                "values": [
+                  "off",
+                  "on"
+                ],
+                "observedValue": "off"
               }
             },
             "status": "active",
@@ -1232,6 +1840,13 @@
                 ],
                 "observedValue": "read-only"
               },
+              "collaboration_mode": {
+                "values": [
+                  "default",
+                  "plan"
+                ],
+                "observedValue": "default"
+              },
               "reasoning_effort": {
                 "values": [
                   "low",
@@ -1239,7 +1854,14 @@
                   "high",
                   "xhigh"
                 ],
-                "observedValue": "medium"
+                "observedValue": "low"
+              },
+              "fast_mode": {
+                "values": [
+                  "off",
+                  "on"
+                ],
+                "observedValue": "off"
               }
             },
             "status": "active",
@@ -1254,7 +1876,7 @@
           },
           {
             "id": "gpt-5.4-mini",
-            "displayName": "GPT-5.4-Mini",
+            "displayName": "GPT-5.4 Mini",
             "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
             "availability": {
               "anyOf": [
@@ -1272,6 +1894,13 @@
                 ],
                 "observedValue": "read-only"
               },
+              "collaboration_mode": {
+                "values": [
+                  "default",
+                  "plan"
+                ],
+                "observedValue": "default"
+              },
               "reasoning_effort": {
                 "values": [
                   "low",
@@ -1279,7 +1908,7 @@
                   "high",
                   "xhigh"
                 ],
-                "observedValue": "medium"
+                "observedValue": "low"
               }
             },
             "status": "active",
@@ -1293,50 +1922,13 @@
             }
           },
           {
-            "id": "gpt-5.3-codex",
-            "displayName": "GPT-5.3-Codex",
-            "description": "Coding-optimized model.",
-            "availability": {
-              "anyOf": [
-                "openai-api"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "read-only",
-                  "auto",
-                  "full-access"
-                ],
-                "observedValue": "read-only"
-              },
-              "reasoning_effort": {
-                "values": [
-                  "low",
-                  "medium",
-                  "high",
-                  "xhigh"
-                ],
-                "observedValue": "medium"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "codex.openai-api"
-              ],
-              "observedInAllContexts": false,
-              "viaTrialOnly": false
-            }
-          },
-          {
             "id": "gpt-5.2",
             "displayName": "GPT-5.2",
             "description": "Optimized for professional work and long-running agents.",
             "availability": {
               "anyOf": [
-                "openai-api"
+                "openai-api",
+                "gateway"
               ]
             },
             "defaultVisible": true,
@@ -1349,6 +1941,13 @@
                 ],
                 "observedValue": "read-only"
               },
+              "collaboration_mode": {
+                "values": [
+                  "default",
+                  "plan"
+                ],
+                "observedValue": "default"
+              },
               "reasoning_effort": {
                 "values": [
                   "low",
@@ -1356,7 +1955,7 @@
                   "high",
                   "xhigh"
                 ],
-                "observedValue": "medium"
+                "observedValue": "low"
               }
             },
             "status": "active",
@@ -1370,7 +1969,7 @@
           },
           {
             "id": "gpt-5.3-codex-spark",
-            "displayName": "GPT-5.3-Codex-Spark",
+            "displayName": "GPT-5.3 Codex Spark",
             "description": "Ultra-fast coding model.",
             "availability": {
               "anyOf": [
@@ -1387,6 +1986,13 @@
                 ],
                 "observedValue": "read-only"
               },
+              "collaboration_mode": {
+                "values": [
+                  "default",
+                  "plan"
+                ],
+                "observedValue": "default"
+              },
               "reasoning_effort": {
                 "values": [
                   "low",
@@ -1405,24 +2011,126 @@
               "observedInAllContexts": false,
               "viaTrialOnly": false
             }
+          },
+          {
+            "id": "gpt-5.2-2025-12-11",
+            "displayName": "GPT-5.2 (2025-12-11)",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "read-only",
+                  "auto",
+                  "full-access"
+                ],
+                "observedValue": "read-only"
+              },
+              "reasoning_effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh"
+                ],
+                "observedValue": "medium"
+              }
+            },
+            "status": "active"
+          },
+          {
+            "id": "gpt-5-mini",
+            "displayName": "GPT-5 Mini",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "read-only",
+                  "auto",
+                  "full-access"
+                ],
+                "observedValue": "read-only"
+              },
+              "reasoning_effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh"
+                ],
+                "observedValue": "medium"
+              }
+            },
+            "status": "active"
+          },
+          {
+            "id": "gpt-5-mini-2025-08-07",
+            "displayName": "GPT-5 Mini (2025-08-07)",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "read-only",
+                  "auto",
+                  "full-access"
+                ],
+                "observedValue": "read-only"
+              },
+              "reasoning_effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh"
+                ],
+                "observedValue": "medium"
+              }
+            },
+            "status": "active"
           }
         ],
         "defaults": {
           "openai-api": "gpt-5.5",
           "openai-oauth": "gpt-5.5",
-          "bedrock": "openai.gpt-5.5"
+          "bedrock": "openai.gpt-5.5",
+          "gateway": "gpt-5.2"
         },
         "observedDefaults": {
           "bedrock": "openai.gpt-oss-120b",
-          "openai-api": "gpt-5.5",
-          "openai-oauth": "gpt-5.5"
+          "openai-api": "gpt-5.6-sol",
+          "openai-oauth": "gpt-5.6-sol"
+        },
+        "gatewayPolicy": {
+          "providers": [
+            "openai"
+          ],
+          "seedModels": [
+            "gpt-5.2",
+            "gpt-5.2-2025-12-11",
+            "gpt-5-mini",
+            "gpt-5-mini-2025-08-07"
+          ]
         }
       },
       "provenance": {
-        "probedAt": "2026-06-18T02:52:32.817407+00:00",
+        "probedAt": "2026-07-11T00:36:25.416008+00:00",
         "attestation": {
           "name": "codex-acp",
-          "version": "0.16.0-proliferate.1",
+          "version": "0.17.0-proliferate.1",
           "title": "Codex"
         },
         "runs": [
@@ -1582,7 +2290,7 @@
           },
           {
             "id": "composer-2.5",
-            "displayName": "Composer-2.5",
+            "displayName": "Composer 2.5",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -1618,7 +2326,7 @@
           },
           {
             "id": "claude-opus-4-8",
-            "displayName": "Claude-Opus-4-8",
+            "displayName": "Claude Opus 4.8",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -1715,7 +2423,7 @@
           },
           {
             "id": "claude-sonnet-4-6",
-            "displayName": "Claude-Sonnet-4-6",
+            "displayName": "Claude Sonnet 4.6",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -1761,7 +2469,7 @@
           },
           {
             "id": "gpt-5.3-codex",
-            "displayName": "GPT-5.3-Codex",
+            "displayName": "GPT-5.3 Codex",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -1802,7 +2510,7 @@
           },
           {
             "id": "claude-opus-4-7",
-            "displayName": "Claude-Opus-4-7",
+            "displayName": "Claude Opus 4.7",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -1853,7 +2561,7 @@
           },
           {
             "id": "grok-build-0.1",
-            "displayName": "Grok-Build-0.1",
+            "displayName": "Grok Build 0.1",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -1935,7 +2643,7 @@
           },
           {
             "id": "claude-opus-4-6",
-            "displayName": "Claude-Opus-4-6",
+            "displayName": "Claude Opus 4.6",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -1986,7 +2694,7 @@
           },
           {
             "id": "claude-opus-4-5",
-            "displayName": "Claude-Opus-4-5",
+            "displayName": "Claude Opus 4.5",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2063,7 +2771,7 @@
           },
           {
             "id": "gemini-3.1-pro",
-            "displayName": "Gemini-3.1-Pro",
+            "displayName": "Gemini 3.1 Pro",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2094,7 +2802,7 @@
           },
           {
             "id": "gpt-5.4-mini",
-            "displayName": "GPT-5.4-Mini",
+            "displayName": "GPT-5.4 Mini",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2130,7 +2838,7 @@
           },
           {
             "id": "gpt-5.4-nano",
-            "displayName": "GPT-5.4-Nano",
+            "displayName": "GPT-5.4 Nano",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2166,7 +2874,7 @@
           },
           {
             "id": "claude-haiku-4-5",
-            "displayName": "Claude-Haiku-4-5",
+            "displayName": "Claude Haiku 4.5",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2202,7 +2910,7 @@
           },
           {
             "id": "grok-4.3",
-            "displayName": "Grok-4.3",
+            "displayName": "Grok 4.3",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2238,7 +2946,7 @@
           },
           {
             "id": "claude-sonnet-4-5",
-            "displayName": "Claude-Sonnet-4-5",
+            "displayName": "Claude Sonnet 4.5",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2279,7 +2987,7 @@
           },
           {
             "id": "gpt-5.2-codex",
-            "displayName": "GPT-5.2-Codex",
+            "displayName": "GPT-5.2 Codex",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2320,7 +3028,7 @@
           },
           {
             "id": "gpt-5.1-codex-max",
-            "displayName": "GPT-5.1-Codex-Max",
+            "displayName": "GPT-5.1 Codex Max",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2397,7 +3105,7 @@
           },
           {
             "id": "gemini-3-flash",
-            "displayName": "Gemini-3-Flash",
+            "displayName": "Gemini 3 Flash",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2428,7 +3136,7 @@
           },
           {
             "id": "gemini-3.5-flash",
-            "displayName": "Gemini-3.5-Flash",
+            "displayName": "Gemini 3.5 Flash",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2459,7 +3167,7 @@
           },
           {
             "id": "gpt-5.1-codex-mini",
-            "displayName": "GPT-5.1-Codex-Mini",
+            "displayName": "GPT-5.1 Codex Mini",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2495,7 +3203,7 @@
           },
           {
             "id": "claude-sonnet-4",
-            "displayName": "Claude-Sonnet-4",
+            "displayName": "Claude Sonnet 4",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2536,7 +3244,7 @@
           },
           {
             "id": "gpt-5-mini",
-            "displayName": "GPT-5-Mini",
+            "displayName": "GPT-5 Mini",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2567,7 +3275,7 @@
           },
           {
             "id": "gemini-2.5-flash",
-            "displayName": "Gemini-2.5-Flash",
+            "displayName": "Gemini 2.5 Flash",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2598,7 +3306,7 @@
           },
           {
             "id": "kimi-k2.5",
-            "displayName": "Kimi-K2.5",
+            "displayName": "Kimi K2.5",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2629,7 +3337,7 @@
           },
           {
             "id": "claude-fable-5",
-            "displayName": "Claude-Fable-5",
+            "displayName": "Claude Fable 5",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2693,293 +3401,6 @@
       }
     },
     {
-      "kind": "gemini",
-      "displayName": "Gemini",
-      "harness": {
-        "agentProcess": {
-          "version": "0.46.0",
-          "source": {
-            "kind": "npm",
-            "package": "@google/gemini-cli@0.46.0",
-            "sha256": "sha512-+HZtuuDKsL8mvOUWgK08GkrL1BQM4IplaSzxIjAM262FmJFp3Jo/zlHUq9ulRKcvx0agZ4KAzuj7jG9yIAxFBw==",
-            "args": [
-              "--acp"
-            ]
-          }
-        }
-      },
-      "authContexts": [
-        {
-          "id": "gemini-api",
-          "authSlotId": "gemini",
-          "signals": {
-            "anyOf": [
-              {
-                "env": "GEMINI_API_KEY"
-              },
-              {
-                "env": "GOOGLE_API_KEY"
-              }
-            ]
-          }
-        },
-        {
-          "id": "google-oauth",
-          "authSlotId": "gemini",
-          "signals": {
-            "anyOf": [
-              {
-                "discovery": "gemini-oauth-creds"
-              },
-              {
-                "discovery": "gemini-keychain"
-              }
-            ]
-          }
-        }
-      ],
-      "session": {
-        "controls": [
-          {
-            "key": "model",
-            "mapping": {
-              "createField": "modelId",
-              "switchVia": "setSessionModel",
-              "liveConfigId": "model"
-            }
-          },
-          {
-            "key": "mode",
-            "values": [
-              "default",
-              "autoEdit",
-              "yolo",
-              "plan"
-            ],
-            "mapping": {
-              "createField": "modeId",
-              "liveConfigId": "mode"
-            }
-          }
-        ],
-        "models": [
-          {
-            "id": "auto",
-            "displayName": "Auto",
-            "description": "Let Gemini CLI decide the best model for the task: gemini-3-pro-preview, gemini-3-flash-preview",
-            "availability": {
-              "anyOf": [
-                "gemini-api",
-                "google-oauth"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "default",
-                  "autoEdit",
-                  "yolo",
-                  "plan"
-                ],
-                "observedValue": "default"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "gemini.gemini-api",
-                "gemini.google-oauth"
-              ],
-              "observedInAllContexts": true,
-              "viaTrialOnly": false
-            }
-          },
-          {
-            "id": "gemini-3-pro-preview",
-            "displayName": "Gemini-3-Pro-Preview",
-            "availability": {
-              "anyOf": [
-                "gemini-api",
-                "google-oauth"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "default",
-                  "autoEdit",
-                  "yolo",
-                  "plan"
-                ],
-                "observedValue": "default"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "gemini.gemini-api",
-                "gemini.google-oauth"
-              ],
-              "observedInAllContexts": true,
-              "viaTrialOnly": false
-            }
-          },
-          {
-            "id": "gemini-3-flash-preview",
-            "displayName": "Gemini-3-Flash-Preview",
-            "availability": {
-              "anyOf": [
-                "gemini-api",
-                "google-oauth"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "default",
-                  "autoEdit",
-                  "yolo",
-                  "plan"
-                ],
-                "observedValue": "default"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "gemini.gemini-api",
-                "gemini.google-oauth"
-              ],
-              "observedInAllContexts": true,
-              "viaTrialOnly": false
-            }
-          },
-          {
-            "id": "gemini-2.5-pro",
-            "displayName": "Gemini-2.5-Pro",
-            "availability": {
-              "anyOf": [
-                "gemini-api",
-                "google-oauth"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "default",
-                  "autoEdit",
-                  "yolo",
-                  "plan"
-                ],
-                "observedValue": "default"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "gemini.gemini-api",
-                "gemini.google-oauth"
-              ],
-              "observedInAllContexts": true,
-              "viaTrialOnly": false
-            }
-          },
-          {
-            "id": "gemini-2.5-flash",
-            "displayName": "Gemini-2.5-Flash",
-            "availability": {
-              "anyOf": [
-                "gemini-api",
-                "google-oauth"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "default",
-                  "autoEdit",
-                  "yolo",
-                  "plan"
-                ],
-                "observedValue": "default"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "gemini.gemini-api",
-                "gemini.google-oauth"
-              ],
-              "observedInAllContexts": true,
-              "viaTrialOnly": false
-            }
-          },
-          {
-            "id": "gemini-3.1-flash-lite",
-            "displayName": "Gemini-3.1-Flash-Lite",
-            "availability": {
-              "anyOf": [
-                "gemini-api",
-                "google-oauth"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "default",
-                  "autoEdit",
-                  "yolo",
-                  "plan"
-                ],
-                "observedValue": "default"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "gemini.gemini-api",
-                "gemini.google-oauth"
-              ],
-              "observedInAllContexts": true,
-              "viaTrialOnly": false
-            }
-          }
-        ],
-        "defaults": {
-          "gemini-api": "auto",
-          "google-oauth": "auto"
-        },
-        "observedDefaults": {
-          "gemini-api": "auto",
-          "google-oauth": "gemini-3-flash-preview"
-        }
-      },
-      "provenance": {
-        "probedAt": "2026-06-10T04:17:09.648698+00:00",
-        "attestation": {
-          "name": "gemini-cli",
-          "version": "0.45.3",
-          "title": "Gemini CLI"
-        },
-        "runs": [
-          {
-            "id": "gemini.gemini-api",
-            "snapshotPath": "generated/gemini.gemini-api.probe.json"
-          },
-          {
-            "id": "gemini.google-oauth",
-            "snapshotPath": "generated/gemini.google-oauth.probe.json"
-          }
-        ]
-      }
-    },
-    {
       "kind": "grok",
       "displayName": "Grok",
       "harness": {
@@ -3013,6 +3434,14 @@
               }
             ]
           }
+        },
+        {
+          "id": "gateway",
+          "authSlotId": "gateway",
+          "description": "Proliferate LiteLLM gateway (route-engaged; not credential-detected).",
+          "signals": {
+            "route": "gateway"
+          }
         }
       ],
       "session": {
@@ -3029,7 +3458,7 @@
         "models": [
           {
             "id": "grok-4.20-0309-non-reasoning",
-            "displayName": "Grok-4.20-0309-Non-Reasoning",
+            "displayName": "Grok 4.20 Non-Reasoning",
             "availability": {
               "anyOf": [
                 "xai-api"
@@ -3048,7 +3477,7 @@
           },
           {
             "id": "grok-4.20-0309-reasoning",
-            "displayName": "Grok-4.20-0309-Reasoning",
+            "displayName": "Grok 4.20 Reasoning",
             "availability": {
               "anyOf": [
                 "xai-api"
@@ -3067,7 +3496,7 @@
           },
           {
             "id": "grok-4.20-multi-agent-0309",
-            "displayName": "Grok-4.20-Multi-Agent-0309",
+            "displayName": "Grok 4.20 Multi-Agent",
             "availability": {
               "anyOf": [
                 "xai-api"
@@ -3086,7 +3515,7 @@
           },
           {
             "id": "grok-4.3",
-            "displayName": "Grok-4.3",
+            "displayName": "Grok 4.3",
             "availability": {
               "anyOf": [
                 "xai-api"
@@ -3105,7 +3534,7 @@
           },
           {
             "id": "grok-build-0.1",
-            "displayName": "Grok-Build-0.1",
+            "displayName": "Grok Build 0.1",
             "availability": {
               "anyOf": [
                 "xai-api"
@@ -3124,7 +3553,7 @@
           },
           {
             "id": "grok-imagine-image",
-            "displayName": "Grok-Imagine-Image",
+            "displayName": "Grok Imagine Image",
             "availability": {
               "anyOf": [
                 "xai-api"
@@ -3143,7 +3572,7 @@
           },
           {
             "id": "grok-imagine-image-quality",
-            "displayName": "Grok-Imagine-Image-Quality",
+            "displayName": "Grok Imagine Image Quality",
             "availability": {
               "anyOf": [
                 "xai-api"
@@ -3162,7 +3591,7 @@
           },
           {
             "id": "grok-imagine-video",
-            "displayName": "Grok-Imagine-Video",
+            "displayName": "Grok Imagine Video",
             "availability": {
               "anyOf": [
                 "xai-api"
@@ -3181,7 +3610,7 @@
           },
           {
             "id": "grok-imagine-video-1.5-preview",
-            "displayName": "Grok-Imagine-Video-1.5-Preview",
+            "displayName": "Grok Imagine Video 1.5 Preview",
             "availability": {
               "anyOf": [
                 "xai-api"
@@ -3197,13 +3626,73 @@
               "observedInAllContexts": true,
               "viaTrialOnly": false
             }
+          },
+          {
+            "id": "grok-4",
+            "displayName": "Grok 4",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {},
+            "status": "active"
+          },
+          {
+            "id": "grok-4-fast",
+            "displayName": "Grok 4 Fast",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {},
+            "status": "active"
+          },
+          {
+            "id": "grok-code-fast-1",
+            "displayName": "Grok Code Fast 1",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {},
+            "status": "active"
+          },
+          {
+            "id": "grok-build",
+            "displayName": "Grok Build",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {},
+            "status": "active"
           }
         ],
         "defaults": {
-          "xai-api": "grok-4.20-0309-non-reasoning"
+          "xai-api": "grok-4.20-0309-non-reasoning",
+          "gateway": "grok-4-fast"
         },
         "observedDefaults": {
           "xai-api": "grok-4.20-0309-non-reasoning"
+        },
+        "gatewayPolicy": {
+          "seedModels": [
+            "grok-4",
+            "grok-4-fast",
+            "grok-code-fast-1",
+            "grok-build"
+          ],
+          "providers": [
+            "xai"
+          ]
         }
       },
       "provenance": {
@@ -3309,6 +3798,14 @@
         },
         {
           "id": "baseline"
+        },
+        {
+          "id": "gateway",
+          "authSlotId": "gateway",
+          "description": "Proliferate LiteLLM gateway (route-engaged; not credential-detected).",
+          "signals": {
+            "route": "gateway"
+          }
         }
       ],
       "session": {
@@ -8381,10 +8878,119 @@
               "observedInAllContexts": false,
               "viaTrialOnly": false
             }
+          },
+          {
+            "id": "claude-sonnet-4-5",
+            "displayName": "Sonnet 4.5",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "high",
+                  "max"
+                ],
+                "observedValue": "high"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active"
+          },
+          {
+            "id": "claude-sonnet-4-5-20250929",
+            "displayName": "Sonnet 4.5 (2025-09-29)",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "high",
+                  "max"
+                ],
+                "observedValue": "high"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active"
+          },
+          {
+            "id": "claude-haiku-4-5",
+            "displayName": "Haiku 4.5",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "high",
+                  "max"
+                ],
+                "observedValue": "high"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active"
+          },
+          {
+            "id": "claude-haiku-4-5-20251001",
+            "displayName": "Haiku 4.5 (2025-10-01)",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "high",
+                  "max"
+                ],
+                "observedValue": "high"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active"
           }
         ],
         "defaults": {
-          "baseline": "opencode/big-pickle"
+          "baseline": "opencode/big-pickle",
+          "gateway": "claude-sonnet-4-5"
         },
         "observedDefaults": {
           "anthropic-api": "opencode/big-pickle",
@@ -8392,6 +8998,14 @@
           "gemini-api": "opencode/big-pickle",
           "openai-api": "opencode/big-pickle",
           "opencode-zen": "opencode/big-pickle"
+        },
+        "gatewayPolicy": {
+          "seedModels": [
+            "claude-sonnet-4-5",
+            "claude-sonnet-4-5-20250929",
+            "claude-haiku-4-5",
+            "claude-haiku-4-5-20251001"
+          ]
         }
       },
       "provenance": {

@@ -21,8 +21,10 @@ from proliferate.auth.identity.service import (
 from proliferate.auth.identity.web_beta import ensure_web_beta_email_allowed
 from proliferate.auth.sso.deployment_config import deployment_sso_connection
 from proliferate.auth.sso.policy import (
+    OIDC_CONFIG_ERROR_MESSAGES,
     email_domain,
     normalize_domains,
+    oidc_configuration_error,
 )
 from proliferate.auth.sso.types import (
     DEFAULT_OIDC_SCOPES,
@@ -39,6 +41,7 @@ from proliferate.config import settings
 from proliferate.constants.auth import SUPPORTED_CODE_CHALLENGE_METHODS
 from proliferate.db.models.auth import User
 from proliferate.db.store import auth_sso as sso_store
+from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.auth import create_auth_code
 from proliferate.integrations.sso.errors import SsoIntegrationError
 from proliferate.integrations.sso.oidc import (
@@ -70,12 +73,63 @@ class SsoStart:
     connection: SsoConnectionSnapshot
 
 
+# Uniform "no SSO here" answer for slug-driven discovery. A nonexistent slug,
+# an org with no SSO, and an org whose SSO is disabled all return this identical
+# response so a caller cannot probe which orgs exist by cycling slugs.
+_SLUG_UNAVAILABLE = SsoDiscovery(
+    enabled=False,
+    scope=None,
+    connection_id=None,
+    organization_id=None,
+    protocol=None,
+    display_name=None,
+    reason="not_available",
+)
+
+
 async def discover_sso(
     db: AsyncSession,
     *,
     email: str | None,
     organization_id: UUID | None = None,
     connection_id: UUID | None = None,
+    slug: str | None = None,
+) -> SsoDiscovery:
+    if slug is not None:
+        resolved_organization_id = await _organization_id_for_slug(db, slug)
+        if resolved_organization_id is None:
+            return _SLUG_UNAVAILABLE
+        discovery = await _discover_for_context(
+            db,
+            email=None,
+            organization_id=resolved_organization_id,
+            connection_id=None,
+        )
+        # Only surface the ids needed to start the flow once SSO is actually
+        # usable; every other outcome collapses to the generic response.
+        return discovery if discovery.enabled else _SLUG_UNAVAILABLE
+    return await _discover_for_context(
+        db,
+        email=email,
+        organization_id=organization_id,
+        connection_id=connection_id,
+    )
+
+
+async def _organization_id_for_slug(db: AsyncSession, slug: str) -> UUID | None:
+    cleaned = slug.strip()
+    if not cleaned:
+        return None
+    organization = await organization_store.get_organization_by_slug(db, cleaned)
+    return organization.id if organization is not None else None
+
+
+async def _discover_for_context(
+    db: AsyncSession,
+    *,
+    email: str | None,
+    organization_id: UUID | None,
+    connection_id: UUID | None,
 ) -> SsoDiscovery:
     connection = await _connection_for_start(
         db,
@@ -104,6 +158,22 @@ async def discover_sso(
             display_name=connection.display_name,
             reason=connection.status.value,
         )
+    # Advertise only USABLE configurations: a connection marked enabled but
+    # missing required OIDC config (client id/secret/endpoints) would render a
+    # sign-in button that can only fail at the provider. Reuse the exact
+    # start-time completeness check so discovery and start never disagree.
+    if connection.protocol == SsoProtocol.OIDC:
+        config_error = oidc_configuration_error(connection)
+        if config_error is not None:
+            return SsoDiscovery(
+                enabled=False,
+                scope=connection.scope,
+                connection_id=connection.id,
+                organization_id=connection.organization_id,
+                protocol=connection.protocol,
+                display_name=connection.display_name,
+                reason=config_error,
+            )
     return SsoDiscovery(
         enabled=True,
         scope=connection.scope,
@@ -380,24 +450,9 @@ def _require_oidc_configured(
     *,
     require_secret: bool = True,
 ) -> None:
-    if not connection.oidc_client_id:
-        raise HTTPException(status_code=400, detail="OIDC client ID is required.")
-    if (
-        require_secret
-        and not connection.oidc_client_secret
-        and (connection.oidc_token_endpoint_auth_method != "none")
-    ):
-        raise HTTPException(status_code=400, detail="OIDC client secret is required.")
-    has_static_endpoints = (
-        connection.oidc_issuer_url
-        and connection.oidc_authorization_endpoint
-        and connection.oidc_token_endpoint
-        and connection.oidc_jwks_uri
-    )
-    if not has_static_endpoints and not (
-        connection.oidc_issuer_url or connection.oidc_discovery_url
-    ):
-        raise HTTPException(status_code=400, detail="OIDC issuer or discovery URL is required.")
+    error = oidc_configuration_error(connection, require_secret=require_secret)
+    if error is not None:
+        raise HTTPException(status_code=400, detail=OIDC_CONFIG_ERROR_MESSAGES[error])
 
 
 def _email_hint_allowed_for_discovery(email: str, allowed_domains: tuple[str, ...]) -> bool:

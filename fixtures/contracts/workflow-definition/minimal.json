@@ -1,0 +1,33 @@
+{
+  "id": "10000000-0000-4000-8000-000000000001",
+  "userId": "20000000-0000-4000-8000-000000000001",
+  "title": "Diagnose a ticket",
+  "description": "",
+  "schemaVersion": 1,
+  "revision": 1,
+  "validatedCatalogVersion": "2026-07-11.2",
+  "defaultRepoConfigId": null,
+  "inputs": [
+    {
+      "name": "ticket",
+      "type": "string",
+      "required": true
+    }
+  ],
+  "stages": [
+    {
+      "harnessConfig": {
+        "agentKind": "claude"
+      },
+      "steps": [
+        {
+          "kind": "agent.prompt",
+          "prompt": "Investigate {{inputs.ticket}}."
+        }
+      ]
+    }
+  ],
+  "createdAt": "2026-07-12T12:00:00Z",
+  "updatedAt": "2026-07-12T12:00:00Z",
+  "deletedAt": null
+}

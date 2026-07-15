@@ -12,7 +12,7 @@ from proliferate.server.cloud.integrations.seeds import SEED_DEFINITIONS
 
 
 def test_all_seeds_round_trip_through_the_config_codec() -> None:
-    assert len(SEED_DEFINITIONS) == 14
+    assert len(SEED_DEFINITIONS) == 13
     namespaces = {seed.namespace for seed in SEED_DEFINITIONS}
     assert {"linear", "notion", "context7", "exa", "posthog", "slack"} <= namespaces
 
@@ -40,7 +40,6 @@ def test_seed_auth_kinds_are_normalized() -> None:
     by_ns = {s.namespace: s for s in SEED_DEFINITIONS}
     assert by_ns["context7"].auth_kind == "api_key"
     assert by_ns["linear"].auth_kind == "oauth2"
-    assert by_ns["cloudflare_docs"].auth_kind == "none"
     assert by_ns["linear"].oauth_client_mode == "dcr"
     assert by_ns["slack"].oauth_client_mode == "static"
 

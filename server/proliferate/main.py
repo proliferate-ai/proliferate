@@ -1,5 +1,6 @@
 """Proliferate API — FastAPI application factory."""
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -17,6 +18,7 @@ import proliferate.db.models.automations  # noqa: F401
 import proliferate.db.models.cloud  # noqa: F401
 import proliferate.db.models.organizations  # noqa: F401
 import proliferate.db.models.support  # noqa: F401
+import proliferate.db.models.workflows  # noqa: F401
 from proliferate.auth.api import router as auth_viewer_router
 from proliferate.auth.desktop.api import router as desktop_router
 from proliferate.auth.identity.api import router as identity_auth_router
@@ -42,12 +44,10 @@ from proliferate.server.artifact_runtime.api import router as artifact_runtime_r
 # AUTOMATIONS PARKED: retarget to RepoEnvironment in a later PR before remounting.
 # from proliferate.server.automations.api import router as automations_router
 from proliferate.server.billing.api import router as billing_router
-
-# BILLING RECONCILER PARKED: retarget runtime usage to CloudSandbox before remounting.
-# from proliferate.server.billing.reconciler import (
-#     start_billing_reconciler,
-#     stop_billing_reconciler,
-# )
+from proliferate.server.billing.reconciler import (
+    start_billing_reconciler,
+    stop_billing_reconciler,
+)
 from proliferate.server.catalogs.api import router as catalogs_router
 from proliferate.server.cloud.agent_gateway.worker import (
     start_agent_gateway_enrollment_backfill,
@@ -74,12 +74,14 @@ from proliferate.server.organizations.registration_pages import (
     router as registration_pages_router,
 )
 from proliferate.server.organizations.sso.api import router as organization_sso_router
+from proliferate.server.organizations.usage.api import router as organization_usage_router
 from proliferate.server.setup.api import router as first_run_setup_router
 from proliferate.server.setup.lifecycle import ensure_first_run_setup_token
+from proliferate.server.support.api import router as support_router
+from proliferate.server.support.feed.api import router as support_feed_router
 from proliferate.server.version import server_version
-
-# SUPPORT PARKED: diagnostics imports deleted target runtime access models.
-# from proliferate.server.support.api import router as support_router
+from proliferate.server.workflows.api import invocations_router as workflow_invocations_router
+from proliferate.server.workflows.api import router as workflows_router
 from proliferate.utils.logging import configure_server_logging
 
 
@@ -104,37 +106,20 @@ def _validate_cloud_billing_configuration() -> None:
 
 
 def _validate_e2b_template_configuration() -> None:
-    if settings.debug:
-        return
-    if not settings.e2b_api_key:
-        return
-    if settings.e2b_template_name.strip():
-        return
-    raise RuntimeError(
-        "E2B_API_KEY set requires E2B_TEMPLATE_NAME in "
-        "non-debug environments so cloud provisioning uses the published runtime "
-        "template instead of the base E2B image."
-    )
-
-
-def _validate_support_tracker_configuration() -> None:
-    if not settings.support_tracker_enabled or settings.debug:
-        return
-    missing = [
-        name
-        for name, value in {
-            "SUPPORT_GITHUB_APP_ID": settings.support_github_app_id,
-            "SUPPORT_GITHUB_APP_PRIVATE_KEY": settings.support_github_app_private_key,
-            "SUPPORT_GITHUB_APP_INSTALLATION_ID": settings.support_github_app_installation_id,
-            "SUPPORT_GITHUB_OWNER": settings.support_github_owner,
-            "SUPPORT_GITHUB_REPO": settings.support_github_repo,
-        }.items()
-        if not value.strip()
-    ]
-    if missing:
-        raise RuntimeError(
-            "support_tracker_enabled=true requires GitHub support tracker configuration: "
-            + ", ".join(missing)
+    # A previously-healthy base instance must not be replaced by a crash-looping
+    # API just because E2B is half-configured (a common self-host mistake: set
+    # E2B_API_KEY, forget E2B_TEMPLATE_NAME). Partial cloud configuration
+    # disables the optional cloud-workspace capability and logs a loud warning;
+    # cloud-provisioning *requests* then fail with a specific, actionable error
+    # (see `settings.cloud_provisioning_config_error` consumers) instead of
+    # taking down auth and every other control-plane surface at boot.
+    config_error = settings.cloud_provisioning_config_error
+    if config_error is not None:
+        logging.getLogger("proliferate.startup").warning(
+            "Cloud workspace provisioning is DISABLED: %s Base control-plane "
+            "features remain available; cloud-workspace requests will return an "
+            "actionable configuration error until this is resolved.",
+            config_error,
         )
 
 
@@ -164,9 +149,17 @@ def _redact_validation_input(value: object) -> object:
 
 
 def _redacts_entire_body(request: Request) -> bool:
-    # The agent-gateway key-create endpoint accepts a raw secret in the body;
+    # The agent-gateway key-create endpoint accepts a raw key value in the body;
     # redact its echoed input wholesale so no malformed shape can leak it.
-    return request.method == "POST" and request.url.path.endswith("/agent-gateway/api-keys")
+    return request.method == "POST" and request.url.path.endswith("/agent-gateway/keys")
+
+
+def _is_workflow_invocation_argument_error(request: Request, loc: object) -> bool:
+    if request.method != "PUT" or "/workflow-invocations/" not in request.url.path:
+        return False
+    if not isinstance(loc, tuple | list):
+        return False
+    return len(loc) >= 2 and loc[0] == "body" and "arguments" in loc[1:]
 
 
 async def _validation_error_handler(
@@ -179,7 +172,11 @@ async def _validation_error_handler(
         item = dict(raw)
         if "input" in item:
             loc = item.get("loc") or ()
-            if redact_all or (loc and _is_sensitive_field(loc[-1])):
+            if (
+                redact_all
+                or (loc and _is_sensitive_field(loc[-1]))
+                or _is_workflow_invocation_argument_error(request, loc)
+            ):
                 item["input"] = _REDACTED_INPUT
             else:
                 item["input"] = _redact_validation_input(item["input"])
@@ -209,7 +206,6 @@ async def _proliferate_error_handler(
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     _validate_cloud_billing_configuration()
     _validate_e2b_template_configuration()
-    _validate_support_tracker_configuration()
     try:
         async with db_engine.engine.begin() as conn:
             await conn.run_sync(validate_database_schema)
@@ -229,9 +225,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     async with db_engine.async_session_factory() as db, db.begin():
         await sync_seed_definitions(db)
     if settings.cloud_billing_mode in {"observe", "enforce"}:
-        # BILLING RECONCILER PARKED: old reconciler imports deleted runtime env tables.
-        # start_billing_reconciler()
-        pass
+        start_billing_reconciler()
     anonymous_telemetry_task = await start_server_anonymous_telemetry_sender()
     agent_gateway_backfill_task = await start_agent_gateway_enrollment_backfill()
     agent_gateway_usage_import_task = await start_agent_gateway_usage_import()
@@ -243,8 +237,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await stop_agent_gateway_usage_import(agent_gateway_usage_import_task)
         await stop_agent_gateway_enrollment_backfill(agent_gateway_backfill_task)
         await stop_server_anonymous_telemetry_sender(anonymous_telemetry_task)
-        # BILLING RECONCILER PARKED.
-        # await stop_billing_reconciler()
+        await stop_billing_reconciler()
         flush_server_sentry()
 
 
@@ -309,14 +302,27 @@ def create_app() -> FastAPI:
     app.include_router(cloud_router, prefix=f"{api_prefix}/v1", tags=["cloud"])
     app.include_router(gateway_router, prefix=f"{api_prefix}/v1/gateway", tags=["gateway"])
     app.include_router(catalogs_router, prefix=f"{api_prefix}/v1", tags=["catalogs"])
+    app.include_router(workflows_router, prefix=f"{api_prefix}/v1", tags=["workflows"])
+    app.include_router(
+        workflow_invocations_router,
+        prefix=f"{api_prefix}/v1",
+        tags=["workflow-invocations"],
+    )
     app.include_router(ai_magic_router, prefix=f"{api_prefix}/v1", tags=["ai_magic"])
-    # SUPPORT PARKED: /v1/support/* is intentionally disabled until diagnostics
-    # stop depending on deleted cloud target runtime access tables.
-    # app.include_router(support_router, prefix=f"{api_prefix}/v1", tags=["support"])
+    app.include_router(support_router, prefix=f"{api_prefix}/v1", tags=["support"])
+    # Private completed-report feed. Logical route /internal/support/reports
+    # (externally /api/internal/support/reports); dark-deployable behind a
+    # dedicated Bearer key.
+    app.include_router(support_feed_router, prefix=api_prefix, tags=["support-feed"])
     app.include_router(billing_router, prefix=f"{api_prefix}/v1", tags=["billing"])
     app.include_router(organizations_router, prefix=f"{api_prefix}/v1", tags=["organizations"])
     app.include_router(
         organization_sso_router,
+        prefix=f"{api_prefix}/v1",
+        tags=["organizations"],
+    )
+    app.include_router(
+        organization_usage_router,
         prefix=f"{api_prefix}/v1",
         tags=["organizations"],
     )

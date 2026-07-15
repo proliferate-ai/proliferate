@@ -1,23 +1,26 @@
 import type { Session } from "@anyharness/sdk";
+import type {
+  DesktopRuntimeBridge,
+  DesktopSshBridge,
+} from "@proliferate/product-client/host/desktop-bridge";
 import { applySessionLaunchDefaults } from "@/lib/workflows/sessions/session-launch-defaults";
 import { createSessionLaunchDefaultsClient } from "@/lib/access/anyharness/session-launch-defaults-client";
-import {
-  resolveRuntimeTargetForWorkspace,
-} from "@/lib/access/anyharness/runtime-target";
+import { resolveRuntimeTargetForWorkspace } from "@/lib/access/anyharness/runtime-target";
+import type { CloudSandboxGatewayUrlSource } from "@/lib/access/cloud/cloud-sandbox-gateway";
 import { resolveStatusFromExecutionSummary } from "@proliferate/product-domain/sessions/activity";
 import {
   findCompatibleExistingSession,
   shouldProbeCompatibleRuntimeSessions,
 } from "@/lib/domain/sessions/creation/compatible-session";
-import {
-  mergeLiveDefaultLaunchControls,
-} from "@/lib/domain/sessions/creation/launch-controls";
-import { trackProductEvent } from "@/lib/integrations/telemetry/client";
+import { mergeLiveDefaultLaunchControls } from "@/lib/domain/sessions/creation/launch-controls";
+import type { ErrorContext } from "@proliferate/product-client/host/product-host";
+import type { DesktopProductEventMap } from "@/lib/domain/telemetry/events";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import {
   createEmptySessionRecord,
   getSessionRecord,
+  putSessionRecord,
 } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
@@ -46,34 +49,85 @@ import type { CreateSessionWithResolvedConfigOptions } from "@/hooks/sessions/wo
 import { resolveDesktopRuntimeUrlForWorkspace } from "@/hooks/sessions/workflows/session-creation-runtime";
 import { annotateLatencyFlow } from "@/lib/infra/measurement/latency-flow";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import {
+  shouldDiscardSupersededSessionCreation,
+} from "@/hooks/sessions/workflows/session-creation-supersession";
+import { filterReplacedSessionTombstones } from "@/hooks/sessions/workflows/session-replacement-tombstones";
+import { scheduleCreatedRuntimeSessionCleanup } from "@/hooks/sessions/workflows/session-created-runtime-cleanup";
+import { runInterruptibleSessionCreationStep } from "@/hooks/sessions/workflows/session-creation-materialization-interruption";
+
+/**
+ * Narrow typed telemetry dependencies injected from the calling hook (which
+ * reads the product telemetry facade). Keeps this plain workflow free of any
+ * vendor import while preserving the exact event name/payload it emits.
+ */
+type TrackChatSessionCreated = (
+  name: "chat_session_created",
+  payload: DesktopProductEventMap["chat_session_created"],
+) => void;
+type CaptureException = (error: unknown, context?: ErrorContext) => void;
 
 interface MaterializeSessionCreationInput {
+  trackProductEvent: TrackChatSessionCreated;
+  captureException: CaptureException;
   ensureCloudAgentCatalog: () => Promise<{
     agents: Parameters<typeof buildDesktopLaunchModelRegistries>[0];
   }>;
   existingProjectedRecord: SessionRuntimeRecord | null;
   frozenDefaultLiveSessionControlValuesByAgentKind: Record<string, Record<string, string>>;
+  localRuntime: DesktopRuntimeBridge | null;
+  ssh?: DesktopSshBridge | null;
+  cloudClient: CloudSandboxGatewayUrlSource | null;
   options: CreateSessionWithResolvedConfigOptions;
   pendingSessionId: string;
   resolvedModeId: string | null;
   upsertWorkspaceSessionRecord: (
     workspaceId: string,
     session: Session,
-    options?: { runtimeUrl?: string },
   ) => void;
   workspaceId: string;
 }
 
-export async function materializeSessionCreation({
+interface MaterializationLifecycle {
+  discardCreatedSession: (() => Promise<boolean>) | null;
+  retainCreatedSession: (() => void) | null;
+}
+
+export async function materializeSessionCreation(
+  input: MaterializeSessionCreationInput,
+): Promise<string> {
+  const lifecycle: MaterializationLifecycle = {
+    discardCreatedSession: null,
+    retainCreatedSession: null,
+  };
+  try {
+    return await runSessionCreationMaterialization(input, lifecycle);
+  } catch (error) {
+    if (await discardIfSuperseded(input.pendingSessionId, lifecycle)) {
+      return input.pendingSessionId;
+    }
+    if (!await discardCreatedRuntimeSession(lifecycle)) {
+      return input.pendingSessionId;
+    }
+    throw error;
+  }
+}
+
+async function runSessionCreationMaterialization({
+  trackProductEvent,
+  captureException,
   ensureCloudAgentCatalog,
   existingProjectedRecord,
   frozenDefaultLiveSessionControlValuesByAgentKind,
+  localRuntime,
+  ssh,
+  cloudClient,
   options,
   pendingSessionId,
   resolvedModeId,
   upsertWorkspaceSessionRecord,
   workspaceId,
-}: MaterializeSessionCreationInput): Promise<string> {
+}: MaterializeSessionCreationInput, lifecycle: MaterializationLifecycle): Promise<string> {
   const materializeStartedAt = Date.now();
   const requestOptions = buildLatencyRequestOptions(options.latencyFlowId);
   logLatency("session.create.materialize.start", {
@@ -83,7 +137,7 @@ export async function materializeSessionCreation({
     modelId: options.modelId,
     modeId: resolvedModeId,
   });
-  const runtimeUrl = await resolveDesktopRuntimeUrlForWorkspace(workspaceId);
+  const runtimeUrl = await resolveDesktopRuntimeUrlForWorkspace(workspaceId, localRuntime);
   logLatency("session.create.materialize.runtime_url_resolved", {
     clientSessionId: pendingSessionId,
     workspaceId,
@@ -91,7 +145,7 @@ export async function materializeSessionCreation({
   });
 
   const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(workspaceId);
-  const target = await resolveRuntimeTargetForWorkspace(runtimeUrl, workspaceId);
+  const target = await resolveRuntimeTargetForWorkspace(runtimeUrl, workspaceId, ssh ?? null, cloudClient);
   logLatency("session.create.materialize.target_resolved", {
     clientSessionId: pendingSessionId,
     workspaceId,
@@ -109,6 +163,9 @@ export async function materializeSessionCreation({
     ...targetConnection,
     anyharnessWorkspaceId: target.anyharnessWorkspaceId,
   };
+  if (await discardIfSuperseded(pendingSessionId, lifecycle)) {
+    return pendingSessionId;
+  }
   if (shouldProbeCompatibleRuntimeSessions({
     preferExistingCompatibleSession: options.preferExistingCompatibleSession,
     runtimeLocation: target.location,
@@ -118,12 +175,15 @@ export async function materializeSessionCreation({
       requestOptions,
     )
       .then((sessions) => findCompatibleExistingSession({
-        sessions,
+        sessions: filterReplacedSessionTombstones(workspaceId, sessions) ?? [],
         agentKind: options.agentKind,
         modelId: options.modelId,
       }))
       .catch(() => null);
     if (existingSession) {
+      if (await discardIfSuperseded(pendingSessionId, lifecycle)) {
+        return pendingSessionId;
+      }
       return materializeExistingSession({
         existingProjectedRecord,
         existingSession,
@@ -131,7 +191,6 @@ export async function materializeSessionCreation({
         latencyFlowId: options.latencyFlowId,
         pendingSessionId,
         resolvedModeId,
-        runtimeUrl: target.baseUrl,
         upsertWorkspaceSessionRecord,
         workspaceId,
         launchIntentId: options.launchIntentId,
@@ -149,6 +208,47 @@ export async function materializeSessionCreation({
     subagentsEnabled,
     origin: DESKTOP_ORIGIN,
   }, requestOptions);
+  lifecycle.discardCreatedSession = () => {
+    return scheduleCreatedRuntimeSessionCleanup({
+      connection: targetConnection,
+      workspaceId,
+      runtimeSessionId: session.id,
+      clientSessionId: pendingSessionId,
+      captureException,
+    });
+  };
+  let sessionToRetain = session;
+  lifecycle.retainCreatedSession = () => {
+    if (!getSessionRecord(pendingSessionId)) {
+      putSessionRecord(createEmptySessionRecord(
+        pendingSessionId,
+        sessionToRetain.agentKind,
+        {
+          workspaceId,
+          materializedSessionId: null,
+          modelId: sessionToRetain.modelId ?? options.modelId,
+          requestedModelId: sessionToRetain.requestedModelId ?? options.modelId,
+          modeId: sessionToRetain.modeId ?? resolvedModeId,
+          title: sessionToRetain.title ?? existingProjectedRecord?.title ?? null,
+          sessionRelationship: { kind: "root" },
+        },
+      ));
+    }
+    materializeExistingSession({
+      existingProjectedRecord,
+      existingSession: sessionToRetain,
+      fallbackModelId: options.modelId,
+      latencyFlowId: options.latencyFlowId,
+      launchIntentId: options.launchIntentId,
+      pendingSessionId,
+      resolvedModeId,
+      upsertWorkspaceSessionRecord,
+      workspaceId,
+    });
+  };
+  if (await discardIfSuperseded(pendingSessionId, lifecycle)) {
+    return pendingSessionId;
+  }
   logLatency("session.create.materialize.session_created", {
     clientSessionId: pendingSessionId,
     materializedSessionId: session.id,
@@ -163,7 +263,15 @@ export async function materializeSessionCreation({
   });
 
   const queuedConfigValuesBeforeDefaults = pendingConfigValuesForSession(pendingSessionId);
-  const cloudLaunchCatalog = await ensureCloudAgentCatalog().catch(() => null);
+  const catalogStep = await runInterruptibleSessionCreationStep({
+    sessionId: pendingSessionId,
+    step: ensureCloudAgentCatalog().catch(() => null),
+    onSuperseded: () => discardIfSuperseded(pendingSessionId, lifecycle),
+  });
+  if (catalogStep.discarded) {
+    return pendingSessionId;
+  }
+  const cloudLaunchCatalog = catalogStep.value;
   const modelRegistries = buildDesktopLaunchModelRegistries(
     cloudLaunchCatalog?.agents ?? [],
   );
@@ -172,17 +280,32 @@ export async function materializeSessionCreation({
     agentKind: options.agentKind,
     values: queuedConfigValuesBeforeDefaults,
   });
-  const launchDefaults = await applySessionLaunchDefaults({
-    client: createSessionLaunchDefaultsClient(targetConnection),
-    session,
-    agentKind: options.agentKind,
-    modelRegistries,
-    defaultLiveSessionControlValuesByAgentKind: liveDefaultsForLaunch,
+  const launchDefaultsStep = await runInterruptibleSessionCreationStep({
+    sessionId: pendingSessionId,
+    step: applySessionLaunchDefaults({
+      client: createSessionLaunchDefaultsClient(targetConnection),
+      session,
+      agentKind: options.agentKind,
+      modelRegistries,
+      defaultLiveSessionControlValuesByAgentKind: liveDefaultsForLaunch,
+    }),
+    onSuperseded: () => discardIfSuperseded(pendingSessionId, lifecycle),
   });
+  if (launchDefaultsStep.discarded) {
+    return pendingSessionId;
+  }
+  const launchDefaults = launchDefaultsStep.value;
   const launchedSession = launchDefaults.session;
   const launchedLiveConfig = launchDefaults.liveConfig
     ?? launchedSession.liveConfig
     ?? null;
+  sessionToRetain = {
+    ...launchedSession,
+    liveConfig: launchedLiveConfig,
+  };
+  if (await discardIfSuperseded(pendingSessionId, lifecycle)) {
+    return pendingSessionId;
+  }
   const realRecord: SessionRuntimeRecord = {
     ...createEmptySessionRecord(pendingSessionId, options.agentKind, {
       workspaceId,
@@ -233,9 +356,7 @@ export async function materializeSessionCreation({
   if (useSessionSelectionStore.getState().activeSessionId === pendingSessionId) {
     rememberLastViewedSession(workspaceId, launchedSession.id);
   }
-  upsertWorkspaceSessionRecord(workspaceId, launchedSession, {
-    runtimeUrl: target.baseUrl,
-  });
+  upsertWorkspaceSessionRecord(workspaceId, launchedSession);
   trackProductEvent("chat_session_created", {
     workspace_kind: cloudWorkspaceId ? "cloud" : "local",
     agent_kind: options.agentKind,
@@ -252,5 +373,43 @@ export async function materializeSessionCreation({
     );
   }
 
+  lifecycle.discardCreatedSession = null;
+  lifecycle.retainCreatedSession = null;
   return pendingSessionId;
+}
+
+async function discardIfSuperseded(
+  sessionId: string,
+  lifecycle: MaterializationLifecycle,
+): Promise<boolean> {
+  if (!await shouldDiscardSupersededSessionCreation(sessionId)) {
+    return false;
+  }
+  const discardCreatedSession = lifecycle.discardCreatedSession;
+  lifecycle.discardCreatedSession = null;
+  if (!discardCreatedSession || await discardCreatedSession()) {
+    lifecycle.retainCreatedSession = null;
+    return true;
+  }
+  // The successor already committed, but this created runtime could not be
+  // retired safely. Publish it honestly and stop this older materializer here.
+  const retainCreatedSession = lifecycle.retainCreatedSession;
+  lifecycle.retainCreatedSession = null;
+  retainCreatedSession?.();
+  return true;
+}
+
+async function discardCreatedRuntimeSession(
+  lifecycle: MaterializationLifecycle,
+): Promise<boolean> {
+  const discardCreatedSession = lifecycle.discardCreatedSession;
+  lifecycle.discardCreatedSession = null;
+  if (!discardCreatedSession || await discardCreatedSession()) {
+    lifecycle.retainCreatedSession = null;
+    return true;
+  }
+  const retainCreatedSession = lifecycle.retainCreatedSession;
+  lifecycle.retainCreatedSession = null;
+  retainCreatedSession?.();
+  return false;
 }

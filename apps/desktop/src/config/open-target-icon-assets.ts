@@ -1,4 +1,4 @@
-import type { OpenTargetIconId } from "@/lib/domain/open-targets/model";
+import type { OpenTargetIconId } from "@proliferate/product-client/host/desktop-bridge";
 
 export const OPEN_TARGET_ICON_ASSET_PATHS: Partial<Record<OpenTargetIconId, string>> = {
   cursor: "/app-icons/cursor.png",

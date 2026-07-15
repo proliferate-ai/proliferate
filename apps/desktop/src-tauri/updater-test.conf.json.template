@@ -1,0 +1,21 @@
+{
+  "$comment": [
+    "TEST-ONLY updater overlay TEMPLATE. Nothing here ships.",
+    "Materialized into src-tauri/updater-test.conf.json (gitignored) by",
+    "scripts/make-updater-test-conf.mjs, then passed to Tauri as a build-time",
+    "config overlay via `tauri build --config`. Tauri deep-merges this on top of",
+    "tauri.conf.json, so it MUST only set keys under plugins.updater -- adding any",
+    "other key here would silently change the produced app.",
+    "dangerousInsecureTransportProtocol is REQUIRED for an http (localhost) feed:",
+    "release builds reject non-https updater endpoints without it. It is a",
+    "test-only escape hatch and never appears in the shipped tauri.conf.json.",
+    "The __PLACEHOLDER__ tokens are substituted at materialization time."
+  ],
+  "plugins": {
+    "updater": {
+      "endpoints": ["__UPDATER_ENDPOINT__"],
+      "pubkey": "__UPDATER_PUBKEY__",
+      "dangerousInsecureTransportProtocol": true
+    }
+  }
+}

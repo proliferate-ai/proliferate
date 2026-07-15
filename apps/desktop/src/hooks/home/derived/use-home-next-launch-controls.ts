@@ -107,9 +107,10 @@ export function useHomeNextLaunchControls({
   );
 
   return {
-    controls: descriptors.filter((control) =>
-      control.key !== "mode" && control.key !== "collaboration_mode"
-    ),
+    // The create-time `mode` field still comes from Home's dedicated mode
+    // selection state. Collaboration mode is a distinct live-default control
+    // and must remain available to the shared composer grouping.
+    controls: descriptors.filter((control) => control.key !== "mode"),
     launchControlValues,
     isLoading: cloudCatalogQuery.isLoading || runtimeLaunchOptions.isLoading,
   };

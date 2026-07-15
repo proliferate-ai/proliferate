@@ -52,8 +52,8 @@ describe("CloudChatTranscript", () => {
           },
           {
             id: "history",
-            kind: "system",
-            title: "Work history",
+            kind: "work_history",
+            title: "Worked for 12s",
             detail: "1 message",
             children: [
               {
@@ -101,13 +101,18 @@ describe("CloudChatTranscript", () => {
     expect(screen.getByText("System instruction body")).toBeTruthy();
 
     expect(screen.getByLabelText("Assistant response loading")).toBeTruthy();
-    expect(screen.getByText("Preparing cloud session...")).toBeTruthy();
+    // ThinkingText renders the label twice (base + aria-hidden sweep copy).
+    expect(
+      screen.getByText("Preparing cloud session...", { selector: "[data-thinking-text]" }),
+    ).toBeTruthy();
     expect(screen.queryByText("Working")).toBeNull();
     expect(screen.queryByText("Streaming")).toBeNull();
 
-    expect(screen.getByText("1 message")).toBeTruthy();
+    expect(screen.getByText("Worked for 12s")).toBeTruthy();
+    expect(document.querySelector("[data-cloud-work-history]")).toBeTruthy();
+    expect(document.querySelector("[data-cloud-work-history] .border-border")).toBeTruthy();
     expect(screen.queryByText("Earlier assistant draft")).toBeNull();
-    fireEvent.click(screen.getByText("1 message"));
+    fireEvent.click(screen.getByText("Worked for 12s"));
     expect(screen.getByText("Earlier assistant draft")).toBeTruthy();
 
     expect(screen.getByText("Session failed")).toBeTruthy();
@@ -144,5 +149,36 @@ describe("CloudChatTranscript", () => {
     expect(screen.getByText("First bullet")).toBeTruthy();
     expect(screen.getByText("Second number")).toBeTruthy();
     expect(document.body.innerHTML).toContain("list-decimal");
+  });
+
+  it("renders permission-bound action groups as static command requests", () => {
+    render(
+      <CloudChatTranscript
+        emptyTitle="No transcript"
+        rows={[
+          {
+            id: "permission-group",
+            kind: "tool_group",
+            title: "Command",
+            actionKind: "command",
+            detail: "pnpm test",
+            status: "Needs approval",
+            children: [
+              {
+                id: "completed-read",
+                kind: "tool",
+                title: "Read file",
+                status: "completed",
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Command")).toBeTruthy();
+    expect(screen.getByText("pnpm test")).toBeTruthy();
+    expect(screen.getByText("Needs approval")).toBeTruthy();
+    expect(screen.queryByText("Command", { selector: "[data-thinking-text]" })).toBeNull();
   });
 });

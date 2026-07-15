@@ -38,6 +38,10 @@
     "./support/CloudSupportSurface": {
       "types": "./dist/support/CloudSupportSurface.d.ts",
       "import": "./dist/support/CloudSupportSurface.js"
+    },
+    "./workflows/WorkflowDefinitionsSurface": {
+      "types": "./dist/workflows/WorkflowDefinitionsSurface.d.ts",
+      "import": "./dist/workflows/WorkflowDefinitionsSurface.js"
     }
   },
   "scripts": {

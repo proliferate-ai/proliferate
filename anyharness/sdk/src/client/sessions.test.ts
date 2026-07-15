@@ -128,3 +128,29 @@ describe("SessionsClient.listEvents", () => {
     }]);
   });
 });
+
+describe("SessionsClient.reorderPendingPrompts", () => {
+  it("sends both expected and desired queue order for CAS", async () => {
+    const calls: Array<{ path: string; body: unknown }> = [];
+    const transport = {
+      put: async (path: string, body: unknown) => {
+        calls.push({ path, body });
+        return sessionResponse();
+      },
+    } as unknown as AnyHarnessTransport;
+    const client = new SessionsClient(transport);
+
+    await client.reorderPendingPrompts("session-1", {
+      expectedSeqs: [1, 2, 3],
+      desiredSeqs: [3, 1, 2],
+    });
+
+    expect(calls).toEqual([{
+      path: "/v1/sessions/session-1/pending-prompts/order",
+      body: {
+        expectedSeqs: [1, 2, 3],
+        desiredSeqs: [3, 1, 2],
+      },
+    }]);
+  });
+});

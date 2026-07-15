@@ -164,12 +164,14 @@ describe("buildHeaderClosedChatTabs", () => {
       title: "Child child",
       viewState: "working",
       isVisible: false,
+      closedAt: null,
     });
     expect(rows[1]).toMatchObject({
       id: "b",
       isActive: true,
       isVisible: false,
       isResolvingSession: true,
+      closedAt: null,
     });
   });
 });

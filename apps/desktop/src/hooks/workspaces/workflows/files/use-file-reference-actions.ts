@@ -1,14 +1,9 @@
 import { useCallback, useMemo } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useOpenInDefaultEditor } from "@/hooks/editor/workflows/use-open-in-default-editor";
 import { useFuzzyFileResolver } from "@/hooks/workspaces/workflows/files/use-fuzzy-file-resolver";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
 import { useWorkspacePath } from "@/providers/WorkspacePathProvider";
-import {
-  copyPath as copyPathToClipboard,
-  openTarget as execOpenTarget,
-  pathIsDirectory,
-  revealInFinder,
-} from "@/lib/access/tauri/shell";
 import { resolveFileReference } from "@/lib/domain/files/path-references";
 import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/selection/workspace-ui-key";
 import { fileViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
@@ -24,6 +19,8 @@ export function useFileReferenceActions({
   rawPath,
   workspacePath,
 }: UseFileReferenceActionsInput) {
+  const host = useProductHost();
+  const files = host.desktop?.files ?? null;
   const openTarget = useWorkspaceViewerTabsStore((state) => state.openTarget);
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
@@ -53,8 +50,8 @@ export function useFileReferenceActions({
   );
 
   const copyPath = useCallback(async () => {
-    await copyPathToClipboard(reference.absolutePath ?? reference.path);
-  }, [reference.absolutePath, reference.path]);
+    await host.clipboard.writeText(reference.absolutePath ?? reference.path);
+  }, [host.clipboard, reference.absolutePath, reference.path]);
 
   const openInSidebar = useCallback(async () => {
     if (!reference.workspacePath) {
@@ -108,12 +105,15 @@ export function useFileReferenceActions({
     if (!reference.absolutePath) {
       return;
     }
-    await revealInFinder(reference.absolutePath);
-  }, [reference.absolutePath]);
+    if (!files) {
+      throw new Error("Local file access is not available.");
+    }
+    await files.reveal(reference.absolutePath);
+  }, [files, reference.absolutePath]);
 
   const openPrimary = useCallback(async () => {
     // Directories open in Finder; the sidebar viewer only renders files.
-    if (reference.absolutePath && await pathIsDirectory(reference.absolutePath)) {
+    if (reference.absolutePath && files && await files.isDirectory(reference.absolutePath)) {
       await reveal();
       return;
     }
@@ -124,14 +124,17 @@ export function useFileReferenceActions({
     if (reference.absolutePath) {
       await reveal();
     }
-  }, [openInSidebar, reference.absolutePath, reference.workspacePath, reveal]);
+  }, [files, openInSidebar, reference.absolutePath, reference.workspacePath, reveal]);
 
   const openWithTarget = useCallback(async (targetId: string) => {
     if (!reference.absolutePath) {
       return;
     }
-    await execOpenTarget(targetId, reference.absolutePath);
-  }, [reference.absolutePath]);
+    if (!files) {
+      throw new Error("Local file access is not available.");
+    }
+    await files.openTarget(targetId, reference.absolutePath);
+  }, [files, reference.absolutePath]);
 
   return {
     reference,

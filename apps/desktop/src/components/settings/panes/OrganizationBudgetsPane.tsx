@@ -1,42 +1,92 @@
+import { useMemo, useState } from "react";
+import { ArrowLeft } from "lucide-react";
+import {
+  useCloudBilling,
+  useLlmBalance,
+  useOrgUsageByUser,
+  useOrgUserUsageTimeseries,
+  useUsageTimeseries,
+} from "@proliferate/cloud-sdk-react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ProgressBar } from "@proliferate/ui/primitives/ProgressBar";
 import { Select } from "@proliferate/ui/primitives/Select";
-import { Switch } from "@proliferate/ui/primitives/Switch";
-import { Badge } from "@proliferate/ui/primitives/Badge";
-import { OrganizationMemberLlmBudgets } from "@/components/settings/panes/organization/OrganizationMemberLlmBudgets";
-import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
-import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import {
+  SegmentedControl,
+} from "@proliferate/ui/primitives/SegmentedControl";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SkeletonBlock, shimmerDelay } from "@/components/feedback/Skeleton";
 import { useOrganizationMembers } from "@/hooks/access/cloud/organizations/use-organization-members";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
+import type { OrganizationMemberRecord } from "@/lib/domain/organizations/organization-records";
 import {
-  AVAILABLE_COMPUTE_PCUS,
-  AVAILABLE_LLM_CREDITS,
-  COMPUTE_BUDGET_PCUS,
-  LLM_BUDGET_CREDITS,
-  TOTAL_COMPUTE_PCUS,
-  TOTAL_LLM_CREDITS,
-  USED_COMPUTE_PCUS,
-  USED_LLM_CREDITS,
-  USAGE_BY_SOURCE,
-  USAGE_POINTS,
-  buildBudgetPeople,
-  type BudgetPerson,
-  type UsagePoint,
-} from "@/lib/domain/settings/organization-budgets-presentation";
+  USAGE_GRANULARITY_OPTIONS,
+  USAGE_KIND_ITEMS,
+  USAGE_RANGE_OPTIONS,
+  buildOrgUsageRows,
+  chartMax,
+  computeGrantBalance,
+  formatUsd,
+  llmGrantBalance,
+  secondsToPcus,
+  toChartPoints,
+  type BudgetBalanceView,
+  type OrgUsageRowView,
+  type UsageChartKind,
+  type UsageChartPoint,
+  type UsageGranularity,
+  type UsageRangeDays,
+} from "@/lib/domain/settings/organization-limits-presentation";
+import { LimitsEditor } from "./OrganizationLimitsEditor";
+
+const EMPTY_MEMBERS: OrganizationMemberRecord[] = [];
 
 export function OrganizationBudgetsPane() {
   const { activeOrganization, activeOrganizationId, organizationsQuery } = useActiveOrganization();
   const membersQuery = useOrganizationMembers(activeOrganizationId);
-  const people = buildBudgetPeople(membersQuery.data?.members ?? []);
-  const computePercentAvailable = Math.round((AVAILABLE_COMPUTE_PCUS / TOTAL_COMPUTE_PCUS) * 100);
-  const llmPercentAvailable = Math.round((AVAILABLE_LLM_CREDITS / TOTAL_LLM_CREDITS) * 100);
+  const members = membersQuery.data?.members ?? EMPTY_MEMBERS;
+
+  const [range, setRange] = useState<UsageRangeDays>(30);
+  const [granularity, setGranularity] = useState<UsageGranularity>("day");
+  const [kind, setKind] = useState<UsageChartKind>("all");
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+
+  const hasOrganization = Boolean(activeOrganizationId);
+  const orgOwner = activeOrganizationId
+    ? { ownerScope: "organization" as const, organizationId: activeOrganizationId }
+    : undefined;
+
+  const billingQuery = useCloudBilling(orgOwner, hasOrganization);
+  const llmBalanceQuery = useLlmBalance(orgOwner, hasOrganization);
+  const timeseriesQuery = useUsageTimeseries({ granularity, days: range, kind }, orgOwner, hasOrganization);
+  const byUserQuery = useOrgUsageByUser(activeOrganizationId, range);
+  const userTimeseriesQuery = useOrgUserUsageTimeseries(activeOrganizationId, selectedUserId, {
+    granularity,
+    days: range,
+    kind,
+  });
+
+  const computeBalance = computeGrantBalance(billingQuery.data);
+  const llmBalance = llmGrantBalance(llmBalanceQuery.data);
+  const chartPoints = useMemo(
+    () => toChartPoints(timeseriesQuery.data?.buckets, granularity),
+    [timeseriesQuery.data, granularity],
+  );
+  const userChartPoints = useMemo(
+    () => toChartPoints(userTimeseriesQuery.data?.buckets, granularity),
+    [userTimeseriesQuery.data, granularity],
+  );
+  const usageRows = useMemo(
+    () => buildOrgUsageRows(byUserQuery.data?.users),
+    [byUserQuery.data],
+  );
+  const selectedRow = usageRows.find((row) => row.userId === selectedUserId) ?? null;
 
   return (
     <section className="space-y-6">
       <SettingsPageHeader
-        title="Budgets"
-        description="Track compute units and LLM credits as separate organization budgets."
+        title="Usage & limits"
+        description="Track compute seconds and LLM spend, and set caps for the organization or individual members."
       />
 
       {!activeOrganization && organizationsQuery.isLoading ? (
@@ -44,136 +94,76 @@ export function OrganizationBudgetsPane() {
       ) : null}
 
       <SettingsSection
-        title={(
-          <span className="flex flex-wrap items-center gap-2">
-            Balances remaining
-            <Badge tone="neutral">Mocked UI</Badge>
-          </span>
-        )}
-        description="Compute units and LLM credits have separate balances, budgets, and top-up rules."
+        title="Balances"
+        description="Compute units and LLM credits have separate balances — never combined into one figure."
       >
         <div className="grid gap-4 md:grid-cols-2">
-          <BudgetBalanceCard
-            label="Compute units"
-            available={`${AVAILABLE_COMPUTE_PCUS} PCUs`}
-            total={`${TOTAL_COMPUTE_PCUS} purchased`}
-            used={`${USED_COMPUTE_PCUS} PCUs used`}
-            percentAvailable={computePercentAvailable}
-          />
-          <BudgetBalanceCard
-            label="LLM credits"
-            available={`${AVAILABLE_LLM_CREDITS.toLocaleString()} LLM credits`}
-            total={`${TOTAL_LLM_CREDITS.toLocaleString()} purchased`}
-            used={`${USED_LLM_CREDITS.toLocaleString()} LLM credits used`}
-            percentAvailable={llmPercentAvailable}
-          />
+          <BudgetBalanceCard {...computeBalance} loading={billingQuery.isLoading} />
+          <BudgetBalanceCard {...llmBalance} loading={llmBalanceQuery.isLoading} />
         </div>
       </SettingsSection>
 
       <SettingsSection
-        title="Total usage"
-        description={`${USED_COMPUTE_PCUS} PCUs and ${USED_LLM_CREDITS.toLocaleString()} LLM credits used in the last 7 days.`}
-        action={(
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="w-full sm:w-44">
-              <Select aria-label="Usage range" defaultValue="7d">
-                <option value="7d">Last 7 days</option>
-                <option value="30d">Last 30 days</option>
-                <option value="90d">Last 90 days</option>
+        title="Consumption"
+        description="Compute seconds and LLM spend never share an axis, so the chart juxtaposes them instead of summing."
+        action={
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="w-36">
+              <Select
+                aria-label="Usage range"
+                value={String(range)}
+                onChange={(event) => setRange(Number(event.target.value) as UsageRangeDays)}
+              >
+                {USAGE_RANGE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
               </Select>
             </div>
-            <Button type="button" variant="secondary" disabled>
-              Forecast
-            </Button>
-          </div>
-        )}
-      >
-        <UsageAreaChart points={USAGE_POINTS} />
-      </SettingsSection>
-
-      <SettingsSection
-        title="Usage by source"
-        description="Mocked split of credit consumption until usage rollups are wired."
-      >
-        {USAGE_BY_SOURCE.map((source) => (
-          <SettingsRow
-            key={source.label}
-            label={source.label}
-            description={source.description}
-          >
-            <div className="flex min-w-[12rem] items-center gap-3">
-              <ProgressBar
-                value={source.percent}
-                className="h-1.5 w-24 overflow-hidden rounded-full bg-foreground/10"
-                indicatorClassName="h-full rounded-full bg-foreground/50"
-              />
-              <span className="w-16 text-right text-ui font-medium text-foreground">
-                {source.value}
-              </span>
+            <div className="w-32">
+              <Select
+                aria-label="Usage granularity"
+                value={granularity}
+                onChange={(event) => setGranularity(event.target.value as UsageGranularity)}
+              >
+                {USAGE_GRANULARITY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </Select>
             </div>
-          </SettingsRow>
-        ))}
-      </SettingsSection>
-
-      <OrganizationBudgetPeople people={people} />
-
-      <OrganizationMemberLlmBudgets people={people} />
-
-      <SettingsSection title="Limits">
-        <SettingsRow
-          label="Monthly compute budget"
-          description="Alert owners before runtime and agent-session consumption crosses this amount."
-        >
-          <div className="text-ui font-medium text-foreground">{COMPUTE_BUDGET_PCUS} PCUs</div>
-        </SettingsRow>
-        <SettingsRow
-          label="LLM and model budget"
-          description="Track gateway, model, and inference-backed tool usage separately from runtime."
-        >
-          <div className="text-ui font-medium text-foreground">{LLM_BUDGET_CREDITS.toLocaleString()} LLM credits</div>
-        </SettingsRow>
-        <SettingsRow
-          label="Compute auto top-up"
-          description="Purchase more compute units when runtime capacity drops below the configured threshold."
-        >
-          <Switch checked={false} onChange={() => {}} disabled aria-label="Compute auto top-up" />
-        </SettingsRow>
-        <SettingsRow
-          label="LLM credit auto top-up"
-          description="Purchase more LLM credits when model usage balance drops below the configured threshold."
-        >
-          <Switch checked={false} onChange={() => {}} disabled aria-label="LLM credit auto top-up" />
-        </SettingsRow>
-      </SettingsSection>
-    </section>
-  );
-}
-
-function OrganizationBudgetPeople({ people }: { people: BudgetPerson[] }) {
-  return (
-    <SettingsSection
-      title="Usage by person"
-      description="Mocked compute and LLM usage mapped onto current members."
-    >
-      {people.map((person) => (
-        <SettingsRow
-          key={person.email}
-          label={person.name}
-          description={person.email}
-        >
-          <div className="flex min-w-[15rem] items-center justify-end gap-3">
-            <ProgressBar
-              value={person.computePercent}
-              className="h-1.5 w-24 overflow-hidden rounded-full bg-foreground/10"
-              indicatorClassName="h-full rounded-full bg-foreground/50"
+            <SegmentedControl
+              items={USAGE_KIND_ITEMS}
+              value={kind}
+              onChange={setKind}
+              ariaLabel="Usage kind"
             />
-            <span className="w-32 text-right text-ui font-medium text-foreground">
-              {person.usedPcus} PCUs · {person.usedLlmCredits.toLocaleString()} LLM
-            </span>
           </div>
-        </SettingsRow>
-      ))}
-    </SettingsSection>
+        }
+      >
+        <UsageBarChart points={chartPoints} kind={kind} loading={timeseriesQuery.isLoading} />
+      </SettingsSection>
+
+      {selectedUserId && selectedRow ? (
+        <UserDrillDown
+          row={selectedRow}
+          points={userChartPoints}
+          loading={userTimeseriesQuery.isLoading}
+          kind={kind}
+          onBack={() => setSelectedUserId(null)}
+        />
+      ) : (
+        <OrgUsageTable
+          rows={usageRows}
+          loading={byUserQuery.isLoading}
+          onSelectUser={setSelectedUserId}
+        />
+      )}
+
+      <LimitsEditor
+        organizationId={activeOrganizationId}
+        members={members}
+        byUserRows={byUserQuery.data?.users}
+      />
+    </section>
   );
 }
 
@@ -183,13 +173,18 @@ function BudgetBalanceCard({
   total,
   used,
   percentAvailable,
-}: {
-  label: string;
-  available: string;
-  total: string;
-  used: string;
-  percentAvailable: number;
-}) {
+  loading,
+}: BudgetBalanceView & { loading?: boolean }) {
+  if (loading) {
+    return (
+      <div className="space-y-3 rounded-lg border border-border-light bg-foreground/[0.02] p-4">
+        <SkeletonBlock className="h-4 w-24" style={shimmerDelay(0)} />
+        <SkeletonBlock className="h-6 w-32" style={shimmerDelay(1)} />
+        <SkeletonBlock className="h-4 w-full" style={shimmerDelay(2)} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3 rounded-lg border border-border-light bg-foreground/[0.02] p-4">
       <div className="space-y-1">
@@ -211,117 +206,189 @@ function BudgetBalanceCard({
   );
 }
 
-function UsageAreaChart({ points }: { points: UsagePoint[] }) {
-  const width = 720;
-  const height = 220;
-  const paddingX = 24;
-  const paddingTop = 16;
-  const paddingBottom = 34;
-  const chartHeight = height - paddingTop - paddingBottom;
-  const maxCompute = Math.max(...points.map((point) => point.compute), 1);
-  const maxLlm = Math.max(...points.map((point) => point.llm), 1);
-  const bottomY = height - paddingBottom;
-  const plottedPoints = points.map((point, index) => {
-    const x = points.length === 1
-      ? width / 2
-      : paddingX + (index / (points.length - 1)) * (width - paddingX * 2);
-    const computeY = bottomY - (point.compute / maxCompute) * chartHeight;
-    const llmY = bottomY - (point.llm / maxLlm) * chartHeight;
-    return { ...point, x, computeY, llmY };
-  });
-  const computeLinePoints = plottedPoints.map((point) => `${point.x},${point.computeY}`).join(" ");
-  const llmLinePoints = plottedPoints.map((point) => `${point.x},${point.llmY}`).join(" ");
-  const computeAreaPoints = [
-    `${plottedPoints[0]?.x ?? paddingX},${bottomY}`,
-    computeLinePoints,
-    `${plottedPoints[plottedPoints.length - 1]?.x ?? width - paddingX},${bottomY}`,
-  ].join(" ");
+function UsageBarChart({
+  points,
+  kind,
+  loading,
+}: {
+  points: UsageChartPoint[];
+  kind: UsageChartKind;
+  loading: boolean;
+}) {
+  if (loading) {
+    return (
+      <div className="flex h-48 items-end gap-2 rounded-lg border border-border-light bg-foreground/[0.02] p-4">
+        {Array.from({ length: 8 }, (_, index) => (
+          <SkeletonBlock
+            key={index}
+            className="flex-1"
+            style={{ height: `${30 + (index % 3) * 20}%`, ...shimmerDelay(index) }}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  if (points.length === 0) {
+    return (
+      <div className="flex h-48 items-center justify-center rounded-lg border border-border-light bg-foreground/[0.02] text-ui-sm text-muted-foreground">
+        No usage in this range.
+      </div>
+    );
+  }
+
+  const showCompute = kind !== "llm";
+  const showLlm = kind !== "compute";
+  const maxCompute = chartMax(points.map((point) => secondsToPcus(point.computeSeconds)));
+  const maxLlm = chartMax(points.map((point) => point.llmCostUsd));
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border-light bg-foreground/[0.02] px-2 py-3">
-      <div className="flex flex-wrap items-center gap-4 px-3 pb-2 text-ui-sm text-muted-foreground">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="size-2 rounded-full bg-primary" />
-          Compute units
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="size-2 rounded-full bg-foreground/60" />
-          LLM credits
-        </span>
+    <div className="rounded-lg border border-border-light bg-foreground/[0.02] p-4">
+      <div className="flex flex-wrap items-center gap-4 pb-3 text-ui-sm text-muted-foreground">
+        {showCompute ? (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="size-2 rounded-full bg-primary" />
+            Compute (PCUs)
+          </span>
+        ) : null}
+        {showLlm ? (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="size-2 rounded-full bg-foreground/60" />
+            LLM ($)
+          </span>
+        ) : null}
       </div>
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        role="img"
-        aria-label="Compute and LLM usage over time"
-        className="h-56 w-full text-primary"
-      >
-        {[0, 1, 2, 3].map((line) => {
-          const y = paddingTop + (line / 3) * chartHeight;
+      <div className="flex h-40 items-end gap-2">
+        {points.map((point, index) => {
+          const computeValue = secondsToPcus(point.computeSeconds);
+          const computePercent = Math.round((computeValue / maxCompute) * 100);
+          const llmPercent = Math.round((point.llmCostUsd / maxLlm) * 100);
           return (
-            <line
-              key={line}
-              x1={paddingX}
-              x2={width - paddingX}
-              y1={y}
-              y2={y}
-              className="stroke-border-light"
-              strokeWidth="1"
-            />
+            <div key={`${point.label}-${index}`} className="flex flex-1 flex-col items-center gap-1">
+              <div className="flex h-32 w-full items-end justify-center gap-1">
+                {showCompute ? (
+                  <div
+                    className="w-full max-w-3 rounded-t-sm bg-primary/70"
+                    style={{ height: `${Math.max(computePercent, computeValue > 0 ? 2 : 0)}%` }}
+                    title={`${point.label}: ${computeValue.toFixed(1)} PCUs`}
+                  />
+                ) : null}
+                {showLlm ? (
+                  <div
+                    className="w-full max-w-3 rounded-t-sm bg-foreground/40"
+                    style={{ height: `${Math.max(llmPercent, point.llmCostUsd > 0 ? 2 : 0)}%` }}
+                    title={`${point.label}: ${formatUsd(point.llmCostUsd)}`}
+                  />
+                ) : null}
+              </div>
+              <span className="text-ui-sm text-muted-foreground">{point.label}</span>
+            </div>
           );
         })}
-        <polygon points={computeAreaPoints} fill="currentColor" className="text-primary/10" />
-        <polyline
-          points={computeLinePoints}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="3"
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
-        <polyline
-          points={llmLinePoints}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="3"
-          strokeLinejoin="round"
-          strokeLinecap="round"
-          className="text-foreground/60"
-        />
-        {plottedPoints.map((point) => (
-          <circle
-            key={`${point.label}-compute`}
-            cx={point.x}
-            cy={point.computeY}
-            r="4"
-            fill="currentColor"
-          >
-            <title>{`${point.label}: ${point.compute} PCUs`}</title>
-          </circle>
-        ))}
-        {plottedPoints.map((point) => (
-          <circle
-            key={`${point.label}-llm`}
-            cx={point.x}
-            cy={point.llmY}
-            r="4"
-            className="fill-foreground/60"
-          >
-            <title>{`${point.label}: ${point.llm.toLocaleString()} LLM credits`}</title>
-          </circle>
-        ))}
-        {plottedPoints.map((point) => (
-          <text
-            key={`${point.label}-label`}
-            x={point.x}
-            y={height - 10}
-            textAnchor="middle"
-            fill="currentColor"
-            className="text-ui-sm text-muted-foreground"
-          >
-            {point.label}
-          </text>
-        ))}
-      </svg>
+      </div>
     </div>
+  );
+}
+
+function OrgUsageTable({
+  rows,
+  loading,
+  onSelectUser,
+}: {
+  rows: OrgUsageRowView[];
+  loading: boolean;
+  onSelectUser: (userId: string) => void;
+}) {
+  return (
+    <SettingsSection title="Usage by member" description="Select a member to see their usage over time.">
+      {loading ? (
+        <div className="space-y-2 py-3">
+          {[0, 1, 2].map((row) => (
+            <SkeletonBlock key={row} className="h-10 w-full" style={shimmerDelay(row)} />
+          ))}
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="py-6 text-ui-sm text-muted-foreground">No usage recorded in this range.</div>
+      ) : (
+        rows.map((row) => (
+          <Button
+            key={row.userId}
+            type="button"
+            variant="unstyled"
+            size="unstyled"
+            onClick={() => onSelectUser(row.userId)}
+            className="flex w-full items-center justify-between gap-4 border-t border-border py-3 text-left first:border-t-0 hover:bg-accent/40"
+          >
+            <div className="min-w-0">
+              <div className="truncate text-ui font-medium text-foreground">{row.name}</div>
+              <div className="truncate text-ui-sm text-muted-foreground">{row.email}</div>
+            </div>
+            <div className="flex shrink-0 items-center gap-4">
+              <UsageMiniStat label="Compute" value={row.computePcus} percent={row.computePercent} />
+              <UsageMiniStat label="LLM" value={row.llmCost} percent={row.llmPercent} />
+            </div>
+          </Button>
+        ))
+      )}
+    </SettingsSection>
+  );
+}
+
+function UsageMiniStat({
+  label,
+  value,
+  percent,
+}: {
+  label: string;
+  value: string;
+  percent: number | null;
+}) {
+  return (
+    <div className="w-28 text-right">
+      <div className="text-ui-sm text-muted-foreground">{label}</div>
+      <div className="text-ui font-medium text-foreground">{value}</div>
+      {percent !== null ? (
+        <ProgressBar
+          value={percent}
+          className="mt-1 h-1 overflow-hidden rounded-full bg-foreground/10"
+          indicatorClassName="h-full rounded-full bg-primary/70"
+          aria-label={`${label} of cap`}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function UserDrillDown({
+  row,
+  points,
+  loading,
+  kind,
+  onBack,
+}: {
+  row: OrgUsageRowView;
+  points: UsageChartPoint[];
+  loading: boolean;
+  kind: UsageChartKind;
+  onBack: () => void;
+}) {
+  return (
+    <SettingsSection>
+      <Button
+        type="button"
+        variant="unstyled"
+        size="unstyled"
+        onClick={onBack}
+        className="mb-3 inline-flex h-7 items-center gap-1.5 rounded-md px-0 text-ui text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ArrowLeft className="size-4" />
+        Back to usage by member
+      </Button>
+      <div className="mb-3">
+        <div className="text-ui font-medium text-foreground">{row.name}</div>
+        <div className="text-ui-sm text-muted-foreground">{row.email}</div>
+      </div>
+      <UsageBarChart points={points} kind={kind} loading={loading} />
+    </SettingsSection>
   );
 }

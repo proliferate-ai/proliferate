@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "declaration": false,
+    "declarationMap": false,
+    "noEmit": true,
+    "sourceMap": false
+  },
+  "include": ["src/workflow-runs.type-test.ts"],
+  "exclude": []
+}

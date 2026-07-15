@@ -11,7 +11,7 @@ describe("right panel shortcut resolution", () => {
     entry("tool:scratch"),
     entry("tool:git"),
     entry("terminal:t1"),
-    entry("browser:b1"),
+    entry("terminal:t2"),
   ];
 
   it("cycles through visible right-panel header entries", () => {
@@ -25,7 +25,7 @@ describe("right panel shortcut resolution", () => {
       entries,
       activeEntryKey: "tool:scratch",
       delta: -1,
-    })).toBe("browser:b1");
+    })).toBe("terminal:t2");
   });
 
   it("uses the first or last entry when the active entry is stale", () => {
@@ -39,13 +39,13 @@ describe("right panel shortcut resolution", () => {
       entries,
       activeEntryKey: "terminal:missing",
       delta: -1,
-    })).toBe("browser:b1");
+    })).toBe("terminal:t2");
   });
 
   it("resolves digit shortcuts against all right-panel header entries", () => {
     expect(resolveRightPanelHeaderEntryKeyByShortcutIndex(entries, 2)).toBe("tool:git");
-    expect(resolveRightPanelHeaderEntryKeyByShortcutIndex(entries, 4)).toBe("browser:b1");
-    expect(resolveRightPanelHeaderEntryKeyByShortcutIndex(entries, 9)).toBe("browser:b1");
+    expect(resolveRightPanelHeaderEntryKeyByShortcutIndex(entries, 4)).toBe("terminal:t2");
+    expect(resolveRightPanelHeaderEntryKeyByShortcutIndex(entries, 9)).toBe("terminal:t2");
   });
 });
 

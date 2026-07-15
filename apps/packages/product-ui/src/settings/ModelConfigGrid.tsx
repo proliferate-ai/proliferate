@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { GridTile } from "@proliferate/ui/primitives/GridTile";
 import { Switch } from "@proliferate/ui/primitives/Switch";
@@ -31,16 +31,16 @@ export function ModelConfigGrid({ models, onToggle, className }: ModelConfigGrid
         <GridTile key={model.id}>
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-2">
-              <span className="min-w-0 truncate text-[13px] font-medium leading-5 text-foreground">
+              <span className="min-w-0 truncate text-ui font-medium leading-5 text-foreground">
                 {model.name}
               </span>
               <Badge tone="neutral">{model.provider}</Badge>
             </div>
             {model.version ? (
-              <span className="text-[12px] leading-[1.45] text-muted-foreground">{model.version}</span>
+              <span className="text-ui-sm leading-[1.45] text-muted-foreground">{model.version}</span>
             ) : null}
             <div className="mt-1 flex items-center justify-between gap-2 border-t border-border pt-2.5">
-              <span className="text-[12px] font-medium leading-[1.45] text-muted-foreground">Enabled</span>
+              <span className="text-ui-sm font-medium leading-[1.45] text-muted-foreground">Enabled</span>
               <Switch
                 checked={model.enabled}
                 disabled={model.disabled}

@@ -6,11 +6,14 @@ import {
   writeSelectedOrganizationCookie,
 } from "@/lib/access/browser/organization-selection-cookie";
 import { useOrganizationStore } from "@/stores/organizations/organization-store";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import {
+  useProductAuthStatus,
+  useProductAuthUserId,
+} from "@/hooks/auth/facade/use-product-auth";
 
 export function useOrganizationSelectionLifecycle() {
-  const authStatus = useAuthStore((state) => state.status);
-  const authUserId = useAuthStore((state) => state.user?.id ?? null);
+  const authStatus = useProductAuthStatus();
+  const authUserId = useProductAuthUserId();
   const organizationsQuery = useOrganizations();
   const activeOrganizationId = useOrganizationStore((state) => state.activeOrganizationId);
   const setActiveOrganizationId = useOrganizationStore((state) => state.setActiveOrganizationId);
@@ -21,7 +24,7 @@ export function useOrganizationSelectionLifecycle() {
   const hydratedUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (authStatus === "bootstrapping") {
+    if (authStatus === "loading") {
       return;
     }
     if (authStatus !== "authenticated" || !authUserId) {

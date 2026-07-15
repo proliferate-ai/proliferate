@@ -6,7 +6,9 @@ use crate::domains::sessions::prompt::prepare::prepare_prompt;
 use crate::domains::sessions::prompt::PromptPrepareContext;
 use crate::live::sessions::{LiveSessionCommandError, QueueMutationError};
 
-use super::{PendingPromptMutationError, SessionLifecycleError, SessionRuntime};
+use super::{
+    PendingPromptMutationError, PendingPromptQueueError, SessionLifecycleError, SessionRuntime,
+};
 
 impl SessionRuntime {
     pub async fn edit_pending_prompt(
@@ -87,6 +89,19 @@ impl SessionRuntime {
                     );
                     PendingPromptMutationError::NotFound
                 }
+                LiveSessionCommandError::Rejected(QueueMutationError::StaleOrder { .. }) => {
+                    PendingPromptMutationError::Internal(anyhow::anyhow!(
+                        "unexpected reorder conflict while editing a pending prompt"
+                    ))
+                }
+                LiveSessionCommandError::Rejected(QueueMutationError::InvalidReorder(_)) => {
+                    PendingPromptMutationError::Internal(anyhow::anyhow!(
+                        "unexpected reorder rejection while editing a pending prompt"
+                    ))
+                }
+                LiveSessionCommandError::Rejected(QueueMutationError::Internal(error)) => {
+                    PendingPromptMutationError::Internal(anyhow::anyhow!(error))
+                }
             })?;
 
         self.session_service
@@ -137,11 +152,123 @@ impl SessionRuntime {
                 LiveSessionCommandError::Rejected(QueueMutationError::NotFound) => {
                     PendingPromptMutationError::NotFound
                 }
+                LiveSessionCommandError::Rejected(QueueMutationError::StaleOrder { .. }) => {
+                    PendingPromptMutationError::Internal(anyhow::anyhow!(
+                        "unexpected reorder conflict while deleting a pending prompt"
+                    ))
+                }
+                LiveSessionCommandError::Rejected(QueueMutationError::InvalidReorder(_)) => {
+                    PendingPromptMutationError::Internal(anyhow::anyhow!(
+                        "unexpected reorder rejection while deleting a pending prompt"
+                    ))
+                }
+                LiveSessionCommandError::Rejected(QueueMutationError::Internal(error)) => {
+                    PendingPromptMutationError::Internal(anyhow::anyhow!(error))
+                }
             })?;
 
         self.session_service
             .get_session(session_id)
             .map_err(PendingPromptMutationError::Internal)?
             .ok_or_else(|| PendingPromptMutationError::SessionNotFound(session_id.to_string()))
+    }
+
+    pub async fn reorder_pending_prompts(
+        &self,
+        session_id: &str,
+        expected_seqs: Vec<i64>,
+        desired_seqs: Vec<i64>,
+    ) -> Result<SessionRecord, PendingPromptQueueError> {
+        self.access_gate
+            .assert_can_mutate_for_session(session_id)
+            .map_err(|error| {
+                PendingPromptQueueError::Internal(anyhow::anyhow!(error.to_string()))
+            })?;
+        let record = self
+            .get_session_or_not_found(session_id)
+            .map_err(map_queue_lifecycle_error)?;
+        let handle = self
+            .ensure_live_session_handle(&record, None)
+            .await
+            .map_err(|error| {
+                PendingPromptQueueError::Internal(anyhow::anyhow!(
+                    "failed to ensure live session handle: {error:?}"
+                ))
+            })?;
+
+        handle
+            .reorder_pending_prompts(expected_seqs, desired_seqs)
+            .await
+            .map_err(map_queue_command_error)?;
+
+        self.session_service
+            .get_session(session_id)
+            .map_err(PendingPromptQueueError::Internal)?
+            .ok_or_else(|| PendingPromptQueueError::SessionNotFound(session_id.to_string()))
+    }
+
+    pub async fn steer_pending_prompt(
+        &self,
+        session_id: &str,
+        seq: i64,
+    ) -> Result<SessionRecord, PendingPromptQueueError> {
+        self.access_gate
+            .assert_can_mutate_for_session(session_id)
+            .map_err(|error| {
+                PendingPromptQueueError::Internal(anyhow::anyhow!(error.to_string()))
+            })?;
+        let record = self
+            .get_session_or_not_found(session_id)
+            .map_err(map_queue_lifecycle_error)?;
+        let handle = self
+            .ensure_live_session_handle(&record, None)
+            .await
+            .map_err(|error| {
+                PendingPromptQueueError::Internal(anyhow::anyhow!(
+                    "failed to ensure live session handle: {error:?}"
+                ))
+            })?;
+
+        handle
+            .steer_pending_prompt(seq)
+            .await
+            .map_err(map_queue_command_error)?;
+
+        self.session_service
+            .get_session(session_id)
+            .map_err(PendingPromptQueueError::Internal)?
+            .ok_or_else(|| PendingPromptQueueError::SessionNotFound(session_id.to_string()))
+    }
+}
+
+fn map_queue_lifecycle_error(error: SessionLifecycleError) -> PendingPromptQueueError {
+    match error {
+        SessionLifecycleError::SessionNotFound(id) => PendingPromptQueueError::SessionNotFound(id),
+        SessionLifecycleError::Internal(error) => PendingPromptQueueError::Internal(error),
+    }
+}
+
+fn map_queue_command_error(
+    error: LiveSessionCommandError<QueueMutationError>,
+) -> PendingPromptQueueError {
+    match error {
+        LiveSessionCommandError::ActorUnavailable => {
+            PendingPromptQueueError::Internal(anyhow::anyhow!("session actor channel closed"))
+        }
+        LiveSessionCommandError::ResponseDropped => PendingPromptQueueError::Internal(
+            anyhow::anyhow!("session actor dropped pending-prompt queue response"),
+        ),
+        LiveSessionCommandError::Rejected(QueueMutationError::NotFound) => {
+            PendingPromptQueueError::NotFound
+        }
+        LiveSessionCommandError::Rejected(QueueMutationError::StaleOrder { current_seqs }) => {
+            PendingPromptQueueError::StaleOrder { current_seqs }
+        }
+        LiveSessionCommandError::Rejected(QueueMutationError::InvalidReorder(detail)) => {
+            PendingPromptQueueError::InvalidReorder(detail)
+        }
+        LiveSessionCommandError::Rejected(QueueMutationError::Internal(error)) => {
+            PendingPromptQueueError::Internal(anyhow::anyhow!(error))
+        }
     }
 }

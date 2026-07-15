@@ -1,5 +1,5 @@
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ListFilter, Plus } from "@proliferate/ui/icons";
+import { History, Plus } from "@proliferate/ui/icons";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { ClosedChatTabsMenu } from "@/components/workspace/shell/tabs/ClosedChatTabsMenu";
 import {
@@ -9,82 +9,88 @@ import type {
   HeaderChatMenuEntry,
 } from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 
-const HEADER_ICON_BUTTON_CLASS =
-  "workspace-shell-icon-button shrink-0 disabled:pointer-events-none disabled:opacity-40";
-const HEADER_FILTER_BUTTON_CLASS =
-  "workspace-shell-action-button shrink-0 gap-1 px-1.5 disabled:pointer-events-none disabled:opacity-40";
+const HEADER_FLAT_ICON_BUTTON_CLASS =
+  "workspace-shell-icon-button workspace-shell-icon-button--flat shrink-0 disabled:pointer-events-none disabled:opacity-40";
 
-interface HeaderTabsActionsProps {
-  closedChatTabs: HeaderChatMenuEntry[];
+interface NewChatButtonProps {
   canOpenNewSessionTab: boolean;
   newSessionDisabledReason: string | null;
-  onRestoreSession: (sessionId: string) => void;
-  onDeleteSession: (sessionId: string) => void;
   onOpenNewSessionTab: () => void;
 }
 
-export function HeaderTabsActions({
-  closedChatTabs,
+export function NewChatButton({
   canOpenNewSessionTab,
   newSessionDisabledReason,
-  onRestoreSession,
-  onDeleteSession,
   onOpenNewSessionTab,
-}: HeaderTabsActionsProps) {
-  const closedCount = closedChatTabs.length;
-  const closedSessionsTrigger = (
+}: NewChatButtonProps) {
+  return (
     <Button
       type="button"
       variant="ghost"
-      size="sm"
-      aria-label={`Closed sessions (${closedCount})`}
-      title={`Closed sessions (${closedCount})`}
-      className={HEADER_FILTER_BUTTON_CLASS}
+      size="icon-sm"
+      disabled={!canOpenNewSessionTab}
+      onClick={onOpenNewSessionTab}
+      data-chat-new-tab-button
+      className={`${HEADER_FLAT_ICON_BUTTON_CLASS} relative`}
     >
-      <ListFilter className="size-3.5" />
-      <span className="min-w-3 text-center tabular-nums">{closedCount}</span>
+      <Plus className="size-3.5" />
+      <span className="sr-only">
+        {newSessionDisabledReason ?? "New chat"}
+      </span>
+    </Button>
+  );
+}
+
+interface ClosedSessionsTriggerProps {
+  closedChatTabs: HeaderChatMenuEntry[];
+  onRestoreSession: (sessionId: string) => void;
+  onDeleteSession: (sessionId: string) => void;
+}
+
+export function ClosedSessionsTrigger({
+  closedChatTabs,
+  onRestoreSession,
+  onDeleteSession,
+}: ClosedSessionsTriggerProps) {
+  const closedCount = closedChatTabs.length;
+
+  if (closedCount === 0) {
+    return null;
+  }
+
+  const trigger = (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-sm"
+      aria-label={`Closed sessions (${closedCount})`}
+      title="Closed sessions"
+      className={HEADER_FLAT_ICON_BUTTON_CLASS}
+    >
+      <History className="size-3.5" />
     </Button>
   );
 
   return (
-    <>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        disabled={!canOpenNewSessionTab}
-        onClick={onOpenNewSessionTab}
-        data-chat-new-tab-button
-        className={`${HEADER_ICON_BUTTON_CLASS} relative`}
-      >
-        <Plus className="size-3.5" />
-        <span className="sr-only">
-          {newSessionDisabledReason ?? "New chat"}
-        </span>
-      </Button>
-
-      {closedCount > 0 && (
-        <PopoverButton
-          align="end"
-          trigger={closedSessionsTrigger}
-          className={`w-72 ${POPOVER_SURFACE_CLASS}`}
-        >
-          {(close) => (
-            <ClosedChatTabsMenu
-              rows={closedChatTabs}
-              renderIcon={renderChatTabIcon}
-              onRestoreSession={(sessionId) => {
-                onRestoreSession(sessionId);
-                close();
-              }}
-              onDeleteSession={(sessionId) => {
-                onDeleteSession(sessionId);
-                close();
-              }}
-            />
-          )}
-        </PopoverButton>
+    <PopoverButton
+      align="end"
+      trigger={trigger}
+      className={`w-72 ${POPOVER_SURFACE_CLASS}`}
+    >
+      {(close) => (
+        <ClosedChatTabsMenu
+          rows={closedChatTabs}
+          renderIcon={renderChatTabIcon}
+          onRestoreSession={(sessionId) => {
+            onRestoreSession(sessionId);
+            close();
+          }}
+          onDeleteSession={(sessionId) => {
+            onDeleteSession(sessionId);
+            close();
+          }}
+        />
       )}
-    </>
+    </PopoverButton>
   );
 }

@@ -4,6 +4,23 @@
 //! catalog, agent readiness, and classified auth contexts — is a sessions
 //! use case (`sessions/service/launch_options.rs`).
 
+/// The thinking/effort control joined from the bundled catalog for a launch
+/// model option (`controls.effort.{values, observedValue}`).
+#[derive(Debug, Clone)]
+pub struct ResolvedModelEffort {
+    pub values: Vec<String>,
+    pub default: Option<String>,
+}
+
+/// Internal live-application metadata. This remains separate from `effort` so
+/// public launch-option projection keeps its existing first-control behavior.
+#[derive(Debug, Clone)]
+pub(crate) struct ResolvedLiveModelEffortCandidate {
+    pub(crate) control_key: String,
+    pub(crate) values: Vec<String>,
+    pub(crate) live_config_id: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct ResolvedLaunchModelOption {
     pub id: String,
@@ -11,6 +28,17 @@ pub struct ResolvedLaunchModelOption {
     pub aliases: Vec<String>,
     pub is_default: bool,
     pub default_opt_in: Option<bool>,
+    // --- Enriched catalog fields (joined the same way as the gateway-models
+    // endpoint) so the native/api_key upload snapshot carries rich rows. ---
+    pub description: Option<String>,
+    pub provider: Option<String>,
+    pub status: Option<crate::domains::agents::model::ModelCatalogStatus>,
+    pub effort: Option<ResolvedModelEffort>,
+    pub(crate) live_effort_candidates: Vec<ResolvedLiveModelEffortCandidate>,
+    pub fast_mode: bool,
+    /// The permission/agent modes the model supports (`controls.mode.values`);
+    /// `None` when the model declares no mode control (contract §5).
+    pub modes: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone)]

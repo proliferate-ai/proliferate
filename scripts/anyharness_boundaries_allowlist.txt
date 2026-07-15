@@ -5,3 +5,6 @@
 #
 # This is migration debt, not permission for new code. If a cleanup reduces a
 # count, update this file in the same PR.
+
+DOMAIN_CONTRACT_REQUEST_RESPONSE anyharness/crates/anyharness-lib/src/domains/goals/runtime.rs 1 strict-mirror goal runtime uses SetSessionGoalRequest to drive the sidecar ext method; contract mapping pending move above the API boundary
+DOMAIN_CONTRACT_REQUEST_RESPONSE anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs 1 strict-mirror loop runtime uses SetSessionLoopRequest to drive the sidecar ext method; contract mapping pending move above the API boundary

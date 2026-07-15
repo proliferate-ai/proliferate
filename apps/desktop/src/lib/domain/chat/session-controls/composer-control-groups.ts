@@ -1,17 +1,9 @@
-import {
-  resolveReasoningEffortPresentation,
-} from "@/lib/domain/chat/session-controls/session-reasoning-effort-control";
-import {
-  resolveConfiguredSessionControlValue,
-} from "@/lib/domain/chat/session-controls/session-mode-control";
-import {
-  resolveSessionToggleControlStateLabel,
-} from "@/lib/domain/chat/session-controls/session-toggle-control";
 import type {
   LiveSessionControlDescriptor,
   SupportedLiveControlKey,
 } from "@/lib/domain/chat/session-controls/session-controls";
 import type { ConfiguredSessionControlKey } from "@/lib/domain/chat/session-controls/presentation";
+import type { WorkspaceSurface } from "@anyharness/sdk";
 
 export type ComposerModeControlDescriptor = LiveSessionControlDescriptor & {
   key: ConfiguredSessionControlKey;
@@ -19,62 +11,55 @@ export type ComposerModeControlDescriptor = LiveSessionControlDescriptor & {
 
 export interface ComposerSessionControlGroups {
   modeControl: ComposerModeControlDescriptor | null;
-  modelConfigControls: LiveSessionControlDescriptor[];
+  reasoningEffortControl: LiveSessionControlDescriptor | null;
+  fastModeControl: LiveSessionControlDescriptor | null;
+  overflowControls: LiveSessionControlDescriptor[];
 }
 
-const PRIMARY_MODE_KEYS: SupportedLiveControlKey[] = ["collaboration_mode", "mode"];
+const WORKING_MODE_MARKERS = new Set([
+  "agent",
+  "ask",
+  "build",
+  "bypass",
+  "chat",
+  "plan",
+]);
 
 export function buildComposerSessionControlGroups(
   controls: LiveSessionControlDescriptor[],
 ): ComposerSessionControlGroups {
   const uniqueControls = uniqueSessionControls(controls);
   const modeControl = resolveComposerModeControl(uniqueControls);
+  const reasoningEffortControl = resolveReasoningEffortControl(uniqueControls);
+  const fastModeControl = uniqueControls.find((control) =>
+    control.key === "fast_mode" && control.kind === "toggle"
+  ) ?? null;
+  const promotedControls = new Set<LiveSessionControlDescriptor>([
+    ...(modeControl ? [modeControl] : []),
+    ...(reasoningEffortControl ? [reasoningEffortControl] : []),
+    ...(fastModeControl ? [fastModeControl] : []),
+  ]);
 
   return {
     modeControl,
-    modelConfigControls: uniqueControls.filter((control) => control !== modeControl),
+    reasoningEffortControl,
+    fastModeControl,
+    overflowControls: uniqueControls.filter((control) => !promotedControls.has(control)),
   };
 }
 
-export function summarizeComposerModelConfigControls(
-  agentKind: string | null,
+export function filterComposerSessionControlsForSurface(
   controls: LiveSessionControlDescriptor[],
-): string | null {
-  const labels = controls.flatMap((control) => {
-    const selectedOption = control.options.find((option) => option.selected) ?? null;
+  surface: WorkspaceSurface | null | undefined,
+): LiveSessionControlDescriptor[] {
+  if (surface !== "cowork") {
+    return controls;
+  }
 
-    if (control.key === "effort") {
-      const presentation = resolveReasoningEffortPresentation(
-        selectedOption?.value ?? null,
-        selectedOption?.label,
-      );
-      return presentation.shortLabel ? [presentation.shortLabel] : [];
-    }
-
-    if (control.key === "fast_mode" || control.key === "reasoning") {
-      if (!control.isEnabled) {
-        return [];
-      }
-      return [resolveSessionToggleControlStateLabel(control.key, true)];
-    }
-
-    if (control.key === "mode" || control.key === "collaboration_mode") {
-      const presentation = resolveConfiguredSessionControlValue(
-        agentKind,
-        control.key,
-        selectedOption?.value ?? null,
-      );
-      return [presentation?.shortLabel ?? selectedOption?.label ?? control.detail].filter(
-        (label): label is string => Boolean(label),
-      );
-    }
-
-    return [selectedOption?.label ?? control.detail].filter(
-      (label): label is string => Boolean(label),
-    );
-  });
-
-  return labels.length > 0 ? labels.slice(0, 3).join(" · ") : null;
+  // Cowork owns its access policy, so the raw approval preset remains hidden.
+  // Working mode (`collaboration_mode`) and independent tuning dimensions such
+  // as reasoning and fast mode still belong in the composer.
+  return controls.filter((control) => control.key !== "mode");
 }
 
 export function uniqueSessionControls(
@@ -98,20 +83,49 @@ export function uniqueSessionControls(
 function resolveComposerModeControl(
   controls: LiveSessionControlDescriptor[],
 ): ComposerModeControlDescriptor | null {
-  for (const key of PRIMARY_MODE_KEYS) {
-    const control = controls.find((candidate) => candidate.key === key);
-    if (control && hasPlanningModeChoice(control)) {
-      return control as ComposerModeControlDescriptor;
-    }
+  const collaborationMode = controls.find((control) =>
+    control.key === "collaboration_mode" && control.options.length >= 2
+  );
+  if (collaborationMode) {
+    return collaborationMode as ComposerModeControlDescriptor;
+  }
+
+  const legacyMode = controls.find((control) => control.key === "mode");
+  if (legacyMode && hasWorkingModeChoice(legacyMode)) {
+    return legacyMode as ComposerModeControlDescriptor;
   }
 
   return null;
 }
 
-function hasPlanningModeChoice(control: LiveSessionControlDescriptor): boolean {
-  const normalizedOptions = control.options.map((option) =>
-    `${option.value} ${option.label}`.toLowerCase()
-  );
+function resolveReasoningEffortControl(
+  controls: LiveSessionControlDescriptor[],
+): LiveSessionControlDescriptor | null {
+  return controls.find((control) => isOrderedReasoningLevelControl(control, "effort"))
+    ?? controls.find((control) => isOrderedReasoningLevelControl(control, "reasoning"))
+    ?? null;
+}
+
+function isOrderedReasoningLevelControl(
+  control: LiveSessionControlDescriptor,
+  key: SupportedLiveControlKey,
+): boolean {
+  return control.key === key && control.options.length >= 2;
+}
+
+function hasWorkingModeChoice(control: LiveSessionControlDescriptor): boolean {
   return control.options.length >= 2
-    && normalizedOptions.some((option) => option.includes("plan"));
+    && control.options.some((option) =>
+      optionTokens(`${option.value} ${option.label}`).some((token) =>
+        WORKING_MODE_MARKERS.has(token)
+      )
+    );
+}
+
+function optionTokens(value: string): string[] {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
 }

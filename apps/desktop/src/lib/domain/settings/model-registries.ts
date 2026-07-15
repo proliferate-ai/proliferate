@@ -10,7 +10,6 @@ import type { SettingsAgentDefaultRow } from "@/lib/domain/settings/agent-defaul
 const AGENT_DEFAULT_SECTION_ORDER: readonly string[] = [
   "claude",
   "codex",
-  "gemini",
   "cursor",
   "opencode",
 ];

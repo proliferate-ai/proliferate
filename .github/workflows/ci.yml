@@ -48,6 +48,11 @@ jobs:
       - name: Check AnyHarness layer boundaries
         run: python3 scripts/check_anyharness_boundaries.py
 
+      - name: Check documentation integrity
+        run: |
+          python3 -m unittest scripts/test_check_docs.py
+          python3 scripts/check_docs.py
+
   ci-cd-config:
     name: CI/CD config checks
     runs-on: ubuntu-latest
@@ -66,16 +71,67 @@ jobs:
           node --check scripts/ci-cd/detect-deploy-surfaces.mjs
           node --check scripts/ci-cd/prepare-artifact-release.mjs
           node --check scripts/ci-cd/publish-product-release.mjs
+          node --check scripts/ci-cd/pr-metadata.mjs
           node --check scripts/ci-cd/resolve-deploy-base.mjs
+          node --check scripts/ci-cd/validate-pr-metadata.mjs
+          node --check scripts/agent-catalog/build-catalog.mjs
+          node --check scripts/agent-catalog/check-version-discipline.mjs
+          node --check scripts/agent-catalog/resolve-pins.mjs
 
       - name: Test CI/CD scripts
         run: node --test scripts/ci-cd/*.test.mjs
+
+      - name: Validate agent catalog generation discipline
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+        run: |
+          node scripts/validate-agent-catalog.mjs
+          node --test scripts/agent-catalog/*.test.mjs
+          node scripts/agent-catalog/check-version-discipline.mjs --base "$BASE_SHA"
 
       - name: Check workflow YAML parses
         run: ruby -e 'require "yaml"; ARGV.each { |file| YAML.load_file(file); puts file }' .github/workflows/*.yml
 
       - name: Smoke deploy surface detector
         run: node scripts/ci-cd/detect-deploy-surfaces.mjs --base HEAD --head HEAD
+
+  # Fail-closed proof of the exact candidate-build handoff. This lane uses no
+  # provider credentials: it builds one host AnyHarness, records its identity,
+  # materializes and launches those bytes, and matches the aggregate evidence.
+  candidate-build-handoff:
+    name: Candidate build handoff
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.11.0
+
+      - name: Setup Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test qualification runner
+        run: pnpm -C tests/release test
+
+      - name: Typecheck qualification runner
+        run: pnpm -C tests/release typecheck
+
+      - name: Test candidate build-map assembler
+        run: node --test scripts/ci-cd/assemble-candidate-build-map.test.mjs
+
+      - name: Prove candidate build handoff
+        run: make qualification-candidate-handoff-smoke
 
   cargo-check:
     name: Cargo check & test
@@ -234,3 +290,88 @@ jobs:
 
       - name: Test product UI
         run: pnpm --filter @proliferate/product-ui test
+
+      - name: Test product client
+        run: pnpm --filter @proliferate/product-client test
+
+      # Focused Tier-1 gate for the workflow definition surface: passive
+      # refetch draft preservation, revision-conflict handling, failed-reload
+      # retry, and create-state reset (specs/codebase/systems/product/workflows/definitions.md
+      # assigns UI conflict behavior to Tier 1). Runs this exact file - the
+      # package-wide product-surfaces suite has known-noisy unrelated tests
+      # and is not gated yet.
+      - name: Test workflow definition surface
+        run: pnpm --filter @proliferate/product-surfaces exec vitest run src/workflows/WorkflowDefinitionsSurface.test.tsx
+
+  # Fail-closed Tier-2 gate for the workflow-definition lifecycle (T2-WFDEF-1)
+  # only. No continue-on-error: a red result fails the CI workflow on PRs and
+  # main, which also blocks the Deploy Staging workflow_run spine. This check
+  # is eligible for a future repository required-status rule (none exists
+  # today). The broad tier-2 lanes stay provisional in intent-tests.yml; do
+  # not fold them into this job.
+  workflow-definition-lifecycle:
+    name: Workflow definition lifecycle (tier-2)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: proliferate
+          POSTGRES_PASSWORD: localdev
+          POSTGRES_DB: proliferate
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U proliferate -d proliferate"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install server (venv, matches local layout)
+        run: cd server && uv venv .venv --python 3.12 && uv pip install -e ".[dev]"
+
+      - name: Install Playwright chromium
+        run: pnpm -C tests/intent exec playwright install --with-deps chromium
+
+      - name: Run workflow-definition lifecycle spec
+        env:
+          USE_EXISTING_POSTGRES: "1"
+          USE_EXISTING_REDIS: "1"
+          LOCAL_PGHOST: 127.0.0.1
+          TIER2_INTENT_SKIP_RUNTIME: "1"
+          CI: "true"
+        run: pnpm -C tests/intent exec playwright test specs/workflow-definitions.spec.ts
+
+      - name: Upload Playwright traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow-definition-lifecycle-traces
+          path: tests/intent/test-results/
+          retention-days: 7

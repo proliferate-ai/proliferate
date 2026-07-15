@@ -1,8 +1,5 @@
 import {
-  RIGHT_PANEL_BROWSER_TAB_LIMIT,
-  browserIdsFromHeaderOrder,
   parseRightPanelHeaderEntryKey,
-  rightPanelBrowserHeaderKey,
   rightPanelTerminalHeaderKey,
   rightPanelToolHeaderKey,
   type RightPanelHeaderEntryKey,
@@ -26,20 +23,6 @@ export function removeTerminalFromRightPanelState(
   return removeHeaderEntryFromState(state, rightPanelTerminalHeaderKey(terminalId), {
     isCloudWorkspaceSelected,
   });
-}
-
-export function removeBrowserTabFromRightPanelState(
-  input: Partial<RightPanelWorkspaceState> | undefined,
-  browserId: string,
-  isCloudWorkspaceSelected: boolean,
-): RightPanelWorkspaceState {
-  const state = reconcileRightPanelWorkspaceState(input, { isCloudWorkspaceSelected });
-  const { [browserId]: _removed, ...browserTabsById } = state.browserTabsById;
-  return removeHeaderEntryFromState(
-    { ...state, browserTabsById },
-    rightPanelBrowserHeaderKey(browserId),
-    { isCloudWorkspaceSelected },
-  );
 }
 
 export function removeViewerTargetFromRightPanelState(
@@ -77,84 +60,6 @@ export function resolveViewerTargetKeyAfterHeaderEntryRemoval(
     : nextHeaderOrder[removedIndex] ?? null;
   const fallbackEntry = parseRightPanelHeaderEntryKey(fallbackEntryKey);
   return fallbackEntry?.kind === "viewer" ? fallbackEntry.targetKey : null;
-}
-
-export function createBrowserTabInRightPanelState(
-  input: Partial<RightPanelWorkspaceState> | undefined,
-  browserId: string,
-  isCloudWorkspaceSelected: boolean,
-): RightPanelWorkspaceState {
-  const state = reconcileRightPanelWorkspaceState(input, { isCloudWorkspaceSelected });
-  if (!canCreateRightPanelBrowserTab(state)) {
-    return state;
-  }
-  const key = rightPanelBrowserHeaderKey(browserId);
-  return reconcileRightPanelWorkspaceState(
-    {
-      ...state,
-      activeEntryKey: key,
-      headerOrder: state.headerOrder.includes(key) ? state.headerOrder : [...state.headerOrder, key],
-      browserTabsById: {
-        ...state.browserTabsById,
-        [browserId]: { id: browserId, url: null },
-      },
-    },
-    { isCloudWorkspaceSelected },
-  );
-}
-
-export function createOrActivateBrowserTabInRightPanelState(
-  input: Partial<RightPanelWorkspaceState> | undefined,
-  browserId: string,
-  isCloudWorkspaceSelected: boolean,
-): RightPanelWorkspaceState {
-  const state = reconcileRightPanelWorkspaceState(input, { isCloudWorkspaceSelected });
-  if (canCreateRightPanelBrowserTab(state)) {
-    return createBrowserTabInRightPanelState(state, browserId, isCloudWorkspaceSelected);
-  }
-
-  const browserIds = browserIdsFromHeaderOrder(state.headerOrder);
-  const existingBrowserId = browserIds[browserIds.length - 1];
-  if (!existingBrowserId || !state.browserTabsById[existingBrowserId]) {
-    return state;
-  }
-
-  return {
-    ...state,
-    activeEntryKey: rightPanelBrowserHeaderKey(existingBrowserId),
-  };
-}
-
-export function updateBrowserTabUrlInRightPanelState(
-  input: Partial<RightPanelWorkspaceState> | undefined,
-  browserId: string,
-  url: string | null,
-  isCloudWorkspaceSelected: boolean,
-): RightPanelWorkspaceState {
-  const state = reconcileRightPanelWorkspaceState(input, { isCloudWorkspaceSelected });
-  const tab = state.browserTabsById[browserId];
-  if (!tab) {
-    return state;
-  }
-  return reconcileRightPanelWorkspaceState(
-    {
-      ...state,
-      browserTabsById: {
-        ...state.browserTabsById,
-        [browserId]: { ...tab, url },
-      },
-    },
-    { isCloudWorkspaceSelected },
-  );
-}
-
-export function canCreateRightPanelBrowserTab(
-  input: Partial<RightPanelWorkspaceState> | undefined,
-): boolean {
-  const count = browserIdsFromHeaderOrder(input?.headerOrder)
-    .filter((browserId) => Boolean(input?.browserTabsById?.[browserId]))
-    .length;
-  return count < RIGHT_PANEL_BROWSER_TAB_LIMIT;
 }
 
 export function reorderHeaderEntryInRightPanelState(

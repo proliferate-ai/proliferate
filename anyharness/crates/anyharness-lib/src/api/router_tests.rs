@@ -328,7 +328,7 @@ async fn scoped_direct_attach_jwt_filters_workspaces_and_honors_revocation() {
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/v1/agents/gemini/login/terminal")
+                .uri("/v1/agents/grok/login/terminal")
                 .header(header::AUTHORIZATION, format!("Bearer {token}"))
                 .header(header::CONTENT_TYPE, "application/json")
                 .body(Body::from("{}"))
@@ -751,8 +751,7 @@ async fn agent_login_terminal_routes_start_status_and_close_managed_npm_binary()
     let _guard = test_support::set_bearer_token_env(None);
     let repo_root = TempDirGuard::new("agent-login-terminal");
     let state = test_state(false);
-    let managed_binary =
-        install_fake_managed_registry_npm_binary(&state, AgentKind::Gemini, "gemini");
+    let managed_binary = install_fake_managed_registry_npm_binary(&state, AgentKind::Grok, "grok");
     seed_workspace(
         &state,
         "workspace-frozen-for-agent-login",
@@ -773,7 +772,7 @@ async fn agent_login_terminal_routes_start_status_and_close_managed_npm_binary()
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/v1/agents/gemini/login/terminal")
+                .uri("/v1/agents/grok/login/terminal")
                 .header(header::CONTENT_TYPE, "application/json")
                 .body(Body::from("{}"))
                 .expect("expected request"),
@@ -786,8 +785,8 @@ async fn agent_login_terminal_routes_start_status_and_close_managed_npm_binary()
         .await
         .expect("read response body");
     let payload: Value = serde_json::from_slice(&body).expect("parse response json");
-    assert_eq!(payload["kind"], "gemini");
-    assert_eq!(payload["agentLoginTerminal"]["kind"], "gemini");
+    assert_eq!(payload["kind"], "grok");
+    assert_eq!(payload["agentLoginTerminal"]["kind"], "grok");
     assert_eq!(payload["agentLoginTerminal"]["status"], "running");
     let managed_binary_display = managed_binary.display().to_string();
     assert!(payload["agentLoginTerminal"]["commandDisplay"]
@@ -1275,4 +1274,91 @@ async fn apply_agent_catalog_rejects_invalid_payload_without_state_change() {
     let payload: Value = serde_json::from_slice(&body).expect("parse response json");
     assert_eq!(payload["code"], "AGENT_CATALOG_REJECTED");
     assert_eq!(state.catalog_sync_service.catalog_version(), version_before);
+}
+
+#[tokio::test]
+async fn get_agent_catalog_version_returns_active_version_and_source() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(None);
+    let state = test_state(false);
+    let expected_version = state.catalog_sync_service.catalog_version();
+    let app = build_router(state.clone());
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/v1/catalogs/agents/version")
+                .body(Body::empty())
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("read response body");
+    let payload: Value = serde_json::from_slice(&body).expect("parse response json");
+    assert_eq!(payload["catalogVersion"], json!(expected_version));
+    assert_eq!(payload["source"], json!("bundled"));
+}
+
+#[tokio::test]
+async fn get_agent_catalog_version_requires_bearer_auth_when_configured() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(Some("secret-token"));
+    let state = test_state(false);
+    let app = build_router(state);
+
+    // Request without Authorization header should be rejected.
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/v1/catalogs/agents/version")
+                .body(Body::empty())
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn get_agent_catalog_version_succeeds_with_valid_bearer_auth() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(Some("secret-token"));
+    let state = test_state(false);
+    let expected_version = state.catalog_sync_service.catalog_version();
+    let app = build_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/v1/catalogs/agents/version")
+                .header(header::AUTHORIZATION, "Bearer secret-token")
+                .body(Body::empty())
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("read response body");
+    let payload: Value = serde_json::from_slice(&body).expect("parse response json");
+    assert_eq!(payload["catalogVersion"], json!(expected_version));
 }

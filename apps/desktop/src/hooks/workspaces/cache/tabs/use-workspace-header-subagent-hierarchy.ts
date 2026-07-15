@@ -6,6 +6,7 @@ import {
   anyHarnessSessionReviewsKey,
   anyHarnessSessionSubagentsKey,
   resolveWorkspaceConnectionFromContext,
+  useAnyHarnessCacheScopeKey,
   useAnyHarnessWorkspaceContext,
 } from "@anyharness/sdk-react";
 import type {
@@ -34,6 +35,9 @@ import {
 } from "@/lib/domain/workspaces/tabs/workspace-header-cowork-hierarchy";
 import { useBatchedHeaderHierarchySessionIds } from "@/hooks/workspaces/ui/tabs/use-batched-header-hierarchy-session-ids";
 import {
+  isReplacedSessionTombstoned,
+} from "@/hooks/sessions/workflows/session-replacement-tombstones";
+import {
   buildHierarchyQuerySignature,
   buildReviewRelationshipHintSignature,
   buildSubagentRelationshipHintSignature,
@@ -48,6 +52,7 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
   sessionIds: string[];
 }): WorkspaceHeaderSubagentHierarchy {
   const workspace = useAnyHarnessWorkspaceContext();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const recordSessionRelationshipHint = useSessionDirectoryStore(
     (state) => state.recordRelationshipHint,
@@ -80,11 +85,17 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
     queries: uniqueSessionIds.map((sessionId, index) => {
       const materializedSessionId = materializedSessionIds[index];
       return {
-        queryKey: anyHarnessSessionSubagentsKey(runtimeUrl, args.workspaceId, sessionId),
-        enabled: !!args.workspaceId
-          && !!sessionId
-          && !!materializedSessionId
-          && enabledSessionIds.has(sessionId),
+        queryKey: anyHarnessSessionSubagentsKey(
+          cacheScopeKey,
+          args.workspaceId,
+          sessionId,
+        ),
+        enabled: shouldEnableHeaderSessionScopedQuery({
+          workspaceId: args.workspaceId,
+          sessionId,
+          materializedSessionId,
+          enabledByBatch: enabledSessionIds.has(sessionId),
+        }),
         queryFn: async ({ signal }): Promise<SessionSubagentsResponse> => {
           if (!materializedSessionId) {
             throw new Error("Session is still starting. Try again in a moment.");
@@ -104,11 +115,17 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
     queries: uniqueSessionIds.map((sessionId, index) => {
       const materializedSessionId = materializedSessionIds[index];
       return {
-        queryKey: anyHarnessSessionReviewsKey(runtimeUrl, args.workspaceId, sessionId),
-        enabled: !!args.workspaceId
-          && !!sessionId
-          && !!materializedSessionId
-          && enabledSessionIds.has(sessionId),
+        queryKey: anyHarnessSessionReviewsKey(
+          cacheScopeKey,
+          args.workspaceId,
+          sessionId,
+        ),
+        enabled: shouldEnableHeaderSessionScopedQuery({
+          workspaceId: args.workspaceId,
+          sessionId,
+          materializedSessionId,
+          enabledByBatch: enabledSessionIds.has(sessionId),
+        }),
         queryFn: async ({ signal }): Promise<SessionReviewsResponse> => {
           if (!materializedSessionId) {
             throw new Error("Session is still starting. Try again in a moment.");
@@ -128,11 +145,17 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
     queries: uniqueSessionIds.map((sessionId, index) => {
       const materializedSessionId = materializedSessionIds[index];
       return {
-        queryKey: anyHarnessCoworkManagedWorkspacesKey(runtimeUrl, materializedSessionId),
-        enabled: !!args.workspaceId
-          && !!sessionId
-          && !!materializedSessionId
-          && enabledSessionIds.has(sessionId),
+        queryKey: anyHarnessCoworkManagedWorkspacesKey(
+          runtimeUrl,
+          materializedSessionId,
+          cacheScopeKey,
+        ),
+        enabled: shouldEnableHeaderSessionScopedQuery({
+          workspaceId: args.workspaceId,
+          sessionId,
+          materializedSessionId,
+          enabledByBatch: enabledSessionIds.has(sessionId),
+        }),
         queryFn: async ({ signal }): Promise<CoworkManagedWorkspacesResponse> => {
           if (!materializedSessionId) {
             throw new Error("Session is still starting. Try again in a moment.");
@@ -294,4 +317,17 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
     hierarchyQueryRows,
     resolveClientSessionId,
   ]);
+}
+
+export function shouldEnableHeaderSessionScopedQuery(input: {
+  workspaceId: string | null;
+  sessionId: string | null | undefined;
+  materializedSessionId: string | null | undefined;
+  enabledByBatch: boolean;
+}): boolean {
+  return !!input.workspaceId
+    && !!input.sessionId
+    && !!input.materializedSessionId
+    && input.enabledByBatch
+    && !isReplacedSessionTombstoned(input.workspaceId, input.materializedSessionId);
 }

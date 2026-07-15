@@ -1,4 +1,4 @@
-"""Personal agent API key pool persistence."""
+"""Personal agent API key vault persistence (titled secrets)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.agent_gateway import (
-    AGENT_API_KEY_PROVIDERS,
     AGENT_API_KEY_STATUS_ACTIVE,
     AGENT_API_KEY_STATUS_REVOKED,
     AGENT_GATEWAY_CIPHERTEXT_KEY_ID,
@@ -20,10 +19,10 @@ from proliferate.utils.crypto import decrypt_text, encrypt_text
 from proliferate.utils.time import utcnow
 
 
-def build_redacted_hint(payload: str) -> str:
-    """A safe display hint like ``sk-...abc4`` built from the raw key."""
-    tail = payload[-4:] if len(payload) >= 4 else payload
-    prefix = payload.split("-", 1)[0] if "-" in payload[:12] else ""
+def build_redacted_hint(value: str) -> str:
+    """A safe display hint like ``sk-...abc4`` built from the raw secret."""
+    tail = value[-4:] if len(value) >= 4 else value
+    prefix = value.split("-", 1)[0] if "-" in value[:12] else ""
     shown_prefix = f"{prefix}-" if prefix and len(prefix) <= 8 else ""
     return f"{shown_prefix}...{tail}"
 
@@ -32,21 +31,19 @@ async def create_agent_api_key(
     db: AsyncSession,
     *,
     user_id: UUID,
-    provider: str,
-    display_name: str,
-    payload: str,
+    title: str,
+    value: str,
 ) -> AgentApiKeyRecord:
-    if provider not in AGENT_API_KEY_PROVIDERS:
-        raise ValueError(f"Unsupported agent API key provider: {provider}")
-    if not payload:
-        raise ValueError("Agent API key payload must not be empty.")
+    if not title.strip():
+        raise ValueError("Agent API key title must not be empty.")
+    if not value:
+        raise ValueError("Agent API key value must not be empty.")
     row = AgentApiKey(
         user_id=user_id,
-        provider=provider,
-        display_name=display_name,
-        payload_ciphertext=encrypt_text(payload),
-        payload_ciphertext_key_id=AGENT_GATEWAY_CIPHERTEXT_KEY_ID,
-        redacted_hint=build_redacted_hint(payload),
+        title=title,
+        value_ciphertext=encrypt_text(value),
+        encryption_key_id=AGENT_GATEWAY_CIPHERTEXT_KEY_ID,
+        redacted_hint=build_redacted_hint(value),
         status=AGENT_API_KEY_STATUS_ACTIVE,
     )
     db.add(row)
@@ -71,10 +68,8 @@ async def revoke_agent_api_key(
     if row is None:
         return None
     if row.status != AGENT_API_KEY_STATUS_REVOKED:
-        now = utcnow()
         row.status = AGENT_API_KEY_STATUS_REVOKED
-        row.revoked_at = now
-        row.updated_at = now
+        row.updated_at = utcnow()
         await db.flush()
     return api_key_record(row)
 
@@ -98,7 +93,7 @@ async def get_agent_api_key_decrypted(
     user_id: UUID,
     api_key_id: UUID,
 ) -> tuple[AgentApiKeyRecord, str] | None:
-    """Internal-use fetch of the raw key payload for materialization."""
+    """Internal-use fetch of the raw key value for materialization."""
     row = (
         await db.execute(
             select(AgentApiKey).where(
@@ -110,4 +105,4 @@ async def get_agent_api_key_decrypted(
     ).scalar_one_or_none()
     if row is None:
         return None
-    return api_key_record(row), decrypt_text(row.payload_ciphertext)
+    return api_key_record(row), decrypt_text(row.value_ciphertext)

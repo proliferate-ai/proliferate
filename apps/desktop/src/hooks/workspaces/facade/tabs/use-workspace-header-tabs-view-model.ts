@@ -36,6 +36,10 @@ import { useWorkspaceHeaderTabsWorkspaceState } from "@/hooks/workspaces/facade/
 import { useWorkspaceHeaderTabsDebugLogging } from "@/hooks/workspaces/lifecycle/use-workspace-header-tabs-debug-logging";
 import { useWorkspaceHeaderTabsPreferences } from "@/hooks/workspaces/facade/tabs/use-workspace-header-tabs-preferences";
 import { useWorkspaceHeaderTabsVisibility } from "@/hooks/workspaces/facade/tabs/use-workspace-header-tabs-visibility";
+import {
+  filterReplacedSessionIds,
+  filterReplacedSessionTombstones,
+} from "@/hooks/sessions/workflows/session-replacement-tombstones";
 
 export function useWorkspaceHeaderTabsViewModel() {
   const {
@@ -104,9 +108,22 @@ export function useWorkspaceHeaderTabsViewModel() {
       ],
       count: (map) => map.size,
     }, () => {
+      // Resolve tombstones inside the live-slot memo. Beginning a replacement
+      // removes the old slot while intentionally leaving the runtime query
+      // cache untouched for rollback; the liveSlots dependency is therefore
+      // the render signal that hides the retired cached header row immediately.
+      const visibleWorkspaceSessions = selectedWorkspaceId
+        ? filterReplacedSessionTombstones(
+          selectedWorkspaceId,
+          workspaceSessionsQuery.data,
+        )
+        : workspaceSessionsQuery.data;
+      const visibleOptimisticSessionIds = selectedWorkspaceId
+        ? filterReplacedSessionIds(selectedWorkspaceId, optimisticHeaderSessionIds)
+        : optimisticHeaderSessionIds;
       return buildKnownHeaderSessions({
-        optimisticSessionIds: optimisticHeaderSessionIds,
-        sessions: workspaceSessionsQuery.data,
+        optimisticSessionIds: visibleOptimisticSessionIds,
+        sessions: visibleWorkspaceSessions,
         selectedWorkspaceId,
         clientSessionIdByMaterializedSessionId,
         liveSlots,

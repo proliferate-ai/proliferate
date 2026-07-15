@@ -125,6 +125,29 @@ export async function startWebSsoFlow(input: {
   window.location.assign(response.authorizationUrl);
 }
 
+// The org-slug login page and per-org /login/<slug> links resolve a slug to an
+// organization's SSO connection, then hand off to the existing start flow. A
+// slug that does not resolve (missing org, no SSO, disabled) returns the same
+// generic answer, so we surface one generic message either way.
+const SSO_SLUG_UNAVAILABLE_MESSAGE =
+  "We could not find single sign-on for that workspace. Check the sign-in link your admin shared.";
+
+export async function startWebSsoFlowForSlug(slug: string): Promise<void> {
+  const trimmed = slug.trim();
+  if (!trimmed) {
+    throw new Error("Enter your organization's workspace name to continue.");
+  }
+  const client = createWebCloudClient(webEnv.apiBaseUrl, null);
+  const discovery = await discoverSso({ slug: trimmed }, client);
+  if (!discovery.enabled || !discovery.organizationId) {
+    throw new Error(SSO_SLUG_UNAVAILABLE_MESSAGE);
+  }
+  await startWebSsoFlow({
+    organizationId: discovery.organizationId,
+    connectionId: discovery.connectionId,
+  });
+}
+
 export async function completeWebAuthFlow(
   searchParams: URLSearchParams,
 ): Promise<AuthSessionResponse> {

@@ -1,5 +1,5 @@
 import { useNativeContextMenu } from "@/hooks/ui/native/use-native-context-menu";
-import type { NativeContextMenuItem } from "@/lib/access/tauri/context-menu";
+import type { NativeMenuItem } from "@proliferate/product-client/host/desktop-bridge";
 
 export function useChatDiffLineWrapNativeContextMenu({
   wrapLongLines,
@@ -22,7 +22,7 @@ export function buildChatDiffLineWrapNativeContextMenuItems({
 }: {
   wrapLongLines: boolean;
   onToggleWrapLongLines: () => void;
-}): NativeContextMenuItem[] {
+}): NativeMenuItem[] {
   return [
     {
       id: "toggle-chat-diff-line-wrap",

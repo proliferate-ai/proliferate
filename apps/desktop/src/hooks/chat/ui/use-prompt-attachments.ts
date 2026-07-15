@@ -55,7 +55,7 @@ export function usePromptAttachments(
     }
     entriesRef.current = [];
     setEntries([]);
-  }, [scopeKey, canAttachEmbeddedContext, canAttachImages]);
+  }, [scopeKey]);
 
   const descriptors = useMemo(
     () => entries.map((entry) => entry.descriptor),
@@ -170,11 +170,39 @@ export function usePromptAttachments(
     setEntries([]);
   }, []);
 
-  const snapshotForSubmit = useCallback((): PromptAttachmentSnapshot[] => {
-    return entriesRef.current.map((entry) =>
-      createPromptAttachmentSnapshot(entry.descriptor, entry.file)
-    );
+  const clearSubmittedAttachments = useCallback((
+    submitted: readonly Pick<PromptAttachmentSnapshot, "id">[],
+  ) => {
+    const submittedIds = new Set(submitted.map((entry) => entry.id));
+    if (submittedIds.size === 0) {
+      return;
+    }
+    const retained: AttachmentEntry[] = [];
+    for (const entry of entriesRef.current) {
+      if (submittedIds.has(entry.descriptor.id)) {
+        revokeAttachmentObjectUrl(entry);
+      } else {
+        retained.push(entry);
+      }
+    }
+    entriesRef.current = retained;
+    setEntries(retained);
   }, []);
+
+  const snapshotForSubmit = useCallback((): PromptAttachmentSnapshot[] => {
+    return entriesRef.current.flatMap((entry) => {
+      const isSupported = entry.descriptor.kind === "image"
+        ? canAttachImages
+        : canAttachEmbeddedContext;
+      return isSupported
+        ? [createPromptAttachmentSnapshot(entry.descriptor, entry.file)]
+        : [];
+    });
+  }, [canAttachEmbeddedContext, canAttachImages]);
+
+  const hasSupportedAttachments = entries.some((entry) => (
+    entry.descriptor.kind === "image" ? canAttachImages : canAttachEmbeddedContext
+  ));
 
   return useMemo(() => ({
     attachments: descriptors,
@@ -182,14 +210,18 @@ export function usePromptAttachments(
     addTextPaste,
     removeAttachment,
     clearAttachments,
+    clearSubmittedAttachments,
     snapshotForSubmit,
     hasAttachments: entries.length > 0,
+    hasSupportedAttachments,
   }), [
     addFiles,
     addTextPaste,
     clearAttachments,
+    clearSubmittedAttachments,
     descriptors,
     entries.length,
+    hasSupportedAttachments,
     removeAttachment,
     snapshotForSubmit,
   ]);

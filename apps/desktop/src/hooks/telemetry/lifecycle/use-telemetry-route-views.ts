@@ -2,14 +2,15 @@ import { useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import type { DesktopTelemetryRoute } from "@/lib/domain/telemetry/events";
 import { resolveDesktopTelemetryRoute } from "@/lib/domain/telemetry/routes";
-import {
-  setTelemetryTag,
-  trackProductEvent,
-} from "@/lib/integrations/telemetry/client";
+import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
 
-// Owns route view telemetry tags and events. Does not own route classification rules.
+// Owns product route classification, screen-view deduplication, and the single
+// `screen_viewed` product event. Classifies the current pathname here (product
+// code), hands the classified route to the host for vendor navigation metadata,
+// then emits exactly one screen-view event through the typed adapter.
 export function useTelemetryRouteViews() {
   const location = useLocation();
+  const telemetry = useProductTelemetry();
   const previousRouteRef = useRef<DesktopTelemetryRoute | null>(null);
 
   useEffect(() => {
@@ -17,9 +18,9 @@ export function useTelemetryRouteViews() {
     if (previousRouteRef.current === currentRoute) return;
     previousRouteRef.current = currentRoute;
 
-    setTelemetryTag("route", currentRoute);
-    trackProductEvent("screen_viewed", {
+    telemetry.routeChanged({ pathname: location.pathname, routeId: currentRoute });
+    telemetry.track("screen_viewed", {
       route: currentRoute,
     });
-  }, [location.pathname]);
+  }, [location.pathname, telemetry]);
 }

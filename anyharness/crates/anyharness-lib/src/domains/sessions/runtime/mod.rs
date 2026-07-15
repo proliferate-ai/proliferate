@@ -6,6 +6,9 @@ use anyharness_contract::v1::{
     McpElicitationSubmittedField, SessionMcpBindingSummary, UserInputSubmittedAnswer,
 };
 
+use super::active_activity_roster::ActivityRosterResolver;
+use super::active_goals::ActiveGoalResolver;
+use super::active_loops::LoopsResolver;
 use super::links::model::SessionLinkRecord;
 use super::links::service::SessionLinkService;
 use super::mcp_bindings::crypto::SessionDataCipher;
@@ -14,7 +17,7 @@ use super::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
 use super::model::SessionRecord;
 use super::plan_references::{PlanInteractionLinkResolver, PlanReferenceResolver};
 use super::service::SessionService;
-use crate::domains::agents::route_auth::RouteAuthError;
+use crate::domains::agents::route_auth::{GatewayModelResolve, RouteAuthError};
 use crate::domains::sessions::extensions::SessionExtension;
 use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
@@ -35,6 +38,9 @@ mod startup;
 mod tests;
 pub(crate) mod view;
 
+pub(crate) use creation::{InternalSessionCreateError, InternalSessionCreateInput};
+pub(crate) use prompt::TextPromptDispatchError;
+
 pub struct SessionRuntime {
     session_service: Arc<SessionService>,
     session_link_service: SessionLinkService,
@@ -47,6 +53,12 @@ pub struct SessionRuntime {
     access_gate: Arc<WorkspaceAccessGate>,
     plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
     plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
+    /// Catalog-driven gateway model resolver (spec §3): supplies the render
+    /// plane's [`GatewayModelPlan`] and schedules launch-time lazy probes.
+    gateway_model_resolver: Arc<dyn GatewayModelResolve>,
+    active_goal_resolver: Arc<dyn ActiveGoalResolver>,
+    loops_resolver: Arc<dyn LoopsResolver>,
+    activity_roster_resolver: Arc<dyn ActivityRosterResolver>,
 }
 
 impl SessionRuntime {
@@ -61,6 +73,14 @@ pub enum CreateAndStartSessionError {
     ModelUnsupported {
         agent_kind: String,
         model_id: String,
+    },
+    /// A known model is gated behind inactive auth contexts. Carries the
+    /// unlock condition (`required_contexts`) for the API layer; an
+    /// unresolvable model uses `ModelUnsupported` instead.
+    ModelGated {
+        agent_kind: String,
+        model_id: String,
+        required_contexts: Vec<String>,
     },
     ModeUnsupported {
         agent_kind: String,
@@ -153,6 +173,15 @@ pub enum PendingPromptMutationError {
     SessionNotFound(String),
     NotFound,
     InvalidPrompt(crate::domains::sessions::prompt::PromptValidationError),
+    Internal(anyhow::Error),
+}
+
+#[derive(Debug)]
+pub enum PendingPromptQueueError {
+    SessionNotFound(String),
+    NotFound,
+    StaleOrder { current_seqs: Vec<i64> },
+    InvalidReorder(String),
     Internal(anyhow::Error),
 }
 
@@ -268,6 +297,10 @@ impl SessionRuntime {
         access_gate: Arc<WorkspaceAccessGate>,
         plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
         plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
+        gateway_model_resolver: Arc<dyn GatewayModelResolve>,
+        active_goal_resolver: Arc<dyn ActiveGoalResolver>,
+        loops_resolver: Arc<dyn LoopsResolver>,
+        activity_roster_resolver: Arc<dyn ActivityRosterResolver>,
     ) -> Self {
         Self {
             session_service,
@@ -281,6 +314,10 @@ impl SessionRuntime {
             access_gate,
             plan_reference_resolver,
             plan_interaction_link_resolver,
+            gateway_model_resolver,
+            active_goal_resolver,
+            loops_resolver,
+            activity_roster_resolver,
         }
     }
 

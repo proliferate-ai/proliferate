@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import type {
   CloudWorkspaceDetail,
@@ -13,6 +13,7 @@ import {
   buildCloudWorkspaceAttemptFromRequest,
   type CloudWorkspaceRepoTarget,
   isCloudWorkspaceBranchConflictError,
+  resolveCloudWorkspaceCreateFailureMessage,
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import {
   buildSubmittingPendingWorkspaceEntry,
@@ -28,13 +29,11 @@ import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { ensureRepoGroupExpanded } from "@/stores/preferences/workspace-ui-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import type { AuthUser } from "@/lib/domain/auth/auth-user";
+import { useProductAuthUser } from "@/hooks/auth/facade/use-product-auth";
 import { useWorkspaceCollectionsCache } from "@/hooks/workspaces/cache/use-workspace-collections-cache";
 import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
-import {
-  captureTelemetryException,
-  trackProductEvent,
-} from "@/lib/integrations/telemetry/client";
+import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
 import {
   elapsedMs,
   logLatency,
@@ -64,11 +63,13 @@ export type CloudWorkspaceEntryResult =
     attemptId: string;
     projectedSessionId: string | null;
   }
-  | { status: "interrupted" };
-
-function resolveErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback;
-}
+  | {
+    status: "interrupted";
+    // Set only when the attempt failed with a server error (vs. being
+    // superseded by a newer attempt); carries the resolved server message so
+    // callers can surface it in a toast instead of a generic string.
+    failureMessage?: string;
+  };
 
 function isAttemptCurrent(attemptId: string): boolean {
   return useSessionSelectionStore.getState().pendingWorkspaceEntry?.attemptId === attemptId;
@@ -85,10 +86,28 @@ function buildRepoTargetFromRequest(
 }
 
 export function useCreateCloudWorkspace() {
+  const telemetry = useProductTelemetry();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const setPendingWorkspaceEntry = useSessionSelectionStore((state) => state.setPendingWorkspaceEntry);
   const branchPrefixType = useUserPreferencesStore((state) => state.branchPrefixType);
-  const authUser = useAuthStore((state) => state.user);
+  // Only the branch prefix (github login) is consumed downstream, so the
+  // normalized host user maps losslessly onto the AuthUser shape the domain
+  // helpers expect. Memoized on the stable host user so the create callback
+  // keeps its identity across unrelated renders.
+  const hostAuthUser = useProductAuthUser();
+  const authUser = useMemo<AuthUser | null>(
+    () =>
+      hostAuthUser
+        ? {
+            id: hostAuthUser.id,
+            email: hostAuthUser.email ?? "",
+            display_name: hostAuthUser.displayName ?? null,
+            github_login: hostAuthUser.githubLogin ?? null,
+            avatar_url: hostAuthUser.avatarUrl ?? null,
+          }
+        : null,
+    [hostAuthUser],
+  );
   const { selectWorkspace } = useWorkspaceSelection();
   const { beginPendingWorkspace, failPendingEntry, finalizeSelection } = useWorkspaceEntryFlow();
   const invalidateCloudBillingState = useInvalidateCloudBillingState();
@@ -187,7 +206,7 @@ export function useCreateCloudWorkspace() {
         });
         const workspace = await createCloudWorkspaceMutation(attempt.request);
         const workspaceStatus = resolveCloudWorkspaceStatus(workspace) ?? "pending";
-        trackProductEvent("cloud_workspace_created", {
+        telemetry.track("cloud_workspace_created", {
           workspace_kind: "cloud",
           status: workspaceStatus,
           git_provider: workspace.repo.provider,
@@ -269,7 +288,7 @@ export function useCreateCloudWorkspace() {
           continue;
         }
 
-        captureTelemetryException(error, {
+        telemetry.captureException(error, {
           tags: {
             action: "create_cloud_workspace",
             domain: "cloud_workspace",
@@ -280,14 +299,18 @@ export function useCreateCloudWorkspace() {
             retryCount,
           },
         });
+        const failureMessage = resolveCloudWorkspaceCreateFailureMessage(
+          error,
+          "Failed to create cloud workspace.",
+        );
         const currentPending = useSessionSelectionStore.getState().pendingWorkspaceEntry;
         failPendingEntry(
           currentPending?.attemptId === attemptId
             ? currentPending
             : currentEntry ?? nextEntry,
-          resolveErrorMessage(error, "Failed to create cloud workspace."),
+          failureMessage,
         );
-        return { status: "interrupted" };
+        return { status: "interrupted", failureMessage };
       }
     }
     return { status: "interrupted" };
@@ -301,6 +324,7 @@ export function useCreateCloudWorkspace() {
     getWorkspaceCollections,
     selectWorkspace,
     setPendingWorkspaceEntry,
+    telemetry,
   ]);
 
   const createCloudWorkspaceAndEnter = useCallback(async (

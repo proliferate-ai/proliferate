@@ -34,6 +34,7 @@ export interface HeaderChatMenuEntry {
   hasUnreadActivity: boolean;
   isActive: boolean;
   isVisible: boolean;
+  closedAt: string | null;
 }
 
 export type HeaderChatStripRow = HeaderStripRow<HeaderChatTabEntry>;

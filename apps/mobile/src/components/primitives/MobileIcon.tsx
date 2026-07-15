@@ -14,7 +14,6 @@ export type MobileIconName =
   | "google"
   | "claude"
   | "openai"
-  | "gemini"
   | "plus"
   | "send"
   | "sparkles"
@@ -151,12 +150,6 @@ export function MobileIcon({ name, size = 18, color = colors.fg }: MobileIconPro
           <Path d="m15.87 8.25-3.86 2.22-3.86-2.22" />
           <Path d="M8.15 12.71 12 10.47l3.87 2.24" />
           <Path d="M12.01 14.94v-4.47" />
-        </Svg>
-      );
-    case "gemini":
-      return (
-        <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
-          <Path d="M12 2.75a.75.75 0 0 1 .72.55l1.18 4.25a3.6 3.6 0 0 0 2.55 2.55l4.25 1.18a.75.75 0 0 1 0 1.44l-4.25 1.18a3.6 3.6 0 0 0-2.55 2.55l-1.18 4.25a.75.75 0 0 1-1.44 0l-1.18-4.25a3.6 3.6 0 0 0-2.55-2.55L3.3 12.72a.75.75 0 0 1 0-1.44l4.25-1.18a3.6 3.6 0 0 0 2.55-2.55l1.18-4.25a.75.75 0 0 1 .72-.55Z" />
         </Svg>
       );
     case "plus":

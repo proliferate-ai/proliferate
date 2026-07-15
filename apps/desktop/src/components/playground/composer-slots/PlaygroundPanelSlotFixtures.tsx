@@ -24,7 +24,7 @@ import {
 import {
   EDIT_OPTIONS,
   EXECUTE_OPTIONS,
-  GEMINI_MCP_OPTIONS,
+  MCP_APPROVAL_OPTIONS,
   MCP_ELICITATION_BOOLEAN,
   MCP_ELICITATION_ENUM,
   MCP_ELICITATION_MIXED_REQUIRED,
@@ -46,9 +46,9 @@ import { noop, noopAsync, revealExampleUrl } from "@/components/playground/Playg
 export function renderPanelSlotFixture(scenario: ScenarioKey): ReactNode | null {
   switch (scenario) {
     case "clean":
-    case "gemini-retry-status":
-    case "gemini-blocked-warning":
-    case "gemini-no-response-warning":
+    case "grok-retry-status":
+    case "grok-blocked-warning":
+    case "grok-no-response-warning":
     case "subagents-composer-few":
     case "subagents-composer-many":
     case "subagents-queued-wake":
@@ -121,12 +121,12 @@ export function renderPanelSlotFixture(scenario: ScenarioKey): ReactNode | null 
           onDeny={noop}
         />
       );
-    case "gemini-mcp-approval-options":
-    case "gemini-tool-before-approval":
+    case "opencode-mcp-approval-options":
+    case "opencode-tool-before-approval":
       return (
         <ApprovalCard
           title="MCP: github.search_pull_requests"
-          actions={GEMINI_MCP_OPTIONS}
+          actions={MCP_APPROVAL_OPTIONS}
           onSelectOption={noop}
           onAllow={noop}
           onDeny={noop}

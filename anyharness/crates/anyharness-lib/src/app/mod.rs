@@ -1,5 +1,6 @@
 mod product_mcp;
 mod sessions;
+mod workflows;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -8,6 +9,12 @@ use crate::adapters::git::WorkspaceFileSearchCache;
 use crate::adapters::hosting::PrStatusCache;
 use crate::adapters::processes::ProcessService;
 use crate::api::auth::AuthManager;
+use crate::domains::activity::feeds::FeedService;
+use crate::domains::activity::runtime::{ActivityRuntime, ActivitySessionHooks};
+use crate::domains::activity::service::ActivityService;
+use crate::domains::activity::store::ActivityStore;
+use crate::domains::agents::catalog::gateway_probe::GatewayProbeStore;
+use crate::domains::agents::catalog::gateway_resolver::GatewayModelResolver;
 use crate::domains::agents::catalog::service::AgentCatalogService;
 use crate::domains::agents::catalog::sync::CatalogSyncService;
 use crate::domains::agents::installer::reconcile::execution::AgentReconcileService;
@@ -21,6 +28,15 @@ use crate::domains::cowork::mcp::auth::CoworkMcpAuth;
 use crate::domains::cowork::runtime::{CoworkRuntime, CoworkSessionHooks};
 use crate::domains::cowork::service::CoworkService;
 use crate::domains::cowork::store::{CoworkDeleteParticipant, CoworkStore};
+use crate::domains::goals::hooks::GoalSessionHooks;
+use crate::domains::goals::runtime::GoalRuntime;
+use crate::domains::goals::service::GoalService;
+use crate::domains::goals::store::GoalStore;
+use crate::domains::loops::hooks::LoopSessionHooks;
+use crate::domains::loops::runtime::{LoopRuntime, SessionLoopFireExecutor};
+use crate::domains::loops::scheduler::LoopScheduler;
+use crate::domains::loops::service::LoopService;
+use crate::domains::loops::store::LoopStore;
 use crate::domains::mobility::service::MobilityService;
 use crate::domains::mobility::store::MobilityStore;
 use crate::domains::plans::runtime::PlanRuntime;
@@ -49,6 +65,7 @@ use crate::domains::sessions::subagents::mcp::auth::SubagentMcpAuth;
 use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::sessions::subagents::store::SubagentStore;
 use crate::domains::terminals::store::TerminalStore;
+use crate::domains::workflows::runtime::WorkflowRunRuntime;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
 use crate::domains::workspaces::access_store::WorkspaceAccessStore;
 use crate::domains::workspaces::checkout_gate::CheckoutDeletionGate;
@@ -82,6 +99,8 @@ pub enum AppStateInitError {
     InvalidDataKey(String),
     #[error("Invalid product MCP endpoint registry: {0}")]
     InvalidProductMcpRegistry(#[source] anyhow::Error),
+    #[error("Failed to fence interrupted workflow runs during startup: {0}")]
+    WorkflowFencingFailed(#[source] anyhow::Error),
 }
 
 #[derive(Clone)]
@@ -94,6 +113,7 @@ pub struct AppState {
     pub agent_seed_store: AgentSeedStore,
     pub agent_runtime: Arc<AgentRuntime>,
     pub catalog_sync_service: Arc<CatalogSyncService>,
+    pub gateway_model_resolver: Arc<GatewayModelResolver>,
     pub agent_reconcile_service: Arc<AgentReconcileService>,
     pub repo_root_service: Arc<RepoRootService>,
     pub workspace_runtime: Arc<WorkspaceRuntime>,
@@ -127,6 +147,14 @@ pub struct AppState {
     pub mobility_service: Arc<MobilityService>,
     pub plan_service: Arc<PlanService>,
     pub plan_runtime: Arc<PlanRuntime>,
+    pub goal_service: Arc<GoalService>,
+    pub goal_runtime: Arc<GoalRuntime>,
+    pub workflow_run_runtime: Arc<WorkflowRunRuntime>,
+    pub loop_service: Arc<LoopService>,
+    pub loop_runtime: Arc<LoopRuntime>,
+    pub activity_service: Arc<ActivityService>,
+    pub activity_runtime: Arc<ActivityRuntime>,
+    pub feed_service: FeedService,
     pub acp_manager: LiveSessionManager,
     pub terminal_service: Arc<TerminalService>,
     pub agent_login_terminal_service: Arc<AgentLoginTerminalService>,
@@ -174,6 +202,12 @@ impl AppState {
         ));
         catalog_sync_service
             .set_catalog_applied_poke(catalog_applied_reconcile_poke(agent_runtime.clone()));
+        // Gateway model resolver (spec §2/§3): catalog gatewayPolicy + the
+        // sqlite probe store -> the render plane's GatewayModelPlan.
+        let gateway_model_resolver = Arc::new(GatewayModelResolver::new(
+            catalog_sync_service.clone(),
+            GatewayProbeStore::new(db.clone()),
+        ));
         let process_service = Arc::new(ProcessService::new());
         let workspace_operation_gate = Arc::new(WorkspaceOperationGate::new());
         let checkout_deletion_gate = Arc::new(CheckoutDeletionGate::new());
@@ -203,6 +237,10 @@ impl AppState {
             runtime_home.clone(),
         ));
         let plan_service = Arc::new(PlanService::new(PlanStore::new(db.clone())));
+        let goal_service = Arc::new(GoalService::new(GoalStore::new(db.clone())));
+        let loop_service = Arc::new(LoopService::new(LoopStore::new(db.clone())));
+        let activity_service = Arc::new(ActivityService::new(ActivityStore::new(db.clone())));
+        let feed_service = FeedService::new(ActivityStore::new(db.clone()));
         let terminal_service = Arc::new(TerminalService::new(
             TerminalStore::new(db.clone()),
             runtime_home.clone(),
@@ -242,6 +280,9 @@ impl AppState {
             runtime_home: runtime_home.clone(),
             plan_service: plan_service.clone(),
             review_service: review_service.clone(),
+            goal_service: goal_service.clone(),
+            loop_service: loop_service.clone(),
+            activity_service: activity_service.clone(),
         });
         let cowork_delegation_service = CoworkDelegationService::new(
             (*cowork_service).clone(),
@@ -286,6 +327,39 @@ impl AppState {
                 cowork_mcp_auth: cowork_mcp_auth.clone(),
                 subagent_service: subagent_service.clone(),
             });
+        let goal_runtime = Arc::new(GoalRuntime::new(
+            goal_service.clone(),
+            session_service.clone(),
+            acp_manager.clone(),
+            workspace_access_gate.clone(),
+        ));
+        let goal_session_hooks = Arc::new(GoalSessionHooks::new(goal_runtime.clone()));
+        // Loops: the emulated scheduler + its session-facing fire executor, the
+        // write-path runtime, and the attach/turn-finished/closing hooks.
+        let loop_fire_executor = Arc::new(SessionLoopFireExecutor::new(
+            loop_service.clone(),
+            acp_manager.clone(),
+        ));
+        let loop_scheduler = Arc::new(LoopScheduler::new(loop_fire_executor));
+        let loop_runtime = Arc::new(LoopRuntime::new(
+            loop_service.clone(),
+            session_service.clone(),
+            acp_manager.clone(),
+            workspace_access_gate.clone(),
+            loop_scheduler.clone(),
+        ));
+        let loop_session_hooks = Arc::new(LoopSessionHooks::new(loop_runtime.clone()));
+        // Activity: read-only roster reconcile-on-attach.
+        let activity_runtime = Arc::new(ActivityRuntime::new(
+            activity_service.clone(),
+            session_service.clone(),
+            acp_manager.clone(),
+        ));
+        let activity_session_hooks = Arc::new(ActivitySessionHooks::new(activity_runtime.clone()));
+        // Workflow runs — phase 1 (before SessionRuntime::new): service,
+        // startup fencing, main-handle capture, completion extension.
+        let workflow_wiring = workflows::wire_workflows_before_sessions(&db)?;
+        let workflow_run_session_extension = workflow_wiring.session_extension.clone();
         let session_extensions: Vec<
             Arc<dyn crate::domains::sessions::extensions::SessionExtension>,
         > = vec![
@@ -293,6 +367,10 @@ impl AppState {
             subagent_session_hooks.clone(),
             review_session_hooks.clone(),
             integration_gateway_session_launch_extension.clone(),
+            goal_session_hooks,
+            loop_session_hooks,
+            activity_session_hooks,
+            workflow_run_session_extension,
         ];
         let session_runtime = Arc::new(SessionRuntime::new(
             session_service.clone(),
@@ -306,7 +384,18 @@ impl AppState {
             workspace_access_gate.clone(),
             plan_service.clone(),
             plan_service.clone(),
+            gateway_model_resolver.clone(),
+            goal_service.clone(),
+            loop_service.clone(),
+            activity_service.clone(),
         ));
+        // Workflow runs — phase 2 (after SessionRuntime): the async facade.
+        let workflow_run_runtime = workflows::wire_workflow_runtime(
+            workflow_wiring,
+            session_runtime.clone(),
+            workspace_operation_gate.clone(),
+            workspace_access_gate.clone(),
+        );
         let retire_preflight_checker = Arc::new(RetirePreflightChecker::new(
             workspace_runtime.clone(),
             workspace_access_gate.clone(),
@@ -393,6 +482,9 @@ impl AppState {
                 cowork_mcp_auth,
             })
             .map_err(AppStateInitError::InvalidProductMcpRegistry)?;
+        // Drive the emulated-loop scheduler (fires only live+idle sessions).
+        #[cfg(not(test))]
+        loop_scheduler.clone().spawn();
         #[cfg(not(test))]
         workspace_retention_service.clone().spawn_startup_pass();
         // Hydrate the bundled agent seed (if pending) and run an installed-only
@@ -409,6 +501,7 @@ impl AppState {
             agent_seed_store,
             agent_runtime,
             catalog_sync_service,
+            gateway_model_resolver,
             agent_reconcile_service,
             repo_root_service,
             workspace_runtime,
@@ -442,6 +535,14 @@ impl AppState {
             mobility_service,
             plan_service,
             plan_runtime,
+            goal_service,
+            goal_runtime,
+            workflow_run_runtime,
+            loop_service,
+            loop_runtime,
+            activity_service,
+            activity_runtime,
+            feed_service,
             acp_manager,
             terminal_service,
             agent_login_terminal_service,
@@ -520,6 +621,5 @@ pub fn ensure_runtime_home(path: &std::path::Path) -> std::io::Result<()> {
 
 #[cfg(test)]
 pub(crate) mod test_support;
-
 #[cfg(test)]
 mod tests;

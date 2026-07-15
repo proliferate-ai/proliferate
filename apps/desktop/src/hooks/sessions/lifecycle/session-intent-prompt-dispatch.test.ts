@@ -226,6 +226,7 @@ function createDeps(): PromptIntentDispatchDeps {
       mutateAsync: mocks.mutateAsync,
     } as unknown as PromptIntentDispatchDeps["promptSessionMutation"],
     rehydrateSessionSlotFromHistory: mocks.rehydrateSessionSlotFromHistory,
+    cloudClient: null,
     upsertWorkspaceSessionRecord: vi.fn(),
   };
 }

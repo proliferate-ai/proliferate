@@ -16,7 +16,7 @@ export function FileChangeStats({
   return (
     <span
       data-thread-find-skip="true"
-      className={`inline-flex shrink-0 items-baseline gap-1 tabular-nums tracking-tight ${className ?? ""}`}
+      className={`inline-flex shrink-0 items-baseline gap-1 tabular-nums tracking-tight [font-feature-settings:'cv01'_on,'cv02'_on] ${className ?? ""}`}
     >
       {additions > 0 && (
         <FileChangeStat sign="+" value={additions} className="text-git-green" />

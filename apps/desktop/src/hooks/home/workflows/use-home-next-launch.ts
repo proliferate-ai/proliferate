@@ -287,7 +287,9 @@ export function useHomeNextLaunch() {
       const result = await resultPromise;
       if (result.status === "interrupted") {
         failLatencyFlow(latencyFlowId, "cloud_workspace_create_interrupted");
-        throw new Error("Cloud workspace creation was interrupted.");
+        // Prefer the resolved server message (e.g. a billing gate 402) so the
+        // toast shows why the launch failed instead of a generic string.
+        throw new Error(result.failureMessage ?? "Cloud workspace creation was interrupted.");
       }
       if (!queuedProjectedSessionId) {
         navigate("/");

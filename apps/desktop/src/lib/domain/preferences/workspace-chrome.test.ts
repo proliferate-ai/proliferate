@@ -14,7 +14,7 @@ describe("workspace chrome classes", () => {
     })).toEqual({
       root: "bg-transparent",
       contentShell: "bg-background",
-      header: "flex h-16 shrink-0 items-center bg-background/70 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 border-b border-foreground/10",
+      header: "flex h-[46px] shrink-0 items-center bg-background/70 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 border-b border-foreground/10",
     });
 
     expect(resolveStandardWorkspaceChromeClasses({

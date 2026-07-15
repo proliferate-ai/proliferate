@@ -20,6 +20,7 @@ from proliferate.db.models.billing import BillingEntitlement
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store.billing_subjects import ensure_organization_billing_subject
 from tests.helpers.desktop_auth import mint_desktop_token_payload
+from tests.integration.test_agent_gateway_api import _create_key, _put_selections
 
 
 async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]:
@@ -298,7 +299,7 @@ class TestOrgAgentPolicyPlanGating:
 
 class TestOrgAgentPolicyViolations:
     @pytest.mark.asyncio
-    async def test_violations_computed_live_and_nothing_blocked(
+    async def test_violations_report_covers_stale_selections(
         self,
         client: AsyncClient,
         monkeypatch: pytest.MonkeyPatch,
@@ -319,18 +320,30 @@ class TestOrgAgentPolicyViolations:
         assert empty.status_code == 200
         assert empty.json() == {"violations": []}
 
-        # Member selections: one route conflict, one harness conflict, one
-        # compliant. Outsider selections never count.
-        for headers, harness, surface, route in (
-            (member_headers, "claude", "local", "native"),
-            (member_headers, "codex", "cloud", "gateway"),
-            (member_headers, "claude", "cloud", "gateway"),
-            (outsider_headers, "claude", "local", "native"),
+        member_key = await _create_key(client, member_headers)
+        outsider_key = await _create_key(client, outsider_headers)
+
+        def api_key(key_id: str) -> dict[str, object]:
+            return {
+                "sourceKind": "api_key",
+                "apiKeyId": key_id,
+                "envVarName": "ANTHROPIC_API_KEY",
+                "enabled": True,
+            }
+
+        gateway = {"sourceKind": "gateway", "enabled": True}
+
+        # Member selections: one source-kind conflict (api_key not in [gateway]),
+        # one harness conflict (codex not in [claude]), one compliant. Outsider
+        # selections never count.
+        for headers, harness, surface, sources in (
+            (member_headers, "claude", "local", [api_key(str(member_key["id"]))]),
+            (member_headers, "codex", "cloud", [gateway]),
+            (member_headers, "claude", "cloud", [gateway]),
+            (outsider_headers, "claude", "local", [api_key(str(outsider_key["id"]))]),
         ):
-            response = await client.put(
-                f"/v1/cloud/agent-gateway/route-selections/{harness}/{surface}",
-                headers=headers,
-                json={"route": route},
+            response = await _put_selections(
+                client, headers, harness=harness, surface=surface, sources=sources
             )
             assert response.status_code == 200, response.text
 
@@ -345,54 +358,43 @@ class TestOrgAgentPolicyViolations:
         assert response.status_code == 200, response.text
         violations = response.json()["violations"]
         flagged = {
-            (item["userId"], item["harnessKind"], item["surface"], item["route"])
+            (item["userId"], item["harnessKind"], item["surface"], item["sourceKind"])
             for item in violations
         }
         assert flagged == {
-            (member_id, "claude", "local", "native"),
+            (member_id, "claude", "local", "api_key"),
             (member_id, "codex", "cloud", "gateway"),
         }
         assert all(item["email"] for item in violations)
         assert outsider_id not in {item["userId"] for item in violations}
 
-        # Flag-only: a member can still select a violating route afterwards.
-        still_allowed = await client.put(
-            "/v1/cloud/agent-gateway/route-selections/grok/local",
-            headers=member_headers,
-            json={"route": "native"},
+        # Select-time enforcement is now HARD: once the policy is in place a
+        # member can no longer PUT a NEW violating selection. (Detailed cases
+        # live in test_agent_gateway_policy_enforcement.)
+        blocked = await _put_selections(
+            client,
+            member_headers,
+            harness="grok",
+            surface="local",
+            sources=[api_key(str(member_key["id"]))],
         )
-        assert still_allowed.status_code == 200, still_allowed.text
+        assert blocked.status_code == 403, blocked.text
+        assert blocked.json()["detail"]["code"] == "policy_violation"
 
-        after = await client.get(violations_path, headers=owner_headers)
-        assert (member_id, "grok", "local", "native") in {
-            (item["userId"], item["harnessKind"], item["surface"], item["route"])
-            for item in after.json()["violations"]
-        }
-
-        # Consistency fix: a member can select an ARBITRARY harness_kind (route
-        # selections accept any kind), and the admin can allow-list that exact
-        # kind to resolve the violation — previously impossible because the
-        # allow-list only accepted SUPPORTED_CLOUD_AGENTS.
-        arbitrary = await client.put(
-            "/v1/cloud/agent-gateway/route-selections/clippy/cloud",
-            headers=member_headers,
-            json={"route": "gateway"},
-        )
-        assert arbitrary.status_code == 200, arbitrary.text
-        flagged_arbitrary = await client.get(violations_path, headers=owner_headers)
-        assert (member_id, "clippy", "cloud", "gateway") in {
-            (item["userId"], item["harnessKind"], item["surface"], item["route"])
-            for item in flagged_arbitrary.json()["violations"]
-        }
-
-        allow_clippy = await client.put(
+        # The stale codex/gateway selection only conflicts on the harness axis
+        # (gateway IS an allowed route). Adding codex to the allow-list resolves
+        # that at-rest violation without the member touching the row.
+        allow_codex = await client.put(
             _policy_path(organization_id),
             headers=owner_headers,
-            json={"allowedRoutes": ["gateway"], "allowedHarnesses": ["claude", "clippy"]},
+            json={"allowedRoutes": ["gateway"], "allowedHarnesses": ["claude", "codex"]},
         )
-        assert allow_clippy.status_code == 200, allow_clippy.text
+        assert allow_codex.status_code == 200, allow_codex.text
         resolved = await client.get(violations_path, headers=owner_headers)
-        assert (member_id, "clippy", "cloud", "gateway") not in {
-            (item["userId"], item["harnessKind"], item["surface"], item["route"])
+        resolved_flagged = {
+            (item["userId"], item["harnessKind"], item["surface"], item["sourceKind"])
             for item in resolved.json()["violations"]
         }
+        assert (member_id, "codex", "cloud", "gateway") not in resolved_flagged
+        # The api_key/local row still conflicts on the route axis.
+        assert (member_id, "claude", "local", "api_key") in resolved_flagged

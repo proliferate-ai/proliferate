@@ -15,12 +15,18 @@ import type {
 export function resolveEffectiveLaunchSelection(
   agents: DesktopAgentLaunchAgent[],
   preferences: ChatLaunchPreferences,
+  catalogDefaultAgentKind?: string | null,
 ): ModelSelectorSelection | null {
   const visibleAgents = agentsWithVisibleModels(agents, {
     selected: null,
     visibilityOverrides: preferences.chatModelVisibilityOverridesByAgentKind,
   });
-  const preferredAgent = visibleAgents.find((agent) => agent.kind === preferences.defaultChatAgentKind);
+
+  // Resolution ladder: user preference ?? catalog default ?? first available.
+  const effectiveDefaultKind = preferences.defaultChatAgentKind || catalogDefaultAgentKind || "";
+  const preferredAgent = effectiveDefaultKind
+    ? visibleAgents.find((agent) => agent.kind === effectiveDefaultKind)
+    : undefined;
   if (preferredAgent) {
     const selection = resolveAgentLaunchSelection(preferredAgent, preferences);
     if (selection) {

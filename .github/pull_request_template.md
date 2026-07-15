@@ -2,19 +2,16 @@
 
 -
 
-## PR Metadata
+## Readiness
 
-- Title format: `<type>(<scope>): <plain-English change>`
-- Required: exactly one `release:*` label
-- Required: at least one `area:*` label
+- [ ] I followed the [pull-request procedure](https://github.com/proliferate-ai/proliferate/blob/main/specs/developing/process/pull-requests.md)
+  for scope, title, labels, body, and readiness.
 
-Release labels:
-`release:large-feature`, `release:minor-feature`, `release:performance`,
-`release:fix`, `release:docs`, `release:maintenance`, `release:skip`
+## Support and attribution (optional)
 
-Area labels:
-`area:desktop`, `area:anyharness`, `area:sdk`, `area:server`, `area:cloud`,
-`area:docs`, `area:website`, `area:release`, `area:product`
+- [ ] If this PR has support relationships, I linked them through the tracker
+  API. No tracker, report, user, or support IDs or private source data appear
+  in this PR.
 
 ## Verification
 

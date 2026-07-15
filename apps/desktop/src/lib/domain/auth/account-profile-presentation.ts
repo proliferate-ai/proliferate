@@ -1,3 +1,4 @@
+import type { AccountProviderView } from "@proliferate/product-ui/account/AccountSettingsPane";
 import { AUTH_ACCOUNT_LABELS } from "@/copy/auth/auth-copy";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 
@@ -137,4 +138,77 @@ export function getAccountInitials(displayName: string): string {
     return parts[0].slice(0, 2).toUpperCase();
   }
   return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+}
+
+export interface AccountProviderViewsInput {
+  githubAccountLabel: string | null;
+  githubConnected: boolean;
+  googleAccounts: Array<{ accountEmail?: string | null; accountId?: string | null }>;
+  ssoAccounts: Array<{
+    accountEmail?: string | null;
+    accountId?: string | null;
+    displayName?: string | null;
+    brandLabel?: string | null;
+  }>;
+  googleAvailable: boolean;
+  showProviders: boolean;
+}
+
+export function buildAccountProviderViews({
+  githubAccountLabel,
+  githubConnected,
+  googleAccounts,
+  ssoAccounts,
+  googleAvailable,
+  showProviders,
+}: AccountProviderViewsInput): AccountProviderView[] {
+  if (!showProviders) {
+    return [
+      {
+        provider: "github",
+        label: "GitHub",
+        accountLabel: "Not signed in",
+        connected: false,
+        primary: false,
+      },
+    ];
+  }
+
+  const providers: AccountProviderView[] = ssoAccounts.map((account) => ({
+    provider: "sso" as const,
+    label: account.displayName ?? "SSO",
+    brandLabel: account.brandLabel ?? account.displayName ?? null,
+    accountLabel: account.accountEmail ?? account.accountId ?? "Connected",
+    connected: true,
+  }));
+
+  providers.push(
+    {
+      provider: "github",
+      label: "GitHub",
+      accountLabel: githubConnected ? githubAccountLabel ?? "Connected" : "Not connected",
+      connected: githubConnected,
+      primary: githubConnected,
+    },
+  );
+
+  if (googleAccounts.length > 0) {
+    providers.push(
+      ...googleAccounts.map((account) => ({
+        provider: "google" as const,
+        label: "Google",
+        accountLabel: account.accountEmail ?? account.accountId ?? "Connected",
+        connected: true,
+      })),
+    );
+  } else {
+    providers.push({
+      provider: "google",
+      label: "Google",
+      accountLabel: googleAvailable ? "Not connected" : "Not configured in this environment",
+      connected: false,
+    });
+  }
+
+  return providers;
 }

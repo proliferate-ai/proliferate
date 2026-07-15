@@ -7,9 +7,7 @@ import {
   type RightPanelHeaderEntryKey,
   type RightPanelWorkspaceState,
 } from "@/lib/domain/workspaces/shell/right-panel-model";
-import { canCreateRightPanelBrowserTab } from "@/lib/domain/workspaces/shell/right-panel-state";
 import {
-  orderBrowserTabs,
   orderTerminals,
 } from "@/lib/domain/workspaces/shell/right-panel-view";
 import type { RightPanelHeaderEntry } from "@/lib/domain/workspaces/shell/right-panel-header-entry";
@@ -23,12 +21,9 @@ export interface RightPanelHeaderEntriesState {
   activeTool: Extract<ReturnType<typeof parseRightPanelHeaderEntryKey>, { kind: "tool" }>["tool"]
     | null;
   activeTerminalId: string | null;
-  activeBrowserId: string | null;
   activeViewerTarget: ViewerTarget | null;
   visibleTerminals: TerminalRecord[];
   orderedTerminals: TerminalRecord[];
-  browserTabs: ReturnType<typeof orderBrowserTabs>;
-  canCreateBrowserTab: boolean;
   headerEntries: RightPanelHeaderEntry[];
 }
 
@@ -65,10 +60,6 @@ export function useRightPanelHeaderEntries({
     () => parseRightPanelHeaderEntryKey(state.activeEntryKey),
     [state.activeEntryKey],
   );
-  const browserTabs = useMemo(
-    () => orderBrowserTabs(state.browserTabsById, state.headerOrder),
-    [state.browserTabsById, state.headerOrder],
-  );
   const viewerTargetByKey = useMemo(
     () => new Map(openViewerTargets.map((target) => [viewerTargetKey(target), target])),
     [openViewerTargets],
@@ -96,13 +87,6 @@ export function useRightPanelHeaderEntries({
         });
         seenKeys.add(key);
       }
-      if (entry.kind === "browser") {
-        const tab = state.browserTabsById[entry.browserId];
-        if (tab) {
-          entries.push({ kind: "browser", key, tab });
-          seenKeys.add(key);
-        }
-      }
       if (entry.kind === "viewer") {
         const target = viewerTargetByKey.get(entry.targetKey);
         if (target && target.kind !== "allChanges") {
@@ -115,7 +99,6 @@ export function useRightPanelHeaderEntries({
     return entries;
   }, [
     isCloudWorkspaceSelected,
-    state.browserTabsById,
     state.headerOrder,
     terminalById,
     viewerTargetByKey,
@@ -123,7 +106,6 @@ export function useRightPanelHeaderEntries({
 
   const activeTool = activeEntry?.kind === "tool" ? activeEntry.tool : null;
   const activeTerminalId = activeEntry?.kind === "terminal" ? activeEntry.terminalId : null;
-  const activeBrowserId = activeEntry?.kind === "browser" ? activeEntry.browserId : null;
   const activeViewerTarget = activeEntry?.kind === "viewer"
     ? viewerTargetByKey.get(activeEntry.targetKey) ?? null
     : null;
@@ -132,12 +114,9 @@ export function useRightPanelHeaderEntries({
     activeEntry,
     activeTool,
     activeTerminalId,
-    activeBrowserId,
     activeViewerTarget,
     visibleTerminals,
     orderedTerminals,
-    browserTabs,
-    canCreateBrowserTab: canCreateRightPanelBrowserTab(state),
     headerEntries,
   };
 }

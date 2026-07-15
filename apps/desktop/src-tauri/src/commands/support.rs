@@ -1,28 +1,10 @@
 use std::fs;
 use std::path::{Component, Path, PathBuf};
-use std::sync::Mutex;
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 use crate::app_config::app_dir_path;
-
-pub const SUPPORT_WINDOW_LABEL: &str = "support";
-pub const SUPPORT_REPORT_JOB_EVENT: &str = "support://report-job";
-pub const SUPPORT_SNAPSHOT_UPDATED_EVENT: &str = "support://snapshot-updated";
-
-#[derive(Debug, Default)]
-pub struct SupportWindowState {
-    latest_snapshot: Mutex<Option<Value>>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct OpenSupportReportWindowInput {
-    pub snapshot: Value,
-}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -57,76 +39,6 @@ pub struct ReadSupportReportAttachmentResult {
 }
 
 #[tauri::command]
-pub fn open_support_report_window(
-    app: AppHandle,
-    state: tauri::State<'_, SupportWindowState>,
-    input: OpenSupportReportWindowInput,
-) -> Result<SupportCommandResult, String> {
-    {
-        let mut guard = state
-            .latest_snapshot
-            .lock()
-            .map_err(|_| "support snapshot lock poisoned".to_string())?;
-        *guard = Some(input.snapshot.clone());
-    }
-
-    if let Some(window) = app.get_webview_window(SUPPORT_WINDOW_LABEL) {
-        window
-            .emit(SUPPORT_SNAPSHOT_UPDATED_EVENT, input.snapshot)
-            .map_err(|error| error.to_string())?;
-        window.show().map_err(|error| error.to_string())?;
-        window.set_focus().map_err(|error| error.to_string())?;
-        return Ok(SupportCommandResult { ok: true });
-    }
-
-    let window = WebviewWindowBuilder::new(
-        &app,
-        SUPPORT_WINDOW_LABEL,
-        WebviewUrl::App("index.html?support=1".into()),
-    )
-    .title("Report issue")
-    .inner_size(560.0, 720.0)
-    .min_inner_size(480.0, 560.0)
-    .resizable(true)
-    .disable_drag_drop_handler()
-    .build()
-    .map_err(|error| error.to_string())?;
-    window.show().map_err(|error| error.to_string())?;
-    window.set_focus().map_err(|error| error.to_string())?;
-
-    Ok(SupportCommandResult { ok: true })
-}
-
-#[tauri::command]
-pub fn get_support_report_window_snapshot(
-    state: tauri::State<'_, SupportWindowState>,
-) -> Result<Option<Value>, String> {
-    let guard = state
-        .latest_snapshot
-        .lock()
-        .map_err(|_| "support snapshot lock poisoned".to_string())?;
-    Ok(guard.clone())
-}
-
-#[tauri::command]
-pub fn submit_support_report_job(
-    app: AppHandle,
-    input: Value,
-) -> Result<SupportCommandResult, String> {
-    app.emit_to("main", SUPPORT_REPORT_JOB_EVENT, input)
-        .map_err(|error| error.to_string())?;
-    Ok(SupportCommandResult { ok: true })
-}
-
-#[tauri::command]
-pub fn close_support_report_window(window: WebviewWindow) -> Result<SupportCommandResult, String> {
-    if window.label() == SUPPORT_WINDOW_LABEL {
-        window.close().map_err(|error| error.to_string())?;
-    }
-    Ok(SupportCommandResult { ok: true })
-}
-
-#[tauri::command]
 pub fn stage_support_report_attachment(
     input: StageSupportReportAttachmentInput,
 ) -> Result<StageSupportReportAttachmentResult, String> {
@@ -142,7 +54,7 @@ pub fn stage_support_report_attachment(
         .canonicalize()
         .map_err(|error| format!("Failed to resolve support attachment directory: {error}"))?;
     // Resolve + contain the write path so a crafted client_file_id / file_name can
-    // never escape the staging directory (path traversal → arbitrary overwrite).
+    // never escape the staging directory (path traversal -> arbitrary overwrite).
     let path =
         resolve_staged_attachment_write_path(&canonical_root, &input.client_file_id, &input.file_name)?;
     if let Some(parent) = path.parent() {

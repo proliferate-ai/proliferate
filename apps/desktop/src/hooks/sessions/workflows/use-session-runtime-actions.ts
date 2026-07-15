@@ -3,6 +3,7 @@ import {
   type Session,
 } from "@anyharness/sdk";
 import { useCallback } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   fetchSessionSummary,
   getSessionClientAndWorkspace,
@@ -31,6 +32,9 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import { useSessionStreamConnectionActions } from "@/hooks/sessions/lifecycle/use-session-stream-connection-actions";
 
 export function useSessionRuntimeActions() {
+  const host = useProductHost();
+  const ssh = host.desktop?.ssh ?? null;
+  const cloudClient = host.cloud.client;
   const sessionStreamCache = useSessionStreamCache();
   const showToast = useToastStore((state) => state.show);
   const { mountSubagentChildSession } = useLinkedSessionMounting();
@@ -76,10 +80,12 @@ export function useSessionRuntimeActions() {
       if (options?.isCurrent && !options.isCurrent()) {
         return;
       }
-      const { workspaceId } = await getSessionClientAndWorkspace(sessionId);
+      const { workspaceId } = await getSessionClientAndWorkspace(sessionId, ssh, cloudClient);
       let session = await fetchSessionSummary(sessionId, {
         requestHeaders: options?.requestHeaders,
         measurementOperationId: options?.measurementOperationId,
+        ssh,
+        cloudClient,
       });
       if (options?.isCurrent && !options.isCurrent()) {
         logDevSessionRuntimeEvent(sessionId, "summary_ignored_not_current", {
@@ -123,6 +129,8 @@ export function useSessionRuntimeActions() {
         session = await resumeSession(sessionId, {
           requestHeaders: options?.requestHeaders,
           measurementOperationId: options?.measurementOperationId,
+          ssh,
+          cloudClient,
         });
         if (options?.isCurrent && !options.isCurrent()) {
           logDevSessionRuntimeEvent(sessionId, "resume_summary_ignored_not_current", {
@@ -165,7 +173,7 @@ export function useSessionRuntimeActions() {
         console.debug("[session-runtime] session metadata refresh failed", error);
       }
     }
-  }, [applySessionSummary, rehydrateSessionSlotFromHistory]);
+  }, [applySessionSummary, rehydrateSessionSlotFromHistory, ssh, cloudClient]);
 
   const createSessionStreamFlushController = useSessionStreamFlushControllerFactory({
     sessionStreamCache,

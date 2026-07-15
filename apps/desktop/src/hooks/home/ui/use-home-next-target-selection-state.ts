@@ -4,6 +4,11 @@ import type {
   HomeNextRepoLaunchKind,
   HomeNextRepositorySelection,
 } from "@/lib/domain/home/home-next-launch";
+import {
+  readPersistedJson,
+  writePersistedJson,
+  type ProductStorageContext,
+} from "@/lib/infra/persistence/product-storage";
 
 export const HOME_NEXT_TARGET_SELECTION_STORAGE_KEY = "home_next_target_selection.v1";
 
@@ -25,9 +30,19 @@ const DEFAULT_HOME_NEXT_TARGET_SELECTION: HomeNextTargetSelectionState = {
   baseBranchOverride: null,
 };
 const homeNextTargetSelectionListeners = new Set<() => void>();
-let cachedHomeNextTargetSelectionRaw: string | null | undefined;
+// In-memory cache is authoritative for the synchronous `useSyncExternalStore`
+// snapshot; ProductStorage is the async persistence backend injected once at the
+// product lifecycle mount (see `useHomeNextTargetSelectionPersistence`). Writes
+// update the cache + notify listeners synchronously and persist best-effort.
 let cachedHomeNextTargetSelection = DEFAULT_HOME_NEXT_TARGET_SELECTION;
-let hasHomeNextTargetSelectionMemoryOverride = false;
+let hasUserWritten = false;
+let storageContext: ProductStorageContext | null = null;
+
+export function setHomeNextTargetSelectionStorageContext(
+  context: ProductStorageContext | null,
+): void {
+  storageContext = context;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -83,60 +98,16 @@ export function normalizeHomeNextTargetSelectionState(
   };
 }
 
-function getLocalStorage(): Storage | null {
-  try {
-    if (typeof window === "undefined") return null;
-    return window.localStorage;
-  } catch {
-    return null;
-  }
-}
-
-function readPersistedTargetSelection(): HomeNextTargetSelectionState {
-  if (hasHomeNextTargetSelectionMemoryOverride) {
-    return cachedHomeNextTargetSelection;
-  }
-
-  const storage = getLocalStorage();
-  if (!storage) {
-    return cachedHomeNextTargetSelection;
-  }
-
-  let raw: string | null = null;
-  try {
-    raw = storage.getItem(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY);
-    if (raw === cachedHomeNextTargetSelectionRaw) {
-      return cachedHomeNextTargetSelection;
-    }
-    cachedHomeNextTargetSelectionRaw = raw;
-    if (!raw) {
-      cachedHomeNextTargetSelection = DEFAULT_HOME_NEXT_TARGET_SELECTION;
-      return cachedHomeNextTargetSelection;
-    }
-    cachedHomeNextTargetSelection = normalizeHomeNextTargetSelectionState(JSON.parse(raw));
-    return cachedHomeNextTargetSelection;
-  } catch {
-    cachedHomeNextTargetSelectionRaw = raw;
-    cachedHomeNextTargetSelection = DEFAULT_HOME_NEXT_TARGET_SELECTION;
-    return cachedHomeNextTargetSelection;
-  }
-}
-
 function persistTargetSelection(selection: HomeNextTargetSelectionState): void {
-  const raw = JSON.stringify(selection);
-  cachedHomeNextTargetSelectionRaw = raw;
+  hasUserWritten = true;
   cachedHomeNextTargetSelection = selection;
 
-  const storage = getLocalStorage();
-  if (storage) {
-    try {
-      storage.setItem(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY, raw);
-      hasHomeNextTargetSelectionMemoryOverride = false;
-    } catch {
-      hasHomeNextTargetSelectionMemoryOverride = true;
-    }
-  } else {
-    hasHomeNextTargetSelectionMemoryOverride = true;
+  if (storageContext) {
+    void writePersistedJson(
+      storageContext,
+      HOME_NEXT_TARGET_SELECTION_STORAGE_KEY,
+      selection,
+    );
   }
 
   for (const listener of homeNextTargetSelectionListeners) {
@@ -145,7 +116,41 @@ function persistTargetSelection(selection: HomeNextTargetSelectionState): void {
 }
 
 export function readHomeNextTargetSelectionState(): HomeNextTargetSelectionState {
-  return readPersistedTargetSelection();
+  return cachedHomeNextTargetSelection;
+}
+
+/**
+ * One-shot hydration of the persisted target selection through the injected
+ * ProductStorage into the in-memory cache. A read that resolves after the user
+ * already changed the selection (or after unmount, via `isStale`) is ignored so
+ * a late read never overwrites live state.
+ */
+export async function hydrateHomeNextTargetSelection(
+  context: ProductStorageContext,
+  isStale?: () => boolean,
+): Promise<void> {
+  const result = await readPersistedJson<HomeNextTargetSelectionState>(
+    context,
+    HOME_NEXT_TARGET_SELECTION_STORAGE_KEY,
+    {
+      parse: (raw) => normalizeHomeNextTargetSelectionState(raw),
+      fallback: DEFAULT_HOME_NEXT_TARGET_SELECTION,
+      isStale,
+    },
+  );
+  if (result.status !== "settled" || hasUserWritten) {
+    return;
+  }
+  cachedHomeNextTargetSelection = result.value;
+  for (const listener of homeNextTargetSelectionListeners) {
+    listener();
+  }
+}
+
+export function resetHomeNextTargetSelectionForTests(): void {
+  storageContext = null;
+  hasUserWritten = false;
+  cachedHomeNextTargetSelection = DEFAULT_HOME_NEXT_TARGET_SELECTION;
 }
 
 export function subscribeHomeNextTargetSelectionState(listener: () => void): () => void {

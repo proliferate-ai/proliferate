@@ -53,11 +53,13 @@ import {
 } from "@/lib/domain/workspaces/selection/optimistic-session-shell";
 import { handleEmptyWorkspaceBootstrap } from "@/hooks/workspaces/workflows/workspace-bootstrap-empty-session";
 import { handleRememberedWorkspaceSessionBootstrap } from "@/hooks/workspaces/workflows/workspace-bootstrap-remembered-session";
+import {
+  shouldPreserveStagedReplacementShell,
+} from "@/hooks/sessions/workflows/session-replacement-tombstones";
 
 interface BootstrapWorkspaceInput {
   workspaceId: string;
   logicalWorkspaceId: string;
-  runtimeUrl: string;
   workspaceConnection: AnyHarnessResolvedConnection;
   startedAt: number;
   latencyFlowId?: string | null;
@@ -110,7 +112,6 @@ export function useWorkspaceBootstrapActions() {
   const bootstrapWorkspace = useCallback(async ({
     workspaceId,
     logicalWorkspaceId,
-    runtimeUrl,
     workspaceConnection,
     startedAt,
     latencyFlowId,
@@ -192,7 +193,7 @@ export function useWorkspaceBootstrapActions() {
           type: "cache",
           category: "session.list",
           operationId: measurementOperationId,
-          decision: getWorkspaceSessionsCacheDecision(runtimeUrl, workspaceId),
+          decision: getWorkspaceSessionsCacheDecision(workspaceId),
           source: "react_query",
         });
       }
@@ -203,7 +204,6 @@ export function useWorkspaceBootstrapActions() {
         headers: requestHeaders,
       });
       const sessions = await loadWorkspaceSessions({
-        runtimeUrl,
         workspaceConnection,
         workspaceId,
         requestOptions: sessionRequestOptions ?? undefined,
@@ -242,13 +242,19 @@ export function useWorkspaceBootstrapActions() {
     }
 
     const activeSessionIdAfterLoad = useSessionSelectionStore.getState().activeSessionId;
+    const activeSessionRecordAfterLoad = activeSessionIdAfterLoad
+      ? getSessionRecord(activeSessionIdAfterLoad)
+      : null;
+    const preserveStagedReplacementShell = shouldPreserveStagedReplacementShell(
+      workspaceId,
+      activeSessionRecordAfterLoad?.workspaceId,
+    );
     const loadedActiveSession = activeSessionIdAfterLoad
       ? findLoadedSessionForClientSession(activeSessionIdAfterLoad, sessions)
       : null;
     if (activeSessionIdAfterLoad && loadedActiveSession) {
-      const activeSessionBeforePatch = getSessionRecord(activeSessionIdAfterLoad);
       const wasOptimisticPlaceholder =
-        isOptimisticWorkspaceSessionPlaceholder(activeSessionBeforePatch);
+        isOptimisticWorkspaceSessionPlaceholder(activeSessionRecordAfterLoad);
       applySessionSummary(activeSessionIdAfterLoad, loadedActiveSession, workspaceId);
       if (wasOptimisticPlaceholder) {
         logLatency("workspace.select.optimistic_session_validated", {
@@ -259,7 +265,7 @@ export function useWorkspaceBootstrapActions() {
           agentKind: loadedActiveSession.agentKind,
         });
       }
-    } else if (!sessionsLoadFailed) {
+    } else if (!sessionsLoadFailed && !preserveStagedReplacementShell) {
       clearInvalidOptimisticActiveSession({
         workspaceId,
         logicalWorkspaceId,
@@ -267,6 +273,18 @@ export function useWorkspaceBootstrapActions() {
     }
 
     if (sessions.length === 0) {
+      if (preserveStagedReplacementShell) {
+        logLatency("workspace.select.initial_session_open.skipped", {
+          workspaceId,
+          sessionId: activeSessionIdAfterLoad,
+          reason: "staged_session_replacement",
+          totalElapsedMs: elapsedMs(startedAt),
+        });
+        if (isCurrent()) {
+          markWorkspaceBootstrappedInSession(workspaceId);
+        }
+        return { sessions };
+      }
       const emptyBootstrap = await handleEmptyWorkspaceBootstrap({
         agentsByKind,
         latencyFlowId,

@@ -3,7 +3,6 @@ import { Plug } from "lucide-react";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import axiomIcon from "@/assets/connector-icons/axiom.svg";
 import axiomDarkIcon from "@/assets/connector-icons/axiom-dark.svg";
-import cloudflareIcon from "@/assets/connector-icons/cloudflare.svg";
 import context7Icon from "@/assets/connector-icons/context7.jpeg";
 import exaIcon from "@/assets/connector-icons/exa.svg";
 import gitlabIcon from "@/assets/connector-icons/gitlab.svg";
@@ -91,7 +90,6 @@ const INTEGRATION_ICON_IMAGES: Record<string, IntegrationIconImageConfig> = {
     darkSrc: axiomDarkIcon,
     darkTileClassName: "bg-background",
   },
-  cloudflare_docs: { lightSrc: cloudflareIcon },
   context7: { lightSrc: context7Icon },
   exa: { lightSrc: exaIcon },
   gitlab: { lightSrc: gitlabIcon },
@@ -129,7 +127,7 @@ function selectIconTileClass(
 }
 
 interface IntegrationIconProps {
-  /** The integration definition's namespace (e.g. "linear", "cloudflare_docs"). */
+  /** The integration definition's namespace (e.g. "linear", "sentry"). */
   namespace: string;
   /** Sizing and layout overrides for the icon tile (defaults to size-8). */
   className?: string;

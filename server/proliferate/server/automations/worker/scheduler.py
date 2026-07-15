@@ -7,7 +7,7 @@ import logging
 from collections.abc import Awaitable, Callable
 
 from proliferate.db import engine as db_engine
-from proliferate.integrations.sentry import capture_server_sentry_exception
+from proliferate.integrations.sentry import report_critical
 from proliferate.server.automations.worker.service import run_scheduler_tick
 
 logger = logging.getLogger(__name__)
@@ -59,12 +59,10 @@ async def run_scheduler_loop(
                 next_delay,
             )
             if consecutive_failures >= FAILURE_ESCALATION_THRESHOLD:
-                capture_server_sentry_exception(
+                report_critical(
                     exc,
-                    level="error",
                     tags={"worker": "automation_scheduler"},
                     extras={"consecutive_failures": consecutive_failures},
-                    fingerprint=["automation-scheduler", "tick-failed"],
                 )
         try:
             await asyncio.wait_for(stop_event.wait(), timeout=next_delay)

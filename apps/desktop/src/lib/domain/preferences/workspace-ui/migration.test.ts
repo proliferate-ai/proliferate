@@ -313,7 +313,6 @@ describe("workspace UI state migration", () => {
           "terminal:t1",
           "terminal:t2",
         ],
-        browserTabsById: {},
       },
     });
   });
@@ -350,7 +349,6 @@ describe("workspace UI state migration", () => {
         "terminal:terminal-a",
         "tool:scratch",
       ],
-      browserTabsById: {},
     });
   });
 
@@ -387,7 +385,6 @@ describe("workspace UI state migration", () => {
         "tool:git",
         "tool:scratch",
       ],
-      browserTabsById: {},
     });
     expect(state.rightPanelDurableByWorkspace.w1).not.toHaveProperty("toolOrder");
     expect(state.rightPanelMaterializedByWorkspace.w1).not.toHaveProperty("terminalOrder");

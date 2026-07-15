@@ -1,7 +1,6 @@
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
-import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 
 export function GitHubAppInstallationSection({
@@ -25,59 +24,52 @@ export function GitHubAppInstallationSection({
   onManage: () => void | Promise<void>;
 }) {
   const installed = status?.installed === true;
-  const repositorySelection = formatRepositorySelection(status?.repositorySelection ?? null);
+  const detail = installed && status?.accountLogin
+    ? `Installed on @${status.accountLogin}`
+    : "Repository access for cloud environments";
   const statusLabel = loading
     ? "Checking…"
     : installed
       ? "Installed"
       : "Not installed";
-  const description = installed
-    ? `Installed on ${status?.accountLogin ? `@${status.accountLogin}` : "this GitHub account"}${repositorySelection ? ` with ${repositorySelection}` : ""}.`
-    : canManage
-      ? "Install the Proliferate GitHub App for this organization before members can enable cloud repositories."
-      : "Ask an organization admin to install the Proliferate GitHub App before you enable cloud repositories.";
 
   return (
-    <SettingsSection
-      title="GitHub App"
-      description="Repository access for organization cloud environments"
-    >
-      <SettingsRow
-        label="Organization installation"
-        description={description}
-      >
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <Badge tone={installed ? "success" : "warning"}>{statusLabel}</Badge>
-          {canManage ? (
-            <Button
-              type="button"
-              variant="secondary"
-              loading={installing}
-              disabled={installing}
-              onClick={() => {
-                void (installed ? onManage() : onInstall());
-              }}
-            >
-              {!installing ? <ProviderBrandIcon provider="github" className="size-[13px]" /> : null}
-              {installed ? "Manage in GitHub" : "Install GitHub App"}
-            </Button>
-          ) : null}
+    <SettingsSection title="GitHub App">
+      <div className="overflow-clip rounded-lg bg-foreground/5">
+        <div className="flex min-h-[3.5rem] flex-col gap-2 border-b border-border-light px-3.5 py-3.5 text-sm last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <ProviderBrandIcon
+              provider="github"
+              className="size-5 shrink-0 text-muted-foreground"
+            />
+            <div className="min-w-0">
+              <div className="font-medium text-foreground">GitHub App</div>
+              <div className="truncate text-muted-foreground">{detail}</div>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <Badge tone="neutral">{statusLabel}</Badge>
+            {canManage ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                loading={installing}
+                disabled={installing}
+                onClick={() => {
+                  void (installed ? onManage() : onInstall());
+                }}
+              >
+                {installed ? "Manage" : "Install"}
+              </Button>
+            ) : null}
+          </div>
         </div>
-      </SettingsRow>
+      </div>
     </SettingsSection>
   );
 }
 
 export function isOrganizationAdminRole(role: string | null | undefined): boolean {
   return role === "owner" || role === "admin";
-}
-
-function formatRepositorySelection(repositorySelection: string | null): string | null {
-  if (repositorySelection === "all") {
-    return "all repositories";
-  }
-  if (repositorySelection === "selected") {
-    return "selected repositories";
-  }
-  return null;
 }

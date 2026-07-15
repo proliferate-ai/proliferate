@@ -19,6 +19,28 @@ export function ProductSidebarFrame({
   );
 }
 
+/**
+ * Codex-style brand row at the top of the sidebar: product mark + wordmark in
+ * the full sidebar ink, sitting above the primary navigation.
+ */
+export function ProductSidebarBrandRow({
+  icon = null,
+  label,
+}: {
+  icon?: ReactNode;
+  label: string;
+}) {
+  return (
+    <div className="mb-1 flex h-8 shrink-0 items-center gap-2 px-4 text-sidebar-primary">
+      {icon}
+      {/* Codex wordmark geometry: 17px/24 semibold. */}
+      <span className="min-w-0 truncate text-sidebar-brand font-semibold">
+        {label}
+      </span>
+    </div>
+  );
+}
+
 export function ProductSidebarBody({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -49,11 +71,13 @@ export function ProductSidebarSectionHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="pl-2 pt-3 pb-1 text-ui leading-5 text-sidebar-muted-foreground">
+    <div className="group/side-section pl-2 pt-3 pb-1 text-sidebar-row text-sidebar-muted-foreground">
       <div className="flex items-center justify-between gap-2">
-        <span className="opacity-75">{label}</span>
+        <span>{label}</span>
         {actions ? (
-          <div className="flex shrink-0 items-center gap-1">
+          // Codex parity: section actions stay hidden until the header is
+          // hovered (or an action's popover is open / focused via keyboard).
+          <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity duration-150 group-hover/side-section:opacity-100 group-focus-within/side-section:opacity-100 has-[[data-state=open]]:opacity-100">
             {actions}
           </div>
         ) : null}

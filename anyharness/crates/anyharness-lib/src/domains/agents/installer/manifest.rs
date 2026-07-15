@@ -236,10 +236,10 @@ mod tests {
     #[test]
     fn unreadable_manifest_reads_as_absent() {
         let home = temp_home("manifest-corrupt");
-        let path = manifest_path(&home, "gemini");
+        let path = manifest_path(&home, "grok");
         std::fs::create_dir_all(path.parent().unwrap()).expect("dirs");
         std::fs::write(&path, "{not json").expect("write");
-        assert!(read_manifest(&home, "gemini").is_none());
+        assert!(read_manifest(&home, "grok").is_none());
         let _ = std::fs::remove_dir_all(home);
     }
 }

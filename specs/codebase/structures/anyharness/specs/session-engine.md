@@ -88,7 +88,8 @@ High-level session use cases:
 - fork
 - set live config
 - resolve interactions
-- edit/remove pending prompts
+- edit/remove/reorder pending prompts
+- steer a pending prompt to execute next
 - inject/replay events
 
 This is the bridge between durable sessions and live execution. The
@@ -320,7 +321,8 @@ accept prompt
   -> run ACP prompt while handling notifications, busy commands, and background work
   -> finish turn
   -> apply queued config
-  -> drain next pending prompt if one exists
+  -> return to the idle selector
+  -> process accepted mailbox commands before low-priority queue drain
 ```
 
 Split idle and busy command handling. While idle, prompt/config/fork/close can
@@ -333,6 +335,17 @@ Core actor invariants:
 - one live actor owns one ACP native session
 - the actor is the only writer of `busy`
 - prompt queue handoff is durable before `PendingPromptRemoved { Executed }`
+- queue-entry `seq` is allocated from a durable per-session monotonic cursor,
+  never reused, and never changed by reorder; durable position is separate
+- reorder requests compare the caller's exact expected order and atomically
+  commit an exact desired permutation; stale expected order is a typed conflict
+- startup and turn-boundary queue drain is lower priority than actor mailbox
+  commands already accepted at that boundary
+- first startup drain waits through one bounded mailbox grace so the caller
+  released by actor readiness can enqueue a reorder/steer before execution
+- steering durably promotes one pending prompt, resolves parked interactions as
+  cancelled, and cancels the active ACP turn so ordinary queue drain runs it
+  next
 - ACP notifications are persisted raw before normalized event handling
 - config changes apply immediately only when idle; otherwise they queue
 - shutdown resolves pending interactions and emits terminal session state

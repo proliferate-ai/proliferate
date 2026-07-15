@@ -1,16 +1,17 @@
-import { Navigate, Route, useLocation, type Location } from "react-router-dom";
+import { Navigate, Route, useLocation, useParams, type Location } from "react-router-dom";
 
 import { WebAppShell } from "./components/app/shell/WebAppShell";
 import { AuthGate } from "./components/auth/AuthGate";
 import { AuthScreen } from "./components/auth/screen/AuthScreen";
 import { ConnectGitHubScreen } from "./components/auth/screen/ConnectGitHubScreen";
-import { routes } from "./config/routes";
+import { legacyWorkflowRedirectHref, routes } from "./config/routes";
 import { AuthCallbackPage } from "./pages/AuthCallbackPage";
 import { AuthErrorPage } from "./pages/AuthErrorPage";
 import { BillingReturnHandoffPage } from "./pages/BillingReturnHandoffPage";
 import { ChatPage } from "./pages/ChatPage";
 import { DesktopHandoffPage } from "./pages/DesktopHandoffPage";
 import { HomePage } from "./pages/HomePage";
+import { LoginSsoPage } from "./pages/LoginSsoPage";
 import { OrganizationJoinPage } from "./pages/OrganizationJoinPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SettingsModalPage } from "./pages/SettingsModalPage";
@@ -29,6 +30,8 @@ export function App() {
     <>
       <InstrumentedRoutes location={backgroundLocation ?? location}>
         <Route path="auth" element={<AuthScreen />} />
+        <Route path="login" element={<LoginSsoPage />} />
+        <Route path="login/:slug" element={<LoginSsoPage />} />
         <Route path="auth/callback" element={<AuthCallbackPage />} />
         <Route path="auth/desktop/handoff" element={<DesktopHandoffPage />} />
         <Route path="auth/error" element={<AuthErrorPage />} />
@@ -47,7 +50,7 @@ export function App() {
           <Route path="workflows" element={<WorkflowsPage />} />
           <Route path="workflows/:workflowId" element={<WorkflowsPage />} />
           <Route path="automations" element={<LegacyRouteRedirect to={routes.workflows} />} />
-          <Route path="automations/:workflowId" element={<LegacyRouteRedirect to={routes.workflows} extractLastSegment />} />
+          <Route path="automations/:workflowId" element={<LegacyRouteRedirect to={routes.workflows} />} />
           <Route path="support" element={<SupportPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="settings/:sectionId" element={<SettingsPage />} />
@@ -88,15 +91,15 @@ function isSettingsPath(pathname: string): boolean {
 
 function LegacyRouteRedirect({
   to,
-  extractLastSegment = false,
 }: {
   to: string;
-  extractLastSegment?: boolean;
 }) {
   const location = useLocation();
-  const match = extractLastSegment
-    ? location.pathname.split("/").filter(Boolean).at(-1)
-    : null;
-  const suffix = match ? `/${encodeURIComponent(decodeURIComponent(match))}` : "";
-  return <Navigate to={`${to}${suffix}${location.search}${location.hash}`} replace />;
+  const { workflowId } = useParams<{ workflowId?: string }>();
+  return (
+    <Navigate
+      to={legacyWorkflowRedirectHref(to, workflowId, location.search, location.hash)}
+      replace
+    />
+  );
 }

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.db.models.auth import User
 from proliferate.db.models.cloud.agent_gateway import AgentApiKey
 from proliferate.db.store import agent_gateway as store
+from proliferate.db.store.agent_gateway import DesiredAuthSource
 from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
 
 
@@ -28,6 +29,26 @@ async def _create_user(db_session: AsyncSession, *, email: str | None = None) ->
     return user.id
 
 
+def _gateway(*, enabled: bool = True) -> DesiredAuthSource:
+    return DesiredAuthSource(source_kind="gateway", enabled=enabled)
+
+
+def _api_key(
+    key_id: uuid.UUID,
+    *,
+    env_var_name: str = "ANTHROPIC_API_KEY",
+    provider_hint: str | None = None,
+    enabled: bool = True,
+) -> DesiredAuthSource:
+    return DesiredAuthSource(
+        source_kind="api_key",
+        api_key_id=key_id,
+        env_var_name=env_var_name,
+        provider_hint=provider_hint,
+        enabled=enabled,
+    )
+
+
 @pytest.mark.asyncio
 async def test_api_key_create_list_revoke(db_session: AsyncSession) -> None:
     user_id = await _create_user(db_session)
@@ -35,10 +56,10 @@ async def test_api_key_create_list_revoke(db_session: AsyncSession) -> None:
     created = await store.create_agent_api_key(
         db_session,
         user_id=user_id,
-        provider="anthropic",
-        display_name="Work key",
-        payload="sk-ant-api03-secretsecretabc4",
+        title="Work key",
+        value="sk-ant-api03-secretsecretabc4",
     )
+    assert created.title == "Work key"
     assert created.redacted_hint == "sk-...abc4"
     assert created.status == "active"
 
@@ -60,7 +81,6 @@ async def test_api_key_create_list_revoke(db_session: AsyncSession) -> None:
     )
     assert revoked is not None
     assert revoked.status == "revoked"
-    assert revoked.revoked_at is not None
 
     assert await store.list_agent_api_keys(db_session, user_id=user_id) == []
     with_revoked = await store.list_agent_api_keys(
@@ -80,15 +100,25 @@ async def test_api_key_create_list_revoke(db_session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
+async def test_create_api_key_requires_title_and_value(db_session: AsyncSession) -> None:
+    user_id = await _create_user(db_session)
+    with pytest.raises(ValueError, match="title"):
+        await store.create_agent_api_key(
+            db_session, user_id=user_id, title="  ", value="sk-ant-1234abcd"
+        )
+    with pytest.raises(ValueError, match="value"):
+        await store.create_agent_api_key(db_session, user_id=user_id, title="Key", value="")
+
+
+@pytest.mark.asyncio
 async def test_revoke_rejects_foreign_key(db_session: AsyncSession) -> None:
     owner_id = await _create_user(db_session)
     other_id = await _create_user(db_session)
     created = await store.create_agent_api_key(
         db_session,
         user_id=owner_id,
-        provider="openai",
-        display_name="Key",
-        payload="sk-proj-abcdef1234",
+        title="Key",
+        value="sk-proj-abcdef1234",
     )
     assert (
         await store.revoke_agent_api_key(db_session, user_id=other_id, api_key_id=created.id)
@@ -97,251 +127,289 @@ async def test_revoke_rejects_foreign_key(db_session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
-async def test_route_selection_upsert_bumps_revision(db_session: AsyncSession) -> None:
+async def test_put_creates_lists_and_filters_enabled(db_session: AsyncSession) -> None:
     user_id = await _create_user(db_session)
+    key = await store.create_agent_api_key(
+        db_session, user_id=user_id, title="Anthropic", value="sk-ant-1234abcd"
+    )
 
-    first = await store.upsert_route_selection(
+    rows = await store.put_auth_selections(
         db_session,
         user_id=user_id,
         harness_kind="claude",
         surface="local",
-        route="native",
+        sources=[
+            _gateway(),
+            _api_key(key.id, provider_hint="anthropic", enabled=False),
+        ],
     )
-    assert first.revision == 1
+    assert {(r.source_kind, r.enabled) for r in rows} == {
+        ("gateway", True),
+        ("api_key", False),
+    }
+    api_row = next(r for r in rows if r.source_kind == "api_key")
+    assert api_row.env_var_name == "ANTHROPIC_API_KEY"
+    assert api_row.provider_hint == "anthropic"
 
-    unchanged = await store.upsert_route_selection(
-        db_session,
-        user_id=user_id,
-        harness_kind="claude",
-        surface="local",
-        route="native",
+    all_rows = await store.list_auth_selections(db_session, user_id=user_id)
+    assert len(all_rows) == 2
+    assert await store.list_auth_selections(db_session, user_id=user_id, surface="cloud") == []
+
+    # Disabled rows stay in the DB but never reach the renderer helper.
+    enabled = await store.list_enabled_auth_selections(
+        db_session, user_id=user_id, surface="local"
     )
-    assert unchanged.id == first.id
-    assert unchanged.revision == 1
-
-    changed = await store.upsert_route_selection(
-        db_session,
-        user_id=user_id,
-        harness_kind="claude",
-        surface="local",
-        route="gateway",
-    )
-    assert changed.id == first.id
-    assert changed.revision == 2
-
-    fetched = await store.get_route_selection(
-        db_session,
-        user_id=user_id,
-        harness_kind="claude",
-        surface="local",
-    )
-    assert fetched is not None
-    assert fetched.route == "gateway"
-
-    listed = await store.list_route_selections(db_session, user_id=user_id)
-    assert len(listed) == 1
+    assert [r.source_kind for r in enabled] == ["gateway"]
 
 
 @pytest.mark.asyncio
-async def test_route_selection_upsert_resolves_conflicting_row(
-    db_session: AsyncSession,
-) -> None:
-    """A row inserted out-of-band (as a racing first writer would) must be
-    resolved by the ON CONFLICT upsert rather than raising IntegrityError."""
-    from proliferate.db.models.cloud.agent_gateway import AgentAuthRouteSelection
-
+async def test_put_is_full_desired_state_replace(db_session: AsyncSession) -> None:
     user_id = await _create_user(db_session)
-    # Simulate the row a concurrent first PUT committed just before us.
-    db_session.add(
-        AgentAuthRouteSelection(
+    key = await store.create_agent_api_key(
+        db_session, user_id=user_id, title="Anthropic", value="sk-ant-1234abcd"
+    )
+
+    first = await store.put_auth_selections(
+        db_session,
+        user_id=user_id,
+        harness_kind="opencode",
+        surface="cloud",
+        sources=[_gateway(), _api_key(key.id)],
+    )
+    gateway_id = next(r.id for r in first if r.source_kind == "gateway")
+
+    # Dropping the api_key source deletes its row; the gateway row is kept
+    # (same id + created_at) rather than churned.
+    second = await store.put_auth_selections(
+        db_session,
+        user_id=user_id,
+        harness_kind="opencode",
+        surface="cloud",
+        sources=[_gateway()],
+    )
+    assert [r.source_kind for r in second] == ["gateway"]
+    assert second[0].id == gateway_id
+
+
+@pytest.mark.asyncio
+async def test_put_updates_row_in_place(db_session: AsyncSession) -> None:
+    user_id = await _create_user(db_session)
+    key = await store.create_agent_api_key(
+        db_session, user_id=user_id, title="Anthropic", value="sk-ant-1234abcd"
+    )
+
+    first = await store.put_auth_selections(
+        db_session,
+        user_id=user_id,
+        harness_kind="claude",
+        surface="local",
+        sources=[_api_key(key.id, enabled=True)],
+    )
+    row_id = first[0].id
+
+    second = await store.put_auth_selections(
+        db_session,
+        user_id=user_id,
+        harness_kind="claude",
+        surface="local",
+        sources=[_api_key(key.id, provider_hint="anthropic", enabled=False)],
+    )
+    assert second[0].id == row_id
+    assert second[0].enabled is False
+    assert second[0].provider_hint == "anthropic"
+
+
+@pytest.mark.asyncio
+async def test_put_rejects_duplicate_source(db_session: AsyncSession) -> None:
+    user_id = await _create_user(db_session)
+    key = await store.create_agent_api_key(
+        db_session, user_id=user_id, title="Anthropic", value="sk-ant-1234abcd"
+    )
+    with pytest.raises(ValueError, match="Duplicate selection source"):
+        await store.put_auth_selections(
+            db_session,
+            user_id=user_id,
+            harness_kind="opencode",
+            surface="cloud",
+            sources=[
+                _api_key(key.id, env_var_name="ANTHROPIC_API_KEY"),
+                _api_key(key.id, env_var_name="ANTHROPIC_API_KEY"),
+            ],
+        )
+
+
+@pytest.mark.asyncio
+async def test_put_rejects_bad_source_shape(db_session: AsyncSession) -> None:
+    user_id = await _create_user(db_session)
+    with pytest.raises(ValueError, match="gateway source must not"):
+        await store.put_auth_selections(
+            db_session,
             user_id=user_id,
             harness_kind="claude",
             surface="local",
-            route="native",
-            revision=1,
+            sources=[
+                DesiredAuthSource(source_kind="gateway", env_var_name="X_API_KEY"),
+            ],
         )
-    )
-    await db_session.flush()
-
-    resolved = await store.upsert_route_selection(
-        db_session,
-        user_id=user_id,
-        harness_kind="claude",
-        surface="local",
-        route="gateway",
-    )
-    assert resolved.route == "gateway"
-    assert resolved.revision == 2
-
-    listed = await store.list_route_selections(db_session, user_id=user_id)
-    assert len(listed) == 1
+    with pytest.raises(ValueError, match="api_key source requires"):
+        await store.put_auth_selections(
+            db_session,
+            user_id=user_id,
+            harness_kind="claude",
+            surface="local",
+            sources=[DesiredAuthSource(source_kind="api_key", api_key_id=uuid.uuid4())],
+        )
 
 
 @pytest.mark.asyncio
-async def test_route_selection_rejects_unknown_harness(db_session: AsyncSession) -> None:
+async def test_put_rejects_unknown_harness(db_session: AsyncSession) -> None:
     user_id = await _create_user(db_session)
     with pytest.raises(ValueError, match="harness kind"):
-        await store.upsert_route_selection(
+        await store.put_auth_selections(
             db_session,
             user_id=user_id,
             harness_kind="x" * 200,
             surface="local",
-            route="native",
+            sources=[_gateway()],
         )
 
 
 @pytest.mark.asyncio
-async def test_route_selection_delete(db_session: AsyncSession) -> None:
-    user_id = await _create_user(db_session)
-    await store.upsert_route_selection(
-        db_session,
-        user_id=user_id,
-        harness_kind="claude",
-        surface="local",
-        route="native",
-    )
-
-    deleted = await store.delete_route_selection(
-        db_session,
-        user_id=user_id,
-        harness_kind="claude",
-        surface="local",
-    )
-    assert deleted is True
-    assert (
-        await store.get_route_selection(
-            db_session,
-            user_id=user_id,
-            harness_kind="claude",
-            surface="local",
-        )
-        is None
-    )
-
-    again = await store.delete_route_selection(
-        db_session,
-        user_id=user_id,
-        harness_kind="claude",
-        surface="local",
-    )
-    assert again is False
-
-
-@pytest.mark.asyncio
-async def test_route_selection_rejects_cloud_native(db_session: AsyncSession) -> None:
-    user_id = await _create_user(db_session)
-    with pytest.raises(ValueError, match="native route"):
-        await store.upsert_route_selection(
-            db_session,
-            user_id=user_id,
-            harness_kind="claude",
-            surface="cloud",
-            route="native",
-        )
-
-
-@pytest.mark.asyncio
-async def test_route_selection_rejects_foreign_or_revoked_api_key(
-    db_session: AsyncSession,
-) -> None:
+async def test_put_rejects_foreign_or_revoked_api_key(db_session: AsyncSession) -> None:
     owner_id = await _create_user(db_session)
     other_id = await _create_user(db_session)
     key = await store.create_agent_api_key(
-        db_session,
-        user_id=owner_id,
-        provider="anthropic",
-        display_name="Key",
-        payload="sk-ant-1234abcd",
+        db_session, user_id=owner_id, title="Key", value="sk-ant-1234abcd"
     )
 
-    with pytest.raises(ValueError, match="active key owned by the user"):
-        await store.upsert_route_selection(
+    with pytest.raises(store.AgentApiKeyNotUsableError, match="active key owned"):
+        await store.put_auth_selections(
             db_session,
             user_id=other_id,
             harness_kind="claude",
             surface="cloud",
-            route="api_key",
-            api_key_id=key.id,
+            sources=[_api_key(key.id)],
         )
 
     await store.revoke_agent_api_key(db_session, user_id=owner_id, api_key_id=key.id)
-    with pytest.raises(ValueError, match="active key owned by the user"):
-        await store.upsert_route_selection(
+    with pytest.raises(store.AgentApiKeyNotUsableError, match="active key owned"):
+        await store.put_auth_selections(
             db_session,
             user_id=owner_id,
             harness_kind="claude",
             surface="cloud",
-            route="api_key",
-            api_key_id=key.id,
+            sources=[_api_key(key.id)],
         )
 
 
 @pytest.mark.asyncio
-async def test_api_key_hard_delete_cascades_api_key_route_selection(
-    db_session: AsyncSession,
-) -> None:
-    """Hard-deleting a key must not abort on the api_key-route CHECK.
-
-    ``api_key_id`` is ``ondelete=CASCADE`` (not ``SET NULL``): nulling it on an
-    ``api_key``-route selection would violate ``ck_..._api_key_ref``, so the key
-    must take its referencing selections with it rather than orphan them.
-    """
+async def test_list_enabled_selections_referencing_key(db_session: AsyncSession) -> None:
     user_id = await _create_user(db_session)
     key = await store.create_agent_api_key(
-        db_session,
-        user_id=user_id,
-        provider="anthropic",
-        display_name="Key",
-        payload="sk-ant-1234abcd",
+        db_session, user_id=user_id, title="Anthropic", value="sk-ant-1234abcd"
     )
-    selection = await store.upsert_route_selection(
+    await store.put_auth_selections(
         db_session,
         user_id=user_id,
         harness_kind="claude",
-        surface="cloud",
-        route="api_key",
-        api_key_id=key.id,
+        surface="local",
+        sources=[_api_key(key.id, enabled=True)],
     )
-    assert selection.api_key_id == key.id
+    referencing = await store.list_enabled_selections_referencing_key(
+        db_session, user_id=user_id, api_key_id=key.id
+    )
+    assert [r.harness_kind for r in referencing] == ["claude"]
 
-    # Hard delete of the key succeeds and cascades away the selection.
-    await db_session.execute(sql_delete(AgentApiKey).where(AgentApiKey.id == key.id))
-    await db_session.flush()
-
-    assert await store.list_route_selections(db_session, user_id=user_id) == []
+    # Disabling the row frees the key for revocation (nothing enabled uses it).
+    await store.put_auth_selections(
+        db_session,
+        user_id=user_id,
+        harness_kind="claude",
+        surface="local",
+        sources=[_api_key(key.id, enabled=False)],
+    )
+    assert (
+        await store.list_enabled_selections_referencing_key(
+            db_session, user_id=user_id, api_key_id=key.id
+        )
+        == []
+    )
 
 
 @pytest.mark.asyncio
-async def test_user_hard_delete_with_api_key_selection_succeeds(
-    db_session: AsyncSession,
-) -> None:
-    """Deleting a user that owns an api_key-route selection must not abort.
+async def test_clear_auth_selections(db_session: AsyncSession) -> None:
+    user_id = await _create_user(db_session)
+    await store.put_auth_selections(
+        db_session,
+        user_id=user_id,
+        harness_kind="claude",
+        surface="local",
+        sources=[_gateway()],
+    )
+    cleared = await store.clear_auth_selections(
+        db_session, user_id=user_id, harness_kind="claude", surface="local"
+    )
+    assert cleared == 1
+    assert (
+        await store.get_scope_auth_selections(
+            db_session, user_id=user_id, harness_kind="claude", surface="local"
+        )
+        == []
+    )
+    assert (
+        await store.clear_auth_selections(
+            db_session, user_id=user_id, harness_kind="claude", surface="local"
+        )
+        == 0
+    )
 
-    User delete cascades to both the key and the selection; the api_key_id
-    CASCADE prevents a SET-NULL/CHECK collision from aborting the delete.
+
+@pytest.mark.asyncio
+async def test_api_key_hard_delete_cascades_selection(db_session: AsyncSession) -> None:
+    """Hard-deleting a key must not abort on the api_key-shape CHECK.
+
+    ``api_key_id`` is ``ondelete=CASCADE`` (not ``SET NULL``): nulling it on an
+    ``api_key`` row would violate ``ck_..._api_key_shape``, so the key takes its
+    referencing selections with it rather than orphaning them.
     """
     user_id = await _create_user(db_session)
     key = await store.create_agent_api_key(
-        db_session,
-        user_id=user_id,
-        provider="anthropic",
-        display_name="Key",
-        payload="sk-ant-1234abcd",
+        db_session, user_id=user_id, title="Key", value="sk-ant-1234abcd"
     )
-    await store.upsert_route_selection(
+    await store.put_auth_selections(
         db_session,
         user_id=user_id,
         harness_kind="claude",
         surface="cloud",
-        route="api_key",
-        api_key_id=key.id,
+        sources=[_api_key(key.id)],
+    )
+
+    await db_session.execute(sql_delete(AgentApiKey).where(AgentApiKey.id == key.id))
+    await db_session.flush()
+
+    assert await store.list_auth_selections(db_session, user_id=user_id) == []
+
+
+@pytest.mark.asyncio
+async def test_user_hard_delete_with_selection_succeeds(db_session: AsyncSession) -> None:
+    """Deleting a user that owns an api_key selection must not abort."""
+    user_id = await _create_user(db_session)
+    key = await store.create_agent_api_key(
+        db_session, user_id=user_id, title="Key", value="sk-ant-1234abcd"
+    )
+    await store.put_auth_selections(
+        db_session,
+        user_id=user_id,
+        harness_kind="claude",
+        surface="cloud",
+        sources=[_api_key(key.id)],
     )
 
     await db_session.execute(sql_delete(User).where(User.id == user_id))
     await db_session.flush()
 
     assert await db_session.get(User, user_id) is None
-    assert await store.list_route_selections(db_session, user_id=user_id) == []
+    assert await store.list_auth_selections(db_session, user_id=user_id) == []
 
 
 @pytest.mark.asyncio
@@ -455,7 +523,6 @@ async def test_list_billing_subject_ids_paginates_past_a_page(
         )
         subject_ids.add(subject.id)
 
-    # Walk in pages of 2 and collect the union — no subject is starved.
     seen: list[uuid.UUID] = []
     after: uuid.UUID | None = None
     while True:
@@ -471,7 +538,6 @@ async def test_list_billing_subject_ids_paginates_past_a_page(
             break
         after = page[-1]
 
-    # Every seeded subject appears, ordering is ascending, and no duplicates.
     assert subject_ids.issubset(set(seen))
     relevant = [sid for sid in seen if sid in subject_ids]
     assert relevant == sorted(relevant)

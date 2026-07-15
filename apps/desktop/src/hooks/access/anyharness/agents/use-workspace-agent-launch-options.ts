@@ -2,6 +2,7 @@ import type { AgentLaunchOptionsResponse } from "@anyharness/sdk";
 import {
   anyHarnessAgentLaunchOptionsKey,
   useAgentLaunchOptionsQuery,
+  useAnyHarnessCacheScopeKey,
 } from "@anyharness/sdk-react";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { getAgentLaunchOptions } from "@/lib/access/anyharness/agents";
@@ -15,6 +16,7 @@ export function useWorkspaceAgentLaunchOptionsQuery({
   workspaceId: string | null;
   cloudConnectionInfo?: CloudConnectionInfo | null;
 }): UseQueryResult<AgentLaunchOptionsResponse> {
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const localQuery = useAgentLaunchOptionsQuery({
     workspaceId,
     enabled: !cloudConnectionInfo,
@@ -25,6 +27,7 @@ export function useWorkspaceAgentLaunchOptionsQuery({
     queryKey: anyHarnessAgentLaunchOptionsKey(
       gatewayRuntimeUrl,
       gatewayWorkspaceId,
+      cacheScopeKey,
     ),
     enabled: Boolean(cloudConnectionInfo && gatewayRuntimeUrl && gatewayWorkspaceId),
     queryFn: async ({ signal }) => {

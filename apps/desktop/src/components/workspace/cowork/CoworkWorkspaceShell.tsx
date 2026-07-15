@@ -4,7 +4,7 @@ import { ChatView } from "@/components/workspace/chat/ChatView";
 import { MainSidebar } from "@/components/workspace/shell/sidebar/MainSidebar";
 import { SidebarUpdatePill } from "@/components/workspace/shell/sidebar/SidebarUpdatePill";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { SplitPanel } from "@proliferate/ui/icons";
+import { SplitPanelLeft } from "@proliferate/ui/icons";
 import { CoworkArtifactsPanel } from "@/components/workspace/cowork/CoworkArtifactsPanel";
 import { CoworkWorkspaceHeader } from "@/components/workspace/cowork/CoworkWorkspaceHeader";
 import { useResize } from "@/hooks/ui/layout/use-resize";
@@ -137,7 +137,7 @@ export function CoworkWorkspaceShell({
                 title="Hide sidebar"
                 className="rounded-md"
               >
-                <SplitPanel className="size-4" />
+                <SplitPanelLeft className="size-4" />
               </IconButton>
               {/* The update pill's single home is the top-left, next to the
                   sidebar toggle. */}
@@ -180,7 +180,7 @@ export function CoworkWorkspaceShell({
                   title="Show sidebar"
                   className="rounded-md"
                 >
-                  <SplitPanel className="size-4" />
+                  <SplitPanelLeft className="size-4" />
                 </IconButton>
                 <SidebarUpdatePill
                   phase={updaterPhase}

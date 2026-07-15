@@ -160,6 +160,28 @@ describe("useAppShortcuts", () => {
     expect(runShortcutHandler("app.open-web", { source: "keyboard" })).toBe(true);
     expect(actions.openWebApp.execute).toHaveBeenCalledWith("shortcut");
   });
+
+  describe("app.open-support gating", () => {
+    // Mirrors the sidebar/palette hiding the support action under
+    // `support.kind === "none"` (`SidebarHelpSection`): Cmd+S must not just
+    // no-op, the shortcut must not be registered at all.
+    it("routes Cmd+S through app command actions when the action is visible", () => {
+      const actions = commandActions();
+      renderHook(() => useAppShortcuts(actions));
+
+      expect(runShortcutHandler("app.open-support", { source: "keyboard" })).toBe(true);
+      expect(actions.openSupport.execute).toHaveBeenCalledWith("shortcut");
+    });
+
+    it("leaves Cmd+S unregistered (inert) when the action is hidden", () => {
+      const actions = commandActions();
+      actions.openSupport = { ...actions.openSupport, hidden: true };
+      renderHook(() => useAppShortcuts(actions));
+
+      expect(runShortcutHandler("app.open-support", { source: "keyboard" })).toBe(false);
+      expect(actions.openSupport.execute).not.toHaveBeenCalled();
+    });
+  });
 });
 
 function commandActions(): AppCommandActions {

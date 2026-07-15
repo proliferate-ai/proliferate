@@ -1,3 +1,8 @@
+// Injected by apps/web/vite.config.ts from the repo-root VERSION file. Only
+// used for the local-dev release fallback below; real builds set
+// VITE_PROLIFERATE_RELEASE directly (see vercel.json).
+declare const __PROLIFERATE_WEB_VERSION__: string;
+
 function envFlagEnabled(value: string | undefined, defaultValue: boolean): boolean {
   if (value === undefined) return defaultValue;
   const normalized = value.trim().toLowerCase();
@@ -43,7 +48,14 @@ export function getWebTelemetryConfig(): WebTelemetryConfig {
       || (import.meta.env.DEV ? "development" : "production"),
     release:
       import.meta.env.VITE_PROLIFERATE_RELEASE?.trim()
-      || "proliferate-web@0.1.0",
+      // Local dev only: Vercel builds always set VITE_PROLIFERATE_RELEASE to
+      // the canonical `proliferate-web@<VERSION>+<12-hex-sha>` string (see
+      // vercel.json). This fallback derives the real version from the root
+      // VERSION file but deliberately has no `+<sha>` suffix and carries a
+      // `-dev` marker, so it reads as a dev sentinel (and is rejected by the
+      // server's parse_client_release_id) rather than a plausible stale
+      // release.
+      || `proliferate-web@${__PROLIFERATE_WEB_VERSION__}-dev`,
     sentry: {
       enabled: !telemetryDisabled && sentryDsn !== null,
       dsn: sentryDsn,

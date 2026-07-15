@@ -16,6 +16,7 @@ import {
   type TranscriptOpenSessionRole,
 } from "@proliferate/product-domain/chats/transcript/transcript-open-target";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import type { GoalTranscriptEvent } from "@proliferate/product-domain/activity/goal-transcript-events";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import {
   ensureSessionTranscriptEntry,
@@ -28,13 +29,18 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 
 interface SessionTranscriptPaneProps {
   bottomInsetPx: number;
+  nonDisplacingBottomInsetPx: number;
 }
 
 const OLDER_SESSION_HISTORY_EVENT_BUDGET = 1_500;
 const OLDER_SESSION_HISTORY_TURN_LIMIT = 20;
 const OLDER_SESSION_HISTORY_TIMEOUT_MS = 60_000;
+const EMPTY_GOAL_EVENTS: readonly GoalTranscriptEvent[] = [];
 
-export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPaneProps) {
+export function SessionTranscriptPane({
+  bottomInsetPx,
+  nonDisplacingBottomInsetPx,
+}: SessionTranscriptPaneProps) {
   useDebugRenderCount("session-transcript-pane");
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const handoff = usePlanHandoffDialogState();
@@ -72,6 +78,9 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
   const transcript = transcriptDeferred
     ? null
     : immediatePaneState.transcript;
+  const goalEvents = transcriptDeferred
+    ? EMPTY_GOAL_EVENTS
+    : immediatePaneState.goalEvents;
   const sessionViewState = transcriptDeferred
     ? "idle"
     : immediatePaneState.sessionViewState;
@@ -268,11 +277,13 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
         optimisticPrompt={optimisticPrompt}
         outboxEntries={outboxEntries}
         transcript={transcript}
+        goalEvents={goalEvents}
         sessionViewState={sessionViewState}
         hasOlderHistory={hasOlderHistory}
         isLoadingOlderHistory={isLoadingOlderHistory}
         olderHistoryCursor={oldestLoadedEventSeq}
         bottomInsetPx={bottomInsetPx}
+        nonDisplacingBottomInsetPx={nonDisplacingBottomInsetPx}
         onLoadOlderHistory={loadOlderHistory}
         onHandOffPlanToNewSession={handoff.open}
         onOpenSession={openTranscriptSession}

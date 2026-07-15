@@ -11,7 +11,7 @@ use super::config::persist::{load_startup_restore_snapshot, persisted_control_va
 use super::config::queue::queue_pending_config_change;
 use super::config::selection::{
     find_select_option_for_request, is_mode_config_request, is_model_config_request,
-    pending_config_rank, select_option_values,
+    pending_config_rank, resolve_model_variant_value, select_option_values,
 };
 use super::config::types::{tracked_config_purpose, PersistedSessionConfigState};
 use super::interactions::cleanup::resolve_pending_interactions;
@@ -19,6 +19,7 @@ use super::notifications::handle::{
     handle_notification, handle_notification_with_resume_replay_filter,
 };
 use super::notifications::replay_filter::{ResumeReplayFilter, IDLE_RESUME_REPLAY_QUIET_WINDOW};
+use super::run::{select_idle_work, IdleWork, STARTUP_QUEUE_DRAIN_GRACE};
 use super::shutdown::handle::finalize_established_actor_exit;
 use super::shutdown::types::ActorExitDisposition;
 use super::state::SessionStartupState;
@@ -47,9 +48,11 @@ use anyharness_contract::v1::{
 use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
 
 mod config;
+mod config_variants;
 mod domain_ops;
 mod notifications;
 mod prompt;
+mod queue;
 mod shutdown;
 
 async fn actor_exit_test_context(

@@ -45,12 +45,6 @@ import {
 import {
   getMobileCloudSandboxAnyHarnessClient,
 } from "../../../lib/access/anyharness/cloud-sandbox-runtime";
-import {
-  cloudPendingInteractionsFromExecutionSummary,
-  cloudPendingInteractionsFromReducer,
-  cloudSessionEventFromAnyHarness,
-  cloudSessionProjectionFromAnyHarness,
-} from "./mobile-chat-anyharness-projections";
 
 const EMPTY_TRANSCRIPT_ITEMS: CloudTranscriptItem[] = [];
 const EMPTY_SESSION_EVENTS: CloudSessionEvent[] = [];

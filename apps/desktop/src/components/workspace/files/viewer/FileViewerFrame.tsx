@@ -1,23 +1,34 @@
-import type {
-  ReactNode,
-  Ref,
+import {
+  useCallback,
+  useState,
+  type ReactNode,
+  type Ref,
 } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import {
+  Check,
   ChevronRight,
   Copy,
   ExternalLink,
-  FileText,
-  FolderOpen,
+  FolderTree,
+  MoreHorizontal,
   Search,
-  WrapText,
 } from "@proliferate/ui/icons";
+import { PaneIconButton } from "@proliferate/ui/layout/PaneIconButton";
 import { PaneOptionsMenuItem } from "@proliferate/ui/layout/PaneOptionsMenuItem";
 import {
-  PaneOptionsMenu,
-  PaneOptionsMenuSeparator,
-} from "@/components/workspace/pane/PaneOptionsMenu";
+  POPOVER_FRAME_CLASS,
+  POPOVER_SURFACE_CLASS,
+  PopoverButton,
+} from "@proliferate/ui/primitives/PopoverButton";
+import { PaneOptionsMenuSeparator } from "@/components/workspace/pane/PaneOptionsMenu";
 import { SessionContentSearchOverlay } from "@/components/workspace/chat/surface/SessionContentSearchOverlay";
+import {
+  useFileViewerNativeContextMenu,
+  useFileViewerNativeMenu,
+  type FileViewerNativeMenuActions,
+} from "@/hooks/workspaces/ui/files/use-file-viewer-native-menu";
 import { useWorkspacePath } from "@/providers/WorkspacePathProvider";
 
 export function FileViewerFrame({
@@ -33,6 +44,7 @@ export function FileViewerFrame({
   onCopyContent,
   onCopyPath,
   onOpenExternal,
+  canOpenExternal,
   onOpenContentSearch,
   browserOpen,
   onToggleBrowser,
@@ -46,6 +58,7 @@ export function FileViewerFrame({
   richPreviewEnabled: boolean;
   canCopyContent: boolean;
   canFindInFile: boolean;
+  canOpenExternal: boolean;
   onToggleWordWrap: () => void;
   onToggleRichPreview: () => void;
   onCopyContent: () => void;
@@ -65,11 +78,11 @@ export function FileViewerFrame({
       data-file-viewer-frame
     >
       <div
-        className="z-20 flex h-10 min-h-10 shrink-0 items-center gap-1 border-b border-border bg-background px-2 text-foreground"
+        className="z-20 flex h-9 min-h-9 shrink-0 select-none items-center gap-1 border-b border-border bg-background px-2 text-foreground"
         data-file-viewer-toolbar
       >
         <FileBreadcrumbs filePath={filePath} onBrowsePath={onBrowsePath} />
-        <div className="flex shrink-0 items-center gap-px">
+        <div className="flex shrink-0 items-center gap-1">
           <FileViewerOptionsMenu
             canRenderRichPreview={canRenderRichPreview}
             richPreviewEnabled={richPreviewEnabled}
@@ -82,16 +95,17 @@ export function FileViewerFrame({
           />
           <FileViewerToolbarButton
             label="Open in default editor"
+            disabled={!canOpenExternal}
             onClick={onOpenExternal}
           >
-            <ExternalLink className="size-4" />
+            <ExternalLink className="size-3.5" />
           </FileViewerToolbarButton>
           {canFindInFile && (
             <FileViewerToolbarButton
               label="Find in file"
               onClick={onOpenContentSearch}
             >
-              <Search className="size-4" />
+              <Search className="size-3.5" />
             </FileViewerToolbarButton>
           )}
           <FileViewerToolbarButton
@@ -99,18 +113,59 @@ export function FileViewerFrame({
             active={browserOpen}
             onClick={onToggleBrowser}
           >
-            <FolderOpen className="size-4" />
+            <FolderTree className="size-3.5" />
           </FileViewerToolbarButton>
         </div>
       </div>
       <SessionContentSearchOverlay enabled surface="file" />
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
+      <FileViewerContentContextMenu
+        canRenderRichPreview={canRenderRichPreview}
+        richPreviewEnabled={richPreviewEnabled}
+        wordWrap={wordWrap}
+        canCopyContent={canCopyContent}
+        onToggleWordWrap={onToggleWordWrap}
+        onToggleRichPreview={onToggleRichPreview}
+        onCopyContent={onCopyContent}
+        onCopyPath={onCopyPath}
+      >
+        {children}
+      </FileViewerContentContextMenu>
     </div>
   );
 }
 
+/**
+ * Right-click in the content area shows the OS-native menu (Tauri); the DOM
+ * popover below is the browser/test fallback — the capture-phase native
+ * handler preventDefaults before the PopoverButton's bubble listener fires.
+ */
+function FileViewerContentContextMenu({
+  children,
+  ...actions
+}: FileViewerNativeMenuActions & { children: ReactNode }) {
+  const { onContextMenuCapture } = useFileViewerNativeContextMenu(actions);
+
+  return (
+    <PopoverButton
+      triggerMode="contextMenu"
+      className={`${POPOVER_FRAME_CLASS} flex w-[220px] select-none flex-col overflow-y-auto p-1`}
+      trigger={
+        <div
+          className="flex min-h-0 flex-1 flex-col overflow-hidden"
+          onContextMenuCapture={onContextMenuCapture}
+        >
+          {children}
+        </div>
+      }
+    >
+      {(close) => <FileViewerMenuBody close={close} {...actions} />}
+    </PopoverButton>
+  );
+}
+
 const FILE_VIEWER_TOOLBAR_BUTTON_CLASS =
-  "size-7 rounded-lg text-muted-foreground hover:bg-list-hover hover:text-foreground data-[state=open]:bg-list-hover data-[state=open]:text-foreground";
+  // Icons match the right-panel tab glyph size (--workspace-shell-tab-icon-size, 14px).
+  "size-7 rounded-lg text-muted-foreground hover:bg-list-hover hover:text-foreground data-[state=open]:bg-list-hover data-[state=open]:text-foreground [&_svg]:size-3.5";
 
 function FileBreadcrumbs({
   filePath,
@@ -132,7 +187,11 @@ function FileBreadcrumbs({
       aria-label="File path"
       className="hide-scrollbar flex min-w-0 flex-1 flex-row-reverse items-center overflow-x-auto px-2"
     >
-      <ol className="flex min-w-max flex-1 items-center gap-1 text-xs text-muted-foreground">
+      {/* Codex breadcrumbs sit one step below chat-body size; --text-ui is
+          our body-minus-one that scales with appearance presets. The line
+          height must clear descenders — leading-none clips "g"/"p" inside the
+          nav's scroll container. */}
+      <ol className="flex min-w-max flex-1 items-center gap-1 text-[length:var(--text-ui)] leading-[var(--text-ui--line-height)] text-muted-foreground">
         {crumbs.map((part, index) => {
           const isLast = index === crumbs.length - 1;
           const isWorkspaceCrumb = workspaceName && index === 0;
@@ -142,7 +201,7 @@ function FileBreadcrumbs({
             : parts.slice(0, Math.max(0, index - workspaceOffset + 1)).join("/");
           return (
             <li key={`${part}-${index}`} className="flex min-w-0 items-center gap-1">
-              {index > 0 && <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/55" />}
+              {index > 0 && <ChevronRight className="size-3 shrink-0 text-muted-foreground/50" />}
               {browsable ? (
                 <Button
                   type="button"
@@ -171,11 +230,13 @@ function FileBreadcrumbs({
 function FileViewerToolbarButton({
   label,
   active = false,
+  disabled = false,
   onClick,
   children,
 }: {
   label: string;
   active?: boolean;
+  disabled?: boolean;
   onClick: () => void;
   children: ReactNode;
 }) {
@@ -185,6 +246,7 @@ function FileViewerToolbarButton({
       variant="ghost"
       size="icon-sm"
       aria-label={label}
+      disabled={disabled}
       className={`${FILE_VIEWER_TOOLBAR_BUTTON_CLASS} ${
         active ? "bg-list-hover text-foreground" : ""
       }`}
@@ -195,7 +257,9 @@ function FileViewerToolbarButton({
   );
 }
 
-function FileViewerOptionsMenu({
+/** Shared DOM-fallback item list for the toolbar menu and the context menu. */
+function FileViewerMenuBody({
+  close,
   canRenderRichPreview,
   richPreviewEnabled,
   wordWrap,
@@ -204,62 +268,90 @@ function FileViewerOptionsMenu({
   onToggleRichPreview,
   onCopyContent,
   onCopyPath,
-}: {
-  canRenderRichPreview: boolean;
-  richPreviewEnabled: boolean;
-  wordWrap: boolean;
-  canCopyContent: boolean;
-  onToggleWordWrap: () => void;
-  onToggleRichPreview: () => void;
-  onCopyContent: () => void;
-  onCopyPath: () => void;
-}) {
+}: FileViewerNativeMenuActions & { close: () => void }) {
   return (
-    <PaneOptionsMenu
-      label="File viewer options"
-      className="min-w-[220px]"
-      triggerClassName={FILE_VIEWER_TOOLBAR_BUTTON_CLASS}
-    >
-      {(close) => (
-        <div className="flex flex-col gap-px">
-          <PaneOptionsMenuItem
-            icon={<Copy />}
-            label="Copy content"
-            disabled={!canCopyContent}
-            onClick={() => {
-              onCopyContent();
-              close();
-            }}
-          />
-          <PaneOptionsMenuItem
-            icon={<Copy />}
-            label="Copy path"
-            onClick={() => {
-              onCopyPath();
-              close();
-            }}
-          />
-          <PaneOptionsMenuSeparator />
-          <PaneOptionsMenuItem
-            icon={<WrapText />}
-            label={wordWrap ? "Disable word wrap" : "Enable word wrap"}
-            onClick={() => {
-              onToggleWordWrap();
-              close();
-            }}
-          />
-          {canRenderRichPreview && (
-            <PaneOptionsMenuItem
-              icon={<FileText />}
-              label={richPreviewEnabled ? "Disable rich preview" : "Enable rich preview"}
-              onClick={() => {
-                onToggleRichPreview();
-                close();
-              }}
-            />
-          )}
-        </div>
+    <div className="flex flex-col gap-px">
+      <PaneOptionsMenuItem
+        icon={<Copy />}
+        label="Copy content"
+        disabled={!canCopyContent}
+        onClick={() => {
+          onCopyContent();
+          close();
+        }}
+      />
+      <PaneOptionsMenuItem
+        icon={<Copy />}
+        label="Copy path"
+        onClick={() => {
+          onCopyPath();
+          close();
+        }}
+      />
+      <PaneOptionsMenuSeparator />
+      <PaneOptionsMenuItem
+        reserveIconSlot
+        icon={wordWrap ? <Check /> : null}
+        label="Word wrap"
+        trailing={wordWrap ? "On" : "Off"}
+        onClick={() => {
+          onToggleWordWrap();
+        }}
+      />
+      {canRenderRichPreview && (
+        <PaneOptionsMenuItem
+          reserveIconSlot
+          icon={richPreviewEnabled ? <Check /> : null}
+          label="Rich preview"
+          trailing={richPreviewEnabled ? "On" : "Off"}
+          onClick={() => {
+            onToggleRichPreview();
+          }}
+        />
       )}
-    </PaneOptionsMenu>
+    </div>
+  );
+}
+
+/**
+ * Toolbar "…" menu. Click opens the OS-native menu under the button (Tauri);
+ * the DOM popover remains the browser/test fallback (opened via externalOpen,
+ * anchored at the trigger). triggerMode="contextMenu" keeps PopoverButton's
+ * own click handling out of the way so a click never opens both menus.
+ */
+function FileViewerOptionsMenu(actions: FileViewerNativeMenuActions) {
+  const [fallbackOpen, setFallbackOpen] = useState(false);
+  const { showNativeMenu } = useFileViewerNativeMenu(actions);
+
+  const handleTriggerClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    void showNativeMenu({ x: rect.left, y: rect.bottom }).then((shown) => {
+      if (!shown) setFallbackOpen(true);
+    });
+  }, [showNativeMenu]);
+
+  const handleOpenChange = useCallback((open: boolean) => {
+    if (!open) setFallbackOpen(false);
+  }, []);
+
+  return (
+    <PopoverButton
+      triggerMode="contextMenu"
+      externalOpen={fallbackOpen}
+      onOpenChange={handleOpenChange}
+      align="end"
+      className={twMerge(POPOVER_SURFACE_CLASS, "min-w-[220px]")}
+      trigger={(
+        <PaneIconButton
+          label="File viewer options"
+          className={FILE_VIEWER_TOOLBAR_BUTTON_CLASS}
+          onClick={handleTriggerClick}
+        >
+          <MoreHorizontal className="size-3.5" />
+        </PaneIconButton>
+      )}
+    >
+      {(close) => <FileViewerMenuBody close={close} {...actions} />}
+    </PopoverButton>
   );
 }

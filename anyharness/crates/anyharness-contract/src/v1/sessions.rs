@@ -5,10 +5,13 @@ use utoipa::ToSchema;
 
 use super::OriginContext;
 use super::{
-    ContentPart, InteractionKind, McpElicitationInteractionPayload, PermissionInteractionContext,
-    PermissionInteractionOption, PromptProvenance, SessionLiveConfigSnapshot,
+    Goal, InteractionKind, McpElicitationInteractionPayload, PermissionInteractionContext,
+    PermissionInteractionOption, SessionActivity, SessionLiveConfigSnapshot,
     SessionMcpBindingSummary, UserInputQuestion,
 };
+
+mod pending_prompts;
+pub use pending_prompts::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -123,6 +126,15 @@ pub struct Session {
     pub pending_prompts: Vec<PendingPromptSummary>,
     #[serde(default)]
     pub action_capabilities: SessionActionCapabilities,
+    /// Deprecated in favor of `activity.goal` — kept for existing SDK
+    /// consumers; every write still moves this field too.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_goal: Option<Goal>,
+    /// `SessionActivity` (turn/goal/loops/processes/agents) — the
+    /// session-activity-architecture aggregate. `None` when the runtime has
+    /// not yet assembled it for this read path.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub activity: Option<SessionActivity>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<OriginContext>,
 }
@@ -134,20 +146,15 @@ pub struct SessionActionCapabilities {
     pub fork: bool,
     #[serde(default)]
     pub targeted_fork: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct PendingPromptSummary {
-    pub seq: i64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub prompt_id: Option<String>,
-    pub text: String,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub content_parts: Vec<ContentPart>,
-    pub queued_at: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub prompt_provenance: Option<PromptProvenance>,
+    #[serde(default)]
+    pub supports_goals: bool,
+    #[serde(default)]
+    pub supports_loops: bool,
+    /// Whether loops ride native harness state (Claude session crons) or are
+    /// runtime-emulated (Codex `LoopSchedulerExtension`). Meaningless when
+    /// `supports_loops` is `false`.
+    #[serde(default)]
+    pub loops_native: bool,
 }
 
 #[derive(Clone, Serialize, Deserialize, ToSchema)]
@@ -439,15 +446,6 @@ pub enum PromptSessionStatus {
     Queued,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct EditPendingPromptRequest {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub blocks: Option<Vec<PromptInputBlock>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub text: Option<String>,
-}
-
 #[derive(Clone, Serialize, Deserialize, ToSchema)]
 #[serde(tag = "outcome", rename_all = "snake_case")]
 pub enum ResolveInteractionRequest {
@@ -713,6 +711,8 @@ mod tests {
             closed_at: None,
             dismissed_at: None,
             pending_prompts: vec![],
+            active_goal: None,
+            activity: None,
             origin: None,
         };
 

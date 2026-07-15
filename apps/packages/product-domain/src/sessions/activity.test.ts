@@ -448,6 +448,22 @@ describe("session activity", () => {
     })).toBe("needs_input");
   });
 
+  it("keeps a running session explicit after completed assistant prose", () => {
+    const slot = {
+      status: "running" as const,
+      executionSummary: executionSummary("running"),
+      streamConnectionState: "open" as const,
+      transcript: {
+        isStreaming: true,
+        pendingInteractions: [],
+      },
+    };
+
+    expect(resolveSessionExecutionPhase(slot)).toBe("running");
+    expect(resolveSessionSidebarActivityState(slot)).toBe("iterating");
+    expect(resolveSessionViewState(slot)).toBe("working");
+  });
+
   it("presents never-prompted starting sessions as idle", () => {
     const slot = {
       status: "starting" as const,

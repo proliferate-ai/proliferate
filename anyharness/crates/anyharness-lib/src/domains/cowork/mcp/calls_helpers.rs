@@ -52,7 +52,6 @@ pub(super) fn recommended_modes_by_agent_kind_json() -> Value {
     json!({
         "claude": "bypassPermissions",
         "codex": "full-access",
-        "gemini": "yolo",
     })
 }
 

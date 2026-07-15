@@ -1,6 +1,7 @@
 import {
   streamSession,
 } from "@anyharness/sdk";
+import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
 import type {
   Session,
   SessionEventEnvelope,
@@ -17,6 +18,7 @@ import {
   resolveRuntimeTargetForWorkspace,
   type RuntimeTarget,
 } from "@/lib/access/anyharness/runtime-target";
+import type { CloudSandboxGatewayUrlSource } from "@/lib/access/cloud/cloud-sandbox-gateway";
 import {
   getSession,
   listSessionEvents,
@@ -80,8 +82,10 @@ async function measureSessionWorkflowStep<T>(
 export function getWorkspaceClientAndId(
   runtimeUrl: string,
   workspaceId: string,
+  ssh: DesktopSshBridge | null,
+  cloudClient: CloudSandboxGatewayUrlSource | null,
 ): Promise<{ connection: AnyHarnessWorkspaceSessionConnection; target: RuntimeTarget }> {
-  return resolveRuntimeTargetForWorkspace(runtimeUrl, workspaceId).then((target) => ({
+  return resolveRuntimeTargetForWorkspace(runtimeUrl, workspaceId, ssh, cloudClient).then((target) => ({
     connection: buildConnection(target),
     target,
   }));
@@ -90,14 +94,18 @@ export function getWorkspaceClientAndId(
 export async function fetchWorkspaceSessionSummaries(
   runtimeUrl: string,
   workspaceId: string,
-  options?: ListSessionsOptions,
+  options: ListSessionsOptions | undefined,
+  ssh: DesktopSshBridge | null,
+  cloudClient: CloudSandboxGatewayUrlSource | null,
 ): Promise<Session[]> {
-  const { connection } = await getWorkspaceClientAndId(runtimeUrl, workspaceId);
+  const { connection } = await getWorkspaceClientAndId(runtimeUrl, workspaceId, ssh, cloudClient);
   return listWorkspaceSessions(connection, options);
 }
 
 export async function getSessionClientAndWorkspace(
   sessionId: string,
+  ssh: DesktopSshBridge | null,
+  cloudClient: CloudSandboxGatewayUrlSource | null,
 ): Promise<{
   connection: AnyHarnessWorkspaceSessionConnection;
   target: RuntimeTarget;
@@ -114,6 +122,8 @@ export async function getSessionClientAndWorkspace(
   const { connection, target } = await getWorkspaceClientAndId(
     useHarnessConnectionStore.getState().runtimeUrl,
     workspaceId,
+    ssh,
+    cloudClient,
   );
   return {
     connection,
@@ -133,6 +143,8 @@ export async function fetchSessionHistory(
     requestHeaders?: HeadersInit;
     measurementOperationId?: MeasurementOperationId | null;
     timeoutMs?: number;
+    ssh?: DesktopSshBridge | null;
+    cloudClient: CloudSandboxGatewayUrlSource | null;
   },
 ) {
   const timeoutMs = options?.timeoutMs ?? SESSION_HISTORY_FETCH_TIMEOUT_MS;
@@ -150,7 +162,7 @@ export async function fetchSessionHistory(
       options?.measurementOperationId,
       "session.history.resolve_target",
       () => waitForSessionHistoryTimeout(
-        getSessionClientAndWorkspace(sessionId),
+        getSessionClientAndWorkspace(sessionId, options?.ssh ?? null, options?.cloudClient ?? null),
         signal,
       ),
     );
@@ -194,12 +206,14 @@ export async function fetchSessionSummary(
   options?: {
     requestHeaders?: HeadersInit;
     measurementOperationId?: MeasurementOperationId | null;
+    ssh?: DesktopSshBridge | null;
+    cloudClient: CloudSandboxGatewayUrlSource | null;
   },
 ) {
   const { connection, materializedSessionId } = await measureSessionWorkflowStep(
     options?.measurementOperationId,
     "session.summary.resolve_target",
-    () => getSessionClientAndWorkspace(sessionId),
+    () => getSessionClientAndWorkspace(sessionId, options?.ssh ?? null, options?.cloudClient ?? null),
   );
   return getSession(
     connection,
@@ -217,13 +231,15 @@ export async function resumeSession(
   options?: {
     requestHeaders?: HeadersInit;
     measurementOperationId?: MeasurementOperationId | null;
+    ssh?: DesktopSshBridge | null;
+    cloudClient: CloudSandboxGatewayUrlSource | null;
   },
 ) {
   const measurementOperationId = options?.measurementOperationId;
   const { connection, materializedSessionId } = await measureSessionWorkflowStep(
     measurementOperationId,
     "session.resume.resolve_target",
-    () => getSessionClientAndWorkspace(sessionId),
+    () => getSessionClientAndWorkspace(sessionId, options?.ssh ?? null, options?.cloudClient ?? null),
   );
   const requestOptions = getMeasurementRequestOptions({
     operationId: measurementOperationId,
@@ -243,12 +259,14 @@ export async function openSessionStream(
   options: {
     afterSeq?: number;
     requestHeaders?: HeadersInit;
+    ssh?: DesktopSshBridge | null;
+    cloudClient: CloudSandboxGatewayUrlSource | null;
   } & SessionStreamCallbacks,
 ): Promise<SessionStreamHandle> {
   const { connection, materializedSessionId } = await measureSessionWorkflowStep(
     options.measurementOperationId,
     "session.stream.resolve_target",
-    () => getSessionClientAndWorkspace(sessionId),
+    () => getSessionClientAndWorkspace(sessionId, options.ssh ?? null, options.cloudClient ?? null),
   );
 
   const handle = streamSession({

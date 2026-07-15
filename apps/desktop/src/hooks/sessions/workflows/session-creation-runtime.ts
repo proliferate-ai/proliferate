@@ -1,4 +1,5 @@
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import type { DesktopRuntimeBridge } from "@proliferate/product-client/host/desktop-bridge";
 import { parseTargetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import {
@@ -41,10 +42,16 @@ export const sessionStreamPruningDeps: SessionStreamPruningDeps = {
   isPendingSessionId,
 };
 
-export async function ensureRuntimeReadyForSessions(): Promise<string> {
+export async function ensureRuntimeReadyForSessions(
+  runtime: DesktopRuntimeBridge | null,
+): Promise<string> {
+  if (!runtime) {
+    throw new Error("A local AnyHarness runtime is only available in Desktop.");
+  }
+
   const state = useHarnessConnectionStore.getState();
   if (state.connectionState !== "healthy" || state.runtimeUrl.trim().length === 0) {
-    await bootstrapHarnessRuntime();
+    await bootstrapHarnessRuntime(runtime);
   }
 
   const readyState = useHarnessConnectionStore.getState();
@@ -55,13 +62,12 @@ export async function ensureRuntimeReadyForSessions(): Promise<string> {
   return readyState.runtimeUrl;
 }
 
-export async function resolveDesktopRuntimeUrlForWorkspace(workspaceId: string): Promise<string> {
+export async function resolveDesktopRuntimeUrlForWorkspace(
+  workspaceId: string,
+  runtime: DesktopRuntimeBridge | null,
+): Promise<string> {
   if (parseTargetWorkspaceSyntheticId(workspaceId) || parseCloudWorkspaceSyntheticId(workspaceId)) {
-    const runtimeUrl = useHarnessConnectionStore.getState().runtimeUrl.trim();
-    if (!runtimeUrl) {
-      throw new Error("AnyHarness runtime URL is not available yet.");
-    }
-    return runtimeUrl;
+    return useHarnessConnectionStore.getState().runtimeUrl.trim();
   }
-  return ensureRuntimeReadyForSessions();
+  return ensureRuntimeReadyForSessions(runtime);
 }

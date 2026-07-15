@@ -3,6 +3,10 @@ import {
   buildLiveSessionControlDescriptors,
   type LiveSessionControlDescriptor,
 } from "@/lib/domain/chat/session-controls/session-controls";
+import {
+  buildComposerSessionControlGroups,
+  filterComposerSessionControlsForSurface,
+} from "@/lib/domain/chat/session-controls/composer-control-groups";
 import { useSessionConfigActions } from "@/hooks/sessions/workflows/use-session-config-actions";
 import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/derived/use-workspace-surface-lookup";
 import { useToastStore } from "@/stores/toast/toast-store";
@@ -37,14 +41,9 @@ export function useChatSessionControls(): {
       activeSessionConfig.pendingConfigChanges,
       onSelect,
     );
-    if (getWorkspaceSurface(activeSessionConfig.workspaceId) !== "cowork") {
-      return nextControls;
-    }
-
-    // Cowork hides both permission mode controls and always uses product-defined
-    // defaults for new sessions instead of user-managed mode preferences.
-    return nextControls.filter((control) =>
-      control.key !== "mode" && control.key !== "collaboration_mode"
+    return filterComposerSessionControlsForSurface(
+      nextControls,
+      getWorkspaceSurface(activeSessionConfig.workspaceId),
     );
   }, [
     activeSessionConfig.normalizedControls,
@@ -55,10 +54,7 @@ export function useChatSessionControls(): {
   ]);
 
   const modeControl = useMemo(
-    () =>
-      controls.find((control) => control.key === "collaboration_mode")
-      ?? controls.find((control) => control.key === "mode")
-      ?? null,
+    () => buildComposerSessionControlGroups(controls).modeControl,
     [controls],
   );
 

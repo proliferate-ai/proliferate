@@ -61,6 +61,18 @@ export function resolveSubagentExecutionState(
     return "completed_background";
   }
 
+  // A native-Agent fire-and-forget async launch flips its launch tool-call to
+  // status:"completed" the instant the launch receipt returns, while the
+  // subagent keeps running. When the pending-background metadata is not
+  // attached to this item's rawOutput, the checks above fall through and the
+  // launch would be mis-classified as completed. Detect the bare launch
+  // receipt (no structured summary yet) and treat it as still running so the
+  // transcript stays quiet — the live subagent lives in the composer roster,
+  // and the raw orchestration receipt never leaks into the transcript.
+  if (isAsyncLaunchReceipt(item)) {
+    return "background";
+  }
+
   return wasLaunchedInBackground(item) ? "completed_background" : "completed";
 }
 
@@ -106,21 +118,47 @@ export function parseAsyncSubagentLaunch(
     return null;
   }
 
-  const backgroundWork = getBackgroundWork(item);
-  if (!backgroundWork || backgroundWork.state !== "pending") {
-    return null;
-  }
-
   const rawText = extractToolResultText(item);
   if (rawText.length === 0) {
     return null;
   }
 
+  const backgroundWork = getBackgroundWork(item);
+  // A native-Agent async launch may or may not carry pending-background
+  // metadata on this item's rawOutput. Recognise the launch receipt either
+  // way: prefer the structured metadata, else fall back to the receipt text
+  // signature. The final synthesized result replaces this text once the
+  // subagent finishes, so this only ever matches the still-running receipt.
+  if (backgroundWork?.state !== "pending" && !isLaunchReceiptText(rawText)) {
+    return null;
+  }
+
   return {
     rawText,
-    agentId: backgroundWork.agentId,
-    outputFile: backgroundWork.outputFile,
+    agentId: backgroundWork?.agentId ?? null,
+    outputFile: backgroundWork?.outputFile ?? null,
   };
+}
+
+/**
+ * True when this item is a native-Agent background launch whose result is
+ * still only the orchestration launch receipt (no final synthesized result
+ * yet). Used to keep the transcript quiet while the subagent runs even when
+ * the pending-background metadata is absent from rawOutput.
+ */
+function isAsyncLaunchReceipt(item: ToolCallItem): boolean {
+  if (!isSubagent(item) || !readBooleanField(item.rawInput, "run_in_background")) {
+    return false;
+  }
+  // If the parent already received a structured summary, the work is done.
+  if (isRecord(item.rawOutput) && readStringField(item.rawOutput, "summary")) {
+    return false;
+  }
+  return isLaunchReceiptText(extractToolResultText(item));
+}
+
+function isLaunchReceiptText(text: string): boolean {
+  return /async agent launched/iu.test(text);
 }
 
 export function parseSubagentLaunchResult(

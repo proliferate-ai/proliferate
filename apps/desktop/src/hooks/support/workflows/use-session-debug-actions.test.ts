@@ -88,7 +88,6 @@ const createSessionDebugClient = vi.hoisted(() => vi.fn(() => ({
     getLiveConfig: vi.fn(),
   },
 })));
-const isTauriDesktop = vi.hoisted(() => vi.fn(() => true));
 const saveDiagnosticJson = vi.hoisted(() => vi.fn(async () => "/tmp/debug.json"));
 const copyText = vi.hoisted(() => vi.fn(async () => {}));
 const showToast = vi.hoisted(() => vi.fn());
@@ -105,16 +104,10 @@ vi.mock("@/lib/access/anyharness/debug-client", () => ({
   createSessionDebugClient,
 }));
 
-vi.mock("@/hooks/access/tauri/use-diagnostics-actions", () => ({
-  useTauriDiagnosticsActions: () => ({
-    isTauriDesktop,
-    saveDiagnosticJson,
-  }),
-}));
-
-vi.mock("@/hooks/access/tauri/use-shell-actions", () => ({
-  useTauriShellActions: () => ({
-    copyText,
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => ({
+    clipboard: { writeText: copyText },
+    desktop: { diagnostics: { saveJson: saveDiagnosticJson } },
   }),
 }));
 

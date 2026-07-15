@@ -1,5 +1,5 @@
-import { FileText } from "@proliferate/ui/icons";
-import { HighlightedCodePanel } from "@/components/content/ui/HighlightedCodePanel";
+import { ReadBook } from "@proliferate/ui/icons";
+import { HighlightedCodeBlock } from "@/components/content/ui/HighlightedCodeBlock";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
 import { ToolActionDetailsPanel } from "./ToolActionDetailsPanel";
 import { ToolActionRow } from "./ToolActionRow";
@@ -39,7 +39,7 @@ export function FileReadCall({
   const previewPanel = preview
     ? (
       <ToolActionDetailsPanel>
-        <HighlightedCodePanel
+        <HighlightedCodeBlock
           code={preview}
           filename={workspacePath ?? path}
           showLanguageLabel={false}
@@ -67,7 +67,7 @@ export function FileReadCall({
 
   return (
     <ToolActionRow
-      icon={<FileText />}
+      icon={<ReadBook />}
       label={fileLabel}
       status={status}
       duration={duration}

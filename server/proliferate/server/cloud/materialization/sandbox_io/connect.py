@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import secrets
 import shlex
+from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store import cloud_sandboxes as cloud_sandboxes_store
+from proliferate.db.store import organizations as organizations_store
 from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
 from proliferate.integrations.sandbox import (
     RuntimeEndpoint,
@@ -15,6 +17,7 @@ from proliferate.integrations.sandbox import (
     SandboxRuntimeContext,
     get_sandbox_provider,
 )
+from proliferate.server.billing.authorization import assert_cloud_sandbox_resume_allowed
 from proliferate.server.cloud.materialization.sandbox_io.target import (
     CloudMaterializationCommandError,
     SandboxIOTarget,
@@ -25,6 +28,7 @@ from proliferate.server.cloud.materialization.sandbox_io.worker_sidecar import (
 from proliferate.server.cloud.runtime.bootstrap import (
     build_runtime_env,
     build_runtime_launch_script,
+    build_supervised_runtime_stop_command,
 )
 from proliferate.server.cloud.runtime.data_key import generate_anyharness_data_key
 from proliferate.server.cloud.runtime.liveness_health import (
@@ -52,6 +56,29 @@ def _runtime_data_key(sandbox: CloudSandboxValue) -> str | None:
     return decrypt_text(sandbox.anyharness_data_key_ciphertext)
 
 
+async def _resolve_owner_organization_id(
+    db: AsyncSession,
+    sandbox: CloudSandboxValue,
+) -> UUID | None:
+    """Resolve the sandbox's owning organization for observability identity tags.
+
+    The cloud_sandbox row has no organization column, but the owner is one
+    membership lookup away. Uses the owner's current (first active)
+    membership; best-effort — identity tags must never block a launch.
+    """
+    if sandbox.organization_id is not None:
+        return sandbox.organization_id
+    if sandbox.owner_user_id is None:
+        return None
+    try:
+        record = await organizations_store.get_current_membership_for_user(
+            db, sandbox.owner_user_id
+        )
+    except Exception:  # noqa: BLE001 - identity tagging is best-effort.
+        return None
+    return record.organization.id if record is not None else None
+
+
 async def connect_ready_sandbox(
     db: AsyncSession,
     *,
@@ -59,6 +86,11 @@ async def connect_ready_sandbox(
 ) -> SandboxIOTarget:
     if sandbox.destroyed_at is not None or sandbox.status == "destroyed":
         raise CloudMaterializationCommandError("Cloud sandbox has been destroyed.")
+
+    # LIVE billing gate (spec §4.3): a sandbox the reconciler paused for a spend
+    # hold or an over-cap compute budget must not be woken by an incoming
+    # request. No-op unless CLOUD_BILLING_MODE=enforce.
+    await assert_cloud_sandbox_resume_allowed(db, sandbox)
 
     provider = get_sandbox_provider(sandbox.e2b_template_ref)
     provider_sandbox_id = sandbox.e2b_sandbox_id
@@ -85,6 +117,7 @@ async def connect_ready_sandbox(
     runtime_context = await provider.resolve_runtime_context(provider_sandbox)
     runtime_token = _runtime_token(sandbox)
     data_key = _runtime_data_key(sandbox)
+    minted_new_credentials = False
 
     if runtime_token is not None and data_key is not None:
         try:
@@ -114,6 +147,7 @@ async def connect_ready_sandbox(
     else:
         runtime_token = secrets.token_urlsafe(32)
         data_key = generate_anyharness_data_key()
+        minted_new_credentials = True
         await _launch_anyharness_runtime(
             db,
             provider=provider,
@@ -126,7 +160,13 @@ async def connect_ready_sandbox(
             anyharness_data_key=data_key,
         )
 
-    if sandbox.anyharness_base_url != endpoint.runtime_url:
+    # Persist the (possibly freshly minted) runtime credentials whenever we
+    # minted them, not only when the runtime URL changed: a legacy row with a
+    # matching anyharness_base_url but a NULL token would otherwise never store
+    # the token we just minted, forcing the whole reconnect dance on every
+    # subsequent connect. _launch_anyharness_runtime already persists on its
+    # own success tail; this is the safety net for the URL-unchanged case.
+    if minted_new_credentials or sandbox.anyharness_base_url != endpoint.runtime_url:
         await cloud_sandboxes_store.mark_cloud_sandbox_ready(
             db,
             sandbox.id,
@@ -163,6 +203,25 @@ async def _launch_anyharness_runtime(
     anyharness_data_key: str,
 ) -> None:
     launcher_path = runtime_launcher_path(runtime_context)
+    organization_id = await _resolve_owner_organization_id(db, sandbox_record)
+    # Self-heal: a resumed sandbox can still have an OLD anyharness runtime (plus
+    # its supervisor/worker) alive and bound to the runtime port, holding a stale
+    # bearer token. Relaunching without killing it leaves the old process
+    # answering, so auth verification against the new token 401s and the whole
+    # reconnect fails. Reuse the supervisor stop mechanism, which targets only
+    # the anyharness/worker/supervisor binary paths by pgrep (never user
+    # processes) and guards against killing this shell. Best-effort: never let
+    # cleanup failures block the relaunch below.
+    await run_sandbox_command_logged(
+        provider,
+        provider_sandbox,
+        workspace_id=sandbox_record.id,
+        label="materialization_stop_stale_runtime",
+        command=build_supervised_runtime_stop_command(runtime_context),
+        runtime_context=runtime_context,
+        timeout_seconds=30,
+        log_output_on_success=True,
+    )
     await provider.write_file(
         provider_sandbox,
         launcher_path,
@@ -172,6 +231,9 @@ async def _launch_anyharness_runtime(
             build_runtime_env(
                 runtime_token,
                 anyharness_data_key=anyharness_data_key,
+                organization_id=organization_id,
+                sandbox_id=provider_sandbox_id,
+                user_id=sandbox_record.owner_user_id,
             ),
         ),
     )
@@ -214,6 +276,7 @@ async def _launch_anyharness_runtime(
         provider_sandbox=provider_sandbox,
         sandbox_record=sandbox_record,
         runtime_context=runtime_context,
+        runtime_bearer_token=runtime_token,
     )
     await cloud_sandboxes_store.mark_cloud_sandbox_ready(
         db,

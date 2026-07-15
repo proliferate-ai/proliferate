@@ -9,6 +9,7 @@ import {
 } from "@anyharness/sdk";
 import { useRevealMcpElicitationUrlMutation } from "@anyharness/sdk-react";
 import { useCallback } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   sessionIntentsForSession,
 } from "@proliferate/product-domain/sessions/intents/session-intent-state";
@@ -25,6 +26,9 @@ import {
 
 // Resolves pending session interactions (permissions, user input, MCP elicitations).
 export function useSessionInteractionResolutionActions() {
+  const host = useProductHost();
+  const ssh = host.desktop?.ssh ?? null;
+  const cloudClient = host.cloud.client;
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const revealMcpElicitationUrlMutation = useRevealMcpElicitationUrlMutation();
 
@@ -215,7 +219,11 @@ export function useSessionInteractionResolutionActions() {
       });
       throw new Error(blockedReason);
     }
-    const { workspaceId, materializedSessionId } = await getSessionClientAndWorkspace(sessionId);
+    const { workspaceId, materializedSessionId } = await getSessionClientAndWorkspace(
+      sessionId,
+      ssh,
+      cloudClient,
+    );
     const response = await revealMcpElicitationUrlMutation.mutateAsync({
       workspaceId,
       sessionId: materializedSessionId,
@@ -233,6 +241,8 @@ export function useSessionInteractionResolutionActions() {
   }, [
     getWorkspaceRuntimeBlockReason,
     revealMcpElicitationUrlMutation,
+    ssh,
+    cloudClient,
   ]);
 
   return {

@@ -16,7 +16,7 @@ pub enum ProductMcpPromptPolicy {
 pub struct ProductMcpDefinition {
     // Keep this intentionally narrower than the full Product MCP spec while
     // the first internal MCPs migrate. Add owner/capability/catalog fields
-    // when user-selectable product MCPs land; see specs/codebase/features/agent-features/servers.md.
+    // when user-selectable product MCPs land; see specs/codebase/platforms/product/agent-features/servers.md.
     pub id: &'static str,
     pub route_slug: &'static str,
     pub acp_server_name: &'static str,

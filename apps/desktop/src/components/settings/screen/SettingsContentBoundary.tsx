@@ -1,7 +1,8 @@
 import React, { type ErrorInfo, type ReactNode } from "react";
+import type { ErrorContext } from "@proliferate/product-client/host/product-host";
 import { SETTINGS_COPY } from "@/copy/settings/settings-copy";
 import type { SettingsSection } from "@/config/settings";
-import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
+import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
 import { Button } from "@proliferate/ui/primitives/Button";
 
 interface SettingsContentBoundaryProps {
@@ -9,12 +10,21 @@ interface SettingsContentBoundaryProps {
   children: ReactNode;
 }
 
+interface SettingsContentErrorBoundaryProps extends SettingsContentBoundaryProps {
+  /**
+   * Injected from the functional wrapper below, which reads the product
+   * telemetry facade. A class component cannot call hooks, so the capture
+   * callback arrives as a prop; the transport and payload are unchanged.
+   */
+  captureException: (error: unknown, context?: ErrorContext) => void;
+}
+
 interface SettingsContentBoundaryState {
   error: Error | null;
 }
 
-export class SettingsContentBoundary extends React.Component<
-  SettingsContentBoundaryProps,
+class SettingsContentErrorBoundary extends React.Component<
+  SettingsContentErrorBoundaryProps,
   SettingsContentBoundaryState
 > {
   state: SettingsContentBoundaryState = {
@@ -26,7 +36,7 @@ export class SettingsContentBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    captureTelemetryException(error, {
+    this.props.captureException(error, {
       tags: {
         action: "render_section",
         domain: "settings",
@@ -40,7 +50,7 @@ export class SettingsContentBoundary extends React.Component<
     });
   }
 
-  componentDidUpdate(prevProps: SettingsContentBoundaryProps): void {
+  componentDidUpdate(prevProps: SettingsContentErrorBoundaryProps): void {
     if (prevProps.section !== this.props.section && this.state.error) {
       this.setState({ error: null });
     }
@@ -77,4 +87,19 @@ export class SettingsContentBoundary extends React.Component<
       </section>
     );
   }
+}
+
+/**
+ * Functional wrapper that binds the product telemetry facade's `captureException`
+ * and passes it to the class error boundary as a prop. This is the seam that
+ * keeps the class free of a direct vendor/telemetry-client import while a class
+ * component cannot itself call `useProductTelemetry()`.
+ */
+export function SettingsContentBoundary(
+  props: SettingsContentBoundaryProps,
+): React.ReactElement {
+  const telemetry = useProductTelemetry();
+  return (
+    <SettingsContentErrorBoundary {...props} captureException={telemetry.captureException} />
+  );
 }

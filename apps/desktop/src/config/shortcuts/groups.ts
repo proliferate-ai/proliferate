@@ -80,6 +80,7 @@ export const COMPOSER_SHORTCUT_GROUPS = [
       "submitMessage",
       "previousMode",
       "stopSession",
+      "editLastQueued",
     ],
   },
 ] as const satisfies readonly ComposerShortcutGroup[];

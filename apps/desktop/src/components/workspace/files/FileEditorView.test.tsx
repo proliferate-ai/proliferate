@@ -10,6 +10,7 @@ import {
 } from "@/lib/domain/workspaces/viewer/viewer-target";
 import { useContentSearchStore } from "@/stores/search/content-search-store";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
+import { useFileTreeStore } from "@/stores/editor/file-tree-store";
 import { FileEditorView } from "./FileEditorView";
 
 const readWorkspaceFileQuery = vi.fn();
@@ -17,6 +18,7 @@ const gitDiffQuery = vi.fn();
 const workspaceFilesQuery = vi.fn();
 const searchWorkspaceFilesQuery = vi.fn();
 const openFileMock = vi.fn();
+const writeTextMock = vi.fn(async () => undefined);
 let workspaceFileContext = {
   workspaceUiKey: "workspace-1",
   materializedWorkspaceId: "workspace-1",
@@ -25,6 +27,10 @@ let workspaceFileContext = {
 
 vi.mock("@/components/content/ui/DiffViewer", () => ({
   DiffViewer: () => createElement("div", null, "diff rendered"),
+}));
+
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => ({ clipboard: { writeText: writeTextMock } }),
 }));
 
 vi.mock("@/hooks/ui/highlighting/use-highlighted-lines", () => ({
@@ -66,11 +72,14 @@ vi.mock("@/hooks/workspaces/workflows/files/use-workspace-file-target-actions", 
   }),
 }));
 
+const gitStatusQuery = vi.fn();
+
 vi.mock("@anyharness/sdk-react", () => ({
   useReadWorkspaceFileQuery: (options: unknown) => readWorkspaceFileQuery(options),
   useGitDiffQuery: (options: unknown) => gitDiffQuery(options),
   useWorkspaceFilesQuery: (options: unknown) => workspaceFilesQuery(options),
   useSearchWorkspaceFilesQuery: (options: unknown) => searchWorkspaceFilesQuery(options),
+  useGitStatusQuery: (options: unknown) => gitStatusQuery(options),
 }));
 
 describe("FileEditorView", () => {
@@ -98,7 +107,9 @@ describe("FileEditorView", () => {
     gitDiffQuery.mockReset();
     workspaceFilesQuery.mockReset();
     searchWorkspaceFilesQuery.mockReset();
+    gitStatusQuery.mockReset();
     openFileMock.mockReset();
+    writeTextMock.mockClear();
     workspaceFileContext = {
       workspaceUiKey: "workspace-1",
       materializedWorkspaceId: "workspace-1",
@@ -136,7 +147,15 @@ describe("FileEditorView", () => {
       data: undefined,
       isLoading: false,
     });
+    gitStatusQuery.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+    });
     useWorkspaceViewerTabsStore.getState().reset();
+    useFileTreeStore.setState({
+      width: 400,
+      expandedPaths: new Set(),
+    });
     useContentSearchStore.setState({
       open: false,
       query: "",
@@ -183,7 +202,7 @@ describe("FileEditorView", () => {
     expect(screen.queryByLabelText("Find in file")).toBeNull();
   });
 
-  it("renders source files with the read-only source viewer", () => {
+  it("renders source files with the read-only source viewer", async () => {
     const target = fileViewerTarget("package.json");
     const targetKey = viewerTargetKey(target);
     useWorkspaceViewerTabsStore.setState({
@@ -222,7 +241,10 @@ describe("FileEditorView", () => {
     expect(container.querySelector(".file-source-line-number")?.textContent).toBe("1");
     expect(container.querySelector(".file-source-scroll")).toBeTruthy();
     fireEvent.click(screen.getByLabelText("File viewer options"));
-    expect(screen.getByText("Enable word wrap")).toBeTruthy();
+    // Native menu resolves unavailable async before the DOM fallback opens.
+    expect(await screen.findByText("Word wrap")).toBeTruthy();
+    fireEvent.click(screen.getByText("Copy content"));
+    expect(writeTextMock).toHaveBeenCalledWith("{\"ok\":true}");
   });
 
   it("virtualizes large source files instead of mounting every line", () => {
@@ -282,24 +304,79 @@ describe("FileEditorView", () => {
       targetKey,
     }));
 
+    // Closed by default
+    expect(container.querySelector("[data-file-tree-overlay]")).toBeNull();
+
     fireEvent.click(screen.getByLabelText("Show files"));
 
     expect(screen.getByRole("dialog", { name: "Browse files" })).toBeTruthy();
-    expect(container.querySelector("[data-pane-side-overlay]")).toBeTruthy();
-    expect(container.querySelector("[data-file-browser-overlay]")).toBeTruthy();
+    expect(container.querySelector("[data-file-tree-overlay]")).toBeTruthy();
+    // Code viewer stays mounted behind the overlay
     expect(screen.getByText("{\"ok\":true}")).toBeTruthy();
     expect(screen.getByText("README.md")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Filter files…")).toBeTruthy();
     expect(workspaceFilesQuery).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
       path: "",
       enabled: true,
     });
-    expect(searchWorkspaceFilesQuery).toHaveBeenCalledWith({
-      workspaceId: "workspace-1",
-      query: "",
-      limit: 60,
-      enabled: false,
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(container.querySelector("[data-file-tree-overlay]")).toBeNull();
+  });
+
+  it("groups filter matches by parent directory as a tree", () => {
+    const target = fileViewerTarget("package.json");
+    const targetKey = viewerTargetKey(target);
+    useWorkspaceViewerTabsStore.setState({
+      materializedWorkspaceId: "workspace-1",
     });
+    useWorkspaceViewerTabsStore.getState().openTarget(target);
+    readWorkspaceFileQuery.mockReturnValue({
+      data: {
+        content: "{\"ok\":true}",
+        isText: true,
+        path: "package.json",
+        sizeBytes: 11,
+        tooLarge: false,
+        versionToken: "v1",
+      },
+      error: null,
+      isLoading: false,
+    });
+    searchWorkspaceFilesQuery.mockReturnValue({
+      data: {
+        results: [
+          { name: "Button.tsx", path: "src/components/Button.tsx" },
+          { name: "Badge.tsx", path: "src/components/Badge.tsx" },
+          { name: "button.css", path: "src/styles/button.css" },
+        ],
+      },
+      isLoading: false,
+    });
+
+    render(createElement(FileEditorView, {
+      filePath: "package.json",
+      targetKey,
+    }));
+
+    fireEvent.click(screen.getByLabelText("Show files"));
+    fireEvent.change(screen.getByPlaceholderText("Filter files…"), {
+      target: { value: "b" },
+    });
+
+    // Directory group rows
+    const componentsGroup = screen.getByRole("treeitem", { name: /src\/components/ });
+    expect(componentsGroup.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("treeitem", { name: /src\/styles/ })).toBeTruthy();
+    // Nested matched files
+    expect(screen.getByText("Button.tsx")).toBeTruthy();
+    expect(screen.getByText("button.css")).toBeTruthy();
+
+    // Collapsing the group hides its files
+    fireEvent.click(componentsGroup);
+    expect(screen.queryByText("Button.tsx")).toBeNull();
+    expect(screen.getByText("button.css")).toBeTruthy();
   });
 
   it("opens pane-local content search from the file viewer toolbar", () => {

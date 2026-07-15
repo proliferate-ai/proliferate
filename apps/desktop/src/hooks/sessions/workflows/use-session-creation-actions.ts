@@ -1,15 +1,14 @@
 import { useCallback } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
 import { hasPromptContent } from "@/lib/domain/chat/composer/prompt-input";
 import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
 import {
   formatSessionCreateFailureMessage,
   toSessionCreateFailureDisplayError,
 } from "@/lib/domain/sessions/creation/create-session-error";
-import {
-  pickLiveDefaultLaunchControls,
-} from "@/lib/domain/sessions/creation/launch-controls";
+import { pickLiveDefaultLaunchControls } from "@/lib/domain/sessions/creation/launch-controls";
 import { resolveSessionCreationModeId } from "@/lib/domain/sessions/creation/mode";
-import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import {
@@ -36,39 +35,43 @@ import {
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import { writeChatShellIntentForSession } from "@/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
 import type { WorkspaceShellIntentKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
-import {
-  useWorkspaceUiStore,
-} from "@/stores/preferences/workspace-ui-store";
-import {
-  removeSessionRecordAndClearSelection,
-} from "@/hooks/sessions/workflows/session-creation-local-state";
-import {
-  inFlightSessionCreatesByWorkspace,
-} from "@/hooks/sessions/workflows/session-creation-in-flight";
-import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
+import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+import { inFlightSessionCreatesByWorkspace } from "@/hooks/sessions/workflows/session-creation-in-flight";
 import { useCloudAgentCatalogCache } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import type {
   CreateEmptySessionWithResolvedConfigOptions,
   CreateSessionWithResolvedConfigOptions,
 } from "@/hooks/sessions/workflows/session-creation-types";
+import { sessionStreamPruningDeps } from "@/hooks/sessions/workflows/session-creation-runtime";
+import { materializeSessionCreation } from "@/hooks/sessions/workflows/session-creation-materialization";
+import { useDismissSessionMutation } from "@anyharness/sdk-react";
 import {
-  sessionStreamPruningDeps,
-} from "@/hooks/sessions/workflows/session-creation-runtime";
+  beginEmptySessionReplacement,
+  type EmptySessionReplacementTransaction,
+} from "@/hooks/sessions/workflows/use-empty-session-replacement-cleanup";
+import { registerSessionCreation } from "@/hooks/sessions/workflows/session-creation-supersession";
 import {
-  markProjectedSessionPromptCreateFailed,
-} from "@/hooks/sessions/workflows/session-creation-failure";
-import {
-  materializeSessionCreation,
-} from "@/hooks/sessions/workflows/session-creation-materialization";
+  beginReplacementShellPreferences,
+  type ReplacementShellPreferencesTransaction,
+} from "@/hooks/sessions/workflows/session-replacement-shell-preferences";
+import { cleanupSessionCreationFailure } from "@/hooks/sessions/workflows/session-creation-failure-cleanup";
+import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
 
 export function useSessionCreationActions() {
+  const host = useProductHost();
+  const desktop = host.desktop;
+  const localRuntime = desktop?.runtime ?? null;
+  const ssh = desktop?.ssh ?? null;
+  const cloudClient = host.cloud.client;
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const { getWorkspaceSurface } = useWorkspaceSurfaceLookup();
   const { promptSession } = useSessionPromptWorkflow();
-  const { activateSession } = useSessionRuntimeActions();
+  const { activateSession, closeSessionSlotStream } = useSessionRuntimeActions();
   const { ensureCloudAgentCatalog } = useCloudAgentCatalogCache();
-  const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
+  const { upsertWorkspaceSessionRecord, removeWorkspaceSessionRecord } = useWorkspaceSessionCache();
+  const dismissSessionMutation = useDismissSessionMutation();
   const showToast = useToastStore((state) => state.show);
+  const telemetry = useProductTelemetry();
 
   const createSessionWithResolvedConfig = useCallback(async function createWithResolvedConfig(
     options: CreateSessionWithResolvedConfigOptions,
@@ -78,6 +81,9 @@ export function useSessionCreationActions() {
     if (!workspaceId) {
       throw new Error("No workspace selected");
     }
+    const recoveryWorkspaceUiKey = resolveWorkspaceUiKey(
+      current.selectedLogicalWorkspaceId, workspaceId,
+    ) ?? workspaceId;
 
     const blockedReason = getWorkspaceRuntimeBlockReason(workspaceId);
     if (blockedReason) {
@@ -113,7 +119,7 @@ export function useSessionCreationActions() {
           });
         try {
           const resolvedClientSessionId = await inFlightCreate.promise;
-          if (pendingShellWrite) {
+          if (pendingShellWrite && getSessionRecord(resolvedClientSessionId)) {
             activateSession(resolvedClientSessionId);
           }
           return resolvedClientSessionId;
@@ -237,6 +243,32 @@ export function useSessionCreationActions() {
     };
     writeOwnedShellIntent(pendingSessionId);
     pruneInactiveSessionStreams(sessionStreamPruningDeps);
+
+    // Stage replacement after the optimistic shell is active. The old tab is
+    // hidden immediately, while destructive cleanup waits for materialization.
+    let replacementTransaction: EmptySessionReplacementTransaction | null = null;
+    let replacementShellPreferences: ReplacementShellPreferencesTransaction | null = null;
+    if (options.replacesSessionId && !hasPrompt) {
+      replacementTransaction = beginEmptySessionReplacement(
+        options.replacesSessionId,
+        workspaceId,
+        {
+          closeSessionSlotStream,
+          removeWorkspaceSessionRecord,
+          dismissSessionMutation,
+          captureException: telemetry.captureException,
+        },
+      );
+      if (replacementTransaction && currentOwnedShellWorkspaceId) {
+        replacementShellPreferences = beginReplacementShellPreferences({
+          shellWorkspaceId: currentOwnedShellWorkspaceId,
+          materializedWorkspaceId: workspaceId,
+          replacedSessionId: replacementTransaction.replacedSessionId,
+          replacementSessionId: pendingSessionId,
+        });
+      }
+    }
+
     if (shouldEnqueueInitialPrompt) {
       await promptSession({
         sessionId: pendingSessionId,
@@ -256,16 +288,22 @@ export function useSessionCreationActions() {
       }
     }
 
+    const unregisterSessionCreation = registerSessionCreation(pendingSessionId);
     const createPromise = materializeSessionCreation({
+      trackProductEvent: telemetry.track,
+      captureException: telemetry.captureException,
       ensureCloudAgentCatalog,
       existingProjectedRecord,
       frozenDefaultLiveSessionControlValuesByAgentKind,
+      localRuntime,
+      ssh,
+      cloudClient,
       options,
       pendingSessionId,
       resolvedModeId: resolvedModeId ?? null,
       upsertWorkspaceSessionRecord,
       workspaceId,
-    });
+    }).finally(unregisterSessionCreation);
 
     if (!hasPrompt && shouldReuseInFlightEmptySession) {
       inFlightSessionCreatesByWorkspace.set(workspaceId, {
@@ -277,61 +315,25 @@ export function useSessionCreationActions() {
     }
 
     const cleanupCreateFailure = (error: unknown): void => {
-      logLatency("session.create.failed", {
-        clientSessionId: pendingSessionId,
-        workspaceId,
+      cleanupSessionCreationFailure({
         agentKind: options.agentKind,
-        modelId: options.modelId,
+        currentOwnedSessionId,
+        error,
+        hadExistingProjectedRecord: Boolean(existingProjectedRecord),
         hasPrompt,
-        hasExistingProjectedRecord: Boolean(existingProjectedRecord),
-        errorMessage: error instanceof Error ? error.message : String(error),
-      });
-      if (hasPrompt) {
-        markProjectedSessionPromptCreateFailed(pendingSessionId, error);
-        if (options.launchIntentId) {
-          useChatLaunchIntentStore.getState().clearIfActive(options.launchIntentId);
-        }
-        captureTelemetryException(error, {
-          tags: {
-            action: "create_session_with_resolved_config",
-            domain: "sessions",
-          },
-        });
-        return;
-      }
-      if (options.preserveProjectedSessionOnCreateFailure) {
-        markProjectedSessionPromptCreateFailed(pendingSessionId, error);
-        if (options.launchIntentId) {
-          useChatLaunchIntentStore.getState().clearIfActive(options.launchIntentId);
-        }
-        captureTelemetryException(error, {
-          tags: {
-            action: "create_projected_session_materialization",
-            domain: "sessions",
-          },
-        });
-        return;
-      }
-      const activeSessionIdBeforeRemoval = useSessionSelectionStore.getState().activeSessionId;
-      useSessionIntentStore.getState().clearSession(pendingSessionId);
-      removeSessionRecordAndClearSelection(pendingSessionId);
-      const rolledBackShellIntent = rollbackOwnedShellIntent();
-      if (rolledBackShellIntent && activeSessionIdBeforeRemoval === currentOwnedSessionId) {
-        if (previousActiveSessionId) {
-          activateSession(previousActiveSessionId);
-        } else {
-          useSessionSelectionStore.getState().setActiveSessionId(null);
-        }
-      }
-      if (options.launchIntentId) {
-        useChatLaunchIntentStore.getState().clearIfActive(options.launchIntentId);
-      }
-      captureTelemetryException(error, {
-        tags: {
-          action: "create_session_with_resolved_config",
-          domain: "sessions",
-        },
-      });
+        launchIntentId: options.launchIntentId,
+        modeId: resolvedModeId ?? null,
+        modelId: options.modelId,
+        pendingSessionId,
+        preserveProjectedSessionOnCreateFailure:
+          options.preserveProjectedSessionOnCreateFailure === true,
+        previousActiveSessionId,
+        recoveryWorkspaceUiKey,
+        replacementShellPreferences,
+        replacementTransaction,
+        rollbackOwnedShellIntent,
+        workspaceId,
+      }, { activateSession, captureException: telemetry.captureException });
     };
 
     const cleanupInFlight = (): void => {
@@ -350,7 +352,15 @@ export function useSessionCreationActions() {
     }
 
     try {
-      return await createPromise;
+      const resolvedSessionId = await createPromise;
+      const replacementOutcome = await replacementTransaction?.commit();
+      if (replacementOutcome === "retained") {
+        showToast(
+          "Opened the new chat, but kept the previous chat because it could not be removed safely.",
+          "info",
+        );
+      }
+      return resolvedSessionId;
     } catch (error) {
       cleanupCreateFailure(error);
       throw toSessionCreateFailureDisplayError(error);
@@ -359,11 +369,18 @@ export function useSessionCreationActions() {
     }
   }, [
     activateSession,
+    closeSessionSlotStream,
+    dismissSessionMutation,
     ensureCloudAgentCatalog,
     getWorkspaceRuntimeBlockReason,
     getWorkspaceSurface,
+    localRuntime,
+    ssh,
+    cloudClient,
     promptSession,
+    removeWorkspaceSessionRecord,
     showToast,
+    telemetry,
     upsertWorkspaceSessionRecord,
   ]);
 
@@ -381,11 +398,9 @@ export function useSessionCreationActions() {
       clientSessionId: options.clientSessionId,
       reuseInFlightEmptySession: options.reuseInFlightEmptySession,
       preserveProjectedSessionOnCreateFailure: options.preserveProjectedSessionOnCreateFailure,
+      replacesSessionId: options.replacesSessionId,
     });
   }, [createSessionWithResolvedConfig]);
 
-  return {
-    createEmptySessionWithResolvedConfig,
-    createSessionWithResolvedConfig,
-  };
+  return { createEmptySessionWithResolvedConfig, createSessionWithResolvedConfig };
 }

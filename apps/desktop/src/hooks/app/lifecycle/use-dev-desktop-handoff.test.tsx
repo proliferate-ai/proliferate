@@ -63,7 +63,7 @@ describe("useDevDesktopHandoff", () => {
 
     await waitFor(() => {
       expect(result.current).toBe(
-        "/settings?section=organization-members&joinOrganizationId=org-1",
+        "/settings?section=account&joinOrganizationId=org-1",
       );
     });
     expect(handoffMocks.revealCurrentWindow).toHaveBeenCalledTimes(1);
@@ -83,7 +83,7 @@ describe("useDevDesktopHandoff", () => {
 
     await waitFor(() => {
       expect(result.current).toBe(
-        "/settings?section=organization-members&joinOrganizationId=org-1",
+        "/settings?section=account&joinOrganizationId=org-1",
       );
     });
     expect(handoffMocks.revealCurrentWindow).toHaveBeenCalledTimes(1);

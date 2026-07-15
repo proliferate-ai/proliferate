@@ -1,63 +1,62 @@
 # Worker Runtime
 
-Status: authoritative for `anyharness/crates/proliferate-worker/src/runtime.rs`
-(and `main.rs`).
+Status: authoritative for `anyharness/crates/proliferate-worker/src/main.rs`
+and `runtime.rs`.
 
-`runtime.rs` is the internal loop supervisor. `main.rs` is thin — parse args,
-bootstrap logging, call `runtime::run`. `runtime.rs` enrolls, builds the shared
-context, spawns the polls, and runs the heartbeat main loop. It may know every
-subsystem exists; it must not implement them.
+`main.rs` initializes telemetry, parses `--config` and `--once`, loads
+`WorkerConfig`, and calls `runtime::run`. It captures a terminal error for
+Sentry but does not own Worker behavior.
 
-## Goal
+## Startup
 
-```text
-enroll → build shared context → spawn control + tail → run the heartbeat main loop → coordinate shutdown
-```
-
-## Startup Choreography
+`runtime::run` performs the current startup in this order:
 
 ```text
-process_lock (single instance)
-  → identity::ensure_enrolled
-  → build WorkerContext (config, store, clients, identity, versions)
-  → inventory snapshot (report once)
-  → spawn task: control::run_loop   (down: commands + reconcile)
-  → spawn task: tail::run_loop      (up: events)
-  → run lifecycle heartbeat as the main loop (carries the self-update check)
-  → on signal: cancel tasks, join with timeout, final drain
+acquire the process lock beside the Worker database
+  -> open and migrate Worker-local SQLite
+  -> build CloudClient
+  -> load durable identity or enroll once
+  -> after a fresh enrollment, write integration-gateway credentials
+  -> create in-memory catalog-sync state
+  -> heartbeat and converge once
+  -> if --once: return
+  -> otherwise: sleep for the configured interval and repeat
 ```
 
-`control` and `tail` are the two spawned poll tasks; the heartbeat is the main
-loop itself, not a third spawned poll.
+There is one loop. The Worker does not spawn command, event-tail, inventory,
+or materialization loops, and it has no custom shutdown coordinator.
 
-## Worker Context
+## One Tick
 
-Long-lived dependencies used by multiple loops belong in `WorkerContext`:
-
-```rust
-pub struct WorkerContext {
-    pub config: WorkerConfig,
-    pub store: WorkerStore,
-    pub cloud: CloudClient,
-    pub anyharness: AnyHarnessClient,
-    pub identity: WorkerIdentity,
-    pub versions: InstalledVersions,
-}
+```text
+POST heartbeat
+  -> on failure: log and retry next tick
+  -> catalog convergence (non-fatal)
+  -> AnyHarness binary convergence (non-fatal; optional)
+  -> Worker binary convergence (non-fatal; optional)
 ```
 
-State that changes per loop pass does not belong in `WorkerContext` — e.g.
-supported command kinds, active event cursors, the current heartbeat request, a
-reconcile bundle, or an event batch payload.
+The order matters. A successful Worker self-update ends by replacing the
+current process image with `exec`, so catalog and AnyHarness convergence run
+first.
+
+`--once` sends one heartbeat and can synchronize the catalog, but it reports
+pending binary updates without applying either binary swap.
+
+## Failure Boundary
+
+After startup, a failed heartbeat or convergence action does not terminate the
+loop. The current Worker and runtime continue serving where possible, and a
+later heartbeat retries according to the owning module's rules.
+
+Enrollment and local-store failures are startup failures because the loop
+cannot authenticate or preserve its required identity without them.
 
 ## Hard Rules
 
-- `main.rs` is thin; `runtime.rs` reads like process choreography.
-- `runtime.rs` builds dependencies and spawns tasks; it does not derive per-loop
-  policy.
-- Shutdown may trigger final drains, but it does not contain command, reconcile,
-  or event workflow logic.
-- Runtime delegates command + reconcile semantics to `control`, event mechanics
-  to `tail`, heartbeat + self-update to `lifecycle`, target-local effects to
-  `materialization`, and identity lifecycle to `identity`.
-- If `runtime.rs` grows real internal structure, split it into a `runtime/`
-  folder (`context`, `tasks`, `shutdown`) rather than fattening one file.
+- Keep dependency construction and ordering in `runtime.rs`; keep each action
+  in its owning module.
+- Do not add a broad context object until multiple real consumers require it.
+- Do not turn the runtime loop into a command scheduler or process supervisor.
+- Preserve the convergence order unless the update safety model changes.
+- Keep `--once` non-destructive for binary updates.

@@ -175,7 +175,7 @@ function IntegrationSettingFieldInput({
         <Checkbox
           id={inputId}
           checked={value === true}
-          onChange={(event) => onChange(event.target.checked)}
+          onCheckedChange={(checked) => onChange(checked === true)}
         />
         {field.label}
       </Label>

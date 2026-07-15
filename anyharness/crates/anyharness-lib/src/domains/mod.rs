@@ -1,10 +1,14 @@
+pub mod activity;
 pub mod agents;
 pub mod artifacts;
 pub mod cowork;
+pub mod goals;
+pub mod loops;
 pub mod mobility;
 pub mod plans;
 pub mod repo_roots;
 pub mod reviews;
 pub mod sessions;
 pub mod terminals;
+pub mod workflows;
 pub mod workspaces;

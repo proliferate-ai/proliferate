@@ -13,7 +13,7 @@ export const EDIT_OPTIONS: PermissionOptionAction[] = [
   { optionId: "reject", label: "Reject", kind: "reject_once" },
 ];
 
-export const GEMINI_MCP_OPTIONS: PermissionOptionAction[] = [
+export const MCP_APPROVAL_OPTIONS: PermissionOptionAction[] = [
   {
     optionId: "proceed_always_server",
     label: "Allow all server tools for this session",

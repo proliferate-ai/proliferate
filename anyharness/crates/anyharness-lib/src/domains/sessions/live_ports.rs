@@ -9,9 +9,9 @@ use anyharness_contract::v1::{SessionEvent, SessionEventEnvelope};
 
 use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::domains::sessions::model::{
-    PendingConfigChangeRecord, PendingPromptRecord, PromptAttachmentRecord, PromptAttachmentState,
-    SessionBackgroundWorkRecord, SessionBackgroundWorkState, SessionEventRecord,
-    SessionLiveConfigSnapshotRecord,
+    PendingConfigChangeRecord, PendingPromptRecord, PendingPromptReorderOutcome,
+    PromptAttachmentRecord, PromptAttachmentState, SessionBackgroundWorkRecord,
+    SessionBackgroundWorkState, SessionEventRecord, SessionLiveConfigSnapshotRecord,
 };
 use crate::domains::sessions::prompt::{
     load_prompt_attachments, PromptPayload, PromptValidationError, ResolvedParts,
@@ -78,6 +78,10 @@ impl QueueDurable for SessionStore {
         SessionStore::insert_pending_prompt_payload(self, session_id, payload, prompt_id)
     }
 
+    fn list_pending_prompts(&self, session_id: &str) -> anyhow::Result<Vec<PendingPromptRecord>> {
+        SessionStore::list_pending_prompts(self, session_id)
+    }
+
     fn peek_head_pending_prompt(
         &self,
         session_id: &str,
@@ -112,6 +116,15 @@ impl QueueDurable for SessionStore {
         seq: i64,
     ) -> anyhow::Result<Option<PendingPromptRecord>> {
         SessionStore::delete_pending_prompt_record(self, session_id, seq)
+    }
+
+    fn reorder_pending_prompts(
+        &self,
+        session_id: &str,
+        expected_seqs: &[i64],
+        desired_seqs: &[i64],
+    ) -> anyhow::Result<PendingPromptReorderOutcome> {
+        SessionStore::reorder_pending_prompts(self, session_id, expected_seqs, desired_seqs)
     }
 }
 

@@ -3,6 +3,8 @@ import { createTranscriptState, type ToolCallItem } from "@anyharness/sdk";
 import {
   classifyCollapsedAction,
   formatCollapsedActionsSummary,
+  resolveCollapsedActionsLeadingKind,
+  resolveCurrentCollapsedAction,
   summarizeCollapsedActions,
 } from "./transcript-collapsed-actions";
 import {
@@ -18,6 +20,36 @@ import {
 } from "./transcript-presentation-test-fixtures";
 
 describe("transcript actions", () => {
+  it("resolves one current action instead of a cumulative live count", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      command: terminalItem("command", "turn-1", 1, "pnpm test", "completed"),
+      read: toolItem("read", "turn-1", 2, "file_read", "in_progress"),
+    };
+
+    expect(resolveCurrentCollapsedAction(["command", "read"], transcript)).toEqual({
+      itemId: "read",
+      kind: "read",
+      label: "Reading read.ts",
+    });
+  });
+
+  it("does not invent per-operation progress for a parsed command batch", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      batch: parsedCommandItem("batch", "turn-1", 1, [
+        { type: "read", cmd: "cat first.ts", path: "first.ts" },
+        { type: "read", cmd: "cat second.ts", path: "second.ts" },
+      ]),
+    };
+
+    expect(resolveCurrentCollapsedAction(["batch"], transcript)).toEqual({
+      itemId: "batch",
+      kind: "command",
+      label: "Running command",
+    });
+  });
+
   it("classifies representative tool calls for collapsed action grouping", () => {
     expect(classifyCollapsedAction(toolItem("read", "turn-1", 1, "file_read"))).toBe("read");
     expect(classifyCollapsedAction(toolItem("edit", "turn-1", 2, "file_change"))).toBe("edit");
@@ -191,11 +223,22 @@ describe("transcript actions", () => {
       actions: 0,
     });
     expect(formatCollapsedActionsSummary(summary)).toBe(
-      "Explored 2 files, 1 listing, 1 search, 1 fetch, ran 2 commands, edited 1 file",
+      "Edited a file, read files, ran commands",
     );
-    expect(formatCollapsedActionsSummary(summary, { active: true })).toBe(
-      "Exploring 2 files, 1 listing, 1 search, 1 fetch, running 2 commands, editing 1 file",
-    );
+    expect(resolveCollapsedActionsLeadingKind(summary)).toBe("edit");
+    expect(resolveCollapsedActionsLeadingKind({
+      ...summary,
+      edits: 0,
+    })).toBe("search");
+    expect(resolveCollapsedActionsLeadingKind({
+      reads: 1,
+      listings: 0,
+      searches: 0,
+      fetches: 0,
+      commands: 1,
+      edits: 0,
+      actions: 0,
+    })).toBe("read");
     expect(formatCollapsedActionsSummary({
       reads: 0,
       listings: 0,

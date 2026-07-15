@@ -100,7 +100,7 @@ describe("resolveModelDisplayName", () => {
     // would be discarded as a raw label; the formatter must still produce a name.
     expect(
       resolveModelDisplayName({
-        agentKind: "gemini",
+        agentKind: "opencode",
         modelId: "gemini-2.5-pro",
         sourceLabels: ["Gemini-2.5-Pro"],
         preferKnownAlias: true,
@@ -111,13 +111,13 @@ describe("resolveModelDisplayName", () => {
   it("formats Gemini preview and flash variants", () => {
     expect(
       resolveModelDisplayName({
-        agentKind: "gemini",
+        agentKind: "opencode",
         modelId: "gemini-3-pro-preview",
       }),
     ).toBe("Gemini 3 Pro Preview");
     expect(
       resolveModelDisplayName({
-        agentKind: "gemini",
+        agentKind: "opencode",
         modelId: "gemini-2.5-flash",
       }),
     ).toBe("Gemini 2.5 Flash");

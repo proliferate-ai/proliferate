@@ -1,4 +1,6 @@
 import type { Session } from "@anyharness/sdk";
+import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
+import type { CloudSandboxGatewayUrlSource } from "@/lib/access/cloud/cloud-sandbox-gateway";
 import type { usePromptSessionMutation } from "@anyharness/sdk-react";
 import {
   promptAttachmentSnapshotsToBlocks,
@@ -41,6 +43,8 @@ const ACCEPTED_RUNNING_RECONCILE_TIMEOUT_MS = 3_000;
 type PromptSessionMutation = ReturnType<typeof usePromptSessionMutation>;
 
 export interface PromptIntentDispatchDeps {
+  ssh?: DesktopSshBridge | null;
+  cloudClient: CloudSandboxGatewayUrlSource | null;
   applySessionSummary: (clientSessionId: string, session: Session, workspaceId: string) => void;
   maybeGenerateSessionTitle: (input: {
     sessionId: string;
@@ -64,7 +68,6 @@ export interface PromptIntentDispatchDeps {
   upsertWorkspaceSessionRecord: (
     workspaceId: string,
     session: Session,
-    options?: { runtimeUrl?: string },
   ) => void;
 }
 
@@ -124,10 +127,9 @@ export async function dispatchPromptIntent(
       return;
     }
     const {
-      connection,
       workspaceId,
       materializedSessionId: resolvedSessionId,
-    } = await getSessionClientAndWorkspace(entry.clientSessionId);
+    } = await getSessionClientAndWorkspace(entry.clientSessionId, deps.ssh ?? null, deps.cloudClient);
     requestHeaders = getLatencyFlowRequestHeaders(entry.latencyFlowId) ?? null;
     const requestOptions = requestHeaders ? { headers: requestHeaders } : undefined;
 
@@ -153,9 +155,7 @@ export async function dispatchPromptIntent(
     }
 
     deps.applySessionSummary(entry.clientSessionId, response.session, workspaceId);
-    deps.upsertWorkspaceSessionRecord(workspaceId, response.session, {
-      runtimeUrl: connection.runtimeUrl,
-    });
+    deps.upsertWorkspaceSessionRecord(workspaceId, response.session);
     useSessionIntentStore.getState().patchIntent(entry.intentId, {
       status: "accepted",
       deliveryState: response.status === "queued" ? "accepted_queued" : "accepted_running",

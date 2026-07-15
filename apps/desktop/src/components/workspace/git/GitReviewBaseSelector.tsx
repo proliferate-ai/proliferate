@@ -95,7 +95,6 @@ export function GitReviewBaseSelector({
                   onSelect(option.id);
                   close();
                 }}
-                trailingClassName="opacity-75 group-hover/menu-item:opacity-100 group-focus/menu-item:opacity-100"
               />
             );
           })}

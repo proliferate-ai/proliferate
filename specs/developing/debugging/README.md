@@ -6,99 +6,98 @@ Use this folder for issue triage, support-report correlation, production/local
 debugging, and performance profiling. Product behavior belongs under
 `specs/codebase/**`; this folder owns operator workflow.
 
-## General Issue Runbook
+## Start From The Symptom
 
-1. Start from the GitHub issue when one exists. Support-submitted issues should
-   link to the internal support report and any Linear ticket.
-2. Use the support report id, tenant id, user id, organization id, cloud
-   workspace id, AnyHarness workspace id, session id, command id, and worker id
-   to correlate Cloud records, Sentry events, logs, and S3 diagnostics.
-3. Check Sentry for matching exceptions or native crashes before assuming the
-   report is purely product confusion.
-4. Check recent deploys and release artifacts when the issue follows a deploy,
-   updater publish, runtime rollout, or cloud worker change.
-5. Reproduce locally with an isolated dev profile when the issue needs code
-   inspection or a stateful workflow.
-6. Capture the narrowest useful evidence: failing command, request id, run id,
-   screenshot, sanitized log tail, and exact surface/version.
-7. Update the GitHub issue with the diagnosis, linked PR or deploy, and any
-   user-facing owner needed.
+Write down what failed, where it failed, and when it was observed before
+collecting more context. Start with the strongest stable id already available.
+For a support report, use the support report id. Otherwise use the user id,
+surface, and exact version or source revision when available.
 
-If there is no GitHub issue yet, search for an existing issue before creating a
-new one. If the failure came from a support report, create or update the issue
-with the stable support ids instead of free-form user content.
+Do not request every possible correlation id up front. Add an id only when it
+helps cross the seam that is actually failing:
 
-## Correlation Keys
-
-Use stable ids to move between product surfaces, Cloud state, observability,
-and support artifacts:
-
-| Key | Use |
+| Failing seam | Add only what is useful |
 | --- | --- |
-| Support report id | Find uploaded diagnostics, sanitized logs, screenshots, and support-submitted GitHub/Linear links. |
-| Tenant id / organization id | Scope Cloud DB state, billing/account state, team settings, Metabase rows, and support dashboards. |
-| User id | Correlate account state, auth readiness, provider links, and user-scoped Sentry/PostHog events. |
-| Cloud workspace id | Inspect server workspace state, exposures, command history, cloud target state, and workspace visibility. |
-| AnyHarness workspace id | Follow local/runtime workspace state, sessions, transcript streams, and runtime diagnostics. |
-| Session id | Match transcript rows, runtime events, pending prompts, and Sentry support tags. |
-| Command id | Trace cloud command enqueue, lease, delivery, failure, and result state. |
-| Worker id / target id | Inspect target registration, worker logs, status updates, and supervisor/worker health. |
+| Hosted account, auth, billing, or control-plane request | organization id, workspace id, or request id |
+| Sandbox provisioning or repository setup | sandbox/provider id or materialization id |
+| Runtime, transcript, or agent session | AnyHarness workspace id or session id |
+| Worker connection or remote execution | Worker id and the relevant request id |
+| Desktop or mobile crash | app version, platform, and matching Sentry event |
+| Deploy, updater, or release regression | release artifact, deploy run, and source revision |
 
-## Tools And Permissions
+The goal is the smallest evidence set that can locate and reproduce the
+failure, not a complete inventory of the user's environment.
 
-Required tools and surfaces:
+## Investigate The Failing Seam
 
-- GitHub MCP, `gh`, or GitHub web access for issues, PRs, labels, linked fixes,
-  workflow runs, and release artifacts.
-- Local shell access with `make dev PROFILE=<name>` for reproduction.
-- Browser or Chrome access with the right logged-in profile for GitHub, Stripe,
-  Vercel, Sentry, PostHog, Customer.io, Metabase, AWS, Apple, or Expo
-  dashboards when needed.
-- S3/support-report access through the internal support tooling, never public
-  object access.
-- Sentry access for production exceptions, native crashes, release health, and
+1. Confirm the symptom, affected surface, environment, observation time, and
+   version or revision.
+2. If a support report exists, use its stable id to retrieve the durable report
+   and diagnostics. The current private Support path provides durable capture
+   plus best-effort Slack delivery. It does not automatically create a GitHub
+   or Linear issue and does not run autonomous triage or fixes.
+3. Choose the failing seam, then collect only the correlation ids required to
+   move between that seam's product state, logs, Sentry events, or provider
+   state.
+4. Check recent deploys or artifacts when timing suggests a release, updater,
+   runtime, Worker, or infrastructure regression.
+5. Inspect the narrowest source of evidence for the seam: a failing request,
+   Sentry event, sanitized log tail, workflow run, provider state, or retained
+   support diagnostic.
+6. Reproduce with an isolated local profile when code inspection or controlled
+   state is needed. Follow [Local Development](../local/README.md).
+7. Record the diagnosis, proof, fix or remaining owner, and user follow-up. If
+   durable issue tracking is needed, search for an existing issue before
+   creating or updating one; do not assume Support already did so.
+
+## Tools And Access
+
+Use only the tools needed for the failing seam:
+
+- GitHub access for issues, PRs, workflow runs, deploys, and release artifacts.
+- Sentry for production exceptions, native crashes, releases, and matching
   support correlation tags.
-- AWS/GitHub Actions access when the issue may be deploy, ECS, S3, CloudFront,
-  updater, ECR, or SSM related.
+- Approved support tooling for support reports and retained diagnostics; do
+  not make report objects public.
+- AWS, Vercel, E2B, Stripe, PostHog, Metabase, Customer.io, Expo/EAS, or App
+  Store Connect only when that provider owns evidence for the failing seam.
+- An isolated local profile for reproduction:
 
-Required permissions depend on the issue surface:
+  ```bash
+  make setup PROFILE=<name>
+  make build # first clean worktree or after generated/Rust/frontend artifacts change
+  make run PROFILE=<name>
+  ```
 
-| Surface | Permissions |
-| --- | --- |
-| GitHub issue/PR triage | repo read access; repo write access when labels, comments, or fixes are needed |
-| Support reports | internal support-report access and S3 diagnostic access through approved tooling |
-| Production errors/crashes | Sentry project access for the affected app/runtime |
-| Hosted deploy or infra | GitHub Actions access and AWS/Vercel/E2B access for the affected lane |
-| Billing | Stripe access plus GitHub/AWS env access only when config repair is required |
-| Analytics/replay | PostHog, Metabase, Customer.io, or Sentry access for the affected tool |
-| Mobile/App Store | Expo/EAS and App Store Connect access when build or submit state is involved |
+Use an appropriately authorized account. Keep secrets, raw user content, and
+unredacted diagnostics out of issues, chat, shared logs, and documentation.
+Start provider investigation read-only. If private or provider access is
+unavailable, retain the stable id and hand off to an authorized operator
+without asking them to copy raw evidence; any provider or production write
+requires separately approved remediation scope and the applicable runbook.
 
-## Specific Runbooks
+## Focused Runbooks
 
-- [support-reports.md](support-reports.md): end-to-end support report triage
-  across Cloud DB state, S3, CloudWatch, Sentry, GitHub, Linear, Slack, and
-  Desktop retry behavior.
-- [performance-profiling.md](performance-profiling.md): privacy-safe renderer
-  and AnyHarness timing baselines.
-- [../runbooks/stripe-webhook-failure.md](../runbooks/stripe-webhook-failure.md):
-  Stripe webhook delivery, replay, and billing mirror recovery.
-- [../runbooks/e2b-template-rollback.md](../runbooks/e2b-template-rollback.md):
-  E2B template rollback for managed cloud runtime release failures.
-- [../analytics/sentry.md](../analytics/sentry.md): Sentry projects, privacy,
-  support correlation, alerts, and release/debug uploads.
-- [../local/README.md](../local/README.md): local reproduction with dev
-  profiles.
-- [../deploying/ci-cd.md](../deploying/ci-cd.md): deploy and release failure
-  response.
+- [support-reports.md](support-reports.md): retrieve, correlate, and close out a
+  private support report.
+- [performance-profiling.md](performance-profiling.md): capture privacy-safe
+  renderer and AnyHarness timing baselines.
+- [../operating/stripe-webhook-failure.md](../operating/stripe-webhook-failure.md):
+  inspect and recover Stripe webhook delivery failures.
+- [../operating/e2b-template-rollback.md](../operating/e2b-template-rollback.md):
+  roll back a managed-cloud E2B runtime release.
+- [../operating/analytics/sentry.md](../operating/analytics/sentry.md): inspect
+  Sentry projects, releases, alerts, privacy behavior, and support tags.
+- [../deploying/ci-cd.md](../deploying/ci-cd.md): investigate deploy and release
+  failures.
 
-## Final Report Shape
+## Closeout
 
-When finishing debugging work, report:
+Leave a concise record containing:
 
-- GitHub issue, support report, PR, deploy run, or release artifact inspected
-- affected surface, environment, version, commit SHA, tenant/org/user ids, and
-  workspace/session/command ids when relevant
-- shortest confirmed reproduction path or why reproduction was not possible
-- Sentry, logs, dashboards, or workflow evidence checked
-- diagnosis, linked fix/deploy, remaining owner, and user-facing owner
-- secrets or sensitive content omitted from the report
+- the symptom, surface, environment, and exact version or revision;
+- the stable starting id and only the seam-specific ids used;
+- the shortest confirmed reproduction, or why it could not be reproduced;
+- the evidence checked and the resulting diagnosis;
+- the linked fix, deploy, remaining owner, and required user follow-up; and
+- confirmation that secrets and sensitive user content were omitted.

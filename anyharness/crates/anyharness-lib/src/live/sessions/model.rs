@@ -42,9 +42,9 @@ use anyharness_contract::v1::{SessionEvent, SessionEventEnvelope};
 use crate::domains::agents::model::ResolvedAgent;
 use crate::domains::sessions::mcp_bindings::model::SessionMcpServer;
 use crate::domains::sessions::model::{
-    PendingConfigChangeRecord, PendingPromptRecord, PromptAttachmentRecord, PromptAttachmentState,
-    SessionBackgroundWorkRecord, SessionBackgroundWorkState, SessionEventRecord,
-    SessionLiveConfigSnapshotRecord, SessionRecord,
+    PendingConfigChangeRecord, PendingPromptRecord, PendingPromptReorderOutcome,
+    PromptAttachmentRecord, PromptAttachmentState, SessionBackgroundWorkRecord,
+    SessionBackgroundWorkState, SessionEventRecord, SessionLiveConfigSnapshotRecord, SessionRecord,
 };
 use crate::domains::sessions::prompt::{PromptPayload, PromptValidationError, ResolvedParts};
 use crate::live::sessions::actor::command::{Resolution, ResolveInteractionCommandError};
@@ -101,6 +101,9 @@ pub struct LaunchEnv {
     /// Env keys the route-auth render plane requires ABSENT in the spawned
     /// process (ambient Bedrock/Vertex reroutes, stale provider keys).
     pub route_auth_remove: Vec<String>,
+    /// Extra CLI args appended to the harness command line, derived from
+    /// catalog settings (e.g. `--chrome` when the chrome setting is true).
+    pub settings_extra_args: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -164,6 +167,7 @@ pub trait QueueDurable: Send + Sync {
         payload: &PromptPayload,
         prompt_id: Option<&str>,
     ) -> anyhow::Result<PendingPromptRecord>;
+    fn list_pending_prompts(&self, session_id: &str) -> anyhow::Result<Vec<PendingPromptRecord>>;
     fn peek_head_pending_prompt(
         &self,
         session_id: &str,
@@ -185,6 +189,12 @@ pub trait QueueDurable: Send + Sync {
         session_id: &str,
         seq: i64,
     ) -> anyhow::Result<Option<PendingPromptRecord>>;
+    fn reorder_pending_prompts(
+        &self,
+        session_id: &str,
+        expected_seqs: &[i64],
+        desired_seqs: &[i64],
+    ) -> anyhow::Result<PendingPromptReorderOutcome>;
 }
 
 /// Durable background-work tracker rows.

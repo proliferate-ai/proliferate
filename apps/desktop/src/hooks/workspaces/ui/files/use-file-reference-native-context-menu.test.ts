@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import type { OpenTarget } from "@proliferate/product-client/host/desktop-bridge";
 import { buildFileReferenceNativeContextMenuItems } from "./use-file-reference-native-context-menu";
-import type { OpenTarget } from "@/lib/access/tauri/shell";
 
 describe("buildFileReferenceNativeContextMenuItems", () => {
   it("models the native file reference menu with app icons and an Open with submenu", () => {

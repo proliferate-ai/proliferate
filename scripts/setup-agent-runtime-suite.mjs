@@ -3,14 +3,14 @@ import { randomUUID } from "node:crypto";
 import { closeSync, mkdirSync, openSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import path, { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
 const REPO_ROOT = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
 const ANYHARNESS_BINARY = join(REPO_ROOT, "target", "debug", "anyharness");
-const DEFAULT_AGENTS = ["claude", "codex", "gemini"];
+const DEFAULT_AGENTS = ["claude", "codex"];
 const DEFAULT_FIXTURE_REF = "main";
 const DEFAULT_GIT_USER_NAME = "AnyHarness Tests";
 const DEFAULT_GIT_USER_EMAIL = "tests@anyharness.local";
@@ -44,7 +44,6 @@ export async function prepareAgentRuntimeSuite(options = {}) {
   try {
     await mkdir(baseDir, { recursive: true });
     await mkdir(runtimeHome, { recursive: true });
-    await seedGeminiOauthCredentials();
     buildAnyHarness();
     await cloneFixtureRepo({
       fixtureRepoUrl,
@@ -319,27 +318,6 @@ async function waitForReadyAgents({
   throw new Error(
     `Timed out waiting for ready agents (${requiredAgents.join(", ")}).\n${summary}`,
   );
-}
-
-async function seedGeminiOauthCredentials() {
-  const credsJson = process.env.GEMINI_OAUTH_CREDS_JSON?.trim();
-  if (!credsJson) {
-    return;
-  }
-
-  const geminiDir = join(homedir(), ".gemini");
-  await mkdir(geminiDir, { recursive: true });
-  await writeFile(
-    join(geminiDir, "settings.json"),
-    `${JSON.stringify({
-      security: {
-        auth: {
-          selectedType: "oauth-personal",
-        },
-      },
-    }, null, 2)}\n`,
-  );
-  await writeFile(join(geminiDir, "oauth_creds.json"), credsJson);
 }
 
 function buildTestEnv({

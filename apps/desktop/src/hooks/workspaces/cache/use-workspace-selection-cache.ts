@@ -1,13 +1,17 @@
 import type { CoworkStatus } from "@anyharness/sdk";
 import {
+  anyHarnessCoworkArtifactScopeKey,
+  anyHarnessCoworkManifestKey,
   anyHarnessCoworkStatusKey,
   anyHarnessWorkspaceQueryKeyRoots,
+  useAnyHarnessCacheScopeKey,
 } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import type { CloudMobilityWorkspaceSummary } from "@/lib/access/cloud/client";
 import { cloudBillingKey, cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import { useProductAuthUserId } from "@/hooks/auth/facade/use-product-auth";
+import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import type { WorkspaceCollections } from "@/lib/domain/workspaces/cloud/collections";
 import {
   getWorkspaceCollectionsFromCache,
@@ -29,24 +33,31 @@ interface CancelPreviousWorkspaceDisplayQueriesInput {
 // Owns query-cache reads and invalidation needed by workspace selection/bootstrap flows.
 export function useWorkspaceSelectionCache() {
   const queryClient = useQueryClient();
-  const authStatus = useAuthStore((state) => state.status);
-  const authUserId = useAuthStore((state) => state.user?.id ?? null);
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
+  const authUserId = useProductAuthUserId();
+  const { cloudActive } = useCloudAvailabilityState();
 
   const getWorkspaceSelectionSnapshot = useCallback((
     runtimeUrl: string,
   ): WorkspaceSelectionCacheSnapshot => ({
+    // Must mirror the collections query's user scope (use-workspaces.ts /
+    // use-workspace-collections-cache.ts): `cloudActive ? authUserId : null`.
+    // Reading under a bare auth check diverges when a session is authenticated
+    // but cloud is inactive (e.g. dev auth bypass) — the snapshot then misses
+    // the populated cache entry and every selection fails "Workspace not
+    // found."
     workspaceCollections: getWorkspaceCollectionsFromCache(
       queryClient,
       runtimeUrl,
-      authStatus === "authenticated" ? authUserId : null,
+      cloudActive ? authUserId : null,
     ),
     cloudMobilityWorkspaces: queryClient.getQueryData<CloudMobilityWorkspaceSummary[]>(
       cloudMobilityWorkspacesKey(),
     ),
     coworkStatus: queryClient.getQueryData<CoworkStatus>(
-      anyHarnessCoworkStatusKey(runtimeUrl),
+      anyHarnessCoworkStatusKey(runtimeUrl, cacheScopeKey),
     ),
-  }), [authStatus, authUserId, queryClient]);
+  }), [authUserId, cacheScopeKey, cloudActive, queryClient]);
 
   const cancelPreviousWorkspaceDisplayQueries = useCallback((
     input: CancelPreviousWorkspaceDisplayQueriesInput,
@@ -61,7 +72,12 @@ export function useWorkspaceSelectionCache() {
       if (!workspaceId || nextIds.has(workspaceId)) {
         continue;
       }
-      for (const root of anyHarnessWorkspaceQueryKeyRoots(input.runtimeUrl, workspaceId)) {
+      const workspaceRoots = [
+        ...anyHarnessWorkspaceQueryKeyRoots(cacheScopeKey, workspaceId),
+        anyHarnessCoworkManifestKey(input.runtimeUrl, workspaceId, cacheScopeKey),
+        anyHarnessCoworkArtifactScopeKey(input.runtimeUrl, workspaceId, cacheScopeKey),
+      ];
+      for (const root of workspaceRoots) {
         roots.add(JSON.stringify(root));
       }
     }
@@ -70,7 +86,7 @@ export function useWorkspaceSelectionCache() {
       const queryKey = JSON.parse(serializedRoot) as readonly unknown[];
       void queryClient.cancelQueries({ queryKey, exact: false });
     }
-  }, [queryClient]);
+  }, [cacheScopeKey, queryClient]);
 
   const invalidateCloudWorkspaceStartState = useCallback(async (runtimeUrl: string) => {
     await Promise.all([

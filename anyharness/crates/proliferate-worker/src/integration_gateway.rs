@@ -2,9 +2,7 @@ use std::path::PathBuf;
 
 use serde::Serialize;
 
-use crate::{
-    cloud_client::IntegrationGatewayConfig, config::WorkerConfig, error::WorkerError,
-};
+use crate::{cloud_client::IntegrationGatewayConfig, config::WorkerConfig, error::WorkerError};
 
 const DOTFILE_NAME: &str = "integration-gateway.json";
 const DOTFILE_VERSION: u32 = 1;
@@ -28,10 +26,7 @@ pub fn dotfile_path(config: &WorkerConfig) -> PathBuf {
 
 /// Atomically (re)write the integration-gateway dotfile from the enroll
 /// response. Directory is created at 0700, file at 0600.
-pub fn write(
-    config: &WorkerConfig,
-    gateway: &IntegrationGatewayConfig,
-) -> Result<(), WorkerError> {
+pub fn write(config: &WorkerConfig, gateway: &IntegrationGatewayConfig) -> Result<(), WorkerError> {
     let path = dotfile_path(config);
     let dotfile = IntegrationGatewayDotfile {
         version: DOTFILE_VERSION,

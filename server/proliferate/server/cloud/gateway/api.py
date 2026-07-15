@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
+from proliferate.integrations.sentry import clear_server_sentry_user
 from proliferate.server.cloud.gateway.access import (
     GatewayWebSocketAuthError,
     accepted_gateway_websocket_subprotocol,
@@ -49,19 +50,26 @@ async def proxy_cloud_sandbox_anyharness_websocket(
     path: str,
     db: AsyncSession = Depends(get_async_session),
 ) -> None:
+    # WebSockets never pass through RequestTelemetryMiddleware (BaseHTTPMiddleware
+    # only runs for HTTP), so the Sentry user set during gateway auth must be
+    # cleared here at socket teardown or it bleeds into later, unrelated events
+    # handled on the same worker (cross-user leakage).
     try:
-        user = await authenticate_product_user_for_gateway_websocket(
-            db,
-            product_token_from_websocket(websocket),
+        try:
+            user = await authenticate_product_user_for_gateway_websocket(
+                db,
+                product_token_from_websocket(websocket),
+            )
+            access = await ensure_cloud_sandbox_gateway_access(db, user)
+        except GatewayWebSocketAuthError:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+        await proxy_websocket_to_anyharness(
+            websocket,
+            upstream_base_url=access.upstream_base_url,
+            upstream_token=access.upstream_token,
+            path=path,
+            accept_subprotocol=accepted_gateway_websocket_subprotocol(websocket),
         )
-        access = await ensure_cloud_sandbox_gateway_access(db, user)
-    except GatewayWebSocketAuthError:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
-    await proxy_websocket_to_anyharness(
-        websocket,
-        upstream_base_url=access.upstream_base_url,
-        upstream_token=access.upstream_token,
-        path=path,
-        accept_subprotocol=accepted_gateway_websocket_subprotocol(websocket),
-    )
+    finally:
+        clear_server_sentry_user()

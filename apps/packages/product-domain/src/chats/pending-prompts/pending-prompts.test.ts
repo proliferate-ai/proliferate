@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createOptimisticPendingPrompt,
   hasVisibleTranscriptContent,
+  resolveOptimisticPromptHandoff,
   resolveVisibleOptimisticPrompt,
   shouldClearOptimisticPromptAfterSessionSummary,
   shouldClearOptimisticPromptAfterPromptResponse,
@@ -90,6 +91,86 @@ describe("pending prompt visibility", () => {
       latestTurnStartedAt: "2026-04-13T12:00:01.000Z",
       latestTurnHasAssistantRenderableContent: true,
     })).toBeNull();
+  });
+
+  it("retains the submitted prompt after its user echo until assistant activity arrives", () => {
+    const prompt = createOptimisticPendingPrompt(
+      "Ship it",
+      "prompt-1",
+      "2026-04-13T12:00:00.000Z",
+    );
+    const liveTurn = {
+      startedAt: "2026-04-13T12:00:01.000Z",
+      completedAt: null,
+    };
+
+    expect(resolveOptimisticPromptHandoff({
+      optimisticPrompt: null,
+      retainedOptimisticPrompt: prompt,
+      latestTurn: liveTurn,
+      latestTurnHasAssistantRenderableContent: false,
+      sessionViewState: "working",
+    })).toBe(prompt);
+    expect(resolveOptimisticPromptHandoff({
+      optimisticPrompt: null,
+      retainedOptimisticPrompt: prompt,
+      latestTurn: liveTurn,
+      latestTurnHasAssistantRenderableContent: true,
+      sessionViewState: "working",
+    })).toBeNull();
+  });
+
+  it("drops a retained optimistic prompt when its turn completes", () => {
+    const prompt = createOptimisticPendingPrompt(
+      "Ship it",
+      "prompt-1",
+      "2026-04-13T12:00:00.000Z",
+    );
+
+    expect(resolveOptimisticPromptHandoff({
+      optimisticPrompt: null,
+      retainedOptimisticPrompt: prompt,
+      latestTurn: {
+        startedAt: "2026-04-13T12:00:01.000Z",
+        completedAt: "2026-04-13T12:00:03.000Z",
+      },
+      latestTurnHasAssistantRenderableContent: false,
+      sessionViewState: "working",
+    })).toBeNull();
+  });
+
+  it("drops a retained prompt when the session is no longer active", () => {
+    const prompt = createOptimisticPendingPrompt("Ship it");
+
+    expect(resolveOptimisticPromptHandoff({
+      optimisticPrompt: null,
+      retainedOptimisticPrompt: prompt,
+      latestTurn: {
+        startedAt: "2026-04-13T12:00:01.000Z",
+        completedAt: null,
+      },
+      latestTurnHasAssistantRenderableContent: false,
+      sessionViewState: "idle",
+    })).toBeNull();
+  });
+
+  it("does not let an earlier completed turn end a new prompt handoff", () => {
+    const prompt = createOptimisticPendingPrompt(
+      "Follow up",
+      "prompt-2",
+      "2026-04-13T12:01:00.000Z",
+    );
+
+    expect(resolveOptimisticPromptHandoff({
+      optimisticPrompt: null,
+      retainedOptimisticPrompt: prompt,
+      latestTurn: {
+        startedAt: "2026-04-13T12:00:00.000Z",
+        completedAt: "2026-04-13T12:00:30.000Z",
+      },
+      latestTurnHasAssistantRenderableContent: true,
+      sessionViewState: "working",
+    })).toBe(prompt);
   });
 
   it("clears optimistic prompt after the runtime confirms a queued response", () => {

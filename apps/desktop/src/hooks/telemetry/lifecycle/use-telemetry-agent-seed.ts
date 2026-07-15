@@ -1,15 +1,17 @@
 import { useEffect, useRef } from "react";
 import { useRuntimeHealthQuery } from "@anyharness/sdk-react";
-import { trackProductEvent } from "@/lib/integrations/telemetry/client";
+import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 
 // Owns agent seed hydration telemetry emitted from runtime health changes.
-// Does not own runtime health fetching or agent setup behavior.
+// Reports through the typed telemetry adapter. Does not own runtime health
+// fetching or agent setup behavior.
 export function useTelemetryAgentSeed() {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const connectionState = useHarnessConnectionStore((state) => state.connectionState);
   const isHealthy = connectionState === "healthy" && runtimeUrl.trim().length > 0;
   const { data: runtimeHealth } = useRuntimeHealthQuery({ enabled: isHealthy });
+  const telemetry = useProductTelemetry();
   const reportedStatusRef = useRef<string | null>(null);
   const agentSeed = runtimeHealth?.agentSeed;
 
@@ -29,7 +31,7 @@ export function useTelemetryAgentSeed() {
       || (agentSeed.status === "partial" && hasSeedContent)
     ) {
       reportedStatusRef.current = statusKey;
-      trackProductEvent("agent_seed_hydrated", {
+      telemetry.track("agent_seed_hydrated", {
         status: agentSeed.status,
         source: agentSeed.source,
         ownership: agentSeed.ownership,
@@ -44,11 +46,11 @@ export function useTelemetryAgentSeed() {
 
     if (agentSeed.status === "failed" || agentSeed.status === "missing_bundled_seed") {
       reportedStatusRef.current = statusKey;
-      trackProductEvent("agent_seed_hydration_failed", {
+      telemetry.track("agent_seed_hydration_failed", {
         status: agentSeed.status,
         source: agentSeed.source,
         failure_kind: agentSeed.failureKind ?? "unknown",
       });
     }
-  }, [agentSeed]);
+  }, [agentSeed, telemetry]);
 }

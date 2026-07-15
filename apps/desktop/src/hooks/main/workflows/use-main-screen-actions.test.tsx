@@ -12,7 +12,7 @@ import {
 import { useMainScreenActions } from "./use-main-screen-actions";
 import type { MainScreenLayoutState } from "@/hooks/main/facade/use-main-screen-state";
 
-const tauriShellActions = vi.hoisted(() => ({
+const productLinks = vi.hoisted(() => ({
   openExternal: vi.fn(async () => undefined),
 }));
 
@@ -43,8 +43,8 @@ vi.mock("@/stores/toast/toast-store", () => ({
     selector({ show: vi.fn() }),
 }));
 
-vi.mock("@/hooks/access/tauri/use-shell-actions", () => ({
-  useTauriShellActions: () => tauriShellActions,
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => ({ links: productLinks }),
 }));
 
 vi.mock("@proliferate/cloud-sdk/client/workspaces", () => ({
@@ -91,7 +91,7 @@ describe("useMainScreenActions publish actions", () => {
 
     act(() => result.current.handlePublishDialogViewPr(pullRequest()));
 
-    expect(tauriShellActions.openExternal).toHaveBeenCalledWith("https://github.test/pull/1");
+    expect(productLinks.openExternal).toHaveBeenCalledWith("https://github.test/pull/1");
     expect(spies.setRightPanelState).not.toHaveBeenCalled();
     expect(spies.setRightPanelOpen).not.toHaveBeenCalled();
     expect(spies.requestRightPanelFocus).not.toHaveBeenCalled();
@@ -177,11 +177,8 @@ describe("useMainScreenActions right panel actions", () => {
     const { result, spies } = renderActions({
       rightPanelState: {
         ...DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
-        activeEntryKey: "browser:b1",
-        headerOrder: [...DEFAULT_RIGHT_PANEL_WORKSPACE_STATE.headerOrder, "browser:b1"],
-        browserTabsById: {
-          b1: { id: "b1", url: null },
-        },
+        activeEntryKey: "terminal:t1",
+        headerOrder: [...DEFAULT_RIGHT_PANEL_WORKSPACE_STATE.headerOrder, "terminal:t1"],
       },
       rightPanelOpen: false,
     });

@@ -8,7 +8,10 @@ import {
   isMainTauriWebviewAvailable,
   revealCurrentWindow,
 } from "@/lib/access/tauri/window";
-import { desktopNavigationTarget } from "@/lib/domain/auth/desktop-navigation";
+import {
+  decodeDesktopProductEntry,
+  productEntryRoute,
+} from "@/lib/domain/auth/desktop-navigation";
 
 const DEV_HANDOFF_POLL_MS = 1000;
 const handledDevHandoffIds = new Set<string>();
@@ -49,7 +52,8 @@ export function useDevDesktopHandoff() {
             return;
           }
           handledDevHandoffIds.add(handoff.id);
-          const target = desktopNavigationTarget(handoff.url);
+          const entry = decodeDesktopProductEntry(handoff.url);
+          const target = entry ? productEntryRoute(entry) : null;
           if (target) {
             navigate(target);
             void markDevDesktopHandoffOpened(handoff.id).catch(() => {

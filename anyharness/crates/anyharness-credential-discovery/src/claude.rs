@@ -1,6 +1,7 @@
 use std::path::Path;
 #[cfg(target_os = "macos")]
 use std::process::Command;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::Value;
 
@@ -41,18 +42,25 @@ pub fn detect_local_auth_state(home_dir: &Path) -> Result<LocalAuthState, Discov
         tracing::debug!(path = %path.display(), "Checking Claude OAuth credential file");
         if let Some(data) = read_json_file(&path)? {
             if has_claude_oauth_payload(&data) {
-                tracing::debug!(path = %path.display(), "Claude OAuth credential file detected");
-                return Ok(LocalAuthState::Present(LocalAuthSource::File { path }));
+                let source = LocalAuthSource::File { path };
+                if is_oauth_expired(&data) {
+                    tracing::debug!("Claude OAuth credential expired");
+                    return Ok(LocalAuthState::Expired(source));
+                }
+                tracing::debug!("Claude OAuth credential file detected");
+                return Ok(LocalAuthState::Present(source));
             }
         }
     }
 
-    if let Some((service, account, _oauth)) = read_keychain_claude_oauth(home_dir)? {
+    if let Some((service, account, oauth)) = read_keychain_claude_oauth(home_dir)? {
         tracing::debug!(service, account, "Claude keychain auth detected");
-        return Ok(LocalAuthState::Present(LocalAuthSource::MacOsKeychain {
-            service,
-            account,
-        }));
+        let source = LocalAuthSource::MacOsKeychain { service, account };
+        if is_oauth_expired(&serde_json::json!({ CLAUDE_KEYCHAIN_ROOT_KEY: oauth })) {
+            tracing::debug!("Claude keychain OAuth credential expired");
+            return Ok(LocalAuthState::Expired(source));
+        }
+        return Ok(LocalAuthState::Present(source));
     }
 
     let config_path = home_dir.join(CLAUDE_CONFIG_PATH);
@@ -253,6 +261,22 @@ fn extract_oauth_payload(data: &Value) -> Option<&Value> {
         .filter(|oauth| oauth.is_object())
 }
 
+/// Returns true if the OAuth payload has an `expiresAt` field (ms epoch) that
+/// is in the past. Missing or non-numeric `expiresAt` → not expired (conservative).
+fn is_oauth_expired(data: &Value) -> bool {
+    let Some(oauth) = extract_oauth_payload(data) else {
+        return false;
+    };
+    let Some(expires_at_ms) = oauth.get("expiresAt").and_then(Value::as_u64) else {
+        return false;
+    };
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    expires_at_ms <= now_ms
+}
+
 #[cfg(target_os = "macos")]
 fn read_keychain_claude_oauth(
     home_dir: &Path,
@@ -354,162 +378,5 @@ fn portable_path(value: &str) -> PortableRelativePath {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::fs;
-
-    use super::*;
-
-    fn make_temp_home() -> std::path::PathBuf {
-        let path = std::env::temp_dir().join(format!(
-            "anyharness-credential-discovery-{}",
-            uuid::Uuid::new_v4()
-        ));
-        fs::create_dir_all(&path).expect("create temp home");
-        path
-    }
-
-    #[test]
-    fn detects_oauth_account_marker_for_local_readiness() {
-        let home = make_temp_home();
-        fs::write(
-            home.join(CLAUDE_CONFIG_PATH),
-            r#"{"oauthAccount":{"accountUuid":"acct-123"}}"#,
-        )
-        .expect("write claude config");
-
-        let state = detect_local_auth_state(&home).expect("detect local auth");
-
-        assert!(matches!(
-            state,
-            LocalAuthState::Present(LocalAuthSource::ConfigMarker {
-                marker: ConfigMarkerKind::ClaudeOauthAccount,
-                ..
-            })
-        ));
-
-        let _ = fs::remove_dir_all(home);
-    }
-
-    #[test]
-    fn fact_kinds_preserve_every_present_credential_kind() {
-        let home = make_temp_home();
-        fs::create_dir_all(home.join(".claude")).expect("create claude dir");
-        fs::write(
-            home.join(CLAUDE_CREDENTIALS_PATH),
-            r#"{"claudeAiOauth":{"accessToken":"token"}}"#,
-        )
-        .expect("write oauth creds");
-        fs::write(
-            home.join(CLAUDE_CONFIG_PATH),
-            r#"{"primaryApiKey":"sk-ant-123","oauthAccount":{"accountUuid":"acct-123"}}"#,
-        )
-        .expect("write claude config");
-
-        let kinds = discovery_fact_kinds(&home).expect("fact kinds");
-        assert_eq!(
-            kinds,
-            vec![
-                "claude-config-api-key",
-                "claude-oauth-creds",
-                "claude-oauth-account"
-            ]
-        );
-
-        let _ = fs::remove_dir_all(home);
-    }
-
-    #[test]
-    fn fact_kinds_empty_when_nothing_present() {
-        let home = make_temp_home();
-        fs::write(
-            home.join(CLAUDE_CONFIG_PATH),
-            r#"{"hasCompletedOnboarding":true}"#,
-        )
-        .expect("write claude config");
-
-        assert!(discovery_fact_kinds(&home).expect("fact kinds").is_empty());
-
-        let _ = fs::remove_dir_all(home);
-    }
-
-    #[test]
-    fn oauth_account_marker_is_not_portable() {
-        let home = make_temp_home();
-        fs::write(
-            home.join(CLAUDE_CONFIG_PATH),
-            r#"{"oauthAccount":{"accountUuid":"acct-123"}}"#,
-        )
-        .expect("write claude config");
-
-        let export = export_portable_auth(&home).expect("export auth");
-        assert!(export.is_none());
-
-        let _ = fs::remove_dir_all(home);
-    }
-
-    #[test]
-    fn normalizes_legacy_oauth_file_to_canonical_path() {
-        let home = make_temp_home();
-        fs::write(
-            home.join(CLAUDE_OAUTH_CREDENTIALS_PATH),
-            r#"{"claudeAiOauth":{"accessToken":"token","refreshToken":"refresh"}}"#,
-        )
-        .expect("write legacy oauth file");
-
-        let export = export_portable_auth(&home)
-            .expect("export auth")
-            .expect("portable auth");
-
-        assert_eq!(export.files.len(), 1);
-        assert_eq!(
-            export.files[0].relative_path.as_str(),
-            CLAUDE_CREDENTIALS_PATH
-        );
-
-        let _ = fs::remove_dir_all(home);
-    }
-
-    #[test]
-    fn exports_api_key_config_as_minimal_portable_file() {
-        let home = make_temp_home();
-        let contents =
-            r#"{"primaryApiKey":"sk-ant-123","oauthAccount":{"accountUuid":"acct-123"}}"#;
-        fs::write(home.join(CLAUDE_CONFIG_PATH), contents).expect("write claude config");
-
-        let export = export_portable_auth(&home)
-            .expect("export auth")
-            .expect("portable auth");
-
-        assert_eq!(export.files.len(), 1);
-        assert_eq!(export.files[0].relative_path.as_str(), CLAUDE_CONFIG_PATH);
-        assert_eq!(
-            serde_json::from_slice::<Value>(&export.files[0].content).expect("parse export"),
-            serde_json::json!({"primaryApiKey":"sk-ant-123"})
-        );
-
-        let _ = fs::remove_dir_all(home);
-    }
-
-    #[test]
-    fn exports_api_key_sidecar_config_to_canonical_portable_path() {
-        let home = make_temp_home();
-        fs::write(
-            home.join(CLAUDE_API_CONFIG_PATH),
-            r#"{"anthropicApiKey":"sk-ant-123"}"#,
-        )
-        .expect("write claude api config");
-
-        let export = export_portable_auth(&home)
-            .expect("export auth")
-            .expect("portable auth");
-
-        assert_eq!(export.files.len(), 1);
-        assert_eq!(export.files[0].relative_path.as_str(), CLAUDE_CONFIG_PATH);
-        assert_eq!(
-            serde_json::from_slice::<Value>(&export.files[0].content).expect("parse export"),
-            serde_json::json!({"anthropicApiKey":"sk-ant-123"})
-        );
-
-        let _ = fs::remove_dir_all(home);
-    }
-}
+#[path = "claude_tests.rs"]
+mod tests;

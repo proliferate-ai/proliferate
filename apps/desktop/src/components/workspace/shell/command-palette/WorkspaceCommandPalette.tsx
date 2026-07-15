@@ -101,10 +101,10 @@ function WorkspaceCommandPaletteContent({
       label="Command palette"
       className="flex min-h-0 flex-1 flex-col"
     >
-      <div className="flex h-11 shrink-0 items-center border-b border-border/70 px-3">
+      <div className="flex shrink-0 items-center border-b border-border-light px-3 py-2.5">
         <CommandPaletteGlyph
           name="search"
-          className="mr-1 size-4 shrink-0 text-muted-foreground"
+          className="mr-2 size-4 shrink-0 text-muted-foreground"
           aria-hidden="true"
         />
         <CommandPaletteInput
@@ -184,13 +184,13 @@ function WorkspaceCommandPaletteRow({ entry }: { entry: CommandPaletteEntry }) {
         )}
       </span>
       {entry.disabledReason ? (
-        <span className="shrink-0 truncate text-base text-muted-foreground">
+        <span className="shrink-0 truncate text-ui-sm text-muted-foreground">
           {entry.disabledReason}
         </span>
       ) : entry.shortcut ? (
-        <span className="shrink-0 rounded border border-border/70 px-1.5 py-0.5 text-base leading-3 text-muted-foreground">
+        <kbd className="ml-auto flex h-4 shrink-0 items-center rounded-md bg-foreground/10 px-1.5 text-ui-sm leading-none text-muted-foreground">
           {entry.shortcut}
-        </span>
+        </kbd>
       ) : null}
     </CommandPaletteItem>
   );

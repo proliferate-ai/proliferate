@@ -34,6 +34,9 @@ export const DEFAULT_CHAT_SURFACE_GUTTER_CLASSNAME = "px-4";
 
 const ESTIMATED_TURN_HEIGHT_PX = 360;
 const ESTIMATED_HISTORY_LOADING_ROW_HEIGHT_PX = 32;
+// Goal lifecycle rows are quiet single-line system rows, not turn content —
+// a much smaller virtualization estimate than the generic turn fallback.
+const ESTIMATED_GOAL_EVENT_ROW_HEIGHT_PX = 28;
 
 export interface TranscriptRowListBaseProps {
   rows: readonly TranscriptVirtualRow[];
@@ -42,6 +45,7 @@ export interface TranscriptRowListBaseProps {
   isLoadingOlderHistory: boolean;
   olderHistoryCursor: number | null;
   bottomInsetPx: number;
+  nonDisplacingBottomInsetPx?: number;
   selectedWorkspaceId: string | null;
   activeSessionId: string;
   isSessionBusy: boolean;
@@ -51,6 +55,18 @@ export interface TranscriptRowListBaseProps {
   renderRow: (row: TranscriptVirtualRow, rowIndex: number) => ReactNode;
   columnClassName?: string;
   gutterClassName?: string;
+}
+
+export function resolveTranscriptBottomInsets(
+  bottomInsetPx: number,
+  nonDisplacingBottomInsetPx: number,
+): { structural: number; nonDisplacing: number } {
+  const total = Math.max(0, bottomInsetPx);
+  const nonDisplacing = Math.min(total, Math.max(0, nonDisplacingBottomInsetPx));
+  return {
+    structural: total - nonDisplacing,
+    nonDisplacing,
+  };
 }
 
 // Preserves the user's read position across a content-height change above the
@@ -164,9 +180,13 @@ export function estimateRenderableRowsHeight(
 export function estimateRenderableRowHeight(
   row: TranscriptRenderableRow | undefined,
 ): number {
-  return row?.kind === "history_loader"
-    ? ESTIMATED_HISTORY_LOADING_ROW_HEIGHT_PX
-    : ESTIMATED_TURN_HEIGHT_PX;
+  if (row?.kind === "history_loader") {
+    return ESTIMATED_HISTORY_LOADING_ROW_HEIGHT_PX;
+  }
+  if (row?.kind === "transcript" && row.row.kind === "goal_event") {
+    return ESTIMATED_GOAL_EVENT_ROW_HEIGHT_PX;
+  }
+  return ESTIMATED_TURN_HEIGHT_PX;
 }
 
 export function TranscriptScrollToBottomButton({

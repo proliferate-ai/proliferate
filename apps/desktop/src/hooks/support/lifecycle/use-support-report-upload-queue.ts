@@ -4,23 +4,23 @@ import {
   type AnyHarnessResolvedConnection,
 } from "@anyharness/sdk-react";
 import { useEffect, useMemo, useRef } from "react";
+import type { DesktopDiagnosticsBridge } from "@proliferate/product-client/host/desktop-bridge";
+import type { ProductSupportTelemetryContext } from "@proliferate/product-client/host/product-host";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
+import { useProductStorageContext } from "@/hooks/persistence/facade/use-product-storage-context";
+import type { DesktopProductEventMap } from "@/lib/domain/telemetry/events";
+import type { ProductStorageContext } from "@/lib/infra/persistence/product-storage";
 import {
   completeSupportReportUpload,
   createSupportReport,
   createSupportReportUploadTargets,
-  ensureSupportReportTracker,
 } from "@proliferate/cloud-sdk/client/support";
 import type {
   SupportReportCompleteRequest,
   SupportReportUploadTargetsRequest,
 } from "@proliferate/cloud-sdk/types";
-import {
-  collectSupportDiagnostics,
-  logRendererEvent,
-} from "@/lib/access/tauri/diagnostics";
-import {
-  listenSupportReportJobs,
-} from "@/lib/access/tauri/support";
+import { listenSupportReportJobs } from "@/lib/access/browser/support-report-job-events";
 import { createSessionDebugClient } from "@/lib/access/anyharness/debug-client";
 import type {
   SupportReportJob,
@@ -62,7 +62,23 @@ interface SupportReportUploadResult {
   reportId: string;
 }
 
+/**
+ * The narrow product telemetry surface this queue threads into its plain payload
+ * builders: the typed `support_report_submitted` emitter and the support-context
+ * accessor, both obtained from the `useProductTelemetry` facade.
+ */
+interface SupportReportUploadTelemetry {
+  track: (
+    name: "support_report_submitted",
+    payload: DesktopProductEventMap["support_report_submitted"],
+  ) => void;
+  getSupportContext: () => ProductSupportTelemetryContext;
+}
+
 export function useSupportReportUploadQueue(): void {
+  const diagnostics = useProductHost().desktop?.diagnostics ?? null;
+  const telemetry = useProductTelemetry();
+  const storage = useProductStorageContext();
   const workspaceContext = useAnyHarnessWorkspaceContext();
   const contextWorkspaceId = workspaceContext.workspaceId;
   const resolveConnection = workspaceContext.resolveConnection;
@@ -75,7 +91,7 @@ export function useSupportReportUploadQueue(): void {
     SupportReportUploadDependencies<AnyHarnessResolvedConnection>
   >(() => ({
     now: () => new Date(),
-    collectDiagnostics: collectSupportDiagnostics,
+    collectDiagnostics: () => diagnostics?.collectSupportBundle() ?? Promise.resolve(null),
     resolveWorkspace: (workspaceId) => resolveWorkspaceConnectionFromContext(
       {
         workspaceId: contextWorkspaceId,
@@ -84,22 +100,27 @@ export function useSupportReportUploadQueue(): void {
       workspaceId,
     ),
     getClient: createSessionDebugClient,
-  }), [contextWorkspaceId, resolveConnection, runtimeUrl]);
+  }), [contextWorkspaceId, diagnostics, resolveConnection, runtimeUrl]);
 
   useEffect(() => {
     let disposed = false;
     let unlistenJobs: (() => void) | null = null;
+    // Persisting is async now, so chain deliveries to preserve the synchronous
+    // dedup the old localStorage path had: a rapid double-delivery of the same
+    // job must read the first write before the second persist runs. This is a
+    // per-mount ordering of this listener's own writes, not a retry/queue system.
+    let persistChain: Promise<void> = Promise.resolve();
 
     const processQueue = () => {
       if (disposed || processingRef.current) {
         return;
       }
       processingRef.current = true;
-      void drainSupportReportQueue(dependencies, showToast)
+      void drainSupportReportQueue(storage, dependencies, diagnostics, showToast, telemetry)
         .finally(() => {
           processingRef.current = false;
           if (!disposed) {
-            scheduleNextRetry(processQueue, retryTimerRef);
+            void scheduleNextRetry(storage, processQueue, retryTimerRef);
           }
         });
     };
@@ -108,12 +129,17 @@ export function useSupportReportUploadQueue(): void {
       if (disposed) {
         return;
       }
-      const queued = persistSupportReportJob(job);
-      if (!queued) {
-        return;
-      }
-      showToast("Sending report...", "info");
-      processQueue();
+      persistChain = persistChain.then(async () => {
+        if (disposed) {
+          return;
+        }
+        const queued = await persistSupportReportJob(storage, job);
+        if (disposed || !queued) {
+          return;
+        }
+        showToast("Sending report...", "info");
+        processQueue();
+      });
     }).then((unlisten) => {
       if (disposed) {
         unlisten();
@@ -130,14 +156,17 @@ export function useSupportReportUploadQueue(): void {
         window.clearTimeout(retryTimerRef.current);
       }
     };
-  }, [dependencies, showToast]);
+  }, [dependencies, diagnostics, showToast, storage, telemetry]);
 }
 
 async function drainSupportReportQueue(
+  storage: ProductStorageContext,
   dependencies: SupportReportUploadDependencies<AnyHarnessResolvedConnection>,
+  diagnostics: DesktopDiagnosticsBridge | null,
   showToast: (message: string, type?: "error" | "info") => void,
+  telemetry: SupportReportUploadTelemetry,
 ): Promise<void> {
-  const queued = readPersistedJobs();
+  const queued = await readPersistedJobs(storage);
   const now = Date.now();
   for (const entry of queued) {
     const nextAttemptMs = entry.nextAttemptAt ? Date.parse(entry.nextAttemptAt) : 0;
@@ -146,8 +175,8 @@ async function drainSupportReportQueue(
     }
 
     try {
-      const result = await uploadSupportReport(entry.job, dependencies);
-      removePersistedJob(entry.job.jobId);
+      const result = await uploadSupportReport(entry.job, dependencies, diagnostics, telemetry);
+      await removePersistedJob(storage, entry.job.jobId);
       showToast(
         `Thanks. Report sent. Support has the details. (${result.reportId})`,
         "info",
@@ -155,7 +184,7 @@ async function drainSupportReportQueue(
     } catch (error) {
       const attemptCount = entry.attemptCount + 1;
       const failure = describeSupportReportUploadFailure(error, attemptCount);
-      void logRendererEvent({
+      void diagnostics?.logEvent({
         source: "support_report_upload",
         message: `failed.${failure.kind}`,
       });
@@ -163,8 +192,11 @@ async function drainSupportReportQueue(
       // Already completed on a prior attempt — this is success, not failure.
       // Clean up the queued job quietly instead of nagging.
       if (failure.kind === "already_completed") {
-        removePersistedJob(entry.job.jobId);
-        await deleteSupportReportJobAttachments(entry.job);
+        await removePersistedJob(storage, entry.job.jobId);
+        await deleteSupportReportJobAttachments(
+          entry.job,
+          diagnostics?.deleteAttachment,
+        );
         showToast(failure.toastMessage, "info");
         continue;
       }
@@ -180,10 +212,13 @@ async function drainSupportReportQueue(
         nowMs: Date.now(),
       });
       if (!failure.retryable || exhausted) {
-        removePersistedJob(entry.job.jobId);
-        await deleteSupportReportJobAttachments(entry.job);
+        await removePersistedJob(storage, entry.job.jobId);
+        await deleteSupportReportJobAttachments(
+          entry.job,
+          diagnostics?.deleteAttachment,
+        );
         if (exhausted) {
-          void logRendererEvent({
+          void diagnostics?.logEvent({
             source: "support_report_upload",
             message: "dropped.exhausted",
           });
@@ -203,7 +238,7 @@ async function drainSupportReportQueue(
         lastToastKind: entry.lastFailureToastKind,
         nowMs,
       });
-      markPersistedJobFailed(entry.job.jobId, failure, new Date(nowMs), shouldToast);
+      await markPersistedJobFailed(storage, entry.job.jobId, failure, new Date(nowMs), shouldToast);
       if (shouldToast) {
         showToast(failure.toastMessage);
       }
@@ -214,48 +249,90 @@ async function drainSupportReportQueue(
 async function uploadSupportReport(
   job: SupportReportJob,
   dependencies: SupportReportUploadDependencies<AnyHarnessResolvedConnection>,
+  diagnostics: DesktopDiagnosticsBridge | null,
+  telemetry: SupportReportUploadTelemetry,
 ): Promise<SupportReportUploadResult> {
   validateAttachmentSizes(job);
-  const report = await createSupportReport(buildCreateReportRequest(job, job.attachments.length));
+  const report = await createSupportReport(
+    buildCreateReportRequest(job, job.attachments.length, telemetry.getSupportContext()),
+  );
   const serverCorrelation = toLocalServerCorrelation(report);
   if (report.status === "completed") {
-    void nudgeSupportReportTracker(report.reportId);
-    trackSupportReportSubmitted(job, serverCorrelation, job.attachments.length);
-    await deleteSupportReportJobAttachments(job);
+    trackSupportReportSubmitted(job, serverCorrelation, job.attachments.length, telemetry.track);
+    await deleteSupportReportJobAttachments(job, diagnostics?.deleteAttachment);
     return {
       reportId: report.reportId,
     };
   }
 
+  // "Include app logs" toggle (bug modal): when OFF, we neither collect nor
+  // upload diagnostics.json for this job. Defaults to ON for jobs persisted
+  // before the toggle existed.
+  const includeLogs = job.includeLogs !== false;
+
   const attachmentBlobs = await Promise.all(job.attachments.map(async (attachment) => ({
     attachment,
-    blob: await loadAttachmentBlob(attachment),
+    blob: await loadAttachmentBlob(attachment, diagnostics?.readAttachment),
   })));
   const attachmentHashes = await Promise.all(attachmentBlobs.map(async ({ blob }) =>
     sha256Hex(await blob.arrayBuffer())
   ));
 
-  const reportPackage = await buildSupportReportPackage(job, dependencies, serverCorrelation);
-  const diagnosticsBlob = jsonBlob(reportPackage);
-  if (diagnosticsBlob.size > DIAGNOSTICS_MAX_BYTES) {
-    throw new Error("Diagnostics are too large to upload.");
+  // Only collect/build the diagnostics package when logs are included.
+  let diagnosticsUpload:
+    | { blob: Blob; sha256: string; generatedAt: string }
+    | null = null;
+  if (includeLogs) {
+    const reportPackage = await buildSupportReportPackage(job, dependencies, serverCorrelation);
+    const diagnosticsBlob = jsonBlob(reportPackage);
+    if (diagnosticsBlob.size > DIAGNOSTICS_MAX_BYTES) {
+      throw new Error("Diagnostics are too large to upload.");
+    }
+    diagnosticsUpload = {
+      blob: diagnosticsBlob,
+      sha256: await sha256Hex(await diagnosticsBlob.arrayBuffer()),
+      generatedAt: reportPackage.generatedAt,
+    };
   }
-  const diagnosticsSha256 = await sha256Hex(await diagnosticsBlob.arrayBuffer());
+
+  // Logs off + no attachments: nothing to upload. Complete directly — the
+  // server allows completion without an upload-target manifest when the
+  // expected upload intent is diagnostics=false and attachmentCount=0.
+  if (!diagnosticsUpload && attachmentBlobs.length === 0) {
+    const completeRequest = completeRequestForUpload({
+      job,
+      reportId: report.reportId,
+      diagnostics: undefined,
+      generatedAt: dependencies.now().toISOString(),
+      cloudDiagnosticsStatus: report.cloudDiagnosticsStatus,
+      attachments: [],
+    });
+    await completeSupportReportUpload(report.reportId, completeRequest);
+    trackSupportReportSubmitted(job, serverCorrelation, 0, telemetry.track);
+    await deleteSupportReportJobAttachments(job, diagnostics?.deleteAttachment);
+    return {
+      reportId: report.reportId,
+    };
+  }
 
   const uploadRequest: SupportReportUploadTargetsRequest = {
-    diagnostics: {
-      contentType: "application/json",
-      sizeBytes: diagnosticsBlob.size,
-      sha256: diagnosticsSha256,
-    },
+    diagnostics: diagnosticsUpload
+      ? {
+          contentType: "application/json",
+          sizeBytes: diagnosticsUpload.blob.size,
+          sha256: diagnosticsUpload.sha256,
+        }
+      : undefined,
     attachments: attachmentUploadFiles(attachmentBlobs, attachmentHashes),
   };
 
   const upload = await createSupportReportUploadTargets(report.reportId, uploadRequest);
-  if (!upload.diagnostics) {
-    throw new Error("Cloud did not return a diagnostics upload URL.");
+  if (diagnosticsUpload) {
+    if (!upload.diagnostics) {
+      throw new Error("Cloud did not return a diagnostics upload URL.");
+    }
+    await putPresignedObject(upload.diagnostics, diagnosticsUpload.blob);
   }
-  await putPresignedObject(upload.diagnostics, diagnosticsBlob);
 
   const completedAttachments: NonNullable<SupportReportCompleteRequest["attachments"]> = [];
   for (const [index, item] of attachmentBlobs.entries()) {
@@ -276,22 +353,21 @@ async function uploadSupportReport(
   const completeRequest = completeRequestForUpload({
     job,
     reportId: report.reportId,
-    diagnosticsObjectKey: upload.diagnostics.objectKey,
-    diagnosticsSha256,
-    diagnosticsBytes: diagnosticsBlob.size,
-    generatedAt: reportPackage.generatedAt,
+    diagnostics: diagnosticsUpload && upload.diagnostics
+      ? {
+          objectKey: upload.diagnostics.objectKey,
+          sha256: diagnosticsUpload.sha256,
+          sizeBytes: diagnosticsUpload.blob.size,
+        }
+      : undefined,
+    generatedAt: diagnosticsUpload?.generatedAt ?? dependencies.now().toISOString(),
     cloudDiagnosticsStatus: report.cloudDiagnosticsStatus,
     attachments: completedAttachments,
   });
   await completeSupportReportUpload(upload.reportId, completeRequest);
-  void nudgeSupportReportTracker(upload.reportId);
-  trackSupportReportSubmitted(job, serverCorrelation, completedAttachments.length);
-  await deleteSupportReportJobAttachments(job);
+  trackSupportReportSubmitted(job, serverCorrelation, completedAttachments.length, telemetry.track);
+  await deleteSupportReportJobAttachments(job, diagnostics?.deleteAttachment);
   return {
     reportId: upload.reportId,
   };
-}
-
-async function nudgeSupportReportTracker(reportId: string): Promise<void> {
-  await ensureSupportReportTracker(reportId).catch(() => null);
 }

@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -15,12 +15,18 @@ import {
   getShortcutHandler,
   runShortcutHandler,
 } from "@/lib/domain/shortcuts/registry";
-import { requestSupportDialog } from "@/lib/infra/support/support-dialog-request";
+import { useSupportModalStore } from "@/stores/support/support-modal-store";
 
-const openSupportReportWindow = vi.hoisted(() => vi.fn(async () => {}));
+const updaterMocks = vi.hoisted(() => ({
+  isSupported: vi.fn(() => false),
+  getVersion: vi.fn(async () => "0.0.0-test"),
+  check: vi.fn(async () => null),
+  downloadAndInstall: vi.fn(async () => {}),
+  relaunch: vi.fn(async () => {}),
+}));
 
-vi.mock("@/lib/access/tauri/support", () => ({
-  openSupportReportWindow,
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => ({ desktop: { updater: updaterMocks } }),
 }));
 
 vi.mock("@/components/app/sidebar/SidebarAccountFooter", () => ({
@@ -39,6 +45,22 @@ vi.mock("@/hooks/support/derived/use-support-report-snapshot", () => ({
     defaultScope: "app_only",
     defaultWorkspaceId: null,
     workspaceOptions: [],
+  }),
+}));
+
+vi.mock("@/hooks/support/facade/use-support-availability", () => ({
+  useSupportAvailability: () => ({
+    canSubmit: true,
+    disabledReason: null,
+  }),
+}));
+
+vi.mock("@/hooks/agents/derived/use-agent-catalog", () => ({
+  useAgentCatalog: () => ({
+    agents: [],
+    agentsByKind: new Map(),
+    isLoading: false,
+    isReconciling: false,
   }),
 }));
 
@@ -97,26 +119,15 @@ function renderSettingsSidebar({
   );
 }
 
-describe("SettingsSidebar support window", () => {
-  it("opens the support report window from Support", async () => {
+describe("SettingsSidebar support modal", () => {
+  it("opens the feedback modal from Support", async () => {
     renderSettingsSidebar();
 
     fireEvent.click(screen.getByRole("button", { name: "Support" }));
 
     await waitFor(() => {
-      expect(openSupportReportWindow).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  it("opens the support report window from the global support request", async () => {
-    renderSettingsSidebar();
-
-    act(() => {
-      requestSupportDialog();
-    });
-
-    await waitFor(() => {
-      expect(openSupportReportWindow).toHaveBeenCalledTimes(1);
+      expect(useSupportModalStore.getState().open).toBe(true);
+      expect(useSupportModalStore.getState().kind).toBe("bug");
     });
   });
 });
@@ -158,18 +169,15 @@ describe("SettingsSidebar layout and shortcuts", () => {
   });
 
   it("gives every harness its own entry in the Agents scope, in order", () => {
-    renderSettingsSidebar({ activeScope: "agents", activeSection: "agents" });
+    renderSettingsSidebar({ activeScope: "agents", activeSection: "agent-claude" });
 
     const navText = screen.getByRole("navigation", { name: "Settings" }).textContent ?? "";
     const expectedOrder = [
-      "Overview",
       "Claude Code",
       "Codex",
       "OpenCode",
       "Grok",
-      "Gemini",
       "API keys",
-      "Defaults",
     ];
     let previousIndex = -1;
     for (const label of expectedOrder) {
@@ -267,10 +275,10 @@ describe("SettingsSidebar layout and shortcuts", () => {
     expect(onCheckForUpdates).not.toHaveBeenCalled();
   });
 
-  it("uses the settings sidebar rail width", () => {
+  it("fills its parent rail width", () => {
     const { container } = renderSettingsSidebar();
 
-    expect(container.firstElementChild?.className).toContain("w-[240px]");
+    expect(container.firstElementChild?.className).toContain("w-full");
   });
 
   it("numbers the active scope's sections for Cmd shortcuts", async () => {
@@ -299,6 +307,36 @@ describe("SettingsSidebar layout and shortcuts", () => {
       digit: 2,
     })).toBe(true);
     expect(onSelectSection).toHaveBeenLastCalledWith("general");
+  });
+
+  it("numbers Org sections in their visible sidebar order", async () => {
+    vi.stubGlobal("navigator", {
+      platform: "MacIntel",
+      userAgent: "Mac OS X",
+    });
+
+    const onSelectSection = vi.fn();
+    renderSettingsSidebar({
+      activeScope: "org",
+      activeSection: "organization",
+      onSelectSection,
+    });
+
+    await waitFor(() => {
+      expect(getShortcutHandler("settings.section-by-index")).not.toBeNull();
+    });
+
+    expect(runShortcutHandler("settings.section-by-index", {
+      source: "keyboard",
+      digit: 1,
+    })).toBe(true);
+    expect(onSelectSection).toHaveBeenLastCalledWith("organization");
+
+    expect(runShortcutHandler("settings.section-by-index", {
+      source: "keyboard",
+      digit: 2,
+    })).toBe(true);
+    expect(onSelectSection).toHaveBeenLastCalledWith("organization-members");
   });
 
   it("keeps disabled sections in numbering but declines their shortcut", async () => {

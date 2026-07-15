@@ -12,7 +12,7 @@ vi.mock("@proliferate/ui/icons", () => ({
   CloudIcon: () => <span data-icon="cloud" />,
   FolderClosedFilled: () => <span data-icon="folder-closed" />,
   FolderFilled: () => <span data-icon="folder-filled" />,
-  Globe: () => <span data-icon="globe" />,
+  FolderRemote: () => <span data-icon="folder-remote" />,
   Plus: () => <span data-icon="plus" />,
   Settings: () => <span data-icon="settings" />,
   Trash: () => <span data-icon="trash" />,
@@ -145,7 +145,7 @@ describe("RepoGroup new workspace command scope", () => {
     expect(useNewWorkspaceCommandScopeStore.getState().activeScope).toBeNull();
   });
 
-  it("marks local cloud repository groups with a cloud overlay", () => {
+  it("marks remote-capable repository groups with the fused folder+globe glyph", () => {
     render(
       <RepoGroup
         name="Repo A"
@@ -158,6 +158,6 @@ describe("RepoGroup new workspace command scope", () => {
       </RepoGroup>,
     );
 
-    expect(document.querySelector('[data-icon="globe"]')).toBeTruthy();
+    expect(document.querySelector('[data-icon="folder-remote"]')).toBeTruthy();
   });
 });

@@ -23,11 +23,15 @@ export function agentGatewayRootKey() {
 }
 
 export function agentApiKeysKey() {
-  return [...agentGatewayRootKey(), "api-keys"] as const;
+  return [...agentGatewayRootKey(), "keys"] as const;
 }
 
-export function agentRouteSelectionsKey() {
-  return [...agentGatewayRootKey(), "route-selections"] as const;
+export function agentAuthSelectionsRootKey() {
+  return [...agentGatewayRootKey(), "selections"] as const;
+}
+
+export function agentAuthSelectionsKey(surface: string | null = null) {
+  return [...agentAuthSelectionsRootKey(), surface ?? "all"] as const;
 }
 
 export function agentAuthStateRootKey() {
@@ -154,6 +158,73 @@ export function cloudBillingKey(
   return [...cloudRootKey(), "billing", owner.ownerScope, owner.organizationId] as const;
 }
 
+export function usageRootKey(
+  owner: CloudOwnerSelectionKey = personalCloudOwnerKey(),
+) {
+  return [...cloudRootKey(), "usage", owner.ownerScope, owner.organizationId] as const;
+}
+
+export function usageSummaryKey(
+  owner: CloudOwnerSelectionKey = personalCloudOwnerKey(),
+) {
+  return [...usageRootKey(owner), "summary"] as const;
+}
+
+export interface UsageTimeseriesKeyOptions {
+  granularity?: string | null;
+  days?: number | null;
+  kind?: string | null;
+}
+
+export function usageTimeseriesKey(
+  owner: CloudOwnerSelectionKey = personalCloudOwnerKey(),
+  options: UsageTimeseriesKeyOptions = {},
+) {
+  return [
+    ...usageRootKey(owner),
+    "timeseries",
+    options.granularity ?? "day",
+    options.days ?? 30,
+    options.kind ?? "all",
+  ] as const;
+}
+
+export function llmBalanceKey(
+  owner: CloudOwnerSelectionKey = personalCloudOwnerKey(),
+) {
+  return [...usageRootKey(owner), "llm-balance"] as const;
+}
+
+export function orgUsageByUserRootKey(organizationId: string | null) {
+  return [...organizationsRootKey(), organizationId, "usage", "by-user"] as const;
+}
+
+export function orgUsageByUserKey(organizationId: string | null, days: number | null = null) {
+  return [...orgUsageByUserRootKey(organizationId), days ?? 30] as const;
+}
+
+export function orgUserUsageTimeseriesKey(
+  organizationId: string | null,
+  userId: string | null,
+  options: UsageTimeseriesKeyOptions = {},
+) {
+  return [
+    ...organizationsRootKey(),
+    organizationId,
+    "usage",
+    "users",
+    userId,
+    "timeseries",
+    options.granularity ?? "day",
+    options.days ?? 30,
+    options.kind ?? "all",
+  ] as const;
+}
+
+export function orgLimitsKey(organizationId: string | null) {
+  return [...organizationsRootKey(), organizationId, "limits"] as const;
+}
+
 export function cloudRepoBranchesKey(gitOwner: string, gitRepoName: string) {
   return [...cloudRootKey(), "repos", gitOwner, gitRepoName, "branches"] as const;
 }
@@ -185,6 +256,15 @@ export function cloudGitRepositoriesKey(
 
 export function repositoriesKey() {
   return [...cloudRootKey(), "repositories"] as const;
+}
+
+export function actorRepositoriesKey(apiBaseUrl: string, authCacheScope: string) {
+  return [
+    ...repositoriesKey(),
+    "actor",
+    apiBaseUrl,
+    authCacheScope,
+  ] as const;
 }
 
 export function repoEnvironmentKey(
@@ -325,6 +405,37 @@ export function isCloudWorkspaceConnectionQueryKey(
 
 export function automationsRootKey() {
   return ["automations"] as const;
+}
+
+export function workflowDefinitionsRootKey(
+  apiBaseUrl: string,
+  authCacheScope: string,
+) {
+  return [
+    ...cloudRootKey(),
+    "workflow-definitions",
+    apiBaseUrl,
+    authCacheScope,
+  ] as const;
+}
+
+export function workflowDefinitionsListKey(
+  apiBaseUrl: string,
+  authCacheScope: string,
+) {
+  return [...workflowDefinitionsRootKey(apiBaseUrl, authCacheScope), "list"] as const;
+}
+
+export function workflowDefinitionDetailKey(
+  apiBaseUrl: string,
+  authCacheScope: string,
+  workflowDefinitionId: string | null,
+) {
+  return [
+    ...workflowDefinitionsRootKey(apiBaseUrl, authCacheScope),
+    "detail",
+    workflowDefinitionId,
+  ] as const;
 }
 
 export interface AutomationsListKeyOptions {

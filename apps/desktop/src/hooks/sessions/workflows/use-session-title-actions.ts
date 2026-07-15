@@ -1,4 +1,5 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useUpdateSessionTitleMutation } from "@anyharness/sdk-react";
 import { generateSessionTitle } from "@proliferate/cloud-sdk/client/ai-magic";
 import { getSessionClientAndWorkspace } from "@/lib/access/anyharness/session-runtime";
@@ -10,7 +11,7 @@ import {
 import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
 import { useSessionSummaryActions } from "@/hooks/sessions/workflows/use-session-summary-actions";
 import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import { useProductAuthStatus } from "@/hooks/auth/facade/use-product-auth";
 
 const requestedAutoSessionTitles = new Map<string, number>();
 const MAX_TRACKED_AUTO_SESSION_TITLES = 500;
@@ -33,6 +34,15 @@ function markAutoSessionTitleRequested(sessionId: string): boolean {
 }
 
 export function useSessionTitleActions() {
+  const host = useProductHost();
+  const ssh = host.desktop?.ssh ?? null;
+  const cloudClient = host.cloud.client;
+  // Auto-title generation runs outside render; read the latest normalized auth
+  // status through a ref so the callback identity stays stable (matching the
+  // former non-reactive the Desktop auth store read).
+  const authStatus = useProductAuthStatus();
+  const authStatusRef = useRef(authStatus);
+  authStatusRef.current = authStatus;
   const { applySessionSummary } = useSessionSummaryActions();
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
   const updateSessionTitleMutation = useUpdateSessionTitleMutation();
@@ -43,8 +53,8 @@ export function useSessionTitleActions() {
       throw new Error("Chat title cannot be empty.");
     }
 
-    const { connection, workspaceId, materializedSessionId } =
-      await getSessionClientAndWorkspace(sessionId);
+    const { workspaceId, materializedSessionId } =
+      await getSessionClientAndWorkspace(sessionId, ssh, cloudClient);
     const operationId = startMeasurementOperation({
       kind: "session_rename",
       surfaces: ["header-tabs", "workspace-sidebar", "chat-surface"],
@@ -62,9 +72,7 @@ export function useSessionTitleActions() {
 
     const storeStartedAt = performance.now();
     applySessionSummary(sessionId, session, workspaceId);
-    upsertWorkspaceSessionRecord(workspaceId, session, {
-      runtimeUrl: connection.runtimeUrl,
-    });
+    upsertWorkspaceSessionRecord(workspaceId, session);
     if (operationId) {
       recordMeasurementMetric({
         type: "store",
@@ -76,7 +84,7 @@ export function useSessionTitleActions() {
     }
 
     return session;
-  }, [applySessionSummary, updateSessionTitleMutation, upsertWorkspaceSessionRecord]);
+  }, [applySessionSummary, ssh, cloudClient, updateSessionTitleMutation, upsertWorkspaceSessionRecord]);
 
   const maybeGenerateSessionTitle = useCallback(async (input: {
     sessionId: string;
@@ -90,7 +98,7 @@ export function useSessionTitleActions() {
     if (!trimmedPrompt) {
       return;
     }
-    if (useAuthStore.getState().status !== "authenticated") {
+    if (authStatusRef.current !== "authenticated") {
       return;
     }
 

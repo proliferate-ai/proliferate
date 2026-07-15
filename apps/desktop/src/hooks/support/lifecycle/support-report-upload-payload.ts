@@ -5,18 +5,23 @@ import type {
   SupportReportUploadFile,
   SupportReportUploadResponse,
 } from "@proliferate/cloud-sdk/types";
-import {
-  readStagedSupportReportAttachment,
-} from "@/lib/access/tauri/support";
+import type { ProductSupportTelemetryContext } from "@proliferate/product-client/host/product-host";
 import type {
   SupportReportJob,
   SupportReportServerCorrelation,
   SupportReportWorkspaceOption,
 } from "@/lib/domain/support/report-types";
-import {
-  getSupportReportTelemetryRefs,
-  trackProductEvent,
-} from "@/lib/integrations/telemetry/client";
+import type { DesktopProductEventMap } from "@/lib/domain/telemetry/events";
+
+/**
+ * Narrow typed telemetry dependency injected from the calling hook (which reads
+ * the product telemetry facade). Keeps this plain module free of any vendor
+ * import while preserving the exact event name/payload it emits.
+ */
+type TrackSupportReportSubmitted = (
+  name: "support_report_submitted",
+  payload: DesktopProductEventMap["support_report_submitted"],
+) => void;
 
 export const DIAGNOSTICS_MAX_BYTES = 25 * 1024 * 1024;
 const ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
@@ -25,6 +30,7 @@ const TOTAL_ATTACHMENT_MAX_BYTES = 100 * 1024 * 1024;
 export function buildCreateReportRequest(
   job: SupportReportJob,
   attachmentCount: number,
+  supportContext: ProductSupportTelemetryContext,
 ): SupportReportCreateRequest {
   return {
     clientJobId: job.jobId,
@@ -33,12 +39,18 @@ export function buildCreateReportRequest(
     context: job.snapshot.context,
     scope: job.scope,
     workspaceRefs: workspaceRefsForJob(job),
-    telemetryRefs: getSupportReportTelemetryRefs(),
+    telemetryRefs: supportContext.telemetryRefs,
     expectedClientUploads: {
-      diagnostics: true,
+      diagnostics: job.includeLogs !== false,
       attachmentCount,
     },
-    publicContentConsent: job.publicContentConsent !== false,
+    publicContentConsent: false,
+    kind: job.kind ?? "bug",
+    creditConsent: job.creditConsent ?? false,
+    creditName: job.creditName ?? null,
+    clientReleaseId: supportContext.clientReleaseId,
+    urgent: job.urgent ?? false,
+    notifyMe: job.notifyMe ?? false,
   };
 }
 
@@ -79,13 +91,14 @@ export function trackSupportReportSubmitted(
   job: SupportReportJob,
   correlation: SupportReportServerCorrelation,
   attachmentCount: number,
+  track: TrackSupportReportSubmitted,
 ): void {
   const workspaceIds = workspaceIdsForJob(job);
-  trackProductEvent("support_report_submitted", {
+  track("support_report_submitted", {
     source_surface: "desktop",
     scope_kind: job.scope.kind,
     public_content_consent: job.publicContentConsent !== false,
-    diagnostics_included: true,
+    diagnostics_included: job.includeLogs !== false,
     attachment_count: attachmentCount,
     workspace_count: workspaceIds.length,
     cloud_workspace_count: correlation.cloudWorkspaceIds.length,
@@ -131,11 +144,12 @@ export function jsonBlob(value: unknown): Blob {
 
 export async function loadAttachmentBlob(
   attachment: SupportReportJob["attachments"][number],
+  readAttachment?: (path: string) => Promise<string>,
 ): Promise<Blob> {
   const dataBase64 = attachment.dataBase64
     ?? (
       attachment.stagedPath
-        ? await readStagedSupportReportAttachment(attachment.stagedPath)
+        ? await readAttachment?.(attachment.stagedPath)
         : null
     );
   if (!dataBase64) {
@@ -154,26 +168,35 @@ export async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
 export function completeRequestForUpload(input: {
   job: SupportReportJob;
   reportId: string;
-  diagnosticsObjectKey: string;
-  diagnosticsSha256: string;
-  diagnosticsBytes: number;
+  /**
+   * Diagnostics object metadata. Omitted (undefined) when the submitter turned
+   * off "Include app logs" so no diagnostics.json was uploaded for this report.
+   */
+  diagnostics?: {
+    objectKey: string;
+    sha256: string;
+    sizeBytes: number;
+  };
   generatedAt: string;
   cloudDiagnosticsStatus: unknown;
   attachments: NonNullable<SupportReportCompleteRequest["attachments"]>;
 }): SupportReportCompleteRequest {
   return {
-    diagnostics: {
-      objectKey: input.diagnosticsObjectKey,
-      sha256: input.diagnosticsSha256,
-      sizeBytes: input.diagnosticsBytes,
-    },
+    diagnostics: input.diagnostics
+      ? {
+          objectKey: input.diagnostics.objectKey,
+          sha256: input.diagnostics.sha256,
+          sizeBytes: input.diagnostics.sizeBytes,
+        }
+      : null,
     attachments: input.attachments,
     packageManifest: {
       schemaVersion: 2,
       jobId: input.job.jobId,
       reportId: input.reportId,
       generatedAt: input.generatedAt,
-      diagnosticsBytes: input.diagnosticsBytes,
+      diagnosticsBytes: input.diagnostics?.sizeBytes ?? 0,
+      diagnosticsIncluded: input.diagnostics != null,
       attachmentCount: input.attachments.length,
       cloudDiagnosticsStatus: input.cloudDiagnosticsStatus,
     },

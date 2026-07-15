@@ -8,7 +8,10 @@ import type {
 } from "@/lib/domain/chat/models/model-selector-types";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
 import type { ConfiguredSessionControlValue } from "@/lib/domain/chat/session-controls/presentation";
-import type { ModelAvailabilityState } from "@/lib/domain/home/home-next-launch";
+import type {
+  HomeNextDestination,
+  ModelAvailabilityState,
+} from "@/lib/domain/home/home-next-launch";
 
 /**
  * Adapters that let the home screen drive the SAME composer controls the chat
@@ -60,10 +63,12 @@ export function buildHomeModelSelectorProps({
 export function buildHomeModeControlDescriptor({
   modes,
   selectedModeId,
+  label = "Mode",
   onSelect,
 }: {
   modes: ConfiguredSessionControlValue[];
   selectedModeId: string | null;
+  label?: string;
   onSelect: (modeId: string) => void;
 }): (LiveSessionControlDescriptor & { key: "mode" }) | null {
   if (modes.length === 0 || selectedModeId === null) {
@@ -71,7 +76,7 @@ export function buildHomeModeControlDescriptor({
   }
   return {
     key: "mode",
-    label: "Mode",
+    label,
     detail: null,
     rawConfigId: "mode",
     settable: true,
@@ -85,4 +90,36 @@ export function buildHomeModeControlDescriptor({
     })),
     onSelect,
   };
+}
+
+export function buildHomeSessionConfigControls({
+  destination,
+  agentKind,
+  modes,
+  selectedModeId,
+  launchControls,
+  onSelectMode,
+}: {
+  destination: HomeNextDestination;
+  agentKind: string | null;
+  modes: ConfiguredSessionControlValue[];
+  selectedModeId: string | null;
+  launchControls: LiveSessionControlDescriptor[];
+  onSelectMode: (modeId: string) => void;
+}): LiveSessionControlDescriptor[] {
+  if (destination === "cowork") {
+    return launchControls.filter((control) => control.key !== "mode");
+  }
+
+  const hasCollaborationMode = launchControls.some(
+    (control) => control.key === "collaboration_mode",
+  );
+  const modeControl = buildHomeModeControlDescriptor({
+    modes,
+    selectedModeId,
+    label: hasCollaborationMode || agentKind === "codex" ? "Permissions" : "Mode",
+    onSelect: onSelectMode,
+  });
+
+  return modeControl ? [modeControl, ...launchControls] : launchControls;
 }

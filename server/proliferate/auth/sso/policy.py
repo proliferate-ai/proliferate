@@ -6,6 +6,49 @@ from urllib.parse import urlparse
 
 from fastapi import HTTPException
 
+from proliferate.auth.sso.types import SsoConnectionSnapshot
+
+# Stable machine reasons for an incomplete OIDC connection, mapped to the human
+# 400 messages `start` has always raised. Surfaced verbatim as the
+# `/auth/sso/discover` `reason` so a misconfigured deployment advertises
+# `enabled: false` with an actionable code instead of a button that only fails
+# at the provider.
+OIDC_CONFIG_ERROR_MESSAGES: dict[str, str] = {
+    "oidc_client_id_missing": "OIDC client ID is required.",
+    "oidc_client_secret_missing": "OIDC client secret is required.",
+    "oidc_endpoints_missing": "OIDC issuer or discovery URL is required.",
+}
+
+
+def oidc_configuration_error(
+    connection: SsoConnectionSnapshot,
+    *,
+    require_secret: bool = True,
+) -> str | None:
+    """Return a stable reason code when an OIDC connection is missing required
+    configuration, else ``None``. Single source of truth for "is this OIDC
+    connection actually startable", consumed by discovery (advertise only usable
+    configs), start-time validation, and the deployment doctor. Never raises."""
+    if not connection.oidc_client_id:
+        return "oidc_client_id_missing"
+    if (
+        require_secret
+        and not connection.oidc_client_secret
+        and (connection.oidc_token_endpoint_auth_method != "none")
+    ):
+        return "oidc_client_secret_missing"
+    has_static_endpoints = (
+        connection.oidc_issuer_url
+        and connection.oidc_authorization_endpoint
+        and connection.oidc_token_endpoint
+        and connection.oidc_jwks_uri
+    )
+    if not has_static_endpoints and not (
+        connection.oidc_issuer_url or connection.oidc_discovery_url
+    ):
+        return "oidc_endpoints_missing"
+    return None
+
 
 def normalize_domain(value: str) -> str:
     normalized = value.strip().lower()

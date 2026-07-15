@@ -127,6 +127,18 @@ export interface IntegrationOAuthFlowStatus {
 // Org-admin definition management
 // ---------------------------------------------------------------------------
 
+/**
+ * How the auth kind of an org-custom definition was determined at creation:
+ * the probe found an OAuth challenge ("detected"), found none ("none"),
+ * could not reach the server ("unreachable"), or the admin chose explicitly
+ * ("forced"). Only present on create responses.
+ */
+export type AdminIntegrationAuthDetection =
+  | "detected"
+  | "none"
+  | "unreachable"
+  | "forced";
+
 export interface AdminIntegrationDefinition {
   definitionId: string;
   namespace: string;
@@ -137,12 +149,15 @@ export interface AdminIntegrationDefinition {
   enabledByDefault: boolean;
   policyEnabled: boolean | null;
   effectiveEnabled: boolean;
+  authDetection?: AdminIntegrationAuthDetection | null;
 }
 
 export interface CreateAdminIntegrationDefinitionRequest {
   displayName: string;
   namespace: string;
   mcpUrl: string;
+  /** "auto" (default) probes the MCP URL for an OAuth challenge. */
+  authKind?: "auto" | "none" | "oauth2";
 }
 
 // ---------------------------------------------------------------------------

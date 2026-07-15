@@ -154,6 +154,14 @@ impl GitService {
         staging::unstage_paths(workspace_path, paths)
     }
 
+    pub fn stage_patch(workspace_path: &Path, patch: &str) -> anyhow::Result<()> {
+        staging::stage_patch(workspace_path, patch)
+    }
+
+    pub fn unstage_patch(workspace_path: &Path, patch: &str) -> anyhow::Result<()> {
+        staging::unstage_patch(workspace_path, patch)
+    }
+
     pub fn revert_patches(
         workspace_path: &Path,
         entries: &[GitRevertPatchEntry],

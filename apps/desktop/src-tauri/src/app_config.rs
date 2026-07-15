@@ -216,6 +216,75 @@ pub fn load_app_config_record() -> Result<AppConfigRecord, String> {
     Ok(app_config_record_from_file(parsed, native_dev_profile()))
 }
 
+/// Validate + normalize a candidate `apiBaseUrl`: must parse as an absolute
+/// `http`/`https` URL with a host. Trailing slash stripped so downstream path
+/// joins (`{base}/meta`, `{base}/v1/...`) never produce a double slash.
+fn validate_api_base_url(raw: &str) -> Result<String, String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err("Server URL is required.".to_string());
+    }
+    let parsed = url::Url::parse(trimmed).map_err(|_| "Enter a valid server URL.".to_string())?;
+    if parsed.scheme() != "http" && parsed.scheme() != "https" {
+        return Err("Server URL must start with http:// or https://.".to_string());
+    }
+    if parsed.host_str().unwrap_or("").is_empty() {
+        return Err("Server URL must include a host.".to_string());
+    }
+    Ok(trimmed.trim_end_matches('/').to_string())
+}
+
+/// Read-modify-write `apiBaseUrl` into config.json, preserving every other key
+/// already in the file (telemetry preference, and any future field). `None`
+/// clears the override (reverting to the packaged default base URL). The
+/// write is atomic via [`write_json_file_atomic`].
+pub fn set_app_config_api_base_url(
+    api_base_url: Option<String>,
+) -> Result<AppConfigRecord, String> {
+    set_app_config_api_base_url_at(&config_path()?, api_base_url)
+}
+
+/// Path-parameterized core of [`set_app_config_api_base_url`] so the
+/// read-modify-write + unknown-field preservation can be unit tested against
+/// a temp file instead of the real `~/.proliferate` home.
+fn set_app_config_api_base_url_at(
+    path: &Path,
+    api_base_url: Option<String>,
+) -> Result<AppConfigRecord, String> {
+    let normalized = match api_base_url {
+        Some(raw) => Some(validate_api_base_url(&raw)?),
+        None => None,
+    };
+
+    let mut document =
+        read_json_file::<serde_json::Map<String, serde_json::Value>>(path)?.unwrap_or_default();
+
+    match &normalized {
+        Some(value) => {
+            document.insert(
+                "apiBaseUrl".to_string(),
+                serde_json::Value::String(value.clone()),
+            );
+        }
+        None => {
+            document.remove("apiBaseUrl");
+        }
+    }
+
+    write_json_file_atomic(path, &document)?;
+
+    let telemetry_disabled = document
+        .get("telemetryDisabled")
+        .and_then(serde_json::Value::as_bool);
+    Ok(app_config_record_from_file(
+        AppConfigFile {
+            api_base_url: normalized,
+            telemetry_disabled,
+        },
+        native_dev_profile(),
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -333,6 +402,120 @@ mod tests {
 
         let contents = std::fs::read_to_string(&path).expect("read should succeed");
         assert_eq!(contents, "install-two");
+
+        std::fs::remove_dir_all(path.parent().expect("temp dir should exist"))
+            .expect("temp dir cleanup should succeed");
+    }
+
+    #[test]
+    fn set_app_config_api_base_url_writes_to_a_fresh_file() {
+        let path = temp_path("config-fresh.json");
+        let record = set_app_config_api_base_url_at(
+            &path,
+            Some("https://proliferate.corp.example/".to_string()),
+        )
+        .expect("set should succeed");
+
+        assert_eq!(
+            record.api_base_url,
+            Some("https://proliferate.corp.example".to_string())
+        );
+
+        let on_disk: serde_json::Value = read_json_file(&path)
+            .expect("read should succeed")
+            .expect("file should exist");
+        assert_eq!(
+            on_disk,
+            json!({ "apiBaseUrl": "https://proliferate.corp.example" })
+        );
+
+        std::fs::remove_dir_all(path.parent().expect("temp dir should exist"))
+            .expect("temp dir cleanup should succeed");
+    }
+
+    #[test]
+    fn set_app_config_api_base_url_is_atomic_and_preserves_unknown_fields() {
+        let path = temp_path("config-preserve.json");
+        write_json_file_atomic(
+            &path,
+            &json!({
+                "apiBaseUrl": "https://old.example",
+                "telemetryDisabled": true,
+                "someFutureField": { "nested": 1 }
+            }),
+        )
+        .expect("seed write should succeed");
+
+        let record = set_app_config_api_base_url_at(
+            &path,
+            Some("https://new.example".to_string()),
+        )
+        .expect("set should succeed");
+
+        assert_eq!(record.api_base_url, Some("https://new.example".to_string()));
+        assert!(record.telemetry_disabled);
+
+        let on_disk: serde_json::Value = read_json_file(&path)
+            .expect("read should succeed")
+            .expect("file should exist");
+        assert_eq!(
+            on_disk,
+            json!({
+                "apiBaseUrl": "https://new.example",
+                "telemetryDisabled": true,
+                "someFutureField": { "nested": 1 }
+            })
+        );
+
+        std::fs::remove_dir_all(path.parent().expect("temp dir should exist"))
+            .expect("temp dir cleanup should succeed");
+    }
+
+    #[test]
+    fn set_app_config_api_base_url_none_clears_the_override_but_keeps_other_fields() {
+        let path = temp_path("config-clear.json");
+        write_json_file_atomic(
+            &path,
+            &json!({ "apiBaseUrl": "https://old.example", "telemetryDisabled": true }),
+        )
+        .expect("seed write should succeed");
+
+        let record =
+            set_app_config_api_base_url_at(&path, None).expect("clearing should succeed");
+
+        assert_eq!(record.api_base_url, None);
+        assert!(record.telemetry_disabled);
+
+        let on_disk: serde_json::Value = read_json_file(&path)
+            .expect("read should succeed")
+            .expect("file should exist");
+        assert_eq!(on_disk, json!({ "telemetryDisabled": true }));
+
+        std::fs::remove_dir_all(path.parent().expect("temp dir should exist"))
+            .expect("temp dir cleanup should succeed");
+    }
+
+    #[test]
+    fn set_app_config_api_base_url_rejects_invalid_urls_and_leaves_file_untouched() {
+        let path = temp_path("config-invalid.json");
+        write_json_file_atomic(&path, &json!({ "apiBaseUrl": "https://old.example" }))
+            .expect("seed write should succeed");
+
+        for invalid in [
+            "not a url",
+            "ftp://proliferate.corp.example",
+            "https://",
+            "   ",
+        ] {
+            let error = set_app_config_api_base_url_at(&path, Some(invalid.to_string()))
+                .expect_err(&format!("{invalid} should be rejected"));
+            assert!(!error.is_empty());
+        }
+
+        let on_disk: serde_json::Value = read_json_file(&path)
+            .expect("read should succeed")
+            .expect("file should exist");
+        assert_eq!(on_disk, json!({ "apiBaseUrl": "https://old.example" }));
 
         std::fs::remove_dir_all(path.parent().expect("temp dir should exist"))
             .expect("temp dir cleanup should succeed");

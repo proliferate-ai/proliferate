@@ -1,9 +1,9 @@
 import {
   Check,
-  CollapseAll,
-  ExpandAll,
-  Filter,
-  FolderPlusFilled,
+  ChevronDownUp,
+  ChevronUpDown,
+  FolderPlus,
+  ListFilter,
 } from "@proliferate/ui/icons";
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
@@ -53,9 +53,9 @@ export function SidebarRepositoriesHeader({
               variant="section"
             >
               {allRepoGroupsCollapsed ? (
-                <ExpandAll className="size-3" />
+                <ChevronUpDown className="size-3" />
               ) : (
-                <CollapseAll className="size-3" />
+                <ChevronDownUp className="size-3" />
               )}
             </SidebarActionButton>
           )}
@@ -66,7 +66,7 @@ export function SidebarRepositoriesHeader({
                 active={filtersActive}
                 variant="section"
               >
-                <Filter className="size-3" />
+                <ListFilter className="size-3" />
               </SidebarActionButton>
             }
           >
@@ -101,7 +101,7 @@ export function SidebarRepositoriesHeader({
             title="Add repository"
             variant="section"
           >
-            <FolderPlusFilled className="size-3" />
+            <FolderPlus className="size-3" />
           </SidebarActionButton>
         </>
       )}

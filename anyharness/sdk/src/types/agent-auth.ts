@@ -4,24 +4,38 @@ export type ApplyAgentAuthStateResponse =
   components["schemas"]["ApplyAgentAuthStateResponse"];
 
 /**
- * One rendered selection in the agent-auth state.json contract
- * (`route_auth/state.rs::AuthSelection`, snake_case on the wire). The runtime
- * accepts the document verbatim as the PUT /v1/agent-auth/state body, so it
- * is typed here rather than in the generated OpenAPI surface.
+ * One credential source in the agent-auth state.json v2 contract
+ * (`route_auth/state.rs`, snake_case on the wire). The runtime accepts the
+ * document verbatim as the PUT /v1/agent-auth/state body, so it is typed here
+ * rather than in the generated OpenAPI surface.
  */
-export interface AgentAuthStateSelection {
-  harness: string;
-  route: "native" | "api_key" | "gateway";
-  slot: string;
-  provider?: string | null;
+export interface AgentAuthStateSource {
+  kind: "gateway" | "api_key";
   base_url?: string | null;
   key?: string | null;
-  model_catalog?: string[] | null;
+  env_var_name?: string | null;
+  value?: string | null;
 }
 
-/** The whole state.json document (`route_auth/state.rs::AgentAuthState`). */
+/** One harness's enabled sources in the state.json v2 document. */
+export interface AgentAuthStateHarness {
+  harness_kind: string;
+  sources: AgentAuthStateSource[];
+}
+
+/** The whole state.json v2 document (`route_auth/state.rs::AgentAuthState`). */
 export interface AgentAuthStateDocument {
+  version: number;
   revision: number;
-  user_id: string;
-  selections: AgentAuthStateSelection[];
+  user_id?: string | null;
+  /**
+   * The origin (`scheme://host[:port]`) of the control-plane server that
+   * produced this document. The desktop write path stamps this at push time
+   * so the runtime's render plane can detect a document left over from a
+   * server the app is no longer pointed at and skip injecting its gateway
+   * credentials. Omit for cloud-materialized state, where there is no
+   * server-switch concern.
+   */
+  issuing_server_origin?: string | null;
+  harnesses: AgentAuthStateHarness[];
 }

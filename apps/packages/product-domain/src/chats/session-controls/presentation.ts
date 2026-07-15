@@ -12,7 +12,6 @@ export type SessionControlIconKey =
   | "chat"
   | "claude"
   | "edit"
-  | "gemini"
   | "openai"
   | "opencodeBuild"
   | "opencodePlan"
@@ -174,39 +173,6 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         shortLabel: "Ask",
         description: "Answer without making changes.",
         icon: "chat",
-      },
-    ],
-  },
-  gemini: {
-    mode: [
-      {
-        value: "default",
-        label: "Default",
-        shortLabel: "Default",
-        description: "Ask before each action.",
-        icon: "chat",
-        isDefault: true,
-      },
-      {
-        value: "autoEdit",
-        label: "Auto Edit",
-        shortLabel: "Auto Edit",
-        description: "Auto-approve edits.",
-        icon: "edit",
-      },
-      {
-        value: "yolo",
-        label: "YOLO",
-        shortLabel: "YOLO",
-        description: "Skip permission checks.",
-        icon: "zap",
-      },
-      {
-        value: "plan",
-        label: "Plan",
-        shortLabel: "Plan",
-        description: "Plan without execution.",
-        icon: "plan",
       },
     ],
   },

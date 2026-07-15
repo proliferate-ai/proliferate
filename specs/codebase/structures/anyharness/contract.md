@@ -1,4 +1,4 @@
-s# Contract Crate
+# Contract Crate
 
 `anyharness-contract` is the transport schema crate for AnyHarness.
 
@@ -108,6 +108,7 @@ Owns session-facing transport types:
 - optional resume request body
 - redacted MCP binding summary read models
 - prompt request and response
+- pending-prompt edit, delete, exact-order, and steer requests
 - interaction resolution request
 
 `PromptInputBlock` is the client-to-runtime prompt shape. Plan handoff uses
@@ -124,6 +125,18 @@ not accept provenance as trusted input. The public variants are deliberately
 bounded to display-safe `agentSession`, `subagentWake`, and `system` shapes;
 internal automation provenance is redacted or omitted rather than exposed
 directly.
+
+Pending-prompt sequence numbers are immutable, runtime-owned queue-entry
+identities. They come from a durable per-session monotonic cursor and are never
+reused after execution or deletion. Array order is the queue position.
+`promptId` is only local-outbox reconciliation metadata and may be absent or
+duplicated. Reorder requests carry both the exact order the caller observed and
+the desired exact permutation; a changed current order is a typed 409 conflict.
+`pending_prompts_reordered` carries the complete authoritative queue after the
+runtime commits; reducers replace their queue from that payload rather than
+applying it as a relative move. Keeping `seq` stable also makes older reducers
+safe when they ignore the newer full-order event and later receive row updates
+or removals.
 
 `Session.mcpBindingSummaries` is a non-secret launch-time read model. It may
 describe which MCP bindings were applied or not applied, but it must not carry
@@ -142,29 +155,27 @@ keeps the clear self-contained after a runtime process restart.
 Omitted values default to enabled for compatibility. Resume requests do not
 carry this flag; resumed sessions use their persisted policy.
 
-### Worker-Facing HTTP Contract
+### Cloud Access And Optional Worker Interaction
 
-`proliferate-worker` is a first-class AnyHarness API client. These routes are
-the current worker-facing contract used by Cloud-mediated targets:
+Managed Cloud does not translate product actions into a Worker command
+protocol. The server creates worktrees by calling the normal AnyHarness
+workspace API directly, and the cloud-sandbox gateway proxies ordinary
+AnyHarness HTTP/WebSocket requests from authorized clients. Session events
+remain AnyHarness runtime truth and are consumed through the normal runtime
+contracts; the Worker does not upload Cloud event batches.
 
-| Worker command / loop | AnyHarness route | Notes |
+The optional Proliferate Worker uses a narrow catalog-and-health portion of the
+AnyHarness HTTP contract:
+
+| Worker purpose | AnyHarness route | Notes |
 | --- | --- | --- |
-| `materialize_workspace` `existing_path` | `POST /v1/workspaces/resolve` | Idempotently resolves or registers a repo/workspace path. |
-| `materialize_workspace` `worktree` | `POST /v1/workspaces/worktrees` | Creates a worktree workspace from an existing repo root id. |
-| worktree recovery | `POST /v1/workspaces/resolve` | Used only when a failed worktree create may correspond to an existing compatible worktree. |
-| display-name patch | `PATCH /v1/workspaces/{workspace_id}/display-name` | Best-effort after workspace materialization. |
-| `start_session` | `POST /v1/sessions` | Uses the normal session create contract. |
-| `send_prompt` | `POST /v1/sessions/{session_id}/prompt` | Worker maps legacy text/prompt payloads into prompt blocks for compatibility. |
-| `update_session_config` | `POST /v1/sessions/{session_id}/config-options` | Raw config ids are applied directly; normalized controls are resolved from live config before apply. |
-| `resolve_interaction` | `POST /v1/sessions/{session_id}/interactions/{interaction_id}/resolve` | Covers permission, user-input, and MCP elicitation outcomes. |
-| `cancel_turn` | `POST /v1/sessions/{session_id}/cancel` | AnyHarness owns canonical cancel semantics. |
-| `close_session` | `POST /v1/sessions/{session_id}/close` | AnyHarness owns session close state. |
-| event tailing | `GET /v1/sessions/{session_id}/events?after_seq=...` | Worker polls by sequence and uploads Cloud event batches. |
+| read active catalog version | `GET /v1/catalogs/agents/version` | Compares the running runtime with the version advertised by Cloud heartbeat. |
+| apply catalog document | `PUT /v1/catalogs/agents` | Pushes the Cloud catalog when versions differ. |
+| verify a relaunched runtime | `GET /health` | Requires the desired AnyHarness version before accepting an in-place runtime update. |
 
-Cloud command ids, actor metadata, and target routing context are Cloud/worker
-concerns today. The worker currently sends ordinary AnyHarness request bodies;
-there is no AnyHarness `command_metadata` envelope or precondition contract on
-these routes yet.
+The Worker's download, checksum, preflight, swap, and relaunch orchestration
+lives outside the AnyHarness API. Only the final health/version gate uses the
+runtime HTTP surface.
 
 ### `files.rs`
 

@@ -1,7 +1,17 @@
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { createElement, type ReactElement } from "react";
+import { renderToStaticMarkup as renderReactToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import type { ProductHost } from "@proliferate/product-client/host/product-host";
+import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import { PlaygroundSidebarGitDiff } from "./PlaygroundSidebarGitDiff";
+
+const webTestHost = { desktop: null } as ProductHost;
+
+function renderToStaticMarkup(ui: ReactElement) {
+  return renderReactToStaticMarkup(
+    <ProductHostProvider host={webTestHost}>{ui}</ProductHostProvider>,
+  );
+}
 
 describe("PlaygroundSidebarGitDiff", () => {
   it("renders sidebar-shaped git diff states with production diff components", () => {

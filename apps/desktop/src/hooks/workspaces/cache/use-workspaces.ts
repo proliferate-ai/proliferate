@@ -7,7 +7,7 @@ import {
 } from "@/lib/domain/workspaces/cloud/collections";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useWorkspaceCollectionsCache } from "@/hooks/workspaces/cache/use-workspace-collections-cache";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import { useProductAuthUserId } from "@/hooks/auth/facade/use-product-auth";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import {
   elapsedMs,
@@ -93,11 +93,10 @@ async function preservePreviousOnNonAbort<T>(
 
 export function useWorkspaces(options?: UseWorkspacesOptions) {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
-  const authUserId = useAuthStore((state) => state.user?.id ?? null);
+  const hasLocalRuntime = runtimeUrl.trim().length > 0;
+  const authUserId = useProductAuthUserId();
   const { cloudActive } = useCloudAvailabilityState();
-  const canQuery = (options?.enabled ?? true) && (
-    runtimeUrl.trim().length > 0 || cloudActive
-  );
+  const canQuery = (options?.enabled ?? true) && hasLocalRuntime;
   const {
     getWorkspaceCollectionsCacheState,
     queryKey,
@@ -106,6 +105,9 @@ export function useWorkspaces(options?: UseWorkspacesOptions) {
   return useQuery<WorkspaceCollections>({
     queryKey,
     queryFn: async ({ signal }) => {
+      if (!hasLocalRuntime) {
+        throw new Error("A local AnyHarness runtime is required to refresh local workspace inventory.");
+      }
       const startedAt = startLatencyTimer();
       const operationId = startMeasurementOperation({
         kind: "workspace_collections_refresh",
@@ -188,7 +190,7 @@ export function useWorkspaces(options?: UseWorkspacesOptions) {
         const collections = buildWorkspaceCollections(
           localWorkspaces,
           repoRoots,
-          [],
+          cachedCollections?.cloudWorkspaces ?? [],
         );
         recordMeasurementWorkflowStep({
           operationId,
@@ -198,6 +200,7 @@ export function useWorkspaces(options?: UseWorkspacesOptions) {
         });
         logLatency("workspace.collections.fetch.success", {
           runtimeUrl,
+          hasLocalRuntime,
           cloudActive,
           localCount: collections.localWorkspaces.length,
           cloudCount: collections.cloudWorkspaces.length,

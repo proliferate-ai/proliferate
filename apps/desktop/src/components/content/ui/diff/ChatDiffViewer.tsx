@@ -4,10 +4,21 @@ import {
   useMemo,
   useState,
   type CSSProperties,
+  type ReactNode,
   type WheelEvent as ReactWheelEvent,
 } from "react";
 import { DiffLineContent } from "@/components/content/ui/diff/DiffLineContent";
+import {
+  DiffCollapsedContentLabel,
+  DiffCollapsedGutterIcon,
+  DiffGapContentLabel,
+  DiffGapGutterControls,
+  DiffGapInfoRow,
+  type ExpandDirection,
+} from "@/components/content/ui/diff/DiffContextExpander";
 import { ChatDiffLineWrapContextMenu } from "@/components/content/ui/diff/ChatDiffLineWrapContextMenu";
+import { HunkActionPill } from "@/components/content/ui/diff/HunkActionPill";
+import type { UnifiedDiffHunkActions } from "@/components/content/ui/diff/UnifiedDiffViewer";
 import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";
 import {
   buildContentSearchLineMatchIds,
@@ -15,16 +26,21 @@ import {
 } from "@/lib/domain/content-search/content-search";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { chainVerticalWheelScroll } from "@proliferate/ui/utils/scroll-chain";
-import type { CollapsedContext, DiffLine, ParsedPatch } from "@/lib/domain/files/diff-parser";
+import type { CollapsedContext, DiffLine, InterHunkGap, ParsedPatch } from "@/lib/domain/files/diff-parser";
 import {
   getChatDiffRows,
   getChatLineNumber,
-  getChatLineNumberDigits,
   getChatLineType,
   getDiffLineIndex,
   getDiffLineNumberColumnWidth,
   type ChatDiffRow,
 } from "@/lib/domain/files/diff-view-rows";
+import {
+  clampGapReveal,
+  resolveGapLineCount,
+  useGapExpansion,
+  type GapExpansionState,
+} from "@/hooks/ui/diff/use-gap-expansion";
 import type { HighlightedToken } from "@/lib/infra/editor/highlighting";
 import { useContentSearchStore } from "@/stores/search/content-search-store";
 
@@ -59,12 +75,14 @@ function ChatGutterLine({ line }: { line: DiffLine }) {
   );
 }
 
-function ChatGutterSeparatorLine() {
+function ChatGutterSeparatorLine({ children }: { children?: React.ReactNode }) {
   return (
     <div
       data-separator="simple"
-      className="diff-gutter-cell min-h-[var(--diffs-line-height)] bg-[var(--diffs-bg)]"
-    />
+      className="diff-gutter-cell flex min-h-[var(--diffs-line-height)] items-center justify-center bg-[var(--codex-diffs-separator-surface)]"
+    >
+      {children}
+    </div>
   );
 }
 
@@ -75,6 +93,9 @@ function ChatContentLine({
   contentSearchQuery,
   activeMatchId,
   contentSearchUnitId,
+  hunkIndex,
+  onHunkHover,
+  pill,
 }: {
   line: DiffLine;
   tokens: HighlightedToken[][] | null;
@@ -82,6 +103,9 @@ function ChatContentLine({
   contentSearchQuery: string;
   activeMatchId: string | null;
   contentSearchUnitId: string;
+  hunkIndex?: number;
+  onHunkHover?: (hunkIndex: number) => void;
+  pill?: ReactNode;
 }) {
   const lineType = getChatLineType(line);
   const lineNumber = getChatLineNumber(line);
@@ -93,6 +117,11 @@ function ChatContentLine({
       data-alt-line={altLineNumber}
       data-line-type={lineType}
       data-line-index={getDiffLineIndex(line)}
+      onMouseEnter={
+        onHunkHover != null && hunkIndex != null
+          ? () => onHunkHover(hunkIndex)
+          : undefined
+      }
       className={`diff-content-cell relative min-h-[var(--diffs-line-height)] pr-3 pl-2 ${
         wrapLongLines
           ? "block min-w-0 whitespace-pre-wrap break-words py-[calc((var(--diffs-line-height)-1em)/2)]"
@@ -106,6 +135,7 @@ function ChatContentLine({
         activeMatchId={activeMatchId}
         contentSearchLineId={`${contentSearchUnitId}:line:${line.tokenIndex}`}
       />
+      {pill}
     </div>
   );
 }
@@ -124,15 +154,14 @@ function ChatCollapsedRow({
       size="unstyled"
       data-separator="simple"
       onClick={onExpand}
-      aria-label={`Show ${section.lineCount} unmodified lines`}
+      aria-label={`Expand ${section.lineCount} unmodified lines`}
       title={`${section.lineCount} unmodified lines`}
-      className="diff-content-cell flex min-h-[var(--diffs-line-height)] cursor-pointer items-center gap-2 border-0 bg-transparent px-2 py-0 text-left font-[inherit] text-[inherit] leading-[inherit] text-muted-foreground/70 hover:text-muted-foreground"
+      className="diff-content-cell flex min-h-[var(--diffs-line-height)] cursor-pointer items-center justify-start border-0 bg-[var(--codex-diffs-separator-surface)] p-0 text-left font-[inherit] text-[inherit] leading-[inherit] text-muted-foreground/60 transition-colors hover:text-foreground"
     >
-      <span className="h-px min-w-4 flex-1 bg-border/60" />
-      <span className="shrink-0 text-[10px] leading-none">
-        Show {section.lineCount} unchanged line{section.lineCount === 1 ? "" : "s"}
-      </span>
-      <span className="h-px min-w-4 flex-1 bg-border/60" />
+      <DiffCollapsedContentLabel
+        lineCount={section.lineCount}
+        stickyLeft="var(--diffs-column-number-width)"
+      />
     </Button>
   );
 }
@@ -140,9 +169,13 @@ function ChatCollapsedRow({
 function ChatGutterColumn({
   rows,
   rowCount,
+  onExpandGap,
+  canExpandGaps,
 }: {
-  rows: ChatDiffRow[];
+  rows: ChatRenderRow[];
   rowCount: number;
+  onExpandGap: (gapIndex: number, gap: InterHunkGap, direction: ExpandDirection) => void;
+  canExpandGaps: boolean;
 }) {
   return (
     <div
@@ -150,13 +183,30 @@ function ChatGutterColumn({
       style={{ gridColumn: "1", gridRow: `1 / span ${rowCount}` }}
       className="sticky left-0 z-10 grid bg-[var(--diffs-bg)] [grid-template-rows:subgrid]"
     >
-      {rows.map((row) =>
-        row.kind === "line" ? (
-          <ChatGutterLine key={row.key} line={row.line} />
-        ) : (
-          <ChatGutterSeparatorLine key={row.key} />
-        )
-      )}
+      {rows.map((row) => {
+        if (row.kind === "line" || row.kind === "expanded-gap-line") {
+          return <ChatGutterLine key={row.key} line={row.line} />;
+        }
+        if (row.kind === "gap" && canExpandGaps) {
+          return (
+            <ChatGutterSeparatorLine key={row.key}>
+              <DiffGapGutterControls
+                gap={row.gap}
+                onExpand={(direction) => onExpandGap(row.gapIndex, row.gap, direction)}
+              />
+            </ChatGutterSeparatorLine>
+          );
+        }
+        if (row.kind === "collapsed") {
+          return (
+            <ChatGutterSeparatorLine key={row.key}>
+              <DiffCollapsedGutterIcon />
+            </ChatGutterSeparatorLine>
+          );
+        }
+        // gap without expand capability
+        return <ChatGutterSeparatorLine key={row.key} />;
+      })}
     </div>
   );
 }
@@ -170,8 +220,13 @@ function ChatContentColumn({
   activeMatchId,
   contentSearchUnitId,
   onExpandCollapsedRow,
+  onExpandGap,
+  canExpandGaps,
+  hunkActions,
+  hoveredHunkIndex,
+  onHunkHover,
 }: {
-  rows: ChatDiffRow[];
+  rows: ChatRenderRow[];
   rowCount: number;
   tokens: HighlightedToken[][] | null;
   wrapLongLines: boolean;
@@ -179,6 +234,11 @@ function ChatContentColumn({
   activeMatchId: string | null;
   contentSearchUnitId: string;
   onExpandCollapsedRow: (key: string) => void;
+  onExpandGap: (gapIndex: number, gap: InterHunkGap, direction: ExpandDirection) => void;
+  canExpandGaps: boolean;
+  hunkActions?: UnifiedDiffHunkActions | null;
+  hoveredHunkIndex?: number | null;
+  onHunkHover?: (hunkIndex: number) => void;
 }) {
   return (
     <div
@@ -186,27 +246,166 @@ function ChatContentColumn({
       style={{ gridColumn: "2", gridRow: `1 / span ${rowCount}` }}
       className="grid [grid-template-rows:subgrid]"
     >
-      {rows.map((row) =>
-        row.kind === "line" ? (
-          <ChatContentLine
-            key={row.key}
-            line={row.line}
-            tokens={tokens}
-            wrapLongLines={wrapLongLines}
-            contentSearchQuery={contentSearchQuery}
-            activeMatchId={activeMatchId}
-            contentSearchUnitId={contentSearchUnitId}
-          />
-        ) : (
+      {rows.map((row) => {
+        if (row.kind === "line") {
+          const showPill = Boolean(
+            hunkActions
+            && row.isHunkFirstRow
+            && hoveredHunkIndex === row.hunkIndex,
+          );
+          return (
+            <ChatContentLine
+              key={row.key}
+              line={row.line}
+              tokens={tokens}
+              wrapLongLines={wrapLongLines}
+              contentSearchQuery={contentSearchQuery}
+              activeMatchId={activeMatchId}
+              contentSearchUnitId={contentSearchUnitId}
+              hunkIndex={hunkActions ? row.hunkIndex : undefined}
+              onHunkHover={hunkActions ? onHunkHover : undefined}
+              pill={showPill && hunkActions ? (
+                <HunkActionPill
+                  mode={hunkActions.mode}
+                  disabled={hunkActions.disabled}
+                  onRevert={() => hunkActions.onRevert(row.hunkIndex)}
+                  onStageOrUnstage={() => hunkActions.onStageOrUnstage(row.hunkIndex)}
+                  reveal="visible"
+                />
+              ) : undefined}
+            />
+          );
+        }
+        if (row.kind === "expanded-gap-line") {
+          return (
+            <ChatContentLine
+              key={row.key}
+              line={row.line}
+              tokens={null}
+              wrapLongLines={wrapLongLines}
+              contentSearchQuery={contentSearchQuery}
+              activeMatchId={activeMatchId}
+              contentSearchUnitId={contentSearchUnitId}
+            />
+          );
+        }
+        if (row.kind === "gap") {
+          // Controls are in the gutter; content column shows just the label.
+          if (!canExpandGaps) {
+            return (
+              <DiffGapInfoRow
+                key={row.key}
+                lineCount={row.gap.lineCount}
+                stickyLeft="var(--diffs-column-number-width)"
+              />
+            );
+          }
+          return (
+            <div
+              key={row.key}
+              data-separator="gap-expander"
+              className="diff-content-cell flex min-h-[var(--diffs-line-height)] items-center bg-[var(--codex-diffs-separator-surface)]"
+            >
+              <DiffGapContentLabel
+                gap={row.gap}
+                onExpand={(direction) => onExpandGap(row.gapIndex, row.gap, direction)}
+                stickyLeft="var(--diffs-column-number-width)"
+              />
+            </div>
+          );
+        }
+        // collapsed
+        return (
           <ChatCollapsedRow
             key={row.key}
             section={row.section}
             onExpand={() => onExpandCollapsedRow(row.key)}
           />
-        )
-      )}
+        );
+      })}
     </div>
   );
+}
+
+/** Flattened render row: either a data row from the diff or an expanded gap line */
+type ChatRenderRow =
+  | ChatDiffRow
+  | { kind: "expanded-gap-line"; key: string; line: DiffLine };
+
+function makeGapContextLine(
+  fileLines: string[],
+  gap: InterHunkGap,
+  offset: number,
+): DiffLine {
+  const newLine = gap.newStartLine + offset;
+  return {
+    type: "context",
+    marker: " ",
+    content: fileLines[newLine - 1] ?? "",
+    oldLineNum: gap.oldStartLine + offset,
+    newLineNum: newLine,
+    lineNum: newLine,
+    tokenIndex: -1,
+  };
+}
+
+function flattenWithGapExpansion(
+  rows: ChatDiffRow[],
+  gapStates: Map<number, GapExpansionState>,
+  fileLines: string[] | undefined,
+): ChatRenderRow[] {
+  const result: ChatRenderRow[] = [];
+  for (const row of rows) {
+    if (row.kind !== "gap") {
+      result.push(row);
+      continue;
+    }
+
+    // Resolve unknown trailing gap count against fetched file length
+    const gap = resolveGapLineCount(row.gap, fileLines);
+    if (!gap) continue;
+    const resolvedRow: ChatDiffRow = gap === row.gap ? row : { ...row, gap };
+
+    const state = gapStates.get(row.gapIndex);
+    if (!fileLines || !state || gap.lineCount <= 0) {
+      result.push(resolvedRow);
+      continue;
+    }
+
+    const totalGapLines = gap.lineCount;
+    const { top, bottom, fullyExpanded } = clampGapReveal(state, totalGapLines);
+    if (top === 0 && bottom === 0) {
+      result.push(resolvedRow);
+      continue;
+    }
+
+    for (let i = 0; i < top; i++) {
+      result.push({
+        kind: "expanded-gap-line",
+        key: `${row.key}-top-${i}`,
+        line: makeGapContextLine(fileLines, gap, i),
+      });
+    }
+
+    if (!fullyExpanded) {
+      const residualGap: InterHunkGap = {
+        kind: "gap",
+        oldStartLine: gap.oldStartLine + top,
+        newStartLine: gap.newStartLine + top,
+        lineCount: totalGapLines - top - bottom,
+      };
+      result.push({ kind: "gap", key: `${row.key}-residual`, gap: residualGap, gapIndex: row.gapIndex });
+    }
+
+    for (let i = totalGapLines - bottom; i < totalGapLines; i++) {
+      result.push({
+        kind: "expanded-gap-line",
+        key: `${row.key}-bottom-${i}`,
+        line: makeGapContextLine(fileLines, gap, i),
+      });
+    }
+  }
+  return result;
 }
 
 export function ChatDiffViewer({
@@ -221,6 +420,9 @@ export function ChatDiffViewer({
   overscrollBehaviorX,
   overscrollBehaviorY,
   chainVerticalWheel = false,
+  fileLines,
+  onRequestFileLines,
+  hunkActions,
 }: {
   parsed: ParsedPatch;
   tokens: HighlightedToken[][] | null;
@@ -233,14 +435,32 @@ export function ChatDiffViewer({
   overscrollBehaviorX?: CSSProperties["overscrollBehaviorX"];
   overscrollBehaviorY?: CSSProperties["overscrollBehaviorY"];
   chainVerticalWheel?: boolean;
+  fileLines?: string[];
+  onRequestFileLines?: () => void;
+  hunkActions?: UnifiedDiffHunkActions | null;
 }) {
   const resolvedMode = useResolvedMode();
   const [expandedCollapsedKeys, setExpandedCollapsedKeys] = useState<Set<string>>(
     new Set(),
   );
-  const rows = useMemo(
+  const [hoveredHunkIndex, setHoveredHunkIndex] = useState<number | null>(null);
+  const { gapStates, expandGap } = useGapExpansion();
+  const canExpandGaps = Boolean(fileLines || onRequestFileLines);
+  const expandGapWithFetch = (
+    gapIndex: number,
+    gap: InterHunkGap,
+    direction: ExpandDirection,
+  ) => {
+    onRequestFileLines?.();
+    expandGap(gapIndex, gap, direction);
+  };
+  const baseRows = useMemo(
     () => getChatDiffRows(parsed, expandedCollapsedKeys),
     [parsed, expandedCollapsedKeys],
+  );
+  const rows = useMemo(
+    () => flattenWithGapExpansion(baseRows, gapStates, fileLines),
+    [baseRows, gapStates, fileLines],
   );
   const contentSearchSurface = useContentSearchStore((state) => state.surface);
   const contentSearchOpen = useContentSearchStore((state) => state.open);
@@ -274,7 +494,17 @@ export function ChatDiffViewer({
     [contentSearchQuery, contentSearchUnitId, parsed.allCodeLines, tokens],
   );
   const rowCount = Math.max(rows.length, 1);
-  const lineNumberDigits = getChatLineNumberDigits(rows);
+  const lineNumberDigits = useMemo(() => {
+    let maxLineNumber = 0;
+    for (const row of rows) {
+      if (row.kind === "line") {
+        maxLineNumber = Math.max(maxLineNumber, getChatLineNumber(row.line) ?? 0);
+      } else if (row.kind === "expanded-gap-line") {
+        maxLineNumber = Math.max(maxLineNumber, getChatLineNumber(row.line) ?? 0);
+      }
+    }
+    return Math.max(String(maxLineNumber).length, 1);
+  }, [rows]);
   const codeStyle = useMemo(
     () => ({
       ...CHAT_DIFF_CODE_BASE_STYLE,
@@ -331,6 +561,7 @@ export function ChatDiffViewer({
       data-chat-diff-wrap-context-trigger="body"
       style={viewportStyle}
       onWheel={handleViewportWheel}
+      onMouseLeave={hunkActions ? () => setHoveredHunkIndex(null) : undefined}
       className={`relative [contain:content] composer-diff-simple-line ${
         wrapLongLines ? "overflow-x-hidden" : "overflow-x-auto"
       } overflow-y-auto ${
@@ -362,7 +593,7 @@ export function ChatDiffViewer({
               : "grid-cols-[var(--diffs-column-number-width)_minmax(max-content,1fr)]"
           }`}
         >
-          <ChatGutterColumn rows={rows} rowCount={rowCount} />
+          <ChatGutterColumn rows={rows} rowCount={rowCount} onExpandGap={expandGapWithFetch} canExpandGaps={canExpandGaps} />
           <ChatContentColumn
             rows={rows}
             rowCount={rowCount}
@@ -372,6 +603,11 @@ export function ChatDiffViewer({
             activeMatchId={activeMatchId}
             contentSearchUnitId={contentSearchUnitId}
             onExpandCollapsedRow={expandCollapsedRow}
+            onExpandGap={expandGapWithFetch}
+            canExpandGaps={canExpandGaps}
+            hunkActions={hunkActions}
+            hoveredHunkIndex={hoveredHunkIndex}
+            onHunkHover={hunkActions ? setHoveredHunkIndex : undefined}
           />
         </code>
       </pre>

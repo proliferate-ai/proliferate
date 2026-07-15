@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.constants.organizations import (
+    ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+    ORGANIZATION_MEMBERSHIP_STATUS_REMOVED,
+    ORGANIZATION_ROLE_MEMBER,
+    ORGANIZATION_STATUS_ACTIVE,
+)
+from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store.integrations import accounts as accounts_store
 from proliferate.db.store.integrations import definitions as definitions_store
 from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
@@ -24,18 +32,37 @@ def _worker_cloud_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "cloud_worker_base_url", "http://cloud.test")
 
 
-async def _gateway_bearer(client: AsyncClient, db_session: AsyncSession, *, prefix: str) -> str:
+async def _authed_user(client: AsyncClient, db_session: AsyncSession, *, prefix: str):
     auth = await create_user_and_login(client, db_session, email_prefix=prefix)
     await seed_linked_github_account(db_session, user_id=auth.user_id, access_token=f"gh-{prefix}")
+    return auth
+
+
+async def _enroll_gateway_bearer(
+    client: AsyncClient,
+    auth,
+    *,
+    prefix: str,
+    organization_id: str | None = None,
+) -> str:
+    body: dict[str, str] = {"desktopInstallId": f"install-{prefix}"}
+    if organization_id is not None:
+        body["organizationId"] = organization_id
     enrollment = await client.post(
         "/v1/cloud/workers/desktop/enrollment",
         headers=auth.headers,
-        json={"desktopInstallId": f"install-{prefix}"},
+        json=body,
     )
+    assert enrollment.status_code == 200, enrollment.text
     token = enrollment.json()["enrollmentToken"]
     enroll = await client.post("/v1/cloud/worker/enroll", json={"enrollmentToken": token})
     authorization = enroll.json()["integrationGateway"]["authorization"]
     return authorization.removeprefix("Bearer ")
+
+
+async def _gateway_bearer(client: AsyncClient, db_session: AsyncSession, *, prefix: str) -> str:
+    auth = await _authed_user(client, db_session, prefix=prefix)
+    return await _enroll_gateway_bearer(client, auth, prefix=prefix)
 
 
 async def _seed_ready_account(db_session: AsyncSession, *, user_id: str, namespace: str) -> None:
@@ -59,6 +86,32 @@ async def _seed_ready_account(db_session: AsyncSession, *, user_id: str, namespa
         token_expires_at=None,
     )
     await db_session.commit()
+
+
+async def _create_org_with_member(db_session: AsyncSession, *, user_id: str) -> str:
+    now = datetime.now(UTC)
+    organization = Organization(
+        name="Acme",
+        logo_domain="acme.dev",
+        status=ORGANIZATION_STATUS_ACTIVE,
+        created_at=now,
+        updated_at=now,
+    )
+    db_session.add(organization)
+    await db_session.flush()
+    db_session.add(
+        OrganizationMembership(
+            organization_id=organization.id,
+            user_id=uuid.UUID(user_id),
+            role=ORGANIZATION_ROLE_MEMBER,
+            status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+            joined_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    await db_session.commit()
+    return str(organization.id)
 
 
 @pytest.mark.asyncio
@@ -277,6 +330,55 @@ async def test_call_tool_upstream_failure_returns_mcp_error_not_500(
     assert by_id[2]["result"]["tools"]  # sibling still returned
 
 
+async def _tool_call(client: AsyncClient, headers: dict[str, str], *, name: str, arguments: dict):
+    response = await client.post(
+        GATEWAY_URL,
+        headers=headers,
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": name, "arguments": arguments},
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["result"]
+
+
+@pytest.mark.asyncio
+async def test_org_scoped_grant_stops_serving_after_membership_removal(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    auth = await _authed_user(client, db_session, prefix="gw-membership")
+    org_id = await _create_org_with_member(db_session, user_id=auth.user_id)
+    bearer = await _enroll_gateway_bearer(
+        client, auth, prefix="gw-membership", organization_id=org_id
+    )
+    headers = {"Authorization": f"Bearer {bearer}"}
+    request_body = {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
+
+    ok = await client.post(GATEWAY_URL, headers=headers, json=request_body)
+    assert ok.status_code == 200, ok.text
+
+    # Remove the owner from the org: the long-lived org-scoped grant must stop
+    # serving immediately, not at the next re-enrollment.
+    from sqlalchemy import select
+
+    membership = (
+        await db_session.execute(
+            select(OrganizationMembership).where(
+                OrganizationMembership.organization_id == uuid.UUID(org_id),
+                OrganizationMembership.user_id == uuid.UUID(auth.user_id),
+            )
+        )
+    ).scalar_one()
+    membership.status = ORGANIZATION_MEMBERSHIP_STATUS_REMOVED
+    await db_session.commit()
+
+    revoked = await client.post(GATEWAY_URL, headers=headers, json=request_body)
+    assert revoked.status_code == 401
+
+
 @pytest.mark.asyncio
 async def test_gateway_get_returns_method_not_allowed(client: AsyncClient) -> None:
     # No GET event stream is offered; streamable-HTTP clients rely on 405 to
@@ -284,3 +386,85 @@ async def test_gateway_get_returns_method_not_allowed(client: AsyncClient) -> No
     response = await client.get(GATEWAY_URL)
     assert response.status_code == 405
     assert response.headers.get("allow") == "POST"
+
+
+@pytest.mark.asyncio
+async def test_gateway_grant_resolves_without_stamping_last_used(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    bearer = await _gateway_bearer(client, db_session, prefix="gw-grant")
+    init = await client.post(
+        GATEWAY_URL,
+        headers={"Authorization": f"Bearer {bearer}"},
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize"},
+    )
+    assert init.status_code == 200, init.text
+
+    from sqlalchemy import select
+
+    from proliferate.db.models.cloud.runtime_workers import CloudIntegrationGatewayToken
+
+    token = (await db_session.execute(select(CloudIntegrationGatewayToken))).scalars().one()
+    assert token.status == "active"
+    # The hot path no longer stamps last_used_at per request.
+    assert token.last_used_at is None
+
+
+@pytest.mark.asyncio
+async def test_list_tools_cache_refetches_after_ttl(
+    client: AsyncClient, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bearer = await _gateway_bearer(client, db_session, prefix="gw-ttl")
+    headers = {"Authorization": f"Bearer {bearer}"}
+
+    from sqlalchemy import select, update
+
+    from proliferate.db.models.cloud.runtime_workers import CloudRuntimeWorker
+
+    worker = (await db_session.execute(select(CloudRuntimeWorker))).scalars().first()
+    assert worker is not None
+    await _seed_ready_account(db_session, user_id=str(worker.owner_user_id), namespace="context7")
+
+    calls = {"count": 0}
+
+    async def fake_list_tools(*, url, headers, query=None):
+        calls["count"] += 1
+        return [{"name": "resolve-library-id", "inputSchema": {"type": "object"}}]
+
+    monkeypatch.setattr(
+        "proliferate.server.cloud.integrations.tools.mcp_remote.list_tools",
+        fake_list_tools,
+    )
+
+    payload = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {"name": "integrations.list_tools", "arguments": {"provider": "context7"}},
+    }
+    first = await client.post(GATEWAY_URL, headers=headers, json=payload)
+    assert first.status_code == 200, first.text
+    assert calls["count"] == 1
+
+    # A fresh, version-matching cache is served without refetching.
+    second = await client.post(GATEWAY_URL, headers=headers, json=payload)
+    assert second.status_code == 200, second.text
+    assert calls["count"] == 1
+
+    # Backdating the fetch beyond the TTL makes the cache stale again.
+    from datetime import UTC, datetime, timedelta
+
+    from proliferate.constants.cloud import CLOUD_INTEGRATION_TOOL_CACHE_TTL_SECONDS
+    from proliferate.db.models.cloud.integrations import CloudIntegrationToolSchemaCache
+
+    await db_session.execute(
+        update(CloudIntegrationToolSchemaCache).values(
+            fetched_at=datetime.now(UTC)
+            - timedelta(seconds=CLOUD_INTEGRATION_TOOL_CACHE_TTL_SECONDS + 60)
+        )
+    )
+    await db_session.commit()
+
+    third = await client.post(GATEWAY_URL, headers=headers, json=payload)
+    assert third.status_code == 200, third.text
+    assert calls["count"] == 2

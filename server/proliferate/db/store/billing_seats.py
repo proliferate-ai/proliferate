@@ -79,6 +79,12 @@ async def maybe_create_org_seat_adjustment(
     ).scalar_one_or_none()
     if subject is None:
         return False
+    # A billing subject can end up with more than one active/trialing
+    # subscription row (double checkout, re-subscribing while the old sub is
+    # still cancelling, a support-created sub). Take the newest one by the
+    # same ordering latest_healthy_cloud_subscription() uses, and cap the
+    # query at one row so this can never raise MultipleResultsFound -- a
+    # membership change must not 500 because Stripe state is messy.
     subscription = (
         await db.execute(
             select(BillingSubscription)
@@ -90,6 +96,7 @@ async def maybe_create_org_seat_adjustment(
                 BillingSubscription.current_period_end.desc().nulls_last(),
                 BillingSubscription.updated_at.desc(),
             )
+            .limit(1)
             .with_for_update()
         )
     ).scalar_one_or_none()

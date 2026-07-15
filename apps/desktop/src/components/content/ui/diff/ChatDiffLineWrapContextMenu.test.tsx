@@ -1,17 +1,25 @@
 // @vitest-environment jsdom
 
-import { createElement } from "react";
+import { createElement, type ReactElement } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { ProductHost } from "@proliferate/product-client/host/product-host";
+import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import { DiffViewer } from "@/components/content/ui/DiffViewer";
 import { FileDiffCard } from "@/components/content/ui/FileDiffCard";
 import {
   CHAT_DIFF_PREFERENCES_STORAGE_KEY,
+  resetChatDiffPreferencesForTests,
+  setChatDiffPreferencesStorageContext,
   useChatDiffPreferencesStore,
 } from "@/stores/chat/chat-diff-preferences-store";
 import {
   buildChatDiffLineWrapNativeContextMenuItems,
 } from "@/hooks/ui/native/use-chat-diff-line-wrap-native-context-menu";
+import {
+  createMemoryProductStorage,
+  type MemoryProductStorage,
+} from "@/test/product-storage-test-utils";
 
 const LONG_LINE_PATCH = `diff --git a/src/long.ts b/src/long.ts
 index 1111111..2222222 100644
@@ -21,19 +29,30 @@ index 1111111..2222222 100644
 -const message = "${"old ".repeat(80)}";
 +const message = "${"new ".repeat(80)}";`;
 
+const webTestHost = { desktop: null } as ProductHost;
+
+function renderWithProductHost(ui: ReactElement) {
+  return render(
+    <ProductHostProvider host={webTestHost}>{ui}</ProductHostProvider>,
+  );
+}
+
+let memory: MemoryProductStorage;
+
 beforeEach(() => {
-  window.localStorage.clear();
+  memory = createMemoryProductStorage();
+  setChatDiffPreferencesStorageContext(memory.context);
   useChatDiffPreferencesStore.getState().setWrapLongLines(false);
 });
 
 afterEach(() => {
   cleanup();
-  window.localStorage.clear();
+  resetChatDiffPreferencesForTests();
 });
 
 describe("ChatDiffLineWrapContextMenu", () => {
   it("toggles persisted line wrapping for every chat diff body", () => {
-    const { container } = render(
+    const { container } = renderWithProductHost(
       <div>
         <DiffViewer patch={LONG_LINE_PATCH} filePath="src/one.ts" variant="chat" />
         <DiffViewer patch={LONG_LINE_PATCH} filePath="src/two.ts" variant="chat" />
@@ -51,7 +70,7 @@ describe("ChatDiffLineWrapContextMenu", () => {
     fireEvent.contextMenu(triggers[0]);
     fireEvent.click(screen.getByRole("button", { name: "Turn line wrapping on" }));
 
-    expect(JSON.parse(window.localStorage.getItem(CHAT_DIFF_PREFERENCES_STORAGE_KEY)!))
+    expect(memory.readJson(CHAT_DIFF_PREFERENCES_STORAGE_KEY))
       .toEqual({ wrapLongLines: true });
     for (const trigger of triggers) {
       expect(trigger.className).toContain("overflow-x-hidden");
@@ -61,7 +80,7 @@ describe("ChatDiffLineWrapContextMenu", () => {
   });
 
   it("opens the same global wrap toggle from chat file headers", () => {
-    const { container } = render(
+    const { container } = renderWithProductHost(
       createElement(
         FileDiffCard,
         {

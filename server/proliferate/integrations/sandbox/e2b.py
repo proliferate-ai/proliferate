@@ -250,7 +250,20 @@ class E2BSandboxProvider:
 
     def _template_name(self) -> str:
         configured = settings.e2b_template_name.strip()
-        return configured or E2B_TEMPLATE_NAME
+        if configured:
+            return configured
+        # In debug/dev a built-in default template is acceptable. In production
+        # (self-host included) an unset template must NOT silently fall back to
+        # the internal default — the operator's E2B account does not have it, so
+        # boots would fail confusingly. Fail with an actionable error naming the
+        # missing requirement instead.
+        if settings.debug:
+            return E2B_TEMPLATE_NAME
+        raise E2BRuntimeError(
+            "E2B_TEMPLATE_NAME is not configured. Set E2B_TEMPLATE_NAME to the "
+            "published runtime template for this deployment before provisioning "
+            "cloud sandboxes."
+        )
 
     def _create_sandbox(self, metadata: dict[str, str] | None) -> SandboxHandle:
         Sandbox = _load_sdk()

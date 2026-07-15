@@ -8,7 +8,6 @@ touch org-custom rows and vice versa.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
@@ -37,7 +36,12 @@ class IntegrationDefinitionRecord:
     updated_at: datetime
 
 
-def _record(row: CloudIntegrationDefinition) -> IntegrationDefinitionRecord:
+def record_from_row(row: CloudIntegrationDefinition) -> IntegrationDefinitionRecord:
+    """Map a definition ORM row to its record.
+
+    Public so sibling stores (e.g. the accounts store, which joins definitions)
+    can reuse the mapping instead of reaching into a private helper.
+    """
     return IntegrationDefinitionRecord(
         id=row.id,
         source=row.source,
@@ -53,6 +57,11 @@ def _record(row: CloudIntegrationDefinition) -> IntegrationDefinitionRecord:
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
+
+
+# Module-internal shorthand for the many in-module call sites below; the public
+# name is record_from_row.
+_record = record_from_row
 
 
 async def list_seed_definitions(db: AsyncSession) -> tuple[IntegrationDefinitionRecord, ...]:
@@ -91,18 +100,6 @@ async def get_definition(
 ) -> IntegrationDefinitionRecord | None:
     row = await db.get(CloudIntegrationDefinition, definition_id)
     return _record(row) if row is not None else None
-
-
-async def get_definitions_by_ids(
-    db: AsyncSession, definition_ids: Iterable[UUID]
-) -> dict[UUID, IntegrationDefinitionRecord]:
-    ids = list(definition_ids)
-    if not ids:
-        return {}
-    result = await db.scalars(
-        select(CloudIntegrationDefinition).where(CloudIntegrationDefinition.id.in_(ids))
-    )
-    return {row.id: _record(row) for row in result.all()}
 
 
 async def get_seed_by_namespace(
@@ -154,6 +151,32 @@ async def set_definition_archived(
     row.archived_at = utcnow() if archived else None
     await db.flush()
     return _record(row)
+
+
+async def archive_seed_definitions_not_in(
+    db: AsyncSession, namespaces: frozenset[str]
+) -> tuple[str, ...]:
+    """Archive seed definitions whose namespaces are not in ``namespaces``.
+
+    Sets ``archived_at`` on all ``source='seed'`` rows where ``namespace NOT IN
+    namespaces`` and ``archived_at IS NULL``. Returns the archived namespaces
+    (for logging). Never touches org-custom rows.
+    """
+    result = await db.scalars(
+        select(CloudIntegrationDefinition).where(
+            CloudIntegrationDefinition.source == "seed",
+            CloudIntegrationDefinition.namespace.not_in(namespaces),
+            CloudIntegrationDefinition.archived_at.is_(None),
+        )
+    )
+    rows = result.all()
+    archived_namespaces = []
+    now = utcnow()
+    for row in rows:
+        row.archived_at = now
+        archived_namespaces.append(row.namespace)
+    await db.flush()
+    return tuple(archived_namespaces)
 
 
 async def upsert_seed_definition(

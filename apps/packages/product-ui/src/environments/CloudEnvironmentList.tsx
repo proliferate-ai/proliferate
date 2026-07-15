@@ -126,7 +126,6 @@ function EnvironmentRow({
 }) {
   return (
     <SettingsRow
-      title={environment.description}
       label={(
         <span className="flex min-w-0 items-center gap-2">
           <Cloud size={14} className="shrink-0 text-muted-foreground" />

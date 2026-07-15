@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { openSessionStreamConnection } from "@/hooks/sessions/lifecycle/session-stream-connection-open";
 import { prepareSessionStreamConnection } from "@/hooks/sessions/lifecycle/session-stream-connection-prepare";
 import { closeSessionSlotStream as closeSessionSlotStreamForSession } from "@/hooks/sessions/lifecycle/session-stream-slot-connection";
@@ -12,6 +13,9 @@ export function useSessionStreamConnectionActions({
   refreshSessionSlotMeta,
   rehydrateSessionSlotFromHistory,
 }: UseSessionStreamConnectionActionsOptions) {
+  const host = useProductHost();
+  const ssh = host.desktop?.ssh ?? null;
+  const cloudClient = host.cloud.client;
   const closeSessionSlotStream = useCallback((sessionId: string) => {
     closeSessionSlotStreamForSession(sessionId);
   }, []);
@@ -35,6 +39,8 @@ export function useSessionStreamConnectionActions({
 
     await openSessionStreamConnection({
       sessionId,
+      ssh,
+      cloudClient,
       options,
       createSessionStreamFlushController,
       refreshSessionSlotMeta,
@@ -45,6 +51,8 @@ export function useSessionStreamConnectionActions({
     createSessionStreamFlushController,
     refreshSessionSlotMeta,
     rehydrateSessionSlotFromHistory,
+    ssh,
+    cloudClient,
   ]);
 
   return {

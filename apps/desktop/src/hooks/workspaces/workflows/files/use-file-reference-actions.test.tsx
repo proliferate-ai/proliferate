@@ -10,11 +10,12 @@ const editorMocks = vi.hoisted(() => ({
   openInDefaultEditor: vi.fn(async () => undefined),
 }));
 
-const shellMocks = vi.hoisted(() => ({
-  copyPath: vi.fn(async () => undefined),
+const hostMocks = vi.hoisted(() => ({
+  desktopAvailable: true,
+  writeText: vi.fn(async () => undefined),
   openTarget: vi.fn(async () => undefined),
-  pathIsDirectory: vi.fn(async () => false),
-  revealInFinder: vi.fn(async () => undefined),
+  isDirectory: vi.fn(async () => false),
+  reveal: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/hooks/editor/workflows/use-open-in-default-editor", () => ({
@@ -31,11 +32,17 @@ vi.mock("@/hooks/workspaces/workflows/tabs/use-workspace-shell-activation", () =
   }),
 }));
 
-vi.mock("@/lib/access/tauri/shell", () => ({
-  copyPath: shellMocks.copyPath,
-  openTarget: shellMocks.openTarget,
-  pathIsDirectory: shellMocks.pathIsDirectory,
-  revealInFinder: shellMocks.revealInFinder,
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => ({
+    clipboard: { writeText: hostMocks.writeText },
+    desktop: hostMocks.desktopAvailable ? {
+      files: {
+        isDirectory: hostMocks.isDirectory,
+        openTarget: hostMocks.openTarget,
+        reveal: hostMocks.reveal,
+      },
+    } : null,
+  }),
 }));
 
 vi.mock("@/hooks/workspaces/workflows/files/use-fuzzy-file-resolver", () => ({
@@ -43,6 +50,7 @@ vi.mock("@/hooks/workspaces/workflows/files/use-fuzzy-file-resolver", () => ({
 }));
 
 afterEach(() => {
+  hostMocks.desktopAvailable = true;
   vi.clearAllMocks();
 });
 
@@ -57,8 +65,22 @@ describe("useFileReferenceActions", () => {
       await result.current.openPrimary();
     });
 
-    expect(shellMocks.revealInFinder).toHaveBeenCalledWith("/Users/pablo/landing");
+    expect(hostMocks.reveal).toHaveBeenCalledWith("/Users/pablo/landing");
     expect(editorMocks.openInDefaultEditor).not.toHaveBeenCalled();
+  });
+
+  it("fails closed without Desktop file access", async () => {
+    hostMocks.desktopAvailable = false;
+    const { result } = renderHook(
+      () => useFileReferenceActions({ rawPath: "/Users/pablo/landing" }),
+      { wrapper: workspaceWrapper(null) },
+    );
+
+    await expect(result.current.openPrimary()).rejects.toThrow(
+      "Local file access is not available.",
+    );
+    expect(hostMocks.isDirectory).not.toHaveBeenCalled();
+    expect(hostMocks.reveal).not.toHaveBeenCalled();
   });
 });
 

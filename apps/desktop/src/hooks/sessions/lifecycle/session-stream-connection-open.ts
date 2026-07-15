@@ -1,9 +1,12 @@
 import type { SessionStreamHandle } from "@anyharness/sdk";
+import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
+import type { CloudSandboxGatewayUrlSource } from "@/lib/access/cloud/cloud-sandbox-gateway";
 import { openSessionStream } from "@/lib/access/anyharness/session-runtime";
 import {
   clearSessionStreamHandle,
   setSessionStreamHandle,
 } from "@/lib/access/anyharness/session-stream-handles";
+import { resetSessionReconnectBackoff } from "@/lib/workflows/sessions/session-reconnect-state";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import {
   finishOrCancelMeasurementOperation,
@@ -34,6 +37,8 @@ import type {
 
 interface OpenSessionStreamConnectionInput {
   sessionId: string;
+  ssh: DesktopSshBridge | null;
+  cloudClient: CloudSandboxGatewayUrlSource | null;
   options: SessionStreamConnectOptions | undefined;
   createSessionStreamFlushController:
     UseSessionStreamConnectionActionsOptions["createSessionStreamFlushController"];
@@ -46,6 +51,8 @@ interface OpenSessionStreamConnectionInput {
 
 export async function openSessionStreamConnection({
   sessionId,
+  ssh,
+  cloudClient,
   options,
   createSessionStreamFlushController,
   refreshSessionSlotMeta,
@@ -143,6 +150,8 @@ export async function openSessionStreamConnection({
     afterSeq,
     requestHeaders: options?.requestHeaders,
     measurementOperationId: streamMeasurementOperationId ?? undefined,
+    ssh,
+    cloudClient,
     onHandle: (nextHandle) => {
       if (!isStillCurrent()) {
         logDevSessionRuntimeEvent(sessionId, "stream_handle_ignored_not_current", {});
@@ -187,6 +196,7 @@ export async function openSessionStreamConnection({
       useSessionDirectoryStore.getState().patchEntry(sessionId, {
         streamConnectionState: "open",
       });
+      resetSessionReconnectBackoff(sessionId);
       useSessionIngestStore.getState().markCurrentIfContiguous(
         sessionId,
         getSessionRecord(sessionId)?.transcript.lastSeq ?? 0,

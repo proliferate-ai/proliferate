@@ -98,20 +98,18 @@ export function prStatusViewFromGitStatus(
 }
 
 export interface SidebarGitGlyph {
-  /** attention === "conflicts" — render destructive tone. */
+  /** attention === "conflicts" — render the detail glyph in destructive tone. */
   conflicted: boolean;
   /** Tooltip content; null renders the glyph without a tooltip. */
   tooltip: string | null;
 }
 
 /**
- * Leading-well PR glyph for sidebar rows (§3.2): rendered ONLY when the row
- * has a real PR (open/draft/merged/closed). No PR (authoritative "none") and
- * unknown PR data (`pr: null`) both leave the well empty — there is no
- * branch-glyph fallback. Conflict attention keeps the destructive tone on PR
- * rows; conflicted rows WITHOUT a PR get no leading glyph — attention there
- * surfaces via the right-slot affordances (status indicator / unread dot),
- * not a leading icon.
+ * Compact PR detail glyph for sidebar rows: rendered only when the row has a
+ * real PR (open/draft/merged/closed). No PR (authoritative "none") and unknown
+ * PR data (`pr: null`) both omit it — there is no branch-glyph fallback.
+ * Conflict attention keeps the destructive tone on PR rows; conflicted rows
+ * without a PR surface attention through other status affordances.
  */
 export function sidebarGitGlyphForStatus(
   status: WorkspaceGitStatus | null | undefined,

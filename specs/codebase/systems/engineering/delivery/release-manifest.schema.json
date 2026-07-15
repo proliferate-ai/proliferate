@@ -1,0 +1,309 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://proliferate.com/schemas/release-manifest.schema.json",
+  "title": "Proliferate release manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "release", "items"],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tag",
+        "version",
+        "date",
+        "baseTag",
+        "baseHead",
+        "head",
+        "deployedAt",
+        "components"
+      ],
+      "properties": {
+        "tag": {
+          "type": "string",
+          "pattern": "^proliferate-v[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "date": {
+          "type": "string",
+          "format": "date"
+        },
+        "baseTag": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^proliferate-v[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "baseHead": {
+          "$ref": "#/$defs/sha"
+        },
+        "head": {
+          "$ref": "#/$defs/sha"
+        },
+        "deployedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "components": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/componentRelease"
+          }
+        }
+      }
+    },
+    "items": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/item"
+      }
+    }
+  },
+  "$defs": {
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
+    },
+    "sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "component": {
+      "type": "string",
+      "enum": [
+        "proliferate-server",
+        "proliferate-litellm",
+        "proliferate-web",
+        "proliferate-mobile",
+        "proliferate-desktop",
+        "proliferate-desktop-native",
+        "anyharness",
+        "proliferate-worker",
+        "proliferate-supervisor"
+      ]
+    },
+    "componentRelease": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "component",
+        "releaseId",
+        "headSha",
+        "deploymentId",
+        "deployedAt",
+        "artifacts"
+      ],
+      "properties": {
+        "component": {
+          "$ref": "#/$defs/component"
+        },
+        "releaseId": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+@[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?\\+[0-9a-f]{12}$"
+        },
+        "headSha": {
+          "$ref": "#/$defs/sha"
+        },
+        "deploymentId": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "deployedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "artifacts": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/artifactProof"
+          }
+        }
+      }
+    },
+    "artifactProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lane", "artifactSetDigest"],
+      "properties": {
+        "lane": {
+          "type": "string",
+          "enum": [
+            "hosted-server",
+            "hosted-litellm",
+            "hosted-web",
+            "hosted-workers",
+            "mobile-production",
+            "desktop-updater",
+            "runtime-artifacts",
+            "e2b-production",
+            "self-hosted-release"
+          ]
+        },
+        "artifactSetDigest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "credit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["displayName", "role"],
+      "properties": {
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[^\\u0000-\\u001F\\u007F]*$"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["reported", "suggested"]
+        }
+      }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "number",
+        "url",
+        "title",
+        "mergeSha",
+        "mergedAt",
+        "releaseLabel",
+        "category",
+        "components",
+        "credits"
+      ],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "pattern": "^[a-z0-9_.-]+/[a-z0-9_.-]+$"
+        },
+        "number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mergeSha": {
+          "$ref": "#/$defs/sha"
+        },
+        "mergedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "releaseLabel": {
+          "type": "string",
+          "enum": [
+            "release:large-feature",
+            "release:minor-feature",
+            "release:performance",
+            "release:fix",
+            "release:docs",
+            "release:maintenance",
+            "release:skip"
+          ]
+        },
+        "category": {
+          "type": "string",
+          "enum": ["feature", "fix", "omit"]
+        },
+        "components": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/component"
+          }
+        },
+        "credits": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/credit"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "releaseLabel": {
+                "enum": [
+                  "release:large-feature",
+                  "release:minor-feature",
+                  "release:performance"
+                ]
+              }
+            },
+            "required": ["releaseLabel"]
+          },
+          "then": {
+            "properties": {
+              "category": {"const": "feature"},
+              "components": {"minItems": 1}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "releaseLabel": {"const": "release:fix"}
+            },
+            "required": ["releaseLabel"]
+          },
+          "then": {
+            "properties": {
+              "category": {"const": "fix"},
+              "components": {"minItems": 1}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "releaseLabel": {
+                "enum": [
+                  "release:docs",
+                  "release:maintenance",
+                  "release:skip"
+                ]
+              }
+            },
+            "required": ["releaseLabel"]
+          },
+          "then": {
+            "properties": {
+              "category": {"const": "omit"},
+              "components": {"maxItems": 0}
+            }
+          }
+        }
+      ]
+    }
+  }
+}

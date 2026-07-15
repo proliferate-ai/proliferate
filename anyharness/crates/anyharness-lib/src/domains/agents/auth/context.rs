@@ -1,7 +1,7 @@
-//! Pure auth-context classification (migration §5.4 layer 4): credential
-//! facts × catalog v2 ordered signatures → `ActiveAuthContexts`.
+//! Pure auth-context classification: credential facts × catalog-ordered
+//! signatures → `ActiveAuthContexts`.
 //!
-//! Rules (decisions ledger 7/8):
+//! Rules:
 //! - ONE winner per auth slot — the FIRST context in catalog order whose
 //!   signals match; list order IS the harness's own credential precedence
 //!   (probe-validated, e.g. an inherited API key masks an OAuth token).
@@ -9,11 +9,13 @@
 //! - `"baseline"` is active iff no context matched any slot.
 //! - A context without signals NEVER matches: it is probe-only knowledge
 //!   (the probe injected its credentials; the runtime has no detection
-//!   signature for it yet).
-//! - Facts must come from the COMPOSED launch env (workspace env + auth
-//!   overlay), never the ambient process env — classifying ambient would
-//!   reproduce the probe env-leak bug in production. Secrets rule: values
-//!   are readable only for registry-declared flag vars (`EnvFlag` facts).
+//!   signature for it yet). Route-signaled contexts (e.g. `gateway`) do match
+//!   a separately collected workspace `Route` fact; only signal-less contexts
+//!   stay inert.
+//! - Env facts come from the composed launch env plus registry-declared
+//!   ambient variables, with composed values winning. Secret facts expose
+//!   presence only; values are readable only for registry-declared flag vars
+//!   (`EnvFlag` facts).
 //!
 //! Everything here is pure: no IO, no clock, no `&self` — call it anywhere.
 
@@ -63,9 +65,7 @@ impl ActiveAuthContexts {
         self.ids.len() == 1 && self.ids[0] == BASELINE_CONTEXT_ID
     }
 
-    /// The cloud-sync projection: context IDS ONLY — no facts, no values.
-    /// TODO(PR-7b): serialize this on the worker registry-projection lane
-    /// (target → cloud) so menus render from last-classified contexts.
+    /// The sync-safe projection: context IDs only, with no facts or values.
     pub fn sync_summary(&self, agent_kind: &str) -> AuthContextSyncSummary {
         AuthContextSyncSummary {
             agent_kind: agent_kind.to_string(),
@@ -75,8 +75,7 @@ impl ActiveAuthContexts {
 }
 
 /// What crosses the target → cloud boundary about classification: ids only.
-/// No credential fact, env var name, or value ever rides along (decisions
-/// ledger 8). TODO(PR-7b): wire the transport (worker/server).
+/// No credential fact, env var name, or value is represented in this shape.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthContextSyncSummary {
@@ -124,7 +123,9 @@ pub fn classify(
         if decided_slots.contains(&slot_id) {
             continue;
         }
-        // No signals = probe-only context: never matches at runtime.
+        // No signals = probe-only context: never matches at runtime. A
+        // route-signaled context (e.g. `gateway`) carries signals and matches
+        // its workspace-derived `Route` fact like any other signature.
         let Some(signals) = context.signals.as_ref() else {
             continue;
         };
@@ -150,7 +151,7 @@ fn signal_matches(signal: &AgentCatalogAuthSignal, facts: &[CredentialFact]) -> 
         AgentCatalogAuthSignal::Env(var) => facts.iter().any(|fact| match fact {
             CredentialFact::Env { var: fact_var } => fact_var == var,
             CredentialFact::EnvFlag { var: fact_var, .. } => fact_var == var,
-            CredentialFact::Discovery { .. } => false,
+            CredentialFact::Discovery { .. } | CredentialFact::Route { .. } => false,
         }),
         AgentCatalogAuthSignal::EnvFlag(spec) => {
             let Some((var, value)) = spec.split_once('=') else {
@@ -169,6 +170,9 @@ fn signal_matches(signal: &AgentCatalogAuthSignal, facts: &[CredentialFact]) -> 
         }
         AgentCatalogAuthSignal::Discovery(kind) => facts.iter().any(|fact| {
             matches!(fact, CredentialFact::Discovery { kind: fact_kind } if fact_kind == kind)
+        }),
+        AgentCatalogAuthSignal::Route(kind) => facts.iter().any(|fact| {
+            matches!(fact, CredentialFact::Route { kind: fact_kind } if fact_kind == kind)
         }),
         AgentCatalogAuthSignal::AnyOf(children) => children
             .iter()
@@ -190,10 +194,9 @@ fn signal_matches(signal: &AgentCatalogAuthSignal, facts: &[CredentialFact]) -> 
 ///    `ReadyViaLocalAuth`,
 /// 3. nothing + login supported → `LoginRequired`, else `MissingEnv`.
 ///
-/// The legacy env + `LocalAuthState` path in `credentials.rs` stays
-/// authoritative for the v1-catalog era; nothing is wired into readiness
-/// here. TODO(PR-7b): readiness consumes this projection and the parallel
-/// logic in `credentials.rs` is deleted, not duplicated.
+/// The legacy env + `LocalAuthState` path in `credentials.rs` remains the
+/// readiness owner. This helper is a pure compatibility projection and must
+/// not create a second effectful detection path.
 pub fn project_credential_state(
     auth: &AuthSpec,
     active: &ActiveAuthContexts,
@@ -203,7 +206,7 @@ pub fn project_credential_state(
         facts.iter().any(|fact| match fact {
             CredentialFact::Env { var: fact_var } => fact_var == var,
             CredentialFact::EnvFlag { var: fact_var, .. } => fact_var == var,
-            CredentialFact::Discovery { .. } => false,
+            CredentialFact::Discovery { .. } | CredentialFact::Route { .. } => false,
         })
     });
     if env_present {

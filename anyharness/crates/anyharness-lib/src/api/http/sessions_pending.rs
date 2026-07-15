@@ -1,4 +1,6 @@
-use anyharness_contract::v1::{EditPendingPromptRequest, PromptInputBlock, Session};
+use anyharness_contract::v1::{
+    EditPendingPromptRequest, PromptInputBlock, ReorderPendingPromptsRequest, Session,
+};
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, HeaderValue},
@@ -8,7 +10,7 @@ use axum::{
 use super::access::assert_session_auth_scope;
 use super::error::ApiError;
 use super::sessions_contract::session_to_contract;
-use super::sessions_errors::map_pending_prompt_mutation_error;
+use super::sessions_errors::{map_pending_prompt_mutation_error, map_pending_prompt_queue_error};
 use super::sessions_leases::acquire_session_operation_lease;
 use crate::api::auth::AuthContext;
 use crate::app::AppState;
@@ -19,7 +21,7 @@ use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
     path = "/v1/sessions/{session_id}/pending-prompts/{seq}",
     params(
         ("session_id" = String, Path, description = "Session ID"),
-        ("seq" = i64, Path, description = "Queue row sequence number"),
+        ("seq" = i64, Path, description = "Stable queue-entry sequence identity"),
     ),
     request_body = anyharness_contract::v1::EditPendingPromptRequest,
     responses(
@@ -56,7 +58,7 @@ pub async fn edit_pending_prompt(
     path = "/v1/sessions/{session_id}/pending-prompts/{seq}",
     params(
         ("session_id" = String, Path, description = "Session ID"),
-        ("seq" = i64, Path, description = "Queue row sequence number"),
+        ("seq" = i64, Path, description = "Stable queue-entry sequence identity"),
     ),
     responses(
         (status = 200, description = "Pending prompt deleted", body = Session),
@@ -78,6 +80,69 @@ pub async fn delete_pending_prompt(
         .delete_pending_prompt(&session_id, seq)
         .await
         .map_err(map_pending_prompt_mutation_error)?;
+    Ok(Json(session_to_contract(&state, &updated).await?))
+}
+
+#[utoipa::path(
+    put,
+    path = "/v1/sessions/{session_id}/pending-prompts/order",
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+    ),
+    request_body = ReorderPendingPromptsRequest,
+    responses(
+        (status = 200, description = "Pending prompts reordered", body = Session),
+        (status = 400, description = "Invalid pending prompt order", body = anyharness_contract::v1::ProblemDetails),
+        (status = 409, description = "Pending prompt order changed", body = anyharness_contract::v1::ProblemDetails),
+        (status = 404, description = "Session not found", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "sessions"
+)]
+pub async fn reorder_pending_prompts(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
+    Path(session_id): Path<String>,
+    Json(req): Json<ReorderPendingPromptsRequest>,
+) -> Result<Json<Session>, ApiError> {
+    assert_session_auth_scope(&state, &auth, &session_id)?;
+    let _lease =
+        acquire_session_operation_lease(&state, &session_id, WorkspaceOperationKind::SessionPrompt)
+            .await?;
+    let updated = state
+        .session_runtime
+        .reorder_pending_prompts(&session_id, req.expected_seqs, req.desired_seqs)
+        .await
+        .map_err(map_pending_prompt_queue_error)?;
+    Ok(Json(session_to_contract(&state, &updated).await?))
+}
+
+#[utoipa::path(
+    post,
+    path = "/v1/sessions/{session_id}/pending-prompts/{seq}/steer",
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+        ("seq" = i64, Path, description = "Stable queue-entry sequence identity"),
+    ),
+    responses(
+        (status = 200, description = "Pending prompt promoted to run next", body = Session),
+        (status = 404, description = "Session or pending prompt not found", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "sessions"
+)]
+pub async fn steer_pending_prompt(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
+    Path((session_id, seq)): Path<(String, i64)>,
+) -> Result<Json<Session>, ApiError> {
+    assert_session_auth_scope(&state, &auth, &session_id)?;
+    let _lease =
+        acquire_session_operation_lease(&state, &session_id, WorkspaceOperationKind::SessionPrompt)
+            .await?;
+    let updated = state
+        .session_runtime
+        .steer_pending_prompt(&session_id, seq)
+        .await
+        .map_err(map_pending_prompt_queue_error)?;
     Ok(Json(session_to_contract(&state, &updated).await?))
 }
 

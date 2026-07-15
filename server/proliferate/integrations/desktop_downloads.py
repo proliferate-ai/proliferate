@@ -6,9 +6,22 @@ Owns the raw HTTP probe for updater manifests so product domains
 
 from __future__ import annotations
 
+import os
 import time
 
 import httpx
+
+# Official CDN root that serves signed desktop updater manifests and pinned
+# runtime/worker binaries. Overridable via env for parity with the release
+# pipeline's DESKTOP_DOWNLOADS_BASE_URL.
+_DEFAULT_DOWNLOADS_BASE_URL = "https://downloads.proliferate.com"
+
+
+def downloads_base_url() -> str:
+    value = os.getenv("DESKTOP_DOWNLOADS_BASE_URL")
+    base = value.strip() if value and value.strip() else _DEFAULT_DOWNLOADS_BASE_URL
+    return base.rstrip("/")
+
 
 # A pinned desktop version can outpace the published manifests (a server built
 # from a commit whose desktop version has not been released yet, or a release

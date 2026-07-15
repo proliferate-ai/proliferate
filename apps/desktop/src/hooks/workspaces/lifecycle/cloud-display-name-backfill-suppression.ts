@@ -1,65 +1,94 @@
+import {
+  readPersistedJson,
+  removePersistedKey,
+  writePersistedJson,
+  type ProductStorageContext,
+} from "@/lib/infra/persistence/product-storage";
+
 const CLOUD_DISPLAY_NAME_BACKFILL_SUPPRESSION_KEY =
   "proliferate.cloudDisplayNameBackfillSuppression.v1";
 
 type SuppressionMap = Record<string, true>;
 
-function readSuppressionMap(): SuppressionMap {
-  if (typeof window === "undefined") {
-    return {};
-  }
+// Read synchronously in a render/effect guard, so the authoritative copy is an
+// in-memory cache. ProductStorage is the async persistence backend injected once
+// at the product lifecycle mount (see `useCloudDisplayNameSuppressionPersistence`);
+// hydration re-seeds the cache and writes persist best-effort.
+let suppressionCache: SuppressionMap = {};
+let storageContext: ProductStorageContext | null = null;
 
-  try {
-    const raw = window.localStorage.getItem(CLOUD_DISPLAY_NAME_BACKFILL_SUPPRESSION_KEY);
-    if (!raw) {
-      return {};
-    }
-    const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return {};
-    }
-    return parsed as SuppressionMap;
-  } catch {
-    return {};
-  }
+export function setCloudDisplayNameSuppressionStorageContext(
+  context: ProductStorageContext | null,
+): void {
+  storageContext = context;
 }
 
-function writeSuppressionMap(map: SuppressionMap): void {
-  if (typeof window === "undefined") {
+function normalizeSuppressionMap(raw: unknown): SuppressionMap {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return {};
+  }
+  return raw as SuppressionMap;
+}
+
+function persistSuppressionMap(map: SuppressionMap): void {
+  if (!storageContext) {
     return;
   }
-
-  try {
-    const entries = Object.entries(map);
-    if (entries.length === 0) {
-      window.localStorage.removeItem(CLOUD_DISPLAY_NAME_BACKFILL_SUPPRESSION_KEY);
-      return;
-    }
-    window.localStorage.setItem(
-      CLOUD_DISPLAY_NAME_BACKFILL_SUPPRESSION_KEY,
-      JSON.stringify(Object.fromEntries(entries)),
-    );
-  } catch {
-    // Storage can be unavailable in privacy modes; runtime clearing still prevents stale backfill.
+  if (Object.keys(map).length === 0) {
+    void removePersistedKey(storageContext, CLOUD_DISPLAY_NAME_BACKFILL_SUPPRESSION_KEY);
+    return;
   }
+  void writePersistedJson(storageContext, CLOUD_DISPLAY_NAME_BACKFILL_SUPPRESSION_KEY, map);
+}
+
+/**
+ * One-shot hydration of the persisted suppression map through the injected
+ * ProductStorage into the in-memory cache. A read resolving after unmount (via
+ * `isStale`) is ignored.
+ */
+export async function hydrateCloudDisplayNameSuppression(
+  context: ProductStorageContext,
+  isStale?: () => boolean,
+): Promise<void> {
+  const result = await readPersistedJson<SuppressionMap>(
+    context,
+    CLOUD_DISPLAY_NAME_BACKFILL_SUPPRESSION_KEY,
+    {
+      parse: (raw) => normalizeSuppressionMap(raw),
+      fallback: {},
+      isStale,
+    },
+  );
+  if (result.status !== "settled") {
+    return;
+  }
+  // Preserve any suppressions written during the async hydration window.
+  suppressionCache = { ...result.value, ...suppressionCache };
 }
 
 export function isCloudDisplayNameBackfillSuppressed(cloudWorkspaceId: string): boolean {
-  return readSuppressionMap()[cloudWorkspaceId] === true;
+  return suppressionCache[cloudWorkspaceId] === true;
 }
 
 export function suppressCloudDisplayNameBackfill(cloudWorkspaceId: string): void {
-  writeSuppressionMap({
-    ...readSuppressionMap(),
-    [cloudWorkspaceId]: true,
-  });
+  if (suppressionCache[cloudWorkspaceId] === true) {
+    return;
+  }
+  suppressionCache = { ...suppressionCache, [cloudWorkspaceId]: true };
+  persistSuppressionMap(suppressionCache);
 }
 
 export function clearCloudDisplayNameBackfillSuppression(cloudWorkspaceId: string): void {
-  const map = readSuppressionMap();
-  if (map[cloudWorkspaceId] !== true) {
+  if (suppressionCache[cloudWorkspaceId] !== true) {
     return;
   }
-  const next = { ...map };
+  const next = { ...suppressionCache };
   delete next[cloudWorkspaceId];
-  writeSuppressionMap(next);
+  suppressionCache = next;
+  persistSuppressionMap(suppressionCache);
+}
+
+export function resetCloudDisplayNameSuppressionForTests(): void {
+  storageContext = null;
+  suppressionCache = {};
 }

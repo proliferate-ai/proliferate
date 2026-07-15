@@ -14,8 +14,8 @@ const scratchQueryMocks = vi.hoisted(() => ({
   setScratchPadCache: vi.fn(),
 }));
 
-const shellMocks = vi.hoisted(() => ({
-  copyText: vi.fn(async () => undefined),
+const hostMocks = vi.hoisted(() => ({
+  writeText: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad", () => ({
@@ -36,9 +36,9 @@ vi.mock("@/hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad-mutati
   }),
 }));
 
-vi.mock("@/hooks/access/tauri/use-shell-actions", () => ({
-  useTauriShellActions: () => ({
-    copyText: shellMocks.copyText,
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => ({
+    clipboard: { writeText: hostMocks.writeText },
   }),
 }));
 
@@ -259,7 +259,7 @@ describe("ScratchPadPanel", () => {
     expect(editor.value).toBe("☐ open\n");
   });
 
-  it("copies scratch content through the shell access boundary", async () => {
+  it("copies scratch content through ProductHost clipboard", async () => {
     scratchQueryMocks.record = {
       content: "durable note",
       updatedAtMs: 1,
@@ -269,6 +269,6 @@ describe("ScratchPadPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Scratch options" }));
     fireEvent.click(screen.getByRole("button", { name: "Copy content" }));
 
-    await waitFor(() => expect(shellMocks.copyText).toHaveBeenCalledWith("durable note"));
+    await waitFor(() => expect(hostMocks.writeText).toHaveBeenCalledWith("durable note"));
   });
 });

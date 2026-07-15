@@ -22,6 +22,13 @@ export interface CreateSessionWithResolvedConfigOptions {
   preserveProjectedSessionOnCreateFailure?: boolean;
   skipInitialPromptEnqueue?: boolean;
   onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void;
+  /**
+   * When set, the creation workflow immediately hides this unused session
+   * after activating the optimistic replacement. Destructive cleanup and
+   * runtime dismissal commit only after the replacement materializes; failure
+   * restores the captured session shell.
+   */
+  replacesSessionId?: string | null;
 }
 
 export interface CreateEmptySessionWithResolvedConfigOptions {
@@ -34,4 +41,11 @@ export interface CreateEmptySessionWithResolvedConfigOptions {
   clientSessionId?: string | null;
   reuseInFlightEmptySession?: boolean;
   preserveProjectedSessionOnCreateFailure?: boolean;
+  /**
+   * When set, the creation workflow immediately hides this unused session
+   * after activating the optimistic replacement. Destructive cleanup and
+   * runtime dismissal commit only after the replacement materializes; failure
+   * restores the captured session shell.
+   */
+  replacesSessionId?: string | null;
 }

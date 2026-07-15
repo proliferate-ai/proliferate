@@ -1,4 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
+import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import type {
   ContentPart,
   NormalizedSessionControl,
@@ -30,6 +32,7 @@ import type {
 } from "@/lib/domain/chat/models/model-selector-types";
 import { resolveModelDisplayName } from "@/lib/domain/chat/models/model-display";
 import { getSessionClientAndWorkspace } from "@/lib/access/anyharness/session-runtime";
+import type { CloudSandboxGatewayUrlSource } from "@/lib/access/cloud/cloud-sandbox-gateway";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { getSessionRecord } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
@@ -43,6 +46,9 @@ export function usePlanHandoffWorkflow({
   plan: PromptPlanAttachmentDescriptor;
   onCompleted: () => void;
 }) {
+  const host = useProductHost();
+  const ssh = host.desktop?.ssh ?? null;
+  const cloudClient = host.cloud.client;
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const connectionState = useHarnessConnectionStore((state) => state.connectionState);
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
@@ -153,6 +159,8 @@ export function usePlanHandoffWorkflow({
             sessionId,
             currentCollaborationModeForSession(sessionId),
             setSessionConfigOptionMutation.mutateAsync,
+            ssh,
+            cloudClient,
           ),
         promptSession,
         dismissSession,
@@ -272,13 +280,19 @@ async function applyPlanHandoffPrePromptConfigChanges(
   sessionId: string,
   collaborationMode: NormalizedSessionControl | null,
   setSessionConfigOption: ReturnType<typeof useSetSessionConfigOptionMutation>["mutateAsync"],
+  ssh: DesktopSshBridge | null,
+  cloudClient: CloudSandboxGatewayUrlSource | null,
 ): Promise<void> {
   const changes = resolvePlanHandoffPrePromptConfigChanges(collaborationMode);
   if (changes.length === 0) {
     return;
   }
 
-  const { materializedSessionId, workspaceId } = await getSessionClientAndWorkspace(sessionId);
+  const { materializedSessionId, workspaceId } = await getSessionClientAndWorkspace(
+    sessionId,
+    ssh,
+    cloudClient,
+  );
   for (const change of changes) {
     const response = await setSessionConfigOption({
       workspaceId,

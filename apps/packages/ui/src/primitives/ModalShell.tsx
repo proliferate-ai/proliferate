@@ -91,7 +91,7 @@ export function ModalShell({
           <DialogClose
             disabled={disableClose}
             aria-label="Close"
-            className="absolute right-4 top-4 z-10 rounded-md p-1 text-muted-foreground opacity-70 transition-opacity hover:opacity-100 disabled:opacity-30"
+            className="absolute right-4 top-4 z-10 rounded-md p-1 text-muted-foreground/70 transition-colors hover:text-muted-foreground disabled:text-muted-foreground/30"
           >
             <X className="size-4" />
           </DialogClose>
@@ -109,11 +109,11 @@ export function ModalShell({
           </>
         ) : (
           <div className={headerClassName ?? `shrink-0 px-5 pb-3 pt-5 ${showCloseButton ? "pr-10" : ""}`}>
-            <DialogTitle className="text-lg font-medium leading-7 tracking-tight text-foreground">
+            <DialogTitle className="text-xl font-medium tracking-tight text-foreground">
               {title}
             </DialogTitle>
             {description && (
-              <DialogDescription className="mt-1 text-xs leading-4 text-muted-foreground">
+              <DialogDescription className="mt-1 text-ui text-muted-foreground">
                 {description}
               </DialogDescription>
             )}

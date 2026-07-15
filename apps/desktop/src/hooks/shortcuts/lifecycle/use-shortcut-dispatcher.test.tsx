@@ -8,12 +8,6 @@ import {
   registerShortcutHandler,
 } from "@/lib/domain/shortcuts/registry";
 
-vi.mock("@/hooks/access/tauri/use-menu-events", () => ({
-  useTauriMenuEvents: () => ({
-    listenForShortcutMenuEvents: vi.fn(async () => vi.fn()),
-  }),
-}));
-
 describe("useShortcutDispatcher", () => {
   beforeEach(() => {
     vi.stubGlobal("navigator", {

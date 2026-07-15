@@ -5,8 +5,8 @@ import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives
 import {
   Check,
   ChevronRight,
+  FolderPlus,
   ProjectNotebook,
-  Plus,
   X,
 } from "@proliferate/ui/icons";
 import { matchesPickerSearch } from "@proliferate/ui/utils/search";
@@ -63,6 +63,7 @@ export function HomeProjectMenu({
               return (
                 <PopoverMenuItem
                   key={repository.sourceRoot}
+                  data-repo-source-root={repository.sourceRoot}
                   icon={<ProjectNotebook className="size-4" />}
                   label={repository.name}
                   trailing={isSelected ? <Check className="size-4" /> : null}
@@ -81,7 +82,7 @@ export function HomeProjectMenu({
           <div className="mx-1 my-1 border-t border-border/70" />
           <div className="pb-1">
             <PopoverMenuItem
-              icon={<Plus className="size-4" />}
+              icon={<FolderPlus className="size-4" />}
               label="New project"
               trailing={<ChevronRight className="size-3.5" />}
               onClick={() => {

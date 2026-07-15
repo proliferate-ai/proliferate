@@ -110,7 +110,6 @@ export function useActiveSessionLaunchState(): {
       pendingModelId
       ?? slice.modelControl?.currentValue
       ?? resolveActiveSessionLaunchModelId(
-        slice.agentKind,
         effectiveModelId,
         effectiveRequestedModelId,
       )
@@ -288,13 +287,9 @@ function useStableBySignature<T>(
 }
 
 function resolveActiveSessionLaunchModelId(
-  agentKind: string,
   modelId: string | null,
   requestedModelId: string | null,
 ): string | null {
-  if (agentKind === "gemini") {
-    return modelId ?? requestedModelId;
-  }
   return requestedModelId ?? modelId;
 }
 

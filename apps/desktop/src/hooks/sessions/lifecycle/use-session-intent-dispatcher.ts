@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   useDeletePendingPromptMutation,
   useEditPendingPromptMutation,
@@ -36,6 +37,9 @@ import {
 let activeDispatcherOwner: symbol | null = null;
 
 export function useSessionIntentDispatcher(): void {
+  const host = useProductHost();
+  const ssh = host.desktop?.ssh ?? null;
+  const cloudClient = host.cloud.client;
   const dispatchVersion = useSessionIntentStore((state) => state.dispatchVersion);
   const { rehydrateSessionSlotFromHistory } = useSessionHistoryHydration();
   const { applySessionSummary } = useSessionSummaryActions();
@@ -75,6 +79,8 @@ export function useSessionIntentDispatcher(): void {
           maybeGenerateWorkspaceName,
           promptSessionMutation,
           rehydrateSessionSlotFromHistory,
+          ssh,
+          cloudClient,
           upsertWorkspaceSessionRecord,
         });
         break;
@@ -82,17 +88,19 @@ export function useSessionIntentDispatcher(): void {
         await dispatchConfigIntent(intent, {
           getWorkspaceSurface,
           setSessionConfigOptionMutation,
+          ssh,
+          cloudClient,
           upsertWorkspaceSessionRecord,
         });
         break;
       case "resolve_interaction":
-        await dispatchInteractionIntent(intent, { resolveInteractionMutation });
+        await dispatchInteractionIntent(intent, { resolveInteractionMutation, ssh, cloudClient });
         break;
       case "edit_pending_prompt":
-        await dispatchEditPendingPromptIntent(intent, { editPendingPromptMutation });
+        await dispatchEditPendingPromptIntent(intent, { editPendingPromptMutation, ssh, cloudClient });
         break;
       case "delete_pending_prompt":
-        await dispatchDeletePendingPromptIntent(intent, { deletePendingPromptMutation });
+        await dispatchDeletePendingPromptIntent(intent, { deletePendingPromptMutation, ssh, cloudClient });
         break;
     }
   }, [
@@ -106,6 +114,8 @@ export function useSessionIntentDispatcher(): void {
     rehydrateSessionSlotFromHistory,
     resolveInteractionMutation,
     setSessionConfigOptionMutation,
+    ssh,
+    cloudClient,
     upsertWorkspaceSessionRecord,
   ]);
 

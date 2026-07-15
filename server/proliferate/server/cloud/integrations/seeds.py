@@ -17,6 +17,7 @@ setup path and gated config, which land in a later PR.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Literal
 
@@ -24,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store.integrations.definitions import (
     IntegrationDefinitionRecord,
+    archive_seed_definitions_not_in,
     upsert_seed_definition,
 )
 from proliferate.server.cloud.integrations.config import (
@@ -37,6 +39,8 @@ from proliferate.server.cloud.integrations.config import (
     UrlBySetting,
     serialize_definition_config,
 )
+
+logger = logging.getLogger(__name__)
 
 SeedAuthKind = Literal["oauth2", "api_key", "none"]
 SeedOAuthClientMode = Literal["dcr", "static"]
@@ -336,21 +340,6 @@ SEED_DEFINITIONS: tuple[SeedDefinition, ...] = (
         ),
     ),
     SeedDefinition(
-        namespace="cloudflare_docs",
-        display_name="Cloudflare Docs",
-        description=(
-            "Use Cloudflare Docs to search official Cloudflare documentation and API "
-            "references through Cloudflare's hosted MCP docs server."
-        ),
-        auth_kind="none",
-        oauth_client_mode=None,
-        config=IntegrationConfig(
-            transport="http",
-            url=StaticUrl("https://docs.mcp.cloudflare.com/mcp"),
-            display_url="https://docs.mcp.cloudflare.com/mcp",
-        ),
-    ),
-    SeedDefinition(
         namespace="gitlab",
         display_name="GitLab",
         description=(
@@ -427,7 +416,8 @@ async def sync_seed_definitions(db: AsyncSession) -> tuple[IntegrationDefinition
     """Upsert every seed spec into ``cloud_integration_definition``.
 
     Idempotent: matches on ``source='seed'`` + namespace, updates the mutable
-    seed fields, and leaves org-custom rows untouched.
+    seed fields, and leaves org-custom rows untouched. Seeds removed from
+    ``SEED_DEFINITIONS`` are archived on sync; re-added seeds are unarchived.
     """
     records = []
     for spec in SEED_DEFINITIONS:
@@ -443,4 +433,8 @@ async def sync_seed_definitions(db: AsyncSession) -> tuple[IntegrationDefinition
                 enabled_by_default=spec.enabled_by_default,
             )
         )
+    current_namespaces = frozenset(spec.namespace for spec in SEED_DEFINITIONS)
+    archived = await archive_seed_definitions_not_in(db, current_namespaces)
+    if archived:
+        logger.info("Archived removed seed definitions: %s", ", ".join(archived))
     return tuple(records)

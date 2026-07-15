@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import type {
   LocalAutomationRunClaimResponse,
 } from "@/lib/access/cloud/client";
@@ -16,8 +17,12 @@ import {
   executeLocalAutomationRun,
   LocalAutomationExecutorError,
 } from "@/lib/workflows/automations/local-automation-executor";
-import { readPersistedValue, persistValue } from "@/lib/infra/persistence/preferences-persistence";
-import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
+import {
+  readPersistedStringValue,
+  writePersistedString,
+  type ProductStorageContext,
+} from "@/lib/infra/persistence/product-storage";
+import { useProductStorageContext } from "@/hooks/persistence/facade/use-product-storage-context";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 
@@ -28,17 +33,22 @@ const LOCAL_EXECUTOR_HEARTBEAT_MS = 30_000;
 let localExecutorMounted = false;
 let executorIdPromise: Promise<string> | null = null;
 
-async function getLocalExecutorId(): Promise<string> {
+async function getLocalExecutorId(
+  storage: ProductStorageContext,
+): Promise<string> {
   if (executorIdPromise) {
     return executorIdPromise;
   }
   executorIdPromise = (async () => {
-    const existing = await readPersistedValue<string>(AUTOMATION_LOCAL_EXECUTOR_ID_KEY);
+    // Bare-string id (never JSON): read/write raw to preserve the existing
+    // per-device executor identity with zero migration.
+    const existing =
+      await readPersistedStringValue(storage, AUTOMATION_LOCAL_EXECUTOR_ID_KEY);
     if (existing?.trim()) {
       return existing.trim();
     }
     const next = `desktop:${crypto.randomUUID()}`;
-    await persistValue(AUTOMATION_LOCAL_EXECUTOR_ID_KEY, next);
+    await writePersistedString(storage, AUTOMATION_LOCAL_EXECUTOR_ID_KEY, next);
     return next;
   })();
   return executorIdPromise;
@@ -53,7 +63,8 @@ export function useLocalAutomationClaimPoller(args: {
   const runClaims = useLocalAutomationRunClaims();
   const createRuntimeClient = useLocalAutomationRuntimeClientFactory();
   const { invalidateAfterLocalAutomationRun } = useLocalAutomationExecutorCache();
-  const { getHomeDir } = useTauriShellActions();
+  const files = useProductHost().desktop?.files ?? null;
+  const storage = useProductStorageContext();
   const workspacesQuery = useWorkspaces();
   const activeRef = useRef(false);
   const candidates = useMemo(
@@ -66,7 +77,7 @@ export function useLocalAutomationClaimPoller(args: {
   );
 
   useEffect(() => {
-    if (!args.enabled || !args.runtimeUrl.trim() || candidates.length === 0) {
+    if (!args.enabled || !args.runtimeUrl.trim() || candidates.length === 0 || !files) {
       return;
     }
     if (localExecutorMounted) {
@@ -82,7 +93,7 @@ export function useLocalAutomationClaimPoller(args: {
       }
       activeRef.current = true;
       try {
-        const executorId = await getLocalExecutorId();
+        const executorId = await getLocalExecutorId(storage);
         const response = await runClaims.claimRuns({
           executorId,
           limit: 1,
@@ -94,7 +105,7 @@ export function useLocalAutomationClaimPoller(args: {
             claim,
             candidates,
             executorId,
-            getHomeDir,
+            getHomeDir: files.getHomeDirectory,
             runtimeUrl: args.runtimeUrl,
             runClaims,
             createRuntimeClient,
@@ -132,9 +143,10 @@ export function useLocalAutomationClaimPoller(args: {
     args.runtimeUrl,
     candidates,
     createRuntimeClient,
-    getHomeDir,
+    files,
     invalidateAfterLocalAutomationRun,
     runClaims,
+    storage,
   ]);
 }
 

@@ -5,9 +5,15 @@ import { WorkspaceArrivalAttachedPanel } from "@/components/workspace/chat/surfa
 import { TodoTrackerPanel, TodoTrackerStrip } from "@/components/workspace/chat/input/TodoTrackerPanel";
 import { ConnectedApprovalCard } from "@/components/workspace/chat/input/ApprovalCard";
 import { ConnectedMcpElicitationCard } from "@/components/workspace/chat/input/McpElicitationCard";
+import { ConnectedPendingPromptList } from "@/components/workspace/chat/input/PendingPromptList";
 import { DelegatedWorkComposerPanel } from "@/components/workspace/chat/input/DelegatedWorkComposerPanel";
 import { DelegatedWorkComposerControl } from "@/components/workspace/chat/input/delegated-work/DelegatedWorkComposerControl";
+import { ConnectedWorkspaceActivityComposerCard } from "@/components/workspace/chat/input/workspace-activity/WorkspaceActivityComposerCard";
 import { ConnectedUserInputCard } from "@/components/workspace/chat/input/UserInputCard";
+import { ConnectedPromptRecoveryPanel } from "@/components/workspace/chat/input/PromptRecoveryPanel";
+import { SessionActivityBar } from "@/components/workspace/activity/SessionActivityBar";
+import { useSessionGoalBarModel } from "@/hooks/activity/derived/use-session-goal";
+import { useSessionActivityChips } from "@/hooks/activity/derived/use-session-activity-chips";
 import {
   useActivePendingInteractionState,
   useActivePendingPrompts,
@@ -17,6 +23,8 @@ import { useActiveTodoTracker } from "@/hooks/chat/derived/use-active-todo-track
 import { useComposerDockCardPresence } from "@/hooks/chat/ui/use-composer-dock-card-presence";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import { useWorkspaceStatusPanelState } from "@/hooks/workspaces/derived/use-workspace-status-panel-state";
+import { useChatPromptRecoveries } from "@/hooks/chat/derived/use-chat-prompt-recoveries";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 export interface ComposerDockSlots {
   outboundSlot: ReactNode | null;
@@ -32,8 +40,12 @@ export function useComposerDockSlots(options?: {
   const suppressWorkspaceStatusPanels = options?.suppressWorkspaceStatusPanels ?? false;
   const { primaryPendingInteraction } = useActivePendingInteractionState();
   const pendingPrompts = useActivePendingPrompts();
+  const promptRecoveries = useChatPromptRecoveries().recoveries;
   const activeTodoTracker = useActiveTodoTracker();
   const delegatedWorkComposer = useDelegatedWorkComposer();
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const sessionGoalBarModel = useSessionGoalBarModel();
+  const sessionActivityChips = useSessionActivityChips();
   const workspaceStatusPanel = useWorkspaceStatusPanelState();
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const hasCloudRuntimePanel = !!selectedCloudRuntime.state
@@ -42,9 +54,13 @@ export function useComposerDockSlots(options?: {
     suppressSessionSlots,
     suppressWorkspaceStatusPanels,
     pendingPromptCount: pendingPrompts.length,
+    recoveredPromptCount: promptRecoveries.length,
     primaryPendingInteractionKind: primaryPendingInteraction?.kind ?? null,
     hasActiveTodoTracker: !!activeTodoTracker,
     hasDelegatedWork: !!delegatedWorkComposer,
+    hasWorkspaceActivity: !!selectedWorkspaceId,
+    hasSessionGoal: !!sessionGoalBarModel,
+    hasSessionActivity: sessionActivityChips.length > 0,
     hasWorkspaceStatusPanel: !!workspaceStatusPanel,
     hasCloudRuntimePanel,
   }), [
@@ -52,9 +68,13 @@ export function useComposerDockSlots(options?: {
     delegatedWorkComposer,
     hasCloudRuntimePanel,
     pendingPrompts.length,
+    promptRecoveries.length,
     primaryPendingInteraction?.kind,
+    sessionActivityChips.length,
+    sessionGoalBarModel,
     suppressSessionSlots,
     suppressWorkspaceStatusPanels,
+    selectedWorkspaceId,
     workspaceStatusPanel,
   ]);
 
@@ -114,28 +134,48 @@ export function useComposerDockSlots(options?: {
       )
       : null
   ), [delegatedWorkComposer, dockSlotResolution.attachedSlot?.delegatedWork]);
+  const workspaceActivitySlot = useMemo<ReactNode | null>(() => (
+    dockSlotResolution.attachedSlot?.workspaceActivity
+      ? <ConnectedWorkspaceActivityComposerCard />
+      : null
+  ), [dockSlotResolution.attachedSlot?.workspaceActivity]);
+  // The workspace cap renders last in the attached stack so it docks against
+  // the composer surface. Existing session-scoped trays keep their order.
+  const sessionActivitySlot = useMemo<ReactNode | null>(() => (
+    dockSlotResolution.attachedSlot?.sessionGoal || dockSlotResolution.attachedSlot?.sessionActivity
+      ? <SessionActivityBar />
+      : null
+  ), [dockSlotResolution.attachedSlot?.sessionGoal, dockSlotResolution.attachedSlot?.sessionActivity]);
   const attachedSlot = useMemo<ReactNode | null>(() => (
-    ambientContextSlot || delegatedWorkSlot
+    ambientContextSlot || delegatedWorkSlot || sessionActivitySlot || workspaceActivitySlot
       ? (
       <>
         {ambientContextSlot}
         {delegatedWorkSlot}
+        {sessionActivitySlot}
+        {workspaceActivitySlot}
       </>
       )
       : null
-  ), [ambientContextSlot, delegatedWorkSlot]);
+  ), [ambientContextSlot, delegatedWorkSlot, sessionActivitySlot, workspaceActivitySlot]);
+
+  // Queue-placed prompts have one owner: the dock's outbound list. A rollback
+  // recovery is workspace-scoped rather than session-scoped and outranks the
+  // queue (resolver priority), owning the slot until retried or dismissed.
+  const outboundSlot = useMemo<ReactNode | null>(() => (
+    dockSlotResolution.outboundSlot?.kind === "prompt_recoveries"
+      ? <ConnectedPromptRecoveryPanel />
+      : dockSlotResolution.outboundSlot?.kind === "pending_prompts"
+        ? <ConnectedPendingPromptList />
+        : null
+  ), [dockSlotResolution.outboundSlot?.kind]);
 
   return useMemo(() => ({
-    // Queued prompts now render IN THE TRANSCRIPT (renderableOutboxEntriesFor-
-    // Transcript includes queue-placed entries), so the dock's pending list is
-    // retired — rendering both would show the same message twice. NOTE: this
-    // also retires the dock's queued-prompt edit affordance (beginEdit was
-    // only reachable from that list); re-home it on the transcript pending row
-    // if we want it back.
-    outboundSlot: null,
+    outboundSlot,
     activeSlot: activeAgentSlot,
     attachedSlot,
   }), [
+    outboundSlot,
     activeAgentSlot,
     attachedSlot,
   ]);

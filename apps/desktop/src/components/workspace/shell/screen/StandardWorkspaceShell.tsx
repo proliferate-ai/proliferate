@@ -21,12 +21,12 @@ import {
   WorkspaceSidebarHeaderControls,
 } from "@/components/workspace/shell/sidebar/WorkspaceSidebarHeaderControls";
 import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
+import { OfflineIndicator } from "@/components/app/OfflineIndicator";
 import { useMainScreenState } from "@/hooks/main/facade/use-main-screen-state";
 import { useMainScreenShortcuts } from "@/hooks/main/lifecycle/use-main-screen-shortcuts";
 import { useMainScreenActions } from "@/hooks/main/workflows/use-main-screen-actions";
 import { useTransparentChromeEnabled } from "@/hooks/theme/derived/use-transparent-chrome";
 import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
-import { useNativeOverlayOpen } from "@proliferate/ui/overlays/overlay-presence";
 import { useUpdater } from "@/hooks/access/tauri/use-updater";
 import { useRunWorkspaceCommand } from "@/hooks/workspaces/workflows/use-run-workspace-command";
 import { useWorkspaceOpenInWebActions } from "@/hooks/workspaces/workflows/remote-access/use-workspace-open-in-web-actions";
@@ -58,6 +58,10 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
   );
+  // Stable qualification hook (attributes only): exposes the active session id
+  // on the shell root so the local-world smoke driver can extract/reopen the
+  // exact session without a private API. No behavior change.
+  const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);
   const { layout, data } = useMainScreenState();
   const actions = useMainScreenActions({
     layout,
@@ -128,28 +132,22 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
   const runtimeBlockedReason = getWorkspaceRuntimeBlockReason(selectedWorkspaceId);
   const shellActions = useMemo(() => ({
     openTerminalPanel: actions.openTerminalPanel,
+    openRightPanelTool: actions.onSetRightPanelTool,
+    openPublishDialog: actions.openPublishDialog,
+    openPullRequest: data.existingPr
+      ? () => actions.handleViewPr(data.existingPr)
+      : actions.handlePrOpen,
     workspaceWebActions,
     workspaceRemoteAccessActions,
-  }), [actions.openTerminalPanel, workspaceRemoteAccessActions, workspaceWebActions]);
-  const workspaceActionsMenuProps = useMemo(() => ({
-    branchName: data.gitStatus?.currentBranch?.trim() || null,
-    hasExistingPr: data.existingPr !== null,
-    gitActionsDisabledReason: hasRuntimeReadyWorkspace
-      ? runtimeBlockedReason
-      : "Workspace runtime is not ready.",
-    onCommit: actions.handleCommitOpen,
-    onPush: actions.handlePushOpen,
-    onCreatePr: actions.handlePrOpen,
-    onViewPr: actions.handleViewPr,
   }), [
-    actions.handleCommitOpen,
     actions.handlePrOpen,
-    actions.handlePushOpen,
     actions.handleViewPr,
+    actions.onSetRightPanelTool,
+    actions.openPublishDialog,
+    actions.openTerminalPanel,
     data.existingPr,
-    data.gitStatus?.currentBranch,
-    hasRuntimeReadyWorkspace,
-    runtimeBlockedReason,
+    workspaceRemoteAccessActions,
+    workspaceWebActions,
   ]);
   const repoSettingsHref = useMemo(() => resolveWorkspaceRepoSettingsHref({
     cloudRepoOwner: selectedCloudWorkspace?.repo?.owner,
@@ -166,10 +164,6 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
   const repositorySettingsDisabledReason = canOpenRepositorySettings
     ? null
     : "Repository settings are unavailable.";
-  const nativePortalOverlayOpen = useNativeOverlayOpen();
-  const nativeWorkspaceOverlaysHidden = commandPaletteOpen
-    || publishDialog.open
-    || nativePortalOverlayOpen;
   const handleTerminalActivationRequestHandled = useCallback(
     (request: NonNullable<typeof terminalActivationRequest>) => {
       layout.setTerminalActivationRequest((current) =>
@@ -226,6 +220,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
               className={`h-screen flex overflow-hidden ${chromeClasses.root}`}
               data-workspace-shell
               data-workspace-ui-key={selectedLogicalWorkspaceId ?? selectedWorkspaceId ?? ""}
+              data-workspace-session-id={activeSessionId ?? ""}
               data-pending-workspace={pendingWorkspaceEntry ? "true" : "false"}
               data-pending-workspace-attempt-id={pendingWorkspaceEntry?.attemptId ?? undefined}
               data-telemetry-block
@@ -281,7 +276,6 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                             runLoading={runCommand.isLaunching}
                             runLabel={runCommand.runLabel}
                             runTitle={runCommand.runTitle}
-                            workspaceActions={workspaceActionsMenuProps}
                             onRun={runCommand.onRun}
                             onTogglePanel={actions.toggleRightPanel}
                           />
@@ -290,6 +284,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                     </DebugProfiler>
                   </div>
 
+                  <OfflineIndicator />
                   <div className="flex min-h-0 flex-1 overflow-hidden bg-sidebar-background">
                     {hasLaunchIntentOnlyShell ? (
                       <DebugProfiler id="workspace-content-frame">
@@ -333,6 +328,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                             runtimeBlockedReason={runtimeBlockedReason}
                             repoDefaultBranch={publishRepoDefaultBranch}
                             onClose={actions.closePublishDialog}
+                            onIntentChange={actions.openPublishDialog}
                             onViewPr={actions.handlePublishDialogViewPr}
                           />
                         )}
@@ -361,8 +357,6 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                   onStateChange={layout.setRightPanelState}
                   terminalActivationRequest={terminalActivationRequest}
                   focusRequestToken={rightPanelFocusRequestToken}
-                  nativeOverlaysHidden={nativeWorkspaceOverlaysHidden}
-                  onOpenPanel={actions.openRightPanel}
                   onTogglePanel={actions.toggleRightPanel}
                   onTerminalActivationRequestHandled={handleTerminalActivationRequestHandled}
                 />

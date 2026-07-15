@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-} from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { TranscriptVirtualizationMode } from "@proliferate/product-domain/chats/transcript/transcript-virtualization-config";
 import {
@@ -15,6 +9,7 @@ import {
   logHistoryPrefetchDecisionOnce,
   TRANSCRIPT_TOP_PADDING_PX,
   TranscriptScrollToBottomButton,
+  resolveTranscriptBottomInsets,
   type HistoryPrefetchDecisionReason,
   type HistoryPrefetchTrigger,
   type HistoryPrependScrollAnchor,
@@ -52,6 +47,7 @@ export function VirtualizedTranscriptRowList({
   isLoadingOlderHistory,
   olderHistoryCursor,
   bottomInsetPx,
+  nonDisplacingBottomInsetPx = 0,
   selectedWorkspaceId,
   activeSessionId,
   isSessionBusy,
@@ -65,11 +61,16 @@ export function VirtualizedTranscriptRowList({
   virtualizationMode,
 }: VirtualizedTranscriptRowListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const pendingAnchorRef = useRef<VirtualScrollAnchor | null>(null);
   const pendingPrependAnchorRef = useRef<HistoryPrependScrollAnchor | null>(null);
   const lastOlderHistoryCursorRequestRef = useRef<number | null>(null);
   const lastPrefetchDecisionLogRef = useRef<string | null>(null);
   const lastBlankReportSignatureRef = useRef<string | null>(null);
+  const {
+    structural: structuralBottomInsetPx,
+    nonDisplacing: effectiveNonDisplacingBottomInsetPx,
+  } = resolveTranscriptBottomInsets(bottomInsetPx, nonDisplacingBottomInsetPx);
   const {
     isPinnedToBottom,
     pinnedRef,
@@ -79,7 +80,11 @@ export function VirtualizedTranscriptRowList({
     notifyProgrammaticScroll,
     setPinned,
     resetForSession,
-  } = useTranscriptStickToBottom({ scrollRef, onScrollSample });
+  } = useTranscriptStickToBottom({
+    scrollRef,
+    onScrollSample,
+    autoFollowBottomInsetPx: effectiveNonDisplacingBottomInsetPx,
+  });
   const renderableRows = useMemo(
     () => buildRenderableRows(rows, isLoadingOlderHistory),
     [isLoadingOlderHistory, rows],
@@ -87,7 +92,7 @@ export function VirtualizedTranscriptRowList({
   const estimatedInitialBottomOffset =
     TRANSCRIPT_TOP_PADDING_PX
     + estimateRenderableRowsHeight(renderableRows)
-    + bottomInsetPx;
+    + structuralBottomInsetPx;
 
   const virtualizer = useVirtualizer({
     count: renderableRows.length,
@@ -96,7 +101,7 @@ export function VirtualizedTranscriptRowList({
     estimateSize: (index) => estimateRenderableRowHeight(renderableRows[index]),
     overscan: VIRTUALIZER_OVERSCAN,
     paddingStart: TRANSCRIPT_TOP_PADDING_PX,
-    paddingEnd: bottomInsetPx,
+    paddingEnd: structuralBottomInsetPx,
     initialOffset: () => estimatedInitialBottomOffset,
     useAnimationFrameWithResizeObserver: true,
   });
@@ -291,7 +296,6 @@ export function VirtualizedTranscriptRowList({
     }
     scrollToBottom();
   }, [
-    bottomInsetPx,
     isSessionBusy,
     pendingPromptText,
     pinnedRef,
@@ -299,6 +303,31 @@ export function VirtualizedTranscriptRowList({
     scrollToBottom,
     totalContentHeight,
   ]);
+
+  // Row content can grow between virtualizer measurements (tool-call output
+  // streaming, status flips, expanding panels). The snap effect above only
+  // fires when totalContentHeight changes — but with
+  // useAnimationFrameWithResizeObserver the virtualizer defers re-measurement
+  // by one frame, leaving a window where the DOM has grown but no snap runs.
+  // Bridge that gap with a ResizeObserver on the content wrapper (same pattern
+  // as FullTranscriptRowList) that re-snaps immediately on any size increase
+  // while pinned, regardless of whether the virtualizer has re-measured yet.
+  useEffect(() => {
+    const content = contentRef.current;
+    if (!content) {
+      return;
+    }
+    const observer = new ResizeObserver(() => {
+      if (!pinnedRef.current) {
+        return;
+      }
+      scrollToBottom();
+    });
+    observer.observe(content);
+    return () => {
+      observer.disconnect();
+    };
+  }, [pinnedRef, scrollToBottom]);
 
   useLayoutEffect(() => () => {
     const viewport = scrollRef.current;
@@ -345,7 +374,9 @@ export function VirtualizedTranscriptRowList({
     <div className="relative h-full">
       <VirtualTranscriptViewport
         bottomSpacerHeight={bottomSpacerHeight}
+        nonDisplacingBottomInsetPx={effectiveNonDisplacingBottomInsetPx}
         columnClassName={columnClassName}
+        contentRef={contentRef}
         gutterClassName={gutterClassName}
         measureElement={virtualizer.measureElement}
         onViewportScroll={handleViewportScroll}

@@ -123,8 +123,7 @@ impl SessionActor {
         catalog_authorized_model: bool,
     ) -> Result<ConfigApplyState, crate::live::sessions::actor::command::SetConfigOptionCommandError>
     {
-        let option = find_select_option_for_request(&self.startup_state.config_options, config_id);
-        queue_pending_config_change(
+        let resolved_value = queue_pending_config_change(
             self.caps.state.as_ref(),
             &self.session_id,
             &self.startup_state,
@@ -132,6 +131,7 @@ impl SessionActor {
             value,
             catalog_authorized_model,
         )?;
+        let option = find_select_option_for_request(&self.startup_state.config_options, config_id);
 
         if let Err(error) = persist_requested_config_value_if_changed(
             self.caps.state.as_ref(),
@@ -139,7 +139,7 @@ impl SessionActor {
             &self.session_id,
             &mut self.persisted_config_state,
             tracked_config_purpose(config_id, option),
-            value,
+            &resolved_value,
             chrono::Utc::now().to_rfc3339(),
         )
         .await

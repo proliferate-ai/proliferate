@@ -1,6 +1,7 @@
 import { AnyHarnessError, type RepoRoot } from "@anyharness/sdk";
 import { useResolveRepoRootFromPathMutation } from "@anyharness/sdk-react";
 import { useSaveRepoEnvironment } from "@proliferate/cloud-sdk-react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useCallback, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { runAddRepoWorkflow } from "@/lib/domain/workspaces/creation/add-repo-workflow";
@@ -39,6 +40,7 @@ function isRepoEntryBlockedPath(pathname: string): boolean {
 }
 
 export function useAddRepo() {
+  const localRuntime = useProductHost().desktop?.runtime ?? null;
   const location = useLocation();
   const { upsertRepoRootInWorkspaceCollections } = useWorkspaceCollectionsMutationCacheActions();
   const { invalidateWorkspaceCollectionsForRuntime } = useWorkspaceCollectionsInvalidationActions();
@@ -94,7 +96,7 @@ export function useAddRepo() {
     try {
       const repoRoot = await runAddRepoWorkflow({
         path,
-        ensureRuntimeReady,
+        ensureRuntimeReady: () => ensureRuntimeReady(localRuntime),
         resolveRepoRootFromPath: (repoPath) => resolveRepoRootFromPath(repoPath),
         upsertRepoRootInWorkspaceCollections,
         invalidateWorkspaceCollections: invalidateWorkspaceCollectionsForRuntime,
@@ -117,6 +119,7 @@ export function useAddRepo() {
   }, [
     canAddRepo,
     invalidateWorkspaceCollectionsForRuntime,
+    localRuntime,
     openRepoSetupModal,
     resolveRepoRootFromPath,
     saveLocalRepoEnvironment,

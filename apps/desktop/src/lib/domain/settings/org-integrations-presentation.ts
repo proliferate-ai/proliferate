@@ -1,4 +1,5 @@
 import type { AdminIntegrationDefinition } from "@proliferate/cloud-sdk/client/integrations";
+import { integrationAuthKindLabel } from "@/lib/domain/settings/integrations-presentation";
 
 /**
  * Presentation logic for the org-admin integrations pane: definition
@@ -9,6 +10,21 @@ import type { AdminIntegrationDefinition } from "@proliferate/cloud-sdk/client/i
 /** Human label for where a definition comes from. */
 export function adminIntegrationSourceLabel(source: string): string {
   return source === "org_custom" ? "Custom" : "Built-in";
+}
+
+/**
+ * Human label for how a definition authenticates. Admin definitions carry the
+ * auth kind as a plain string, so unknown values pass through unchanged.
+ */
+export function adminIntegrationAuthKindLabel(authKind: string): string {
+  switch (authKind) {
+    case "oauth2":
+    case "api_key":
+    case "none":
+      return integrationAuthKindLabel(authKind);
+    default:
+      return authKind;
+  }
 }
 
 export interface AdminIntegrationEnabledView {
@@ -36,10 +52,23 @@ export function adminIntegrationEnabledView(
   };
 }
 
+/** Admin's authentication choice when adding a custom MCP definition. */
+export type CustomIntegrationAuthChoice = "auto" | "none" | "oauth2";
+
+export const CUSTOM_INTEGRATION_AUTH_OPTIONS: ReadonlyArray<{
+  value: CustomIntegrationAuthChoice;
+  label: string;
+}> = [
+  { value: "auto", label: "Auto-detect" },
+  { value: "none", label: "None" },
+  { value: "oauth2", label: "OAuth" },
+];
+
 export interface CustomIntegrationFormInput {
   displayName: string;
   namespace: string;
   mcpUrl: string;
+  authKind: CustomIntegrationAuthChoice;
 }
 
 export interface CustomIntegrationFormErrors {
@@ -95,4 +124,22 @@ export function customIntegrationSubmitError(apiMessage: string | null): string 
     return apiMessage;
   }
   return "The custom integration could not be added. Try again.";
+}
+
+/**
+ * Toast message after a successful create, stating the auth outcome: OAuth
+ * (detected or forced) tells admins where members connect; an unreachable
+ * probe admits the auth requirement was not verified; otherwise the
+ * integration is open and the plain confirmation suffices.
+ */
+export function customIntegrationCreatedMessage(
+  definition: Pick<AdminIntegrationDefinition, "displayName" | "authKind" | "authDetection">,
+): string {
+  if (definition.authKind === "oauth2") {
+    return `${definition.displayName} added. OAuth required — members connect from Settings → Integrations.`;
+  }
+  if (definition.authDetection === "unreachable") {
+    return `${definition.displayName} added, but the server could not be reached to verify authentication. It is saved without auth.`;
+  }
+  return `${definition.displayName} added. No authentication required.`;
 }

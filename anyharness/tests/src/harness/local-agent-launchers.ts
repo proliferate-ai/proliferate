@@ -20,26 +20,16 @@ export function ensureLocalAgentLaunchers(): Record<string, string> {
     "ANYHARNESS_TEST_CLAUDE_REPO",
     join(HOME, "claude-agent-acp"),
   );
-  const geminiRepo = resolveRequiredRepoPath(
-    "ANYHARNESS_TEST_GEMINI_REPO",
-    join(HOME, "gemini-cli"),
-  );
   const codexLauncher = resolveCodexLauncher();
 
   const claudeEntrypoint = join(claudeRepo, "dist", "index.js");
-  const geminiEntrypoint = join(geminiRepo, "bundle", "gemini.js");
   const forceRebuild = process.env.ANYHARNESS_TEST_FORCE_AGENT_REBUILD === "1";
   const forceInstall = process.env.ANYHARNESS_TEST_FORCE_AGENT_INSTALL === "1";
 
   ensureNodeWorkspaceDependencies("claude-agent-acp", claudeRepo, forceInstall);
-  ensureNodeWorkspaceDependencies("gemini-cli", geminiRepo, forceInstall);
 
   if (forceRebuild || !exists(claudeEntrypoint)) {
     ensureExecutable("claude-agent-acp", "npm", ["run", "build"], claudeRepo);
-  }
-
-  if (forceRebuild || !exists(geminiEntrypoint)) {
-    ensureExecutable("gemini-cli", "npm", ["run", "bundle"], geminiRepo);
   }
 
   return {
@@ -49,12 +39,6 @@ export function ensureLocalAgentLaunchers(): Record<string, string> {
     ANYHARNESS_CODEX_AGENT_PROGRAM: codexLauncher.program,
     ANYHARNESS_CODEX_AGENT_ARGS_JSON: JSON.stringify(codexLauncher.args),
     ANYHARNESS_CODEX_AGENT_CWD: codexLauncher.cwd,
-    ANYHARNESS_GEMINI_AGENT_PROGRAM: process.execPath,
-    ANYHARNESS_GEMINI_AGENT_ARGS_JSON: JSON.stringify([
-      geminiEntrypoint,
-      "--experimental-acp",
-    ]),
-    ANYHARNESS_GEMINI_AGENT_CWD: geminiRepo,
   };
 }
 

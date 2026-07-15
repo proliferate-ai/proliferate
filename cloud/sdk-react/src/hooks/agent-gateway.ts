@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  clearAgentRouteSelection,
   createAgentApiKey,
   deleteAgentCatalogOverride,
   getAgentAuthState,
@@ -9,18 +8,17 @@ import {
   getAgentGatewayEnrollment,
   getOrgAgentPolicy,
   listAgentApiKeys,
-  listAgentRouteSelections,
+  listAuthSelections,
   listOrgAgentPolicyViolations,
+  mirrorAgentCatalog,
+  putAuthSelections,
   refreshAgentCatalog,
   revokeAgentApiKey,
   updateOrgAgentPolicy,
   upsertAgentCatalogOverride,
-  upsertAgentRouteSelection,
   type AgentApiKey,
-  type AgentApiKeyListResponse,
   type AgentAuthRoute,
-  type AgentAuthRouteSelection,
-  type AgentAuthRouteSelectionListResponse,
+  type AgentAuthSelection,
   type AgentAuthState,
   type AgentAuthSurface,
   type AgentGatewayCapabilities,
@@ -28,38 +26,33 @@ import {
   type AgentGatewayCatalogOverride,
   type AgentGatewayEnrollment,
   type CreateAgentApiKeyRequest,
+  type MirrorAgentGatewayCatalogRequest,
   type OrgAgentPolicy,
   type OrgAgentPolicyViolationListResponse,
+  type PutAuthSelectionsRequest,
   type RefreshAgentGatewayCatalogRequest,
   type UpdateOrgAgentPolicyRequest,
-  type UpsertAgentAuthRouteSelectionRequest,
   type UpsertAgentGatewayCatalogOverrideRequest,
 } from "@proliferate/cloud-sdk";
 import { useCloudClient } from "../context/CloudClientProvider.js";
 import {
   agentApiKeysKey,
+  agentAuthSelectionsKey,
+  agentAuthSelectionsRootKey,
   agentAuthStateKey,
   agentAuthStateRootKey,
   agentGatewayCapabilitiesKey,
   agentGatewayCatalogKey,
   agentGatewayCatalogRootKey,
   agentGatewayEnrollmentKey,
-  agentRouteSelectionsKey,
   orgAgentPolicyKey,
   orgAgentPolicyViolationsKey,
 } from "../lib/query-keys.js";
 
-export interface UpsertRouteSelectionInput {
+export interface PutAuthSelectionsInput {
   harnessKind: string;
-  surface: string;
-  body: UpsertAgentAuthRouteSelectionRequest;
-}
-
-export interface ClearRouteSelectionInput {
-  harnessKind: string;
-  surface: string;
-  /** Slot to clear; defaults to 'primary' (single-source harnesses). */
-  slot?: string;
+  surface: AgentAuthSurface;
+  body: PutAuthSelectionsRequest;
 }
 
 export interface AgentCatalogScope {
@@ -73,14 +66,21 @@ export interface RefreshAgentCatalogInput {
   body: RefreshAgentGatewayCatalogRequest;
 }
 
+export interface MirrorAgentCatalogInput {
+  harnessKind: string;
+  body: MirrorAgentGatewayCatalogRequest;
+}
+
 export interface UpsertCatalogOverrideInput {
   harnessKind: string;
   body: UpsertAgentGatewayCatalogOverrideRequest;
 }
 
+// --- Key vault -------------------------------------------------------------
+
 export function useAgentApiKeys(enabled = true) {
   const client = useCloudClient();
-  return useQuery<AgentApiKeyListResponse>({
+  return useQuery<AgentApiKey[]>({
     queryKey: agentApiKeysKey(),
     queryFn: () => listAgentApiKeys(client),
     enabled,
@@ -105,18 +105,23 @@ export function useRevokeAgentApiKey() {
     mutationFn: (keyId) => revokeAgentApiKey(keyId, client),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: agentApiKeysKey() });
-      // Revoking a key can invalidate api_key route selections downstream.
-      void queryClient.invalidateQueries({ queryKey: agentRouteSelectionsKey() });
+      // Revoking a key can invalidate api_key selections downstream.
+      void queryClient.invalidateQueries({ queryKey: agentAuthSelectionsRootKey() });
       void queryClient.invalidateQueries({ queryKey: agentAuthStateRootKey() });
     },
   });
 }
 
-export function useRouteSelections(enabled = true) {
+// --- Auth selections -------------------------------------------------------
+
+export function useAuthSelections(
+  surface: AgentAuthSurface | null = null,
+  enabled = true,
+) {
   const client = useCloudClient();
-  return useQuery<AgentAuthRouteSelectionListResponse>({
-    queryKey: agentRouteSelectionsKey(),
-    queryFn: () => listAgentRouteSelections(client),
+  return useQuery<AgentAuthSelection[]>({
+    queryKey: agentAuthSelectionsKey(surface),
+    queryFn: () => listAuthSelections(surface ?? undefined, client),
     enabled,
   });
 }
@@ -135,31 +140,20 @@ export function useAgentAuthState(surface: AgentAuthSurface, enabled = true) {
   });
 }
 
-export function useUpsertRouteSelection() {
+export function usePutAuthSelections() {
   const client = useCloudClient();
   const queryClient = useQueryClient();
-  return useMutation<AgentAuthRouteSelection, Error, UpsertRouteSelectionInput>({
+  return useMutation<AgentAuthSelection[], Error, PutAuthSelectionsInput>({
     mutationFn: ({ harnessKind, surface, body }) =>
-      upsertAgentRouteSelection(harnessKind, surface, body, client),
+      putAuthSelections(harnessKind, surface, body, client),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: agentRouteSelectionsKey() });
+      void queryClient.invalidateQueries({ queryKey: agentAuthSelectionsRootKey() });
       void queryClient.invalidateQueries({ queryKey: agentAuthStateRootKey() });
     },
   });
 }
 
-export function useClearRouteSelection() {
-  const client = useCloudClient();
-  const queryClient = useQueryClient();
-  return useMutation<void, Error, ClearRouteSelectionInput>({
-    mutationFn: ({ harnessKind, surface, slot }) =>
-      clearAgentRouteSelection(harnessKind, surface, slot ?? "primary", client),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: agentRouteSelectionsKey() });
-      void queryClient.invalidateQueries({ queryKey: agentAuthStateRootKey() });
-    },
-  });
-}
+// --- Catalog ---------------------------------------------------------------
 
 export function useAgentCatalog(scope: AgentCatalogScope, enabled = true) {
   const client = useCloudClient();
@@ -176,6 +170,28 @@ export function useRefreshAgentCatalog() {
   const queryClient = useQueryClient();
   return useMutation<AgentGatewayCatalog, Error, RefreshAgentCatalogInput>({
     mutationFn: ({ harnessKind, body }) => refreshAgentCatalog(harnessKind, body, client),
+    onSuccess: (data, { harnessKind, body }) => {
+      queryClient.setQueryData(
+        agentGatewayCatalogKey(harnessKind, body.surface, body.route),
+        data,
+      );
+    },
+  });
+}
+
+/**
+ * Push a runtime-resolved gateway-probe result to the cloud mirror (contract
+ * §4). The runtime itself holds no cloud session, so the desktop — the only
+ * process here with an authenticated cloud client — calls this on the
+ * runtime's behalf whenever it observes a fresh probe (see the desktop's
+ * `useGatewayCatalogMirrorSync`). Not signed in => the caller simply never
+ * invokes this; there is nothing to gate here.
+ */
+export function useMirrorAgentCatalog() {
+  const client = useCloudClient();
+  const queryClient = useQueryClient();
+  return useMutation<AgentGatewayCatalog, Error, MirrorAgentCatalogInput>({
+    mutationFn: ({ harnessKind, body }) => mirrorAgentCatalog(harnessKind, body, client),
     onSuccess: (data, { harnessKind, body }) => {
       queryClient.setQueryData(
         agentGatewayCatalogKey(harnessKind, body.surface, body.route),
@@ -209,6 +225,8 @@ export function useDeleteCatalogOverride() {
   });
 }
 
+// --- Capabilities + enrollment --------------------------------------------
+
 export function useAgentGatewayCapabilities(enabled = true) {
   const client = useCloudClient();
   return useQuery<AgentGatewayCapabilities>({
@@ -227,6 +245,8 @@ export function useAgentGatewayEnrollment(enabled = true) {
     enabled,
   });
 }
+
+// --- Org policy ------------------------------------------------------------
 
 export function useOrgAgentPolicy(organizationId: string | null, enabled = true) {
   const client = useCloudClient();

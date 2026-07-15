@@ -5,6 +5,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.responses import Response
 
 from proliferate.integrations.sentry import (
+    clear_server_sentry_user,
     set_server_sentry_correlation_context,
     set_server_sentry_tag,
 )
@@ -28,6 +29,9 @@ class RequestTelemetryMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
         finally:
             set_server_sentry_correlation_context(get_correlation_context())
+            # Clear the authenticated user from the scope at request teardown so
+            # it cannot bleed onto the next request handled by this worker.
+            clear_server_sentry_user()
         return response
 
 

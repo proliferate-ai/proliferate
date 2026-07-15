@@ -114,6 +114,7 @@ export function useSessionSummaryActions() {
         liveConfig: effectiveLiveConfig,
         executionSummary: patch.executionSummary,
         mcpBindingSummaries: patch.mcpBindingSummaries,
+        activeGoal: patch.activeGoal,
         pendingConfigChanges: {},
         status: nextStatus,
         lastPromptAt: patch.lastPromptAt,

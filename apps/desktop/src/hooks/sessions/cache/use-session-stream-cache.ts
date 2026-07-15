@@ -4,20 +4,20 @@ import {
   anyHarnessGitStatusKey,
   anyHarnessSessionReviewsKey,
   anyHarnessSessionSubagentsKey,
+  useAnyHarnessCacheScopeKey,
 } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import {
   getWorkspaceCollectionsFromCache,
   workspaceCollectionsScopeKey,
 } from "@/hooks/workspaces/cache/query-keys";
 import { scheduleRepoPrStatusRefresh } from "@/hooks/workspaces/cache/use-pr-status-refresh";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import { useProductAuthUserId } from "@/hooks/auth/facade/use-product-auth";
 
 export interface SessionStreamCache {
   invalidateWorkspaceCollections(runtimeUrl: string): void;
   invalidateSessionSubagents(input: {
-    runtimeUrl: string;
     workspaceId: string | null;
     sessionId: string;
   }): void;
@@ -26,12 +26,10 @@ export interface SessionStreamCache {
     sessionId: string;
   }): void;
   invalidateSessionReviews(input: {
-    runtimeUrl: string;
     workspaceId: string | null;
     parentSessionId: string;
   }): void;
   invalidateGitStatus(input: {
-    runtimeUrl: string;
     workspaceId: string;
   }): void;
   refreshPrStatuses(input: {
@@ -44,6 +42,13 @@ export interface SessionStreamCache {
 // Does not interpret stream envelopes or mutate session stores.
 export function useSessionStreamCache(): SessionStreamCache {
   const queryClient = useQueryClient();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
+  // Stream-triggered invalidation runs outside render; read the latest user id
+  // through a ref so the memoized cache object stays stable (matching the former
+  // non-reactive the Desktop auth store read).
+  const authUserId = useProductAuthUserId();
+  const authUserIdRef = useRef(authUserId);
+  authUserIdRef.current = authUserId;
 
   return useMemo<SessionStreamCache>(() => ({
     invalidateWorkspaceCollections(runtimeUrl) {
@@ -51,27 +56,39 @@ export function useSessionStreamCache(): SessionStreamCache {
         queryKey: workspaceCollectionsScopeKey(runtimeUrl),
       });
     },
-    invalidateSessionSubagents({ runtimeUrl, workspaceId, sessionId }) {
+    invalidateSessionSubagents({ workspaceId, sessionId }) {
       void queryClient.invalidateQueries({
-        queryKey: anyHarnessSessionSubagentsKey(runtimeUrl, workspaceId, sessionId),
+        queryKey: anyHarnessSessionSubagentsKey(cacheScopeKey, workspaceId, sessionId),
       });
     },
     invalidateCoworkManagedWorkspaces({ runtimeUrl, sessionId }) {
       void queryClient.invalidateQueries({
-        queryKey: anyHarnessCoworkManagedWorkspacesKey(runtimeUrl, sessionId),
+        queryKey: anyHarnessCoworkManagedWorkspacesKey(
+          runtimeUrl,
+          sessionId,
+          cacheScopeKey,
+        ),
       });
       void queryClient.invalidateQueries({
-        queryKey: [...anyHarnessRuntimeKey(runtimeUrl), "cowork", "sessions"],
+        queryKey: [
+          ...anyHarnessRuntimeKey(runtimeUrl, cacheScopeKey),
+          "cowork",
+          "sessions",
+        ],
       });
     },
-    invalidateSessionReviews({ runtimeUrl, workspaceId, parentSessionId }) {
+    invalidateSessionReviews({ workspaceId, parentSessionId }) {
       void queryClient.invalidateQueries({
-        queryKey: anyHarnessSessionReviewsKey(runtimeUrl, workspaceId, parentSessionId),
+        queryKey: anyHarnessSessionReviewsKey(
+          cacheScopeKey,
+          workspaceId,
+          parentSessionId,
+        ),
       });
     },
-    invalidateGitStatus({ runtimeUrl, workspaceId }) {
+    invalidateGitStatus({ workspaceId }) {
       void queryClient.invalidateQueries({
-        queryKey: anyHarnessGitStatusKey(runtimeUrl, workspaceId),
+        queryKey: anyHarnessGitStatusKey(cacheScopeKey, workspaceId),
       });
     },
     refreshPrStatuses({ runtimeUrl, workspaceId }) {
@@ -81,7 +98,7 @@ export function useSessionStreamCache(): SessionStreamCache {
       const collections = getWorkspaceCollectionsFromCache(
         queryClient,
         runtimeUrl,
-        useAuthStore.getState().user?.id ?? null,
+        authUserIdRef.current,
       );
       const repoRootId = collections?.allWorkspaces
         .find((workspace) => workspace.id === workspaceId)
@@ -89,7 +106,12 @@ export function useSessionStreamCache(): SessionStreamCache {
       if (!repoRootId) {
         return;
       }
-      scheduleRepoPrStatusRefresh({ queryClient, runtimeUrl, repoRootId });
+      scheduleRepoPrStatusRefresh({
+        queryClient,
+        runtimeUrl,
+        repoRootId,
+        cacheScopeKey,
+      });
     },
-  }), [queryClient]);
+  }), [cacheScopeKey, queryClient]);
 }

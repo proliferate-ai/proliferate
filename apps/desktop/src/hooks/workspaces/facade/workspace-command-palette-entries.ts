@@ -7,7 +7,6 @@ import {
 import { focusChatInput } from "@/lib/domain/focus-zone";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 import { runShortcutHandler } from "@/lib/domain/shortcuts/registry";
-import { requestRightPanelBrowserTab } from "@/lib/infra/right-panel-new-tab-menu";
 
 export interface RunCommandState {
   onRun: () => void;
@@ -50,7 +49,7 @@ export function buildWorkspaceCommandPaletteEntries(args: {
   workspaceRemoteAccessActions: WorkspaceRemoteAccessActionState;
   workspaceWebActions: WorkspaceWebActionState;
 }): CommandPaletteEntry[] {
-  return [
+  const entries: CommandPaletteEntry[] = [
     {
       id: "workspace.focus-chat",
       value: commandPaletteCommandValue("workspace.focus-chat"),
@@ -189,17 +188,6 @@ export function buildWorkspaceCommandPaletteEntries(args: {
       },
     },
     {
-      id: "workspace.open-browser-tab",
-      value: commandPaletteCommandValue("workspace.open-browser-tab"),
-      group: "tabs",
-      label: "Open Browser Tab",
-      icon: "panel-bottom",
-      disabledReason: args.selectedWorkspaceId ? null : "Workspace is still opening.",
-      execute: () => {
-        requestRightPanelBrowserTab();
-      },
-    },
-    {
       id: "session.rename",
       value: commandPaletteCommandValue("session.rename"),
       group: "tabs",
@@ -312,4 +300,10 @@ export function buildWorkspaceCommandPaletteEntries(args: {
       execute: () => args.appActions.newCloudWorkspace.execute("palette"),
     },
   ];
+
+  // Mirrors the sidebar hiding its support action under `support.kind ===
+  // "none"`: don't just disable the palette entry, don't register it at all.
+  return args.appActions.openSupport.hidden
+    ? entries.filter((entry) => entry.id !== "app.open-support")
+    : entries;
 }

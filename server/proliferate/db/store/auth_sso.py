@@ -444,6 +444,36 @@ async def list_sso_identities_for_user(
     return [sso_identity_record(row) for row in rows]
 
 
+async def user_has_active_organization_sso_membership(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+) -> bool:
+    """True when the user reached us through an org's SSO connection and still
+    holds an active membership in that org.
+
+    This is the "identity arrived via org SSO" signal the product-readiness gate
+    consults: an org-scoped SSO identity (``organization_id`` set) backed by a
+    live membership. The org relationship is the vetting, so it stands in for the
+    GitHub link on hosted product surfaces.
+    """
+    row = await db.execute(
+        select(SsoIdentity.id)
+        .join(
+            OrganizationMembership,
+            (OrganizationMembership.organization_id == SsoIdentity.organization_id)
+            & (OrganizationMembership.user_id == SsoIdentity.user_id),
+        )
+        .where(
+            SsoIdentity.user_id == user_id,
+            SsoIdentity.organization_id.is_not(None),
+            OrganizationMembership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+        )
+        .limit(1)
+    )
+    return row.scalar_one_or_none() is not None
+
+
 async def upsert_sso_identity_for_user(
     db: AsyncSession,
     *,

@@ -1,7 +1,7 @@
 import { useCallback, type ReactNode } from "react";
 import { DiffViewer } from "@/components/content/ui/DiffViewer";
 import { FileDiffCard } from "@/components/content/ui/FileDiffCard";
-import { HighlightedCodePanel } from "@/components/content/ui/HighlightedCodePanel";
+import { HighlightedCodeBlock } from "@/components/content/ui/HighlightedCodeBlock";
 import {
   ArrowRight,
   FilePen,
@@ -157,7 +157,7 @@ export function FileChangeCall({
             />
           ) : preview ? (
             <div className="p-2">
-              <HighlightedCodePanel
+              <HighlightedCodeBlock
                 code={preview}
                 filename={displayPath}
                 showLanguageLabel={false}

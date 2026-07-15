@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AccountSettingsPane,
   type AccountPasswordCredentialSubmit,
-  type AccountProviderView,
 } from "@proliferate/product-ui/account/AccountSettingsPane";
 import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
 import { setPasswordCredential } from "@proliferate/cloud-sdk";
@@ -11,33 +10,47 @@ import {
   useGitHubAppUserAuthorizationStatus,
   useStartGitHubAppUserAuthorization,
 } from "@proliferate/cloud-sdk-react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { ExternalLink, RefreshCw } from "@proliferate/ui/icons";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
-import { AUTH_ACCOUNT_LABELS } from "@/copy/auth/auth-copy";
+import { ConnectServerDialog } from "@/components/auth/ConnectServerDialog";
+import { CurrentUserInvitationsSection } from "@/components/settings/panes/organization/CurrentUserInvitationsSection";
+import { AUTH_ACCOUNT_LABELS, CONNECT_SERVER_LABELS } from "@/copy/auth/auth-copy";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 import { useAuthViewer } from "@/hooks/access/cloud/auth/use-auth-viewer";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useGitHubDesktopAuthAvailability } from "@/hooks/access/cloud/auth/use-github-auth-availability";
+import { useCurrentUserOrganizationInvitations } from "@/hooks/access/cloud/organizations/use-current-user-organization-invitations";
+import { useOrganizationActions } from "@/hooks/access/cloud/organizations/use-organization-actions";
 import {
+  buildAccountProviderViews,
   getAccountActionDescription,
   getAccountDisplayName,
   getAccountProfileSummary,
   getGitHubStatusLabel,
 } from "@/lib/domain/auth/account-profile-presentation";
 import { isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
-import { useAuthActions } from "@/hooks/auth/workflows/use-auth-actions";
+import {
+  useProductAuthStatus,
+  useProductAuthUser,
+} from "@/hooks/auth/facade/use-product-auth";
+import { useAuditedAuth } from "@/hooks/auth/facade/use-audited-auth";
 import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
-import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
+import { useOrganizationJoinInvitationFlow } from "@/hooks/organizations/workflows/use-organization-join-invitation-flow";
+import { useJoinedOrganizationActivation } from "@/hooks/organizations/workflows/use-joined-organization-activation";
 import { buildGitHubOAuthAppSettingsUrl } from "@/lib/integrations/auth/proliferate-auth";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import type { OrganizationInvitationRecord } from "@/lib/domain/organizations/organization-records";
+import { useToastStore } from "@/stores/toast/toast-store";
 import { buildGitHubAppUserAuthorizationServiceView } from "./account/GitHubAppUserAuthorizationService";
+
+const EMPTY_INVITATIONS: OrganizationInvitationRecord[] = [];
 
 export function AccountPane() {
   const navigate = useNavigate();
-  const status = useAuthStore((state) => state.status);
-  const user = useAuthStore((state) => state.user);
-  const { linkGoogle, signOut } = useAuthActions();
-  const { openExternal } = useTauriShellActions();
+  const status = useProductAuthStatus();
+  const user = useProductAuthUser();
+  const { links } = useProductHost();
+  const auth = useAuditedAuth();
   const {
     signIn: signInWithGitHub,
     submitting: signingIn,
@@ -64,6 +77,15 @@ export function AccountPane() {
     isAuthenticated && !devAuthBypassed && cloudSignInAvailable,
     authViewerCacheScope,
   );
+  // Pending invitations for the signed-in user's own email. Account is the
+  // one settings page every member (admin or not) can reach — Members is
+  // admin-gated, so this is the reachable surface for a plain invitee.
+  const pendingInvitationsQuery = useCurrentUserOrganizationInvitations(isAuthenticated);
+  const pendingInvitations = pendingInvitationsQuery.data?.invitations ?? EMPTY_INVITATIONS;
+  const organizationActions = useOrganizationActions(null);
+  const joinFlow = useOrganizationJoinInvitationFlow();
+  const { activateJoinedOrganization } = useJoinedOrganizationActivation();
+  const showToast = useToastStore((state) => state.show);
   const linkedProviders = authViewer.data?.linkedProviders ?? [];
   const linkedGitHub = linkedProviders.find((provider) => (
     provider.provider === "github" && provider.connected
@@ -77,7 +99,7 @@ export function AccountPane() {
   const googleAvailability = authViewer.data?.providerAvailability.find((provider) => (
     provider.provider === "google"
   ));
-  const githubLogin = user?.github_login?.trim() || null;
+  const githubLogin = user?.githubLogin?.trim() || null;
   const githubConnected = Boolean(authViewer.data?.githubConnected || linkedGitHub || githubLogin);
   const githubAccountLabel = githubLogin
     ? `@${githubLogin}`
@@ -104,7 +126,7 @@ export function AccountPane() {
   const signedInWhileCloudUnavailable = cloudUnavailable && isAuthenticated;
   const displayName = getAccountDisplayName({
     email: user?.email,
-    displayName: user?.display_name,
+    displayName: user?.displayName,
     githubLogin,
     isAuthenticated,
     devAuthBypassed,
@@ -117,7 +139,7 @@ export function AccountPane() {
     signInUnavailable,
     signedInWhileCloudUnavailable,
   });
-  const profileAvatarUrl = user?.avatar_url?.trim()
+  const profileAvatarUrl = user?.avatarUrl?.trim()
     || (githubLogin
       ? `https://github.com/${encodeURIComponent(githubLogin)}.png?size=160`
       : null);
@@ -131,10 +153,23 @@ export function AccountPane() {
     githubAppAuthorizationRefreshTimersRef.current = [];
   }, [authViewerCacheScope]);
 
+  async function handleAcceptCurrentInvitation(invitationId: string) {
+    joinFlow.setStatusMessage(null);
+    try {
+      const response = await organizationActions.acceptCurrentInvitation(invitationId);
+      await activateJoinedOrganization(response.organization.id);
+      joinFlow.clearJoinTarget();
+      joinFlow.setStatusMessage(`Joined ${response.organization.name}.`);
+      showToast(`Joined ${response.organization.name}.`, "info");
+    } catch {
+      joinFlow.setStatusMessage("Could not accept invitation.");
+    }
+  }
+
   async function handleSignOut() {
     setSigningOut(true);
     try {
-      await signOut();
+      await auth.logout();
       navigate("/login", { replace: true });
     } finally {
       setSigningOut(false);
@@ -145,7 +180,7 @@ export function AccountPane() {
     setLinkingGoogle(true);
     setProviderLinkError(null);
     try {
-      await linkGoogle();
+      await auth.startLogin({ kind: "google", purpose: "link" });
       await authViewer.refetch();
     } catch (error) {
       setProviderLinkError(error instanceof Error ? error.message : "Google linking failed");
@@ -158,9 +193,13 @@ export function AccountPane() {
     setProviderLinkError(null);
     try {
       const response = await githubAppUserAuthorizationStart.mutateAsync({
-        returnTo: "proliferate://settings/account?source=github_app_callback",
+        returnTo: links.buildReturnUrl({
+          kind: "settings",
+          section: "account",
+          source: "github_app_callback",
+        }),
       });
-      await openExternal(response.authorizationUrl);
+      await links.openExternal(response.authorizationUrl);
       clearGitHubAppAuthorizationRefreshTimers(githubAppAuthorizationRefreshTimersRef.current);
       githubAppAuthorizationRefreshTimersRef.current = scheduleGitHubAppAuthorizationRefresh(() => {
         void githubAppUserAuthorization.refetch();
@@ -173,7 +212,7 @@ export function AccountPane() {
   }
 
   async function handleManageGitHubApp() {
-    await openExternal("https://github.com/settings/installations");
+    await links.openExternal("https://github.com/settings/installations");
   }
 
   async function handleSetPassword(input: AccountPasswordCredentialSubmit) {
@@ -198,6 +237,25 @@ export function AccountPane() {
             : "Sign in to use cloud workspaces and credential sync. Local workspaces remain available without an account."
         }
       />
+
+      {joinFlow.statusMessage ? (
+        <AccountNotice>{joinFlow.statusMessage}</AccountNotice>
+      ) : null}
+
+      {joinFlow.unauthenticatedJoin ? (
+        <AccountNotice>Finish sign-in to accept this organization invitation.</AccountNotice>
+      ) : null}
+
+      {pendingInvitations.length > 0 ? (
+        <CurrentUserInvitationsSection
+          invitations={pendingInvitations}
+          accepting={organizationActions.acceptingCurrentInvitation}
+          focusedOrganizationId={joinFlow.joinOrganizationId}
+          onAccept={(invitationId) => {
+            void handleAcceptCurrentInvitation(invitationId);
+          }}
+        />
+      ) : null}
 
       <AccountSettingsPane
         displayName={displayName}
@@ -292,7 +350,7 @@ export function AccountPane() {
             ? {
                 label: AUTH_ACCOUNT_LABELS.manageAccess,
                 icon: <ExternalLink className="size-3" />,
-                onClick: () => { void openExternal(githubSettingsUrl); },
+                onClick: () => { void links.openExternal(githubSettingsUrl); },
               }
             : undefined,
           signOut: isAuthenticated && !devAuthBypassed
@@ -307,7 +365,23 @@ export function AccountPane() {
         }}
         error={signInError || providerLinkError}
       />
+
+      {/* Invite links from a different server open this trust-confirm dialog
+          before the app is ever repointed (join-invitation flow's security
+          boundary). No-op when no server switch is pending. */}
+      <ConnectServerDialog
+        controller={joinFlow.connectServer}
+        context={CONNECT_SERVER_LABELS.inviteContext}
+      />
     </section>
+  );
+}
+
+function AccountNotice({ children }: { children: ReactNode }) {
+  return (
+    <div className="rounded-lg border border-border bg-foreground/5 px-4 py-3 text-ui-sm text-muted-foreground">
+      {children}
+    </div>
   );
 }
 
@@ -321,75 +395,4 @@ function clearGitHubAppAuthorizationRefreshTimers(timerIds: number[]) {
   for (const timerId of timerIds) {
     window.clearTimeout(timerId);
   }
-}
-
-function buildAccountProviderViews({
-  githubAccountLabel,
-  githubConnected,
-  googleAccounts,
-  ssoAccounts,
-  googleAvailable,
-  showProviders,
-}: {
-  githubAccountLabel: string | null;
-  githubConnected: boolean;
-  googleAccounts: Array<{ accountEmail?: string | null; accountId?: string | null }>;
-  ssoAccounts: Array<{
-    accountEmail?: string | null;
-    accountId?: string | null;
-    displayName?: string | null;
-    brandLabel?: string | null;
-  }>;
-  googleAvailable: boolean;
-  showProviders: boolean;
-}): AccountProviderView[] {
-  if (!showProviders) {
-    return [
-      {
-        provider: "github",
-        label: "GitHub",
-        accountLabel: "Not signed in",
-        connected: false,
-        primary: false,
-      },
-    ];
-  }
-
-  const providers: AccountProviderView[] = ssoAccounts.map((account) => ({
-    provider: "sso" as const,
-    label: account.displayName ?? "SSO",
-    brandLabel: account.brandLabel ?? account.displayName ?? null,
-    accountLabel: account.accountEmail ?? account.accountId ?? "Connected",
-    connected: true,
-  }));
-
-  providers.push(
-    {
-      provider: "github",
-      label: "GitHub",
-      accountLabel: githubConnected ? githubAccountLabel ?? "Connected" : "Not connected",
-      connected: githubConnected,
-      primary: githubConnected,
-    },
-  );
-
-  if (googleAccounts.length > 0) {
-    providers.push(
-      ...googleAccounts.map((account) => ({
-        provider: "google" as const,
-        label: "Google",
-        accountLabel: account.accountEmail ?? account.accountId ?? "Connected",
-        connected: true,
-      })),
-    );
-  } else {
-    providers.push({
-      provider: "google",
-      label: "Google",
-      accountLabel: googleAvailable ? "Not connected" : "Not configured in this environment",
-      connected: false,
-    });
-  }
-
-  return providers;
 }

@@ -122,7 +122,6 @@ describe("applyBatchedStreamSideEffects", () => {
     expect(sessionStreamCache.invalidateWorkspaceCollections)
       .toHaveBeenCalledWith("http://runtime.test");
     expect(sessionStreamCache.invalidateGitStatus).toHaveBeenCalledWith({
-      runtimeUrl: "http://runtime.test",
       workspaceId: "workspace-1",
     });
   });

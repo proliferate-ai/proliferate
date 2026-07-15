@@ -1,5 +1,5 @@
 import type { PendingSessionConfigChangeStatus } from "@proliferate/product-domain/sessions/pending-config";
-import { Clock, Spinner } from "@proliferate/ui/icons";
+import { Clock } from "@proliferate/ui/icons";
 
 interface PendingConfigIndicatorProps {
   pendingState: PendingSessionConfigChangeStatus | null;
@@ -10,10 +10,8 @@ export function PendingConfigIndicator({
   pendingState,
   className = "size-3 shrink-0 text-muted-foreground/70",
 }: PendingConfigIndicatorProps) {
-  if (pendingState === "submitting") {
-    return <Spinner className={className} />;
-  }
-
+  // Submitting renders nothing because the optimistically-updated control is itself the feedback;
+  // queued keeps the clock because the change is waiting on the running turn.
   if (pendingState === "queued") {
     return <Clock className={className} />;
   }

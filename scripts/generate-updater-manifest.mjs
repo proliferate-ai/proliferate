@@ -34,9 +34,43 @@ const version = args.version;
 const artifactsDir = args["artifacts-dir"];
 const baseUrl = args["base-url"];
 const output = args.output;
+const rawNotes = args.notes;
+const validateNotesOnly = args["validate-notes-only"] === "true";
+
+const MAX_NOTES_LENGTH = 80;
+
+function normalizeNotes(value) {
+  if (value === undefined) return undefined;
+  if (/[\r\n\u2028\u2029]/u.test(value)) {
+    throw new Error("release title must be a single line");
+  }
+
+  const notes = value.trim();
+  if (!notes) return undefined;
+  if (/[\u0000-\u001F\u007F-\u009F]/u.test(notes)) {
+    throw new Error("release title must not contain control characters");
+  }
+  if (Array.from(notes).length > MAX_NOTES_LENGTH) {
+    throw new Error(`release title must be at most ${MAX_NOTES_LENGTH} characters`);
+  }
+  return notes;
+}
+
+let notes;
+try {
+  notes = normalizeNotes(rawNotes);
+} catch (error) {
+  console.error(`Invalid --notes: ${error.message}`);
+  process.exit(1);
+}
+
+if (validateNotesOnly) {
+  console.log(notes ? `Release title: ${notes}` : "Release title omitted");
+  process.exit(0);
+}
 
 if (!version || !artifactsDir || !baseUrl || !output) {
-  console.error("Usage: generate-updater-manifest.mjs --version <ver> --artifacts-dir <dir> --base-url <url> --output <file>");
+  console.error("Usage: generate-updater-manifest.mjs --version <ver> --artifacts-dir <dir> --base-url <url> --output <file> [--notes <title>] [--validate-notes-only true]");
   process.exit(1);
 }
 
@@ -64,6 +98,7 @@ const platforms = [
 
 const manifest = {
   version,
+  ...(notes ? { notes } : {}),
   pub_date: new Date().toISOString(),
   platforms: {},
 };

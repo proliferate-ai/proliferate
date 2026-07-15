@@ -9,7 +9,6 @@ const IMAGE_NAMESPACES = [
   "notion",
   "context7",
   "exa",
-  "cloudflare_docs",
   "gitlab",
   "render",
   "neon",

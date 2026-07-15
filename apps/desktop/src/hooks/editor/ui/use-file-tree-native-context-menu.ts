@@ -1,6 +1,8 @@
 import { useNativeContextMenu } from "@/hooks/ui/native/use-native-context-menu";
-import type { NativeContextMenuItem } from "@/lib/access/tauri/context-menu";
-import type { OpenTarget } from "@/lib/access/tauri/shell";
+import type {
+  NativeMenuItem,
+  OpenTarget,
+} from "@proliferate/product-client/host/desktop-bridge";
 
 export function useFileTreeNativeContextMenu({
   targets,
@@ -49,8 +51,8 @@ export function buildFileTreeNativeContextMenuItems({
   onNewFolder?: () => void;
   onRename?: () => void;
   onDelete?: () => void;
-}): NativeContextMenuItem[] {
-  const items: NativeContextMenuItem[] = [
+}): NativeMenuItem[] {
+  const items: NativeMenuItem[] = [
     {
       id: "open-in-proliferate",
       label: "Open in Proliferate",
@@ -58,7 +60,7 @@ export function buildFileTreeNativeContextMenuItems({
     },
   ];
 
-  const createItems: NativeContextMenuItem[] = [];
+  const createItems: NativeMenuItem[] = [];
   if (onNewFile) {
     createItems.push({
       id: "new-file",
@@ -74,7 +76,7 @@ export function buildFileTreeNativeContextMenuItems({
     });
   }
 
-  const editItems: NativeContextMenuItem[] = [];
+  const editItems: NativeMenuItem[] = [];
   if (onRename) {
     editItems.push({
       id: "rename",
@@ -100,7 +102,7 @@ export function buildFileTreeNativeContextMenuItems({
 
   if (targets.length > 0) {
     items.push({ kind: "separator" });
-    items.push(...targets.map((target): NativeContextMenuItem => ({
+    items.push(...targets.map((target): NativeMenuItem => ({
       id: `open-target:${target.id}`,
       label: target.label,
       onSelect: () => onOpenTarget(target.id),

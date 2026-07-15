@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   buildResult,
+  classifyFile,
   parseSurfaceList,
   selectSurfaces,
 } from "./detect-deploy-surfaces.mjs";
@@ -67,6 +68,15 @@ test("litellm config changes select the litellm surface", () => {
   });
 
   assert.deepEqual([...selection.selected].sort(), ["litellm", "server"]);
+});
+
+test("agent catalog changes select desktop seed and runtime surfaces", () => {
+  assert.deepEqual([...classifyFile("catalogs/agents/catalog.json")].sort(), [
+    "desktop",
+    "e2b",
+    "runtime",
+    "server",
+  ]);
 });
 
 test("invalid surfaces fail fast", () => {

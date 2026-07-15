@@ -7,11 +7,7 @@ pub(crate) fn permission_context_from_meta(
     let meta = meta?;
     let context = meta
         .get("claudeCode")
-        .and_then(|value| value.get("permissionContext"))
-        .or_else(|| {
-            meta.get("gemini")
-                .and_then(|value| value.get("permissionContext"))
-        })?;
+        .and_then(|value| value.get("permissionContext"))?;
     let display_name = context
         .get("displayName")
         .and_then(|value| value.as_str())
@@ -58,35 +54,13 @@ mod tests {
     }
 
     #[test]
-    fn parses_gemini_permission_context_from_meta() {
-        let meta = meta(serde_json::json!({
-            "gemini": {
-                "permissionContext": {
-                    "displayName": "Gemini write_file",
-                    "blockedPath": "/tmp/file.txt",
-                    "decisionReason": "Tool requires confirmation",
-                    "agentId": "gemini"
-                }
-            }
-        }));
-
-        let context = permission_context_from_meta(Some(&meta)).expect("context");
-
-        assert_eq!(context.display_name.as_deref(), Some("Gemini write_file"));
-        assert_eq!(context.blocked_path.as_deref(), Some("/tmp/file.txt"));
-        assert_eq!(
-            context.decision_reason.as_deref(),
-            Some("Tool requires confirmation")
-        );
-        assert_eq!(context.agent_id.as_deref(), Some("gemini"));
-    }
-
-    #[test]
     fn parses_claude_permission_context_from_meta() {
         let meta = meta(serde_json::json!({
             "claudeCode": {
                 "permissionContext": {
                     "displayName": "Claude Bash",
+                    "blockedPath": "/tmp/file.txt",
+                    "decisionReason": "Tool requires confirmation",
                     "agentId": "claude"
                 }
             }
@@ -95,6 +69,11 @@ mod tests {
         let context = permission_context_from_meta(Some(&meta)).expect("context");
 
         assert_eq!(context.display_name.as_deref(), Some("Claude Bash"));
+        assert_eq!(context.blocked_path.as_deref(), Some("/tmp/file.txt"));
+        assert_eq!(
+            context.decision_reason.as_deref(),
+            Some("Tool requires confirmation")
+        );
         assert_eq!(context.agent_id.as_deref(), Some("claude"));
     }
 }

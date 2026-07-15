@@ -1,4 +1,6 @@
 import { useCallback } from "react";
+import type { Workspace } from "@anyharness/sdk";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useWorkspaceBootstrapActions } from "@/hooks/workspaces/workflows/use-workspace-bootstrap-actions";
 import { useCloudWorkspaceConnectionCache } from "@/hooks/access/cloud/use-cloud-workspace-connection-cache";
 import { useWorkspaceSelectionCache } from "@/hooks/workspaces/cache/use-workspace-selection-cache";
@@ -19,6 +21,11 @@ function removeWorkspaceSessionRecordsForWorkspace(workspaceId: string): void {
 }
 
 export function useWorkspaceSelection() {
+  const host = useProductHost();
+  const desktop = host.desktop;
+  const localRuntime = desktop?.runtime ?? null;
+  const ssh = desktop?.ssh ?? null;
+  const cloudClient = host.cloud.client;
   const {
     cancelPreviousWorkspaceDisplayQueries,
     getWorkspaceSelectionSnapshot,
@@ -41,6 +48,7 @@ export function useWorkspaceSelection() {
         preservePending?: boolean;
         initialActiveSessionId?: string | null;
         latencyFlowId?: string | null;
+        knownWorkspace?: Workspace | null;
       },
     ) => {
       const runtimeUrl = useHarnessConnectionStore.getState().runtimeUrl;
@@ -67,6 +75,9 @@ export function useWorkspaceSelection() {
         })
         : [];
       const deps = {
+        localRuntime,
+        ssh,
+        cloudClient,
         cache: {
           cancelPreviousWorkspaceDisplayQueries,
           invalidateCloudWorkspaceStartState,
@@ -105,10 +116,13 @@ export function useWorkspaceSelection() {
       clearSelection,
       getWorkspaceSelectionSnapshot,
       invalidateCloudWorkspaceStartState,
+      localRuntime,
       reconcileHotWorkspace,
       refreshCloudWorkspaceConnection,
       setSelectedLogicalWorkspaceId,
       setSelectedWorkspace,
+      ssh,
+      cloudClient,
     ]),
     clearWorkspaceRuntimeState: useCallback((
       workspaceId: string,

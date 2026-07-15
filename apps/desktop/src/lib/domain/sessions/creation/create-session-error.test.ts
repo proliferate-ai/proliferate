@@ -35,6 +35,30 @@ describe("session create failure presentation", () => {
     );
   });
 
+  it("maps gated model errors to unlock guidance with the required contexts", () => {
+    const error = new AnyHarnessError({
+      type: "about:blank",
+      title: "Bad request",
+      status: 400,
+      code: "SESSION_MODEL_GATED",
+      detail: "gated",
+      instance: null,
+      requiredContexts: ["anthropic-api", "gateway"],
+    });
+
+    expect(formatSessionCreateFailureMessage(error)).toBe(
+      "This model is locked. Unlock it by signing in with or adding credentials for: anthropic-api, gateway.",
+    );
+  });
+
+  it("maps gated model errors without contexts to generic unlock guidance", () => {
+    const error = anyHarnessError("SESSION_MODEL_GATED", "gated");
+
+    expect(formatSessionCreateFailureMessage(error)).toBe(
+      "This model is locked behind credentials this workspace does not have yet. Sign in, add an API key, or enable the gateway, then try again.",
+    );
+  });
+
   it("preserves generic errors", () => {
     const error = new Error("network down");
 

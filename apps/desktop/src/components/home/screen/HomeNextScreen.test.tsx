@@ -1,10 +1,20 @@
 // @vitest-environment jsdom
 
 import type { ReactNode, TextareaHTMLAttributes } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HomeNextScreen } from "./HomeNextScreen";
-import { HOME_NEXT_TARGET_SELECTION_STORAGE_KEY } from "@/hooks/home/ui/use-home-next-target-selection-state";
+import {
+  HOME_NEXT_TARGET_SELECTION_STORAGE_KEY,
+  hydrateHomeNextTargetSelection,
+  resetHomeNextTargetSelectionForTests,
+  setHomeNextTargetSelectionStorageContext,
+} from "@/hooks/home/ui/use-home-next-target-selection-state";
+import {
+  createMemoryProductStorage,
+  type MemoryProductStorage,
+} from "@/test/product-storage-test-utils";
+import type { ProductStorage } from "@proliferate/product-client/host/product-host";
 import { HOME_CHAT_COMPOSER_INPUT } from "@/config/chat";
 
 const screenMocks = vi.hoisted(() => {
@@ -48,6 +58,8 @@ const screenMocks = vi.hoisted(() => {
     homeNext,
     homeNextStateArgs: null as any,
     targetPickerProps: null as any,
+    leadingControlsProps: null as any,
+    trailingControlsProps: null as any,
   };
 });
 
@@ -119,12 +131,15 @@ vi.mock("@/components/home/screen/HomeTargetPicker", () => ({
   },
 }));
 
-vi.mock("@/components/workspace/chat/input/ComposerModelConfigSelector", () => ({
-  ComposerModelConfigSelector: () => <div data-testid="model-picker" />,
-}));
-
-vi.mock("@/components/workspace/chat/input/SessionModeControl", () => ({
-  SessionModeControl: () => <div data-testid="mode-picker" />,
+vi.mock("@/components/workspace/chat/input/ChatInputControlRow", () => ({
+  ComposerLeadingControls: (props: any) => {
+    screenMocks.leadingControlsProps = props;
+    return <div data-testid="composer-leading-controls" />;
+  },
+  ComposerTrailingControls: (props: any) => {
+    screenMocks.trailingControlsProps = props;
+    return <div data-testid="composer-trailing-controls" />;
+  },
 }));
 
 vi.mock("@proliferate/product-ui/chat/composer/ChatComposerSurface", () => ({
@@ -153,28 +168,18 @@ vi.mock("@/components/workspace/chat/input/ChatComposerActions", () => ({
   ),
 }));
 
-vi.mock("@/components/workspace/chat/transcript/UserMessage", () => ({
-  UserMessage: ({ content }: { content: string }) => (
-    <div data-chat-user-message>{content}</div>
-  ),
-}));
-
 function installLocalStorageMock(options?: { throwOnSet?: boolean }) {
   const values = new Map<string, string>();
   Object.defineProperty(window, "localStorage", {
     configurable: true,
     value: {
-      get length() {
-        return values.size;
-      },
+      get length() { return values.size; },
       clear: () => values.clear(),
       getItem: (key: string) => values.get(key) ?? null,
       key: (index: number) => Array.from(values.keys())[index] ?? null,
       removeItem: (key: string) => values.delete(key),
       setItem: (key: string, value: string) => {
-        if (options?.throwOnSet) {
-          throw new Error("localStorage write failed");
-        }
+        if (options?.throwOnSet) throw new Error("localStorage write failed");
         values.set(key, String(value));
       },
     },
@@ -192,6 +197,16 @@ function resetHomeNext() {
   screenMocks.homeNext.sshTargetsLoading = false;
   screenMocks.homeNextStateArgs = null;
   screenMocks.targetPickerProps = null;
+  screenMocks.leadingControlsProps = null;
+  screenMocks.trailingControlsProps = null;
+}
+
+function submitPrompt(text: string): HTMLTextAreaElement {
+  render(<HomeNextScreen />);
+  const prompt = screen.getByLabelText("Prompt") as HTMLTextAreaElement;
+  fireEvent.change(prompt, { target: { value: text } });
+  fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+  return prompt;
 }
 
 describe("HomeNextScreen model availability notices", () => {
@@ -275,20 +290,21 @@ describe("HomeNextScreen model availability notices", () => {
     expect(screen.getByText("Choose a repository")).toBeTruthy();
   });
 
-  it("does not render a submitted preview below the composer for cowork launches", () => {
-    render(<HomeNextScreen />);
-
-    fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "start cowork" } });
-    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+  it("hands cowork prompts directly to launch without rendering a Home preview", () => {
+    submitPrompt("start cowork");
 
     expect(screenMocks.launch).toHaveBeenCalledWith(expect.objectContaining({
       text: "start cowork",
       target: { kind: "cowork" },
     }));
-    expect(screen.queryByText("start cowork")).toBeNull();
+    expect(document.querySelector("[data-home-submit-preview]")).toBeNull();
   });
 
-  it("keeps the submitted preview for repository launches", () => {
+  it("clears and hands a repository prompt off exactly once without waiting for a paint", async () => {
+    let resolveLaunch!: (succeeded: boolean) => void;
+    screenMocks.launch.mockReturnValue(new Promise<boolean>((resolve) => {
+      resolveLaunch = resolve;
+    }));
     screenMocks.homeNext.launchTarget = {
       kind: "worktree",
       repoRootId: "repo-root-1",
@@ -296,26 +312,54 @@ describe("HomeNextScreen model availability notices", () => {
       baseBranch: "main",
       defaultBranch: "main",
     };
-    render(<HomeNextScreen />);
+    const prompt = submitPrompt("start worktree");
+    fireEvent.submit(prompt.closest("form")!);
 
-    fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "start worktree" } });
-    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+    expect(prompt.value).toBe("");
+    expect(screenMocks.launch).toHaveBeenCalledTimes(1);
+    expect(screenMocks.launch).toHaveBeenCalledWith(expect.objectContaining({
+      text: "start worktree",
+      target: expect.objectContaining({ kind: "worktree" }),
+    }));
+    expect(document.querySelector("[data-home-submit-preview]")).toBeNull();
 
-    expect(screen.getByText("start worktree")).toBeTruthy();
+    resolveLaunch(true);
+    await waitFor(() => {
+      expect(screenMocks.launch).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it.each([
+    { label: "returns false", fail: () => screenMocks.launch.mockResolvedValue(false) },
+    {
+      label: "rejects",
+      fail: () => screenMocks.launch.mockRejectedValue(new Error("unexpected launch failure")),
+    },
+  ])("restores the submitted draft when launch $label", async ({ fail }) => {
+    fail();
+    const prompt = submitPrompt("keep this draft");
+    await waitFor(() => expect(prompt.value).toBe("keep this draft"));
+    expect(document.querySelector("[data-home-submit-preview]")).toBeNull();
+  });
+
+  it("preserves a newer draft when the submitted launch fails", async () => {
+    let resolveLaunch!: (succeeded: boolean) => void;
+    screenMocks.launch.mockReturnValue(new Promise<boolean>((resolve) => {
+      resolveLaunch = resolve;
+    }));
+    const prompt = submitPrompt("launch this");
+    fireEvent.change(prompt, { target: { value: "newer draft" } });
+    await act(async () => {
+      resolveLaunch(false);
+    });
+    expect(prompt.value).toBe("newer draft");
+    expect(document.querySelector("[data-home-submit-preview]")).toBeNull();
   });
 
   it("renders onboarding cards as the only home onboarding actions", () => {
     screenMocks.onboardingCards.push(
-      {
-        id: "add-repository",
-        title: "Add a GitHub repo",
-        icon: "github",
-      },
-      {
-        id: "agent-defaults",
-        title: "Configure default harnesses",
-        icon: "sliders",
-      },
+      { id: "add-repository", title: "Add a GitHub repo", icon: "github" },
+      { id: "agent-defaults", title: "Configure default harnesses", icon: "sliders" },
     );
 
     render(<HomeNextScreen />);
@@ -334,7 +378,7 @@ describe("HomeNextScreen model availability notices", () => {
   });
 });
 
-describe("HomeNextScreen target selection persistence", () => {
+describe("HomeNextScreen composer control-row parity", () => {
   beforeEach(() => {
     installLocalStorageMock();
     resetHomeNext();
@@ -345,14 +389,65 @@ describe("HomeNextScreen target selection persistence", () => {
     cleanup();
   });
 
-  it("hydrates the last selected launch target into home next state", () => {
-    window.localStorage.setItem(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY, JSON.stringify({
+  it("renders the shared leading and trailing composer control clusters", () => {
+    render(<HomeNextScreen />);
+
+    expect(screen.getByTestId("composer-leading-controls")).toBeTruthy();
+    expect(screen.getByTestId("composer-trailing-controls")).toBeTruthy();
+  });
+
+  it("feeds the clusters sessionless chat-equivalent props", () => {
+    render(<HomeNextScreen />);
+
+    expect(screenMocks.leadingControlsProps).toMatchObject({
+      runtimeControlsDisabled: false,
+      agentKind: "codex",
+      activeSessionId: null,
+    });
+    expect(screenMocks.leadingControlsProps.modelSelectorProps).toMatchObject({
+      connectionState: "healthy",
+      hasAgents: false,
+      isLoading: false,
+    });
+    expect(screenMocks.trailingControlsProps).toMatchObject({
+      runtimeControlsDisabled: false,
+      agentKind: "codex",
+      activeSessionId: null,
+      isEditingQueuedPrompt: false,
+      chatDisabled: false,
+      isSubmitting: false,
+      // Home has no attachments infra pre-session; the shared cluster shows
+      // chat's exact pre-session disabled state for these.
+      supportsAttachments: false,
+      canAttachFiles: false,
+    });
+  });
+});
+
+describe("HomeNextScreen target selection persistence", () => {
+  let memory: MemoryProductStorage;
+
+  beforeEach(() => {
+    resetHomeNext();
+    resetHomeNextTargetSelectionForTests();
+    memory = createMemoryProductStorage();
+    setHomeNextTargetSelectionStorageContext(memory.context);
+  });
+
+  afterEach(() => {
+    cleanup();
+    resetHomeNextTargetSelectionForTests();
+  });
+
+  it("hydrates the last selected launch target into home next state", async () => {
+    memory.values.set(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY, {
       destination: "repository",
       repositorySelection: { kind: "repository", sourceRoot: "/repo-a" },
       repoLaunchKind: "ssh",
       selectedSshTargetId: "ssh-target-1",
       baseBranchOverride: "feature/sticky",
-    }));
+    });
+    await hydrateHomeNextTargetSelection(memory.context);
 
     render(<HomeNextScreen />);
 
@@ -365,14 +460,15 @@ describe("HomeNextScreen target selection persistence", () => {
     });
   });
 
-  it("persists repository, branch, and runtime choices from the target picker", () => {
+  it("persists repository, branch, and runtime choices from the target picker", async () => {
     render(<HomeNextScreen />);
 
     fireEvent.click(screen.getByRole("button", { name: "Mock repo" }));
     fireEvent.click(screen.getByRole("button", { name: "Mock branch" }));
     fireEvent.click(screen.getByRole("button", { name: "Mock ssh" }));
+    await Promise.resolve();
 
-    expect(JSON.parse(window.localStorage.getItem(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY)!))
+    expect(memory.readJson(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY))
       .toMatchObject({
         destination: "repository",
         repositorySelection: { kind: "repository", sourceRoot: "/repo-b" },
@@ -382,19 +478,21 @@ describe("HomeNextScreen target selection persistence", () => {
       });
   });
 
-  it("keeps the selected branch when switching to a local runtime", () => {
-    window.localStorage.setItem(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY, JSON.stringify({
+  it("keeps the selected branch when switching to a local runtime", async () => {
+    memory.values.set(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY, {
       destination: "repository",
       repositorySelection: { kind: "repository", sourceRoot: "/repo-a" },
       repoLaunchKind: "worktree",
       selectedSshTargetId: null,
       baseBranchOverride: "feature/sticky",
-    }));
+    });
+    await hydrateHomeNextTargetSelection(memory.context);
     render(<HomeNextScreen />);
 
     fireEvent.click(screen.getByRole("button", { name: "Mock local" }));
+    await Promise.resolve();
 
-    expect(JSON.parse(window.localStorage.getItem(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY)!))
+    expect(memory.readJson(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY))
       .toMatchObject({
         destination: "repository",
         repositorySelection: { kind: "repository", sourceRoot: "/repo-a" },
@@ -403,17 +501,30 @@ describe("HomeNextScreen target selection persistence", () => {
       });
   });
 
-  it("keeps target selection in memory when localStorage writes fail", () => {
-    installLocalStorageMock({ throwOnSet: true });
-    resetHomeNext();
+  it("keeps target selection in memory when a ProductStorage write fails", async () => {
+    const captured: unknown[] = [];
+    const throwingStorage: ProductStorage = {
+      getItem: async () => null,
+      setItem: async () => {
+        throw new Error("storage write failed");
+      },
+      removeItem: async () => {},
+    };
+    setHomeNextTargetSelectionStorageContext({
+      storage: throwingStorage,
+      captureException: (error) => captured.push(error),
+    });
     render(<HomeNextScreen />);
 
     fireEvent.click(screen.getByRole("button", { name: "Mock repo" }));
+    await Promise.resolve();
+    await Promise.resolve();
 
+    // In-memory selection still applied even though the persisted write rejected.
     expect(screenMocks.homeNextStateArgs).toMatchObject({
       destination: "repository",
       repositorySelection: { kind: "repository", sourceRoot: "/repo-b" },
     });
-    expect(window.localStorage.getItem(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY)).toBeNull();
+    expect(captured.length).toBeGreaterThan(0);
   });
 });

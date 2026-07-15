@@ -68,6 +68,11 @@ class SupportReportWorkspaceReference(BaseModel):
     sandbox_type: str | None = Field(default=None, alias="sandboxType", max_length=128)
 
 
+class SupportSentryEventReference(BaseModel):
+    project: str = Field(min_length=1, max_length=128)
+    event_id: str = Field(alias="eventId", min_length=1, max_length=128)
+
+
 class SupportReportTelemetryReferences(BaseModel):
     posthog_distinct_id: str | None = Field(
         default=None,
@@ -79,6 +84,13 @@ class SupportReportTelemetryReferences(BaseModel):
         alias="posthogSessionId",
         max_length=255,
     )
+    # Canonical {project, eventId} Sentry references. Clients should send these
+    # so the tracker can resolve the exact Sentry issue.
+    sentry_events: list[SupportSentryEventReference] = Field(
+        default_factory=list, alias="sentryEvents", max_length=20
+    )
+    # Legacy project-less event IDs. Insufficient to form a pair; retained for
+    # later bounded backfill and never guessed into a project.
     sentry_event_ids: list[str] = Field(
         default_factory=list, alias="sentryEventIds", max_length=20
     )
@@ -112,6 +124,14 @@ class SupportReportCreateRequest(BaseModel):
         alias="expectedClientUploads",
     )
     public_content_consent: bool | None = Field(default=None, alias="publicContentConsent")
+    kind: Literal["bug", "feature"] = Field(default="bug")
+    credit_consent: bool = Field(default=False, alias="creditConsent")
+    credit_name: str | None = Field(default=None, alias="creditName", max_length=200)
+    # Canonical client release ID (<component>@<semver>+<12-char-sha>) captured
+    # with the immutable report intent. Malformed/absent values store as NULL.
+    client_release_id: str | None = Field(default=None, alias="clientReleaseId", max_length=255)
+    urgent: bool = Field(default=False, alias="urgent")
+    notify_me: bool = Field(default=False, alias="notifyMe")
 
 
 class SupportReportServerCorrelation(BaseModel):
@@ -163,6 +183,14 @@ class SupportReportUploadRequest(BaseModel):
     diagnostics: SupportReportDiagnosticsUpload | None = None
     attachments: list[SupportReportUploadFile] = Field(default_factory=list, max_length=20)
     public_content_consent: bool | None = Field(default=None, alias="publicContentConsent")
+    kind: Literal["bug", "feature"] = Field(default="bug")
+    credit_consent: bool = Field(default=False, alias="creditConsent")
+    credit_name: str | None = Field(default=None, alias="creditName", max_length=200)
+    client_release_id: str | None = Field(default=None, alias="clientReleaseId", max_length=255)
+    telemetry_refs: SupportReportTelemetryReferences | None = Field(
+        default=None,
+        alias="telemetryRefs",
+    )
 
 
 class SupportReportUploadTargetsRequest(BaseModel):
@@ -204,14 +232,6 @@ class SupportReportCompleteRequest(BaseModel):
 class SupportReportCompleteResponse(BaseModel):
     ok: bool = True
     report_id: str = Field(alias="reportId")
-
-
-class SupportReportTrackerResponse(BaseModel):
-    ok: bool = True
-    report_id: str = Field(alias="reportId")
-    tracker_status: str = Field(alias="trackerStatus")
-    github_issue_url: str | None = Field(default=None, alias="githubIssueUrl")
-    linear_issue_url: str | None = Field(default=None, alias="linearIssueUrl")
 
 
 def support_report_create_response(
@@ -268,14 +288,3 @@ def support_report_create_response(
 def support_report_correlation_record(report: SupportReportSnapshot) -> dict[str, object]:
     response = support_report_create_response(report).server_correlation
     return response.model_dump(by_alias=True, exclude_none=True)
-
-
-def support_report_tracker_response(
-    report: SupportReportSnapshot,
-) -> SupportReportTrackerResponse:
-    return SupportReportTrackerResponse(
-        reportId=report.id,
-        trackerStatus=report.tracker_status,
-        githubIssueUrl=report.github_issue_url,
-        linearIssueUrl=report.linear_issue_url,
-    )

@@ -217,6 +217,20 @@ pub struct UnstagePathsRequest {
     pub paths: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct StagePatchRequest {
+    /// A valid unified diff patch (file headers + hunk) to apply to the index.
+    pub patch: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UnstagePatchRequest {
+    /// A valid unified diff patch (file headers + hunk) to reverse-apply from the index.
+    pub patch: String,
+}
+
 // ---------------------------------------------------------------------------
 // Revert patches
 // ---------------------------------------------------------------------------

@@ -2,10 +2,10 @@ import { useEffect, useMemo } from "react";
 import { useGitHubDesktopAuthAvailability } from "@/hooks/access/cloud/auth/use-github-auth-availability";
 import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
 import { logStartupDebug } from "@/lib/infra/measurement/debug-startup";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import { useProductAuthStatus } from "@/hooks/auth/facade/use-product-auth";
 
 export function useCloudAvailabilityState() {
-  const authStatus = useAuthStore((state) => state.status);
+  const authStatus = useProductAuthStatus();
   const { cloudEnabled, cloudComputeEnabled } = useAppCapabilities();
   const {
     data: githubDesktopAuthAvailable,

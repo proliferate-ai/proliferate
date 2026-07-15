@@ -5,7 +5,6 @@ import { ChatComposerActions } from "@/components/workspace/chat/input/ChatCompo
 import { ChatComposerControlRowFrame } from "@proliferate/product-ui/chat/composer/ChatComposerControlRowFrame";
 import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
 import { ComposerTextarea } from "@proliferate/ui/primitives/ComposerTextarea";
-import { UserMessage } from "@/components/workspace/chat/transcript/UserMessage";
 import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import { useHomeNextComposerState } from "@/hooks/home/ui/use-home-next-composer-state";
 import {
@@ -200,20 +199,6 @@ export function HomeComposerForm({
           {targetPickerSlot}
         </div>
       </DebugProfiler>
-
-      {composer.submittedPreview ? (
-        <div
-          key={composer.submittedPreview.id}
-          className="mt-5"
-          data-home-submit-preview
-        >
-          <UserMessage
-            sessionId={null}
-            content={composer.submittedPreview.text}
-            contentParts={[{ type: "text", text: composer.submittedPreview.text }]}
-          />
-        </div>
-      ) : null}
 
       {modelAvailabilityNoticeSlot}
 

@@ -37,8 +37,6 @@ export interface UseRightPanelControllerOptions {
   onStateChange: Dispatch<SetStateAction<RightPanelWorkspaceState>>;
   terminalActivationRequest: RightPanelTerminalActivationRequest | null;
   focusRequestToken?: number;
-  nativeOverlaysHidden?: boolean;
-  onOpenPanel: () => void;
   onTogglePanel: () => void;
   onTerminalActivationRequestHandled: (request: RightPanelTerminalActivationRequest) => void;
 }
@@ -55,8 +53,6 @@ export function useRightPanelController({
   onStateChange,
   terminalActivationRequest,
   focusRequestToken = 0,
-  nativeOverlaysHidden = false,
-  onOpenPanel,
   onTogglePanel,
   onTerminalActivationRequestHandled,
 }: UseRightPanelControllerOptions) {
@@ -81,11 +77,9 @@ export function useRightPanelController({
   const {
     activeTool,
     activeTerminalId,
-    activeBrowserId,
     activeViewerTarget,
     visibleTerminals,
     orderedTerminals,
-    browserTabs,
     headerEntries,
   } = useRightPanelHeaderEntries({
     state,
@@ -118,7 +112,6 @@ export function useRightPanelController({
     reorderViewerTargets,
     setActiveViewerTarget,
     clearBuffer,
-    onOpenPanel,
   });
 
   useRightPanelLifecycle({
@@ -137,7 +130,6 @@ export function useRightPanelController({
     setActiveTerminalForWorkspace,
     createTerminal: actions.createTerminal,
     activateTerminalTool: actions.activateTerminalTool,
-    handleCreateBrowser: actions.handleCreateBrowser,
     onTerminalActivationRequestHandled,
   });
 
@@ -162,7 +154,6 @@ export function useRightPanelController({
 
   const shouldMountTerminalPanel = shouldRenderContent
     && (activeTerminalId !== null || orderedTerminals.length > 0);
-  const shouldMountBrowserPanel = browserTabs.length > 0;
 
   return {
     rootRef,
@@ -171,19 +162,15 @@ export function useRightPanelController({
     workspaceUiKey,
     activeEntryKey: state.activeEntryKey,
     activeTool,
-    activeBrowserId,
     activeTerminalId,
     activeViewerTarget,
     entries: headerEntries,
     unreadByTerminal,
     buffersByPath,
     tabModes,
-    browserTabs,
     orderedTerminals,
-    isOpen,
     isWorkspaceReady,
     shouldRenderContent,
-    shouldMountBrowserPanel,
     shouldMountTerminalPanel,
     canConnectTerminals: terminalsQuery.isSuccess,
     isLoadingTerminals: terminalsQuery.isLoading && !terminalsQuery.data,
@@ -191,18 +178,14 @@ export function useRightPanelController({
     terminalFocusRequestToken: terminalActivationRequestToken + actions.terminalFocusNonce,
     newTabMenuRequestToken: newTabMenuRequest.token,
     newTabMenuDefaultKind: newTabMenuRequest.defaultKind,
-    nativeOverlaysHidden,
     onActivateEntry: actions.activateRightPanelEntry,
     onSelectTerminal: actions.selectTerminal,
     onCloseTerminal: actions.handleCloseTerminal,
-    onCloseBrowser: actions.handleCloseBrowser,
     onCloseViewerTarget: actions.handleCloseViewer,
     onRenameTerminal: actions.handleRenameTerminal,
     onCreateTerminal: actions.handleCreateTerminal,
-    onCreateBrowser: actions.handleCreateBrowser,
     onOpenRepoSettings: actions.handleOpenRepoSettings,
     onReorderHeaderEntry: actions.handleReorderHeaderEntry,
-    onUpdateBrowserUrl: actions.handleUpdateBrowserUrl,
     onTogglePanel,
   };
 }

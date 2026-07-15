@@ -6,12 +6,12 @@ import {
 } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   useGitHubAppInstallationStatus,
   useStartGitHubAppInstallation,
 } from "@proliferate/cloud-sdk-react";
 import { UpgradeGateDialog } from "@/components/billing/UpgradeGateDialog";
-import { OrganizationAgentPolicySection } from "@/components/settings/panes/organization/OrganizationAgentPolicySection";
 import { OrganizationBillingLinkSection } from "@/components/settings/panes/organization/OrganizationBillingLinkSection";
 import { OrganizationSettingsCard } from "@/components/settings/panes/organization/OrganizationSettingsCard";
 import {
@@ -27,10 +27,9 @@ import {
   useTeamCheckoutActions,
 } from "@/hooks/access/cloud/billing/use-team-checkout";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
-import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { TEAM_UPGRADE_GATE_COPY } from "@/copy/billing/upgrade-gate-copy";
 import { organizationLogoImageValidationError } from "@/lib/domain/organizations/logo-image";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import { useProductAuthStatus } from "@/hooks/auth/facade/use-product-auth";
 
 function readLogoImage(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -42,14 +41,14 @@ function readLogoImage(file: File): Promise<string> {
 }
 
 export function OrganizationPane() {
-  const authStatus = useAuthStore((state) => state.status);
+  const authStatus = useProductAuthStatus();
   const {
     activeOrganization,
     activeOrganizationId,
     organizations,
     organizationsQuery,
   } = useActiveOrganization();
-  const { openExternal } = useTauriShellActions();
+  const { openExternal } = useProductHost().links;
   const actions = useOrganizationActions(activeOrganizationId);
   const [settingsName, setSettingsName] = useState("");
   const [settingsLogoImage, setSettingsLogoImage] = useState<string | null>(null);
@@ -309,10 +308,6 @@ export function OrganizationPane() {
             onInstall={handleInstallGitHubApp}
             onManage={handleManageGitHubAppInstallation}
           />
-
-          {isOrgAdmin ? (
-            <OrganizationAgentPolicySection organizationId={activeOrganizationId} />
-          ) : null}
 
           <OrganizationBillingLinkSection />
         </>

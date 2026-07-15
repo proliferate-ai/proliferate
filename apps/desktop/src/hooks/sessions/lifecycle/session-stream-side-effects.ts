@@ -145,7 +145,6 @@ export function applyBatchedStreamSideEffects(input: {
   }
   if (plan.invalidateSessionSubagents) {
     input.sessionStreamCache.invalidateSessionSubagents({
-      runtimeUrl: input.runtimeUrl,
       workspaceId: input.workspaceId,
       sessionId: input.sessionId,
     });
@@ -158,14 +157,12 @@ export function applyBatchedStreamSideEffects(input: {
   }
   for (const parentSessionId of plan.reviewParentSessionIds) {
     input.sessionStreamCache.invalidateSessionReviews({
-      runtimeUrl: input.runtimeUrl,
       workspaceId: input.workspaceId,
       parentSessionId,
     });
   }
   if (plan.invalidateGitStatus && input.workspaceId) {
     input.sessionStreamCache.invalidateGitStatus({
-      runtimeUrl: input.runtimeUrl,
       workspaceId: input.workspaceId,
     });
   }

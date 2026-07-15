@@ -1,9 +1,9 @@
-//! AWS credential-chain detection: passive sources only (decisions ledger
-//! 12) — the env pair, the bedrock bearer token env var, a
-//! shared-credentials profile, or an SSO token cache.
+//! AWS credential-chain detection: passive sources only — the env pair, the
+//! Bedrock bearer-token env var, a shared-credentials profile, or an SSO token
+//! cache.
 //! The exotic tail of the real AWS chain (IMDS, process credentials,
 //! container credentials) is deliberately NOT detected here: it is proven by
-//! launch/trial, never by detection — "menus lie, inference proves."
+//! launch or trial, never by this detector.
 //! No network access, ever.
 
 use std::collections::BTreeSet;
@@ -42,7 +42,7 @@ pub(crate) struct AwsChainPaths {
 impl AwsChainPaths {
     /// `AWS_SHARED_CREDENTIALS_FILE` is a path override (not a credential),
     /// honored only when `home_dir` is the process home — mirroring how the
-    /// `LocalAuthState` detectors treat `CODEX_HOME`/`GEMINI_CLI_HOME`.
+    /// `LocalAuthState` detectors treat `CODEX_HOME`.
     pub(crate) fn resolve(home_dir: &Path) -> Self {
         let default_credentials_file = home_dir.join(".aws").join("credentials");
         Self {

@@ -208,6 +208,7 @@ export function SidebarWorkspaceContent({
                 detailIndicators={item.detailIndicators}
                 cloudStatus={item.cloudStatus}
                 branchName={item.branchName}
+                lastInteracted={item.lastInteracted}
                 gitStatus={item.gitStatus}
                 needsReview={item.needsReview}
                 shortcutLabel={shortcutLabelByWorkspaceId.get(item.id) ?? null}

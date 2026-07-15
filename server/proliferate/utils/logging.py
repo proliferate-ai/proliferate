@@ -4,15 +4,25 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from datetime import UTC, datetime
 
 from proliferate.config import settings
 from proliferate.middleware.request_context import get_correlation_context
+from proliferate.server.release import server_release_id
+from proliferate.server.version import server_version
 
 _APP_LOGGER_NAME = "proliferate"
 _UVICORN_ERROR_LOGGER_NAME = "uvicorn.error"
 _FALLBACK_FORMAT = "%(levelname)s:%(name)s:%(message)s"
 _STANDARD_RECORD_KEYS = frozenset(logging.makeLogRecord({}).__dict__)
+
+# Computed once at import/configure time — not per-record.
+_SERVER_VERSION: str | None = None
+_SERVER_GIT_SHA: str | None = None
+# The canonical `<component>@<version>+<sha>` release ID stamped on every
+# structured production log line (support-system "Release identity" contract).
+_RELEASE_ID: str | None = None
 
 
 class CorrelationLogFilter(logging.Filter):
@@ -31,6 +41,12 @@ class JsonLogFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
         }
+        if _RELEASE_ID:
+            payload["release_id"] = _RELEASE_ID
+        if _SERVER_VERSION:
+            payload["version"] = _SERVER_VERSION
+        if _SERVER_GIT_SHA:
+            payload["git_sha"] = _SERVER_GIT_SHA
         for key, value in get_correlation_context().items():
             payload[key] = value
         for key, value in record.__dict__.items():
@@ -44,6 +60,11 @@ class JsonLogFormatter(logging.Formatter):
 
 def configure_server_logging() -> None:
     """Ensure application logs are visible in dev and under Uvicorn."""
+    global _SERVER_VERSION, _SERVER_GIT_SHA, _RELEASE_ID
+    _SERVER_VERSION = server_version()
+    _SERVER_GIT_SHA = os.getenv("SERVER_GIT_SHA") or None
+    _RELEASE_ID = server_release_id()
+
     app_logger = logging.getLogger(_APP_LOGGER_NAME)
     if getattr(app_logger, "_proliferate_configured", False):
         return

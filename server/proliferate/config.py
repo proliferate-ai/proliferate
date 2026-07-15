@@ -233,12 +233,35 @@ class Settings(BaseSettings):
     # Customer.io (optional)
     customerio_site_id: str = ""
     customerio_api_key: str = ""
-    customerio_app_api_key: str = ""
-    customerio_from_email: str = "hello@proliferate.com"
-    customerio_welcome_transactional_message_id: str = ""
     resend_api_key: str = ""
     resend_from_email: str = "hello@proliferate.dev"
     frontend_base_url: str = ""
+
+    # Self-managed instance identity + operator support routing. Surfaced on the
+    # public /meta capability contract so the desktop renders a self-hosted
+    # server as itself (name/logo) and points users at the operator's own
+    # support destination instead of the vendor's. All optional: an empty value
+    # means "use the safe default" — for identity the desktop falls back to the
+    # connected server origin, and for support it offers no vendor address.
+    instance_name: str = Field(
+        default="",
+        validation_alias=AliasChoices("INSTANCE_NAME", "PROLIFERATE_INSTANCE_NAME"),
+    )
+    instance_logo_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("INSTANCE_LOGO_URL", "PROLIFERATE_INSTANCE_LOGO_URL"),
+    )
+    instance_support_email: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "INSTANCE_SUPPORT_EMAIL", "PROLIFERATE_INSTANCE_SUPPORT_EMAIL"
+        ),
+    )
+    instance_support_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("INSTANCE_SUPPORT_URL", "PROLIFERATE_INSTANCE_SUPPORT_URL"),
+    )
+
     anonymous_telemetry_endpoint: str = Field(
         default="https://app.proliferate.com/api/v1/telemetry/anonymous",
         validation_alias=AliasChoices(
@@ -257,7 +280,7 @@ class Settings(BaseSettings):
     # Observability
     sentry_dsn: str = ""
     sentry_environment: str = "trusted-beta"
-    sentry_release: str = "proliferate-server@0.1.0"
+    sentry_release: str = ""
     sentry_traces_sample_rate: float = 1.0
 
     # Secondary LLM flows
@@ -282,23 +305,18 @@ class Settings(BaseSettings):
     support_report_attachment_max_bytes: int = 25 * 1024 * 1024
     support_report_total_attachment_max_bytes: int = 100 * 1024 * 1024
     support_report_internal_base_url: str = ""
-    support_tracker_enabled: bool = False
-    support_tracker_reconciler_interval_seconds: float = 30.0
-    support_tracker_reconciler_batch_size: int = 10
-    support_tracker_max_attempts: int = 8
-    support_tracker_retry_base_seconds: float = 60.0
-    support_github_app_id: str = ""
-    support_github_app_private_key: str = ""
-    support_github_app_installation_id: str = ""
-    support_github_owner: str = ""
-    support_github_repo: str = ""
-    support_github_label_support: str = "support"
-    support_github_label_private: str = "private-details"
-    support_linear_api_key: str = ""
-    support_linear_team_id: str = ""
-    support_linear_project_id: str = ""
-    support_linear_label_ids: str = ""
-    support_linear_private_details_label_id: str = ""
+    # Dedicated Bearer key for the private completed-report feed
+    # (GET /internal/support/reports). Empty disables the feed (every request is
+    # rejected); the route still exists so the feed is dark-deployable.
+    support_feed_bearer_token: str = ""
+    # When true, report completion rejects a NEW report whose client PROVIDED a
+    # release value that failed canonical validation (captured at create time
+    # as `client_release_provided`). Reports from old/legacy clients that never
+    # sent the field complete normally and stay feedable with a visible
+    # warning. Defaults off: production enablement is an explicit ops flip once
+    # desktop client adoption of the canonical `<component>@<version>+<sha>`
+    # release ID is confirmed (old installed desktop builds send no release).
+    support_report_require_client_release: bool = False
     signups_slack_webhook_url: str = ""
     billing_positive_slack_webhook_url: str = ""
     billing_negative_slack_webhook_url: str = ""
@@ -334,8 +352,17 @@ class Settings(BaseSettings):
     cloud_runtime_sentry_traces_sample_rate: float = 1.0
     cloud_target_sentry_dsn: str = ""
     cloud_target_sentry_environment: str = ""
-    cloud_target_sentry_release: str = ""
     cloud_target_sentry_traces_sample_rate: float = 1.0
+    # Emergency, component-specific Sentry release overrides for the target
+    # processes. Each must canonically name its own component
+    # (`proliferate-worker@...` / `proliferate-supervisor@...`); a mismatched
+    # value is refused rather than propagated. Normally EMPTY: each binary
+    # stamps its own `<component>@<version>+<sha>` from its compile-time build
+    # stamp. The prior shared `cloud_target_sentry_release` /
+    # `PROLIFERATE_TARGET_SENTRY_RELEASE` override was removed because it could
+    # not distinguish worker from supervisor events.
+    cloud_worker_sentry_release: str = ""
+    cloud_supervisor_sentry_release: str = ""
     cloud_jwt_signing_key_pem: str = ""
     cloud_jwt_signing_key_id: str = "local-dev"
     cloud_jwt_verification_keys_json: str = "[]"
@@ -391,6 +418,40 @@ class Settings(BaseSettings):
         "install/proliferate-target-install.sh"
     )
     proliferate_target_artifact_base_url: str = ""
+
+    @property
+    def cloud_provisioning_configured(self) -> bool:
+        """True when E2B is fully configured to provision cloud sandboxes.
+
+        Requires BOTH an API key and a template name. In debug/dev the template
+        name may be blank (a built-in default is used), so any API key suffices.
+        """
+        if not self.e2b_api_key.strip():
+            return False
+        if self.debug:
+            return True
+        return bool(self.e2b_template_name.strip())
+
+    @property
+    def cloud_provisioning_config_error(self) -> str | None:
+        """Actionable reason cloud provisioning is unavailable, or None if ready.
+
+        Names the missing requirement without echoing any secret value. Used
+        both to log a startup warning and to fail cloud-provisioning requests
+        with a specific error instead of crash-looping the API or booting the
+        wrong E2B template.
+        """
+        if self.debug:
+            return None
+        if not self.e2b_api_key.strip():
+            return None  # cloud provisioning intentionally disabled
+        if not self.e2b_template_name.strip():
+            return (
+                "E2B_API_KEY is set but E2B_TEMPLATE_NAME is empty. Set "
+                "E2B_TEMPLATE_NAME to the published runtime template for this "
+                "deployment to enable cloud workspaces."
+            )
+        return None
 
     @property
     def single_org_mode(self) -> bool:

@@ -21,6 +21,15 @@ pub enum AgentCredentialState {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
+pub enum AgentCliAuthState {
+    Authenticated,
+    Expired,
+    Absent,
+    Unsupported,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum AgentReadinessState {
     Ready,
     InstallRequired,
@@ -67,6 +76,8 @@ pub struct AgentSummary {
     pub docs_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cli_auth_state: Option<AgentCliAuthState>,
 }
 
 // --- Launch options ---
@@ -80,6 +91,17 @@ pub enum ModelCatalogStatus {
     Hidden,
 }
 
+/// The thinking/effort control surfaced per model: the values the model
+/// supports and the observed default (the runtime joins these from the
+/// bundled catalog's `controls.effort.{values, observedValue}`).
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelEffort {
+    pub values: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentLaunchModelOption {
@@ -90,6 +112,24 @@ pub struct AgentLaunchModelOption {
     pub is_default: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_opt_in: Option<bool>,
+    // --- Enriched catalog fields (joined from the bundled catalog-v2 entry
+    // with the same id, so cloud snapshots stored from this payload carry the
+    // same richness as the gateway-models endpoint). All optional. ---
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<ModelCatalogStatus>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effort: Option<ModelEffort>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fast_mode: Option<bool>,
+    /// The permission/agent modes the model supports (joined from the bundled
+    /// catalog's `controls.mode.values`); absent when the model has no mode
+    /// control (contract §5).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub modes: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

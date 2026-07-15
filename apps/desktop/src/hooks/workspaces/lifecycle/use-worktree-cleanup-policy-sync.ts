@@ -10,7 +10,7 @@ import {
   WORKTREE_AUTO_DELETE_LIMIT_DEFAULT,
 } from "@/lib/domain/preferences/user/worktree-auto-delete";
 import type { WorktreeSettingsTarget } from "@/lib/domain/workspaces/worktrees/worktree-settings-target";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import { useProductAuthStatus } from "@/hooks/auth/facade/use-product-auth";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
 const seededCloudPolicyRuntimeKeys = new Set<string>();
@@ -41,7 +41,7 @@ export function useWorktreeCleanupPolicySync(
   targets: WorktreeCleanupPolicySyncTargetState[],
   syncPolicyToTarget: SyncPolicyToTarget,
 ): WorktreeCleanupPolicySyncState {
-  const authStatus = useAuthStore((state) => state.status);
+  const authStatus = useProductAuthStatus();
   const preferenceValue = useUserPreferencesStore((state) => state.worktreeAutoDeleteLimit);
   const setPreference = useUserPreferencesStore((state) => state.set);
   const preferencesHydrated = useUserPreferencesStore((state) => state._hydrated);
@@ -59,7 +59,7 @@ export function useWorktreeCleanupPolicySync(
   });
 
   const resolvedValue = useMemo(() => {
-    if (authStatus === "bootstrapping") {
+    if (authStatus === "loading") {
       return null;
     }
     if (
@@ -150,7 +150,7 @@ export function useWorktreeCleanupPolicySync(
   useEffect(() => {
     if (
       !preferencesHydrated
-      || authStatus === "bootstrapping"
+      || authStatus === "loading"
       || resolvedValue === null
       || adoptionPending
     ) {

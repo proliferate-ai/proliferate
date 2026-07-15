@@ -1,6 +1,6 @@
 {
   "name": "@anyharness/sdk",
-  "version": "0.3.3",
+  "version": "0.3.28",
   "description": "TypeScript SDK for the AnyHarness runtime API",
   "type": "module",
   "main": "dist/index.js",
@@ -21,7 +21,8 @@
     "generate": "npm run generate:openapi && npm run generate:types",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "typecheck:contracts": "tsc -p tsconfig.type-tests.json",
+    "test": "npm run typecheck:contracts && vitest run",
     "test:watch": "vitest"
   },
   "license": "AGPL-3.0",

@@ -3,9 +3,9 @@ export type ComposerDockInteractionKind =
   | "user_input"
   | "mcp_elicitation";
 
-export type ComposerDockOutboundSlot = {
-  kind: "pending_prompts";
-};
+export type ComposerDockOutboundSlot =
+  | { kind: "pending_prompts" }
+  | { kind: "prompt_recoveries" };
 
 export type ComposerDockActiveSlot =
   | { kind: "permission" }
@@ -27,6 +27,18 @@ export type ComposerDockActiveSlotCompanion = { kind: "todo_strip" };
 export interface ComposerDockAttachedSlot {
   ambientSlot: ComposerDockAmbientSlot | null;
   delegatedWork: boolean;
+  workspaceActivity: boolean;
+  /**
+   * Session goal bar — ever-present ambient context while goal state is live.
+   */
+  sessionGoal: boolean;
+  /**
+   * Compact activity chips (loops/terminals/agents) that stack on the same
+   * bar row as the goal (session-activity-architecture §Locked decisions
+   * #5). Independent from `sessionGoal` — activity can be live with no goal
+   * set, so the bar must still mount.
+   */
+  sessionActivity: boolean;
 }
 
 export interface ComposerDockSlotResolution {
@@ -40,9 +52,13 @@ export interface ResolveComposerDockSlotsInput {
   suppressSessionSlots?: boolean;
   suppressWorkspaceStatusPanels?: boolean;
   pendingPromptCount: number;
+  recoveredPromptCount?: number;
   primaryPendingInteractionKind: ComposerDockInteractionKind | null;
   hasActiveTodoTracker: boolean;
   hasDelegatedWork: boolean;
+  hasWorkspaceActivity: boolean;
+  hasSessionGoal: boolean;
+  hasSessionActivity?: boolean;
   hasWorkspaceStatusPanel: boolean;
   hasCloudRuntimePanel: boolean;
 }
@@ -51,14 +67,19 @@ export function resolveComposerDockSlots({
   suppressSessionSlots = false,
   suppressWorkspaceStatusPanels = false,
   pendingPromptCount,
+  recoveredPromptCount = 0,
   primaryPendingInteractionKind,
   hasActiveTodoTracker,
   hasDelegatedWork,
+  hasWorkspaceActivity,
+  hasSessionGoal,
+  hasSessionActivity = false,
   hasWorkspaceStatusPanel,
   hasCloudRuntimePanel,
 }: ResolveComposerDockSlotsInput): ComposerDockSlotResolution {
-  const outboundSlot =
-    !suppressSessionSlots && pendingPromptCount > 0
+  const outboundSlot = !suppressSessionSlots && recoveredPromptCount > 0
+    ? { kind: "prompt_recoveries" as const }
+    : !suppressSessionSlots && pendingPromptCount > 0
       ? { kind: "pending_prompts" as const }
       : null;
   const activeSlot = !suppressSessionSlots
@@ -72,11 +93,21 @@ export function resolveComposerDockSlots({
     ? resolveAmbientSlot(hasWorkspaceStatusPanel, hasCloudRuntimePanel)
     : null;
   const attachedDelegatedWork = !suppressSessionSlots && hasDelegatedWork;
+  const attachedWorkspaceActivity = hasWorkspaceActivity;
+  const attachedSessionGoal = !suppressSessionSlots && hasSessionGoal;
+  const attachedSessionActivity = !suppressSessionSlots && hasSessionActivity;
   const attachedSlot =
-    ambientSlot || attachedDelegatedWork
+    ambientSlot
+    || attachedDelegatedWork
+    || attachedWorkspaceActivity
+    || attachedSessionGoal
+    || attachedSessionActivity
       ? {
         ambientSlot,
         delegatedWork: attachedDelegatedWork,
+        workspaceActivity: attachedWorkspaceActivity,
+        sessionGoal: attachedSessionGoal,
+        sessionActivity: attachedSessionActivity,
       }
       : null;
 

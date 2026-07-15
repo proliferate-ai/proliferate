@@ -57,6 +57,38 @@ export function resolveVisibleOptimisticPrompt(args: {
   return null;
 }
 
+/**
+ * Retain the just-submitted prompt across the user-echo seam until the turn
+ * has real assistant-owned content. The ingest store intentionally clears its
+ * optimistic value once the runtime echoes the user message, but that echo is
+ * not an activity handoff: dropping the pending row there briefly unmounts the
+ * only working indicator before the first thought/tool/prose event arrives.
+ */
+export function resolveOptimisticPromptHandoff(args: {
+  optimisticPrompt: PendingPromptEntry | null;
+  retainedOptimisticPrompt: PendingPromptEntry | null;
+  latestTurn: Pick<TurnRecord, "startedAt" | "completedAt"> | null;
+  latestTurnHasAssistantRenderableContent: boolean;
+  sessionViewState: SessionViewState;
+}): PendingPromptEntry | null {
+  if (args.optimisticPrompt) {
+    return args.optimisticPrompt;
+  }
+  const retainedPrompt = args.retainedOptimisticPrompt;
+  const latestTurnBelongsToPrompt = retainedPrompt
+    && args.latestTurn
+    && new Date(args.latestTurn.startedAt).getTime() >= new Date(retainedPrompt.queuedAt).getTime();
+  if (
+    !retainedPrompt
+    || (args.sessionViewState !== "working" && args.sessionViewState !== "needs_input")
+    || (latestTurnBelongsToPrompt && args.latestTurn?.completedAt)
+    || (latestTurnBelongsToPrompt && args.latestTurnHasAssistantRenderableContent)
+  ) {
+    return null;
+  }
+  return retainedPrompt;
+}
+
 export function shouldClearOptimisticPromptAfterPromptResponse(
   status: PromptSessionStatus,
 ): boolean {

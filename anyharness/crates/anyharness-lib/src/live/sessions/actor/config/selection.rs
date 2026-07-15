@@ -236,3 +236,78 @@ pub(in crate::live::sessions::actor) fn select_option_values(
         _ => Vec::new(),
     }
 }
+
+fn model_variant_base(value: &str) -> &str {
+    value.split_once('[').map_or(value, |(base, _)| base)
+}
+
+/// A bracket-params value is a model base followed by either `[]` or a
+/// comma-separated parameter list. Context-window tags such as `[1m]` are
+/// distinct model ids and deliberately do not match this grammar.
+fn is_bracket_params_variant(value: &str) -> bool {
+    let Some((base, suffix)) = value.split_once('[') else {
+        return false;
+    };
+    let Some(params) = suffix.strip_suffix(']') else {
+        return false;
+    };
+
+    !base.is_empty()
+        && (params.is_empty()
+            || params
+                .split(',')
+                .all(|pair| !pair.is_empty() && pair.contains('=')))
+}
+
+/// A non-empty or malformed bracket suffix is an explicit caller choice. The
+/// resolver may fill in a bare/empty variant, but must never replace params a
+/// caller supplied.
+fn has_explicit_variant_params(value: &str) -> bool {
+    let Some((_, suffix)) = value.split_once('[') else {
+        return false;
+    };
+
+    suffix
+        .strip_suffix(']')
+        .map_or(true, |params| !params.is_empty())
+}
+
+/// Resolve a model request to the exact composed value advertised by the live
+/// ACP session.
+///
+/// Cursor's bracket-params model control accepts values such as
+/// `composer-2.5[fast=true]`, while product selection can request the bare
+/// catalog id `composer-2.5` (or `composer-2.5[]`). The live option is the
+/// active-session authority for those provider-chosen defaults. Resolution is
+/// intentionally conservative: it only substitutes when exactly one distinct
+/// advertised bracket-params value shares the requested base.
+pub(in crate::live::sessions::actor) fn resolve_model_variant_value(
+    option: &acp::schema::SessionConfigOption,
+    desired_value: &str,
+) -> String {
+    if has_explicit_variant_params(desired_value)
+        || select_option_contains_value(option, desired_value)
+        || !option_matches_purpose(option, ConfigPurpose::Model)
+    {
+        return desired_value.to_string();
+    }
+
+    let requested_base = model_variant_base(desired_value);
+    let mut resolved: Option<String> = None;
+
+    for candidate in select_option_values(option) {
+        if model_variant_base(&candidate) != requested_base
+            || !is_bracket_params_variant(&candidate)
+        {
+            continue;
+        }
+
+        match resolved.as_deref() {
+            None => resolved = Some(candidate),
+            Some(existing) if existing == candidate => {}
+            Some(_) => return desired_value.to_string(),
+        }
+    }
+
+    resolved.unwrap_or_else(|| desired_value.to_string())
+}

@@ -1,7 +1,7 @@
 use super::SessionEventSink;
 use anyharness_contract::v1::{
     PendingPromptAddedPayload, PendingPromptRemovedPayload, PendingPromptUpdatedPayload,
-    SessionEvent,
+    PendingPromptsReorderedPayload, SessionEvent,
 };
 
 impl SessionEventSink {
@@ -15,5 +15,9 @@ impl SessionEventSink {
 
     pub fn pending_prompt_removed(&mut self, payload: PendingPromptRemovedPayload) {
         self.emit_with_ids(SessionEvent::PendingPromptRemoved(payload), None, None);
+    }
+
+    pub fn pending_prompts_reordered(&mut self, payload: PendingPromptsReorderedPayload) {
+        self.emit_with_ids(SessionEvent::PendingPromptsReordered(payload), None, None);
     }
 }

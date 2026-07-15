@@ -1,11 +1,11 @@
 # Server Architecture
 
 Status: consolidated architecture reference for the Proliferate backend /
-control-plane (`server/**`). The per-layer guides and the runtime/protocol design
-docs remain the detailed canon; this doc is the single structured overview —
-purpose, the 20k-foot model, core workflows, per-folder best practices, and
-detailed sections for the **runtime worker tier**, the **cloud ↔ worker up/down
-flows**, and the **DB models**.
+control-plane (`server/**`). The focused Server guides, managed-cloud platform
+docs, and Proliferate Worker structure docs remain the detailed current owners;
+this doc is the single structured overview — purpose, the 20k-foot model, core
+workflows, per-folder best practices, and detailed sections for the **managed
+runtime path**, the optional **runtime Worker**, and the **DB models**.
 
 ---
 
@@ -198,9 +198,10 @@ outbox row and let a worker do the call.
 
 ### `auth/**` / `permissions.py`
 - Authorization is enforced at the endpoint via `Depends()`; services get a
-  pre-authorized context and run no auth checks. `auth/dependencies.py` = all
-  actor deps (`current_active_user`, `current_product_user` (default for product
-  surfaces), `current_worker` → `WorkerAuthContext`). `permissions.py` (server
+  pre-authorized context and run no auth checks. `auth/dependencies.py` owns
+  user actor deps (`current_active_user`, `current_product_user`); the Cloud
+  runtime-worker domain owns its opaque-bearer `WorkerAuthContext` dependency.
+  `permissions.py` (server
   root) = org-authorization factory deps (`require_org_role(org_id, roles)`,
   `require_org_membership`) returning `OwnerContext`, plus `PolicyVerdict`. It is
   a leaf importing neither `auth/**` nor `server/<domain>/**`; cross-domain authz
@@ -244,88 +245,88 @@ modules (`helpers.py`/`utils.py`/`misc.py`); no single-file folders (except
 
 ---
 
-## 5. The Runtime Worker Tier (detailed)
+## 5. Managed Runtime And Worker (detailed)
 
-The runtime is **three components** in a **watchdog chain**:
+The hosted Cloud path is direct. One user has at most one active personal
+`cloud_sandbox` row. Provider and runtime work happens just in time when a repo
+environment or workspace needs materialization:
 
 ```text
-systemd  ──supervises──►  proliferate-supervisor  ──supervises──►  proliferate-worker  +  anyharness
- (Restart=always)              (process + update)                   (cloud comms)        (the runtime)
+Cloud service
+  -> E2B create/resume
+  -> launch authenticated AnyHarness when absent/unhealthy
+       -> persist ready access
+       -> best-effort start Proliferate Worker sidecar
+     OR reuse an already-healthy authenticated AnyHarness
+       -> do not restart a missing Worker sidecar
+  -> materialize the repo
 ```
 
-**Collapsed identity model** (decided): **one runtime = one sandbox = one Target
-(1:1), ephemeral.** No slots, no `slot_generation`, no fencing. A sandbox death =
-a Target death → provision a fresh Target. Pause/resume keeps the same instance.
-**All product state is ephemeral** (cascades on Target death). See
-`specs/tbd/runtime-worker-supervisor-design.md` for the full model + deltas.
+The current E2B launch path does not start Proliferate Supervisor. Supervisor
+remains the process/update owner for the SSH installer and its installed target
+layout; do not infer that topology for hosted sandboxes.
 
-**Worker = two polls + lifecycle:**
+The optional Worker has one heartbeat loop, not a product-command channel:
+
 ```text
-ENROLL (once):  one-time token (env for managed / install command for ssh) → worker token
-AUTH (every call): Bearer worker_token → cloud looks up the Target
-TWO POLLS:
-  control (DOWN)  long-poll → commands + ALL reconcile (config/exposures/revoked-jti)
-  events  (UP)    tail AnyHarness → ship batches
-HEARTBEAT       liveness ping; self-update check rides its response → writes supervisor mailbox
-INVENTORY       one-shot at startup (capabilities → capability negotiation)
-MATERIALIZATION report on command completion
+fresh process
+  -> consume one-time enrollment token when no durable identity exists
+  -> persist opaque Worker identity/token in local SQLite
+  -> heartbeat with Worker and AnyHarness versions
+  -> act on desired catalog, Worker, and AnyHarness versions
 ```
-Worker structure: `identity/` · `cloud_client/` · `anyharness_client/` ·
-`control/{loop,commands,reconcile/{manager,handlers}}` · `tail/` · `lifecycle/` ·
-`inventory/` · `store/`.
 
-**Supervisor** (keep as-is): `process/` (keep children alive, restart on crash) +
-`update/` (staged, SHA-verified, rollback-able, per-component) + `install/`
-(layout + systemd). Self-update = stage own binary → exit → systemd relaunches.
+Cloud enrollment returns a Worker token plus integration-gateway credentials.
+Heartbeat updates `last_seen_at` and installed versions and returns desired
+versions. Catalog convergence reads/writes the AnyHarness catalog directly.
+Worker self-update verifies and preflights a public artifact, atomically swaps
+the binary, then `exec`s it. AnyHarness convergence stops, swaps, relaunches,
+health-checks, and can roll back the runtime binary.
 
-**Self-update handoff:** worker writes an atomic, idempotent `desired-update.json`
-**mailbox** (knows desired from cloud); supervisor reads it and applies (can
-restart the worker, which the worker can't do to itself).
+There is no mounted Target registry, command/control poll, event tail, exposure
+reconcile loop, inventory report, materialization report, or Supervisor mailbox.
+See `specs/codebase/structures/proliferate-worker/README.md` for the exact current
+source tree.
 
 ---
 
-## 6. Cloud ↔ Worker: Up / Down (detailed)
+## 6. Cloud ↔ Runtime Flow (detailed)
 
-Tiered truth: **git** owns durable code; the **sandbox** owns live work
-(authoritative while alive); **cloud** owns control-plane + a replica/fan-out of
-the live work. The worker is a **dispatch pump down** and a **replication +
-fan-out pump up**.
-
-### DOWN — intent (cloud → worker)
-
-Two classes over one control long-poll:
-- **Acts** (send_prompt, cancel, create_workspace) — a **command row** in
-  `cloud/commands`; at-least-once + idempotent + per-session ordered. Enqueue runs
-  preflight + idempotency + wake.
-- **Desired-state** (auth, plugins, mcp, skills, runtime config, **exposures**,
-  **revoked-jti**) — **versioned reconcile**, not commands. Each domain owns a
-  revision; bumps it on change; the control long-poll signals the delta; the
-  worker fetches the bundle, applies to local AnyHarness, verifies, with backoff.
-  `applied >= desired` is correctness; a missed signal self-heals.
-
-Transport: the control long-poll holds the request open (parked coroutine), woken
-by a Redis **doorbell** + a per-target **RevisionMap** cursor; commands are leased
-(at-least-once + slot-free fencing in the collapsed model). Cloud owns the channel
-(`cloud/worker`); each config domain owns its revision + bundle; `cloud/commands`
-owns acts.
-
-### UP — truth replication (worker → cloud → clients)
+Cloud owns product/account configuration, billing gates, repository settings,
+and Cloud workspace rows. AnyHarness SQLite owns runtime workspaces, sessions,
+events, terminals, and execution state.
 
 ```text
-AnyHarness (event_sink normalizes ACP chunks → SessionEvent log: item_started→item_delta→item_completed,
-            stable item_id, monotonic seq; item_completed carries FULL content)
-  → worker tails by after_seq (cursor in SQLite) → ships batches
-  → cloud /events/batches: exposure-gate → classify durable/live (deltas are live-only, dropped)
-        → idempotent insert (seq+hash) → derive projections → (after batch) publish patches to Redis (post-commit)
-        → advance the contiguous cursor (gap detection → backfill)
-  → clients: SSE — Postgres snapshot + Redis patch stream (cursor-deduped, heartbeated)
-```
-Redis on the up-side is a **data channel** (carries the patch), with the Postgres
-snapshot as recovery. Stable `item_id`/`seq` make both sinks idempotent and the
-live/history read paths render identically (shared `product-domain` reducer).
+save cloud repo environment
+  -> commit product configuration
+  -> schedule best-effort materialization after commit
 
-Cloud owners: `cloud/events` (ingest + projection), `cloud/live` (publish→Redis +
-SSE). Full contracts: `specs/tbd/cloud-worker-protocol-design.md`.
+create cloud workspace
+  -> validate repo environment, GitHub access, branch, and conflicts
+  -> synchronously materialize the repo (creating/resuming E2B as needed)
+  -> insert cloud_workspace
+  -> call AnyHarness POST /v1/workspaces/worktrees directly
+  -> store anyharness_workspace_id
+
+client runtime request
+  -> authenticate and authorize in Cloud
+  -> load/decrypt cloud_sandbox runtime access
+  -> proxy HTTP or WebSocket traffic through the cloud-sandbox gateway
+  -> AnyHarness
+```
+
+The workspace operation is not an atomic cross-system transaction. The Cloud
+row is flushed before the AnyHarness call but remains in the request
+transaction, so a propagated failure rolls it back. If runtime creation or
+resolution succeeds and a later Cloud write or commit fails, an AnyHarness
+worktree can instead remain without a committed Cloud row. Existing null-id
+Cloud rows still render as `materializing` and eventually `error` after the
+stale threshold; they are not the normal artifact of a failed current create
+request.
+
+Worker enrollment and heartbeat are a separate optional liveness/convergence
+path. Product prompts, workspace operations, and session events do not travel
+through the Worker. The server calls or proxies to AnyHarness directly.
 
 ---
 
@@ -348,28 +349,26 @@ ORM stays in the store; Pydantic never sees ORM.
 - One ORM resource per store file. Takes `db`, never commits/opens sessions,
   returns dataclasses. Flat (prefixed) or folder (un-prefixed inside).
 
-### Key model families
-- **Runtime identity** (`db/models/cloud/targets.py`): **Target** (= runtime =
-  sandbox, collapsed — carries kind/ownership/provider/desired-versions + worker
-  creds + liveness), **Enrollment** (one-time, hashed token, TTL, consume-once).
-  In the collapsed model: `slot_generation`/supersession/active-slot-index are
-  removed.
-- **Commands** (`db/models/cloud/commands.py`): the imperative-act queue —
-  id/kind/payload/preconditions/status/lease/result, addressed to a target.
-- **Sync** (`db/models/cloud/sync.py`): the up-direction projection — event log
-  (`cloud_session_events`), session state (`cloud_sessions`), transcript
-  (`cloud_transcript_items`), open interactions (`cloud_pending_interactions`),
-  ingest cursor (`cloud_event_ingest_state`), and the control-revision cursor
-  (`worker_control` → a per-domain `RevisionMap` in the target model).
-- **Exposures / claims** — what's projected/commandable + one-way ownership.
-- **Workspaces, billing, orgs, agent-auth, automations** — the product domains,
-  each with its own `db/models/cloud/<resource>.py` + `db/store/**`.
+### Key current model families
 
-### Projections are CQRS-style read views
-One event log → several read-optimized views, each shaped for a UI query:
-`cloud_session_events` (the log, rebuildable source), `cloud_sessions` (header /
-list state), `cloud_transcript_items` (the conversation, keyed by `item_id`),
-`cloud_pending_interactions` (the "what's awaiting me" actionable view).
+- **Sandbox access** (`db/models/cloud/sandboxes.py`): personal
+  `cloud_sandbox` lifecycle, provider id, and encrypted AnyHarness access.
+- **Repository configuration** (`db/models/cloud/repositories.py`):
+  `repo_config`, `repo_environment`, and
+  `cloud_repo_environment_materialization`.
+- **Cloud workspace records** (`db/models/cloud/workspaces.py`): repository
+  environment, branch/base branch, archive state, and optional
+  `anyharness_workspace_id`.
+- **Optional runtime Worker** (`db/models/cloud/runtime_workers.py`): Worker,
+  one-time enrollment, and integration-gateway token records.
+- **Sandbox secret materialization** (`db/models/cloud/secrets.py`): persisted
+  runtime/repository secret-application state.
+- **Billing, orgs, auth, and other product domains**: each retains its own
+  `db/models/**` and `db/store/**` owner.
+
+Target, command-queue, exposure, and Cloud session-projection tables were
+removed. Runtime session/event truth remains in AnyHarness rather than a Cloud
+projection ledger.
 
 ---
 
@@ -377,9 +376,8 @@ list state), `cloud_transcript_items` (the conversation, keyed by `item_id`),
 
 **`api` transports, `service` orchestrates, `domain` decides, `store` persists,
 `integrations` reach outside; types flow ORM → dataclass → Pydantic, never
-backward; transactions are short and owned at the edge (dep or worker entry), with
-the outbox for external side effects.** The runtime tier is **one ephemeral Target
-(= sandbox + worker creds), two polls (control down / events up), a watchdog
-chain (systemd → supervisor → worker + anyharness)**, with **acts as commands and
-config/exposures/revoked-jti as versioned reconcile** down, and **normalized
-events → idempotent projection → SSE fan-out** up.
+backward; transactions are short and owned at the edge, with the outbox for
+external side effects.** Managed Cloud uses one personal `cloud_sandbox`,
+just-in-time E2B/AnyHarness materialization, and direct gateway access. The
+optional Worker enrolls, heartbeats, and converges catalog/binary versions; it
+does not carry product commands or replicate runtime events.

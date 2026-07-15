@@ -258,6 +258,44 @@ async def rotate_virtual_key(
     )
 
 
+async def delete_virtual_keys_by_alias(*, alias: str) -> int:
+    """Delete every live virtual key minted under ``alias``; returns the count.
+
+    ``/key/generate`` enforces globally-unique aliases, so this normally finds
+    at most one key. It exists for orphan recovery: a crash between a mint and
+    the enrollment DB write leaves a live key we no longer track, and the next
+    mint under the deterministic alias fails with a duplicate-alias 400. The
+    ``/key/list`` alias filter is treated as advisory (mirroring ``/team/list``,
+    whose alias param the pinned image ignores), so the alias is re-checked
+    client-side before anything is deleted.
+    """
+    payload = _require_dict(
+        await _admin_request(
+            "GET",
+            "/key/list",
+            params={"key_alias": alias, "return_full_object": "true"},
+        ),
+        context="/key/list",
+    )
+    keys = payload.get("keys")
+    if not isinstance(keys, list):
+        raise LiteLLMIntegrationError(
+            "litellm_invalid_response", "LiteLLM returned an invalid key list."
+        )
+    token_ids = [
+        key["token"]
+        for key in keys
+        if isinstance(key, dict)
+        and key.get("key_alias") == alias
+        and isinstance(key.get("token"), str)
+        and key["token"]
+    ]
+    if not token_ids:
+        return 0
+    await _admin_request("POST", "/key/delete", json_body={"keys": token_ids})
+    return len(token_ids)
+
+
 async def disable_virtual_key(*, key_or_token_id: str) -> None:
     """Block a virtual key; enforcement on the data plane is immediate."""
     await _admin_request("POST", "/key/block", json_body={"key": key_or_token_id})

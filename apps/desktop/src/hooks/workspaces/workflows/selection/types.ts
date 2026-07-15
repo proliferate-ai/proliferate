@@ -1,7 +1,12 @@
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
+import type {
+  DesktopRuntimeBridge,
+  DesktopSshBridge,
+} from "@proliferate/product-client/host/desktop-bridge";
 import type { Workspace } from "@anyharness/sdk";
 import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
+import type { CloudSandboxGatewayUrlSource } from "@/lib/access/cloud/cloud-sandbox-gateway";
 
 export interface WorkspaceSelectionOptions {
   force?: boolean;
@@ -9,6 +14,15 @@ export interface WorkspaceSelectionOptions {
   preservePending?: boolean;
   initialActiveSessionId?: string | null;
   latencyFlowId?: string | null;
+  /**
+   * A workspace the caller has already resolved but that may not be present in
+   * the selection's internal `logicalWorkspaces`/`rawWorkspaces` snapshot yet —
+   * either just created (the collections query lags creation) or being restored
+   * on reopen (the snapshot read can momentarily miss a workspace the reactive
+   * hooks already have). When set and its id matches `workspaceId`, selection
+   * uses it directly instead of failing with "Workspace not found."
+   */
+  knownWorkspace?: Workspace | null;
 }
 
 export interface WorkspaceSelectionRequest {
@@ -25,6 +39,9 @@ export interface WorkspaceSelectionContext {
 }
 
 export interface WorkspaceSelectionDeps {
+  localRuntime: DesktopRuntimeBridge | null;
+  ssh?: DesktopSshBridge | null;
+  cloudClient: CloudSandboxGatewayUrlSource | null;
   logicalWorkspaces: LogicalWorkspace[];
   rawWorkspaces: Workspace[];
   cache: {
@@ -50,7 +67,6 @@ export interface WorkspaceSelectionDeps {
   bootstrapWorkspace: (input: {
     workspaceId: string;
     logicalWorkspaceId: string;
-    runtimeUrl: string;
     workspaceConnection: AnyHarnessResolvedConnection;
     startedAt: number;
     latencyFlowId?: string | null;
@@ -59,7 +75,6 @@ export interface WorkspaceSelectionDeps {
   reconcileHotWorkspace: (input: {
     workspaceId: string;
     logicalWorkspaceId: string;
-    runtimeUrl: string;
     workspaceConnection: AnyHarnessResolvedConnection;
     sessionId: string;
     selectionNonce: number;

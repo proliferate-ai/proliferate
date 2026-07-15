@@ -1,6 +1,8 @@
 export {
   AnyHarnessRuntime,
+  resolveRuntimeCacheScopeKey,
   resolveRuntimeConnection,
+  useAnyHarnessCacheScopeKey,
   useAnyHarnessRuntimeContext,
 } from "./context/AnyHarnessRuntime.js";
 export {
@@ -8,6 +10,9 @@ export {
   resolveWorkspaceConnectionFromContext,
   useAnyHarnessWorkspaceContext,
 } from "./context/AnyHarnessWorkspace.js";
+export type {
+  AnyHarnessRuntimeContextValue,
+} from "./context/AnyHarnessRuntime.js";
 export type {
   AnyHarnessResolvedConnection,
   AnyHarnessWorkspaceContextValue,
@@ -21,16 +26,20 @@ export type {
 } from "./lib/timing-options.js";
 
 export {
+  anyHarnessCacheScopeKey,
   anyHarnessRuntimeKey,
+  anyHarnessWorkspaceKey,
   anyHarnessRuntimeHealthKey,
   anyHarnessAgentsKey,
   anyHarnessAgentLaunchOptionsKey,
   anyHarnessAgentLaunchOptionsPrefixKey,
   anyHarnessAgentReconcileStatusKey,
   anyHarnessReconcileAgentsMutationKey,
+  anyHarnessAgentGatewayModelsKey,
   anyHarnessRuntimeWorkspacesKey,
   anyHarnessWorkspaceRetirePreflightKey,
   anyHarnessWorkspacePurgePreflightKey,
+  anyHarnessWorkspaceDetailKey,
   anyHarnessWorktreesInventoryKey,
   anyHarnessWorktreesRetentionPolicyKey,
   anyHarnessRepoRootsKey,
@@ -88,6 +97,11 @@ export {
   useCloseAgentLoginTerminalMutation,
   useReconcileAgentsMutation,
 } from "./hooks/agents.js";
+export {
+  useAgentGatewayModelsQuery,
+  useAgentGatewayModelsQueries,
+  useRefreshAgentGatewayModelsMutation,
+} from "./hooks/agent-gateway-catalog.js";
 export {
   useRepoRootsQuery,
   useReadRepoRootFileMutation,
@@ -151,10 +165,12 @@ export {
   usePromptSessionTextMutation,
   useFetchPromptAttachmentMutation,
   useForkSessionMutation,
-  useEditPendingPromptMutation,
-  useDeletePendingPromptMutation,
   useResumeSessionMutation,
   useUpdateSessionTitleMutation,
+  useSetSessionGoalMutation,
+  useClearSessionGoalMutation,
+  useSetSessionLoopMutation,
+  useClearSessionLoopMutation,
   useCancelSessionMutation,
   useDismissSessionMutation,
   useCloseSessionMutation,
@@ -162,6 +178,12 @@ export {
   useResolveSessionInteractionMutation,
   useRevealMcpElicitationUrlMutation,
 } from "./hooks/sessions.js";
+export {
+  useEditPendingPromptMutation,
+  useDeletePendingPromptMutation,
+  useReorderPendingPromptsMutation,
+  useSteerPendingPromptMutation,
+} from "./hooks/session-pending-prompts.js";
 export {
   useWorkspacePlansQuery,
   usePlanDetailQuery,
@@ -191,6 +213,8 @@ export {
   useGitBranchesQuery,
   useStageGitPathsMutation,
   useUnstageGitPathsMutation,
+  useStagePatchMutation,
+  useUnstagePatchMutation,
   useRevertGitPatchesMutation,
   useCommitGitMutation,
   usePushGitMutation,

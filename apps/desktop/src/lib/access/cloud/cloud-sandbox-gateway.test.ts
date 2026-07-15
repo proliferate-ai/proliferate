@@ -1,31 +1,37 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getDesktopCloudAccessToken,
-  getProliferateClient,
   isCloudAgentKind,
   type CloudWorkspaceDetail,
 } from "@/lib/access/cloud/client";
 import {
+  type CloudSandboxGatewayUrlSource,
   resolveCloudSandboxGatewayConnectionForWorkspace,
 } from "@/lib/access/cloud/cloud-sandbox-gateway";
 
-vi.mock("@/lib/access/cloud/client", () => ({
-  getDesktopCloudAccessToken: vi.fn(),
-  getProliferateClient: vi.fn(),
-  isCloudAgentKind: vi.fn(),
-}));
+vi.mock("@/lib/access/cloud/client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/access/cloud/client")>();
+  return {
+    getDesktopCloudAccessToken: vi.fn(),
+    isCloudAgentKind: vi.fn(),
+    ProliferateClientError: actual.ProliferateClientError,
+  };
+});
 
 const getProductToken = vi.mocked(getDesktopCloudAccessToken);
-const getClient = vi.mocked(getProliferateClient);
 const isKnownCloudAgent = vi.mocked(isCloudAgentKind);
+
+// The gateway receives the Cloud client (its URL builder) as an explicit
+// dependency; it never reaches for a client singleton. This stand-in proves the
+// gateway URL is derived from exactly the passed client.
+const explicitCloudClient: CloudSandboxGatewayUrlSource = {
+  buildUrl: (path: string) => `http://api.test${path}`,
+};
 
 describe("resolveCloudSandboxGatewayConnectionForWorkspace", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     getProductToken.mockResolvedValue("product-token");
-    getClient.mockReturnValue({
-      buildUrl: (path: string) => `http://api.test${path}`,
-    } as ReturnType<typeof getProliferateClient>);
     isKnownCloudAgent.mockImplementation((kind) => kind === "claude" || kind === "codex");
   });
 
@@ -45,7 +51,7 @@ describe("resolveCloudSandboxGatewayConnectionForWorkspace", () => {
       runtime: {
         generation: 7,
       },
-    } as unknown as CloudWorkspaceDetail);
+    } as unknown as CloudWorkspaceDetail, explicitCloudClient);
 
     expect(connection).toMatchObject({
       runtimeUrl: "http://api.test/v1/gateway/cloud-sandbox/anyharness",
@@ -57,5 +63,20 @@ describe("resolveCloudSandboxGatewayConnectionForWorkspace", () => {
       allowedAgentKinds: ["claude"],
       readyAgentKinds: ["claude"],
     });
+  });
+
+  it("rejects when no Cloud client is available", async () => {
+    await expect(
+      resolveCloudSandboxGatewayConnectionForWorkspace(
+        {
+          id: "cloud-workspace-1",
+          anyharnessWorkspaceId: "runtime-workspace",
+          allowedAgentKinds: ["claude"],
+          readyAgentKinds: ["claude"],
+          runtime: { generation: 1 },
+        } as unknown as CloudWorkspaceDetail,
+        null,
+      ),
+    ).rejects.toThrow(/Cloud client is unavailable/);
   });
 });

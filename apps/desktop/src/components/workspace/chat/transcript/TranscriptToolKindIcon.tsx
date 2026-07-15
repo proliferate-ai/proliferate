@@ -1,25 +1,25 @@
 import {
   ClipboardList,
+  CommandWindow,
   FilePen,
   FilePlus,
-  FileText,
   FolderList,
+  ReadBook,
   Settings,
-  SquareTerminal,
 } from "@proliferate/ui/icons";
 import { ProliferateIcon } from "@proliferate/ui/proliferate-icons";
 import type { ToolDisplayIconKey } from "@proliferate/product-domain/chats/tools/tool-call-display";
 
 export function ToolKindIcon({ iconKey }: { iconKey: ToolDisplayIconKey }) {
-  const className = "size-3 text-faint";
+  const className = "size-[1.143em] text-current";
 
   switch (iconKey) {
     case "terminal":
-      return <SquareTerminal className={className} />;
+      return <CommandWindow className={className} />;
     case "folder-list":
       return <FolderList className={className} />;
     case "file-text":
-      return <FileText className={className} />;
+      return <ReadBook className={className} />;
     case "file-plus":
       return <FilePlus className={className} />;
     case "file-pen":

@@ -1,7 +1,6 @@
 import { Fragment, useMemo, type ComponentType, type ReactNode } from "react";
 import {
   Blocks,
-  Bot,
   Brain,
   Building2,
   CircleUser,
@@ -22,20 +21,23 @@ import { SidebarNavRow } from "@proliferate/ui/layout/SidebarNavRow";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { SettingsEyebrow } from "@proliferate/product-ui/settings/SettingsEyebrow";
 import { SidebarAccountFooter } from "@/components/app/sidebar/SidebarAccountFooter";
+import { HarnessStatusDot } from "@/components/settings/sidebar/HarnessStatusDot";
 import { SHORTCUTS } from "@/config/shortcuts/registry";
 import {
-  SETTINGS_SHORTCUT_SECTION_ORDER,
   TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION,
   type SettingsSection,
 } from "@/config/settings";
 import {
   SETTINGS_HELP_ITEMS,
+  getHarnessKindForSettingsSection,
   getSettingsScopeNav,
   isSettingsAdminOnlySection,
+  isSettingsHarnessSection,
   type SettingsNavIconId,
   type SettingsNavItem,
   type SettingsScope,
 } from "@/lib/domain/settings/navigation-presentation";
+import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { useAppVersion } from "@/hooks/access/tauri/app/use-app-version";
 import { useSettingsSectionShortcuts } from "@/hooks/settings/ui/use-settings-section-shortcuts";
 import { useShortcutRevealVisible } from "@/providers/ShortcutRevealProvider";
@@ -61,7 +63,7 @@ interface SettingsSidebarProps {
 }
 
 const SETTINGS_SIDEBAR_ROOT_CLASS =
-  "flex h-full w-[240px] shrink-0 select-none flex-col border-r border-border bg-background text-foreground";
+  "flex h-full w-full select-none flex-col bg-background text-foreground";
 const SETTINGS_NAV_CLASS = "flex-1 overflow-y-auto px-3 pb-5 pt-4";
 const SETTINGS_GROUPS_CLASS = "flex flex-col";
 const SETTINGS_GROUP_CLASS = "flex flex-col gap-0.5";
@@ -86,11 +88,8 @@ const SETTINGS_NAV_ICONS = {
   "agent-api-keys": KeyRound,
   "agent-claude": harnessNavIcon("claude"),
   "agent-codex": harnessNavIcon("codex"),
-  "agent-defaults": SlidersHorizontal,
-  "agent-gemini": harnessNavIcon("gemini"),
   "agent-grok": harnessNavIcon("grok"),
   "agent-opencode": harnessNavIcon("opencode"),
-  agents: Bot,
   appearance: Palette,
   billing: CreditCard,
   "check-for-updates": RefreshCw,
@@ -138,8 +137,15 @@ function isSettingsItemDisabled(
 function settingsItemStatus(
   item: SettingsNavItem,
   updateActionState: SettingsSidebarProps["updateActionState"],
+  agentsByKind: Map<string, any>,
 ) {
   const statusItems: ReactNode[] = [];
+
+  if (item.kind === "section" && isSettingsHarnessSection(item.id)) {
+    const harnessKind = getHarnessKindForSettingsSection(item.id);
+    const agent = agentsByKind.get(harnessKind);
+    statusItems.push(<HarnessStatusDot key="harness-status" agent={agent} />);
+  }
 
   if (item.kind === "action" && item.id === "checkForUpdates") {
     if (!updateActionState.updatesSupported) {
@@ -189,8 +195,9 @@ export function SettingsSidebar({
   updateActionState,
 }: SettingsSidebarProps) {
   const appVersion = useAppVersion().data?.trim();
-  const handleOpenSupport = useOpenSupportReportWindow({ source: "settings" });
+  const { openBug: handleOpenSupport } = useOpenSupportReportWindow({ source: "settings" });
   const shortcutRevealVisible = useShortcutRevealVisible();
+  const { agentsByKind } = useAgentCatalog();
   const visibleNavGroups = useMemo(() =>
     getSettingsScopeNav(activeScope).groups.map((group) => ({
       ...group,
@@ -203,13 +210,10 @@ export function SettingsSidebar({
     })).filter((group) => group.items.length > 0),
   [activeScope, adminAccess?.isAdmin]);
   const visibleShortcutSections = useMemo(() => {
-    const visibleSections = new Set(
-      visibleNavGroups.flatMap((group) =>
-        group.items.flatMap((item) => item.kind === "section" ? [item.id] : [])
-      ),
-    );
-    return SETTINGS_SHORTCUT_SECTION_ORDER.filter((section) =>
-      visibleSections.has(section)
+    return visibleNavGroups.flatMap((group) =>
+      group.items.flatMap((item) =>
+        item.kind === "section" ? [item.id] : []
+      )
     );
   }, [visibleNavGroups]);
   const effectiveDisabledSections = useMemo(() => {
@@ -266,7 +270,7 @@ export function SettingsSidebar({
         key={item.id}
         icon={<Icon className="size-4" />}
         label={item.label}
-        status={settingsItemStatus(item, updateActionState)}
+        status={settingsItemStatus(item, updateActionState, agentsByKind)}
         shortcutLabel={item.kind === "section" ? shortcutLabelBySection.get(item.id) : undefined}
         title={settingsItemDisabledReason(item, disabled, updateActionState)}
         onPress={() => handleItemClick(item)}
@@ -304,7 +308,7 @@ export function SettingsSidebar({
               <Fragment key={item.id}>{renderNavRow(item)}</Fragment>
             ))}
             {appVersion ? (
-              <div className="px-2.5 py-2 text-base text-muted-foreground">
+              <div className="px-2.5 py-2 text-ui-sm text-muted-foreground">
                 Proliferate v{appVersion}
               </div>
             ) : null}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveHighlightTheme } from "./use-highlighted-code";
+import { resolveHighlightTheme } from "@/lib/infra/editor/highlighting";
 
 describe("resolveHighlightTheme", () => {
   it("maps resolved modes to explicit Shiki themes", () => {

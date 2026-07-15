@@ -280,11 +280,10 @@ describe("sidebar indicators", () => {
         tone: "neutral",
         tooltip: "Cloud access enabled · live",
       },
-      {
-        kind: "materialization",
-        variant: "local",
-      },
     ]);
+    expect(groups[0]?.items[0]?.detailIndicators).not.toContainEqual(
+      expect.objectContaining({ kind: "materialization", variant: "local" }),
+    );
   });
 
   it("uses cloud activity for dual rows when cloud is the effective materialization", () => {

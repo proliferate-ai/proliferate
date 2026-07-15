@@ -25,6 +25,9 @@ pub enum PromptAcceptance {
 #[derive(Debug)]
 pub enum QueueMutationError {
     NotFound,
+    StaleOrder { current_seqs: Vec<i64> },
+    InvalidReorder(String),
+    Internal(String),
 }
 
 #[derive(Debug)]
@@ -138,6 +141,15 @@ pub(in crate::live::sessions) enum SessionCommand {
         seq: i64,
         respond_to: oneshot::Sender<Result<(), QueueMutationError>>,
     },
+    ReorderPendingPrompts {
+        expected_seqs: Vec<i64>,
+        desired_seqs: Vec<i64>,
+        respond_to: oneshot::Sender<Result<(), QueueMutationError>>,
+    },
+    SteerPendingPrompt {
+        seq: i64,
+        respond_to: oneshot::Sender<Result<(), QueueMutationError>>,
+    },
     SetConfigOption {
         config_id: String,
         value: String,
@@ -159,6 +171,14 @@ pub(in crate::live::sessions) enum SessionCommand {
     RunDomainOp {
         op: Box<dyn SessionDomainOp>,
         respond_to: oneshot::Sender<Box<dyn std::any::Any + Send>>,
+    },
+    /// Send an ACP extension-method request (`_`-prefixed wire name) to the
+    /// agent and return its raw JSON result. The method string is serialized
+    /// verbatim; the agent is the sole authority on acceptance.
+    CallAgentExtMethod {
+        method: String,
+        params: serde_json::Value,
+        respond_to: oneshot::Sender<anyhow::Result<serde_json::Value>>,
     },
     VerifyForkReady {
         respond_to: oneshot::Sender<Result<(), ForkSessionCommandError>>,

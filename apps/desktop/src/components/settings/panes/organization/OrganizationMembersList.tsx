@@ -8,8 +8,8 @@ import {
 } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { SettingsEyebrow } from "@proliferate/product-ui/settings/SettingsEyebrow";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { Avatar } from "@/components/settings/panes/organization/OrganizationLogo";
-import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { buildProliferateApiUrl } from "@/lib/infra/proliferate-api";
 import {
   membershipStatusBadge,
@@ -17,7 +17,7 @@ import {
   type OrganizationMemberRecord,
   type OrganizationRole,
 } from "@/lib/domain/organizations/organization-records";
-import type { MemberListRow } from "@/lib/domain/organizations/member-list-rows";
+import { invitationDeliveryHint, type MemberListRow } from "@/lib/domain/organizations/member-list-rows";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 const PEOPLE_GRID_CLASS =
@@ -181,15 +181,16 @@ function InvitationRow({
   updating: boolean;
   onRevokeInvitation?: (invitationId: string) => void;
 }) {
-  const { copyText } = useTauriShellActions();
+  const { writeText } = useProductHost().clipboard;
   const showToast = useToastStore((state) => state.show);
+  const deliveryHint = invitationDeliveryHint(invitation.deliveryStatus);
 
   async function handleCopyInviteLink() {
     const url = buildProliferateApiUrl(
       `/register?token=${invitation.id}&email=${encodeURIComponent(invitation.email)}`,
     );
     try {
-      await copyText(url);
+      await writeText(url);
       showToast("Invite link copied.", "info");
     } catch {
       showToast("Invite link could not be copied.");
@@ -209,6 +210,11 @@ function InvitationRow({
           <div className="truncate text-ui-sm text-muted-foreground" title={row.email}>
             {row.email}
           </div>
+          {deliveryHint && (
+            <div className="truncate text-ui-sm text-muted-foreground/80" title={deliveryHint}>
+              {deliveryHint}
+            </div>
+          )}
         </div>
       </div>
       <MemberMeta value={row.dateLabel} />

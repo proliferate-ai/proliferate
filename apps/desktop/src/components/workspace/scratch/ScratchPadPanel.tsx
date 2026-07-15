@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   Check,
   Copy,
@@ -22,7 +23,6 @@ import {
 } from "@/components/workspace/pane/PaneOptionsMenu";
 import { useWorkspaceScratchPad } from "@/hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad";
 import { useWorkspaceScratchPadMutations } from "@/hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad-mutations";
-import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 
 const SAVE_DEBOUNCE_MS = 500;
 const SCRATCH_PLACEHOLDER = "Write notes here";
@@ -49,7 +49,7 @@ export function ScratchPadPanel({ workspaceKey }: ScratchPadPanelProps) {
     writeScratchPadState,
     setScratchPadCache,
   } = useWorkspaceScratchPadMutations(workspaceKey);
-  const { copyText } = useTauriShellActions();
+  const clipboard = useProductHost().clipboard;
   const [draft, setDraft] = useState("");
   const [wordWrap, setWordWrap] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -165,10 +165,10 @@ export function ScratchPadPanel({ workspaceKey }: ScratchPadPanelProps) {
   }, [draft, updateDraft]);
 
   const handleCopyContent = useCallback(async () => {
-    await copyText(draft);
+    await clipboard.writeText(draft);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1200);
-  }, [copyText, draft]);
+  }, [clipboard, draft]);
 
   const handleBlur = useCallback(() => {
     if (saveTimerRef.current !== null) {
@@ -183,14 +183,16 @@ export function ScratchPadPanel({ workspaceKey }: ScratchPadPanelProps) {
       <PaneHeader
         left={(
           <div className="flex min-w-0 items-center px-1">
-            <span className="truncate text-xs font-medium text-sidebar-foreground">
+            {/* Header reads at the same size as the scratch content
+                (--text-message), not the smaller chrome scales. */}
+            <span className="truncate text-[length:var(--text-message)] font-medium text-sidebar-foreground">
               Scratch
             </span>
           </div>
         )}
         right={(
           <>
-            <span className="max-w-20 truncate text-base text-sidebar-muted-foreground">
+            <span className="max-w-24 truncate text-[length:var(--text-message)] text-sidebar-muted-foreground">
               {saveStatus}
             </span>
             <ScratchPadOptionsMenu

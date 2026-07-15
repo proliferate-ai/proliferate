@@ -231,6 +231,17 @@ fn map_create_cowork_thread_error(error: CoworkCreateThreadError) -> ApiError {
                 format!("model '{model_id}' is not supported for agent '{agent_kind}'"),
                 "SESSION_MODEL_UNSUPPORTED",
             ),
+            crate::domains::sessions::runtime::CreateAndStartSessionError::ModelGated {
+                agent_kind,
+                model_id,
+                required_contexts,
+            } => ApiError::model_gated(
+                format!(
+                    "model '{model_id}' for agent '{agent_kind}' is gated behind auth contexts \
+                     {required_contexts:?}"
+                ),
+                required_contexts,
+            ),
             crate::domains::sessions::runtime::CreateAndStartSessionError::ModeUnsupported {
                 agent_kind,
                 mode_id,

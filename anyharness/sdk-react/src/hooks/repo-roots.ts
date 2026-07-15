@@ -1,6 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PrepareRepoRootMobilityDestinationRequest } from "@anyharness/sdk";
-import { useAnyHarnessRuntimeContext, resolveRuntimeConnection } from "../context/AnyHarnessRuntime.js";
+import {
+  resolveRuntimeCacheScopeKey,
+  resolveRuntimeConnection,
+  useAnyHarnessRuntimeContext,
+} from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
 import { requestOptionsWithSignal } from "../lib/request-options.js";
 import {
@@ -17,9 +21,10 @@ interface RuntimeQueryOptions {
 export function useRepoRootsQuery(options?: RuntimeQueryOptions) {
   const runtime = useAnyHarnessRuntimeContext();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useQuery({
-    queryKey: anyHarnessRepoRootsKey(runtimeUrl),
+    queryKey: anyHarnessRepoRootsKey(runtimeUrl, cacheScopeKey),
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0,
     queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
@@ -32,6 +37,7 @@ export function useResolveRepoRootFromPathMutation() {
   const runtime = useAnyHarnessRuntimeContext();
   const queryClient = useQueryClient();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useMutation({
     mutationFn: async (path: string) => {
@@ -40,7 +46,7 @@ export function useResolveRepoRootFromPathMutation() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessRepoRootsKey(runtimeUrl),
+        queryKey: anyHarnessRepoRootsKey(runtimeUrl, cacheScopeKey),
       });
     },
   });
@@ -69,10 +75,11 @@ export function useRepoRootGitBranchesQuery(options: {
 }) {
   const runtime = useAnyHarnessRuntimeContext();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
   const repoRootId = options.repoRootId?.trim() ?? "";
 
   return useQuery({
-    queryKey: anyHarnessRepoRootGitBranchesKey(runtimeUrl, repoRootId),
+    queryKey: anyHarnessRepoRootGitBranchesKey(runtimeUrl, repoRootId, cacheScopeKey),
     enabled: (options.enabled ?? true) && repoRootId.length > 0 && runtimeUrl.length > 0,
     queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
@@ -87,10 +94,11 @@ export function useDetectRepoRootSetupQuery(options: {
 }) {
   const runtime = useAnyHarnessRuntimeContext();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
   const repoRootId = options.repoRootId?.trim() ?? "";
 
   return useQuery({
-    queryKey: anyHarnessRepoRootDetectSetupKey(runtimeUrl, repoRootId),
+    queryKey: anyHarnessRepoRootDetectSetupKey(runtimeUrl, repoRootId, cacheScopeKey),
     enabled: (options.enabled ?? true) && repoRootId.length > 0 && runtimeUrl.length > 0,
     staleTime: Infinity,
     queryFn: async ({ signal }) => {
@@ -104,6 +112,7 @@ export function usePrepareRepoRootMobilityDestinationMutation() {
   const runtime = useAnyHarnessRuntimeContext();
   const queryClient = useQueryClient();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useMutation({
     mutationFn: async ({
@@ -118,7 +127,7 @@ export function usePrepareRepoRootMobilityDestinationMutation() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl),
+        queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl, cacheScopeKey),
       });
     },
   });

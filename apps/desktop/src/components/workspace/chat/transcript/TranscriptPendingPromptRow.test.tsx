@@ -77,7 +77,7 @@ describe("TranscriptPendingPromptRow", () => {
       retryPrompt: vi.fn(),
       dismissPrompt: vi.fn(),
     };
-    render(
+    const { container } = render(
       <TranscriptPendingPromptRow
         activeSessionId="session-1"
         rowIndex={0}
@@ -96,6 +96,15 @@ describe("TranscriptPendingPromptRow", () => {
 
     expect(actions.retryPrompt).toHaveBeenCalledWith("prompt-1");
     expect(actions.dismissPrompt).toHaveBeenCalledWith("prompt-1");
+
+    const frontier = container.querySelector("[data-pending-frontier]");
+    const footer = container.querySelector("[data-turn-assistant-footer]");
+    const retry = screen.getByRole("button", { name: "Retry" });
+    const turn = frontier?.parentElement;
+    expect(turn ? [...turn.children].indexOf(retry.parentElement!) : -1)
+      .toBeLessThan(turn ? [...turn.children].indexOf(frontier!) : -1);
+    expect(frontier?.nextElementSibling).toBe(footer);
+    expect(footer?.nextElementSibling).toBeNull();
   });
 
   it("renders transcript waits as quiet transcript text", () => {
@@ -118,7 +127,30 @@ describe("TranscriptPendingPromptRow", () => {
     expect(statusLine?.className).toContain("text-chat");
     expect(statusLine?.className).toContain("font-normal");
     expect(statusLine?.className).toContain("text-muted-foreground");
+    expect(container.querySelector("[class~='gap-4']")).not.toBeNull();
+    expect(container.innerHTML).not.toContain("gap-3.5");
     expect(container.innerHTML).not.toContain("thinking-text");
+  });
+
+  it("keeps the pending frontier above the fixed assistant footer", () => {
+    const { container } = render(
+      <TranscriptPendingPromptRow
+        activeSessionId="session-1"
+        rowIndex={0}
+        prompt={createOptimisticPendingPrompt("Keep the anchor still", "prompt-1", NOW)}
+        outboxEntry={null}
+        optimisticTrailingStatus={<div data-testid="thinking">Thinking</div>}
+        outboxActions={{
+          retryPrompt: vi.fn(),
+          dismissPrompt: vi.fn(),
+        }}
+      />,
+    );
+
+    const frontier = container.querySelector("[data-pending-frontier]");
+    const footer = container.querySelector("[data-turn-assistant-footer]");
+    expect(frontier?.nextElementSibling).toBe(footer);
+    expect(footer?.querySelector("[data-turn-assistant-footer-slot]")?.className).toContain("h-6");
   });
 });
 

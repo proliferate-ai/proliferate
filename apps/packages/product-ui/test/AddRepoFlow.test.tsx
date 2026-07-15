@@ -26,7 +26,6 @@ function renderFlow(overrides: Partial<AddRepoFlowProps> = {}) {
     open: true,
     step: { kind: "entry" },
     onPickOption: vi.fn(),
-    onConfirmLocal: vi.fn(),
     onBack: vi.fn(),
     onClose: vi.fn(),
     ...overrides,

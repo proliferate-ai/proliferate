@@ -21,6 +21,33 @@ describe("filterTargetReadyLaunchAgents", () => {
       ]),
     ).map((agent) => agent.kind)).toEqual(["codex"]);
   });
+
+  it("keeps a launch-ready gateway agent whose native readiness is login_required", () => {
+    const agents = [
+      launchAgent("claude", "claude-haiku-4-5"),
+      launchAgent("codex", "gpt-5.5"),
+    ];
+
+    // claude is launch-ready via its enrolled gateway route (present in the
+    // runtime's launch options) even though the vendor CLI is not logged in;
+    // codex has no route and stays hidden.
+    expect(filterTargetReadyLaunchAgents(
+      agents,
+      new Map([
+        ["claude", { readiness: "login_required" }],
+        ["codex", { readiness: "login_required" }],
+      ]),
+      new Set(["claude"]),
+    ).map((agent) => agent.kind)).toEqual(["claude"]);
+  });
+
+  it("never treats a launch-ready kind without models as launchable", () => {
+    expect(filterTargetReadyLaunchAgents(
+      [launchAgent("cursor", null)],
+      new Map([["cursor", { readiness: "login_required" }]]),
+      new Set(["cursor"]),
+    )).toEqual([]);
+  });
 });
 
 function launchAgent(kind: string, modelId: string | null): DesktopAgentLaunchAgent {

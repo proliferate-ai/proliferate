@@ -9,6 +9,7 @@ import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useActiveSessionLaunchState } from "@/hooks/chat/derived/use-active-session-config-state";
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
 import { resolveAvailableLaunchSelection } from "@/lib/domain/chat/models/launch-selection-defaults";
@@ -21,11 +22,16 @@ import {
   failLatencyFlow,
   startLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
+import { withUpdatedDefaultModelIdByAgentKind } from "@/lib/domain/agents/model-options";
 
 const EMPTY_WORKSPACES: Workspace[] = [];
 
-export function useChatLaunchActions(options?: { suppressActiveSessionState?: boolean }) {
+export function useChatLaunchActions(options?: {
+  suppressActiveSessionState?: boolean;
+  replacementSessionId?: string | null;
+}) {
   const suppressActiveSessionState = options?.suppressActiveSessionState ?? false;
+  const replacementSessionId = options?.replacementSessionId ?? null;
   const showToast = useToastStore((store) => store.show);
   const setWorkspaceArrivalEvent = useSessionSelectionStore((state) => state.setWorkspaceArrivalEvent);
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
@@ -72,11 +78,10 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
       scopedActiveSessionId
       && scopedCurrentLaunchIdentity?.kind === selection.kind
     ) {
-      // Same-harness switch always keeps the session (decision 10). The
-      // runtime accepts catalog-authorized values beyond the live option
-      // list and falls back to relaunching the agent process under the same
-      // session when the harness has no live mechanism (gemini). "model" is
-      // the generic model config id when the session exposes no control.
+      // Same-harness selection preserves the durable session. The runtime
+      // accepts catalog-authorized values beyond the live option list and may
+      // relaunch the agent process under that session. "model" is the generic
+      // config id when the session exposes no model control.
       void setActiveSessionConfigOption(scopedCurrentModelConfigId ?? "model", selection.modelId)
         .then(() => {
           setWorkspaceArrivalEvent(null);
@@ -97,6 +102,9 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
       showToast(configuredLaunch.disabledReason ?? "Choose a ready model before opening a new chat.");
       return;
     }
+
+    // Last-used-wins: persist the selection so subsequent new chats default to it.
+    persistLastUsedLaunchSelection(launchSelection);
 
     if (selectedWorkspace?.surface === "cowork") {
       const latencyFlowId = startLatencyFlow({
@@ -125,10 +133,16 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
       source: "model_selector",
       targetWorkspaceId: selectedWorkspaceId,
     });
+    // Pass the current session as replacesSessionId: the creation workflow
+    // hides an unused old shell synchronously, then commits its cleanup only
+    // after the optimistic replacement materializes.
     void createEmptySessionWithResolvedConfig({
       agentKind: launchSelection.kind,
       modelId: launchSelection.modelId,
       latencyFlowId,
+      // Presentation suppression hides stale config/model state while a
+      // pending shell is projected; it must not erase the shell being replaced.
+      replacesSessionId: replacementSessionId ?? scopedActiveSessionId ?? null,
     })
       .then(() => {
         setWorkspaceArrivalEvent(null);
@@ -152,9 +166,26 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
     scopedCurrentLaunchIdentity,
     scopedCurrentModelConfigId,
     scopedModelControl,
+    replacementSessionId,
   ]);
 
   return {
     handleLaunchSelect,
   };
+}
+
+/**
+ * Last-used-wins: persists the user's agent+model selection so the next new
+ * chat defaults to it (replacing the deleted "Agent Defaults" settings page).
+ */
+function persistLastUsedLaunchSelection(selection: ModelSelectorSelection): void {
+  const state = useUserPreferencesStore.getState();
+  state.setMultiple({
+    defaultChatAgentKind: selection.kind,
+    defaultChatModelIdByAgentKind: withUpdatedDefaultModelIdByAgentKind(
+      state.defaultChatModelIdByAgentKind,
+      selection.kind,
+      selection.modelId,
+    ),
+  });
 }

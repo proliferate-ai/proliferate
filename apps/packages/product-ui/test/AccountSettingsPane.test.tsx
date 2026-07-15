@@ -161,7 +161,7 @@ describe("AccountSettingsPane", () => {
       />,
     );
 
-    expect(screen.getByText("Email/password")).toBeTruthy();
+    expect(screen.getByText("Email & password")).toBeTruthy();
     expect(screen.getByText("Not set")).toBeTruthy();
     fireEvent.click(screen.getByText("Set password"));
     fireEvent.change(screen.getByLabelText("New password"), {

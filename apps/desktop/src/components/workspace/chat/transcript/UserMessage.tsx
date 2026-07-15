@@ -84,7 +84,7 @@ export function UserMessage({
           >
             <div
               ref={textRef}
-              className={`break-words select-text${
+              className={`[--prose-text-size:var(--text-message)] [--prose-text-line-height:var(--text-message--line-height)] break-words select-text${
                 !expanded ? " line-clamp-5" : ""
               }`}
             >

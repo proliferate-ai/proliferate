@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { DiffViewer } from "@/components/content/ui/DiffViewer";
 import { FileDiffCard } from "@/components/content/ui/FileDiffCard";
 import { useTurnCurrentFilePatch } from "@/hooks/chat/cache/use-turn-current-file-diffs";
+import { useLazyDiffFileLines } from "@/hooks/ui/diff/use-lazy-diff-file-lines";
 import type { GitPanelReviewFile } from "@/lib/domain/workspaces/changes/git-panel-diff";
 import { CircleAlert, FileCode, FileIcon, RefreshCw } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
@@ -53,6 +54,13 @@ export function TurnDiffFileCard({
     workspaceId,
     baseRef,
     enabled: isRuntimeReady && isExpanded,
+  });
+  // Turn diffs use scope=base_worktree (worktree vs merge-base), so the
+  // diff's NEW side is the current worktree file — safe for gap expansion.
+  const { fileLines, requestFileLines } = useLazyDiffFileLines({
+    workspaceId,
+    path: file.path,
+    enabled: isRuntimeReady,
   });
   const emptyDiffState = formatEmptyDiffState({
     binary: Boolean(diffQuery.data?.binary || currentDiff?.binary),
@@ -132,6 +140,8 @@ export function TurnDiffFileCard({
               contentSearchUnitId={`diff:${turnId}:${file.path}`}
               viewportClassName={TURN_DIFF_VIEWPORT_CLASS}
               variant="chat"
+              fileLines={fileLines}
+              onRequestFileLines={requestFileLines}
             />
             {diffQuery.data?.truncated ? (
               <p className="px-3 py-2 text-center text-xs text-muted-foreground">

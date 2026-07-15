@@ -11,6 +11,7 @@ export function TranscriptTreeNode({
   itemId,
   transcript,
   childrenByParentId,
+  animateActivityEntry = false,
   workspaceId,
   onOpenArtifact,
   onHandOffPlanToNewSession,
@@ -18,6 +19,7 @@ export function TranscriptTreeNode({
   itemId: string;
   transcript: TranscriptState;
   childrenByParentId: Map<string, string[]>;
+  animateActivityEntry?: boolean;
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
@@ -28,7 +30,7 @@ export function TranscriptTreeNode({
   const childIds = childrenByParentId.get(itemId) ?? [];
   if (item.kind === "tool_call" && (childIds.length > 0 || isSubagentItem(item))) {
     return (
-      <TranscriptActivityBlock>
+      <TranscriptActivityBlock entryItemId={itemId} animateEntry={animateActivityEntry}>
         <TranscriptToolCallGroupBlock
           item={item}
           childIds={childIds}
@@ -41,6 +43,7 @@ export function TranscriptTreeNode({
               itemId={childId}
               transcript={transcript}
               childrenByParentId={childrenByParentId}
+              animateActivityEntry={animateActivityEntry}
               workspaceId={workspaceId}
               onOpenArtifact={onOpenArtifact}
               onHandOffPlanToNewSession={onHandOffPlanToNewSession}
@@ -55,6 +58,7 @@ export function TranscriptTreeNode({
     <TranscriptItemBlock
       item={item}
       transcript={transcript}
+      animateActivityEntry={animateActivityEntry}
       workspaceId={workspaceId}
       onOpenArtifact={onOpenArtifact}
       onHandOffPlanToNewSession={onHandOffPlanToNewSession}

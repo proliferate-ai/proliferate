@@ -8,6 +8,7 @@ import type { SessionViewState } from "@proliferate/product-domain/sessions/acti
 import type { TranscriptVirtualRow } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
 import type { TurnDisplayBlock } from "@proliferate/product-domain/chats/transcript/transcript-presentation";
 import type {
+  ChatTranscriptGoalEventRenderInput,
   ChatTranscriptOutboxActions,
   ChatTranscriptPendingPromptRenderInput,
   ChatTranscriptTurnRowRenderInput,
@@ -24,6 +25,7 @@ export function useChatTranscriptRowRenderer({
   outboxStartedAtByPromptId,
   renderPendingPromptRow,
   renderTurnRow,
+  renderGoalEventRow,
   selectedWorkspaceId,
   sessionViewState,
   transcript,
@@ -39,6 +41,7 @@ export function useChatTranscriptRowRenderer({
   outboxStartedAtByPromptId: ReadonlyMap<string, string>;
   renderPendingPromptRow: (input: ChatTranscriptPendingPromptRenderInput) => ReactNode;
   renderTurnRow: (input: ChatTranscriptTurnRowRenderInput) => ReactNode;
+  renderGoalEventRow?: (input: ChatTranscriptGoalEventRenderInput) => ReactNode;
   selectedWorkspaceId: string | null;
   sessionViewState: SessionViewState;
   transcript: TranscriptState;
@@ -64,6 +67,10 @@ export function useChatTranscriptRowRenderer({
         optimisticTrailingStatus: optimisticPromptTrailingStatus,
         outboxActions,
       });
+    }
+
+    if (row.kind === "goal_event") {
+      return renderGoalEventRow?.({ row, rowIndex, event: row.event }) ?? null;
     }
 
     const turn = transcript.turnsById[row.turnId];
@@ -93,6 +100,7 @@ export function useChatTranscriptRowRenderer({
     outboxStartedAtByPromptId,
     renderPendingPromptRow,
     renderTurnRow,
+    renderGoalEventRow,
     selectedWorkspaceId,
     sessionViewState,
     transcript,

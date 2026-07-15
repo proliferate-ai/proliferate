@@ -72,6 +72,15 @@ export interface DesktopLaunchModelRegistryModel {
   /** v2 availability gate (`anyOf` auth context ids); null when unknown. */
   availability?: ModelAvailability | null;
   sessionDefaultControls?: DesktopSessionDefaultControl[];
+  /**
+   * The `mode` control vocabulary this model actually supports (per-model
+   * `controls.mode.values` in the catalog). Differs from the agent-level `mode`
+   * control: e.g. gateway/bedrock Claude models exclude `auto`. `null` when the
+   * model carries no per-model mode vocabulary (fall back to the agent-level
+   * control). Used to keep the composer from offering/defaulting to a mode the
+   * selected model would reject at session creation.
+   */
+  modeValues?: string[] | null;
 }
 
 export interface DesktopAgentLaunchModel extends DesktopLaunchModelRegistryModel {
@@ -92,6 +101,7 @@ export interface DesktopAgentLaunchCatalog {
   schemaVersion: 2;
   catalogVersion: string;
   generatedAt: string;
+  defaultAgentKind: string | null;
   workspaceId: string | null;
   agents: DesktopAgentLaunchAgent[];
 }
@@ -126,6 +136,7 @@ export interface CloudAgentCatalogResponseInput {
   schemaVersion: 2;
   catalogVersion: string;
   generatedAt: string;
+  defaultAgentKind?: string | null;
   probedAgainst?: Record<string, unknown> | null;
   agents: CloudAgentCatalogAgentInput[];
 }

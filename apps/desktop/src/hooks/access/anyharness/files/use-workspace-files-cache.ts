@@ -5,6 +5,7 @@ import {
   anyHarnessWorkspaceFileSearchScopeKey,
   anyHarnessWorkspaceFileTreeKey,
   anyHarnessWorkspaceFilesScopeKey,
+  useAnyHarnessCacheScopeKey,
 } from "@anyharness/sdk-react";
 import { useCallback } from "react";
 import {
@@ -31,23 +32,22 @@ interface WorkspaceFileCacheTarget {
 
 export function useWorkspaceFilesCache() {
   const queryClient = useQueryClient();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
 
   const invalidateWorkspaceFiles = useCallback(async ({
-    runtimeUrl,
     workspaceId,
   }: {
-    runtimeUrl: string;
     workspaceId: string;
   }) => {
     await Promise.all([
       queryClient.invalidateQueries({
-        queryKey: anyHarnessWorkspaceFilesScopeKey(runtimeUrl, workspaceId),
+        queryKey: anyHarnessWorkspaceFilesScopeKey(cacheScopeKey, workspaceId),
       }),
       queryClient.invalidateQueries({
-        queryKey: anyHarnessWorkspaceFileSearchScopeKey(runtimeUrl, workspaceId),
+        queryKey: anyHarnessWorkspaceFileSearchScopeKey(cacheScopeKey, workspaceId),
       }),
     ]);
-  }, [queryClient]);
+  }, [cacheScopeKey, queryClient]);
 
   const prefetchWorkspaceDirectory = useCallback(async ({
     materializedWorkspaceId,
@@ -59,7 +59,11 @@ export function useWorkspaceFilesCache() {
     dirPath: string;
   }) => {
     await queryClient.prefetchQuery({
-      queryKey: anyHarnessWorkspaceFileTreeKey(runtimeUrl, materializedWorkspaceId, dirPath),
+      queryKey: anyHarnessWorkspaceFileTreeKey(
+        cacheScopeKey,
+        materializedWorkspaceId,
+        dirPath,
+      ),
       queryFn: async ({ signal }) => {
         return listWorkspaceFiles(
           buildConnection(runtimeUrl, authToken),
@@ -69,7 +73,7 @@ export function useWorkspaceFilesCache() {
         );
       },
     });
-  }, [queryClient]);
+  }, [cacheScopeKey, queryClient]);
 
   const reloadWorkspaceFile = useCallback(async ({
     materializedWorkspaceId,
@@ -80,7 +84,11 @@ export function useWorkspaceFilesCache() {
   }: WorkspaceFileCacheTarget & {
     filePath: string;
   }) => {
-    const queryKey = anyHarnessWorkspaceFileKey(runtimeUrl, materializedWorkspaceId, filePath);
+    const queryKey = anyHarnessWorkspaceFileKey(
+      cacheScopeKey,
+      materializedWorkspaceId,
+      filePath,
+    );
     await queryClient.invalidateQueries({ queryKey, exact: true });
     return queryClient.fetchQuery({
       queryKey,
@@ -94,7 +102,7 @@ export function useWorkspaceFilesCache() {
       },
       staleTime: 0,
     });
-  }, [queryClient]);
+  }, [cacheScopeKey, queryClient]);
 
   return {
     invalidateWorkspaceFiles,

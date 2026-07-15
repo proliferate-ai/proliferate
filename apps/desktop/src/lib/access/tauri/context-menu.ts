@@ -1,6 +1,7 @@
 import type { Image, MenuIcon } from "@tauri-apps/api/image";
 import type { IconMenuItem } from "@tauri-apps/api/menu/iconMenuItem";
 import type { MenuItem } from "@tauri-apps/api/menu/menuItem";
+import type { Menu } from "@tauri-apps/api/menu/menu";
 import type { PredefinedMenuItem } from "@tauri-apps/api/menu/predefinedMenuItem";
 import type { Submenu } from "@tauri-apps/api/menu/submenu";
 
@@ -35,6 +36,11 @@ export type NativeContextMenuItem =
       onSelect?: () => void;
     };
 
+export interface NativeContextMenuPosition {
+  x: number;
+  y: number;
+}
+
 type BuiltNativeContextMenuItem =
   | IconMenuItem
   | MenuItem
@@ -59,6 +65,7 @@ export function canShowNativeContextMenu(): boolean {
 
 export async function showNativeContextMenu(
   items: NativeContextMenuItem[],
+  position?: NativeContextMenuPosition,
 ): Promise<boolean> {
   if (!isTauriWindowApiAvailable()) {
     return false;
@@ -67,8 +74,11 @@ export async function showNativeContextMenu(
     return false;
   }
 
+  const builtResources: BuiltNativeContextMenuItem[] = [];
+  let menu: Menu | null = null;
   try {
     const { Menu } = await import("@tauri-apps/api/menu/menu");
+    const { LogicalPosition } = await import("@tauri-apps/api/dpi");
     const { Image } = await import("@tauri-apps/api/image");
     const { resolveResource } = await import("@tauri-apps/api/path");
     const { MenuItem } = await import("@tauri-apps/api/menu/menuItem");
@@ -89,14 +99,24 @@ export async function showNativeContextMenu(
         PredefinedMenuItem,
         resolveResource,
         Submenu,
-      })
+      }, builtResources)
     ));
 
-    const menu = await Menu.new({ items: built });
-    await menu.popup();
+    menu = await Menu.new({ items: built });
+    await menu.popup(position
+      ? new LogicalPosition(position.x, position.y)
+      : undefined);
     return true;
   } catch {
     return false;
+  } finally {
+    // `Menu` and each explicitly constructed item are Tauri resources. The
+    // popup call resolves after the native menu is dismissed, so release all
+    // of them here instead of retaining one resource tree per open.
+    await menu?.close().catch(() => undefined);
+    await Promise.allSettled(
+      builtResources.reverse().map((resource) => resource.close()),
+    );
   }
 }
 
@@ -111,21 +131,26 @@ async function buildNativeContextMenuItem(
     resolveResource: ResolveResource;
     Submenu: typeof import("@tauri-apps/api/menu/submenu").Submenu;
   },
+  builtResources: BuiltNativeContextMenuItem[],
 ): Promise<BuiltNativeContextMenuItem> {
   if ("kind" in item && item.kind === "separator") {
-    return api.PredefinedMenuItem.new({ item: "Separator" });
+    const separator = await api.PredefinedMenuItem.new({ item: "Separator" });
+    builtResources.push(separator);
+    return separator;
   }
 
   if ("kind" in item && item.kind === "submenu") {
     const submenuItems = await Promise.all(
-      item.items.map((child) => buildNativeContextMenuItem(child, api)),
+      item.items.map((child) => buildNativeContextMenuItem(child, api, builtResources)),
     );
-    return api.Submenu.new({
+    const submenu = await api.Submenu.new({
       ...(item.submenuId ? { id: item.submenuId } : {}),
       text: item.label,
       enabled: item.enabled ?? true,
       items: submenuItems,
     });
+    builtResources.push(submenu);
+    return submenu;
   }
 
   const action = item as Extract<NativeContextMenuItem, { id: string }>;
@@ -142,13 +167,17 @@ async function buildNativeContextMenuItem(
   const icon = await resolveNativeContextMenuIcon(action.icon, api);
   if (icon) {
     try {
-      return await api.IconMenuItem.new({ ...baseOptions, icon });
+      const iconMenuItem = await api.IconMenuItem.new({ ...baseOptions, icon });
+      builtResources.push(iconMenuItem);
+      return iconMenuItem;
     } catch {
       // Keep the menu native if icon materialization fails on a platform/build.
     }
   }
 
-  return api.MenuItem.new(baseOptions);
+  const menuItem = await api.MenuItem.new(baseOptions);
+  builtResources.push(menuItem);
+  return menuItem;
 }
 
 async function resolveNativeContextMenuIcon(

@@ -7,17 +7,14 @@ import {
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { resolvePreferredOpenTarget } from "@/lib/domain/chat/composer/preference-resolvers";
 import { HeaderTabs } from "@/components/workspace/shell/topbar/HeaderTabs";
-import {
-  WorkspaceActionsMenuContainer,
-  type WorkspaceActionsMenuContainerProps,
-} from "@/components/workspace/shell/topbar/WorkspaceActionsMenuContainer";
+import { WorkspaceActionsMenuContainer } from "@/components/workspace/shell/topbar/WorkspaceActionsMenuContainer";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import { SplitButton } from "@/components/workspace/open-target/SplitButton";
 import {
   type OpenTarget,
-  useTauriShellActions,
-} from "@/hooks/access/tauri/use-shell-actions";
+} from "@proliferate/product-client/host/desktop-bridge";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   FilePen,
   Play,
@@ -26,6 +23,7 @@ import {
 import type { Workspace } from "@anyharness/sdk";
 import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
 import { workspaceHeaderTitle } from "@/lib/domain/workspaces/display/workspace-display";
+import { useToastStore } from "@/stores/toast/toast-store";
 
 const HEADER_ICON_BUTTON_CLASS = "workspace-shell-icon-button";
 const HEADER_RUN_BUTTON_CLASS = "workspace-shell-action-button font-medium";
@@ -38,7 +36,6 @@ interface GlobalHeaderProps {
   runLoading?: boolean;
   runLabel?: string;
   runTitle?: string;
-  workspaceActions: WorkspaceActionsMenuContainerProps;
   onRun: () => void;
   onTogglePanel: () => void;
 }
@@ -51,37 +48,59 @@ export const GlobalHeader = memo(function GlobalHeader({
   runLoading = false,
   runLabel = "Run",
   runTitle = "Run workspace command",
-  workspaceActions,
   onRun,
   onTogglePanel,
 }: GlobalHeaderProps) {
   useDebugRenderCount("global-header");
   const [targets, setTargets] = useState<OpenTarget[]>([]);
-  const {
-    listOpenTargets,
-    openTarget: execOpenTarget,
-  } = useTauriShellActions();
+  const host = useProductHost();
+  const files = host.desktop?.files ?? null;
   const defaultOpenInTargetId = useUserPreferencesStore((s) => s.defaultOpenInTargetId);
   const preferredTarget = resolvePreferredOpenTarget(targets, { defaultOpenInTargetId });
   const workspacePath = workspacePathProp ?? selectedWorkspace?.path;
   const title = workspaceHeaderTitle(selectedWorkspace, workspacePath);
 
   useEffect(() => {
-    void listOpenTargets("directory").then(setTargets);
-  }, [listOpenTargets]);
+    if (!files) {
+      setTargets([]);
+      return;
+    }
+    void files.listOpenTargets("directory").then(setTargets);
+  }, [files]);
+
+  const showToast = useToastStore((s) => s.show);
+
+  const openTarget = useCallback(
+    (targetId: string, label: string) => {
+      if (!workspacePath || !files) return;
+      // The Rust side re-resolves the app at click time, so an editor can
+      // vanish between listing and clicking — don't swallow that.
+      files.openTarget(targetId, workspacePath).catch(() => {
+        showToast(`Couldn't open workspace in ${label}`);
+      });
+    },
+    [files, showToast, workspacePath],
+  );
 
   const handleDefaultOpen = useCallback(() => {
     if (!workspacePath) return;
-    const targetId = preferredTarget?.id ?? "finder";
-    void execOpenTarget(targetId, workspacePath);
-  }, [execOpenTarget, workspacePath, preferredTarget]);
+    if (preferredTarget?.kind === "copy") {
+      void host.clipboard.writeText(workspacePath);
+      return;
+    }
+    openTarget(preferredTarget?.id ?? "finder", preferredTarget?.label ?? "Finder");
+  }, [host.clipboard, openTarget, workspacePath, preferredTarget]);
 
   const handleTargetClick = useCallback(
-    (targetId: string) => {
+    (target: OpenTarget) => {
       if (!workspacePath) return;
-      void execOpenTarget(targetId, workspacePath);
+      if (target.kind === "copy") {
+        void host.clipboard.writeText(workspacePath);
+        return;
+      }
+      openTarget(target.id, target.label);
     },
-    [execOpenTarget, workspacePath],
+    [host.clipboard, openTarget, workspacePath],
   );
 
   return (
@@ -95,7 +114,7 @@ export const GlobalHeader = memo(function GlobalHeader({
           {title}
         </div>
 
-        <WorkspaceActionsMenuContainer {...workspaceActions} />
+        <WorkspaceActionsMenuContainer />
 
         <div className="flex min-w-0 flex-1 items-center overflow-hidden">
           <HeaderTabs />
@@ -116,7 +135,7 @@ export const GlobalHeader = memo(function GlobalHeader({
               <Play className="size-3.5" />
               <span>{runLabel}</span>
             </Button>
-            {workspacePath && (
+            {workspacePath && files && (
               <SplitButton
                 icon={<FilePen className="size-4" />}
                 label={preferredTarget?.label ?? "Open"}

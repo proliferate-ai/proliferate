@@ -5,11 +5,13 @@ import { describe, expect, it } from "vitest";
 import {
   Clock,
   Spinner,
+  Tree,
 } from "@proliferate/ui/icons";
 import type { SidebarStatusIndicator } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
 import {
   SidebarStatusGlyph,
 } from "./SidebarIndicators";
+import { SidebarWorkspaceVariantIcon } from "./SidebarWorkspaceVariantIcon";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
   .IS_REACT_ACT_ENVIRONMENT = true;
@@ -71,5 +73,14 @@ describe("SidebarStatusGlyph", () => {
     const glyph = renderGlyph("queued_prompt");
 
     expect(countElementsByType(glyph, Spinner)).toBe(1);
+  });
+});
+
+describe("SidebarWorkspaceVariantIcon", () => {
+  it("uses the Home worktree glyph in sidebar surfaces", () => {
+    const glyph = SidebarWorkspaceVariantIcon({ variant: "worktree" });
+
+    expect(isValidElement(glyph)).toBe(true);
+    expect(isValidElement(glyph) ? glyph.type : null).toBe(Tree);
   });
 });

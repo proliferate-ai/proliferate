@@ -116,6 +116,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agents/{kind}/catalog/gateway-models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_gateway_models"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{kind}/catalog/refresh-gateway": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["refresh_gateway_models"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/agents/{kind}/install": {
         parameters: {
             query?: never;
@@ -644,6 +676,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sessions/{session_id}/goal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["set_session_goal"];
+        post?: never;
+        delete: operations["clear_session_goal"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions/{session_id}/interactions/{request_id}/mcp-url/reveal": {
         parameters: {
             query?: never;
@@ -692,6 +740,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sessions/{session_id}/loops": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_session_loops"];
+        put: operations["set_session_loop"];
+        post?: never;
+        delete: operations["clear_session_loops"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{session_id}/loops/{loop_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["edit_session_loop"];
+        post?: never;
+        delete: operations["clear_session_loop"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{session_id}/pending-prompts/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["reorder_pending_prompts"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions/{session_id}/pending-prompts/{seq}": {
         parameters: {
             query?: never;
@@ -706,6 +802,22 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["edit_pending_prompt"];
+        trace?: never;
+    };
+    "/v1/sessions/{session_id}/pending-prompts/{seq}/steer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["steer_pending_prompt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/sessions/{session_id}/prompt": {
@@ -914,6 +1026,22 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["update_terminal_title"];
+        trace?: never;
+    };
+    "/v1/workflow-runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_workflow_run"];
+        put: operations["put_workflow_run"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/workspaces": {
@@ -1236,6 +1364,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{workspace_id}/git/stage-patch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["stage_patch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces/{workspace_id}/git/status": {
         parameters: {
             query?: never;
@@ -1262,6 +1406,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["unstage_paths"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/git/unstage-patch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["unstage_patch"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1752,9 +1912,60 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * @description A harness-owned or client-executed process the agent is running in the
+         *     background (Claude background bash, Cursor detached terminals, …).
+         *     Read-only roster element — never externally settable.
+         */
+        ActivityProcess: {
+            command: string;
+            cwd?: string | null;
+            endedAt?: string | null;
+            feed?: null | components["schemas"]["FeedRef"];
+            id: string;
+            /**
+             * Format: int32
+             * @description Cursor provides a real pid; Claude does not.
+             */
+            pid?: number | null;
+            startedAt: string;
+            status: components["schemas"]["ProcessStatus"];
+        };
+        ActivityProcessUpsertedPayload: {
+            process: components["schemas"]["ActivityProcess"];
+        };
+        /**
+         * @description A harness-native subagent (Claude Task agent, Codex collab child thread,
+         *     Cursor `cursor/task`). Read-only roster element; the ⑂ chip routes to the
+         *     existing delegated-work surfaces.
+         */
+        ActivitySubagent: {
+            agentType?: string | null;
+            background: boolean;
+            description?: string | null;
+            feed?: null | components["schemas"]["FeedRef"];
+            /** @description Claude `task_id` / Codex child `threadId` / Cursor `agentId`. */
+            id: string;
+            model?: string | null;
+            status: components["schemas"]["SubagentStatus"];
+            usage?: null | components["schemas"]["ActivityUsage"];
+        };
+        ActivitySubagentUpsertedPayload: {
+            agent: components["schemas"]["ActivitySubagent"];
+        };
+        ActivityUsage: {
+            /** Format: int64 */
+            durationSeconds?: number | null;
+            /** Format: int64 */
+            tokensUsed?: number | null;
+            /** Format: int64 */
+            toolCalls?: number | null;
+        };
         AdvanceReplaySessionResponse: {
             advanced: boolean;
         };
+        /** @enum {string} */
+        AgentCliAuthState: "authenticated" | "expired" | "absent" | "unsupported";
         /** @enum {string} */
         AgentCredentialState: "ready" | "missing_env" | "login_required" | "unknown";
         /** @enum {string} */
@@ -1762,9 +1973,20 @@ export interface components {
         AgentLaunchModelOption: {
             aliases?: string[];
             defaultOptIn?: boolean | null;
+            description?: string | null;
             displayName: string;
+            effort?: null | components["schemas"]["ModelEffort"];
+            fastMode?: boolean | null;
             id: string;
             isDefault: boolean;
+            /**
+             * @description The permission/agent modes the model supports (joined from the bundled
+             *     catalog's `controls.mode.values`); absent when the model has no mode
+             *     control (contract §5).
+             */
+            modes?: string[] | null;
+            provider?: string | null;
+            status?: null | components["schemas"]["ModelCatalogStatus"];
         };
         AgentLaunchOption: {
             defaultModelId?: string | null;
@@ -1836,6 +2058,7 @@ export interface components {
         AgentSeedStatus: "not_configured_dev" | "missing_bundled_seed" | "hydrating" | "ready" | "partial" | "failed";
         AgentSummary: {
             agentProcess: components["schemas"]["ArtifactStatus"];
+            cliAuthState?: null | components["schemas"]["AgentCliAuthState"];
             credentialState: components["schemas"]["AgentCredentialState"];
             displayName: string;
             docsUrl?: string | null;
@@ -1920,6 +2143,16 @@ export interface components {
             subagentId?: string | null;
             title?: string | null;
             wakeScheduled: boolean;
+        };
+        ClearSessionGoalResponse: {
+            cleared: boolean;
+        };
+        ClearSessionLoopsResponse: {
+            /**
+             * Format: int32
+             * @description How many loops were cleared (0 when the target was already gone).
+             */
+            cleared: number;
         };
         CommitRequest: {
             body?: string | null;
@@ -2308,6 +2541,10 @@ export interface components {
             provider: string;
             providerModel: string;
             unit: string;
+        } | {
+            /** @enum {string} */
+            kind: "network_connection";
+            provider?: string | null;
         };
         ExportReplayRecordingRequest: {
             name?: string | null;
@@ -2322,6 +2559,18 @@ export interface components {
             expectedBranchName?: string | null;
             expectedHandoffOpId?: string | null;
             requireCleanGitState?: boolean;
+        };
+        /** @enum {string} */
+        FeedKind: "terminal_bytes" | "transcript";
+        /**
+         * @description An opaque handle to a roster element's live content stream. The UI never
+         *     learns the transport (`tail_file` / `acp_child_demux` / `http_sse`) — that
+         *     detail stays inside the runtime's `FeedBinding` table and is resolved
+         *     lazily by the `FeedService` only while a panel watches it.
+         */
+        FeedRef: {
+            feedId: string;
+            kind: components["schemas"]["FeedKind"];
         };
         /** @enum {string} */
         FileChangeOperation: "create" | "edit" | "delete" | "move";
@@ -2351,6 +2600,45 @@ export interface components {
         };
         /** @enum {string} */
         ForkSessionTargetType: "before_user_message";
+        /**
+         * @description One enriched gateway model row (spec §1). Catalog-known ids carry the joined
+         *     display metadata; probe-only ids (the proxy serves it but the bundled
+         *     catalog doesn't know it) emit just `{ id, provider? }`.
+         */
+        GatewayModelEntry: {
+            /** @description Catalog description; absent when the catalog omits one or for probe-only ids. */
+            description?: string | null;
+            /** @description Catalog display name; absent for probe-only ids. */
+            displayName?: string | null;
+            effort?: null | components["schemas"]["ModelEffort"];
+            /** @description Whether the model carries a `fast_mode` control; absent for probe-only ids. */
+            fastMode?: boolean | null;
+            /** @description The gateway model id (always present — the render plane keys on this). */
+            id: string;
+            /**
+             * @description The permission/agent modes the model supports (`controls.mode.values`);
+             *     absent when the model has no mode control or is probe-only (contract §5).
+             */
+            modes?: string[] | null;
+            /**
+             * @description Provider id from the id-prefix matcher (`claude-*`→anthropic, …); absent
+             *     when no family matches.
+             */
+            provider?: string | null;
+            status?: null | components["schemas"]["ModelCatalogStatus"];
+        };
+        /** @description Resolved gateway model plan for the local surface. */
+        GatewayModelsResponse: {
+            /**
+             * @description The resolved, provider-filtered models — each id enriched with the
+             *     bundled catalog row (or bare `{ id, provider? }` for probe-only ids).
+             */
+            models: components["schemas"]["GatewayModelEntry"][];
+            /** @description When a probe supplied the list (RFC3339); absent for seed. */
+            probedAt?: string | null;
+            /** @description `"seed"` (no probe yet) or `"probe"` (a live probe supplied the list). */
+            source: string;
+        };
         /** @description Response payload for fetching the current live session config snapshot. */
         GetSessionLiveConfigResponse: {
             liveConfig?: null | components["schemas"]["SessionLiveConfigSnapshot"];
@@ -2482,6 +2770,64 @@ export interface components {
             /** Format: int32 */
             includedFiles: number;
         };
+        /**
+         * @description A session goal: a strict mirror of the native harness goal (Codex
+         *     `ThreadGoal`, Claude `/goal`). Mutations flow only through native
+         *     mechanisms; this record transitions only after the native notification
+         *     round-trips.
+         */
+        Goal: {
+            createdAt: string;
+            /**
+             * Format: int64
+             * @description Claude only.
+             */
+            iterations?: number | null;
+            /**
+             * @description Claude evaluator reason; always absent for codex (terminal detail is
+             *     in `native_status`).
+             */
+            metReason?: string | null;
+            native: boolean;
+            /** @description Raw harness status string, verbatim (e.g. codex `budgetLimited`). */
+            nativeStatus?: string | null;
+            objective: string;
+            /**
+             * Format: int64
+             * @description Bumped on every mirrored edit.
+             */
+            revision: number;
+            status: components["schemas"]["GoalStatus"];
+            /** Format: int64 */
+            timeUsedSeconds?: number | null;
+            /** Format: int64 */
+            tokenBudget?: number | null;
+            /** Format: int64 */
+            tokensUsed?: number | null;
+            updatedAt: string;
+        };
+        /**
+         * @description The externally settable arm states (`_anyharness/goal/set` accepts only
+         *     these; the remaining statuses are native-origin transitions).
+         * @enum {string}
+         */
+        GoalArmState: "active" | "paused";
+        GoalClearedPayload: {
+            goal: components["schemas"]["Goal"];
+        };
+        GoalMetPayload: {
+            goal: components["schemas"]["Goal"];
+        };
+        /**
+         * @description Normalized goal status across harnesses (GoalPort wire contract v1).
+         *     Non-terminal: `active | paused | blocked`; terminal: `met | failed |
+         *     cleared`. Raw harness detail rides `native_status` verbatim.
+         * @enum {string}
+         */
+        GoalStatus: "active" | "paused" | "blocked" | "met" | "failed" | "cleared";
+        GoalUpdatedPayload: {
+            goal: components["schemas"]["Goal"];
+        };
         HandoffPlanRequest: {
             agentKind?: string | null;
             instruction?: string | null;
@@ -2608,6 +2954,51 @@ export interface components {
         LoginCommand: {
             args: string[];
             program: string;
+        };
+        /**
+         * @description A recurring in-session prompt on a schedule: a strict mirror of native
+         *     harness state where it exists (Claude session crons) and a
+         *     runtime-emulated equivalent where it doesn't (Codex — `native: false`).
+         *     Unlike [`super::Goal`], **multiple loops per session are allowed**, keyed
+         *     by `loop_id` (LoopPort wire contract v1).
+         */
+        Loop: {
+            /** Format: int64 */
+            fireCount: number;
+            /** Format: int64 */
+            lastFiredAtMs?: number | null;
+            loopId: string;
+            native: boolean;
+            prompt: string;
+            recurring: boolean;
+            schedule: components["schemas"]["LoopSchedule"];
+            status: components["schemas"]["LoopStatus"];
+            /** Format: int64 */
+            updatedAtMs: number;
+        };
+        LoopFiredPayload: {
+            /** Format: int64 */
+            firedAtMs: number;
+            loop: components["schemas"]["Loop"];
+            turnId?: string | null;
+        };
+        LoopRemovedPayload: {
+            loopId: string;
+        };
+        LoopSchedule: {
+            /** @description `"5m"` sugar or a raw cron expression, per `kind`. */
+            expr: string;
+            kind: components["schemas"]["LoopScheduleKind"];
+        };
+        /** @enum {string} */
+        LoopScheduleKind: "interval" | "cron";
+        /**
+         * @description Normalized loop status across harnesses (LoopPort wire contract v1).
+         * @enum {string}
+         */
+        LoopStatus: "active" | "cleared";
+        LoopUpsertedPayload: {
+            loop: components["schemas"]["Loop"];
         };
         MarkReviewRevisionReadyRequest: {
             revisedPlanId?: string | null;
@@ -2833,6 +3224,15 @@ export interface components {
         /** @enum {string} */
         ModelCatalogStatus: "candidate" | "active" | "deprecated" | "hidden";
         /**
+         * @description The thinking/effort control surfaced per model: the values the model
+         *     supports and the observed default (the runtime joins these from the
+         *     bundled catalog's `controls.effort.{values, observedValue}`).
+         */
+        ModelEffort: {
+            default?: string | null;
+            values: string[];
+        };
+        /**
          * @description A product-normalized live session control derived from raw ACP config options.
          *
          *     This is the product semantics layer used by clients to render consistent
@@ -2959,7 +3359,11 @@ export interface components {
             promptId?: string | null;
             promptProvenance?: null | components["schemas"]["PromptProvenance"];
             queuedAt: string;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Immutable runtime-owned queue-entry identity. This is monotonic within
+             *     a session and is independent from this summary's position in the array.
+             */
             seq: number;
             text: string;
         };
@@ -2970,6 +3374,13 @@ export interface components {
             /** Format: int64 */
             seq: number;
             text: string;
+        };
+        PendingPromptsReorderedPayload: {
+            /**
+             * @description Complete authoritative queue in committed order. Entry `seq` values
+             *     retain their immutable identities across the reorder.
+             */
+            pendingPrompts: components["schemas"]["PendingPromptSummary"][];
         };
         PermissionInteractionContext: {
             agentId?: string | null;
@@ -3017,10 +3428,26 @@ export interface components {
             code?: string | null;
             detail?: string | null;
             instance?: string | null;
+            /**
+             * @description RFC 7807 extension member: the auth-context ids that would unlock a
+             *     gated selection (the model's `availability.anyOf`). Only set on
+             *     `SESSION_MODEL_GATED`; absent on every other error, so unrelated responses
+             *     stay byte-identical.
+             */
+            requiredContexts?: string[] | null;
             /** Format: int32 */
             status: number;
             title: string;
             type: string;
+        };
+        ProcessStatus: {
+            /** @enum {string} */
+            status: "running";
+        } | {
+            /** Format: int32 */
+            exitCode?: number | null;
+            /** @enum {string} */
+            status: "exited";
         };
         /** @enum {string} */
         PromptAttachmentSource: "upload" | "paste";
@@ -3187,6 +3614,33 @@ export interface components {
             accepted: number;
         };
         /**
+         * @description `PUT /v1/workflow-runs/{runId}` request body. The `runId` lives in the path
+         *     only and never appears in the body.
+         */
+        PutWorkflowRunRequest: {
+            /** @description Concrete scalar argument values keyed by declared input name. */
+            arguments?: {
+                [key: string]: components["schemas"]["WorkflowRunArgumentValue"];
+            };
+            definition: components["schemas"]["WorkflowRunDefinition"];
+            /** Format: int64 */
+            schemaVersion: number;
+            workspaceId: string;
+        };
+        /**
+         * @description Schema-v2 portable invocation. Model, mode, and optional effort are target
+         *     intent until AnyHarness resolves and persists a concrete plan.
+         */
+        PutWorkflowRunRequestV2: {
+            arguments?: {
+                [key: string]: components["schemas"]["WorkflowRunArgumentValue"];
+            };
+            definition: components["schemas"]["WorkflowRunDefinitionV2"];
+            /** Format: int64 */
+            schemaVersion: number;
+            workspaceId: string;
+        };
+        /**
          * @description A raw ACP session configuration option as exposed by the active session.
          *
          *     This is the transport-fidelity layer. It should match the live ACP state as
@@ -3259,6 +3713,16 @@ export interface components {
         ReconcileJobStatus: "idle" | "queued" | "running" | "completed" | "failed";
         /** @enum {string} */
         ReconcileOutcome: "installed" | "already_installed" | "skipped" | "failed";
+        /** @description Result of a manual gateway refresh. */
+        RefreshGatewayResponse: {
+            /**
+             * @description The freshly probed model ids (unfiltered — exactly what the gateway
+             *     returned; the resolver applies provider filtering when building plans).
+             */
+            models: string[];
+            /** @description The probe timestamp (RFC3339). */
+            probedAt: string;
+        };
         RenameWorkspaceFileEntryRequest: {
             newPath: string;
             path: string;
@@ -3266,6 +3730,15 @@ export interface components {
         RenameWorkspaceFileEntryResponse: {
             entry: components["schemas"]["WorkspaceFileEntry"];
             oldPath: string;
+        };
+        ReorderPendingPromptsRequest: {
+            /** @description Exact permutation to commit when `expected_seqs` still matches. */
+            desiredSeqs: number[];
+            /**
+             * @description Queue order the caller last observed. The mutation is rejected with a
+             *     conflict if this no longer matches durable state.
+             */
+            expectedSeqs: number[];
         };
         ReplayRecordingSummary: {
             createdAt?: string | null;
@@ -3534,6 +4007,8 @@ export interface components {
         };
         Session: {
             actionCapabilities?: components["schemas"]["SessionActionCapabilities"];
+            activeGoal?: null | components["schemas"]["Goal"];
+            activity?: null | components["schemas"]["SessionActivity"];
             agentKind: string;
             closedAt?: string | null;
             createdAt: string;
@@ -3557,7 +4032,30 @@ export interface components {
         };
         SessionActionCapabilities: {
             fork?: boolean;
+            /**
+             * @description Whether loops ride native harness state (Claude session crons) or are
+             *     runtime-emulated (Codex `LoopSchedulerExtension`). Meaningless when
+             *     `supports_loops` is `false`.
+             */
+            loopsNative?: boolean;
+            supportsGoals?: boolean;
+            supportsLoops?: boolean;
             targetedFork?: boolean;
+        };
+        /**
+         * @description One normalized, strictly-typed, per-session aggregate: the single answer
+         *     to "what is this agent doing right now" (session-activity-architecture,
+         *     locked 2026-07-02). Two element classes: mirrors with write paths
+         *     (`goal`, `loops`) and read-only rosters (`processes`, `agents`), each
+         *     roster element carrying an opaque [`FeedRef`] for its live content
+         *     stream — the UI never learns the transport.
+         */
+        SessionActivity: {
+            agents?: components["schemas"]["ActivitySubagent"][];
+            goal?: null | components["schemas"]["Goal"];
+            loops?: components["schemas"]["Loop"][];
+            processes?: components["schemas"]["ActivityProcess"][];
+            turn: components["schemas"]["TurnState"];
         };
         /**
          * @description Supported ACP session configuration input types.
@@ -3617,6 +4115,30 @@ export interface components {
         }) | (components["schemas"]["UsageUpdatePayload"] & {
             /** @enum {string} */
             type: "usage_update";
+        }) | (components["schemas"]["GoalUpdatedPayload"] & {
+            /** @enum {string} */
+            type: "goal_updated";
+        }) | (components["schemas"]["GoalMetPayload"] & {
+            /** @enum {string} */
+            type: "goal_met";
+        }) | (components["schemas"]["GoalClearedPayload"] & {
+            /** @enum {string} */
+            type: "goal_cleared";
+        }) | (components["schemas"]["LoopUpsertedPayload"] & {
+            /** @enum {string} */
+            type: "loop_upserted";
+        }) | (components["schemas"]["LoopRemovedPayload"] & {
+            /** @enum {string} */
+            type: "loop_removed";
+        }) | (components["schemas"]["LoopFiredPayload"] & {
+            /** @enum {string} */
+            type: "loop_fired";
+        }) | (components["schemas"]["ActivityProcessUpsertedPayload"] & {
+            /** @enum {string} */
+            type: "process_upserted";
+        }) | (components["schemas"]["ActivitySubagentUpsertedPayload"] & {
+            /** @enum {string} */
+            type: "subagent_upserted";
         }) | (components["schemas"]["PendingPromptAddedPayload"] & {
             /** @enum {string} */
             type: "pending_prompt_added";
@@ -3626,6 +4148,9 @@ export interface components {
         }) | (components["schemas"]["PendingPromptRemovedPayload"] & {
             /** @enum {string} */
             type: "pending_prompt_removed";
+        }) | (components["schemas"]["PendingPromptsReorderedPayload"] & {
+            /** @enum {string} */
+            type: "pending_prompts_reordered";
         }) | (components["schemas"]["InteractionRequestedEvent"] & {
             /** @enum {string} */
             type: "interaction_requested";
@@ -3652,6 +4177,9 @@ export interface components {
             pendingInteractions?: components["schemas"]["PendingInteractionSummary"][];
             phase: components["schemas"]["SessionExecutionPhase"];
             updatedAt: string;
+        };
+        SessionGoalResponse: {
+            goal: components["schemas"]["Goal"];
         };
         SessionInfoUpdatePayload: {
             title?: string | null;
@@ -3700,6 +4228,12 @@ export interface components {
             sourceSeq: number;
             /** @description Timestamp when this snapshot was last updated. */
             updatedAt: string;
+        };
+        SessionLoopResponse: {
+            loop: components["schemas"]["Loop"];
+        };
+        SessionLoopsResponse: {
+            loops: components["schemas"]["Loop"][];
         };
         /** @enum {string} */
         SessionMcpBindingNotAppliedReason: "missing_secret" | "needs_reconnect" | "unsupported_target" | "workspace_path_unresolved" | "policy_disabled" | "resolver_error";
@@ -3787,6 +4321,31 @@ export interface components {
             /** @description Updated session summary after accepting the change. */
             session: components["schemas"]["Session"];
         };
+        SetSessionGoalRequest: {
+            /** @description Omitted = status/budget-only patch (codex semantics). */
+            objective?: string | null;
+            status?: null | components["schemas"]["GoalArmState"];
+            /** Format: int64 */
+            tokenBudget?: number | null;
+        };
+        /**
+         * @description Arm-or-edit a loop through `PUT /v1/sessions/{id}/loops` (create) or
+         *     `PUT /v1/sessions/{id}/loops/{loop_id}` (edit). On native harnesses (Claude
+         *     session crons) this drives `_anyharness/loop/set`; on emulation-eligible
+         *     harnesses (Codex) it arms a runtime-owned loop (`native: false`) in the
+         *     [`crate::v1`] loop scheduler.
+         */
+        SetSessionLoopRequest: {
+            /**
+             * Format: int64
+             * @description Optional cap on total fires (emulated loops only). `None` = uncapped.
+             */
+            maxFires?: number | null;
+            prompt: string;
+            /** @description Fire indefinitely (default) or once. Native crons are recurring. */
+            recurring?: boolean;
+            schedule: components["schemas"]["LoopSchedule"];
+        };
         SetupHint: {
             category: components["schemas"]["SetupHintCategory"];
             detectedFile: string;
@@ -3808,6 +4367,10 @@ export interface components {
         };
         /** @enum {string} */
         SetupScriptStatus: "queued" | "running" | "succeeded" | "failed";
+        StagePatchRequest: {
+            /** @description A valid unified diff patch (file headers + hunk) to apply to the index. */
+            patch: string;
+        };
         StagePathsRequest: {
             paths: string[];
         };
@@ -3878,6 +4441,17 @@ export interface components {
             parentEventSeq?: number | null;
             /** Format: int64 */
             parentPromptSeq?: number | null;
+        };
+        SubagentStatus: {
+            /** @enum {string} */
+            status: "running";
+        } | {
+            /** @enum {string} */
+            status: "completed";
+            summary?: string | null;
+        } | {
+            /** @enum {string} */
+            status: "failed";
         };
         SubagentTurnCompletedPayload: {
             /** Format: int64 */
@@ -3973,6 +4547,19 @@ export interface components {
             stopReason: components["schemas"]["StopReason"];
         };
         TurnStartedEvent: Record<string, never>;
+        TurnState: {
+            startedAt: string;
+            /** @enum {string} */
+            status: "running";
+            turnId: string;
+        } | {
+            /** @enum {string} */
+            status: "idle";
+        };
+        UnstagePatchRequest: {
+            /** @description A valid unified diff patch (file headers + hunk) to reverse-apply from the index. */
+            patch: string;
+        };
         UnstagePathsRequest: {
             paths: string[];
         };
@@ -4023,6 +4610,177 @@ export interface components {
             questionId: string;
             selectedOptionLabel?: string | null;
             text?: string | null;
+        };
+        /**
+         * @description Operation-level PUT union. API decoding first inspects the required integer
+         *     `schemaVersion`, then strictly decodes the selected member.
+         */
+        VersionedPutWorkflowRunRequest: components["schemas"]["PutWorkflowRunRequest"] | components["schemas"]["PutWorkflowRunRequestV2"];
+        VersionedWorkflowRunResponse: components["schemas"]["WorkflowRunResponse"] | components["schemas"]["WorkflowRunResponseV2"];
+        /** @description The durable run view. */
+        WorkflowRun: {
+            arguments: {
+                [key: string]: components["schemas"]["WorkflowRunArgumentValue"];
+            };
+            createdAt: string;
+            definition: components["schemas"]["WorkflowRunDefinition"];
+            failureCode?: null | components["schemas"]["WorkflowRunFailureCode"];
+            finishedAt?: string | null;
+            id: string;
+            /** Format: int64 */
+            schemaVersion: number;
+            sessionId?: string | null;
+            startedAt?: string | null;
+            status: components["schemas"]["WorkflowRunStatus"];
+            updatedAt: string;
+            workspaceId: string;
+        };
+        WorkflowRunArgumentValue: boolean | number | string;
+        /** @description The frozen executable definition: inputs plus exactly one stage. */
+        WorkflowRunDefinition: {
+            inputs?: components["schemas"]["WorkflowRunInput"][];
+            stages: components["schemas"]["WorkflowRunStage"][];
+        };
+        WorkflowRunDefinitionV2: {
+            inputs?: components["schemas"]["WorkflowRunInput"][];
+            stages: components["schemas"]["WorkflowRunStageV2"][];
+        };
+        /**
+         * @description The stable machine failure result on failed runs and steps (spec §6.1).
+         * @enum {string}
+         */
+        WorkflowRunFailureCode: "workspace_unavailable" | "session_create_failed" | "session_start_failed" | "prompt_dispatch_failed" | "session_turn_failed" | "session_turn_cancelled" | "runtime_restarted";
+        /**
+         * @description V2 extends, but does not widen, the stable V1 failure-code component.
+         * @enum {string}
+         */
+        WorkflowRunFailureCodeV2: "workspace_unavailable" | "session_create_failed" | "session_start_failed" | "prompt_dispatch_failed" | "session_turn_failed" | "session_turn_cancelled" | "runtime_restarted" | "session_config_apply_failed";
+        /** @description Harness selection for the stage's session. */
+        WorkflowRunHarnessConfig: {
+            agentKind: string;
+            /** @description Required key; `null` requests existing `SessionRuntime` mode behavior. */
+            modeId: string | null;
+            /**
+             * @description Required key; `null` requests the target-default model. The
+             *     `schema(required)` override keeps the generated OpenAPI/SDK in sync
+             *     with the wire rule (present key, nullable value) that `nullable_string`
+             *     enforces at deserialization.
+             */
+            modelId: string | null;
+        };
+        WorkflowRunHarnessConfigV2: {
+            agentKind: string;
+            effort?: string | null;
+            modelSelection: components["schemas"]["WorkflowRunModelSelection"];
+            permissionPolicy: components["schemas"]["WorkflowRunPermissionPolicy"];
+        };
+        /** @description A declared scalar input. */
+        WorkflowRunInput: {
+            name: string;
+            required: boolean;
+            type: components["schemas"]["WorkflowRunInputType"];
+        };
+        /**
+         * @description The only permitted input types (scalars). Defaults, arrays, objects,
+         *     choices, and secret types are rejected by omission from this enum.
+         * @enum {string}
+         */
+        WorkflowRunInputType: "string" | "number" | "boolean";
+        WorkflowRunModelSelection: {
+            /** @enum {string} */
+            kind: "targetDefault";
+        } | {
+            /** @enum {string} */
+            kind: "exact";
+            modelId: string;
+        };
+        /** @enum {string} */
+        WorkflowRunPermissionPolicy: "workflowDefault";
+        /** @description The single `agent.prompt` step. */
+        WorkflowRunPromptStep: {
+            kind: string;
+            prompt: string;
+        };
+        WorkflowRunResolvedHarnessV2: {
+            agentKind: string;
+            effort: string | null;
+            modeId: string;
+            modelId: string;
+        };
+        /** @description PUT/GET response envelope. */
+        WorkflowRunResponse: {
+            run: components["schemas"]["WorkflowRun"];
+            steps: components["schemas"]["WorkflowRunStep"][];
+        };
+        WorkflowRunResponseV2: {
+            resolvedHarness: components["schemas"]["WorkflowRunResolvedHarnessV2"];
+            run: components["schemas"]["WorkflowRunV2"];
+            steps: components["schemas"]["WorkflowRunStepV2"][];
+        };
+        /** @description Exactly one stage: a harness configuration plus exactly one prompt step. */
+        WorkflowRunStage: {
+            harnessConfig: components["schemas"]["WorkflowRunHarnessConfig"];
+            steps: components["schemas"]["WorkflowRunPromptStep"][];
+        };
+        WorkflowRunStageV2: {
+            harnessConfig: components["schemas"]["WorkflowRunHarnessConfigV2"];
+            steps: components["schemas"]["WorkflowRunPromptStep"][];
+        };
+        /**
+         * @description Durable run status.
+         * @enum {string}
+         */
+        WorkflowRunStatus: "accepted" | "running" | "completed" | "failed";
+        /** @description The durable materialized step view. */
+        WorkflowRunStep: {
+            createdAt: string;
+            failureCode?: null | components["schemas"]["WorkflowRunFailureCode"];
+            finishedAt?: string | null;
+            promptId: string;
+            /** Format: int64 */
+            stageIndex: number;
+            startedAt?: string | null;
+            status: components["schemas"]["WorkflowRunStepStatus"];
+            /** Format: int64 */
+            stepIndex: number;
+            turnId?: string | null;
+            updatedAt: string;
+        };
+        /**
+         * @description Durable step status.
+         * @enum {string}
+         */
+        WorkflowRunStepStatus: "pending" | "running" | "completed" | "failed";
+        WorkflowRunStepV2: {
+            createdAt: string;
+            failureCode?: null | components["schemas"]["WorkflowRunFailureCodeV2"];
+            finishedAt?: string | null;
+            promptId: string;
+            /** Format: int64 */
+            stageIndex: number;
+            startedAt?: string | null;
+            status: components["schemas"]["WorkflowRunStepStatus"];
+            /** Format: int64 */
+            stepIndex: number;
+            turnId?: string | null;
+            updatedAt: string;
+        };
+        WorkflowRunV2: {
+            arguments: {
+                [key: string]: components["schemas"]["WorkflowRunArgumentValue"];
+            };
+            createdAt: string;
+            definition: components["schemas"]["WorkflowRunDefinitionV2"];
+            failureCode?: null | components["schemas"]["WorkflowRunFailureCodeV2"];
+            finishedAt?: string | null;
+            id: string;
+            /** Format: int64 */
+            schemaVersion: number;
+            sessionId?: string | null;
+            startedAt?: string | null;
+            status: components["schemas"]["WorkflowRunStatus"];
+            updatedAt: string;
+            workspaceId: string;
         };
         Workspace: {
             cleanupAttemptedAt?: string | null;
@@ -4563,6 +5321,70 @@ export interface operations {
             };
             /** @description Agent not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_gateway_models: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Agent kind identifier */
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resolved gateway model plan (probe or seed) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GatewayModelsResponse"];
+                };
+            };
+        };
+    };
+    refresh_gateway_models: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Agent kind identifier */
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Gateway re-probed and recorded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefreshGatewayResponse"];
+                };
+            };
+            /** @description No gateway selection for this harness */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Gateway probe failed */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5896,6 +6718,92 @@ export interface operations {
             };
         };
     };
+    set_session_goal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session ID */
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetSessionGoalRequest"];
+            };
+        };
+        responses: {
+            /** @description Goal set through the native mechanism and confirmed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionGoalResponse"];
+                };
+            };
+            /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session cannot take goal mutations */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    clear_session_goal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session ID */
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Goal cleared through the native mechanism */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClearSessionGoalResponse"];
+                };
+            };
+            /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session cannot take goal mutations */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     reveal_mcp_elicitation_url: {
         parameters: {
             query?: never;
@@ -6016,6 +6924,259 @@ export interface operations {
             };
         };
     };
+    list_session_loops: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session ID */
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The session's active loops */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionLoopsResponse"];
+                };
+            };
+        };
+    };
+    set_session_loop: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session ID */
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetSessionLoopRequest"];
+            };
+        };
+        responses: {
+            /** @description Loop armed (native cron set, or emulated loop scheduled) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionLoopResponse"];
+                };
+            };
+            /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session cannot take loop mutations */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    clear_session_loops: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session ID */
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All loops cleared */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClearSessionLoopsResponse"];
+                };
+            };
+            /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session cannot take loop mutations */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    edit_session_loop: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session ID */
+                session_id: string;
+                /** @description Loop ID */
+                loop_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetSessionLoopRequest"];
+            };
+        };
+        responses: {
+            /** @description Loop edited (emulated loops only) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionLoopResponse"];
+                };
+            };
+            /** @description Session or loop not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session cannot take loop mutations */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    clear_session_loop: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session ID */
+                session_id: string;
+                /** @description Loop ID */
+                loop_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The loop was cleared */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClearSessionLoopsResponse"];
+                };
+            };
+            /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session cannot take loop mutations */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    reorder_pending_prompts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session ID */
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderPendingPromptsRequest"];
+            };
+        };
+        responses: {
+            /** @description Pending prompts reordered */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Session"];
+                };
+            };
+            /** @description Invalid pending prompt order */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Pending prompt order changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     delete_pending_prompt: {
         parameters: {
             query?: never;
@@ -6023,7 +7184,7 @@ export interface operations {
             path: {
                 /** @description Session ID */
                 session_id: string;
-                /** @description Queue row sequence number */
+                /** @description Stable queue-entry sequence identity */
                 seq: number;
             };
             cookie?: never;
@@ -6057,7 +7218,7 @@ export interface operations {
             path: {
                 /** @description Session ID */
                 session_id: string;
-                /** @description Queue row sequence number */
+                /** @description Stable queue-entry sequence identity */
                 seq: number;
             };
             cookie?: never;
@@ -6069,6 +7230,40 @@ export interface operations {
         };
         responses: {
             /** @description Pending prompt updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Session"];
+                };
+            };
+            /** @description Session or pending prompt not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    steer_pending_prompt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session ID */
+                session_id: string;
+                /** @description Stable queue-entry sequence identity */
+                seq: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pending prompt promoted to run next */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -6612,6 +7807,146 @@ export interface operations {
             };
             /** @description Terminal not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_workflow_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Canonical UUID for the workflow run */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Durable run and step status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionedWorkflowRunResponse"];
+                };
+            };
+            /** @description Non-canonical run ID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Direct-attach token is outside its workspace scope */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unknown workflow run */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    put_workflow_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Canonical UUID for the workflow run */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionedPutWorkflowRunRequest"];
+            };
+        };
+        responses: {
+            /** @description Exact replay of an identical invocation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionedWorkflowRunResponse"];
+                };
+            };
+            /** @description New durable acceptance */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionedWorkflowRunResponse"];
+                };
+            };
+            /** @description Invalid ID, definition, arguments, or rendered prompt */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Direct-attach token is outside its workspace scope */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Same ID with different invocation, or workspace mutation blocked */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Portable target cannot be resolved */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Acceptance storage failure; no committed run or step */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7508,6 +8843,49 @@ export interface operations {
             };
         };
     };
+    stage_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StagePatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Patch staged */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Patch could not be applied */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     get_git_status: {
         parameters: {
             query?: never;
@@ -7562,6 +8940,49 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    unstage_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnstagePatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Patch unstaged */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Patch could not be removed from index */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
             };
             /** @description Workspace not found */
             404: {

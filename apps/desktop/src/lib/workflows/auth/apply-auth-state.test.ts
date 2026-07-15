@@ -49,6 +49,7 @@ describe("applyAnonymousAuthState", () => {
       session: null,
       user: null,
       error: null,
+      issue: null,
     });
   });
 });
@@ -77,6 +78,7 @@ describe("applyPersistedAuthenticatedAuthState", () => {
         avatar_url: null,
       },
       error: null,
+      issue: null,
     });
   });
 });
@@ -98,6 +100,7 @@ describe("applyVolatileAuthenticatedAuthState", () => {
         avatar_url: null,
       },
       error: null,
+      issue: null,
     });
   });
 });

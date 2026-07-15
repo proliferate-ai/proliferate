@@ -22,6 +22,7 @@ import { type ChatSurfaceState, useChatSurfaceState } from "@/hooks/chat/derived
 import {
   useActiveSessionId,
   useActiveSessionPromptCapabilities,
+  useSelectedWorkspaceUiKey,
 } from "@/hooks/chat/derived/use-active-session-identity";
 import { useChatAvailabilityState } from "@/hooks/chat/derived/use-chat-availability-state";
 import { useChatDockInset } from "@/hooks/chat/ui/use-chat-dock-inset";
@@ -45,19 +46,24 @@ import type { WorkspaceRenderSurface } from "@/lib/domain/workspaces/tabs/shell-
 function ChatContent({
   dockSafeAreaPx,
   mode,
-  scrollBottomInsetPx,
   stickyBottomInsetPx,
+  stickyNonDisplacingBottomInsetPx,
 }: {
   dockSafeAreaPx: number;
   mode: ChatSurfaceState;
-  scrollBottomInsetPx: number;
   stickyBottomInsetPx: number;
+  stickyNonDisplacingBottomInsetPx: number;
 }): JSX.Element | null {
   switch (mode.kind) {
     case "no-workspace":
       return <NoWorkspaceState bottomInsetPx={dockSafeAreaPx} />;
     case "launch-intent":
-      return <ChatLaunchIntentPane bottomInsetPx={scrollBottomInsetPx} />;
+      return (
+        <ChatLaunchIntentPane
+          bottomInsetPx={stickyBottomInsetPx}
+          nonDisplacingBottomInsetPx={stickyNonDisplacingBottomInsetPx}
+        />
+      );
     case "workspace-status":
     case "session-loading":
       return (
@@ -66,7 +72,12 @@ function ChatContent({
         </ChatPreMessageCanvas>
       );
     case "session-hydrating":
-      return <SessionTranscriptPane bottomInsetPx={stickyBottomInsetPx} />;
+      return (
+        <SessionTranscriptPane
+          bottomInsetPx={stickyBottomInsetPx}
+          nonDisplacingBottomInsetPx={stickyNonDisplacingBottomInsetPx}
+        />
+      );
     case "session-switching":
       return <TranscriptSwitchingPlaceholder />;
     case "session-empty":
@@ -76,7 +87,12 @@ function ChatContent({
         </ChatPreMessageCanvas>
       );
     case "session-transcript":
-      return <SessionTranscriptPane bottomInsetPx={stickyBottomInsetPx} />;
+      return (
+        <SessionTranscriptPane
+          bottomInsetPx={stickyBottomInsetPx}
+          nonDisplacingBottomInsetPx={stickyNonDisplacingBottomInsetPx}
+        />
+      );
   }
 }
 
@@ -112,7 +128,11 @@ export const ChatView = memo(function ChatView({
   const suppressSessionSlots = shellRenderSurface?.kind === "chat-shell"
     || shellRenderSurface?.kind === "chat-session-pending";
   const suppressComposerActiveSessionState = shellRenderSurface?.kind === "chat-session-pending";
+  const replacementSessionId = shellRenderSurface?.kind === "chat-session-pending"
+    ? shellRenderSurface.sessionId
+    : null;
   const activeSessionId = useActiveSessionId();
+  const workspaceUiKey = useSelectedWorkspaceUiKey();
   const activePromptCapabilities = useActiveSessionPromptCapabilities();
   const availability = useChatAvailabilityState();
   const queuedPromptEditStatus = useQueuedPromptEditStatus();
@@ -135,7 +155,7 @@ export const ChatView = memo(function ChatView({
     supportsAttachments,
   });
   const promptAttachments = useChatPromptAttachments({
-    activeSessionId,
+    scopeKey: workspaceUiKey,
     promptCapabilities,
     canAttachFiles: canAcceptFileDrop,
   });
@@ -145,8 +165,8 @@ export const ChatView = memo(function ChatView({
     dockRef,
     dockSafeAreaPx,
     lowerBackdropTopPx,
-    scrollBottomInsetPx,
     stickyBottomInsetPx,
+    stickyNonDisplacingBottomInsetPx,
   } = useChatDockInset();
 
   useCloudWorkspacePolling();
@@ -160,9 +180,15 @@ export const ChatView = memo(function ChatView({
     <ChatInput
       attachments={promptAttachments}
       suppressActiveSessionState={suppressComposerActiveSessionState}
+      replacementSessionId={replacementSessionId}
       hasSessionTurns={hasSessionTurns}
     />
-  ), [hasSessionTurns, promptAttachments, suppressComposerActiveSessionState]);
+  ), [
+    hasSessionTurns,
+    promptAttachments,
+    replacementSessionId,
+    suppressComposerActiveSessionState,
+  ]);
 
   const handleFileDrag = useCallback((event: DragEvent<HTMLDivElement>) => {
     const dragInput = readFileDragInput(event.dataTransfer);
@@ -215,8 +241,8 @@ export const ChatView = memo(function ChatView({
           <ChatContent
             dockSafeAreaPx={dockSafeAreaPx}
             mode={mode}
-            scrollBottomInsetPx={scrollBottomInsetPx}
             stickyBottomInsetPx={stickyBottomInsetPx}
+            stickyNonDisplacingBottomInsetPx={stickyNonDisplacingBottomInsetPx}
           />
         </div>
       </DebugProfiler>

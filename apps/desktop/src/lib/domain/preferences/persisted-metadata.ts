@@ -69,6 +69,8 @@ export function selectPersistedUserPreferencesSlice(
     pasteAttachmentsEnabled: preferences.pasteAttachmentsEnabled,
     reviewDefaultsByKind: preferences.reviewDefaultsByKind,
     reviewPersonalitiesByKind: preferences.reviewPersonalitiesByKind,
+    acknowledgedReleaseVersion: preferences.acknowledgedReleaseVersion,
+    cachedInstalledRelease: preferences.cachedInstalledRelease,
   };
 }
 

@@ -29,6 +29,7 @@ from tests.integration.test_agent_gateway_topups import (
     StubLiteLLM,
     StubStripe,
     _create_org,
+    _create_user,
     _overage_org_subject,
     _spend,
 )
@@ -52,6 +53,7 @@ async def test_reactivation_uncaps_overage_subject_capped_at_enrollment(
     the key — otherwise the subject is billed but stays blocked at the old cap.
     """
     org_id = await _create_org(db_session)
+    member_id = await _create_user(db_session)
     subject = await ensure_organization_billing_subject(db_session, org_id)
     subject.stripe_customer_id = f"cus_uncap-{uuid.uuid4().hex[:6]}"
     await store.create_llm_credit_grant(
@@ -62,7 +64,7 @@ async def test_reactivation_uncaps_overage_subject_capped_at_enrollment(
     )
     await db_session.flush()
 
-    enrollment = await ensure_org_enrollment(db_session, org_id)
+    enrollment = await ensure_org_enrollment(db_session, org_id, member_id)
     # Enrolled while NOT overage-enabled: minted with a hard cap of 5.
     assert stub_litellm.minted[-1]["max_budget"] == 5.0
     assert enrollment.virtual_key_id is not None
@@ -92,7 +94,11 @@ async def test_reactivation_uncaps_overage_subject_capped_at_enrollment(
     assert stub_litellm.enabled_keys == [enrollment.virtual_key_id]
     assert stub_litellm.team_budgets == [(enrollment.litellm_team_id, None)]
     assert stub_litellm.key_budgets == [(enrollment.virtual_key_id, None)]
-    refreshed = await store.get_enrollment_for_organization(db_session, organization_id=org_id)
+    refreshed = await store.get_enrollment_for_organization(
+        db_session,
+        organization_id=org_id,
+        user_id=member_id,
+    )
     assert refreshed is not None
     assert refreshed.budget_status == "ok"
 
@@ -110,7 +116,8 @@ async def test_topup_does_not_bill_zero_grant_historical_spend(
     ledger; enabling overage must not retroactively bill that free spend.
     """
     org_id, subject_id = await _overage_org_subject(db_session)
-    await ensure_org_enrollment(db_session, org_id)
+    member_id = await _create_user(db_session)
+    await ensure_org_enrollment(db_session, org_id, member_id)
     # Historical spend incurred for free under the default budget, no grant.
     await _spend(db_session, billing_subject_id=subject_id, cost_usd=50.0)
 
@@ -137,7 +144,8 @@ async def test_importer_enforces_overage_when_topup_amount_invalid(
     """
     monkeypatch.setattr(settings, "agent_gateway_topup_amount_usd", "0")
     org_id, subject_id = await _overage_org_subject(db_session)
-    enrollment = await ensure_org_enrollment(db_session, org_id)
+    member_id = await _create_user(db_session)
+    enrollment = await ensure_org_enrollment(db_session, org_id, member_id)
     await store.create_llm_credit_grant(
         db_session,
         billing_subject_id=subject_id,

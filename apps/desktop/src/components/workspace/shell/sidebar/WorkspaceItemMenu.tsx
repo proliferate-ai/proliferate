@@ -1,8 +1,9 @@
+import { useCallback, useRef, useState } from "react";
 import { SHORTCUTS } from "@/config/shortcuts/registry";
 import {
   Archive,
   Folder,
-  GitBranch,
+  GitBranchIcon,
   GitPullRequest,
   MoreHorizontal,
   Pencil,
@@ -34,6 +35,7 @@ interface WorkspaceItemMenuProps {
   onCopyWorkspaceLocation?: () => void;
   onCopyBranchName?: () => void;
   onMarkDone?: () => void;
+  onShowNativeMenu?: (position?: { x: number; y: number }) => Promise<boolean>;
 }
 
 /**
@@ -54,11 +56,29 @@ export function WorkspaceItemMenu({
   onCopyWorkspaceLocation,
   onCopyBranchName,
   onMarkDone,
+  onShowNativeMenu,
 }: WorkspaceItemMenuProps) {
+  const [fallbackOpen, setFallbackOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const handleOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      setFallbackOpen(false);
+      return;
+    }
+    if (!onShowNativeMenu) {
+      setFallbackOpen(true);
+      return;
+    }
+    const rect = triggerRef.current?.getBoundingClientRect();
+    void onShowNativeMenu(rect ? { x: rect.left, y: rect.bottom } : undefined).then((shown) => {
+      if (!shown) setFallbackOpen(true);
+    });
+  }, [onShowNativeMenu]);
   return (
-    <DropdownMenu>
+    <DropdownMenu open={fallbackOpen} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
         <IconButton
+          ref={triggerRef}
           tone="sidebar"
           size="xs"
           onClick={(e) => e.stopPropagation()}
@@ -113,13 +133,13 @@ export function WorkspaceItemMenu({
             )}
             {branchName && (
               <div className="flex items-center gap-2 px-2 py-1.5 font-mono text-ui-sm text-muted-foreground">
-                <GitBranch className="size-3.5 shrink-0" />
+                <GitBranchIcon className="size-3.5 shrink-0" />
                 <span className="min-w-0 truncate">{branchName}</span>
               </div>
             )}
             {onCopyBranchName && (
               <DropdownMenuItem onSelect={onCopyBranchName}>
-                <GitBranch className="size-4 text-muted-foreground" />
+                <GitBranchIcon className="size-4 text-muted-foreground" />
                 Copy branch name
                 <DropdownMenuShortcut>
                   {getShortcutDisplayLabel(SHORTCUTS.copyBranchName)}

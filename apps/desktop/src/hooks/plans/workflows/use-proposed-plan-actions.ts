@@ -26,7 +26,7 @@ import {
   resolvePlanImplementationTargetCheck,
   type PlanImplementationHarnessState,
 } from "@/lib/domain/plans/implementation-target";
-import { trackProductEvent } from "@/lib/integrations/telemetry/client";
+import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
 import {
   failLatencyFlow as failPromptLatencyFlow,
   startLatencyFlow as startPromptLatencyFlow,
@@ -34,7 +34,6 @@ import {
 } from "@/lib/infra/measurement/latency-flow";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import { completeChatPromptSubmitSideEffects } from "@/lib/workflows/chat/complete-chat-prompt-submit-side-effects";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { getSessionRecords } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
@@ -92,7 +91,6 @@ export function useProposedPlanActions() {
 // Owns approve/reject actions and decision-conflict refresh behavior.
 function useProposedPlanDecisionActions() {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
-  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const showToast = useToastStore((state) => state.show);
   const approveMutation = useApprovePlanMutation({ workspaceId: selectedWorkspaceId });
   const rejectMutation = useRejectPlanMutation({ workspaceId: selectedWorkspaceId });
@@ -102,7 +100,6 @@ function useProposedPlanDecisionActions() {
   const {
     applyPlanDecisionToCache,
   } = useProposedPlanCache({
-    runtimeUrl,
     selectedWorkspaceId,
   });
 
@@ -181,6 +178,7 @@ function usePlanImplementationActions() {
   const { setActiveSessionConfigOption } = useSessionConfigActions();
   const { promptActiveSession } = useSessionPromptActions();
   const gitPromptEffects = useGitPromptSnapshotEffects();
+  const telemetry = useProductTelemetry();
 
   const implementPlanHere = useCallback((plan: PromptPlanAttachmentDescriptor) => {
     if (!claimPlanImplementationRun(isImplementingPlanRef)) {
@@ -210,7 +208,7 @@ function usePlanImplementationActions() {
             agentKind,
             reuseSession,
             setWorkspaceArrivalEvent,
-          }, { trackProductEvent, ...gitPromptEffects.promptSubmitDeps });
+          }, { trackProductEvent: telemetry.track, ...gitPromptEffects.promptSubmitDeps });
         },
         showToast,
       });
@@ -227,6 +225,7 @@ function usePlanImplementationActions() {
     setActiveSessionConfigOption,
     setWorkspaceArrivalEvent,
     showToast,
+    telemetry,
   ]);
 
   return {

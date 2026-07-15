@@ -117,13 +117,13 @@ export function SidebarUpdatePill({
     }
   }
 
-  // UX spec §12: 12px, --special text, pill on --accent. Downloading keeps the
-  // active tone (non-disabled-looking) but isn't clickable; armed is subdued.
+  // Neutral pill: foreground/5 card surface, foreground text. Downloading keeps
+  // the active tone (non-disabled-looking) but isn't clickable; armed is subdued.
   const toneClass = isDownloading
-    ? "cursor-default bg-accent text-special"
+    ? "cursor-default bg-foreground/5 text-muted-foreground"
     : variant === "armed"
-      ? "bg-accent text-muted-foreground hover:bg-foreground/10"
-      : "bg-accent text-special hover:bg-foreground/10";
+      ? "bg-foreground/5 text-muted-foreground hover:bg-foreground/10"
+      : "bg-foreground/5 text-foreground hover:bg-foreground/10";
 
   return (
     <Button

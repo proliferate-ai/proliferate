@@ -129,7 +129,7 @@ function FileLinkedText({ text }: { text: string }) {
   const tokens = tokenizeSerializedFileLinks(text);
 
   return (
-    <div className="whitespace-pre-wrap break-words text-chat leading-[var(--text-chat--line-height)]">
+    <div className="whitespace-pre-wrap break-words text-[length:var(--prose-text-size,var(--text-chat))] leading-[var(--prose-text-line-height,var(--text-chat--line-height))]">
       {tokens.map((token, index) => {
         if (token.type === "text") {
           return <Fragment key={`text-${index}`}>{token.text}</Fragment>;

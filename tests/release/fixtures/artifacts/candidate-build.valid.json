@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "kind": "proliferate.candidate-build",
+  "source_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "artifacts": [
+    {
+      "artifact_id": "anyharness/aarch64-apple-darwin",
+      "version": "0.3.27",
+      "sha256": "REPLACED_BY_TESTS_WITH_REAL_DIGEST_0000000000000000000000000000",
+      "locator": {
+        "kind": "local_file",
+        "path": "REPLACED_BY_TESTS_WITH_TEMP_BINARY_PATH"
+      }
+    }
+  ]
+}

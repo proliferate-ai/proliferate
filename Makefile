@@ -38,6 +38,13 @@ CLOUD_SSH_WORKER_API_PORT ?= 8044
 CLOUD_SSH_WORKER_DB ?= proliferate_dev_ssh_worker_smoke
 DESKTOP_RELEASE_WORKFLOW ?= Release Desktop
 DESKTOP_RELEASE_REF ?= $(shell git branch --show-current 2>/dev/null)
+LANE ?= local
+DESKTOP ?= web
+AGENTS ?= all
+SCENARIOS ?= all
+BEHAVIOR ?= diagnostic
+DRY_RUN ?=
+FILE_ISSUES ?=
 DESKTOP_RELEASE_TARGET_OS ?= macos
 DESKTOP_RELEASE_TAG ?= desktop-v$(shell node -p "require('./apps/desktop/package.json').version" 2>/dev/null)
 SERVER_ENV_SOURCE = set -a; \
@@ -104,7 +111,7 @@ endif
         check check-max-lines check-server-boundaries test test-server fmt clippy \
         dev-automation-worker \
         sdk-generate sdk-build sdk-react-build cloud-sdk-build cloud-sdk-react-build shared-build dev-artifacts-ready build-rust runtime-build web-build desktop-build build-frontend build rebuild \
-        release-desktop-dry-run release-desktop-draft \
+        desktop-test-build release-desktop-dry-run release-desktop-draft \
         test-agent-spec test-agent-runtime-local test-agent-local-fast test-agent-local \
         test-agent-runtime-cloud-e2b \
         cloud-runtime-build publish-cloud-template-env-local \
@@ -116,6 +123,7 @@ endif
         prod-service prod-taskdef prod-tasks prod-task prod-logs prod-secret-keys \
         prod-db-url prod-sql prod-psql prod-rds \
         db-migrate-up db-migrate-down \
+        release-e2e \
         all clean
 
 # --- Profile dev (setup, build, and run are separate) ---
@@ -518,6 +526,16 @@ db-ah:
 
 # --- Release helpers ---
 
+# Build a TEST-FLAVOR desktop app whose auto-updater points at a local manifest
+# server (UPDATER_URL) and trusts a throwaway key. For the tier-4 upgrade test.
+# The shipped tauri.conf.json is untouched -- a gitignored overlay is merged via
+# `tauri build --config`. See specs/developing/testing/desktop-update-testing.md.
+#   make desktop-test-build UPDATER_URL=http://127.0.0.1:8787/latest.json
+desktop-test-build:
+	@test -n "$(UPDATER_URL)" || { echo "UPDATER_URL is required. Example: make desktop-test-build UPDATER_URL=http://127.0.0.1:8787/latest.json"; exit 1; }
+	UPDATER_URL="$(UPDATER_URL)" UPDATER_PUBKEY="$(UPDATER_PUBKEY)" TARGET="$(TARGET)" BUNDLES="$(BUNDLES)" \
+		bash apps/desktop/scripts/build-updater-test.sh
+
 release-desktop-dry-run:
 	@set -e; \
 	command -v gh >/dev/null 2>&1 || { echo "GitHub CLI is required: brew install gh"; exit 1; }; \
@@ -763,6 +781,138 @@ test-cloud-webhooks: server-db-ready
 test-cloud-all: cloud-runtime-build server-db-ready
 	cd server && RUN_CLOUD_E2E=1 RUN_LIVE_E2B_WEBHOOK=1 uv run python -m pytest tests/e2e/cloud -xvs
 
+# Tier-3 live end-to-end / tier-4 upgrade-path runner
+# (specs/developing/testing/README.md "Running tier 3/4 locally"). One runner
+# CLI with lane flags; this target is a thin wrapper so CI and laptops call it
+# identically. LANE=local|staging DESKTOP=web|native AGENTS=<list|all>
+# SCENARIOS=<list|all> BEHAVIOR=diagnostic|strict DRY_RUN=1 FILE_ISSUES=1.
+release-e2e:
+	pnpm install --silent
+	cd tests/release && pnpm exec tsx src/cli/run.ts \
+		--behavior $(BEHAVIOR) \
+		--lane $(LANE) \
+		--desktop $(DESKTOP) \
+		--agents $(AGENTS) \
+		--scenarios $(SCENARIOS) \
+		$(if $(DRY_RUN),--dry-run,) \
+		$(if $(FILE_ISSUES),--file-issues,) \
+		$(if $(CANDIDATE_BUILD_MAP),--candidate-build-map $(CANDIDATE_BUILD_MAP),)
+
+# Assembles a CandidateBuildMapV1 for an already-built binary
+# (specs/developing/testing/candidate-build-handoff.md). BINARY defaults to the
+# release AnyHarness build; OUTPUT to tests/release/.output/candidate-build.json.
+CANDIDATE_MAP_BINARY ?= target/release/anyharness
+CANDIDATE_MAP_OUTPUT ?= tests/release/.output/candidate-build.json
+qualification-candidate-build-map:
+	node scripts/ci-cd/assemble-candidate-build-map.mjs \
+		--binary $(CANDIDATE_MAP_BINARY) \
+		--output $(CANDIDATE_MAP_OUTPUT)
+
+# The real build→map→validate→materialize→launch→health→evidence proof
+# (specs/developing/testing/candidate-build-handoff.md "Real handoff smoke").
+# Builds a release-mode AnyHarness stamped with the repository VERSION and the
+# current HEAD SHA, assembles the map, launches the exact bytes against an
+# isolated runtime home/port, and requires the diagnostic runner's report
+# candidate evidence to equal the launched identity.
+# The build and the assembler must agree on the exact output path: pin the
+# target dir and clear any ambient cross-compile target so an operator's
+# CARGO_TARGET_DIR/CARGO_BUILD_TARGET cannot make this qualify a stale binary
+# at target/release/ while cargo wrote somewhere else.
+qualification-candidate-handoff-smoke:
+	pnpm install --silent
+	env -u CARGO_BUILD_TARGET \
+	CARGO_TARGET_DIR=$(CURDIR)/target \
+	PROLIFERATE_BUILD_VERSION=$$(cat VERSION) \
+	PROLIFERATE_BUILD_SHA=$$(git rev-parse HEAD) \
+		cargo build --release -p anyharness
+	node scripts/ci-cd/assemble-candidate-build-map.mjs \
+		--binary $(CURDIR)/target/release/anyharness \
+		--output tests/release/.output/candidate-build.json
+	cd tests/release && pnpm exec tsx src/artifacts/anyharness-smoke.ts \
+		--map .output/candidate-build.json
+
+# "Prove One Real Local Workspace Turn": one exact candidate Server, one exact
+# candidate AnyHarness, and one exact candidate Desktop renderer built,
+# handed to the qualification runner, started as an isolated local world, and
+# used through the real product UI for one cheap managed-gateway turn. This
+# is the ONE entrypoint; GitHub Actions' manual `release-e2e.yml` job invokes
+# this same target — same four operations (resolve secrets, build candidates,
+# write the candidate map, run the same TypeScript command), same code path.
+#
+# PROFILE=<unique-name>   Names this run (becomes its run id). Never reuse a
+#                         PROFILE for two concurrent invocations.
+# BEHAVIOR=diagnostic|strict
+#
+# Locally, LiteLLM access comes from an ignored, mode-0600 secret profile
+# (never committed, never printed): AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL and
+# AGENT_GATEWAY_LITELLM_MASTER_KEY. When that file has no separate
+# AGENT_GATEWAY_LITELLM_BASE_URL (admin/control-plane URL), the verified
+# public origin is mapped to it too (the public staging origin serves both
+# inference and authenticated admin routes today). In GitHub Actions
+# (GITHUB_ACTIONS=true) the same three env vars are supplied directly by the
+# protected `staging` environment's secrets/vars — this target does not read
+# or expect the local file there.
+QUALIFICATION_INFRA_ENV ?= $(HOME)/.proliferate-local/dev/qualification-infra.env
+QUALIFICATION_LOCAL_WORLD_BASE_DIR ?= $(CURDIR)/tests/release/.output/local-world
+qualification-local-workspace:
+	@test -n "$(PROFILE)" || { \
+		echo "PROFILE=<unique-name> is required, e.g. make qualification-local-workspace PROFILE=$$(whoami)-1 BEHAVIOR=diagnostic"; \
+		exit 1; \
+	}
+	@test -n "$(BEHAVIOR)" || { \
+		echo "BEHAVIOR=<diagnostic|strict> is required."; \
+		exit 1; \
+	}
+	@if [ "$$GITHUB_ACTIONS" != "true" ]; then \
+		test -f "$(QUALIFICATION_INFRA_ENV)" || { \
+			echo "Missing qualification secret profile at $(QUALIFICATION_INFRA_ENV)."; \
+			echo "It must define AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL and AGENT_GATEWAY_LITELLM_MASTER_KEY (mode 0600, never committed)."; \
+			exit 1; \
+		}; \
+		perm=$$(stat -f '%Lp' "$(QUALIFICATION_INFRA_ENV)" 2>/dev/null || stat -c '%a' "$(QUALIFICATION_INFRA_ENV)"); \
+		test "$$perm" = "600" || { \
+			echo "$(QUALIFICATION_INFRA_ENV) must be mode 0600 (got $$perm). Run: chmod 600 $(QUALIFICATION_INFRA_ENV)"; \
+			exit 1; \
+		}; \
+	fi
+	pnpm install --silent
+	pnpm exec playwright install --with-deps chromium
+	@if [ "$$GITHUB_ACTIONS" = "true" ]; then \
+		: "$${AGENT_GATEWAY_LITELLM_BASE_URL:=$$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL}"; \
+		export AGENT_GATEWAY_LITELLM_BASE_URL; \
+	else \
+		set -a; \
+		. "$(QUALIFICATION_INFRA_ENV)"; \
+		: "$${AGENT_GATEWAY_LITELLM_BASE_URL:=$$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL}"; \
+		set +a; \
+		export AGENT_GATEWAY_LITELLM_BASE_URL; \
+	fi; \
+	test -n "$$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL" || { \
+		echo "AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL is required (local: $(QUALIFICATION_INFRA_ENV); Actions: Qualification environment vars)."; \
+		exit 1; \
+	}; \
+	test -n "$$AGENT_GATEWAY_LITELLM_MASTER_KEY" || { \
+		echo "AGENT_GATEWAY_LITELLM_MASTER_KEY is required (local: $(QUALIFICATION_INFRA_ENV); Actions: Qualification environment secrets)."; \
+		exit 1; \
+	}; \
+	run_id="ql-$(PROFILE)"; \
+	shard_id="1"; \
+	run_dir="$(QUALIFICATION_LOCAL_WORLD_BASE_DIR)/$$run_id/$$shard_id"; \
+	mkdir -p "$$run_dir"; \
+	build_summary=$$(node scripts/ci-cd/build-local-qualification-candidates.mjs \
+		--run-id "$$run_id" --shard-id "$$shard_id" --run-dir "$$run_dir") || exit $$?; \
+	echo "$$build_summary"; \
+	candidate_map=$$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).candidate_build_map)' "$$build_summary"); \
+	cd tests/release && pnpm exec tsx src/cli/run.ts \
+		--behavior $(BEHAVIOR) \
+		--lane local \
+		--desktop web \
+		--agents claude \
+		--scenarios LOCAL-WORLD-SMOKE-1 \
+		--candidate-build-map "$$candidate_map" \
+		--run-id "$$run_id" --shard-id "$$shard_id" \
+		--output-dir "$$run_dir/evidence"
+
 test-cloud-ssh-worker:
 	@test -n "$(SSH_TARGET)" || { \
 		echo "SSH_TARGET is required, for example:"; \
@@ -837,8 +987,13 @@ clippy:
 
 # --- Cloud client (Python control plane → TypeScript types) ---
 
+# Pin the deployment posture (telemetry/single-org mode) so the generated
+# schema is machine-independent: conditionally mounted routes (e.g. password
+# registration under single-org mode) must not churn with the local .env.
 cloud-openapi:
 	cd server && DEBUG=1 \
+	  TELEMETRY_MODE=local_dev \
+	  SINGLE_ORG_MODE=1 \
 	  JWT_SECRET=local-openapi-generation-secret \
 	  CLOUD_SECRET_KEY=local-openapi-generation-cloud-secret \
 	  GITHUB_OAUTH_CLIENT_ID=local-openapi-generation-github-client-id \
@@ -942,14 +1097,31 @@ catalog-view:
 # Rebuild the draft, resolve every harness into a fenced pin (per-platform
 # {url,sha256} or npm/git, reusing prior shas for unchanged URLs), and promote
 # it to the bundled lockfile the runtime loads (catalogs/agents/catalog.json).
+# This target finalizes already-committed probe snapshots; use catalog-update
+# when discovering new upstream harness versions.
 catalog-pin:
+	@state=scripts/agent-catalog/generated/.probe-logs/run.state; \
+		if [ -f "$$state" ] && ! grep -q '^complete=true$$' "$$state"; then \
+			echo "Refusing catalog promotion after an incomplete diagnostic probe run." >&2; \
+			echo "Run a complete catalog-update or remove the local probe state intentionally." >&2; \
+			exit 1; \
+		fi
 	cd scripts/agent-catalog && node build-catalog.mjs \
 		&& node resolve-pins.mjs --catalog catalog.draft.json --reuse-from ../../catalogs/agents/catalog.json \
 		&& cp catalog.draft.json ../../catalogs/agents/catalog.json \
 		&& node render-catalog.mjs
+	node scripts/validate-agent-catalog.mjs
 
-# Re-run the full probe matrix (skips contexts missing credentials; reads
-# .probe-secrets.env at the repo root), then re-pin the bundled lockfile.
+# Resolve current upstream pins, install those exact artifacts, run the complete
+# probe matrix, then promote only agents backed by fresh successful probes.
+# Set CATALOG_PROBE_AGENTS=codex (comma-separated for more than one) for a
+# focused authoritative update; agents outside that selection are retained
+# byte-for-byte. Cursor additionally requires CATALOG_PROBE_ARGS=--include-cursor
+# on a machine with a working cursor-agent login. --allow-partial is diagnostics
+# only: the completeness gate below deliberately refuses to promote it.
 catalog-update:
-	./scripts/agent-catalog/run-probes.sh
-	$(MAKE) catalog-pin
+	CATALOG_PROBE_AGENTS="$(CATALOG_PROBE_AGENTS)" ./scripts/agent-catalog/run-probes.sh $(CATALOG_PROBE_ARGS)
+	cd scripts/agent-catalog && node build-catalog.mjs --require-complete-probe \
+		&& cp catalog.draft.json ../../catalogs/agents/catalog.json \
+		&& node render-catalog.mjs
+	node scripts/validate-agent-catalog.mjs

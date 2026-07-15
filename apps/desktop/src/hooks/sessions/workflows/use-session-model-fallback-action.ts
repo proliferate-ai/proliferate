@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useSetSessionConfigOptionMutation } from "@anyharness/sdk-react";
 import { resolveStatusFromExecutionSummary } from "@proliferate/product-domain/sessions/activity";
 import { resolveFallbackSessionModelId } from "@/lib/domain/sessions/model-fallback";
@@ -10,12 +11,15 @@ import {
 import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 
 export function useSessionModelFallbackAction() {
+  const host = useProductHost();
+  const ssh = host.desktop?.ssh ?? null;
+  const cloudClient = host.cloud.client;
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
   const setSessionConfigOptionMutation = useSetSessionConfigOptionMutation();
 
   return useCallback(async (sessionId: string, fallbackModelId: string) => {
-    const { connection, workspaceId, materializedSessionId } =
-      await getSessionClientAndWorkspace(sessionId);
+    const { workspaceId, materializedSessionId } =
+      await getSessionClientAndWorkspace(sessionId, ssh, cloudClient);
     const response = await setSessionConfigOptionMutation.mutateAsync({
       workspaceId,
       sessionId: materializedSessionId,
@@ -25,9 +29,7 @@ export function useSessionModelFallbackAction() {
       },
     });
 
-    upsertWorkspaceSessionRecord(workspaceId, response.session, {
-      runtimeUrl: connection.runtimeUrl,
-    });
+    upsertWorkspaceSessionRecord(workspaceId, response.session);
 
     const latestSlot = getSessionRecord(sessionId);
     if (!latestSlot) {
@@ -63,5 +65,5 @@ export function useSessionModelFallbackAction() {
     });
 
     return response;
-  }, [setSessionConfigOptionMutation, upsertWorkspaceSessionRecord]);
+  }, [setSessionConfigOptionMutation, ssh, cloudClient, upsertWorkspaceSessionRecord]);
 }

@@ -1,4 +1,5 @@
-import { Check, ChevronsUpDown, Cloud, Folder, Plus } from "lucide-react";
+import { Check, ChevronsUpDown, Cloud, Plus } from "lucide-react";
+import { GitHub } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import {
   POPOVER_SURFACE_CLASS,
@@ -40,7 +41,7 @@ export function RepoPicker({
           variant="unstyled"
           size="unstyled"
           aria-label="Select repository"
-          className="flex h-7 w-[200px] items-center gap-2 rounded-md border border-input bg-background pl-2 pr-2 text-ui-sm transition-colors hover:bg-accent data-[state=open]:bg-accent"
+          className="flex h-8 w-[200px] items-center gap-2 rounded-md border border-input bg-background px-2 text-ui-sm transition-colors hover:bg-accent data-[state=open]:bg-accent"
         >
           <RepoChip kind={selected?.kind ?? "local"} />
           <span className="min-w-0 flex-1 truncate text-left">
@@ -84,9 +85,11 @@ export function RepoPicker({
 }
 
 function RepoChip({ kind }: { kind: RepoPickerItem["kind"] }) {
-  const Icon = kind === "cloud" ? Cloud : Folder;
+  // GitHub-backed repos read as a GitHub mark; cloud environments stay a Cloud
+  // glyph. Neutral chip, not the old blue folder.
+  const Icon = kind === "cloud" ? Cloud : GitHub;
   return (
-    <span className="flex size-[15px] shrink-0 items-center justify-center rounded bg-special text-white [&>svg]:size-[9px]">
+    <span className="flex size-[15px] shrink-0 items-center justify-center rounded bg-surface-control text-muted-foreground [&>svg]:size-[10px]">
       <Icon />
     </span>
   );

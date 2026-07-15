@@ -15,6 +15,10 @@ on:
         description: Exact comma-separated surfaces to promote, or all. Overrides detection and force_surfaces.
         required: false
         type: string
+      release_title:
+        description: Optional one-line Desktop changelog title.
+        required: false
+        type: string
       require_staging_success:
         description: Require a successful Deploy Staging run for this exact SHA.
         default: true
@@ -218,6 +222,7 @@ jobs:
       enabled: ${{ needs.plan.outputs.desktop == 'true' }}
       dry_run: false
       publish_updater: true
+      release_title: ${{ github.event.inputs.release_title || '' }}
     secrets: inherit
 
   summary:

@@ -529,25 +529,4 @@ describe("shortcut dispatch policy", () => {
       target: null,
     } as KeyboardEvent)).toBe(true);
   });
-
-  it("allows tab cycling from browser focus zones", () => {
-    vi.stubGlobal("document", {
-      activeElement: {
-        closest: () => ({
-          getAttribute: () => "browser",
-        }),
-      },
-    });
-
-    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.nextTab, {
-      key: "}",
-      code: "BracketRight",
-      metaKey: true,
-      ctrlKey: false,
-      shiftKey: true,
-      altKey: false,
-      defaultPrevented: true,
-      target: null,
-    } as KeyboardEvent)).toBe(true);
-  });
 });

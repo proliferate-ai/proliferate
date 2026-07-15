@@ -56,12 +56,12 @@ export function detailIndicatorsForWorkspace(
     ...(origin ? [origin] : []),
     ...(cloudAccess ? [cloudAccess] : []),
     ...(cloudExposure ? [cloudExposure] : []),
-    {
+    ...(variant === "local" ? [] : [{
       kind: "materialization" as const,
       variant,
       tooltip: materializationTooltip(variant, targetAppearance),
       targetAppearance: variant === "ssh" ? targetAppearance ?? null : null,
-    },
+    }]),
   ];
 }
 

@@ -2,36 +2,31 @@
 
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { MockInstance } from "vitest";
 import { useUserPreferencesLifecycle } from "@/hooks/preferences/lifecycle/use-user-preferences-lifecycle";
 import { useWorktreeAutoDeleteAdoption } from "@/hooks/preferences/workflows/use-worktree-auto-delete-adoption";
 import { USER_PREFERENCE_DEFAULTS } from "@/lib/domain/preferences/user/model";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+import {
+  createMemoryProductStorage,
+  type MemoryProductStorage,
+} from "@/test/product-storage-test-utils";
+import {
+  makeTestProductHost,
+  productHostWrapper,
+} from "@/test/product-host-test-utils";
 
-const storeMocks = vi.hoisted(() => {
-  const values = new Map<string, unknown>();
-  const get = vi.fn(async (key: string) => values.get(key));
-  const set = vi.fn(async (key: string, value: unknown) => {
-    values.set(key, value);
-  });
+let memory: MemoryProductStorage;
+let setItemSpy: MockInstance;
 
-  return {
-    values,
-    get,
-    set,
-    getPreferencesStore: vi.fn(async () => ({ get, set })),
-  };
-});
-
-vi.mock("@/lib/access/tauri/store", () => ({
-  getPreferencesStore: storeMocks.getPreferencesStore,
-}));
+function persistedUserPreferences(): Record<string, unknown> {
+  return memory.readJson<Record<string, unknown>>("user_preferences") ?? {};
+}
 
 describe("useUserPreferencesLifecycle", () => {
   beforeEach(() => {
-    storeMocks.values.clear();
-    storeMocks.get.mockClear();
-    storeMocks.set.mockClear();
-    storeMocks.getPreferencesStore.mockClear();
+    memory = createMemoryProductStorage();
+    setItemSpy = vi.spyOn(memory.storage, "setItem");
     useUserPreferencesStore.setState({
       ...USER_PREFERENCE_DEFAULTS,
       _hydrated: false,
@@ -46,9 +41,12 @@ describe("useUserPreferencesLifecycle", () => {
   it("preserves persisted metadata after bootstrap when preferences change", async () => {
     const persisted = { ...USER_PREFERENCE_DEFAULTS } as Record<string, unknown>;
     delete persisted.worktreeAutoDeleteLimit;
-    storeMocks.values.set("user_preferences", persisted);
+    memory.values.set("user_preferences", persisted);
 
-    renderHook(() => useUserPreferencesLifecycle());
+    const host = makeTestProductHost({ overrides: { storage: memory.storage } });
+    renderHook(() => useUserPreferencesLifecycle(), {
+      wrapper: productHostWrapper(host),
+    });
 
     await waitFor(() => {
       expect(useUserPreferencesStore.getState()._hydrated).toBe(true);
@@ -59,7 +57,7 @@ describe("useUserPreferencesLifecycle", () => {
     });
 
     await waitFor(() => {
-      const persistedRecord = storeMocks.values.get("user_preferences") as Record<string, unknown>;
+      const persistedRecord = persistedUserPreferences();
       expect(persistedRecord.colorMode).toBe("light");
       expect(persistedRecord.worktreeAutoDeleteLimit).toBeUndefined();
       expect(persistedRecord.worktreeAutoDeleteLimitBackfilled).toBe(true);
@@ -69,27 +67,24 @@ describe("useUserPreferencesLifecycle", () => {
   it("awaits persistence when worktree cleanup adoption metadata is consumed", async () => {
     const persisted = { ...USER_PREFERENCE_DEFAULTS } as Record<string, unknown>;
     delete persisted.worktreeAutoDeleteLimit;
-    storeMocks.values.set("user_preferences", persisted);
+    memory.values.set("user_preferences", persisted);
 
-    renderHook(() => useUserPreferencesLifecycle());
-    const adoption = renderHook(() => useWorktreeAutoDeleteAdoption());
+    const host = makeTestProductHost({ overrides: { storage: memory.storage } });
+    const wrapper = productHostWrapper(host);
+    renderHook(() => useUserPreferencesLifecycle(), { wrapper });
+    const adoption = renderHook(() => useWorktreeAutoDeleteAdoption(), { wrapper });
 
     await waitFor(() => {
       expect(useUserPreferencesStore.getState()._hydrated).toBe(true);
     });
-    storeMocks.set.mockClear();
+    setItemSpy.mockClear();
 
     await act(async () => {
       await adoption.result.current();
     });
 
-    expect(storeMocks.set).toHaveBeenCalledWith(
-      "user_preferences",
-      expect.objectContaining({
-        worktreeAutoDeleteLimit: USER_PREFERENCE_DEFAULTS.worktreeAutoDeleteLimit,
-      }),
-    );
-    const persistedRecord = storeMocks.values.get("user_preferences") as Record<string, unknown>;
+    expect(setItemSpy).toHaveBeenCalledWith("user_preferences", expect.any(String));
+    const persistedRecord = persistedUserPreferences();
     expect(persistedRecord.worktreeAutoDeleteLimitBackfilled).toBeUndefined();
     expect(persistedRecord.worktreeAutoDeleteLimit)
       .toBe(USER_PREFERENCE_DEFAULTS.worktreeAutoDeleteLimit);

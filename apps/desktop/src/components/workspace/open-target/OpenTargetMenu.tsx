@@ -1,9 +1,9 @@
-import { useState, useRef, useEffect, type ReactNode } from "react";
+import type { ReactElement, ReactNode, Ref } from "react";
 import { Copy } from "@proliferate/ui/icons";
 import { OpenTargetIcon } from "@/components/workspace/open-target/OpenTargetIcon";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { POPOVER_SURFACE_CLASS } from "@proliferate/ui/primitives/PopoverButton";
-import type { OpenTarget } from "@/hooks/access/tauri/use-shell-actions";
+import { POPOVER_FRAME_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import type { OpenTarget } from "@proliferate/product-client/host/desktop-bridge";
 
 export function TargetIcon({ target, size = "size-3.5" }: { target: OpenTarget; size?: string }) {
   if (target.kind === "copy") {
@@ -29,7 +29,7 @@ function DropdownItem({
       role="menuitem"
       onClick={onClick}
       icon={icon}
-      iconClassName="size-4 opacity-100"
+      iconClassName="size-4 text-current"
       label={label}
       trailing={shortcut ? (
         <span className="inline-flex shrink-0 items-center pl-1">
@@ -38,95 +38,48 @@ function DropdownItem({
           </span>
         </span>
       ) : null}
-      trailingClassName="ml-0 size-auto opacity-100"
+      trailingClassName="ml-0 size-auto"
     />
   );
 }
 
-type DropdownPhase = "closed" | "entering" | "open" | "exiting";
-
 interface OpenTargetMenuProps {
   targets: OpenTarget[];
   onTargetClick: (target: OpenTarget) => void;
-  trigger: (props: { ref: React.Ref<HTMLDivElement>; toggle: () => void; isOpen: boolean }) => ReactNode;
-  align?: "left" | "right";
+  /** Trigger element; PopoverButton wires click/aria/data-state onto it. */
+  trigger: ReactElement<{ onClick?: (...args: unknown[]) => void; ref?: Ref<HTMLElement> }>;
+  align?: "start" | "end";
 }
 
-export function OpenTargetMenu({ targets, onTargetClick, trigger, align = "left" }: OpenTargetMenuProps) {
-  const [phase, setPhase] = useState<DropdownPhase>("closed");
-  const containerRef = useRef<HTMLDivElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  const isVisible = phase !== "closed";
-
-  function openMenu() {
-    setPhase("entering");
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => setPhase("open"));
-    });
-  }
-
-  function closeMenu() {
-    setPhase("exiting");
-  }
-
-  function toggle() {
-    if (phase === "closed") openMenu();
-    else if (phase === "open" || phase === "entering") closeMenu();
-  }
-
-  useEffect(() => {
-    if (phase !== "exiting") return;
-    const el = menuRef.current;
-    if (!el) { setPhase("closed"); return; }
-    function onEnd() { setPhase("closed"); }
-    el.addEventListener("transitionend", onEnd, { once: true });
-    const fallback = setTimeout(onEnd, 200);
-    return () => { el.removeEventListener("transitionend", onEnd); clearTimeout(fallback); };
-  }, [phase]);
-
-  useEffect(() => {
-    if (!isVisible) return;
-    function handleClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        closeMenu();
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [isVisible]);
-
-  function handleItemClick(target: OpenTarget) {
-    closeMenu();
-    onTargetClick(target);
-  }
-
+/**
+ * Compact "open in <app>" dropdown (codex popover recipe: 220px, icon+label
+ * rows). Built on the canonical Radix PopoverButton so it portals, handles
+ * collision/dismiss, and matches every other menu's chrome.
+ */
+export function OpenTargetMenu({ targets, onTargetClick, trigger, align = "start" }: OpenTargetMenuProps) {
   return (
-    <div className="relative inline-block" ref={containerRef}>
-      {trigger({ ref: containerRef, toggle, isOpen: isVisible })}
-      {isVisible && (
-        <div
-          ref={menuRef}
-          role="menu"
-          className={`absolute top-full z-50 mt-1 max-h-80 w-[220px] overflow-y-auto ${POPOVER_SURFACE_CLASS} transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-            align === "right" ? "right-0 origin-top-right" : "left-0 origin-top-left"
-          } ${
-            phase === "open"
-              ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
-              : "pointer-events-none -translate-y-1 scale-95 opacity-0"
-          }`}
-        >
+    <PopoverButton
+      trigger={trigger}
+      align={align}
+      side="bottom"
+      className={`${POPOVER_FRAME_CLASS} flex max-h-80 w-[200px] select-none flex-col overflow-y-auto p-1`}
+    >
+      {(close) => (
+        <div role="menu" className="flex flex-col gap-px">
           {targets.map((target) => (
             <DropdownItem
               key={target.id}
               icon={<TargetIcon target={target} />}
               label={target.label}
               shortcut={target.shortcut}
-              onClick={() => handleItemClick(target)}
+              onClick={() => {
+                close();
+                onTargetClick(target);
+              }}
             />
           ))}
         </div>
       )}
-    </div>
+    </PopoverButton>
   );
 }

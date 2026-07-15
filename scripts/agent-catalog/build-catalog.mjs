@@ -22,8 +22,130 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const generatedDir = join(here, "generated");
 const outPath = join(here, "catalog.draft.json");
+const bundledPath = join(here, "..", "..", "catalogs", "agents", "catalog.json");
+const probeStatePath = join(generatedDir, ".probe-logs", "run.state");
+const resolvedCandidatePath = join(generatedDir, ".probe-logs", "resolved-candidate.json");
+const allowedArgs = new Set(["--require-complete-probe"]);
+for (const arg of process.argv.slice(2)) {
+  if (!allowedArgs.has(arg)) throw new Error(`unexpected argument ${arg}`);
+}
+const requireCompleteProbe = process.argv.includes("--require-complete-probe");
+let previousCatalog = null;
+try { previousCatalog = JSON.parse(readFileSync(bundledPath, "utf8")); } catch {}
+const previousByKind = new Map((previousCatalog?.agents ?? []).map((agent) => [agent.kind, agent]));
 
-const AGENT_DISPLAY_NAMES = { claude: "Claude", codex: "Codex", gemini: "Gemini", cursor: "Cursor", opencode: "OpenCode", grok: "Grok" };
+function normalizedNativeVersion(value) {
+  if (typeof value !== "string") return null;
+  return value.match(/\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?/)?.[0] ?? null;
+}
+
+function readCompleteProbeState() {
+  let text;
+  try {
+    text = readFileSync(probeStatePath, "utf8");
+  } catch (error) {
+    throw new Error(`complete probe state is required at ${probeStatePath}: ${error.message}`);
+  }
+  const state = {};
+  for (const line of text.split("\n")) {
+    const separator = line.indexOf("=");
+    if (separator === -1) continue;
+    const key = line.slice(0, separator);
+    const value = line.slice(separator + 1);
+    (state[key] ??= []).push(value);
+  }
+  if (state.complete?.at(-1) !== "true") {
+    throw new Error("probe run is partial or failed; refusing to build a promotable catalog");
+  }
+  const required = new Set(state.required ?? []);
+  const passed = new Set(state.passed ?? []);
+  const missing = [...required].filter((id) => !passed.has(id));
+  if (missing.length) {
+    throw new Error(`probe state is incomplete; missing successful contexts: ${missing.join(", ")}`);
+  }
+  const startedAt = Date.parse(state.startedAt?.at(-1) ?? "");
+  if (!Number.isFinite(startedAt)) throw new Error("probe state has no valid startedAt timestamp");
+  const snapshotsByAgent = new Map();
+  for (const id of passed) {
+    const separator = id.indexOf(".");
+    const agent = id.slice(0, separator);
+    const context = id.slice(separator + 1);
+    const snapshotPath = join(generatedDir, `${id}.probe.json`);
+    const snapshot = JSON.parse(readFileSync(snapshotPath, "utf8"));
+    if (snapshot.agentKind !== agent || snapshot.authContext !== context) {
+      throw new Error(`${id}: probe state does not match ${snapshotPath}`);
+    }
+    const probedAt = Date.parse(snapshot.probedAt);
+    if (!Number.isFinite(probedAt) || probedAt < startedAt) {
+      throw new Error(`${id}: snapshot is missing or predates the authoritative probe run`);
+    }
+    if (!snapshotsByAgent.has(agent)) snapshotsByAgent.set(agent, []);
+    snapshotsByAgent.get(agent).push(snapshot);
+  }
+  const activeAgents = new Set(state.agent ?? []);
+  const candidate = JSON.parse(readFileSync(resolvedCandidatePath, "utf8"));
+  const candidateByKind = new Map(candidate.agents.map((agent) => [agent.kind, agent]));
+  for (const agent of snapshotsByAgent.keys()) {
+    if (!activeAgents.has(agent)) {
+      throw new Error(`${agent}: passed probe snapshots are not tied to a resolved agent`);
+    }
+  }
+  for (const agent of activeAgents) {
+    const agentSnapshots = snapshotsByAgent.get(agent) ?? [];
+    if (!agentSnapshots.length) {
+      throw new Error(`${agent}: resolved agent has no fresh successful probe context`);
+    }
+    const candidateAgent = candidateByKind.get(agent);
+    if (!candidateAgent?.harness?.agentProcess?.source) {
+      throw new Error(`${agent}: resolved candidate has no fenced agent-process source`);
+    }
+    const attestationVersions = agentSnapshots.map((snapshot) => {
+      const version = snapshot.attestation?.version;
+      if (typeof version !== "string" || !version.trim()) {
+        throw new Error(
+          `${agent}.${snapshot.authContext}: successful probe is missing agent-process attestation version`,
+        );
+      }
+      return version;
+    });
+    const observedVersions = new Set(attestationVersions);
+    if (observedVersions.size > 1 || (
+      observedVersions.size === 1 &&
+      !observedVersions.has(candidateAgent.harness.agentProcess.version)
+    )) {
+      throw new Error(
+        `${agent}: probe attestation (${[...observedVersions].join(", ") || "missing"}) ` +
+        `does not match resolved candidate ${candidateAgent.harness.agentProcess.version}`,
+      );
+    }
+    const candidateNative = candidateAgent.harness.native;
+    if (candidateNative) {
+      const observedNativeVersions = agentSnapshots.map((snapshot) => {
+        const version = snapshot.nativeCli?.version;
+        if (typeof version !== "string" || !version.trim()) {
+          throw new Error(
+            `${agent}.${snapshot.authContext}: successful probe is missing native CLI version ` +
+            `required by resolved candidate ${candidateNative.version}`,
+          );
+        }
+        return version;
+      });
+      const expected = normalizedNativeVersion(candidateNative.version);
+      const observed = new Set(observedNativeVersions.map(normalizedNativeVersion));
+      if (!expected || observed.has(null) || observed.size !== 1 || !observed.has(expected)) {
+        throw new Error(
+          `${agent}: native CLI versions (${observedNativeVersions.join(", ")}) ` +
+          `do not match resolved candidate ${candidateNative.version}`,
+        );
+      }
+    }
+  }
+  return { activeAgents, candidateByKind, passed };
+}
+
+const probeState = requireCompleteProbe ? readCompleteProbeState() : null;
+
+const AGENT_DISPLAY_NAMES = { claude: "Claude", codex: "Codex", cursor: "Cursor", opencode: "OpenCode", grok: "Grok" };
 // Which registry auth slot satisfies each probe auth context (curation-owned).
 // Per-agent context -> registry auth slot. Slot ids MUST be slots the
 // registry declares for that agent (the runtime classifier skips contexts
@@ -33,7 +155,6 @@ const AGENT_DISPLAY_NAMES = { claude: "Claude", codex: "Codex", gemini: "Gemini"
 const AUTH_CONTEXT_SLOTS = {
   claude: { "anthropic-api": "anthropic", "anthropic-oauth": "anthropic", "bedrock": "anthropic" },
   codex: { "openai-api": "openai", "openai-oauth": "openai", "bedrock": "openai" },
-  gemini: { "gemini-api": "gemini", "google-oauth": "gemini" },
   cursor: { "cursor-login": "cursor" },
   opencode: {
     "anthropic-api": "anthropic",
@@ -52,17 +173,23 @@ const AUTH_CONTEXT_SLOTS = {
 // the registry slot's envVars/discoveryKinds (validation_pairing.rs).
 const AUTH_CONTEXT_SIGNALS = {
   claude: {
-    "bedrock": { allOf: [{ envFlag: "CLAUDE_CODE_USE_BEDROCK=1" }, { discovery: "aws-credential-chain" }] },
+    // CLAUDE_CODE_USE_BEDROCK=1 is the routing switch: when set, the CLI
+    // routes to Bedrock and only serves us.anthropic.* inference-profile ids,
+    // whichever credential source it uses. We key bedrock on the flag alone
+    // and do NOT also require aws-credential-chain — that discovery covers only
+    // the passive sources (env pair, bearer token, ~/.aws profile, SSO cache)
+    // and deliberately misses the exotic tail (IMDS / task-role / container
+    // credentials). A production Bedrock deployment on an ECS
+    // task role sets the flag but has no passively detectable creds, so an
+    // allOf would misclassify it as oauth/api and then accept bare ids the
+    // account 400s on. The flag is the honest, sufficient signal.
+    "bedrock": { envFlag: "CLAUDE_CODE_USE_BEDROCK=1" },
     "anthropic-api": { anyOf: [{ env: "ANTHROPIC_API_KEY" }, { env: "ANTHROPIC_AUTH_TOKEN" }] },
     "anthropic-oauth": { anyOf: [{ discovery: "claude-oauth-creds" }, { discovery: "claude-keychain" }] },
   },
   codex: {
     "openai-oauth": { anyOf: [{ discovery: "codex-auth-json-oauth" }, { discovery: "codex-keychain" }] },
     "openai-api": { anyOf: [{ env: "OPENAI_API_KEY" }, { env: "CODEX_API_KEY" }, { discovery: "codex-auth-json-api-key" }] },
-  },
-  gemini: {
-    "gemini-api": { anyOf: [{ env: "GEMINI_API_KEY" }, { env: "GOOGLE_API_KEY" }] },
-    "google-oauth": { anyOf: [{ discovery: "gemini-oauth-creds" }, { discovery: "gemini-keychain" }] },
   },
   cursor: {
     "cursor-login": { anyOf: [{ env: "CURSOR_API_KEY" }, { discovery: "cursor-keychain" }] },
@@ -93,10 +220,19 @@ const AGENT_SESSION_DEFAULTS = {
     "openai-oauth": "gpt-5.5",
     "bedrock": "openai.gpt-5.5",
   },
-  gemini: { "gemini-api": "auto", "google-oauth": "auto" },
   cursor: { "cursor-login": "default" },
   opencode: { "baseline": "opencode/big-pickle" },
   grok: { "xai-api": "grok-4.20-0309-non-reasoning" },
+};
+
+// Native goal support per harness (session.supportsGoals, curation-owned):
+// the pinned harness version implements the GoalPort (claude >= 2.1.139,
+// codex >= 0.133). The runtime capability stays ACP-advertised at initialize;
+// this flag is the version-level declaration for surfaces without a live
+// handshake.
+const AGENT_SUPPORTS_GOALS = {
+  claude: true,
+  codex: true,
 };
 
 // Display-name curation: probe snapshots carry pretty names for some models
@@ -123,7 +259,6 @@ const CONTROL_MAPPINGS = {
     reasoning_effort: { liveConfigId: "reasoning_effort" },
     fast_mode: { liveConfigId: "fast_mode" },
   },
-  gemini: { mode: { createField: "modeId", liveConfigId: "mode" } },
   cursor: { mode: { createField: "modeId", liveConfigId: "mode" } },
   opencode: { mode: { createField: "modeId", liveConfigId: "mode" } },
   grok: { mode: { createField: "modeId", liveConfigId: "mode" } },
@@ -136,9 +271,13 @@ const CONTROL_MAPPINGS = {
 // the probe can prove a model launches.
 const MODEL_VISIBILITY_OPT_OUTS = {
   claude: [
-    // trial-id duplicate of menu id "opus" (Opus 4.8)
-    "claude-opus-4-8",
-    // global-region duplicate of us.anthropic.claude-fable-5 (bedrock)
+    // Only opt out GENUINE same-context duplicates. The bare current-gen ids
+    // (claude-fable-5, claude-opus-4-8) are oauth/api-only — never gateway-
+    // reachable — so they are NOT duplicates of the us.anthropic.* Bedrock
+    // entries and must stay visible on the native/api surfaces (that's the
+    // only form of those models an OAuth/API login can use). Only the
+    // global-region id duplicates its us.anthropic.* sibling WITHIN the
+    // bedrock context, so it alone stays opted out.
     "global.anthropic.claude-fable-5",
   ],
   grok: [
@@ -150,12 +289,100 @@ const MODEL_VISIBILITY_OPT_OUTS = {
   ],
 };
 
+// Availability stays the OBSERVED SET (menu or accepted trial per context)
+// with ONE sanctioned correction. Bedrock serves only region-prefixed
+// inference-profile ids (us.anthropic.* / global.anthropic.*). The Claude CLI
+// still lists the bare current-gen ids (default / haiku / opus) on its menu
+// during a bedrock probe run, so the raw observed set tags them
+// bedrock-available — but the CLI 400s those bare ids on use ("Try --model to
+// switch to us.anthropic.claude-opus-4-7 ..."). Menu presence is not
+// serve-ability: this is a menu-lie. Strip bedrock from any claude id that is
+// not a region-prefixed inference profile so validate_launch never accepts a
+// bare id a Bedrock-routed account cannot serve. The us.anthropic.* rows stay
+// the account's real menu; a normal oauth/api login (no bedrock context) is
+// untouched. Provenance keeps the honest observation.
+function correctAvailability(kind, modelId, contexts) {
+  if (kind === "claude" && !modelId.includes(".anthropic.")) {
+    return contexts.filter((context) => context !== "bedrock");
+  }
+  return contexts;
+}
+
+// Per-harness advanced settings: declared here (curation-owned), emitted onto
+// the agent entry, and applied at launch per the mapping kind. v1 supports
+// boolean-only, surfaces ⊆ {local, cloud}, mapping.kind ∈ {cli_flag, env}.
+const HARNESS_SETTINGS = {
+  claude: [
+    {
+      key: "chrome",
+      type: "boolean",
+      label: "Use Claude Code with Chrome",
+      description: "Allow Claude Code to control your Chrome browser. Requires the Claude Code Chrome extension.",
+      default: false,
+      surfaces: ["local"],
+      mapping: { kind: "cli_flag", flag: "--chrome" },
+    },
+  ],
+};
+
 // Explicit display overrides where prettifying alone is ambiguous (two
-// "GPT-5.4" rows when the bedrock CMB models sit beside the API ones).
+// "GPT-5.4" rows when the bedrock CMB models sit beside the API ones), or
+// where the probe-reported name is a lowercase/hyphenated raw id.
+// prettifyDisplayName() below skips any name that already contains an
+// uppercase letter, so these raw probe names (all-lowercase) never get
+// auto-prettified and need an explicit curated entry here.
 const MODEL_DISPLAY_OVERRIDES = {
+  claude: {
+    "claude-fable-5": "Fable 5",
+    "claude-opus-4-8": "Opus 4.8",
+    "global.anthropic.claude-fable-5": "Fable 5",
+  },
   codex: {
     "openai.gpt-5.4-cmb": "GPT-5.4 on Bedrock",
     "openai.gpt-5.4-cmb/xhigh": "GPT-5.4 (xhigh) on Bedrock",
+    "openai.gpt-oss-120b": "GPT-OSS 120B",
+    "gpt-5.6-sol": "GPT-5.6 Sol",
+    "gpt-5.6-terra": "GPT-5.6 Terra",
+    "gpt-5.6-luna": "GPT-5.6 Luna",
+    "gpt-5.4-mini": "GPT-5.4 Mini",
+    "gpt-5.3-codex-spark": "GPT-5.3 Codex Spark",
+  },
+  cursor: {
+    "composer-2.5": "Composer 2.5",
+    "claude-opus-4-8": "Claude Opus 4.8",
+    "claude-opus-4-7": "Claude Opus 4.7",
+    "claude-opus-4-6": "Claude Opus 4.6",
+    "claude-opus-4-5": "Claude Opus 4.5",
+    "claude-sonnet-4-6": "Claude Sonnet 4.6",
+    "claude-sonnet-4-5": "Claude Sonnet 4.5",
+    "claude-sonnet-4": "Claude Sonnet 4",
+    "claude-haiku-4-5": "Claude Haiku 4.5",
+    "claude-fable-5": "Claude Fable 5",
+    "grok-build-0.1": "Grok Build 0.1",
+    "grok-4.3": "Grok 4.3",
+    "gpt-5.3-codex": "GPT-5.3 Codex",
+    "gpt-5.2-codex": "GPT-5.2 Codex",
+    "gpt-5.1-codex-max": "GPT-5.1 Codex Max",
+    "gpt-5.1-codex-mini": "GPT-5.1 Codex Mini",
+    "gpt-5.4-mini": "GPT-5.4 Mini",
+    "gpt-5.4-nano": "GPT-5.4 Nano",
+    "gpt-5-mini": "GPT-5 Mini",
+    "gemini-3.1-pro": "Gemini 3.1 Pro",
+    "gemini-3-flash": "Gemini 3 Flash",
+    "gemini-3.5-flash": "Gemini 3.5 Flash",
+    "gemini-2.5-flash": "Gemini 2.5 Flash",
+    "kimi-k2.5": "Kimi K2.5",
+  },
+  grok: {
+    "grok-4.20-0309-non-reasoning": "Grok 4.20 Non-Reasoning",
+    "grok-4.20-0309-reasoning": "Grok 4.20 Reasoning",
+    "grok-4.20-multi-agent-0309": "Grok 4.20 Multi-Agent",
+    "grok-4.3": "Grok 4.3",
+    "grok-build-0.1": "Grok Build 0.1",
+    "grok-imagine-image": "Grok Imagine Image",
+    "grok-imagine-image-quality": "Grok Imagine Image Quality",
+    "grok-imagine-video": "Grok Imagine Video",
+    "grok-imagine-video-1.5-preview": "Grok Imagine Video 1.5 Preview",
   },
 };
 
@@ -190,7 +417,6 @@ function prettifyDisplayName(name) {
 const AUTH_CONTEXT_PRECEDENCE = {
   claude: ["bedrock", "anthropic-api", "anthropic-oauth"],
   codex: ["bedrock", "openai-oauth", "openai-api"],
-  gemini: ["gemini-api", "google-oauth"],
   cursor: ["cursor-login"],
   opencode: ["anthropic-api", "openai-api", "gemini-api", "opencode-zen", "baseline"],
   grok: ["xai-api"],
@@ -201,6 +427,11 @@ const warnings = [];
 // ---- load snapshots, grouped by agent kind --------------------------------
 const snapshots = readdirSync(generatedDir)
   .filter((name) => name.endsWith(".probe.json"))
+  .filter((name) => {
+    if (!probeState) return true;
+    const id = name.slice(0, -".probe.json".length);
+    return probeState.passed.has(id);
+  })
   .map((name) => ({ name, data: JSON.parse(readFileSync(join(generatedDir, name), "utf8")) }));
 
 const byAgent = new Map();
@@ -254,8 +485,8 @@ function versionedDisplayName(name, description, modelId) {
     : `${name.slice(0, paren)} ${version}${name.slice(paren)}`;
 }
 
-// Derive a `mode` control from the legacy ACP modes block (harnesses like
-// gemini report modes there and have no config options at all).
+// Derive a `mode` control from the legacy ACP modes block (some harnesses
+// report modes there and have no config options at all).
 function modesBlockMatrix(modes) {
   if (!modes?.availableModes?.length) return {};
   return {
@@ -391,6 +622,42 @@ function mergeMatrices(matrices) {
   return merged;
 }
 
+// Gateway rows and policy are curated runtime-route metadata, not probe
+// observations. Preserve that overlay from the bundled lockfile while fresh
+// probe facts are rebuilt. Inactive agents are copied wholesale below.
+function applyBundledCuration(agent) {
+  const previous = previousByKind.get(agent.kind);
+  if (!previous) return agent;
+
+  const gatewayContext = previous.authContexts?.find((context) => context.id === "gateway");
+  if (gatewayContext && !agent.authContexts.some((context) => context.id === "gateway")) {
+    agent.authContexts.push(structuredClone(gatewayContext));
+  }
+
+  for (const previousModel of previous.session?.models ?? []) {
+    if (!previousModel.availability?.anyOf?.includes("gateway")) continue;
+    const currentModel = agent.session.models.find((model) => model.id === previousModel.id);
+    if (!currentModel) {
+      agent.session.models.push(structuredClone(previousModel));
+      continue;
+    }
+    if (!currentModel.availability.anyOf.includes("gateway")) {
+      currentModel.availability.anyOf.push("gateway");
+    }
+  }
+
+  if (previous.session?.defaults?.gateway) {
+    agent.session.defaults.gateway = previous.session.defaults.gateway;
+  }
+  if (previous.session?.gatewayPolicy) {
+    agent.session.gatewayPolicy = structuredClone(previous.session.gatewayPolicy);
+  }
+  if (probeState) {
+    agent.harness = structuredClone(probeState.candidateByKind.get(agent.kind).harness);
+  }
+  return agent;
+}
+
 // ---- per-agent collation ----------------------------------------------------
 const agents = [];
 for (const [kind, runs] of byAgent) {
@@ -421,8 +688,8 @@ for (const [kind, runs] of byAgent) {
   let variantSyntax = null;
   for (const run of runs) {
     const ctx = run.data.authContext;
-    // Harnesses that never re-emit config options on model switch (cursor,
-    // gemini) leave per-model captures null — fall back to the session
+    // Harnesses that never re-emit config options on model switch (e.g.
+    // cursor) leave per-model captures null — fall back to the session
     // baseline options, then to the legacy modes block, so uniform controls
     // (e.g. cursor's agent/plan/ask modes) still reach the catalog.
     const fallback = run.data.baselineConfigOptions
@@ -480,14 +747,15 @@ for (const [kind, runs] of byAgent) {
     const matrix = entry.mergedMatrix ?? {};
     // Observed-set semantics: exactly the contexts that saw this model.
     // 'baseline' is a first-class context; no always/anyOf inference.
-    const contexts = [...new Set(entry.observedIn.map((r) => r.split(".").slice(1).join(".")))];
+    const observedContexts = [...new Set(entry.observedIn.map((r) => r.split(".").slice(1).join(".")))];
+    const availabilityContexts = correctAvailability(kind, modelId, observedContexts);
     return {
       id: modelId,
       displayName:
         MODEL_DISPLAY_OVERRIDES[kind]?.[modelId] ??
         prettifyDisplayName(versionedDisplayName(entry.name, entry.description, modelId)),
       ...(entry.description ? { description: entry.description } : {}),
-      availability: { anyOf: contexts },
+      availability: { anyOf: availabilityContexts },
       // On a harness menu somewhere -> advertised; trial-only -> available
       // but hidden unless curation opts it in.
       defaultVisible: !(MODEL_VISIBILITY_OPT_OUTS[kind] ?? []).includes(modelId),
@@ -495,7 +763,7 @@ for (const [kind, runs] of byAgent) {
       status: "active",
       provenance: {
         observedIn: [...new Set(entry.observedIn)],
-        observedInAllContexts: contexts.length === probedContexts.length,
+        observedInAllContexts: observedContexts.length === probedContexts.length,
         viaTrialOnly: !entry.onMenu,
         ...(entry.variants ? { variantIds: entry.variants } : {}),
       },
@@ -542,7 +810,7 @@ for (const [kind, runs] of byAgent) {
     throw new Error(`${kind}: runs used different native CLI versions: ${[...nativeVersions].join(", ")}`);
   }
   const nativeVersion = [...nativeVersions][0];
-  agents.push({
+  agents.push(applyBundledCuration({
     kind,
     displayName: AGENT_DISPLAY_NAMES[kind] ?? kind,
     harness: {
@@ -570,13 +838,28 @@ for (const [kind, runs] of byAgent) {
           ? { signals: AUTH_CONTEXT_SIGNALS[kind][run.data.authContext] }
           : {}),
       })),
-    session: { controls, models, defaults: AGENT_SESSION_DEFAULTS[kind] ?? {}, observedDefaults },
+    session: {
+      supportsGoals: AGENT_SUPPORTS_GOALS[kind] ?? false,
+      controls,
+      models,
+      defaults: AGENT_SESSION_DEFAULTS[kind] ?? {},
+      observedDefaults,
+    },
+    ...(HARNESS_SETTINGS[kind] ? { settings: HARNESS_SETTINGS[kind] } : {}),
     provenance: {
       probedAt: runs.map((r) => r.data.probedAt).sort().at(-1),
       attestation,
       runs: runs.map((r) => ({ id: `${kind}.${r.data.authContext}`, snapshotPath: `generated/${r.name}` })),
     },
-  });
+  }));
+}
+
+if (probeState) {
+  for (const previous of previousCatalog?.agents ?? []) {
+    if (!probeState.activeAgents.has(previous.kind)) {
+      agents.push(structuredClone(previous));
+    }
+  }
 }
 
 // Pair the catalog with the registry it was probed against (catalog owns
@@ -599,6 +882,9 @@ const catalog = {
   catalogVersion: `${today}.${revision}`,
   probedAgainst: { registryVersion },
   generatedAt: new Date().toISOString(),
+  ...(previousCatalog?.defaultAgentKind
+    ? { defaultAgentKind: previousCatalog.defaultAgentKind }
+    : {}),
   agents: agents.sort((a, b) => a.kind.localeCompare(b.kind)),
 };
 

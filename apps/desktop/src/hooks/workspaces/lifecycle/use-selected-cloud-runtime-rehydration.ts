@@ -94,7 +94,6 @@ export function useSelectedCloudRuntimeRehydration(
         await bootstrapWorkspace({
           workspaceId,
           logicalWorkspaceId: selectedLogicalWorkspaceId ?? workspaceId,
-          runtimeUrl,
           workspaceConnection: {
             runtimeUrl: freshConnectionInfo.runtimeUrl,
             authToken: freshConnectionInfo.accessToken,

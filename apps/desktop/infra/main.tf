@@ -43,6 +43,18 @@ resource "aws_s3_bucket_versioning" "desktop_downloads" {
   }
 }
 
+resource "aws_s3_bucket_cors_configuration" "desktop_downloads" {
+  bucket = aws_s3_bucket.desktop_downloads.id
+
+  cors_rule {
+    allowed_headers = ["*"]
+    allowed_methods = ["GET", "HEAD"]
+    allowed_origins = ["*"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 86400
+  }
+}
+
 # --------------------------------------------------------------------------
 # CloudFront distribution
 # --------------------------------------------------------------------------
@@ -52,6 +64,33 @@ resource "aws_cloudfront_origin_access_control" "desktop_downloads" {
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
   signing_protocol                  = "sigv4"
+}
+
+resource "aws_cloudfront_response_headers_policy" "desktop_downloads_cors" {
+  name = "proliferate-desktop-downloads-cors"
+
+  cors_config {
+    access_control_allow_credentials = false
+
+    access_control_allow_headers {
+      items = ["*"]
+    }
+
+    access_control_allow_methods {
+      items = ["GET", "HEAD", "OPTIONS"]
+    }
+
+    access_control_allow_origins {
+      items = ["*"]
+    }
+
+    access_control_expose_headers {
+      items = ["ETag"]
+    }
+
+    access_control_max_age_sec = 86400
+    origin_override            = true
+  }
 }
 
 resource "aws_cloudfront_distribution" "desktop_downloads" {
@@ -68,14 +107,20 @@ resource "aws_cloudfront_distribution" "desktop_downloads" {
   }
 
   default_cache_behavior {
-    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
-    cached_methods         = ["GET", "HEAD"]
-    target_origin_id       = "s3-desktop-downloads"
-    viewer_protocol_policy = "redirect-to-https"
-    compress               = true
+    allowed_methods            = ["GET", "HEAD", "OPTIONS"]
+    cached_methods             = ["GET", "HEAD", "OPTIONS"]
+    target_origin_id           = "s3-desktop-downloads"
+    viewer_protocol_policy     = "redirect-to-https"
+    compress                   = true
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.desktop_downloads_cors.id
 
     forwarded_values {
       query_string = false
+      headers = [
+        "Access-Control-Request-Headers",
+        "Access-Control-Request-Method",
+        "Origin",
+      ]
       cookies {
         forward = "none"
       }
@@ -200,6 +245,7 @@ resource "aws_iam_role_policy" "desktop_release" {
         Sid    = "S3Upload"
         Effect = "Allow"
         Action = [
+          "s3:GetObject",
           "s3:PutObject",
           "s3:ListBucket",
         ]

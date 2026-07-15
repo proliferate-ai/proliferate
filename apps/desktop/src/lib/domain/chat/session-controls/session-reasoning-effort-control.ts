@@ -2,6 +2,23 @@ export interface SessionReasoningEffortPresentation {
   shortLabel: string | null;
 }
 
+export type ReasoningEffortEmphasis = "none" | "max" | "ultra";
+
+// "max" — the session sits at the top reasoning level its model offers.
+// "ultra" — that top level is the ultra tier, which only frontier models
+// expose, so ultra-at-max doubles as the "top model at full capacity" signal.
+// Shared by the bars chip and the composer surface so they can't disagree.
+export function resolveReasoningEffortEmphasis(
+  options: ReadonlyArray<{ value: string; selected: boolean }>,
+): ReasoningEffortEmphasis {
+  const selectedIndex = options.findIndex((option) => option.selected);
+  if (options.length < 2 || selectedIndex !== options.length - 1) {
+    return "none";
+  }
+  const topValue = options[selectedIndex]?.value.toLowerCase() ?? "";
+  return topValue === "ultra" ? "ultra" : "max";
+}
+
 const TITLE_CASE_SPLIT = /[^a-z0-9]+/i;
 
 export function resolveReasoningEffortPresentation(

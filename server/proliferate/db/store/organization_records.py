@@ -18,6 +18,7 @@ from proliferate.db.models.organizations import (
 class OrganizationRecord:
     id: UUID
     name: str
+    slug: str | None
     logo_domain: str | None
     logo_image: str | None
     status: str
@@ -132,6 +133,7 @@ def organization_record(organization: Organization) -> OrganizationRecord:
     return OrganizationRecord(
         id=organization.id,
         name=organization.name,
+        slug=organization.slug,
         logo_domain=organization.logo_domain,
         logo_image=organization.logo_image,
         status=organization.status,

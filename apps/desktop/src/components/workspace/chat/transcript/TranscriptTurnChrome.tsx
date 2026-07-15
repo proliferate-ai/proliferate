@@ -1,4 +1,7 @@
 import type { ReactNode } from "react";
+// CircleCheck isn't in the curated @proliferate/ui/icons set — the goal bar
+// and goal transcript rows source it directly from lucide-react too.
+import { CircleCheck } from "lucide-react";
 import {
   CircleQuestion,
   MessageCircleQuestion,
@@ -21,14 +24,8 @@ export type PendingInteractionMarkerKind = "permission" | "question";
 
 const TURN_HORIZONTAL_PADDING = "px-0";
 const ASSISTANT_ACTION_SLOT_HEIGHT = "h-6";
-
-/**
- * Minimum height for a turn that has no assistant text yet. Once prose exists,
- * the trailing status should stay compact instead of creating an empty block
- * between the prose and future tool activity.
- */
-export const TRAILING_STATUS_MIN_HEIGHT =
-  "min-h-[calc(var(--text-chat--line-height)+1.5rem)]";
+/** Exact Codex conversation-item rhythm shared by pending and materialized turns. */
+export const TURN_ITEM_GAP_CLASS = "gap-4";
 
 export function TurnShell({
   children,
@@ -50,29 +47,76 @@ export function TurnAssistantActionRow({
   showCopyButton = false,
   reserveSlot = false,
   timestampLabel = null,
+  alwaysVisible = false,
+  metMarker = null,
 }: {
   content: string | null;
   showCopyButton?: boolean;
   reserveSlot?: boolean;
   timestampLabel?: string | null;
+  /**
+   * When true the copy/action row is persistently visible (opacity-100)
+   * instead of hover-gated. Set only for the transcript's final completed AI
+   * message; every earlier message keeps hover-to-reveal.
+   */
+  alwaysVisible?: boolean;
+  /**
+   * Inline "✓ Goal achieved in Xs" marker rendered between the copy button
+   * and the timestamp — only on the final completed message when the active
+   * session's goal is currently met.
+   */
+  metMarker?: ReactNode;
 }) {
-  if (!content || (!showCopyButton && !reserveSlot)) {
+  const copyContent = showCopyButton ? content : null;
+  if (!copyContent && !reserveSlot) {
     return null;
   }
 
+  const visibilityClassName = alwaysVisible
+    ? "opacity-100"
+    : "opacity-0 group-hover/turn:opacity-100";
+
   return (
-    <div className="flex justify-start relative">
-      <div className={`pt-0.5 ${ASSISTANT_ACTION_SLOT_HEIGHT}`}>
-        {showCopyButton && (
+    <div className="flex justify-start relative" data-turn-assistant-footer>
+      <div
+        className={`flex items-center gap-2 pt-0.5 ${ASSISTANT_ACTION_SLOT_HEIGHT}`}
+        data-turn-assistant-footer-slot
+      >
+        {copyContent && (
           <CopyMessageButton
-            content={content}
-            timestampLabel={timestampLabel}
+            content={copyContent}
+            timestampLabel={metMarker ? null : timestampLabel}
             timestampPosition="after"
-            visibilityClassName="opacity-0 group-hover/turn:opacity-100"
+            visibilityClassName={visibilityClassName}
           />
+        )}
+        {copyContent && metMarker && (
+          <>
+            <span aria-hidden className="h-3 w-px bg-border/60" />
+            {metMarker}
+            {timestampLabel && (
+              <span className="text-[length:var(--text-chat-meta,11px)] text-muted-foreground tabular-nums">
+                {timestampLabel}
+              </span>
+            )}
+          </>
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Inline "✓ Goal achieved in Xs" marker for the final completed message's
+ * action footer (Fix 3). Matches the action-row typography (text-chat-meta,
+ * muted-foreground) with a small neutral check glyph.
+ */
+export function TurnGoalMetMarker({ label }: { label: string }): ReactNode {
+  return (
+    <span className="inline-flex items-center gap-1 text-[length:var(--text-chat-meta,11px)] text-muted-foreground">
+      <CircleCheck className="size-3 shrink-0 text-muted-foreground" aria-hidden />
+      {label}
+    </span>
   );
 }
 
@@ -83,18 +127,19 @@ export function resolvePendingPromptTrailingStatus(
 ): ReactNode {
   if (sessionViewState === "needs_input") {
     return (
-      <TrailingStatusCrossfade statusKey="needs-input">
+      <TrailingStatusCrossfade statusKey="needs-input" className={ASSISTANT_ACTION_SLOT_HEIGHT}>
         <ConnectedPendingInteractionMarker />
       </TrailingStatusCrossfade>
     );
   }
 
   if (forceWorking || sessionViewState === "working") {
-    // Outbox / launch dispatch — the truthful voice is "Sending…", not "Thinking".
-    return (
-      <TrailingStatusCrossfade statusKey="sending">
-        <StreamingIndicator startedAt={queuedAt} label={CHAT_STREAMING_STATUS_LABELS.sending} />
-      </TrailingStatusCrossfade>
+    // Outbox / launch dispatch — same "Thinking" voice as agent work (the
+    // send/queue distinction is plumbing, not something the user tracks).
+    return renderWorkingTrailingStatus(
+      "sending",
+      queuedAt,
+      CHAT_STREAMING_STATUS_LABELS.sending,
     );
   }
 
@@ -106,29 +151,27 @@ export function resolveTurnTrailingStatus(
   sessionViewState: SessionViewState,
   transientStatusText: string | null,
 ): ReactNode {
-  // Every variant renders inside the same fixed-height row as the reserved
-  // assistant action slot, so swapping between "Thinking…", a transient status,
-  // and the needs-input marker never shifts the content above it. The three
-  // states share one crossfade container: a state change fades the new content
-  // in over 150ms (opacity only) instead of a hard swap.
+  // Every status variant has fixed-height frontier geometry above the separate
+  // assistant footer. Transient and blocking markers fade in; the phase-anchored
+  // working gleam renders directly so an owner handoff cannot replay a one-shot
+  // parent animation.
   if (sessionViewState === "working" && transientStatusText) {
     return (
       <TrailingStatusCrossfade
         statusKey="transient"
-        className={`gap-2 text-ui-sm leading-[var(--text-ui-sm--line-height)] text-muted-foreground ${ASSISTANT_ACTION_SLOT_HEIGHT}`}
+        className={`gap-2 text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)] text-muted-foreground ${ASSISTANT_ACTION_SLOT_HEIGHT}`}
       >
-        <Sparkles className="size-3.5 shrink-0 text-muted-foreground" />
+        <Sparkles className="size-[1.143em] shrink-0 text-current" />
         <span className="min-w-0 truncate">{transientStatusText}</span>
       </TrailingStatusCrossfade>
     );
   }
 
   if (sessionViewState === "working") {
-    return (
-      <TrailingStatusCrossfade statusKey="working" className={ASSISTANT_ACTION_SLOT_HEIGHT}>
-        <StreamingIndicator startedAt={startedAt} />
-      </TrailingStatusCrossfade>
-    );
+    // The gleam carries its own motion and is phase-anchored to startedAt.
+    // Avoid a one-shot parent fade that would visibly replay when the pending
+    // prompt hands this slot to the materialized turn.
+    return renderWorkingTrailingStatus("working", startedAt);
   }
 
   if (sessionViewState === "needs_input") {
@@ -142,10 +185,25 @@ export function resolveTurnTrailingStatus(
   return null;
 }
 
-// Single container for the three trailing states. `key` forces a remount on a
-// real state change (the crossfade replays), while same-state re-renders — the
-// elapsed second ticking, a transient string re-wording — reconcile in place
-// with no re-animation. Compositor-only (opacity), motion-safe.
+function renderWorkingTrailingStatus(
+  status: "sending" | "working",
+  startedAt: string,
+  label?: string,
+): ReactNode {
+  return (
+    <div
+      className={`flex items-center ${ASSISTANT_ACTION_SLOT_HEIGHT}`}
+      data-trailing-status={status}
+      data-working-status-frame
+    >
+      <StreamingIndicator startedAt={startedAt} label={label} />
+    </div>
+  );
+}
+
+// One-shot container for transient and blocking trailing states. Same-state
+// re-renders reconcile in place. The working gleam deliberately bypasses this
+// wrapper so pending→turn ownership changes remain visually continuous.
 function TrailingStatusCrossfade({
   statusKey,
   className,
@@ -209,11 +267,11 @@ export function PendingInteractionMarkerView({
     <div className="flex items-center gap-2 text-muted-foreground">
       <Icon className="size-3.5 shrink-0" />
       {label && (
-        <span className="text-ui font-medium leading-[var(--text-ui--line-height)] text-foreground">
+        <span className="text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)] font-medium text-foreground">
           {label}
         </span>
       )}
-      <span className="text-ui-sm uppercase leading-[var(--text-ui-sm--line-height)] tracking-wide text-muted-foreground">
+      <span className="text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)] uppercase tracking-wide text-muted-foreground">
         Awaiting response
       </span>
     </div>

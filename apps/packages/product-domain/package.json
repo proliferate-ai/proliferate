@@ -7,6 +7,30 @@
     "dist"
   ],
   "exports": {
+    "./activity/goal": {
+      "types": "./dist/activity/goal.d.ts",
+      "import": "./dist/activity/goal.js"
+    },
+    "./activity/goal-transcript-events": {
+      "types": "./dist/activity/goal-transcript-events.d.ts",
+      "import": "./dist/activity/goal-transcript-events.js"
+    },
+    "./activity/loop": {
+      "types": "./dist/activity/loop.d.ts",
+      "import": "./dist/activity/loop.js"
+    },
+    "./activity/process": {
+      "types": "./dist/activity/process.d.ts",
+      "import": "./dist/activity/process.js"
+    },
+    "./activity/subagent": {
+      "types": "./dist/activity/subagent.d.ts",
+      "import": "./dist/activity/subagent.js"
+    },
+    "./activity/chips": {
+      "types": "./dist/activity/chips.d.ts",
+      "import": "./dist/activity/chips.js"
+    },
     "./auth/model": {
       "types": "./dist/auth/model.d.ts",
       "import": "./dist/auth/model.js"
@@ -34,6 +58,14 @@
     "./automations/schedule": {
       "types": "./dist/automations/schedule.d.ts",
       "import": "./dist/automations/schedule.js"
+    },
+    "./workflows/definition": {
+      "types": "./dist/workflows/definition.d.ts",
+      "import": "./dist/workflows/definition.js"
+    },
+    "./workflows/validation": {
+      "types": "./dist/workflows/validation.d.ts",
+      "import": "./dist/workflows/validation.js"
     },
     "./chats/model": {
       "types": "./dist/chats/model.d.ts",
@@ -82,6 +114,10 @@
     "./chats/transcript/transcript-action-time": {
       "types": "./dist/chats/transcript/transcript-action-time.d.ts",
       "import": "./dist/chats/transcript/transcript-action-time.js"
+    },
+    "./chats/transcript/transcript-work-duration": {
+      "types": "./dist/chats/transcript/transcript-work-duration.d.ts",
+      "import": "./dist/chats/transcript/transcript-work-duration.js"
     },
     "./chats/transcript/chat-transcript-state": {
       "types": "./dist/chats/transcript/chat-transcript-state.d.ts",

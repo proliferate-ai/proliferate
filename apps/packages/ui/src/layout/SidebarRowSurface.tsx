@@ -1,5 +1,7 @@
 import type { ButtonHTMLAttributes, HTMLAttributes, KeyboardEvent, ReactNode } from "react";
 
+import { twMerge } from "../utils/tw-merge";
+
 interface SidebarRowSurfaceProps extends Omit<HTMLAttributes<HTMLElement>, "onClick"> {
   children: ReactNode;
   as?: "button" | "div";
@@ -18,18 +20,26 @@ export function SidebarRowSurface({
   ...props
 }: SidebarRowSurfaceProps) {
   const interactive = typeof onPress === "function" && !disabled;
+  // Hover sits one step below the selected row so a committed selection reads
+  // stronger than a transient hover (previously both used the same accent, so
+  // hovering any row looked identical to the active one).
   const stateClass = active
     ? "bg-sidebar-accent text-sidebar-foreground"
     : disabled
       ? "text-sidebar-muted-foreground"
-      : "text-sidebar-foreground hover:bg-sidebar-accent";
+      : "text-sidebar-foreground hover:bg-sidebar-accent/70";
 
   // Codex sidebar row geometry (UX spec §0.1): 30px rows, 10px radius.
-  const rowClassName = `group relative flex w-full min-w-0 items-center rounded-[10px] text-left font-[430] transition-[background-color,color,opacity] duration-150 ${
-    interactive ? "cursor-pointer select-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring" : ""
-  } ${
-    disabled ? "cursor-not-allowed opacity-60" : ""
-  } ${stateClass} ${className}`;
+  // twMerge so a caller-provided size token (text-sidebar-nav etc.) actually
+  // replaces a baseline size instead of fighting it on stylesheet order.
+  const rowClassName = twMerge(
+    `group relative flex w-full min-w-0 items-center rounded-[10px] text-left font-[430] transition-[background-color,color,opacity] duration-150 ${
+      interactive ? "cursor-pointer select-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring" : ""
+    } ${
+      disabled ? "cursor-not-allowed opacity-60" : ""
+    } ${stateClass}`,
+    className,
+  );
 
   const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (!interactive) {

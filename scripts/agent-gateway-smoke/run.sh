@@ -40,7 +40,7 @@ log "core proxy checks passed"
 HARNESS_FAILURES=""
 HARNESS_SUMMARY=""
 
-for harness in claude codex opencode grok gemini; do
+for harness in claude codex opencode grok; do
   runner="$SCRIPT_DIR/$harness.sh"
   if [ ! -x "$runner" ]; then
     log "SKIP: $harness (no runner at $runner)"

@@ -181,7 +181,7 @@ stripe trigger invoice.payment_failed
 Inspect local billing tables:
 
 ```bash
-make db-local
+make db-local PROFILE=billing
 select status, event_type, attempt_count from webhook_event_receipt order by received_at desc limit 10;
 select grant_type, remaining_seconds, source_ref from billing_grant order by created_at desc limit 10;
 select status, quantity_seconds, error from billing_usage_export order by created_at desc limit 10;

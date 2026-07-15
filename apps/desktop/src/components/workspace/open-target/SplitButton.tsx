@@ -3,7 +3,7 @@ import { ChevronDown } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { OpenTargetIcon } from "@/components/workspace/open-target/OpenTargetIcon";
 import { OpenTargetMenu, TargetIcon } from "./OpenTargetMenu";
-import type { OpenTarget } from "@/hooks/access/tauri/use-shell-actions";
+import type { OpenTarget } from "@proliferate/product-client/host/desktop-bridge";
 
 interface SplitButtonProps {
   icon?: ReactNode;
@@ -11,7 +11,7 @@ interface SplitButtonProps {
   showLabel?: boolean;
   onClick?: () => void;
   targets?: OpenTarget[];
-  onTargetClick?: (targetId: string) => void;
+  onTargetClick?: (target: OpenTarget) => void;
   preferredTarget?: OpenTarget | null;
 }
 
@@ -54,40 +54,37 @@ export function SplitButton({
   }
 
   return (
-    <OpenTargetMenu
-      targets={targets}
-      onTargetClick={(target) => onTargetClick(target.id)}
-      align="right"
-      trigger={({ toggle, isOpen }) => (
-        <div className="flex">
+    <div className="flex">
+      <Button
+        type="button"
+        variant="unstyled"
+        size="unstyled"
+        onClick={onClick}
+        title={label}
+        aria-label={label}
+        className={`${primaryClassName} workspace-shell-split-button-left ${showLabel ? "flex-1 justify-start" : ""}`}
+      >
+        {content}
+      </Button>
+      <OpenTargetMenu
+        targets={targets}
+        onTargetClick={onTargetClick}
+        align="end"
+        trigger={(
           <Button
             type="button"
             variant="unstyled"
             size="unstyled"
-            onClick={onClick}
-            title={label}
-            aria-label={label}
-            className={`${primaryClassName} workspace-shell-split-button-left ${showLabel ? "flex-1 justify-start" : ""}`}
-          >
-            {content}
-          </Button>
-          <Button
-            type="button"
-            variant="unstyled"
-            size="unstyled"
-            onClick={toggle}
             aria-haspopup="menu"
-            aria-expanded={isOpen}
-            data-state={isOpen ? "open" : "closed"}
             title={`Choose ${label}`}
             aria-label={`Choose ${label}`}
             className="workspace-shell-icon-button workspace-shell-split-button-right inline-flex items-center justify-center whitespace-nowrap"
           >
             <ChevronDown className="size-3" />
           </Button>
-        </div>
-      )}
-    />
+        )}
+      />
+    </div>
   );
 }
 

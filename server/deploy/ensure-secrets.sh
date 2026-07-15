@@ -90,9 +90,9 @@ copy_unmanaged_env_values() {
 resolve_instance_public_ip() {
   local token=""
   local ip=""
-  local attempt
 
-  for attempt in $(seq 1 30); do
+  # 30 attempts; the loop variable is only a counter, not referenced.
+  for _ in $(seq 1 30); do
     token="$(curl -fsS --connect-timeout 1 --max-time 2 -X PUT \
       "http://169.254.169.254/latest/api/token" \
       -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" || true)"

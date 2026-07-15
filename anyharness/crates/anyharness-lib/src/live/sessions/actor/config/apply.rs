@@ -5,6 +5,7 @@ use anyharness_contract::v1::{ConfigApplyState, SessionLiveConfigSnapshot};
 use tokio::sync::Mutex;
 
 use crate::live::sessions::actor::command::SetConfigOptionCommandError;
+use crate::live::sessions::actor::config::diagnostics;
 use crate::live::sessions::actor::config::persist::{
     emit_live_config_update, persist_requested_config_value_if_changed, persisted_control_values,
 };
@@ -12,7 +13,7 @@ use crate::live::sessions::actor::config::queue::config_request_matches_current_
 use crate::live::sessions::actor::config::selection::{
     current_select_value, find_select_option_by_purpose, find_select_option_for_request,
     find_select_option_for_value, is_mode_config_request, is_model_config_request,
-    option_matches_purpose, select_option_contains_value,
+    option_matches_purpose, resolve_model_variant_value, select_option_contains_value,
 };
 use crate::live::sessions::actor::config::types::{
     tracked_config_purpose, ConfigApplyOutcome, ConfigPurpose, PersistedSessionConfigState,
@@ -134,6 +135,10 @@ pub(in crate::live::sessions::actor) async fn apply_select_config_option_with_po
         return Ok(ConfigApplyOutcome::NotApplied);
     };
 
+    let resolved_value = resolve_model_variant_value(option, desired_value);
+    diagnostics::trace_native_variant(native_session_id, config_id, desired_value, &resolved_value);
+    let desired_value = resolved_value.as_str();
+
     if !select_option_contains_value(option, desired_value) && !allow_foreign_value {
         return Ok(ConfigApplyOutcome::NotApplied);
     }
@@ -179,6 +184,14 @@ pub(in crate::live::sessions::actor) async fn apply_specific_config_option(
     let is_mode_request = is_mode_config_request(config_id, option);
     let tracked_purpose = tracked_config_purpose(config_id, option);
     let model_value_authorized = is_model_request && catalog_authorized_model;
+
+    // Resolve before validation so validation, ACP, and persistence agree.
+    let resolved_value = option.map_or_else(
+        || desired_value.to_string(),
+        |option| resolve_model_variant_value(option, desired_value),
+    );
+    diagnostics::trace_session_variant(session_id, config_id, desired_value, &resolved_value);
+    let desired_value = resolved_value.as_str();
 
     if option.is_none() && !is_model_request && !is_mode_request {
         return Err(SetConfigOptionCommandError::Rejected(format!(
@@ -438,8 +451,7 @@ pub(in crate::live::sessions::actor) async fn apply_config_option_if_possible_wi
 
 /// Wire method for the legacy `session/set_model` RPC. ACP 0.14 dropped the
 /// typed `SetSessionModelRequest`, but harnesses that predate the
-/// model-as-config-option migration (e.g. Gemini CLI, via its
-/// `unstable_setSessionModel` handler) still listen on this method. We reach it
+/// model-as-config-option migration still listen on this method. We reach it
 /// through ACP's extension-method channel: the method string is serialized
 /// verbatim, so the lack of a `_` prefix (which only gates *inbound* ext
 /// routing) is irrelevant on the outbound path.
@@ -517,7 +529,7 @@ pub(in crate::live::sessions::actor) fn should_apply_model_via_direct_setter(
     _desired_model_id: &str,
 ) -> bool {
     // Attempt the legacy `session/set_model` only when the harness reports no live
-    // model control at all. ACP 0.14 drops the legacy models block, so Gemini-style
+    // model control at all. ACP 0.14 drops the legacy models block, so such
     // harnesses surface neither a `model` config option nor `available_models` — the
     // write cannot be gated locally, and the agent is the sole authority on validity.
     // When a live model list IS present, membership is enforced upstream; don't

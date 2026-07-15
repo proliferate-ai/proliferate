@@ -23,7 +23,6 @@ function shouldPreservePointerFocus(target: EventTarget): boolean {
       "[role='button']",
       "[tabindex]:not([tabindex='-1'])",
       "[data-focus-zone='terminal']",
-      "[data-focus-zone='browser']",
     ].join(","),
   ));
 }

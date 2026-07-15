@@ -95,7 +95,17 @@ variable "cloud_target_sentry_environment" {
   default = "production"
 }
 
-variable "cloud_target_sentry_release" {
+# Emergency, component-specific Sentry release overrides for the target
+# processes. Normally EMPTY: the worker/supervisor binaries stamp their own
+# `<component>@<version>+<sha>` from their compile-time build stamp. A value
+# must canonically name its own component or the server refuses it. The prior
+# shared `cloud_target_sentry_release` was removed because one value could not
+# distinguish worker from supervisor events (support-system "Release identity").
+variable "cloud_worker_sentry_release" {
+  default = ""
+}
+
+variable "cloud_supervisor_sentry_release" {
   default = ""
 }
 
@@ -628,6 +638,9 @@ resource "aws_ecs_task_definition" "server" {
         { name = "JWT_SECRET", value = var.jwt_secret },
         { name = "E2B_API_KEY", value = var.e2b_api_key },
         { name = "E2B_TEMPLATE_NAME", value = var.e2b_template_name },
+        # Billing enforcement in production: pause/deny over-limit + spend-hold
+        # sandboxes (reconciler + live resume gate). config.py defaults to "off".
+        { name = "CLOUD_BILLING_MODE", value = "enforce" },
         { name = "PROLIFERATE_TELEMETRY_MODE", value = var.telemetry_mode },
         { name = "SENTRY_DSN", value = var.sentry_dsn },
         { name = "SENTRY_ENVIRONMENT", value = var.sentry_environment },
@@ -639,7 +652,8 @@ resource "aws_ecs_task_definition" "server" {
         { name = "CLOUD_RUNTIME_SENTRY_TRACES_SAMPLE_RATE", value = var.cloud_runtime_sentry_traces_sample_rate },
         { name = "CLOUD_TARGET_SENTRY_DSN", value = var.cloud_target_sentry_dsn },
         { name = "CLOUD_TARGET_SENTRY_ENVIRONMENT", value = var.cloud_target_sentry_environment },
-        { name = "CLOUD_TARGET_SENTRY_RELEASE", value = var.cloud_target_sentry_release },
+        { name = "CLOUD_WORKER_SENTRY_RELEASE", value = var.cloud_worker_sentry_release },
+        { name = "CLOUD_SUPERVISOR_SENTRY_RELEASE", value = var.cloud_supervisor_sentry_release },
         { name = "CLOUD_TARGET_SENTRY_TRACES_SAMPLE_RATE", value = var.cloud_target_sentry_traces_sample_rate },
         { name = "CUSTOMERIO_SITE_ID", value = var.customerio_site_id },
         { name = "CUSTOMERIO_API_KEY", value = var.customerio_api_key },

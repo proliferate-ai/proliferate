@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { toast } from "@proliferate/ui/kit/Sonner";
 import { CircleAlert } from "@proliferate/ui/icons";
+import { Badge } from "@proliferate/ui/primitives/Badge";
 import { useUpdater, type UpdaterPhase } from "@/hooks/access/tauri/use-updater";
 import { useAppVersion } from "@/hooks/access/tauri/app/use-app-version";
 
@@ -45,6 +46,37 @@ function DownloadProgressBar({ progress }: { progress: number | null }) {
   );
 }
 
+function AuthoredUpdateTitle({ title }: { title: string }) {
+  return (
+    <span className="flex min-w-0 flex-col items-start gap-1.5">
+      <Badge className="shrink-0">UPDATE</Badge>
+      <span
+        className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]"
+        title={title}
+      >
+        {title}
+      </span>
+    </span>
+  );
+}
+
+function TitledDownloadProgress({
+  version,
+  progress,
+}: {
+  version: string | null;
+  progress: number | null;
+}) {
+  return (
+    <span className="block">
+      <span className="block">
+        {version ? `Downloading Proliferate ${version}.` : "Downloading update."}
+      </span>
+      <DownloadProgressBar progress={progress} />
+    </span>
+  );
+}
+
 /**
  * Update lifecycle notifications as toasts (UX spec §12): available →
  * downloading (progress bar) → ready ("Restart to update", the toast's one
@@ -55,6 +87,7 @@ export function UpdateToastPresenter() {
   const {
     phase,
     availableVersion,
+    availableTitle,
     errorMessage,
     errorSource,
     downloadProgress,
@@ -136,12 +169,15 @@ export function UpdateToastPresenter() {
     toast.dismiss(UP_TO_DATE_TOAST_ID);
 
     const versionLabel = availableVersion ? ` ${availableVersion}` : "";
+    const authoredTitle = availableTitle ? (
+      <AuthoredUpdateTitle title={availableTitle} />
+    ) : null;
     const onDismiss = () => {
       dismissedKeyRef.current = dismissalKey;
     };
 
     if (phase === "available") {
-      toast("Update available", {
+      toast(authoredTitle ?? "Update available", {
         id: UPDATE_TOAST_ID,
         description: `Proliferate${versionLabel} — downloads in the background.`,
         duration: Infinity,
@@ -169,9 +205,16 @@ export function UpdateToastPresenter() {
     }
 
     if (phase === "downloading") {
-      toast("Downloading update", {
+      toast(authoredTitle ?? "Downloading update", {
         id: UPDATE_TOAST_ID,
-        description: <DownloadProgressBar progress={downloadProgress} />,
+        description: authoredTitle ? (
+          <TitledDownloadProgress
+            version={availableVersion}
+            progress={downloadProgress}
+          />
+        ) : (
+          <DownloadProgressBar progress={downloadProgress} />
+        ),
         duration: Infinity,
         closeButton: true,
         onDismiss,
@@ -182,7 +225,7 @@ export function UpdateToastPresenter() {
     }
 
     // ready
-    toast("Restart to update", {
+    toast(authoredTitle ?? "Restart to update", {
       id: UPDATE_TOAST_ID,
       description: `Proliferate${versionLabel} is ready.`,
       duration: Infinity,
@@ -207,6 +250,7 @@ export function UpdateToastPresenter() {
       },
     });
   }, [
+    availableTitle,
     availableVersion,
     downloadProgress,
     downloadUpdate,

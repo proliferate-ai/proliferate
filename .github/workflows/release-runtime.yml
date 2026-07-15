@@ -72,6 +72,25 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      # Stamp the release semver into the binaries so `anyharness --version`
+      # and the runtime `/health` version report the pinned version instead
+      # of the crate's hardcoded Cargo.toml version. build.rs in the anyharness,
+      # anyharness-lib, and proliferate-worker crates reads this env; the
+      # self-update preflight and health-gate require an exact match to the pin.
+      # workflow_call passes the bare semver (inputs.version); a direct
+      # `runtime-v<semver>` tag push derives it by stripping the tag prefix.
+      # Anything else (e.g. a workflow_dispatch dry run) leaves it unset so the
+      # build falls back to the Cargo.toml version.
+      - name: Resolve build version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${{ inputs.version }}" ]]; then
+            echo "PROLIFERATE_BUILD_VERSION=${{ inputs.version }}" >> "$GITHUB_ENV"
+          elif [[ "${GITHUB_REF_NAME:-}" == runtime-v* ]]; then
+            echo "PROLIFERATE_BUILD_VERSION=${GITHUB_REF_NAME#runtime-v}" >> "$GITHUB_ENV"
+          fi
+
       - name: Install musl-tools (x86_64 linux)
         if: matrix.target == 'x86_64-unknown-linux-musl'
         run: sudo apt-get update && sudo apt-get install -y musl-tools
@@ -176,11 +195,22 @@ jobs:
           path: artifacts
           merge-multiple: true
 
-      - name: Generate SHA256SUMS
+      - name: Generate SHA256SUMS + per-asset checksums
         run: |
           cd artifacts
           sha256sum anyharness-* > SHA256SUMS
           cat SHA256SUMS
+          # Also emit a per-asset `<asset>.sha256` next to each artifact. The
+          # sandbox worker's runtime self-update derives the checksum URL from
+          # the binary's resolved CDN location (`<binary>.sha256`) rather than
+          # parsing SHA256SUMS, matching the worker binary path — so the CDN
+          # mirror needs a sibling checksum per asset.
+          for asset in anyharness-*; do
+            case "$asset" in
+              *.sha256) continue ;;
+            esac
+            sha256sum "$asset" | cut -d' ' -f1 > "${asset}.sha256"
+          done
 
       - name: Ensure runtime release tag exists
         if: github.event_name == 'workflow_call' && inputs.publish && !inputs.dry_run
@@ -211,3 +241,61 @@ jobs:
           files: |
             artifacts/anyharness-*
             artifacts/SHA256SUMS
+
+  publish-cdn:
+    name: Publish runtime + worker CDN trees
+    needs: [create-release]
+    if: (github.event_name == 'push' || inputs.publish) && !inputs.dry_run
+    runs-on: ubuntu-latest
+    permissions:
+      # OIDC role assumption for the downloads bucket, matching the desktop
+      # release's publish-updater job.
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.git_sha || github.ref }}
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          # Same role/bucket the desktop release uses for the desktop/ tree; the
+          # runtime/ and worker/ trees live in the same downloads bucket.
+          role-to-assume: ${{ vars.AWS_DESKTOP_RELEASE_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Resolve release version
+        env:
+          INPUT_VERSION: ${{ inputs.version || '' }}
+        run: |
+          version="$INPUT_VERSION"
+          if [[ "${GITHUB_REF_NAME:-}" == runtime-v* ]]; then
+            version="${GITHUB_REF_NAME#runtime-v}"
+          fi
+          : "${version:?Missing runtime release version.}"
+          echo "RUNTIME_RELEASE_VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Publish bare binaries to the downloads CDN
+        # Nothing published the worker/ or runtime/ bare-binary trees before this
+        # step: release-runtime.yml only attached them to the GitHub Release, but
+        # the sandbox self-update path (server runtime/worker redirects) reads the
+        # CDN, not GitHub. Publish both trees, version-pinned and as the unpinned
+        # stable "latest" the redirect falls back to.
+        run: |
+          bash scripts/ci-cd/publish-runtime-cdn.sh \
+            --artifacts-dir artifacts \
+            --version "$RUNTIME_RELEASE_VERSION" \
+            --bucket "${{ vars.DESKTOP_DOWNLOADS_S3_BUCKET }}" \
+            --publish-latest
+
+      - name: Invalidate CloudFront cache for the stable latest pointers
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ vars.DESKTOP_CLOUDFRONT_DISTRIBUTION_ID }}" \
+            --paths "/runtime/stable/*" "/worker/stable/*"

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from proliferate.server.support.domain.message import (
     build_support_message_plan,
+    build_support_report_plan,
     normalize_support_message,
 )
 
@@ -42,6 +43,44 @@ def test_build_support_message_plan_includes_sender_context_and_request_id() -> 
         ("Workspace ID", "cloud:123"),
         ("Request ID", "req_123"),
     ]
+
+
+def test_build_support_report_plan_marks_urgent_title_and_fields() -> None:
+    plan = build_support_report_plan(
+        sender_name="Support Tester",
+        sender_email="support@example.com",
+        message="Prod is down.",
+        report_id="report_123",
+        internal_url=None,
+        diagnostics_included=True,
+        attachment_count=0,
+        urgent=True,
+        notify_me=True,
+    )
+
+    assert plan.title == "*:rotating_light: URGENT support report*"
+    assert plan.fallback_text.startswith("URGENT support report report_123")
+    field_map = {field.label: field.value for field in plan.fields}
+    assert field_map["Urgent"] == "Yes"
+    assert field_map["Notify requested"] == "Yes"
+
+
+def test_build_support_report_plan_non_urgent_defaults() -> None:
+    plan = build_support_report_plan(
+        sender_name="Support Tester",
+        sender_email="support@example.com",
+        message="Minor question.",
+        report_id="report_456",
+        internal_url=None,
+        diagnostics_included=False,
+        attachment_count=0,
+    )
+
+    assert plan.title == "*New support report*"
+    assert plan.fallback_text.startswith("Support report report_456")
+    field_map = {field.label: field.value for field in plan.fields}
+    assert field_map["Urgent"] == "No"
+    assert field_map["Notify requested"] == "No"
 
 
 def test_build_support_message_plan_uses_location_without_workspace_name() -> None:

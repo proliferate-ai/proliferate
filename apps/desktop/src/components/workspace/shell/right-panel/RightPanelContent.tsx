@@ -1,4 +1,3 @@
-import { WorkspaceBrowserPanel } from "@/components/workspace/browser/WorkspaceBrowserPanel";
 import { FileEditorView } from "@/components/workspace/files/FileEditorView";
 import { GitPanel } from "@/components/workspace/git/GitPanel";
 import { ScratchPadPanel } from "@/components/workspace/scratch/ScratchPadPanel";
@@ -8,7 +7,6 @@ import { TERMINAL_GRID_PROBE_ATTRIBUTE } from "@/lib/infra/terminals/terminal-gr
 import type { TerminalRecord } from "@anyharness/sdk";
 import type {
   RightPanelActiveEntryKey,
-  RightPanelBrowserTab,
   RightPanelTool,
 } from "@/lib/domain/workspaces/shell/right-panel-model";
 import {
@@ -21,23 +19,17 @@ interface RightPanelContentProps {
   workspaceUiKey: string | null;
   activeEntryKey: RightPanelActiveEntryKey;
   activeTool: RightPanelTool | null;
-  activeBrowserId: string | null;
   activeTerminalId: string | null;
   activeViewerTarget: ViewerTarget | null;
-  browserTabs: readonly RightPanelBrowserTab[];
   orderedTerminals: readonly TerminalRecord[];
   shouldRenderContent: boolean;
-  shouldMountBrowserPanel: boolean;
   shouldMountTerminalPanel: boolean;
-  isOpen: boolean;
   isWorkspaceReady: boolean;
   canConnectTerminals: boolean;
   isLoadingTerminals: boolean;
   terminalListErrorMessage: string | null;
   terminalFocusRequestToken: number;
   unreadByTerminal: Record<string, boolean>;
-  nativeOverlaysHidden: boolean;
-  onUpdateBrowserUrl: (browserId: string, url: string) => void;
   onNewTerminal: () => void;
   onSelectTerminal: (terminalId: string) => void;
   onCloseTerminal: (terminalId: string) => void;
@@ -49,23 +41,17 @@ export function RightPanelContent({
   workspaceUiKey,
   activeEntryKey,
   activeTool,
-  activeBrowserId,
   activeTerminalId,
   activeViewerTarget,
-  browserTabs,
   orderedTerminals,
   shouldRenderContent,
-  shouldMountBrowserPanel,
   shouldMountTerminalPanel,
-  isOpen,
   isWorkspaceReady,
   canConnectTerminals,
   isLoadingTerminals,
   terminalListErrorMessage,
   terminalFocusRequestToken,
   unreadByTerminal,
-  nativeOverlaysHidden,
-  onUpdateBrowserUrl,
   onNewTerminal,
   onSelectTerminal,
   onCloseTerminal,
@@ -111,18 +97,6 @@ export function RightPanelContent({
               ) : (
                 <GitPanel />
               )}
-            </div>
-          )}
-          {shouldMountBrowserPanel && (
-            <div className={activeBrowserId ? "absolute inset-0" : "hidden"}>
-              <WorkspaceBrowserPanel
-                workspaceId={workspaceId}
-                tabs={browserTabs}
-                activeBrowserId={activeBrowserId}
-                isVisible={isOpen && activeBrowserId !== null}
-                nativeOverlaysHidden={nativeOverlaysHidden}
-                onUpdateUrl={onUpdateBrowserUrl}
-              />
             </div>
           )}
           {shouldMountTerminalPanel && (

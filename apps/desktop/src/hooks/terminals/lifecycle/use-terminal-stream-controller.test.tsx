@@ -5,6 +5,8 @@ import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { connectTerminal } from "@anyharness/sdk";
+import type { ProductHost } from "@proliferate/product-client/host/product-host";
+import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import { resetTerminalStreamRegistryForTests } from "@/lib/infra/terminals/terminal-stream-registry";
 import { useTerminalStreamController } from "./use-terminal-stream-controller";
 
@@ -34,6 +36,8 @@ const mockState = vi.hoisted(() => ({
   }>,
 }));
 
+const testProductHost = { desktop: null, cloud: { client: null } } as ProductHost;
+
 vi.mock("@anyharness/sdk", () => ({
   AnyHarnessError: class AnyHarnessError extends Error {
     problem = { status: 500, code: "UNKNOWN" };
@@ -50,12 +54,13 @@ vi.mock("@anyharness/sdk", () => ({
 }));
 
 vi.mock("@anyharness/sdk-react", () => ({
-  anyHarnessTerminalsKey: (runtimeUrl: string, workspaceId: string) => [
+  anyHarnessTerminalsKey: (cacheScopeKey: string, workspaceId: string) => [
     "terminals",
-    runtimeUrl,
+    cacheScopeKey,
     workspaceId,
   ],
   getAnyHarnessClient: vi.fn(),
+  useAnyHarnessCacheScopeKey: () => "test-cache-scope",
 }));
 
 vi.mock("@/hooks/access/cloud/query-keys", () => ({
@@ -272,7 +277,9 @@ function renderActions() {
     },
   });
   const wrapper = ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <ProductHostProvider host={testProductHost}>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    </ProductHostProvider>
   );
   return renderHook(() => useTerminalStreamController(), { wrapper });
 }

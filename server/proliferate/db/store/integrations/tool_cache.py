@@ -103,34 +103,15 @@ async def upsert_tool_cache(
     return _record(cache)
 
 
-async def mark_tool_cache_stale(
-    db: AsyncSession,
-    account_id: UUID,
-) -> ToolSchemaCacheRecord | None:
-    cache = (
-        await db.execute(
-            select(CloudIntegrationToolSchemaCache)
-            .where(CloudIntegrationToolSchemaCache.account_id == account_id)
-            .with_for_update()
-        )
-    ).scalar_one_or_none()
-    if cache is None:
-        return None
-    cache.status = "stale"
-    cache.updated_at = utcnow()
-    await db.flush()
-    await db.refresh(cache)
-    return _record(cache)
-
-
 async def delete_tool_cache(
     db: AsyncSession,
     account_id: UUID,
 ) -> None:
     """Delete the tool-schema cache row for ``account_id`` (no-op if absent).
 
-    The cache keys on ``account_id`` with no FK cascade, so account deletion
-    must clear this row explicitly.
+    Account deletion also cascades this row at the DB level; this helper keeps
+    the intent explicit for callers that clear the cache without deleting the
+    account.
     """
     await db.execute(
         delete(CloudIntegrationToolSchemaCache).where(

@@ -3,7 +3,6 @@ mod claude;
 mod codex;
 mod cursor;
 mod facts;
-mod gemini;
 mod grok;
 mod opencode;
 mod types;
@@ -11,7 +10,7 @@ mod util;
 
 use std::path::Path;
 
-pub use facts::{collect_facts, fact_kinds, CredentialFact};
+pub use facts::{collect_facts, fact_kinds, route_kinds, CredentialFact};
 pub use types::{
     ConfigMarkerKind, LocalAuthSource, LocalAuthState, PortableAuthExport, PortableAuthFile,
     PortableRelativePath, ProviderId,
@@ -34,7 +33,6 @@ pub fn detect_local_auth_state(
     match provider {
         ProviderId::Claude => claude::detect_local_auth_state(home_dir),
         ProviderId::Codex => codex::detect_local_auth_state(home_dir),
-        ProviderId::Gemini => gemini::detect_local_auth_state(home_dir),
         ProviderId::Xai => grok::detect_local_auth_state(home_dir),
     }
 }
@@ -46,7 +44,6 @@ pub fn export_portable_auth(
     match provider {
         ProviderId::Claude => claude::export_portable_auth(home_dir),
         ProviderId::Codex => codex::export_portable_auth(home_dir),
-        ProviderId::Gemini => gemini::export_portable_auth(home_dir),
         ProviderId::Xai => grok::export_portable_auth(home_dir),
     }
 }

@@ -11,7 +11,6 @@ export type ChatModelVisibilityOverridesByAgentKind = Record<string, Record<stri
 
 const MODEL_VISIBILITY_RESET_AGENT_KINDS = new Set([
   "cursor",
-  "gemini",
   "opencode",
 ]);
 
@@ -68,10 +67,6 @@ const LEGACY_CURSOR_MODEL_IDS: Record<string, string> = {
   "gpt-5-mini[]": "gpt-5-mini",
   "gemini-2.5-flash[]": "gemini-3-flash",
   "kimi-k2.5[]": "kimi-k2.5",
-};
-
-const LEGACY_GEMINI_MODEL_IDS: Record<string, string> = {
-  "gemini-3-flash-preview": "gemini-3-flash",
 };
 
 const DEFAULT_LIVE_SESSION_CONTROL_KEYS = new Set<DefaultLiveSessionControlKey>([
@@ -208,9 +203,6 @@ export function normalizeDefaultChatModelId(agentKind: string, modelId: string):
   }
   if (agentKind === "cursor") {
     return LEGACY_CURSOR_MODEL_IDS[modelId] ?? modelId;
-  }
-  if (agentKind === "gemini") {
-    return LEGACY_GEMINI_MODEL_IDS[modelId] ?? modelId;
   }
   return modelId;
 }

@@ -1,25 +1,29 @@
 import { useCallback, useMemo } from "react";
 import { webWorkspaceDeepLink } from "@proliferate/cloud-sdk";
-import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { useWebAppTarget } from "@/hooks/capabilities/derived/use-web-app-target";
 import { useSelectedLogicalWorkspace } from "@/hooks/workspaces/derived/use-selected-logical-workspace";
-import { getProliferateWebBaseUrl } from "@/lib/infra/proliferate-web";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 export function useWorkspaceOpenInWebActions() {
   const { selectedLogicalWorkspace } = useSelectedLogicalWorkspace();
-  const { copyText, openExternal } = useTauriShellActions();
+  const { links, clipboard } = useProductHost();
+  const webApp = useWebAppTarget();
   const showToast = useToastStore((state) => state.show);
   const cloudWorkspaceId = selectedLogicalWorkspace?.cloudWorkspace?.id
     ?? selectedLogicalWorkspace?.mobilityWorkspace?.cloudWorkspaceId
     ?? null;
+  const webBaseUrl = webApp.baseUrl;
   const url = useMemo(() => (
-    cloudWorkspaceId
-      ? webWorkspaceDeepLink(cloudWorkspaceId, getProliferateWebBaseUrl())
+    cloudWorkspaceId && webBaseUrl
+      ? webWorkspaceDeepLink(cloudWorkspaceId, webBaseUrl)
       : null
-  ), [cloudWorkspaceId]);
+  ), [cloudWorkspaceId, webBaseUrl]);
   const disabledReason = url
     ? null
-    : "Enable remote access first.";
+    : !webApp.available
+      ? "The web app is not available for this server."
+      : "Enable remote access first.";
   const title = url
     ? "Open this workspace in the web app."
     : "Enable remote access first to open this workspace from web and mobile.";
@@ -36,19 +40,19 @@ export function useWorkspaceOpenInWebActions() {
 
     void (async () => {
       try {
-        await copyText(url);
+        await clipboard.writeText(url);
         showToast("Workspace link copied. Opening in web...", "info");
       } catch {
         showToast("Opening workspace in web. Failed to copy link.");
       }
 
       try {
-        await openExternal(url);
+        await links.openExternal(url);
       } catch {
         showToast("Failed to open the web workspace.");
       }
     })();
-  }, [copyText, disabledReason, openExternal, showToast, url]);
+  }, [clipboard, disabledReason, links, showToast, url]);
 
   return {
     disabled: disabledReason !== null,

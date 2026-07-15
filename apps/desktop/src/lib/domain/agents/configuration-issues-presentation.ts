@@ -27,11 +27,11 @@ export function configurationDetailForAgent(
   if (agent.readiness === "login_required") {
     return `Sign in with ${agent.displayName} in Proliferate.`;
   }
+  if (agent.readiness === "install_required") {
+    return "Install this managed harness to use it in this profile.";
+  }
   if (agent.message?.trim()) {
     return agent.message;
-  }
-  if (agent.readiness === "install_required") {
-    return "The managed harness install has not completed yet.";
   }
   if (agent.readiness === "error") {
     return "Review setup details, then refresh the runtime once the issue is fixed.";

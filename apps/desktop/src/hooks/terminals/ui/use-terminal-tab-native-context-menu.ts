@@ -1,5 +1,5 @@
 import { useNativeContextMenu } from "@/hooks/ui/native/use-native-context-menu";
-import type { NativeContextMenuItem } from "@/lib/access/tauri/context-menu";
+import type { NativeMenuItem } from "@proliferate/product-client/host/desktop-bridge";
 
 export function useTerminalTabNativeContextMenu({
   isRuntimeReady,
@@ -27,7 +27,7 @@ export function buildTerminalTabNativeContextMenuItems({
   isRuntimeReady: boolean;
   onRename: () => void;
   onClose: () => void;
-}): NativeContextMenuItem[] {
+}): NativeMenuItem[] {
   return [
     {
       id: "rename",

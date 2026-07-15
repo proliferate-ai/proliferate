@@ -5,15 +5,16 @@ import {
   setStoredPendingAuthSession,
   type StoredPendingAuthSession,
 } from "@/lib/access/tauri/auth";
-import { desktopNavigationTarget } from "@/lib/domain/auth/desktop-navigation";
 import { markTelemetryHandled } from "@/lib/domain/telemetry/errors";
 import {
   cancelGitHubSignIn,
 } from "@/lib/domain/auth/github-signin-state";
 import { createDevBypassSession } from "@/lib/domain/auth/auth-mode";
+import type { ProductAuthIssue } from "@proliferate/product-client/host/product-host";
 import {
   anonymousAuthState,
   authErrorStatePatch,
+  authIssueStatePatch,
   type AuthClientState,
   type AuthClientStatePatch,
 } from "@/lib/domain/auth/auth-state-mapping";
@@ -43,7 +44,6 @@ export interface AuthOrchestrationDeps {
   clearSessionRuntimeState(): void;
   closeRepoSetupModal(): void;
   showToast(message: string): void;
-  navigateDesktopRoute(target: string): void;
 }
 
 export function applyDevBypassState(deps: AuthOrchestrationDeps): void {
@@ -177,17 +177,33 @@ export function reportBackgroundAuthError(
   });
 }
 
-export function handleDesktopNavigationUrl(
-  url: string,
+/**
+ * Publish a normalized callback issue for the current anonymous state. Mirrors
+ * {@link reportBackgroundAuthError} (toast + error string + warning telemetry)
+ * and additionally publishes the structured {@link ProductAuthIssue} the host
+ * surfaces on the anonymous snapshot. Only writes state while not authenticated
+ * so a stale callback failing behind a signed-in session never regresses it.
+ *
+ * Callers perform any terminal cleanup (clearing the pending transaction)
+ * BEFORE calling this, so terminal cleanup holds even if reporting here throws.
+ */
+export function publishCallbackIssue(
+  issue: ProductAuthIssue,
+  message: string,
   deps: AuthOrchestrationDeps,
-): boolean {
-  const target = desktopNavigationTarget(url);
-  if (!target) {
-    return false;
+): void {
+  deps.showToast(message);
+  if (deps.getAuthState().status !== "authenticated") {
+    deps.setAuthState(authIssueStatePatch(issue, message));
   }
-
-  deps.navigateDesktopRoute(target);
-  return true;
+  captureTelemetryException(new Error(message), {
+    level: "warning",
+    tags: {
+      action: "callback_issue",
+      domain: "auth",
+      provider: "github",
+    },
+  });
 }
 
 export async function clearPendingGitHubAuth(

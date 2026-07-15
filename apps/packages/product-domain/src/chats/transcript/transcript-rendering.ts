@@ -4,7 +4,10 @@ import type {
   ToolCallItem,
   TurnRecord,
 } from "@anyharness/sdk";
-import { summarizeCollapsedActions } from "./transcript-collapsed-actions";
+import {
+  resolveCurrentCollapsedAction,
+  summarizeCollapsedActions,
+} from "./transcript-collapsed-actions";
 import {
   type TurnDisplayBlock,
   type TurnPresentation,
@@ -124,9 +127,31 @@ export function findTrailingLiveExplorationBlock(
     return null;
   }
 
-  return shouldForceExpandActionBlock(block.itemIds, transcript, false)
-    ? block
+  // A trailing exploration batch owns the live activity row for the whole
+  // exploration phase, not only while one tool item happens to be marked
+  // in-progress. Harnesses commonly complete one search/read event before
+  // starting the next, and treating that tiny event gap as the end of the
+  // phase makes the header drop its shimmer and restart on every command.
+  // Prose, a different trailing block, or turn completion still takes
+  // ownership immediately because this only considers the final block of an
+  // in-progress turn.
+  const currentAction = resolveCurrentCollapsedAction(block.itemIds, transcript);
+  const currentItem = currentAction
+    ? transcript.itemsById[currentAction.itemId]
     : null;
+  const currentActionIsExploration = currentAction
+    && (
+      currentAction.kind === "read"
+      || currentAction.kind === "listing"
+      || currentAction.kind === "search"
+      || currentAction.kind === "fetch"
+    );
+  return shouldForceExpandActionBlock(block.itemIds, transcript, false)
+    && currentActionIsExploration
+    && currentItem?.kind === "tool_call"
+    && currentItem.status !== "failed"
+      ? block
+      : null;
 }
 
 function shouldForceExpandActionBlock(

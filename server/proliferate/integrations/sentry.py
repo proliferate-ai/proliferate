@@ -15,6 +15,7 @@ except ImportError:  # pragma: no cover - optional dependency in local/test envs
     StarletteIntegration = None
 
 from proliferate.config import settings
+from proliferate.server.release import is_canonical_release_id, server_release_id
 from proliferate.utils.telemetry_mode import (
     get_server_telemetry_mode,
     is_vendor_telemetry_enabled,
@@ -36,7 +37,17 @@ def _scrub_breadcrumb(
 
 
 def _scrub_event(event: dict[str, Any], _hint: dict[str, Any]) -> dict[str, Any] | None:
+    # The top-level `environment` field is deployment identity (e.g. the Sentry
+    # environment name), not a raw process-environment map. The generic scrubber
+    # would redact it because the key matches `env`, so snapshot it first, run
+    # the recursive scrub, then restore the snapshot scrubbed only as text. This
+    # is bounded: nested `env`/`environment` keys stay redacted.
+    original_environment = event.get("environment")
+
     scrubbed = scrub_mapping(event) or {}
+
+    if isinstance(original_environment, str):
+        scrubbed["environment"] = scrub_text(original_environment)
 
     message = scrubbed.get("message")
     if isinstance(message, str):
@@ -95,10 +106,21 @@ def init_server_sentry() -> None:
         event_level=None,
     )
 
+    # Prefer a CI-stamped release only when it canonically names this component;
+    # otherwise fall back to the code-built `proliferate-server@<version>+<sha>`
+    # so a misconfigured `SENTRY_RELEASE` can never stamp the server's Sentry
+    # events with another component's (or a malformed) release.
+    configured_release = settings.sentry_release
+    release = (
+        configured_release
+        if is_canonical_release_id(configured_release, component="proliferate-server")
+        else server_release_id()
+    )
+
     sentry_sdk.init(
         dsn=settings.sentry_dsn,
         environment=settings.sentry_environment,
-        release=settings.sentry_release,
+        release=release,
         attach_stacktrace=True,
         max_breadcrumbs=100,
         send_default_pii=False,
@@ -124,6 +146,19 @@ def set_server_sentry_user(user_id: str) -> None:
             "id": user_id,
         }
     )
+
+
+def clear_server_sentry_user() -> None:
+    """Drop any authenticated user from the current Sentry scope.
+
+    Called at request/session teardown so an authenticated user's identity can
+    never leak onto a later, unrelated request handled on the same worker
+    (cross-user leakage). Passing ``None`` clears the scope's ``user``.
+    """
+    if not settings.sentry_dsn or sentry_sdk is None or not is_vendor_telemetry_enabled():
+        return
+
+    sentry_sdk.set_user(None)
 
 
 def set_server_sentry_tag(key: str, value: str) -> None:
@@ -191,6 +226,46 @@ def capture_server_sentry_exception(
                 scope.set_extra(key, scrubbed.get(key))
 
         sentry_sdk.capture_exception(normalized)
+
+
+_report_critical_logger = logging.getLogger("proliferate.critical")
+
+
+def report_critical(
+    error: Any,
+    *,
+    tags: dict[str, str] | None = None,
+    extras: dict[str, Any] | None = None,
+    **context: Any,
+) -> None:
+    """Report a page-worthy failure to Sentry (level=fatal) and structured logs.
+
+    Contract fields (stable for Grafana/Sentry alert rules):
+    - Sentry tag: critical_failure=true, level=fatal
+    - Log extra: critical_failure=True
+    - Log message contains "CRITICAL_FAILURE" marker for CloudWatch filtering
+    """
+    merged_tags = dict(tags or {})
+    merged_tags["critical_failure"] = "true"
+
+    capture_server_sentry_exception(
+        error,
+        level="fatal",
+        tags=merged_tags,
+        extras=extras,
+    )
+
+    log_extra: dict[str, Any] = {"critical_failure": True}
+    if context:
+        log_extra.update(context)
+    if extras:
+        log_extra.update(extras)
+
+    _report_critical_logger.exception(
+        "CRITICAL_FAILURE: %s",
+        str(error),
+        extra=log_extra,
+    )
 
 
 def flush_server_sentry(timeout: float = 2.0) -> None:

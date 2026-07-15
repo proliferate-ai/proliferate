@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { SplitPanel } from "@proliferate/ui/icons";
+import { SplitPanelLeft } from "@proliferate/ui/icons";
 import { useResize } from "@/hooks/ui/layout/use-resize";
 import { useTransparentChromeEnabled } from "@/hooks/theme/derived/use-transparent-chrome";
 import { useUpdater } from "@/hooks/access/tauri/use-updater";
@@ -52,7 +52,9 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
     >
       <div
         id="main-sidebar"
-        className="flex shrink-0 flex-col overflow-hidden bg-sidebar transition-[width] duration-150 ease-in-out"
+        // isolate: keeps sidebar-internal z-indexes below the resize
+        // separator's overlapping hit strip (z-10 in the page context).
+        className="isolate flex shrink-0 flex-col overflow-hidden bg-sidebar transition-[width] duration-150 ease-in-out"
         style={{ width: sidebarOpen ? sidebarWidth : 0 }}
       >
         <div className="flex h-10 shrink-0 items-center" data-tauri-drag-region="true">
@@ -64,7 +66,7 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
               title="Hide sidebar"
               className="rounded-md"
             >
-              <SplitPanel className="size-4" />
+              <SplitPanelLeft className="size-4" />
             </IconButton>
             {/* The update pill's single home is the top-left, next to the
                 sidebar toggle. */}
@@ -107,7 +109,7 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
                 title="Show sidebar"
                 className="rounded-md"
               >
-                <SplitPanel className="size-4" />
+                <SplitPanelLeft className="size-4" />
               </IconButton>
               <SidebarUpdatePill
                 phase={updaterPhase}

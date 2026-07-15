@@ -62,7 +62,6 @@ export function RedirectCallbackScreen({
                 <ProliferateLivingMark
                   testIds={{
                     root: "redirect-callback-living-mark",
-                    brailleLayer: "redirect-callback-braille-layer",
                     iconLayer: "redirect-callback-icon-layer",
                   }}
                 />

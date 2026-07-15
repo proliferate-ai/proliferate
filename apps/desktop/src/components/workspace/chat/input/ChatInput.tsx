@@ -28,13 +28,18 @@ import type { PromptAttachmentController } from "@/hooks/chat/ui/use-chat-prompt
 import { useComposerSubmitGate } from "@/hooks/chat/ui/use-composer-submit-gate";
 import { usePlanDraftAttachments } from "@/hooks/plans/facade/use-plan-draft-attachments";
 import { useChatSessionControls } from "@/hooks/chat/facade/use-chat-session-controls";
-import { useQueuedPromptEdit } from "@/hooks/chat/ui/use-queued-prompt-edit";
+import {
+  useEditLastQueuedPrompt,
+  useQueuedPromptEdit,
+} from "@/hooks/chat/ui/use-queued-prompt-edit";
 import { useComposerTextareaAutosize } from "@/hooks/chat/ui/use-composer-textarea-autosize";
 import { focusChatInput } from "@/lib/domain/focus-zone";
 import { serializeChatDraftToPrompt } from "@/lib/domain/chat/composer/file-mention-draft-model";
 import { promptAttachmentSnapshotsToContentParts } from "@proliferate/product-domain/chats/composer/prompt-attachment-snapshot";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { mergeSessionConfigControlDescriptors } from "@/lib/domain/chat/session-controls/session-controls";
+import { buildComposerSessionControlGroups } from "@/lib/domain/chat/session-controls/composer-control-groups";
+import { useComposerUltraEmphasis } from "@/hooks/chat/ui/use-composer-ultra-emphasis";
 import {
   finishOrCancelMeasurementOperation,
   recordMeasurementWorkflowStep,
@@ -64,10 +69,12 @@ const CHAT_INPUT_ATTACHMENT_ACCEPT =
 export function ChatInput({
   attachments,
   suppressActiveSessionState = false,
+  replacementSessionId = null,
   hasSessionTurns = false,
 }: {
   attachments: PromptAttachmentController;
   suppressActiveSessionState?: boolean;
+  replacementSessionId?: string | null;
   /** Flips the placeholder to the follow-up variant once the transcript has turns. */
   hasSessionTurns?: boolean;
 }) {
@@ -92,6 +99,7 @@ export function ChatInput({
   });
   const modelSelectorProps = useChatModelSelectorState({
     suppressActiveSessionState,
+    replacementSessionId,
   });
   const { agentKind, controls: sessionConfigControls, modeControl } = useChatSessionControls();
   const launchConfigControls = suppressActiveSessionState ? [] : modelSelectorProps.launchControls;
@@ -105,10 +113,10 @@ export function ChatInput({
     : agentKind ?? modelSelectorProps.launchAgentKind;
   const effectiveModeControl = suppressActiveSessionState
     ? null
-    : effectiveSessionConfigControls.find((control) => control.key === "collaboration_mode")
-      ?? effectiveSessionConfigControls.find((control) => control.key === "mode")
+    : buildComposerSessionControlGroups(effectiveSessionConfigControls).modeControl
       ?? modeControl
       ?? null;
+  const isUltraEmphasis = useComposerUltraEmphasis(effectiveSessionConfigControls);
   const { handleSubmit, handleCancel } = useChatPromptActions();
   const { isSubmitting, run: runSubmit } = useComposerSubmitGate();
   const {
@@ -119,16 +127,19 @@ export function ChatInput({
     commitEdit,
   } = useQueuedPromptEdit();
   const effectiveIsEditingQueuedPrompt = suppressActiveSessionState ? false : isEditingQueuedPrompt;
+  const editLastQueuedPrompt = useEditLastQueuedPrompt(suppressActiveSessionState);
   const planAttachments = usePlanDraftAttachments({
     workspaceUiKey,
     sdkWorkspaceId: materializedWorkspaceId,
   });
   const hasDraftAttachments = attachments.hasAttachments || planAttachments.hasPlans;
+  const hasSubmittableDraftAttachments =
+    attachments.hasSupportedAttachments || planAttachments.hasPlans;
   const effectiveIsEmpty = effectiveIsEditingQueuedPrompt
     ? editDraft.trim().length === 0
-    : isEmpty && !hasDraftAttachments;
+    : isEmpty && !hasSubmittableDraftAttachments;
   const canSubmit =
-    !effectiveIsEmpty && !isDisabled && !planAttachments.hasUnresolvedPlans && !isSubmitting;
+    !effectiveIsEmpty && !isDisabled && !isSubmitting;
   const canAcceptPastedAttachments =
     !effectiveIsEditingQueuedPrompt
     && !isDisabled
@@ -151,9 +162,6 @@ export function ChatInput({
     await runSubmit(async () => {
       if (effectiveIsEditingQueuedPrompt) {
         await commitEdit();
-        return;
-      }
-      if (planAttachments.hasUnresolvedPlans) {
         return;
       }
       const measurementOperationId = startMeasurementOperation({
@@ -194,7 +202,10 @@ export function ChatInput({
         finishOrCancelMeasurementOperation(measurementOperationId, "aborted");
         return;
       }
-      attachments.clearAttachments();
+      // A harness switch can temporarily make an existing attachment
+      // unsupported. Clear only attachments that were eligible for this send,
+      // leaving visible incompatible drafts available for another harness.
+      attachments.clearSubmittedAttachments(attachmentSnapshots);
       planAttachments.clearPlans();
     });
   }, [
@@ -223,6 +234,7 @@ export function ChatInput({
     modeControl: effectiveModeControl,
     isEditingQueuedPrompt: effectiveIsEditingQueuedPrompt,
     onCancelEdit: cancelEdit,
+    onEditLastQueued: editLastQueuedPrompt,
   });
 
   const focusComposer = useCallback((): boolean => {
@@ -324,9 +336,10 @@ export function ChatInput({
   return (
     <DebugProfiler id="chat-composer">
       <div className="relative">
-        <div ref={setComposerOverlayHost} className="relative z-20 flex flex-col px-5" />
+        <div ref={setComposerOverlayHost} className="relative z-20 flex flex-col" />
         <ChatComposerSurface
           overflowMode="clip"
+          data-ultra-emphasis={isUltraEmphasis || undefined}
           onClick={handleComposerSurfaceClick}
           onPaste={handlePaste}
         >
@@ -369,9 +382,6 @@ export function ChatInput({
               supportsAttachments={attachments.supportsAttachments}
               canAttachFiles={attachments.canAttachFiles}
               activeSessionId={activeSessionIdForUi}
-              workspaceUiKey={workspaceUiKey}
-              sdkWorkspaceId={materializedWorkspaceId}
-              hasUnresolvedPlans={planAttachments.hasUnresolvedPlans}
               onAttachFile={() => fileInputRef.current?.click()}
               isRunning={isRunningForUi}
               isEmpty={effectiveIsEmpty}

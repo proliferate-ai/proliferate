@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 #[cfg(target_os = "macos")]
 use std::process::Command;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::Value;
 #[cfg(target_os = "macos")]
@@ -19,12 +20,17 @@ pub fn detect_local_auth_state(home_dir: &Path) -> Result<LocalAuthState, Discov
     let path = local_codex_auth_path(home_dir);
     tracing::debug!(path = %path.display(), "Detecting Codex local auth state");
 
-    if let Some((account, _data)) = read_keychain_codex_auth(home_dir)? {
+    if let Some((account, data)) = read_keychain_codex_auth(home_dir)? {
         tracing::debug!(account, "Codex keychain auth detected");
-        return Ok(LocalAuthState::Present(LocalAuthSource::MacOsKeychain {
+        let source = LocalAuthSource::MacOsKeychain {
             service: CODEX_KEYCHAIN_SERVICE.to_string(),
             account,
-        }));
+        };
+        if is_codex_oauth_expired(&data) {
+            tracing::debug!("Codex keychain OAuth credential expired");
+            return Ok(LocalAuthState::Expired(source));
+        }
+        return Ok(LocalAuthState::Present(source));
     }
 
     let Some(data) = read_json_file(&path)? else {
@@ -33,8 +39,13 @@ pub fn detect_local_auth_state(home_dir: &Path) -> Result<LocalAuthState, Discov
     };
 
     if has_codex_auth(&data) {
-        tracing::debug!(path = %path.display(), "Codex auth file detected");
-        return Ok(LocalAuthState::Present(LocalAuthSource::File { path }));
+        let source = LocalAuthSource::File { path };
+        if is_codex_oauth_expired(&data) {
+            tracing::debug!("Codex OAuth credential expired");
+            return Ok(LocalAuthState::Expired(source));
+        }
+        tracing::debug!("Codex auth file detected");
+        return Ok(LocalAuthState::Present(source));
     }
 
     tracing::debug!(path = %path.display(), "Codex auth file present but missing usable auth");
@@ -113,6 +124,24 @@ fn has_codex_oauth_tokens(data: &Value) -> bool {
         .and_then(Value::as_str)
         .map(|value| !value.is_empty())
         .unwrap_or(false)
+}
+
+/// Returns true if the Codex OAuth token has an `expires_at` field (seconds epoch)
+/// that is in the past. Only applies to OAuth tokens (not API keys).
+/// Missing or non-numeric `expires_at` → not expired (conservative).
+fn is_codex_oauth_expired(data: &Value) -> bool {
+    // Only check expiry for OAuth tokens, not plain API keys
+    if !has_codex_oauth_tokens(data) {
+        return false;
+    }
+    let Some(expires_at_secs) = data.pointer("/tokens/expires_at").and_then(Value::as_u64) else {
+        return false;
+    };
+    let now_secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    expires_at_secs <= now_secs
 }
 
 /// Kind-preserving fact detection: emits EVERY present codex credential
@@ -268,6 +297,86 @@ mod tests {
             .expect("write codex auth");
 
         assert!(discovery_fact_kinds(&home).expect("fact kinds").is_empty());
+
+        let _ = fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn detects_expired_codex_oauth_token() {
+        let home = make_temp_home();
+        // expires_at in the past (epoch 1 second = 1970)
+        fs::write(
+            home.join(CODEX_AUTH_PATH),
+            r#"{"tokens":{"access_token":"token","expires_at":1}}"#,
+        )
+        .expect("write codex auth");
+
+        let state = detect_local_auth_state(&home).expect("detect");
+        assert!(
+            matches!(state, LocalAuthState::Expired(LocalAuthSource::File { .. })),
+            "Expected Expired, got {:?}",
+            state
+        );
+
+        let _ = fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn detects_valid_codex_oauth_token_with_future_expiry() {
+        let home = make_temp_home();
+        // expires_at far in the future
+        fs::write(
+            home.join(CODEX_AUTH_PATH),
+            r#"{"tokens":{"access_token":"token","expires_at":2840000000}}"#,
+        )
+        .expect("write codex auth");
+
+        let state = detect_local_auth_state(&home).expect("detect");
+        assert!(
+            matches!(state, LocalAuthState::Present(LocalAuthSource::File { .. })),
+            "Expected Present, got {:?}",
+            state
+        );
+
+        let _ = fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn codex_api_key_ignores_expiry() {
+        let home = make_temp_home();
+        // API key has no expiry concept — always present
+        fs::write(
+            home.join(CODEX_AUTH_PATH),
+            r#"{"OPENAI_API_KEY":"sk-test"}"#,
+        )
+        .expect("write codex auth");
+
+        let state = detect_local_auth_state(&home).expect("detect");
+        assert!(
+            matches!(state, LocalAuthState::Present(LocalAuthSource::File { .. })),
+            "Expected Present, got {:?}",
+            state
+        );
+
+        let _ = fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn codex_oauth_without_expires_at_treated_as_present() {
+        let home = make_temp_home();
+        // No expires_at field → conservative: Present
+        fs::write(
+            home.join(CODEX_AUTH_PATH),
+            r#"{"tokens":{"access_token":"token"}}"#,
+        )
+        .expect("write codex auth");
+
+        let state = detect_local_auth_state(&home).expect("detect");
+        assert!(
+            matches!(state, LocalAuthState::Present(LocalAuthSource::File { .. })),
+            "Expected Present, got {:?}",
+            state
+        );
 
         let _ = fs::remove_dir_all(home);
     }

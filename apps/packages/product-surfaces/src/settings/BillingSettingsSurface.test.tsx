@@ -7,6 +7,7 @@ import { BillingSettingsSurface } from "./BillingSettingsSurface";
 const cloudHooks = vi.hoisted(() => ({
   useCloudBilling: vi.fn(),
   useCloudBillingActions: vi.fn(),
+  useLlmBalance: vi.fn(),
   createCloudCheckout: vi.fn(),
   createBillingPortal: vi.fn(),
   createRefillCheckout: vi.fn(),
@@ -17,6 +18,7 @@ const cloudHooks = vi.hoisted(() => ({
 vi.mock("@proliferate/cloud-sdk-react", () => ({
   useCloudBilling: cloudHooks.useCloudBilling,
   useCloudBillingActions: cloudHooks.useCloudBillingActions,
+  useLlmBalance: cloudHooks.useLlmBalance,
 }));
 
 function billingPlan(overrides: Record<string, unknown> = {}) {
@@ -77,6 +79,11 @@ describe("BillingSettingsSurface", () => {
       updateOverageEnabled: cloudHooks.updateOverageEnabled,
       updatingOverage: false,
     });
+    cloudHooks.useLlmBalance.mockReturnValue({
+      data: { grantedUsd: 12000, usedUsd: 7400, remainingUsd: 4600 },
+      isLoading: false,
+      isError: false,
+    });
   });
 
   afterEach(() => {
@@ -118,10 +125,10 @@ describe("BillingSettingsSurface", () => {
     );
 
     expect(screen.getAllByRole("heading", { name: "Billing" }).length).toBeGreaterThan(0);
-    expect(screen.getByRole("heading", { name: "Plan" })).toBeTruthy();
+    expect(screen.getByText("Plan")).toBeTruthy();
     expect(screen.getByText(/tracked, budgeted, and topped up separately/)).toBeTruthy();
     expect(screen.getByText("360 PCUs")).toBeTruthy();
-    expect(screen.getByText("12,000 LLM credits")).toBeTruthy();
+    expect(screen.getByText("$12,000.00")).toBeTruthy();
     expect(screen.queryByText("Loading")).toBeNull();
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "Add compute units" }).disabled).toBe(true);
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "Add LLM credits" }).disabled).toBe(true);

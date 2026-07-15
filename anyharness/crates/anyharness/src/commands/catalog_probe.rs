@@ -11,7 +11,7 @@ use anyharness_lib::live::sessions::probe::{probe_agent, ProbeOptions, ProbeSnap
 
 #[derive(Args)]
 pub struct CatalogProbeArgs {
-    /// Agent kind to probe (claude, codex, gemini, cursor, opencode, grok)
+    /// Agent kind to probe (claude, codex, cursor, opencode, grok)
     #[arg(long)]
     pub agent: String,
 
@@ -334,29 +334,6 @@ wire_api = "responses"
             env.insert("AWS_BEARER_TOKEN_BEDROCK".to_string(), token);
             Ok(env)
         }
-        // Gemini stores state under $HOME/.gemini — isolate HOME and seed the
-        // auth-type selection so ACP mode starts non-interactively.
-        (AgentKind::Gemini, "gemini-api") => {
-            let key = secrets.require("GEMINI_API_KEY")?;
-            let mut env = isolation_env(auth_context, &[("HOME", "home")], isolation_dirs)?;
-            seed_gemini_settings(env.get("HOME").expect("home"), "gemini-api-key", None)?;
-            env.insert("GEMINI_API_KEY".to_string(), key);
-            Ok(env)
-        }
-        (AgentKind::Gemini, "google-oauth") => {
-            let source = std::env::var("PROBE_GEMINI_OAUTH_CREDS").unwrap_or_else(|_| {
-                format!(
-                    "{}/.gemini/oauth_creds.json",
-                    std::env::var("HOME").unwrap_or_default()
-                )
-            });
-            if !std::path::Path::new(&source).exists() {
-                bail!("google-oauth requires gemini oauth creds (run `gemini` and log in); not found at {source}");
-            }
-            let env = isolation_env(auth_context, &[("HOME", "home")], isolation_dirs)?;
-            seed_gemini_settings(env.get("HOME").expect("home"), "oauth-personal", Some(&source))?;
-            Ok(env)
-        }
         // cursor-agent's ACP session services ignore CURSOR_API_KEY and
         // require a machine login (auth in macOS Keychain "Cursor Safe
         // Storage" — not isolatable by HOME). Probe runs under the real
@@ -480,22 +457,6 @@ fn opencode_isolation_env(
         ],
         isolation_dirs,
     )
-}
-
-/// Seed an isolated gemini HOME: settings.json selecting the auth type, and
-/// optionally a copied oauth_creds.json.
-fn seed_gemini_settings(home: &str, auth_type: &str, oauth_creds: Option<&str>) -> Result<()> {
-    let gemini_dir = std::path::Path::new(home).join(".gemini");
-    std::fs::create_dir_all(&gemini_dir)?;
-    std::fs::write(
-        gemini_dir.join("settings.json"),
-        serde_json::json!({ "security": { "auth": { "selectedType": auth_type } } }).to_string(),
-    )?;
-    if let Some(source) = oauth_creds {
-        std::fs::copy(source, gemini_dir.join("oauth_creds.json"))
-            .with_context(|| format!("failed to copy {source}"))?;
-    }
-    Ok(())
 }
 
 fn isolation_env(

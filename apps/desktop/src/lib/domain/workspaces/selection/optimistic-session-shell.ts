@@ -46,6 +46,13 @@ export function resolveOptimisticWorkspaceSessionId({
   return lookupFirst(visibleChatSessionIdsByWorkspace, lookupKeys)?.[0] ?? null;
 }
 
+/**
+ * Detects a fast-open synthetic placeholder record. This is NOT the same as
+ * "session emptiness" (see session-emptiness.ts): it tests placeholder identity
+ * (agentKind/title/materializedSessionId/transcriptHydrated) plus content
+ * absence. The shared emptiness predicate is used for replace-in-place
+ * decisions; this function is used for placeholder-vs-real reconciliation.
+ */
 export function isOptimisticWorkspaceSessionPlaceholder(
   record: OptimisticSessionPlaceholderLike | null | undefined,
 ): boolean {

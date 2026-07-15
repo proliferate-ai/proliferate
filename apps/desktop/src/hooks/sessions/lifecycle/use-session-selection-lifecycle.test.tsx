@@ -2,18 +2,30 @@
 
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { MockInstance } from "vitest";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import {
+  createMemoryProductStorage,
+  type MemoryProductStorage,
+} from "@/test/product-storage-test-utils";
+import {
+  makeTestProductHost,
+  productHostWrapper,
+} from "@/test/product-host-test-utils";
 import { useSessionSelectionLifecycle } from "./use-session-selection-lifecycle";
 
-const persistenceMocks = vi.hoisted(() => ({
-  readPersistedValue: vi.fn(),
-  persistValue: vi.fn(),
-}));
+let memory: MemoryProductStorage;
+let setItemSpy: MockInstance;
+let removeItemSpy: MockInstance;
 
-vi.mock("@/lib/infra/persistence/preferences-persistence", () => ({
-  readPersistedValue: persistenceMocks.readPersistedValue,
-  persistValue: persistenceMocks.persistValue,
-}));
+const SELECTION_KEY = "selected_logical_workspace_id";
+
+function renderLifecycle() {
+  const host = makeTestProductHost({ overrides: { storage: memory.storage } });
+  return renderHook(() => useSessionSelectionLifecycle(), {
+    wrapper: productHostWrapper(host),
+  });
+}
 
 function resetSelectionStore(): void {
   useSessionSelectionStore.setState({
@@ -39,10 +51,9 @@ describe("useSessionSelectionLifecycle", () => {
   beforeEach(() => {
     cleanup();
     resetSelectionStore();
-    persistenceMocks.readPersistedValue.mockReset();
-    persistenceMocks.persistValue.mockReset();
-    persistenceMocks.readPersistedValue.mockResolvedValue(null);
-    persistenceMocks.persistValue.mockResolvedValue(undefined);
+    memory = createMemoryProductStorage();
+    setItemSpy = vi.spyOn(memory.storage, "setItem");
+    removeItemSpy = vi.spyOn(memory.storage, "removeItem");
   });
 
   afterEach(() => {
@@ -50,32 +61,33 @@ describe("useSessionSelectionLifecycle", () => {
   });
 
   it("hydrates the persisted logical workspace id", async () => {
-    persistenceMocks.readPersistedValue.mockResolvedValue("logical-workspace-1");
+    memory.values.set(SELECTION_KEY, "logical-workspace-1");
 
-    renderHook(() => useSessionSelectionLifecycle());
+    renderLifecycle();
 
     await waitFor(() => {
       expect(useSessionSelectionStore.getState()._hydrated).toBe(true);
     });
     expect(useSessionSelectionStore.getState().selectedLogicalWorkspaceId)
       .toBe("logical-workspace-1");
-    expect(persistenceMocks.persistValue).not.toHaveBeenCalled();
+    expect(setItemSpy).not.toHaveBeenCalled();
+    expect(removeItemSpy).not.toHaveBeenCalled();
   });
 
   it("normalizes persisted pending workspace ids to null", async () => {
-    persistenceMocks.readPersistedValue.mockResolvedValue("pending-workspace:abc");
+    memory.values.set(SELECTION_KEY, "pending-workspace:abc");
 
-    renderHook(() => useSessionSelectionLifecycle());
+    renderLifecycle();
 
     await waitFor(() => {
       expect(useSessionSelectionStore.getState()._hydrated).toBe(true);
     });
     expect(useSessionSelectionStore.getState().selectedLogicalWorkspaceId).toBeNull();
-    expect(persistenceMocks.persistValue).not.toHaveBeenCalled();
+    expect(setItemSpy).not.toHaveBeenCalled();
   });
 
   it("persists stable selection changes after hydration", async () => {
-    renderHook(() => useSessionSelectionLifecycle());
+    renderLifecycle();
 
     await waitFor(() => {
       expect(useSessionSelectionStore.getState()._hydrated).toBe(true);
@@ -85,16 +97,13 @@ describe("useSessionSelectionLifecycle", () => {
       useSessionSelectionStore.getState().setSelectedLogicalWorkspaceId("logical-workspace-2");
     });
     await waitFor(() => {
-      expect(persistenceMocks.persistValue).toHaveBeenCalledWith(
-        "selected_logical_workspace_id",
-        "logical-workspace-2",
-      );
+      expect(setItemSpy).toHaveBeenCalledWith(SELECTION_KEY, "logical-workspace-2");
     });
   });
 
   it("skips transient pending workspace ids when persisting live state", async () => {
-    persistenceMocks.readPersistedValue.mockResolvedValue("logical-workspace-1");
-    renderHook(() => useSessionSelectionLifecycle());
+    memory.values.set(SELECTION_KEY, "logical-workspace-1");
+    renderLifecycle();
 
     await waitFor(() => {
       expect(useSessionSelectionStore.getState()._hydrated).toBe(true);
@@ -105,12 +114,13 @@ describe("useSessionSelectionLifecycle", () => {
     });
     await flushAsyncWork();
 
-    expect(persistenceMocks.persistValue).not.toHaveBeenCalled();
+    expect(setItemSpy).not.toHaveBeenCalled();
+    expect(removeItemSpy).not.toHaveBeenCalled();
   });
 
-  it("persists null when stable selection is cleared", async () => {
-    persistenceMocks.readPersistedValue.mockResolvedValue("logical-workspace-1");
-    renderHook(() => useSessionSelectionLifecycle());
+  it("removes the persisted key when stable selection is cleared", async () => {
+    memory.values.set(SELECTION_KEY, "logical-workspace-1");
+    renderLifecycle();
 
     await waitFor(() => {
       expect(useSessionSelectionStore.getState()._hydrated).toBe(true);
@@ -120,20 +130,18 @@ describe("useSessionSelectionLifecycle", () => {
       useSessionSelectionStore.getState().setSelectedLogicalWorkspaceId(null);
     });
     await waitFor(() => {
-      expect(persistenceMocks.persistValue).toHaveBeenCalledWith(
-        "selected_logical_workspace_id",
-        null,
-      );
+      expect(removeItemSpy).toHaveBeenCalledWith(SELECTION_KEY);
     });
+    expect(memory.values.has(SELECTION_KEY)).toBe(false);
   });
 
   it("does not hydrate or subscribe after unmounting before the read completes", async () => {
     let resolveRead: (value: string) => void = () => {};
-    persistenceMocks.readPersistedValue.mockReturnValue(new Promise((resolve) => {
+    getItemSpyResolvingWith((resolve) => {
       resolveRead = resolve;
-    }));
+    });
 
-    const rendered = renderHook(() => useSessionSelectionLifecycle());
+    const rendered = renderLifecycle();
     rendered.unmount();
 
     await act(async () => {
@@ -143,6 +151,17 @@ describe("useSessionSelectionLifecycle", () => {
 
     expect(useSessionSelectionStore.getState()._hydrated).toBe(false);
     expect(useSessionSelectionStore.getState().selectedLogicalWorkspaceId).toBeNull();
-    expect(persistenceMocks.persistValue).not.toHaveBeenCalled();
+    expect(setItemSpy).not.toHaveBeenCalled();
   });
 });
+
+function getItemSpyResolvingWith(
+  register: (resolve: (value: string) => void) => void,
+): void {
+  vi.spyOn(memory.storage, "getItem").mockImplementation(
+    () =>
+      new Promise<string | null>((resolve) => {
+        register((value) => resolve(value));
+      }),
+  );
+}

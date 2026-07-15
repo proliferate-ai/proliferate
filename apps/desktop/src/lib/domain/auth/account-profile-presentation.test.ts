@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildAccountProviderViews,
   getAccountActionDescription,
   getAccountDisplayName,
   getAccountInitials,
@@ -96,5 +97,46 @@ describe("getAccountInitials", () => {
     expect(getAccountInitials("Person Name")).toBe("PN");
     expect(getAccountInitials("octocat")).toBe("OC");
     expect(getAccountInitials("   ")).toBe("P");
+  });
+});
+
+describe("buildAccountProviderViews", () => {
+  it("shows only a disconnected GitHub row when providers aren't shown", () => {
+    const providers = buildAccountProviderViews({
+      githubAccountLabel: null,
+      githubConnected: false,
+      googleAccounts: [],
+      ssoAccounts: [],
+      googleAvailable: true,
+      showProviders: false,
+    });
+
+    expect(providers).toEqual([
+      {
+        provider: "github",
+        label: "GitHub",
+        accountLabel: "Not signed in",
+        connected: false,
+        primary: false,
+      },
+    ]);
+  });
+
+  it("lists SSO accounts first, then GitHub, then Google", () => {
+    const providers = buildAccountProviderViews({
+      githubAccountLabel: "@octocat",
+      githubConnected: true,
+      googleAccounts: [{ accountEmail: "person@example.com" }],
+      ssoAccounts: [{ accountEmail: "person@work.com", displayName: "Okta" }],
+      googleAvailable: true,
+      showProviders: true,
+    });
+
+    expect(providers.map((provider) => provider.provider)).toEqual([
+      "sso",
+      "github",
+      "google",
+    ]);
+    expect(providers[1]).toMatchObject({ accountLabel: "@octocat", connected: true });
   });
 });

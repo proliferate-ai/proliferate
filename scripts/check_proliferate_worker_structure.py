@@ -36,6 +36,7 @@ REQUIRED_FILES = (
     WORKER_SRC / "config.rs",
     WORKER_SRC / "process_lock.rs",
     WORKER_SRC / "runtime.rs",
+    WORKER_SRC / "self_update.rs",
 )
 
 BLOCKED_IMPORT_RE = re.compile(r"\bcrate::(?:commands|sync|updates|control|tail|inventory)\b")

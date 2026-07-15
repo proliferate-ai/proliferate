@@ -6,7 +6,7 @@ import {
   type CreateAdminIntegrationDefinitionRequest,
 } from "@proliferate/cloud-sdk/client/integrations";
 import { ProliferateClientError } from "@/lib/access/cloud/client";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import { useProductAuthStatus } from "@/hooks/auth/facade/use-product-auth";
 import { cloudIntegrationAdminDefinitionsKey } from "./query-keys";
 import { useInvalidateCloudIntegrations } from "./use-integration-health";
 
@@ -14,7 +14,7 @@ export function useAdminIntegrationDefinitions(
   organizationId: string | null,
   options?: { enabled?: boolean },
 ) {
-  const authStatus = useAuthStore((state) => state.status);
+  const authStatus = useProductAuthStatus();
   return useQuery({
     queryKey: cloudIntegrationAdminDefinitionsKey(organizationId),
     enabled:
