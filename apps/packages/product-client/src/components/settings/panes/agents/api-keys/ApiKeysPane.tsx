@@ -89,7 +89,7 @@ export function ApiKeysPane() {
 
   if (!cloudActive) {
     return (
-      <section className="space-y-5">
+      <section className="space-y-5" data-api-keys-pane="">
         <SettingsPageHeader
           title={AGENT_API_KEYS_COPY.title}
           description={AGENT_API_KEYS_COPY.description}
@@ -105,7 +105,7 @@ export function ApiKeysPane() {
   }
 
   return (
-    <section className="space-y-5">
+    <section className="space-y-5" data-api-keys-pane="">
       <SettingsPageHeader
         title={AGENT_API_KEYS_COPY.title}
         description={AGENT_API_KEYS_COPY.description}

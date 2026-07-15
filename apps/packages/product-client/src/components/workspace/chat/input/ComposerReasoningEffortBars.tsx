@@ -80,6 +80,8 @@ export function ComposerReasoningEffortBars({ control }: ComposerReasoningEffort
         aria-label={ariaLabel}
         className={TIER_TONE_CLASSES[tierTone]}
         labelClassName="text-current"
+        data-reasoning-effort-trigger=""
+        data-reasoning-effort-selected={currentOption?.value ?? ""}
       />
     )
     : (
@@ -92,6 +94,9 @@ export function ComposerReasoningEffortBars({ control }: ComposerReasoningEffort
         disabled={!control.settable}
         title={tooltip}
         aria-label={ariaLabel}
+        data-reasoning-effort-trigger=""
+        data-reasoning-effort-selected={currentOption?.value ?? ""}
+        levelOptionAttribute="data-reasoning-effort-option"
       />
     );
 

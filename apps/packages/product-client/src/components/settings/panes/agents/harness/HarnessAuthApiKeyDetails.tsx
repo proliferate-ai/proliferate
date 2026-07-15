@@ -140,6 +140,7 @@ export function ApiKeyDetails({
         onClose={handleAddKeyModalClose}
         heading={HARNESS_PANE_COPY.newApiKeyModalTitle}
         description="Create and bind a new API key in one step."
+        providerHint={envVarSuggestion?.providerHint ?? null}
         showTitleField
         envVarField={{
           label: "Environment variable",

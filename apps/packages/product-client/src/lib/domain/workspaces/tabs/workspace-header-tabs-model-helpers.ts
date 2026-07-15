@@ -176,6 +176,22 @@ export function getKnownSessionViewState(known: KnownHeaderSession): SessionView
   });
 }
 
+/**
+ * True when the session behind a header tab has never run a prompt — a visible
+ * empty chat. Qualification-testid signal only (`data-workspace-empty-chat`):
+ * it drives no behavior.
+ */
+export function getKnownSessionIsEmptyChat(known: KnownHeaderSession): boolean {
+  switch (known.kind) {
+    case "placeholder":
+      return true;
+    case "slot":
+      return !known.slot.hasAttemptedPrompt && known.slot.lastPromptAt === null;
+    case "session":
+      return known.session.lastPromptAt == null;
+  }
+}
+
 function shouldSuppressMaterializationActivity(
   slot: SessionDirectoryEntry,
   viewState: SessionViewState,

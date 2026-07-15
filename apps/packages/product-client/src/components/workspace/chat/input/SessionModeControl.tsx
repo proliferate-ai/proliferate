@@ -64,6 +64,8 @@ export function SessionModeControl({
         detail={triggerDetail}
         trailing={triggerTrailing}
         className="max-w-[12rem]"
+        data-session-mode-trigger=""
+        data-session-mode-selected={currentValue ?? ""}
       />
     );
   }
@@ -80,6 +82,8 @@ export function SessionModeControl({
           title={`${CHAT_MODE_CONTROL_LABELS.cycleHint} (${CHAT_MODE_CONTROL_LABELS.shortcut})`}
           aria-label={`${control.label}: ${currentOption?.label ?? currentDetail ?? ""}`}
           className="max-w-[12rem]"
+          data-session-mode-trigger=""
+          data-session-mode-selected={currentValue ?? ""}
         />
       }
       side="top"
@@ -96,6 +100,7 @@ export function SessionModeControl({
             return (
               <PopoverMenuItem
                 key={option.value}
+                data-session-mode-option={option.value}
                 icon={<SessionControlIcon icon={presentation.icon} className="size-3.5 text-muted-foreground" />}
                 label={presentation.shortLabel ?? option.label}
                 trailing={option.selected ? <Check className="size-3.5 shrink-0 text-foreground/60" /> : null}

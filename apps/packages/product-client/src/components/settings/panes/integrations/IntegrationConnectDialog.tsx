@@ -105,18 +105,20 @@ export function IntegrationConnectDialog({
 
         <form
           className="mt-4 space-y-4"
+          data-integration-connect-dialog=""
           onSubmit={(event) => {
             event.preventDefault();
             handleSubmit();
           }}
         >
-          {secretFields.map((field) => (
+          {secretFields.map((field, fieldIndex) => (
             <div key={field.id}>
               <Label htmlFor={`integration-secret-${field.id}`}>{field.label}</Label>
               <Input
                 id={`integration-secret-${field.id}`}
                 type="password"
                 autoComplete="off"
+                data-integration-api-key-input={fieldIndex === 0 ? "" : undefined}
                 placeholder={field.placeholder ?? undefined}
                 value={secretValues[field.id] ?? ""}
                 onChange={(event) => {
@@ -149,7 +151,12 @@ export function IntegrationConnectDialog({
             <Button type="button" variant="ghost" disabled={connecting} onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" loading={connecting} disabled={!canSubmit}>
+            <Button
+              type="submit"
+              loading={connecting}
+              disabled={!canSubmit}
+              data-integration-connect-submit=""
+            >
               Connect
             </Button>
           </DialogFooter>

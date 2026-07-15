@@ -174,7 +174,13 @@ function HarnessAuthMethods({
       {editor.harnessDisallowed ? (
         <p className="pb-2 text-sm text-muted-foreground">{POLICY_TOOLTIP}.</p>
       ) : null}
-      <div className="grid grid-cols-3 gap-3">
+      <div
+        className="grid grid-cols-3 gap-3"
+        data-harness-auth-section={harnessKind}
+        data-harness-selected-route={[...selectedMethods]
+          .map((method) => `${harnessKind}:${method}`)
+          .join(" ")}
+      >
         <MethodCard
           label={HARNESS_PANE_COPY.methodGateway}
           icon={<CloudIcon className="size-5" />}
@@ -187,6 +193,7 @@ function HarnessAuthMethods({
                 ? POLICY_TOOLTIP
                 : undefined
           }
+          routeOptionId={`${harnessKind}:gateway`}
           onClick={() => selectMethod("gateway")}
         />
         <MethodCard
@@ -195,6 +202,7 @@ function HarnessAuthMethods({
           selected={selectedMethods.has("api_key")}
           disabled={editor.busy || apiKeyCardDisallowed}
           disabledReason={apiKeyCardDisallowed ? POLICY_TOOLTIP : undefined}
+          routeOptionId={`${harnessKind}:api_key`}
           onClick={() => selectMethod("api_key")}
         />
         <MethodCard
@@ -209,6 +217,7 @@ function HarnessAuthMethods({
                 ? POLICY_TOOLTIP
                 : undefined
           }
+          routeOptionId={`${harnessKind}:cli`}
           onClick={() => selectMethod("cli")}
         />
       </div>
@@ -304,6 +313,8 @@ interface MethodCardProps {
   selected: boolean;
   disabled?: boolean;
   disabledReason?: string;
+  /** Qualification testid value (`data-harness-route-option="<kind>:<method>"`). */
+  routeOptionId?: string;
   onClick: () => void;
 }
 
@@ -313,6 +324,7 @@ function MethodCard({
   selected,
   disabled,
   disabledReason,
+  routeOptionId,
   onClick,
 }: MethodCardProps) {
   return (
@@ -323,6 +335,7 @@ function MethodCard({
         type="button"
         aria-pressed={selected}
         disabled={disabled}
+        data-harness-route-option={routeOptionId}
         className={[
           "relative flex flex-col items-center gap-2 rounded-lg border px-4 py-5 transition-colors",
           selected

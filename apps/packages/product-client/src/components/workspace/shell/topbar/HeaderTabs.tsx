@@ -296,6 +296,7 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
             label="Workspace tabs"
             stripRef={stripScrollRef}
             contentWidth={contentWidth}
+            data-workspace-tab-strip
             className="h-7 min-w-0 shrink"
             style={{ maxWidth: contentWidth }}
             {...shellDrag.stripDragProps}

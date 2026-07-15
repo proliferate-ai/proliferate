@@ -14,6 +14,12 @@ interface LevelBarsButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonEleme
   onStep: (nextValue: string) => void;
   iconOnly?: boolean;
   emphasis?: LevelBarsEmphasis;
+  /**
+   * Optional `data-*` attribute name stamped on each level bar with that
+   * level's value (e.g. `data-reasoning-effort-option`). Pure test/automation
+   * labeling — it changes no rendering or behavior.
+   */
+  levelOptionAttribute?: string;
 }
 
 // HTML bars, not an inline SVG: WebKit does not compositor-accelerate
@@ -32,10 +38,12 @@ function LevelBarsIcon({
   levels,
   currentIndex,
   emphasis = "none",
+  levelOptionAttribute,
 }: {
   levels: Level[];
   currentIndex: number;
   emphasis?: LevelBarsEmphasis;
+  levelOptionAttribute?: string;
 }) {
   const barCount = levels.length;
 
@@ -43,10 +51,14 @@ function LevelBarsIcon({
     const heightPx = Math.max(2, Math.round(((i + 1) / barCount) * LEVEL_BAR_CONTAINER_PX));
     const lit = i <= currentIndex;
     const wave = lit && emphasis === "ultra";
+    const optionAttr = levelOptionAttribute && levels[i]
+      ? { [levelOptionAttribute]: levels[i]!.value }
+      : undefined;
 
     return (
       <span
         key={i}
+        {...optionAttr}
         className={`block w-[2px] shrink-0 rounded-full bg-current${wave ? " composer-level-bar-wave" : ""}`}
         style={{
           height: `${heightPx}px`,
@@ -82,6 +94,7 @@ export const LevelBarsButton = forwardRef<HTMLButtonElement, LevelBarsButtonProp
     onClick,
     iconOnly = false,
     emphasis = "none",
+    levelOptionAttribute,
     className = "",
     ...props
   }, ref) {
@@ -104,7 +117,14 @@ export const LevelBarsButton = forwardRef<HTMLButtonElement, LevelBarsButtonProp
     return (
       <ComposerControlButton
         ref={ref}
-        icon={<LevelBarsIcon levels={levels} currentIndex={currentIndex} emphasis={emphasis} />}
+        icon={(
+          <LevelBarsIcon
+            levels={levels}
+            currentIndex={currentIndex}
+            emphasis={emphasis}
+            levelOptionAttribute={levelOptionAttribute}
+          />
+        )}
         iconOnly={iconOnly}
         label={currentLabel}
         onClick={handleClick}

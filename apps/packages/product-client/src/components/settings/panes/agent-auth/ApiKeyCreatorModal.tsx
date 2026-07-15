@@ -40,6 +40,13 @@ export interface ApiKeyCreatorModalProps {
   submitting: boolean;
   error?: string | null;
   onSubmit: (input: ApiKeyCreatorSubmit) => void;
+  /**
+   * Provider identity of the key being created (e.g. "anthropic"), when the
+   * caller knows it. Qualification testids only: stamps
+   * `data-api-key-input`/`data-api-key-save` with the provider so automation
+   * can target this provider's key form. No behavior.
+   */
+  providerHint?: string | null;
 }
 
 /**
@@ -64,6 +71,7 @@ export function ApiKeyCreatorModal({
   submitting,
   error = null,
   onSubmit,
+  providerHint = null,
 }: ApiKeyCreatorModalProps) {
   const [title, setTitle] = useState("");
   const [value, setValue] = useState("");
@@ -121,6 +129,7 @@ export function ApiKeyCreatorModal({
             form="api-key-creator-form"
             loading={submitting}
             disabled={!canSubmit}
+            data-api-key-save={providerHint ?? undefined}
           >
             {submitLabel}
           </Button>
@@ -179,6 +188,7 @@ export function ApiKeyCreatorModal({
             id="api-key-value"
             type="password"
             value={value}
+            data-api-key-input={providerHint ?? undefined}
             data-telemetry-mask
             autoComplete="off"
             spellCheck={false}
