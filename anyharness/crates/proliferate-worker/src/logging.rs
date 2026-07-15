@@ -11,6 +11,9 @@ const TARGET_SENTRY_ENVIRONMENT_ENV: &str = "PROLIFERATE_TARGET_SENTRY_ENVIRONME
 // own `<component>@<version>+<sha>` from its compile-time build stamp.
 const WORKER_SENTRY_RELEASE_ENV: &str = "PROLIFERATE_WORKER_SENTRY_RELEASE";
 const TARGET_SENTRY_TRACES_SAMPLE_RATE_ENV: &str = "PROLIFERATE_TARGET_SENTRY_TRACES_SAMPLE_RATE";
+/// The single env-like Sentry tag preserved as bounded deployment identity.
+/// Its allowed live value is `e2b`; every other env-like tag stays redacted.
+const RUNTIME_ENV_TAG: &str = "runtime_env";
 
 pub struct TelemetryGuards {
     _sentry: Option<sentry::ClientInitGuard>,
@@ -311,7 +314,12 @@ fn scrub_event(mut event: Event<'static>) -> Option<Event<'static>> {
         scrub_value(value, Some(key));
     }
     for (key, value) in &mut event.tags {
-        if sensitive_key(key) {
+        if key == RUNTIME_ENV_TAG {
+            // Bounded deployment identity: the runtime-environment tag survives
+            // (allowed live value `e2b`). Every other env-like tag key still
+            // matches `sensitive_key` and stays redacted.
+            *value = scrub_text(value);
+        } else if sensitive_key(key) {
             *value = "[redacted]".to_string();
         } else {
             *value = scrub_text(value);
@@ -365,7 +373,7 @@ pub fn init() -> TelemetryGuards {
 
             let runtime_env = std::env::var("PROLIFERATE_RUNTIME_ENV")
                 .unwrap_or_else(|_| "local".to_string());
-            scope.set_tag("runtime_env", &runtime_env);
+            scope.set_tag(RUNTIME_ENV_TAG, &runtime_env);
 
             if let Ok(org_id) = std::env::var("PROLIFERATE_ORG_ID") {
                 if !org_id.trim().is_empty() {
@@ -475,5 +483,28 @@ mod tests {
             .frames[0];
         assert_eq!(frame.abs_path.as_deref(), Some("[redacted-path]"));
         assert!(frame.context_line.is_none());
+    }
+
+    #[test]
+    fn runtime_env_tag_survives_while_other_env_tags_are_redacted() {
+        let mut event = Event::new();
+        event.tags.insert("runtime_env".to_string(), "e2b".to_string());
+        event.tags.insert("deploy_env".to_string(), "prod".to_string());
+        event
+            .tags
+            .insert("environment_name".to_string(), "prod".to_string());
+
+        let scrubbed = scrub_event(event).expect("event should remain");
+
+        // Bounded deployment identity is preserved; other env-like tags are not.
+        assert_eq!(scrubbed.tags.get("runtime_env").map(String::as_str), Some("e2b"));
+        assert_eq!(
+            scrubbed.tags.get("deploy_env").map(String::as_str),
+            Some("[redacted]")
+        );
+        assert_eq!(
+            scrubbed.tags.get("environment_name").map(String::as_str),
+            Some("[redacted]")
+        );
     }
 }

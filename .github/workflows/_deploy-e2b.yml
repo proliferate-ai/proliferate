@@ -93,6 +93,11 @@ jobs:
           set -euo pipefail
           short_sha="${GIT_SHA:0:12}"
           echo "sha_tag=sha-${short_sha}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${short_sha}" >> "$GITHUB_OUTPUT"
+          # The canonical runtime version the build stamps and the smoke asserts.
+          runtime_version="$(jq -r '.version' anyharness/sdk/package.json)"
+          : "${runtime_version:?Failed to read anyharness/sdk/package.json version.}"
+          echo "runtime_version=${runtime_version}" >> "$GITHUB_OUTPUT"
         env:
           GIT_SHA: ${{ inputs.git_sha }}
 
@@ -113,6 +118,8 @@ jobs:
         run: >
           node scripts/smoke-cloud-template.mjs
           --template "$E2B_PUBLIC_TEMPLATE_FAMILY:${{ steps.tag.outputs.sha_tag }}"
+          --expected-version "${{ steps.tag.outputs.runtime_version }}"
+          --expected-sha "${{ steps.tag.outputs.short_sha }}"
         env:
           E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
 

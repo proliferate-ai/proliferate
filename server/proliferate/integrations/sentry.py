@@ -37,7 +37,17 @@ def _scrub_breadcrumb(
 
 
 def _scrub_event(event: dict[str, Any], _hint: dict[str, Any]) -> dict[str, Any] | None:
+    # The top-level `environment` field is deployment identity (e.g. the Sentry
+    # environment name), not a raw process-environment map. The generic scrubber
+    # would redact it because the key matches `env`, so snapshot it first, run
+    # the recursive scrub, then restore the snapshot scrubbed only as text. This
+    # is bounded: nested `env`/`environment` keys stay redacted.
+    original_environment = event.get("environment")
+
     scrubbed = scrub_mapping(event) or {}
+
+    if isinstance(original_environment, str):
+        scrubbed["environment"] = scrub_text(original_environment)
 
     message = scrubbed.get("message")
     if isinstance(message, str):

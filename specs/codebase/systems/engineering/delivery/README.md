@@ -100,10 +100,10 @@ gate.
 | Workflow | Trigger and posture | Role |
 | --- | --- | --- |
 | `_deploy-desktop.yml` | Reusable only | Validate/build Desktop for staging or call the Desktop publisher for production. |
-| `_deploy-e2b.yml` | Reusable only | Build and/or promote one immutable E2B template into a rolling environment tag. |
+| `_deploy-e2b.yml` | Reusable only | Build and/or promote one immutable E2B template into a rolling environment tag; the smoke proves the three runtime binaries report the canonical version and carry the stamped source SHA before the rolling tag moves. |
 | `_deploy-litellm.yml` | Reusable only | Build and roll the LiteLLM ECS service when its environment switch is enabled. |
 | `_deploy-mobile.yml` | Reusable only | Run the selected EAS build and optional submit lane when enabled. |
-| `_deploy-server.yml` | Reusable only | Build the exact-SHA server image, migrate, roll ECS, and verify health. |
+| `_deploy-server.yml` | Reusable only | Build the exact-SHA server image, migrate, roll ECS, and verify health. The rendered task enables strict release identity, strips inherited stale runtime-identity variables, and preserves the support-feed secret, all asserted before registration. |
 | `_deploy-web.yml` | Reusable only | Deploy and verify the selected Vercel web surface. |
 | `_deploy-workers.yml` | Reusable only | Report the disabled Worker lane, or fail if enabled before a canonical deploy exists. |
 

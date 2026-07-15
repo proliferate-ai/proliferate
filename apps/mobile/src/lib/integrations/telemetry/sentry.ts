@@ -7,6 +7,7 @@ import type {
 } from "@sentry/react-native";
 import {
   scrubTelemetryData,
+  scrubTelemetryEvent,
   scrubTelemetryText,
 } from "@proliferate/product-domain/telemetry/scrub";
 
@@ -86,7 +87,7 @@ function scrubSentrySpan<T extends SentrySpanPayload>(span: T): T {
 }
 
 function scrubSentryEventPayload(event: MutableSentryEvent): MutableSentryEvent {
-  const scrubbed = scrubTelemetryData(event);
+  const scrubbed = scrubTelemetryEvent(event);
   scrubbed.transaction = scrubbed.transaction
     ? scrubTelemetryText(scrubbed.transaction)
     : scrubbed.transaction;
