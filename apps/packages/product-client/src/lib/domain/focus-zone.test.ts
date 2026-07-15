@@ -1,0 +1,55 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  focusChatInput,
+  focusTerminal,
+  getFocusZone,
+  isRightPanelFocusZone,
+} from "#product/lib/domain/focus-zone";
+
+describe("focus-zone helpers", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("derives the active focus zone from the nearest focus-zone ancestor", () => {
+    vi.stubGlobal("document", {
+      activeElement: {
+        closest: vi.fn(() => ({
+          getAttribute: vi.fn(() => "terminal"),
+        })),
+      },
+    });
+
+    expect(getFocusZone()).toBe("terminal");
+  });
+
+  it("classifies the right panel and its hosted surfaces as right-panel focus", () => {
+    expect(isRightPanelFocusZone("right-panel")).toBe(true);
+    expect(isRightPanelFocusZone("terminal")).toBe(true);
+    expect(isRightPanelFocusZone("chat")).toBe(false);
+  });
+
+  it("focuses the chat composer editor when the chat focus zone exists", () => {
+    const focus = vi.fn();
+    const querySelector = vi.fn(() => ({ focus }));
+    vi.stubGlobal("document", {
+      querySelector: vi.fn(() => ({ querySelector })),
+    });
+
+    expect(focusChatInput()).toBe(true);
+    expect(querySelector).toHaveBeenCalledWith("[data-chat-composer-editor], textarea");
+    expect(focus).toHaveBeenCalledWith({ preventScroll: false });
+  });
+
+  it("focuses xterm's helper textarea when the terminal focus zone exists", () => {
+    const focus = vi.fn();
+    const querySelector = vi.fn(() => ({ focus }));
+    vi.stubGlobal("document", {
+      querySelector: vi.fn(() => ({ querySelector })),
+    });
+
+    expect(focusTerminal()).toBe(true);
+    expect(querySelector).toHaveBeenCalledWith(".xterm-helper-textarea");
+    expect(focus).toHaveBeenCalledWith({ preventScroll: false });
+  });
+});

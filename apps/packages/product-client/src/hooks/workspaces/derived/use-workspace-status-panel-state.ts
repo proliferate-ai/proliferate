@@ -1,0 +1,278 @@
+import { useMemo } from "react";
+import { useSetupStatusQuery } from "@anyharness/sdk-react";
+import type { CloudWorkspaceStatusScreenModel } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
+import {
+  buildCloudWorkspaceStatusScreenModel,
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
+import {
+  isCloudWorkspacePostReadyPending,
+  resolveCloudWorkspaceStatus,
+  shouldShowCloudWorkspaceStatusScreen,
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
+import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import {
+  buildPendingWorkspaceArrivalViewModel,
+  summarizeSetupFailure,
+} from "#product/lib/domain/workspaces/creation/arrival";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
+import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
+import { useWorkspaceArrivalState } from "#product/hooks/workspaces/derived/use-workspace-arrival-state";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { resolveSelectedWorkspaceIdentity } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
+import { resolveWithWorkspaceFallback } from "#product/lib/domain/workspaces/selection/workspace-keyed-preferences";
+import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
+import type { WorkspaceArrivalViewModel } from "#product/lib/domain/workspaces/creation/arrival";
+import { useIsHotPaintGatePendingForWorkspace } from "#product/hooks/workspaces/derived/use-hot-paint-gate";
+
+export type WorkspaceStatusPanelState =
+  | {
+    kind: "pending";
+    entry: PendingWorkspaceEntry;
+    badgeLabel: string;
+    title: string;
+    subtitle: string;
+    detail: string | null;
+    isFailed: boolean;
+    arrivalViewModel: WorkspaceArrivalViewModel | null;
+    workspacePath: string | null;
+    sourceRepoRootPath: string | null;
+  }
+  | {
+    kind: "cloud-status";
+    workspaceId: string;
+    model: CloudWorkspaceStatusScreenModel;
+  }
+  | {
+    kind: "arrival";
+    viewModel: WorkspaceArrivalViewModel;
+    workspacePath: string | null;
+    sourceRepoRootPath: string | null;
+    setupTerminalId: string | null;
+  }
+  | {
+    kind: "setup-failure";
+    workspaceUiKey: string;
+    materializedWorkspaceId: string;
+    command: string;
+    summary: string;
+    detail: string | null;
+    terminalId: string | null;
+  };
+
+function buildPendingSubtitle(entry: PendingWorkspaceEntry): string {
+  if (entry.stage === "failed") {
+    return entry.errorMessage ?? "Workspace setup failed.";
+  }
+
+  if (entry.stage === "awaiting-cloud-ready") {
+    return "Provisioning cloud workspace...";
+  }
+
+  switch (entry.source) {
+    case "local-created":
+      return "Creating workspace...";
+    case "worktree-created":
+      return "Creating worktree...";
+    case "cloud-created":
+      return "Creating cloud workspace...";
+    case "cowork-created":
+      return "Starting cowork thread...";
+  }
+}
+
+function buildPendingBadge(entry: PendingWorkspaceEntry): string {
+  if (entry.stage === "failed") {
+    return "Failed";
+  }
+
+  if (entry.stage === "awaiting-cloud-ready" || entry.source === "cloud-created") {
+    return "Provisioning";
+  }
+
+  return "Setting up";
+}
+
+function buildPendingDetail(entry: PendingWorkspaceEntry): string | null {
+  return [
+    entry.repoLabel,
+    entry.baseBranchName ? `from ${entry.baseBranchName}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ") || null;
+}
+
+// Owns the read-only workspace status panel state shown above the composer.
+// User actions for the panel live in workspaces/workflows.
+export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null {
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const selectedLogicalWorkspaceId = useSessionSelectionStore(
+    (state) => state.selectedLogicalWorkspaceId,
+  );
+  const { workspaceUiKey, materializedWorkspaceId } = resolveSelectedWorkspaceIdentity({
+    selectedLogicalWorkspaceId,
+    materializedWorkspaceId: selectedWorkspaceId,
+  });
+  const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
+  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const { data: workspaceCollections } = useWorkspaces();
+  const arrival = useWorkspaceArrivalState();
+  const dismissedSetupFailures = useWorkspaceUiStore((s) => s.dismissedSetupFailures);
+  const pendingSourceRepoRootPath = useMemo(() => {
+    if (!pendingWorkspaceEntry) {
+      return null;
+    }
+    const { request } = pendingWorkspaceEntry;
+    if (request.kind === "local") {
+      return request.sourceRoot;
+    }
+    if (request.kind !== "worktree") {
+      return null;
+    }
+    return workspaceCollections?.repoRoots.find(
+      (repoRoot) => repoRoot.id === request.input.repoRootId,
+    )?.path ?? null;
+  }, [pendingWorkspaceEntry, workspaceCollections?.repoRoots]);
+  const pendingConfiguredSetupScript = useRepoPreferencesStore((state) => {
+    if (!pendingSourceRepoRootPath) {
+      return "";
+    }
+    return state.repoConfigs[pendingSourceRepoRootPath]?.setupScript?.trim() ?? "";
+  });
+  const selectedWorkspace = workspaceCollections?.workspaces.find(
+    (workspace) => workspace.id === selectedWorkspaceId,
+  ) ?? null;
+  const selectedRepoRoot = selectedWorkspace
+    ? workspaceCollections?.repoRoots.find((repoRoot) => repoRoot.id === selectedWorkspace.repoRootId)
+      ?? null
+    : null;
+  const selectedSourceRepoRootPath = selectedRepoRoot?.path?.trim()
+    || selectedWorkspace?.path?.trim()
+    || null;
+  const configuredSetupScript = useRepoPreferencesStore((state) => {
+    if (!selectedSourceRepoRootPath) {
+      return "";
+    }
+    return state.repoConfigs[selectedSourceRepoRootPath]?.setupScript?.trim() ?? "";
+  });
+
+  // Query setup status for the selected workspace. Used to show persistent
+  // failure banners on workspace re-entry (after the arrival event is gone).
+  const { data: setupStatus } = useSetupStatusQuery({
+    workspaceId: materializedWorkspaceId,
+    enabled:
+      !!materializedWorkspaceId
+      && !arrival.viewModel
+      && !hotPaintPending
+      && configuredSetupScript.length > 0,
+    refetchWhileRunning: false,
+  });
+
+  const selectedCloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
+  const selectedCloudWorkspace = workspaceCollections?.cloudWorkspaces.find(
+    (workspace) => workspace.id === selectedCloudWorkspaceId,
+  ) ?? null;
+
+  return useMemo(() => {
+    const staleCloudReadyPendingEntry = Boolean(
+      pendingWorkspaceEntry
+      && pendingWorkspaceEntry.stage === "awaiting-cloud-ready"
+      && pendingWorkspaceEntry.workspaceId === selectedWorkspaceId
+      && selectedCloudWorkspace
+      && resolveCloudWorkspaceStatus(selectedCloudWorkspace) === "ready"
+      && !isCloudWorkspacePostReadyPending(selectedCloudWorkspace),
+    );
+
+    if (pendingWorkspaceEntry && !staleCloudReadyPendingEntry) {
+      return {
+        kind: "pending",
+        entry: pendingWorkspaceEntry,
+        badgeLabel: buildPendingBadge(pendingWorkspaceEntry),
+        title: pendingWorkspaceEntry.displayName,
+        subtitle: buildPendingSubtitle(pendingWorkspaceEntry),
+        detail: buildPendingDetail(pendingWorkspaceEntry),
+        isFailed: pendingWorkspaceEntry.stage === "failed",
+        arrivalViewModel: buildPendingWorkspaceArrivalViewModel({
+          entry: pendingWorkspaceEntry,
+          configuredSetupScript: pendingConfiguredSetupScript,
+        }),
+        workspacePath: pendingWorkspaceEntry.request.kind === "local"
+          ? pendingWorkspaceEntry.request.sourceRoot
+          : pendingWorkspaceEntry.request.kind === "worktree"
+            ? pendingWorkspaceEntry.request.input.targetPath?.trim() || null
+            : null,
+        sourceRepoRootPath: pendingSourceRepoRootPath,
+      };
+    }
+
+    if (
+      selectedWorkspaceId
+      && selectedCloudWorkspace
+      && shouldShowCloudWorkspaceStatusScreen(selectedCloudWorkspace)
+    ) {
+      return {
+        kind: "cloud-status",
+        workspaceId: selectedWorkspaceId,
+        model: buildCloudWorkspaceStatusScreenModel(selectedCloudWorkspace),
+      };
+    }
+
+    if (arrival.viewModel) {
+      return {
+        kind: "arrival",
+        viewModel: arrival.viewModel,
+        workspacePath: arrival.workspacePath,
+        sourceRepoRootPath: arrival.sourceRepoRootPath,
+        setupTerminalId: arrival.setupTerminalId,
+      };
+    }
+
+    // Persistent setup failure banner: shown on workspace re-entry when the
+    // arrival event is gone but the runtime still has a failed setup result
+    // and the user hasn't dismissed it yet.
+    if (
+      workspaceUiKey
+      && materializedWorkspaceId
+      && setupStatus?.status === "failed"
+      && !resolveWithWorkspaceFallback(
+        dismissedSetupFailures,
+        workspaceUiKey,
+        materializedWorkspaceId,
+      ).value
+    ) {
+      const fullOutput = `${setupStatus.stderr ?? ""}\n${setupStatus.stdout ?? ""}`.trim();
+      return {
+        kind: "setup-failure",
+        workspaceUiKey,
+        materializedWorkspaceId,
+        command: setupStatus.command,
+        summary: summarizeSetupFailure({
+          command: setupStatus.command,
+          status: "failed",
+          exitCode: setupStatus.exitCode ?? -1,
+          stdout: setupStatus.stdout ?? "",
+          stderr: setupStatus.stderr ?? "",
+          durationMs: setupStatus.durationMs ?? 0,
+        }),
+        detail: fullOutput || null,
+        terminalId: setupStatus.terminalId ?? null,
+      };
+    }
+
+    return null;
+  }, [
+    arrival.sourceRepoRootPath,
+    arrival.viewModel,
+    arrival.workspacePath,
+    dismissedSetupFailures,
+    pendingConfiguredSetupScript,
+    pendingSourceRepoRootPath,
+    pendingWorkspaceEntry,
+    selectedCloudWorkspace,
+    selectedWorkspace,
+    selectedWorkspaceId,
+    setupStatus,
+    workspaceUiKey,
+    materializedWorkspaceId,
+  ]);
+}

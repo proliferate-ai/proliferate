@@ -1,0 +1,203 @@
+import { useMemo } from "react";
+import { useShallow } from "zustand/react/shallow";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
+import { compareChatLaunchKinds } from "#product/config/chat-launch";
+import {
+  buildModelSelectorGroups,
+} from "#product/lib/domain/chat/models/model-selector-options";
+import type {
+  ActiveModelSelectorControl,
+  ModelSelectorGroup,
+  ModelSelectorSelection,
+} from "#product/lib/domain/chat/models/model-selector-types";
+import {
+  resolveAvailableLaunchSelection,
+  resolveEffectiveLaunchSelection,
+} from "#product/lib/domain/chat/models/launch-selection-defaults";
+import type { LaunchCatalogSnapshot } from "#product/lib/domain/chat/launch/launch-intent";
+import { useCloudAgentCatalog } from "#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
+import {
+  mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents,
+  type DesktopAgentLaunchAgent,
+} from "#product/lib/domain/agents/cloud-launch-catalog";
+import { filterTargetReadyLaunchAgents } from "#product/lib/domain/agents/target-ready-launch-agents";
+import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
+import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
+import { useWorkspaceAgentLaunchOptionsQuery } from "#product/hooks/access/anyharness/agents/use-workspace-agent-launch-options";
+
+const EMPTY_AGENTS: DesktopAgentLaunchAgent[] = [];
+
+interface UseChatLaunchCatalogArgs {
+  activeSelection: ModelSelectorSelection | null;
+  activeModelControl?: ActiveModelSelectorControl | null;
+}
+
+export function useChatLaunchCatalog({
+  activeSelection,
+  activeModelControl = null,
+}: UseChatLaunchCatalogArgs) {
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const preferences = useUserPreferencesStore(useShallow((state) => ({
+    defaultChatAgentKind: state.defaultChatAgentKind,
+    defaultChatModelIdByAgentKind: state.defaultChatModelIdByAgentKind,
+    chatModelVisibilityOverridesByAgentKind: state.chatModelVisibilityOverridesByAgentKind,
+  })));
+
+  const query = useCloudAgentCatalog(true);
+  const agentCatalog = useAgentCatalog();
+  const selectedCloudRuntime = useSelectedCloudRuntimeState();
+  const runtimeLaunchOptions = useWorkspaceAgentLaunchOptionsQuery({
+    workspaceId: selectedWorkspaceId,
+    cloudConnectionInfo: selectedCloudRuntime.connectionInfo,
+  });
+  const hasCloudTargetReadiness = Boolean(selectedCloudRuntime.connectionInfo);
+  const catalogData = query.data ?? null;
+  const catalogLoading = query.isLoading
+    || runtimeLaunchOptions.isLoading
+    || (!hasCloudTargetReadiness && agentCatalog.isLoading);
+  const cloudCatalogError = query.error ?? null;
+  const targetReadinessError = runtimeLaunchOptions.isError
+    ? runtimeLaunchOptions.error
+    : hasCloudTargetReadiness
+      ? null
+      : agentCatalog.isError
+        ? agentCatalog.error
+        : null;
+  const launchCatalogError = cloudCatalogError ?? targetReadinessError;
+
+  const launchAgents = useMemo(
+    () => orderLaunchAgents(
+      mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
+        catalogData?.agents ?? EMPTY_AGENTS,
+        runtimeLaunchOptions.data?.agents ?? null,
+      ),
+      agentCatalog.agentsByKind,
+      selectedCloudRuntime.connectionInfo?.readyAgentKinds ?? null,
+      Boolean(selectedCloudRuntime.connectionInfo && runtimeLaunchOptions.data?.agents.length),
+      // Local-target launch readiness: kinds the runtime's launch options list
+      // with models (an enrolled gateway route supplies the launch credential
+      // even when the vendor CLI itself is not logged in).
+      buildLaunchReadyKinds(runtimeLaunchOptions.data?.agents ?? null),
+    ),
+    [
+      agentCatalog.agentsByKind,
+      catalogData?.agents,
+      runtimeLaunchOptions.data?.agents,
+      selectedCloudRuntime.connectionInfo,
+    ],
+  );
+
+  const snapshot = useMemo<LaunchCatalogSnapshot | null>(() => {
+    if (!catalogData) {
+      return null;
+    }
+    const catalogVersion = catalogData.catalogVersion || "unknown";
+    const snapshotWorkspaceId = selectedWorkspaceId ?? catalogData.workspaceId ?? null;
+    return {
+      snapshotId: [
+        "cloud-launch-catalog",
+        snapshotWorkspaceId,
+        catalogVersion,
+      ].join(":"),
+      workspaceId: snapshotWorkspaceId,
+      runtimeUrl: null,
+      catalogVersion,
+      agents: launchAgents,
+      createdAt: Date.now(),
+    };
+  }, [catalogData, launchAgents, selectedWorkspaceId]);
+
+  const catalogDefaultAgentKind = catalogData?.defaultAgentKind ?? null;
+  const defaultLaunchSelection = useMemo(
+    () => resolveEffectiveLaunchSelection(launchAgents, preferences, catalogDefaultAgentKind),
+    [launchAgents, preferences, catalogDefaultAgentKind],
+  );
+
+  const selectedLaunchSelection = useMemo(
+    () => resolveAvailableLaunchSelection(
+      launchAgents,
+      activeSelection,
+      defaultLaunchSelection,
+    ),
+    [activeSelection, defaultLaunchSelection, launchAgents],
+  );
+
+  const groups = useMemo<ModelSelectorGroup[]>(
+    () => buildModelSelectorGroups(
+      launchAgents,
+      selectedLaunchSelection,
+      activeSelection,
+      activeModelControl,
+      preferences.chatModelVisibilityOverridesByAgentKind,
+    ),
+    [
+      activeModelControl,
+      activeSelection,
+      launchAgents,
+      preferences.chatModelVisibilityOverridesByAgentKind,
+      selectedLaunchSelection,
+    ],
+  );
+
+  return {
+    ...query,
+    data: catalogData ?? undefined,
+    isLoading: catalogLoading,
+    error: launchCatalogError,
+    cloudCatalogError,
+    targetReadinessError,
+    launchAgents,
+    defaultLaunchSelection,
+    selectedLaunchSelection,
+    groups,
+    snapshot,
+    hasLaunchableAgents: launchAgents.length > 0,
+    isEmpty: !catalogLoading && !launchCatalogError && launchAgents.length === 0,
+  };
+}
+
+function buildLaunchReadyKinds(
+  runtimeAgents: ReadonlyArray<{ kind: string; models: ReadonlyArray<unknown> }> | null,
+): ReadonlySet<string> | null {
+  if (!runtimeAgents || runtimeAgents.length === 0) {
+    return null;
+  }
+  return new Set(
+    runtimeAgents.filter((agent) => agent.models.length > 0).map((agent) => agent.kind),
+  );
+}
+
+function orderLaunchAgents(
+  agents: readonly DesktopAgentLaunchAgent[],
+  agentsByKind: ReadonlyMap<string, { readiness: string }>,
+  cloudReadyAgentKinds: readonly string[] | null,
+  runtimeOptionsAreAuthoritative = false,
+  launchReadyKinds: ReadonlySet<string> | null = null,
+): DesktopAgentLaunchAgent[] {
+  const targetReadyAgents = runtimeOptionsAreAuthoritative
+    ? agents.filter((agent) => agent.models.length > 0)
+    : cloudReadyAgentKinds
+    ? filterCloudReadyLaunchAgents(agents, cloudReadyAgentKinds)
+    : filterTargetReadyLaunchAgents(agents, agentsByKind, launchReadyKinds);
+
+  return targetReadyAgents
+    .sort((left, right) =>
+      compareChatLaunchKinds(
+        left.kind,
+        right.kind,
+        left.displayName,
+        right.displayName,
+      )
+    );
+}
+
+function filterCloudReadyLaunchAgents(
+  agents: readonly DesktopAgentLaunchAgent[],
+  readyAgentKinds: readonly string[],
+): DesktopAgentLaunchAgent[] {
+  const readyKinds = new Set(readyAgentKinds);
+  return agents.filter((agent) =>
+    agent.models.length > 0 && readyKinds.has(agent.kind)
+  );
+}

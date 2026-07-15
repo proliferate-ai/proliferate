@@ -7,9 +7,9 @@ import {
   getActiveGitHubSignIn,
   resolveGitHubSignIn,
   startGitHubSignIn,
-} from "@/lib/domain/auth/github-signin-state";
-import { isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
-import type { AuthSignInSource, AuthTelemetryProvider } from "@/lib/domain/telemetry/events";
+} from "@proliferate/product-client/internal/lib/domain/auth/github-signin-state";
+import { isDevAuthBypassed } from "@proliferate/product-client/internal/lib/domain/auth/auth-mode";
+import type { AuthSignInSource, AuthTelemetryProvider } from "@proliferate/product-client/internal/lib/domain/telemetry/events";
 import type { GitHubDesktopSignInOptions } from "@/lib/integrations/auth/proliferate-auth";
 import type { DesktopSsoSignInOptions } from "@/lib/integrations/auth/proliferate-sso-auth";
 import {
@@ -18,16 +18,19 @@ import {
   beginDesktopProviderAuth,
   beginGitHubDesktopSignIn,
   createPendingGitHubDesktopAuth,
-  getGitHubDesktopAuthAvailability,
   isPendingDesktopAuthExpired,
   pollGitHubDesktopSession,
   type DesktopIdentityProvider,
 } from "@/lib/integrations/auth/proliferate-auth";
+import { beginDesktopSsoSignIn } from "@/lib/integrations/auth/proliferate-sso-auth";
+// Public server-capability probes are product-owned; the base URL that used to
+// default host-side is now supplied explicitly from the host deployment config.
 import {
-  beginDesktopSsoSignIn,
   discoverDesktopSso,
-} from "@/lib/integrations/auth/proliferate-sso-auth";
-import { checkControlPlaneReachable } from "@/lib/access/cloud/health";
+  getGitHubDesktopAuthAvailability,
+} from "@proliferate/product-client/internal/lib/access/cloud/auth-probes";
+import { getProliferateApiBaseUrl } from "@/lib/infra/proliferate-api";
+import { checkControlPlaneReachable } from "@proliferate/product-client/internal/lib/access/cloud/health";
 import { revokeDesktopWorkerServerSide } from "@/lib/integrations/auth/desktop-worker-revocation";
 import {
   applyAnonymousState,
@@ -53,7 +56,7 @@ export async function signInWithGitHub(
     };
   }
 
-  const controlPlaneReachable = await checkControlPlaneReachable();
+  const controlPlaneReachable = await checkControlPlaneReachable(getProliferateApiBaseUrl());
   if (!controlPlaneReachable) {
     throw new AuthRequestError(
       "GitHub sign-in requires a reachable control plane.",
@@ -61,7 +64,9 @@ export async function signInWithGitHub(
     );
   }
 
-  const availability = await getGitHubDesktopAuthAvailability();
+  const availability = await getGitHubDesktopAuthAvailability(
+    getProliferateApiBaseUrl(),
+  );
   if (!availability.enabled) {
     throw new AuthRequestError(
       "GitHub sign-in is not configured for this environment",
@@ -160,7 +165,7 @@ export async function linkDesktopProvider(
     throw new AuthRequestError("Sign in before linking another provider.", 401);
   }
 
-  const controlPlaneReachable = await checkControlPlaneReachable();
+  const controlPlaneReachable = await checkControlPlaneReachable(getProliferateApiBaseUrl());
   if (!controlPlaneReachable) {
     throw new AuthRequestError(
       "Provider linking requires a reachable control plane.",
@@ -251,7 +256,7 @@ export async function signInWithSso(
     };
   }
 
-  const controlPlaneReachable = await checkControlPlaneReachable();
+  const controlPlaneReachable = await checkControlPlaneReachable(getProliferateApiBaseUrl());
   if (!controlPlaneReachable) {
     throw new AuthRequestError(
       "SSO sign-in requires a reachable control plane.",
@@ -259,7 +264,12 @@ export async function signInWithSso(
     );
   }
 
-  const discovery = await discoverDesktopSso(options);
+  const discovery = await discoverDesktopSso({
+    apiBaseUrl: getProliferateApiBaseUrl(),
+    email: options?.email,
+    organizationId: options?.organizationId,
+    connectionId: options?.connectionId,
+  });
   if (!discovery.enabled) {
     throw new AuthRequestError(
       discovery.reason === "not_configured"

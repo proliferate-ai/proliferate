@@ -1,10 +1,31 @@
 import { CloudClientProvider } from "@proliferate/cloud-sdk-react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { useMemo, type ReactNode } from "react";
+import { setMeasurementSink } from "@proliferate/product-client/infra/measurement";
+import { setSandboxGatewayAccessTokenProvider } from "@proliferate/product-client/infra/cloud-gateway";
 
-import { getProliferateClient } from "@/lib/access/cloud/client";
+import {
+  getDesktopCloudAccessToken,
+  getProliferateClient,
+} from "@/lib/access/cloud/client";
+import { desktopMeasurementSink } from "@/lib/infra/measurement/measurement-port-sink";
 import { appQueryClient } from "@/providers/app-query-client";
 import { DesktopProductHostProvider } from "./DesktopProductHostProvider";
+
+// Inject the retained Desktop measurement engine into the product-client
+// measurement port (WDU slice 04, ruling R1) at module scope — before any
+// ProductClient code renders and calls a measurement function — so the moved
+// product tree's boot-diagnostic/latency/measurement behavior is byte-identical
+// to before the move. `main.tsx` imports this module before mounting
+// ProductClient, so the sink is installed ahead of the first product render.
+setMeasurementSink(desktopMeasurementSink);
+
+// Arm the Cloud sandbox-gateway access-token provider (WDU slice 04, ruling G4)
+// at module scope, mirroring the measurement sink. The plain gateway-connection
+// builders read the token through this provider; it is the exact retained token
+// transport also wired into `host.cloud.getSandboxGatewayAccessToken`, so the
+// moved connection behavior is byte-identical.
+setSandboxGatewayAccessTokenProvider(getDesktopCloudAccessToken);
 
 /**
  * Host-owned infrastructure envelope. Mounts the one Query cache, the one Cloud

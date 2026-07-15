@@ -1,0 +1,363 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { WORKSPACE_UI_DEFAULTS } from "#product/lib/domain/preferences/workspace-ui/model";
+import { createManualChatGroupId } from "#product/lib/domain/workspaces/tabs/manual-groups";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+describe("workspace ui tab persistence", () => {
+  it("stores visible and hidden chat ids per workspace", () => {
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+    });
+
+    const store = useWorkspaceUiStore.getState();
+    store.setVisibleChatSessionIdsForWorkspace("w1", ["a", "a", "b"]);
+    store.rememberHiddenChatSessionForWorkspace("w1", "c");
+    store.rememberHiddenChatSessionForWorkspace("w1", "b");
+    store.clearHiddenChatSessionsForWorkspace("w1", ["c"]);
+
+    expect(useWorkspaceUiStore.getState().visibleChatSessionIdsByWorkspace.w1).toEqual(["a", "b"]);
+    expect(useWorkspaceUiStore.getState().recentlyHiddenChatSessionIdsByWorkspace.w1).toEqual(["b"]);
+  });
+
+  it("marks workspace viewed at exact monotonic timestamps", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-04T00:00:30.000Z"));
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+      lastViewedAt: {
+        w1: "2026-04-04T00:00:10.000Z",
+      },
+    });
+
+    const store = useWorkspaceUiStore.getState();
+    store.markWorkspaceViewedAt("w1", "2026-04-04T00:00:09.000Z");
+    expect(useWorkspaceUiStore.getState().lastViewedAt.w1)
+      .toBe("2026-04-04T00:00:10.000Z");
+
+    store.markWorkspaceViewedAt("w1", "2026-04-04T00:00:10.000Z");
+    expect(useWorkspaceUiStore.getState().lastViewedAt.w1)
+      .toBe("2026-04-04T00:00:10.000Z");
+
+    store.markWorkspaceViewedAt("w1", "2026-04-04T00:00:11.000Z");
+    expect(useWorkspaceUiStore.getState().lastViewedAt.w1)
+      .toBe("2026-04-04T00:00:11.000Z");
+
+    store.markWorkspaceViewed("w2");
+    expect(useWorkspaceUiStore.getState().lastViewedAt.w2)
+      .toBe("2026-04-04T00:00:30.000Z");
+  });
+
+  it("tracks session activity and viewed timestamps monotonically", () => {
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+      sessionLastInteracted: {
+        s1: "2026-04-04T00:00:10.000Z",
+      },
+      sessionLastViewedAt: {
+        s1: "2026-04-04T00:00:05.000Z",
+      },
+    });
+
+    const store = useWorkspaceUiStore.getState();
+    store.updateSessionLastInteracted("s1", "2026-04-04T00:00:09.000Z");
+    expect(useWorkspaceUiStore.getState().sessionLastInteracted.s1)
+      .toBe("2026-04-04T00:00:10.000Z");
+
+    store.updateSessionLastInteracted("s1", "2026-04-04T00:00:11.000Z");
+    expect(useWorkspaceUiStore.getState().sessionLastInteracted.s1)
+      .toBe("2026-04-04T00:00:11.000Z");
+
+    store.markSessionViewedAt("s1", "2026-04-04T00:00:04.000Z");
+    expect(useWorkspaceUiStore.getState().sessionLastViewedAt.s1)
+      .toBe("2026-04-04T00:00:05.000Z");
+
+    store.markSessionViewedAt("s1", "2026-04-04T00:00:12.000Z");
+    expect(useWorkspaceUiStore.getState().sessionLastViewedAt.s1)
+      .toBe("2026-04-04T00:00:12.000Z");
+  });
+
+  it("stores archived workspace visibility", () => {
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+    });
+
+    useWorkspaceUiStore.getState().setShowArchived(true);
+
+    expect(useWorkspaceUiStore.getState().showArchived).toBe(true);
+  });
+
+  it("stores right panel preferences per workspace", () => {
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+    });
+
+    const store = useWorkspaceUiStore.getState();
+    store.setRightPanelForWorkspace("w1", {
+      activeEntryKey: "terminal:t1",
+      headerOrder: ["tool:git", "terminal:t1"],
+    });
+    store.setRightPanelWidthForWorkspace("w1", 900);
+
+    expect(useWorkspaceUiStore.getState().rightPanelMaterializedByWorkspace.w1?.activeEntryKey)
+      .toBe("terminal:t1");
+    expect(useWorkspaceUiStore.getState().rightPanelDurableByWorkspace.w1?.width).toBe(700);
+  });
+
+  it("stores shell tab state without notifying on unchanged writes", () => {
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+      shellActivationEpochByWorkspace: {},
+      pendingChatActivationByWorkspace: {},
+    });
+
+    const store = useWorkspaceUiStore.getState();
+    store.setActiveShellTabKeyForWorkspace("w1", "chat:s1");
+    store.setShellTabOrderForWorkspace("w1", ["chat:s1", "file:src/App.tsx"]);
+    store.setShellTabOrderForWorkspace("w2", []);
+
+    expect(useWorkspaceUiStore.getState().activeShellTabKeyByWorkspace.w1).toBe("chat:s1");
+    expect(useWorkspaceUiStore.getState().shellTabOrderByWorkspace.w1)
+      .toEqual(["chat:s1", "file:src/App.tsx"]);
+    expect(useWorkspaceUiStore.getState().shellTabOrderByWorkspace.w2).toEqual([]);
+  });
+
+  it("keeps chat-shell out of real tab order while accepting it as active intent", () => {
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+      shellActivationEpochByWorkspace: {},
+      pendingChatActivationByWorkspace: {},
+    });
+
+    const store = useWorkspaceUiStore.getState();
+    store.writeShellIntent({
+      workspaceId: "w1",
+      intent: "chat-shell",
+    });
+    store.setShellTabOrderForWorkspace("w1", ["chat:s1"]);
+
+    expect(useWorkspaceUiStore.getState().activeShellTabKeyByWorkspace.w1).toBe("chat-shell");
+    expect(useWorkspaceUiStore.getState().shellTabOrderByWorkspace.w1)
+      .toEqual(["chat:s1"]);
+  });
+
+  it("does not roll back a shell intent after another activation replaced it", () => {
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+      shellActivationEpochByWorkspace: {},
+      pendingChatActivationByWorkspace: {},
+    });
+
+    const first = useWorkspaceUiStore.getState().writeShellIntent({
+      workspaceId: "w1",
+      intent: "chat:s1",
+    });
+    useWorkspaceUiStore.getState().writeShellIntent({
+      workspaceId: "w1",
+      intent: "file:src/App.tsx",
+    });
+
+    const rollback = useWorkspaceUiStore.getState().rollbackShellIntent({
+      workspaceId: "w1",
+      expectedIntent: "chat:s1",
+      expectedEpoch: first.epoch,
+      rollbackIntent: null,
+    });
+
+    expect(rollback.rolledBack).toBe(false);
+    expect(useWorkspaceUiStore.getState().activeShellTabKeyByWorkspace.w1)
+      .toBe("file:src/App.tsx");
+  });
+
+  it("does not replace a pending shell intent after another activation replaced it", () => {
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+      shellActivationEpochByWorkspace: {},
+      pendingChatActivationByWorkspace: {},
+    });
+
+    const pending = useWorkspaceUiStore.getState().writeShellIntent({
+      workspaceId: "w1",
+      intent: "chat:pending-1",
+    });
+    useWorkspaceUiStore.getState().writeShellIntent({
+      workspaceId: "w1",
+      intent: "file:src/App.tsx",
+    });
+
+    const replace = useWorkspaceUiStore.getState().replaceShellIntent({
+      workspaceId: "w1",
+      expectedIntent: "chat:pending-1",
+      expectedEpoch: pending.epoch,
+      nextIntent: "chat:real-1",
+    });
+
+    expect(replace.replaced).toBe(false);
+    expect(useWorkspaceUiStore.getState().activeShellTabKeyByWorkspace.w1)
+      .toBe("file:src/App.tsx");
+  });
+
+  it("does not roll back a same-intent activation after pending ownership changed", () => {
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+      shellActivationEpochByWorkspace: {},
+      pendingChatActivationByWorkspace: {},
+    });
+
+    const store = useWorkspaceUiStore.getState();
+    store.writeShellIntent({ workspaceId: "w1", intent: "chat:s1" });
+    const firstWrite = store.writeShellIntent({
+      workspaceId: "w1",
+      intent: "chat:s2",
+    });
+    store.setPendingChatActivation({
+      workspaceId: "w1",
+      pending: {
+        attemptId: "attempt-1",
+        sessionId: "s2",
+        intent: "chat:s2",
+        guardToken: 1,
+        workspaceSelectionNonce: 1,
+        shellEpochAtWrite: firstWrite.epoch,
+        sessionActivationEpochAtWrite: 1,
+      },
+    });
+
+    const secondWrite = store.writeShellIntent({
+      workspaceId: "w1",
+      intent: "chat:s2",
+    });
+    store.setPendingChatActivation({
+      workspaceId: "w1",
+      pending: {
+        attemptId: "attempt-2",
+        sessionId: "s2",
+        intent: "chat:s2",
+        guardToken: 2,
+        workspaceSelectionNonce: 1,
+        shellEpochAtWrite: secondWrite.epoch,
+        sessionActivationEpochAtWrite: 2,
+      },
+    });
+
+    const rollback = store.rollbackShellIntent({
+      workspaceId: "w1",
+      expectedIntent: "chat:s2",
+      expectedEpoch: firstWrite.epoch,
+      expectedPendingAttemptId: "attempt-1",
+      rollbackIntent: "chat:s1",
+    });
+
+    expect(rollback.rolledBack).toBe(false);
+    expect(useWorkspaceUiStore.getState().activeShellTabKeyByWorkspace.w1)
+      .toBe("chat:s2");
+    expect(useWorkspaceUiStore.getState().pendingChatActivationByWorkspace.w1?.attemptId)
+      .toBe("attempt-2");
+  });
+
+  it("stores and clears viewed session error keys without eviction", () => {
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+    });
+
+    const store = useWorkspaceUiStore.getState();
+    store.markSessionErrorViewed("s1", "error-item:one");
+    store.markSessionErrorViewed("s1", "error-item:one");
+    for (let index = 0; index < 50; index += 1) {
+      store.markSessionErrorViewed(`s${index + 2}`, `error-item:${index + 2}`);
+    }
+    store.clearViewedSessionErrors(["s2", "missing"]);
+
+    expect(useWorkspaceUiStore.getState().lastViewedSessionErrorAtBySession.s1)
+      .toBe("error-item:one");
+    expect(useWorkspaceUiStore.getState().lastViewedSessionErrorAtBySession.s2)
+      .toBeUndefined();
+    expect(Object.keys(useWorkspaceUiStore.getState().lastViewedSessionErrorAtBySession))
+      .toHaveLength(50);
+  });
+
+  it("toggles collapsed chat groups per workspace", () => {
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+    });
+
+    const store = useWorkspaceUiStore.getState();
+    store.toggleChatGroupCollapsedForWorkspace("w1", "parent-a");
+    store.toggleChatGroupCollapsedForWorkspace("w1", "parent-b");
+    store.toggleChatGroupCollapsedForWorkspace("w1", "parent-a");
+
+    expect(useWorkspaceUiStore.getState().collapsedChatGroupsByWorkspace.w1).toEqual(["parent-b"]);
+  });
+
+  it("stores and removes manual chat groups per workspace", () => {
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+    });
+
+    const store = useWorkspaceUiStore.getState();
+    const firstGroup = {
+      id: createManualChatGroupId("group-a"),
+      label: "Group A",
+      colorId: "blue" as const,
+      sessionIds: ["a", "b"],
+    };
+    const secondGroup = {
+      id: createManualChatGroupId("group-b"),
+      label: "Group B",
+      colorId: "yellow" as const,
+      sessionIds: ["b", "c"],
+    };
+
+    store.upsertManualChatGroupForWorkspace("w1", firstGroup);
+    store.upsertManualChatGroupForWorkspace("w1", secondGroup);
+    store.updateManualChatGroupForWorkspace("w1", secondGroup.id, {
+      label: "Renamed",
+    });
+    store.removeSessionsFromManualChatGroupsForWorkspace("w1", ["c"]);
+
+    expect(useWorkspaceUiStore.getState().manualChatGroupsByWorkspace.w1).toBeUndefined();
+  });
+
+  it("clears chat tab state including collapsed and manual groups", () => {
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+      visibleChatSessionIdsByWorkspace: { w1: ["a"] },
+      recentlyHiddenChatSessionIdsByWorkspace: { w1: ["b"] },
+      collapsedChatGroupsByWorkspace: { w1: ["parent-a"] },
+      manualChatGroupsByWorkspace: {
+        w1: [
+          {
+            id: createManualChatGroupId("group-a"),
+            label: "Group A",
+            colorId: "blue",
+            sessionIds: ["a", "b"],
+          },
+        ],
+      },
+    });
+
+    useWorkspaceUiStore.getState().clearWorkspaceChatTabState("w1");
+
+    expect(useWorkspaceUiStore.getState().visibleChatSessionIdsByWorkspace.w1).toBeUndefined();
+    expect(useWorkspaceUiStore.getState().recentlyHiddenChatSessionIdsByWorkspace.w1).toBeUndefined();
+    expect(useWorkspaceUiStore.getState().collapsedChatGroupsByWorkspace.w1).toBeUndefined();
+    expect(useWorkspaceUiStore.getState().manualChatGroupsByWorkspace.w1).toBeUndefined();
+  });
+});

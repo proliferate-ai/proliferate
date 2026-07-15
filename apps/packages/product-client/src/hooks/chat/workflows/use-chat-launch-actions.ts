@@ -1,0 +1,191 @@
+import { useCallback } from "react";
+import type { ModelSelectorSelection } from "#product/lib/domain/chat/models/model-selector-types";
+import type { Workspace } from "@anyharness/sdk";
+import { useSessionCreationActions } from "#product/hooks/sessions/workflows/use-session-creation-actions";
+import { formatSessionCreateToastMessage } from "#product/lib/domain/sessions/creation/create-session-error";
+import { useSessionConfigActions } from "#product/hooks/sessions/workflows/use-session-config-actions";
+import { useCoworkThreadWorkflow } from "#product/hooks/cowork/workflows/use-cowork-thread-workflow";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
+import { useChatInputStore } from "#product/stores/chat/chat-input-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
+import { useActiveSessionLaunchState } from "#product/hooks/chat/derived/use-active-session-config-state";
+import { useConfiguredLaunchReadiness } from "#product/hooks/chat/derived/use-configured-launch-readiness";
+import { resolveAvailableLaunchSelection } from "#product/lib/domain/chat/models/launch-selection-defaults";
+import {
+  EMPTY_CHAT_DRAFT,
+  serializeChatDraftToPrompt,
+} from "#product/lib/domain/chat/composer/file-mention-draft-model";
+import { resolveWorkspaceUiKey } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
+import {
+  failLatencyFlow,
+  startLatencyFlow,
+} from "#product/lib/infra/measurement/measurement-port";
+import { withUpdatedDefaultModelIdByAgentKind } from "#product/lib/domain/agents/model-options";
+
+const EMPTY_WORKSPACES: Workspace[] = [];
+
+export function useChatLaunchActions(options?: {
+  suppressActiveSessionState?: boolean;
+  replacementSessionId?: string | null;
+}) {
+  const suppressActiveSessionState = options?.suppressActiveSessionState ?? false;
+  const replacementSessionId = options?.replacementSessionId ?? null;
+  const showToast = useToastStore((store) => store.show);
+  const setWorkspaceArrivalEvent = useSessionSelectionStore((state) => state.setWorkspaceArrivalEvent);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const selectedLogicalWorkspaceId = useSessionSelectionStore((state) => state.selectedLogicalWorkspaceId);
+  const workspaceUiKey = resolveWorkspaceUiKey(selectedLogicalWorkspaceId, selectedWorkspaceId);
+  // PERF: read the draft imperatively at launch time. A reactive subscription
+  // here re-rendered this hook's consumers (useChatModelSelectorState →
+  // ChatInput, ~20 hooks) on EVERY keystroke — the draft is only needed when
+  // the user actually picks a launch option.
+  const getCurrentDraftText = useCallback((): string => {
+    return serializeChatDraftToPrompt(
+      workspaceUiKey
+        ? useChatInputStore.getState().draftByWorkspaceId[workspaceUiKey] ?? EMPTY_CHAT_DRAFT
+        : EMPTY_CHAT_DRAFT,
+    );
+  }, [workspaceUiKey]);
+  const { data: workspaceCollections } = useWorkspaces();
+  const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
+  const selectedWorkspace = workspaces.find((workspace) => workspace.id === selectedWorkspaceId);
+  const { createEmptySessionWithResolvedConfig } = useSessionCreationActions();
+  const { setActiveSessionConfigOption } = useSessionConfigActions();
+  const { createThreadFromSelection } = useCoworkThreadWorkflow();
+  const {
+    activeSessionId,
+    currentLaunchIdentity,
+    currentModelConfigId,
+    modelControl,
+  } = useActiveSessionLaunchState();
+  const scopedActiveSessionId = suppressActiveSessionState ? null : activeSessionId;
+  const scopedCurrentLaunchIdentity = suppressActiveSessionState ? null : currentLaunchIdentity;
+  const scopedCurrentModelConfigId = suppressActiveSessionState ? null : currentModelConfigId;
+  const scopedModelControl = suppressActiveSessionState ? null : modelControl;
+  const configuredLaunch = useConfiguredLaunchReadiness(scopedCurrentLaunchIdentity);
+
+  const handleLaunchSelect = useCallback((selection: ModelSelectorSelection) => {
+    if (
+      scopedCurrentLaunchIdentity?.kind === selection.kind
+      && scopedCurrentLaunchIdentity.modelId === selection.modelId
+    ) {
+      return;
+    }
+
+    if (
+      scopedActiveSessionId
+      && scopedCurrentLaunchIdentity?.kind === selection.kind
+    ) {
+      // Same-harness selection preserves the durable session. The runtime
+      // accepts catalog-authorized values beyond the live option list and may
+      // relaunch the agent process under that session. "model" is the generic
+      // config id when the session exposes no model control.
+      void setActiveSessionConfigOption(scopedCurrentModelConfigId ?? "model", selection.modelId)
+        .then(() => {
+          setWorkspaceArrivalEvent(null);
+        })
+        .catch((error) => {
+          const message = error instanceof Error ? error.message : String(error);
+          showToast(`Failed to switch model: ${message}`);
+        });
+      return;
+    }
+
+    const launchSelection = resolveAvailableLaunchSelection(
+      configuredLaunch.launchCatalog.launchAgents,
+      selection,
+      null,
+    );
+    if (!launchSelection) {
+      showToast(configuredLaunch.disabledReason ?? "Choose a ready model before opening a new chat.");
+      return;
+    }
+
+    // Last-used-wins: persist the selection so subsequent new chats default to it.
+    persistLastUsedLaunchSelection(launchSelection);
+
+    if (selectedWorkspace?.surface === "cowork") {
+      const latencyFlowId = startLatencyFlow({
+        flowKind: "session_create",
+        source: "model_selector",
+        targetWorkspaceId: selectedWorkspaceId,
+      });
+      void createThreadFromSelection({
+        agentKind: launchSelection.kind,
+        modelId: launchSelection.modelId,
+        draftText: getCurrentDraftText(),
+        sourceWorkspaceId: selectedWorkspaceId,
+      })
+        .then(() => {
+          setWorkspaceArrivalEvent(null);
+        })
+        .catch((error) => {
+          failLatencyFlow(latencyFlowId, "session_create_failed");
+          showToast(formatSessionCreateToastMessage(error, "Failed to open chat"));
+        });
+      return;
+    }
+
+    const latencyFlowId = startLatencyFlow({
+      flowKind: "session_create",
+      source: "model_selector",
+      targetWorkspaceId: selectedWorkspaceId,
+    });
+    // Pass the current session as replacesSessionId: the creation workflow
+    // hides an unused old shell synchronously, then commits its cleanup only
+    // after the optimistic replacement materializes.
+    void createEmptySessionWithResolvedConfig({
+      agentKind: launchSelection.kind,
+      modelId: launchSelection.modelId,
+      latencyFlowId,
+      // Presentation suppression hides stale config/model state while a
+      // pending shell is projected; it must not erase the shell being replaced.
+      replacesSessionId: replacementSessionId ?? scopedActiveSessionId ?? null,
+    })
+      .then(() => {
+        setWorkspaceArrivalEvent(null);
+      })
+      .catch((error) => {
+        failLatencyFlow(latencyFlowId, "session_create_failed");
+        showToast(formatSessionCreateToastMessage(error, "Failed to open chat"));
+      });
+  }, [
+    configuredLaunch.disabledReason,
+    configuredLaunch.launchCatalog.launchAgents,
+    createThreadFromSelection,
+    getCurrentDraftText,
+    createEmptySessionWithResolvedConfig,
+    selectedWorkspace?.surface,
+    selectedWorkspaceId,
+    setActiveSessionConfigOption,
+    setWorkspaceArrivalEvent,
+    showToast,
+    scopedActiveSessionId,
+    scopedCurrentLaunchIdentity,
+    scopedCurrentModelConfigId,
+    scopedModelControl,
+    replacementSessionId,
+  ]);
+
+  return {
+    handleLaunchSelect,
+  };
+}
+
+/**
+ * Last-used-wins: persists the user's agent+model selection so the next new
+ * chat defaults to it (replacing the deleted "Agent Defaults" settings page).
+ */
+function persistLastUsedLaunchSelection(selection: ModelSelectorSelection): void {
+  const state = useUserPreferencesStore.getState();
+  state.setMultiple({
+    defaultChatAgentKind: selection.kind,
+    defaultChatModelIdByAgentKind: withUpdatedDefaultModelIdByAgentKind(
+      state.defaultChatModelIdByAgentKind,
+      selection.kind,
+      selection.modelId,
+    ),
+  });
+}

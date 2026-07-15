@@ -1,0 +1,120 @@
+import type { ShortcutDef, ShortcutMatch } from "#product/config/shortcuts/types";
+
+export type ShortcutDigit = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+
+export interface ShortcutMatchResult {
+  digit?: ShortcutDigit;
+}
+
+type KeyboardShortcutEventLike = Pick<
+  KeyboardEvent,
+  "altKey" | "ctrlKey" | "key" | "metaKey" | "shiftKey"
+> & {
+  code?: string;
+};
+
+function normalizeKey(key: string): string {
+  return key.length === 1 ? key.toLowerCase() : key;
+}
+
+export function isApplePlatform(): boolean {
+  const platform = globalThis.navigator?.platform ?? "";
+  const userAgent = globalThis.navigator?.userAgent ?? "";
+  return /Mac|iPhone|iPad|iPod/.test(platform) || /Mac OS X/.test(userAgent);
+}
+
+export function getShortcutDisplayLabel(shortcut: Pick<ShortcutDef, "label" | "nonMacLabel">): string {
+  return isApplePlatform()
+    ? shortcut.label
+    : shortcut.nonMacLabel ?? shortcut.label;
+}
+
+export function getShortcutPlatformMatch(
+  shortcut: Pick<ShortcutDef, "match" | "nonMacMatch">,
+): ShortcutMatch {
+  return isApplePlatform()
+    ? shortcut.match
+    : shortcut.nonMacMatch ?? shortcut.match;
+}
+
+function matchesModifiers(
+  event: KeyboardShortcutEventLike,
+  match: ShortcutMatch,
+): boolean {
+  const requiresCtrl = match.ctrl ?? false;
+  const isApple = isApplePlatform();
+  const hasPrimaryModifier = isApple ? event.metaKey : event.ctrlKey;
+
+  if (
+    hasPrimaryModifier !== match.meta
+    || event.shiftKey !== match.shift
+    || event.altKey !== match.alt
+  ) {
+    return false;
+  }
+
+  if (!isApple) {
+    return !requiresCtrl;
+  }
+
+  return event.ctrlKey === requiresCtrl;
+}
+
+function getShortcutDigitByKey(key: string): ShortcutDigit | null {
+  if (!/^[1-9]$/.test(key)) {
+    return null;
+  }
+
+  return Number.parseInt(key, 10) as ShortcutDigit;
+}
+
+function getShortcutDigitByCode(code: string): ShortcutDigit | null {
+  const match = /^Digit([1-9])$/.exec(code);
+  if (!match) {
+    return null;
+  }
+
+  return Number.parseInt(match[1], 10) as ShortcutDigit;
+}
+
+export function matchShortcut(
+  match: ShortcutMatch,
+  event: KeyboardShortcutEventLike,
+): ShortcutMatchResult | null {
+  if (!matchesModifiers(event, match)) {
+    return null;
+  }
+
+  switch (match.kind) {
+    case "fixed":
+      return normalizeKey(event.key) === normalizeKey(match.key) ? {} : null;
+    case "fixed-code":
+      return event.code === match.code ? {} : null;
+    case "digit-key": {
+      const digit = getShortcutDigitByKey(event.key);
+      return digit ? { digit } : null;
+    }
+    case "digit-code": {
+      const digit = event.code ? getShortcutDigitByCode(event.code) : null;
+      return digit ? { digit } : null;
+    }
+  }
+}
+
+export function matchShortcutDef(
+  shortcut: Pick<ShortcutDef, "match" | "nonMacMatch">,
+  event: KeyboardShortcutEventLike,
+): ShortcutMatchResult | null {
+  return matchShortcut(getShortcutPlatformMatch(shortcut), event);
+}
+
+export function isTextEntryTarget(target: EventTarget | null): boolean {
+  const element = target as HTMLElement | null;
+  if (!element) {
+    return false;
+  }
+
+  return element.tagName === "INPUT"
+    || element.tagName === "TEXTAREA"
+    || element.isContentEditable;
+}

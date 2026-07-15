@@ -9,15 +9,16 @@ import { ProductHostProvider } from "@proliferate/product-client/host/ProductHos
 
 import { desktopProductStorage } from "@/lib/access/browser/product-storage";
 import { desktopBridge } from "@/lib/access/tauri/desktop-bridge";
-import { isProductAuthRequired } from "@/lib/domain/auth/auth-mode";
+import { getDesktopCloudAccessToken } from "@/lib/access/cloud/client";
+import { isProductAuthRequired } from "@proliferate/product-client/internal/lib/domain/auth/auth-mode";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { useAuthBootstrap } from "@/hooks/auth/lifecycle/use-auth-bootstrap";
 import { useAuthActions } from "@/hooks/auth/workflows/use-auth-actions";
 import { useAuthOrchestrationEffects } from "@/hooks/auth/workflows/use-auth-orchestration-effects";
-import { useAppCapabilitiesFor } from "@/hooks/capabilities/derived/use-app-capabilities";
-import { useDesktopAuthMethodsFor } from "@/hooks/access/cloud/auth/use-auth-methods";
-import { useGitHubDesktopAuthAvailabilityFor } from "@/hooks/access/cloud/auth/use-github-auth-availability";
-import { useSsoDiscoveryFor } from "@/hooks/access/cloud/auth/use-sso-discovery";
+import { useAppCapabilitiesFor } from "@proliferate/product-client/internal/hooks/capabilities/derived/use-app-capabilities";
+import { useDesktopAuthMethodsFor } from "@proliferate/product-client/internal/hooks/access/cloud/auth/use-auth-methods";
+import { useGitHubDesktopAuthAvailabilityFor } from "@proliferate/product-client/internal/hooks/access/cloud/auth/use-github-auth-availability";
+import { useSsoDiscoveryFor } from "@proliferate/product-client/internal/hooks/access/cloud/auth/use-sso-discovery";
 
 import {
   buildAnonymousMethods,
@@ -192,7 +193,10 @@ export function DesktopProductHostProvider({
       surface: "desktop",
       deployment,
       auth,
-      cloud: { client: cloudClient },
+      cloud: {
+        client: cloudClient,
+        getSandboxGatewayAccessToken: getDesktopCloudAccessToken,
+      },
       storage: desktopProductStorage,
       links: desktopProductLinks,
       clipboard: desktopClipboard,

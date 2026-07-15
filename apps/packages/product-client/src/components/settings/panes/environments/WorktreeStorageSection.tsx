@@ -1,0 +1,295 @@
+import { useEffect, useRef, useState } from "react";
+import { Button } from "@proliferate/ui/primitives/Button";
+import { Input } from "@proliferate/ui/primitives/Input";
+import { Label } from "@proliferate/ui/primitives/Label";
+import { Minus, Plus } from "@proliferate/ui/icons";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SETTINGS_CONTROL_WIDTH_CLASS, SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import { RuntimePressureDetailsDialog } from "#product/components/workspace/chat/input/RuntimePressureDetailsDialog";
+import { RuntimePressureRing } from "#product/components/workspace/chat/input/RuntimePressureIndicator";
+import { useWorktreeCleanupPolicy } from "#product/hooks/workspaces/facade/use-worktree-cleanup-policy";
+import {
+  WORKTREE_AUTO_DELETE_LIMIT_MAX,
+  WORKTREE_AUTO_DELETE_LIMIT_MIN,
+} from "#product/lib/domain/preferences/user/worktree-auto-delete";
+import {
+  type RuntimePressureTargetState,
+  useRuntimePressureControlStateFromSettings,
+} from "#product/hooks/workspaces/facade/use-runtime-pressure-control-state";
+import { useWorktreeSettingsTargets } from "#product/hooks/workspaces/facade/use-worktree-settings-targets";
+import { useToastStore } from "#product/stores/toast/toast-store";
+
+export function WorktreeStorageSection() {
+  const settings = useWorktreeSettingsTargets();
+  const cleanupPolicy = useWorktreeCleanupPolicy(
+    settings.targets,
+    settings.syncPolicyToTarget,
+  );
+  const pressure = useRuntimePressureControlStateFromSettings(settings);
+  const showToast = useToastStore((state) => state.show);
+  const [selectedTargetKey, setSelectedTargetKey] = useState<string | null>(null);
+  const selectedTarget = selectedTargetKey
+    ? pressure.targets.find((targetState) => targetState.target.key === selectedTargetKey) ?? null
+    : null;
+
+  const applyPolicy = () => {
+    void cleanupPolicy.apply().then(() => {
+      showToast("Worktree preference updated.");
+    }).catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      showToast(message);
+    });
+  };
+
+  return (
+    <>
+      <SettingsSection title="Worktrees" className="w-full">
+        <WorktreePolicyRow
+          draftValue={cleanupPolicy.draftValue}
+          currentValue={cleanupPolicy.value}
+          onDraftValueChange={cleanupPolicy.setDraftValue}
+          canApply={cleanupPolicy.canApply && !cleanupPolicy.isApplying}
+          applyDisabledReason={cleanupPolicy.applyDisabledReason}
+          statusMessage={cleanupPolicy.statusMessage}
+          onApply={applyPolicy}
+        />
+        {pressure.isDiscovering && pressure.targets.length === 0 ? (
+          <SettingsRow
+            label="Runtime status"
+            description="Looking for runtimes…"
+          />
+        ) : pressure.targets.length === 0 ? (
+          <SettingsRow
+            label="Runtime status"
+            description="No runtime roots found."
+          />
+        ) : (
+          pressure.targets.map((targetState) => (
+            <WorktreeRuntimeStatusRow
+              key={targetState.target.key}
+              targetState={targetState}
+              onOpenDetails={() => setSelectedTargetKey(targetState.target.key)}
+            />
+          ))
+        )}
+      </SettingsSection>
+
+      {selectedTarget ? (
+        <RuntimePressureDetailsDialog
+          open
+          targetState={selectedTarget}
+          actions={pressure.actions}
+          onClose={() => setSelectedTargetKey(null)}
+        />
+      ) : null}
+    </>
+  );
+}
+
+const WORKTREE_POLICY_COMMIT_DELAY_MS = 600;
+
+// Exported for tests only.
+export function WorktreePolicyRow({
+  draftValue,
+  currentValue,
+  onDraftValueChange,
+  canApply,
+  applyDisabledReason,
+  statusMessage,
+  onApply,
+}: {
+  draftValue: string;
+  currentValue: number;
+  onDraftValueChange: (value: string) => void;
+  canApply: boolean;
+  applyDisabledReason: string | null;
+  statusMessage: string | null;
+  onApply: () => void;
+}) {
+  const helperText = applyDisabledReason ?? statusMessage;
+  const parsedDraft = Number.parseInt(draftValue, 10);
+  const value = Number.isFinite(parsedDraft) ? parsedDraft : currentValue;
+  const dirty = canApply && value !== currentValue;
+
+  // Stepper clicks land in draft state; the commit (cloud PUT + preference
+  // write) fires once clicking settles, replacing the old commit-on-blur.
+  const onApplyRef = useRef(onApply);
+  onApplyRef.current = onApply;
+  useEffect(() => {
+    if (!dirty) {
+      return;
+    }
+    const handle = window.setTimeout(() => onApplyRef.current(), WORKTREE_POLICY_COMMIT_DELAY_MS);
+    return () => window.clearTimeout(handle);
+  }, [dirty, value]);
+
+  const step = (delta: number) => {
+    const next = Math.min(
+      WORKTREE_AUTO_DELETE_LIMIT_MAX,
+      Math.max(WORKTREE_AUTO_DELETE_LIMIT_MIN, value + delta),
+    );
+    onDraftValueChange(String(next));
+  };
+
+  return (
+    <SettingsRow
+      label="Ideal worktrees"
+      description="Per-repo target. Composer pressure warns above this count; cleanup skips dirty checkouts."
+    >
+      <div className="flex flex-col items-end gap-1">
+        <div
+          role="group"
+          aria-label="Ideal worktrees per repo"
+          className={`grid h-8 ${SETTINGS_CONTROL_WIDTH_CLASS} grid-cols-[2rem_minmax(0,1fr)_2rem] items-center overflow-hidden rounded-lg border border-transparent bg-foreground/5 text-foreground`}
+        >
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Fewer ideal worktrees"
+            disabled={value <= WORKTREE_AUTO_DELETE_LIMIT_MIN}
+            className="h-8 w-8 rounded-none text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+            onClick={() => step(-1)}
+          >
+            <Minus className="size-3.5" />
+          </Button>
+          <Label className="mb-0 flex h-8 min-w-16 cursor-text items-center justify-center gap-1.5 border-x border-border-light px-2">
+            <WorktreeCountInput
+              value={value}
+              min={WORKTREE_AUTO_DELETE_LIMIT_MIN}
+              max={WORKTREE_AUTO_DELETE_LIMIT_MAX}
+              onCommit={(next) => onDraftValueChange(String(next))}
+            />
+            <span className="select-none text-ui-sm text-muted-foreground">worktrees</span>
+          </Label>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="More ideal worktrees"
+            disabled={value >= WORKTREE_AUTO_DELETE_LIMIT_MAX}
+            className="h-8 w-8 rounded-none text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+            onClick={() => step(1)}
+          >
+            <Plus className="size-3.5" />
+          </Button>
+        </div>
+        {helperText ? (
+          <p className="max-w-72 text-right text-sm text-muted-foreground">
+            {helperText}
+          </p>
+        ) : null}
+      </div>
+    </SettingsRow>
+  );
+}
+
+/**
+ * The stepper's number as a real inline input: borderless and transparent at
+ * rest (focus-visible ring only), width tracks the typed digits. Digits-only
+ * drafts commit on blur/Enter — clamped to [min, max] — through the same
+ * debounced apply path the −/+ buttons ride; empty drafts and Escape revert
+ * to the last committed value.
+ */
+function WorktreeCountInput({
+  value,
+  min,
+  max,
+  onCommit,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  onCommit: (next: number) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const display = draft ?? String(value);
+
+  const commit = () => {
+    if (draft === null) {
+      return;
+    }
+    setDraft(null);
+    const parsed = Number.parseInt(draft, 10);
+    if (!Number.isInteger(parsed)) {
+      return;
+    }
+    const clamped = Math.min(max, Math.max(min, parsed));
+    if (clamped !== value) {
+      onCommit(clamped);
+    }
+  };
+
+  return (
+    <Input
+      variant="unstyled"
+      value={display}
+      inputMode="numeric"
+      aria-label="Ideal worktrees"
+      className="rounded-sm bg-transparent text-ui font-medium tabular-nums text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      style={{ width: `calc(${Math.max(display.length, 1)}ch + 2px)` }}
+      onChange={(event) => {
+        setDraft(event.target.value.replace(/\D/g, "").slice(0, String(max).length));
+      }}
+      onFocus={(event) => event.currentTarget.select()}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          commit();
+        } else if (event.key === "Escape" && draft !== null) {
+          // Revert the draft; keep the Escape from bubbling into
+          // settings-level close handlers while an edit is in flight.
+          event.stopPropagation();
+          setDraft(null);
+        }
+      }}
+    />
+  );
+}
+
+function WorktreeRuntimeStatusRow({
+  targetState,
+  onOpenDetails,
+}: {
+  targetState: RuntimePressureTargetState;
+  onOpenDetails: () => void;
+}) {
+  return (
+    <SettingsRow
+      label={targetState.target.label}
+      description={runtimeStatusDescription(targetState)}
+    >
+      <div className="flex items-center gap-3">
+        <RuntimePressureRing
+          tone={targetState.tone}
+          progressPercent={targetState.ringProgressPercent}
+          loading={targetState.isLoading}
+        />
+        <span className="min-w-24 text-right text-sm tabular-nums text-foreground">
+          {targetState.isLoading ? "Loading" : targetState.pressureLabel}
+        </span>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onOpenDetails}
+        >
+          Details
+        </Button>
+      </div>
+    </SettingsRow>
+  );
+}
+
+function runtimeStatusDescription(targetState: RuntimePressureTargetState): string {
+  if (targetState.error) {
+    return "Runtime inventory is unavailable.";
+  }
+  if (targetState.isLoading) {
+    return "Loading worktree status…";
+  }
+  if (targetState.target.location === "cloud") {
+    return targetState.detailLines.join(" · ");
+  }
+  return targetState.detailLines.slice(0, 2).join(" · ");
+}

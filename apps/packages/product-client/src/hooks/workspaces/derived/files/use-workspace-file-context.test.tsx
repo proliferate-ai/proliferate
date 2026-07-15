@@ -1,0 +1,113 @@
+// @vitest-environment jsdom
+
+import { cleanup, renderHook } from "@testing-library/react";
+import type { Workspace } from "@anyharness/sdk";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useWorkspaceFileContext } from "#product/hooks/workspaces/derived/files/use-workspace-file-context";
+
+const mocks = vi.hoisted(() => ({
+  useWorkspaces: vi.fn(),
+}));
+
+vi.mock("#product/hooks/workspaces/cache/use-workspaces", () => ({
+  useWorkspaces: mocks.useWorkspaces,
+}));
+
+describe("useWorkspaceFileContext", () => {
+  beforeEach(() => {
+    useSessionSelectionStore.getState().clearSelection();
+    mocks.useWorkspaces.mockReturnValue({ data: undefined });
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+    useSessionSelectionStore.getState().clearSelection();
+  });
+
+  it("derives the workspace ui key and file-tree key from selected workspace state", () => {
+    mocks.useWorkspaces.mockReturnValue({
+      data: {
+        workspaces: [workspace({
+          id: "workspace-1",
+          repoRootId: "repo-root-1",
+          path: "/repo/proliferate",
+        })],
+      },
+    });
+    useSessionSelectionStore.getState().activateWorkspace({
+      logicalWorkspaceId: "logical-1",
+      workspaceId: "workspace-1",
+    });
+
+    const { result } = renderHook(() => useWorkspaceFileContext());
+
+    expect(result.current).toEqual({
+      workspaceUiKey: "logical-1",
+      materializedWorkspaceId: "workspace-1",
+      treeStateKey: "repo-root-1",
+    });
+  });
+
+  it("falls back to the materialized workspace id while collections are loading", () => {
+    useSessionSelectionStore.getState().activateWorkspace({
+      logicalWorkspaceId: null,
+      workspaceId: "workspace-1",
+    });
+
+    const { result } = renderHook(() => useWorkspaceFileContext());
+
+    expect(result.current).toEqual({
+      workspaceUiKey: "workspace-1",
+      materializedWorkspaceId: "workspace-1",
+      treeStateKey: "workspace-1",
+    });
+  });
+
+  it("keeps the initialized fallback file-tree key when collections finish loading", () => {
+    useSessionSelectionStore.getState().activateWorkspace({
+      logicalWorkspaceId: null,
+      workspaceId: "workspace-1",
+    });
+
+    const { result, rerender } = renderHook(() => useWorkspaceFileContext());
+
+    expect(result.current.treeStateKey).toBe("workspace-1");
+
+    mocks.useWorkspaces.mockReturnValue({
+      data: {
+        workspaces: [workspace({
+          id: "workspace-1",
+          repoRootId: "repo-root-1",
+          path: "/repo/proliferate",
+        })],
+      },
+    });
+    rerender();
+
+    expect(result.current).toEqual({
+      workspaceUiKey: "workspace-1",
+      materializedWorkspaceId: "workspace-1",
+      treeStateKey: "workspace-1",
+    });
+  });
+});
+
+function workspace(input: {
+  id: string;
+  repoRootId: string;
+  path: string;
+}): Workspace {
+  return {
+    id: input.id,
+    kind: "local",
+    repoRootId: input.repoRootId,
+    path: input.path,
+    surface: "standard",
+    lifecycleState: "active",
+    cleanupState: "none",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+}

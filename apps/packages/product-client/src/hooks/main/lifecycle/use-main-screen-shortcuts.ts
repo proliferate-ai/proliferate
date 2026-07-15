@@ -1,0 +1,58 @@
+import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
+import { focusChatInput } from "#product/lib/domain/focus-zone";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+
+interface UseMainScreenShortcutsArgs {
+  enabled?: boolean;
+  canOpenCommandPalette: boolean;
+  onOpenCommandPalette: () => void;
+  onOpenWorkspaceInWeb: () => void;
+  onOpenTerminal: () => boolean;
+  onSyncWorkspaceToWeb: () => void;
+  onToggleLeftSidebar: () => void;
+  onToggleRightPanel: () => void;
+}
+
+// Owns Main screen shortcut registration. The callbacks are supplied by the
+// workflow hook so shortcut bindings stay separate from action behavior.
+export function useMainScreenShortcuts({
+  enabled = true,
+  canOpenCommandPalette,
+  onOpenCommandPalette,
+  onOpenWorkspaceInWeb,
+  onOpenTerminal,
+  onSyncWorkspaceToWeb,
+  onToggleLeftSidebar,
+  onToggleRightPanel,
+}: UseMainScreenShortcutsArgs): void {
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const canUseWorkspaceShortcuts = enabled && selectedWorkspaceId !== null;
+
+  useShortcutHandler("workspace.focus-chat", () => {
+    return focusChatInput();
+  }, { enabled: canUseWorkspaceShortcuts });
+
+  useShortcutHandler("workspace.open-terminal", () => {
+    return onOpenTerminal();
+  }, { enabled: canUseWorkspaceShortcuts });
+
+  useShortcutHandler("workspace.toggle-left-sidebar", () => {
+    onToggleLeftSidebar();
+  }, { enabled });
+
+  useShortcutHandler("workspace.toggle-right-panel", () => {
+    onToggleRightPanel();
+  }, { enabled: canUseWorkspaceShortcuts });
+
+  useShortcutHandler("workspace.open-command-palette", () => {
+    onOpenCommandPalette();
+  }, { enabled: enabled && canOpenCommandPalette });
+
+  useShortcutHandler("workspace.open-in-web", () => {
+    onOpenWorkspaceInWeb();
+  }, { enabled: canUseWorkspaceShortcuts });
+
+  useShortcutHandler("workspace.sync-to-web", () => {
+    onSyncWorkspaceToWeb();
+  }, { enabled: canUseWorkspaceShortcuts });
+}

@@ -11,6 +11,10 @@
     }
   },
   "exports": {
+    "./internal/*": {
+      "types": "./src/*",
+      "default": "./dist/*.js"
+    },
     "./host/product-host": {
       "types": "./dist/host/product-host.d.ts",
       "import": "./dist/host/product-host.js"
@@ -23,14 +27,24 @@
       "types": "./dist/host/ProductHostProvider.d.ts",
       "import": "./dist/host/ProductHostProvider.js"
     },
-    "./qualification/ProductClientBuildCanary": {
-      "types": "./dist/qualification/ProductClientBuildCanary.d.ts",
-      "import": "./dist/qualification/ProductClientBuildCanary.js"
+    "./infra/measurement": {
+      "types": "./dist/lib/infra/measurement/measurement-port.d.ts",
+      "import": "./dist/lib/infra/measurement/measurement-port.js"
+    },
+    "./infra/cloud-gateway": {
+      "types": "./dist/lib/access/cloud/sandbox-gateway-access.d.ts",
+      "import": "./dist/lib/access/cloud/sandbox-gateway-access.js"
+    },
+    "./ProductClient": {
+      "types": "./dist/ProductClient.d.ts",
+      "import": "./dist/ProductClient.js"
     }
   },
   "scripts": {
-    "build": "pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/product-domain build && tsc -p tsconfig.json && node scripts/copy-qualification-assets.mjs",
-    "typecheck": "pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/product-domain build && tsc -p tsconfig.json --noEmit",
+    "prepare": "node scripts/copy-product-client-assets.mjs",
+    "sync-assets": "node scripts/copy-product-client-assets.mjs",
+    "build": "node scripts/copy-product-client-assets.mjs && pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/product-domain build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/design build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build && pnpm --filter @proliferate/product-surfaces build && tsc -p tsconfig.json && node scripts/copy-product-client-assets.mjs --dist",
+    "typecheck": "node scripts/copy-product-client-assets.mjs && pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/product-domain build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/design build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build && pnpm --filter @proliferate/product-surfaces build && tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
@@ -51,6 +65,7 @@
     "@proliferate/cloud-sdk-react": "workspace:*",
     "@proliferate/design": "workspace:*",
     "@proliferate/product-domain": "workspace:*",
+    "@proliferate/product-surfaces": "workspace:*",
     "@proliferate/product-ui": "workspace:*",
     "@proliferate/ui": "workspace:*",
     "@tanstack/react-query": "^5.101.0",
@@ -61,6 +76,7 @@
     "@xterm/xterm": "^6.0.0",
     "cmdk": "^1.1.1",
     "geist": "^1.7.2",
+    "lucide-react": "0.577.0",
     "react-markdown": "^9",
     "react-router-dom": "^7",
     "remark-gfm": "^4",
@@ -73,6 +89,7 @@
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/react": "~19.2.17",
     "@types/react-dom": "~19.2.3",
     "@vitejs/plugin-react": "^4",

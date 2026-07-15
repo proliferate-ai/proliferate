@@ -14,7 +14,7 @@ import type {
   ProductTelemetry,
 } from "@proliferate/product-client/host/product-host";
 
-import type { AuthUser } from "@/lib/domain/auth/auth-user";
+import type { AuthUser } from "@proliferate/product-client/internal/lib/domain/auth/auth-user";
 import type { AuthOrchestrationDeps } from "@/lib/integrations/auth/orchestration-effects";
 import type { GitHubDesktopSignInOptions } from "@/lib/integrations/auth/proliferate-auth";
 import type { DesktopSsoSignInOptions } from "@/lib/integrations/auth/proliferate-sso-auth";
@@ -28,7 +28,7 @@ import { copyText, openExternal } from "@/lib/access/tauri/shell";
 import {
   decodeDesktopProductEntry,
   encodeDesktopReturnUrl,
-} from "@/lib/domain/auth/desktop-navigation";
+} from "@proliferate/product-client/internal/lib/domain/auth/desktop-navigation";
 import { subscribeDeepLinkUrls } from "@/lib/access/tauri/deep-link";
 import {
   captureTelemetryException,
@@ -39,9 +39,10 @@ import {
   setTelemetryUser,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
-import { markLoginNotAttempted } from "@/lib/domain/telemetry/errors";
+import { loadAnonymousTelemetryBootstrap } from "@/lib/integrations/telemetry/anonymous-storage";
+import { markLoginNotAttempted } from "@proliferate/product-client/internal/lib/domain/telemetry/errors";
 import { handleDesktopCallbackUrl } from "@/lib/integrations/auth/orchestration-callback";
-import { discoverDesktopSso } from "@/lib/integrations/auth/proliferate-sso-auth";
+import { discoverDesktopSso } from "@proliferate/product-client/internal/lib/access/cloud/auth-probes";
 import { DESKTOP_AUTH_REDIRECT_URI } from "@/lib/integrations/auth/proliferate-auth";
 
 // Same generic string surfaced by the existing slug SSO flow: a missing org,
@@ -205,6 +206,7 @@ export function createDesktopAuthOperations(
           });
         }
         const discovery = await discoverDesktopSso({
+          apiBaseUrl: getProliferateApiBaseUrl(),
           slug: request.slug,
           email: request.email,
           organizationId: request.organizationId,
@@ -330,5 +332,16 @@ export const desktopTelemetry: ProductTelemetry = {
       clientReleaseId: getSupportReportReleaseId(),
       telemetryRefs: getSupportReportTelemetryRefs(),
     };
+  },
+  async getAnonymousInstallId(): Promise<string | null> {
+    // The anonymous-telemetry bootstrap always resolves an install id on
+    // Desktop (native id, or the browser-storage fallback); return null only if
+    // that read fails, matching the prior consumer's catch-to-null path.
+    try {
+      const { installId } = await loadAnonymousTelemetryBootstrap();
+      return installId ?? null;
+    } catch {
+      return null;
+    }
   },
 };

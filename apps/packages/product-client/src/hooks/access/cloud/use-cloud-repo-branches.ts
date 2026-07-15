@@ -1,0 +1,16 @@
+import { useQuery } from "@tanstack/react-query";
+import type { CloudRepoBranchesResponse } from "@proliferate/cloud-sdk/types";
+import { listCloudRepoBranches } from "@proliferate/cloud-sdk/client/repos";
+import { cloudRepoBranchesKey } from "#product/hooks/access/cloud/query-keys";
+
+export function useCloudRepoBranches(
+  gitOwner: string,
+  gitRepoName: string,
+  enabled = true,
+) {
+  return useQuery<CloudRepoBranchesResponse>({
+    queryKey: cloudRepoBranchesKey(gitOwner, gitRepoName),
+    queryFn: () => listCloudRepoBranches(gitOwner, gitRepoName),
+    enabled: enabled && gitOwner.trim().length > 0 && gitRepoName.trim().length > 0,
+  });
+}

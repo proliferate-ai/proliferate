@@ -1,0 +1,515 @@
+// @vitest-environment jsdom
+import { createElement } from "react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  fileViewerTarget,
+  fileDiffViewerTarget,
+  viewerTargetKey,
+  type ViewerTarget,
+} from "#product/lib/domain/workspaces/viewer/viewer-target";
+import { useContentSearchStore } from "#product/stores/search/content-search-store";
+import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
+import { useFileTreeStore } from "#product/stores/editor/file-tree-store";
+import { FileEditorView } from "#product/components/workspace/files/FileEditorView";
+
+const readWorkspaceFileQuery = vi.fn();
+const gitDiffQuery = vi.fn();
+const workspaceFilesQuery = vi.fn();
+const searchWorkspaceFilesQuery = vi.fn();
+const openFileMock = vi.fn();
+const writeTextMock = vi.fn(async () => undefined);
+let workspaceFileContext = {
+  workspaceUiKey: "workspace-1",
+  materializedWorkspaceId: "workspace-1",
+  treeStateKey: "workspace-1",
+};
+
+vi.mock("#product/components/content/ui/DiffViewer", () => ({
+  DiffViewer: () => createElement("div", null, "diff rendered"),
+}));
+
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => ({ clipboard: { writeText: writeTextMock } }),
+}));
+
+vi.mock("#product/hooks/ui/highlighting/use-highlighted-lines", () => ({
+  useHighlightedLines: (code: string) =>
+    code.split("\n").map((line) => [{ content: line }]),
+}));
+
+vi.mock("#product/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
+  useFileReferenceActions: () => ({
+    reference: {
+      rawPath: "package.json",
+      path: "package.json",
+      line: null,
+      column: null,
+      absolutePath: "/repo/package.json",
+      workspacePath: "package.json",
+    },
+    openTargets: [],
+    canOpenInSidebar: true,
+    canOpenExternal: true,
+    copyPath: vi.fn(),
+    openInSidebar: vi.fn(),
+    openDefault: vi.fn(),
+    openPrimary: vi.fn(),
+    openWithTarget: vi.fn(),
+    reveal: vi.fn(),
+  }),
+}));
+
+vi.mock("#product/hooks/workspaces/derived/files/use-workspace-file-context", () => ({
+  useWorkspaceFileContext: () => workspaceFileContext,
+}));
+
+vi.mock("#product/hooks/workspaces/workflows/files/use-workspace-file-target-actions", () => ({
+  useWorkspaceFileTargetActions: () => ({
+    openFile: openFileMock,
+    openFileDiff: vi.fn(),
+    openViewerTarget: vi.fn(),
+  }),
+}));
+
+const gitStatusQuery = vi.fn();
+
+vi.mock("@anyharness/sdk-react", () => ({
+  useReadWorkspaceFileQuery: (options: unknown) => readWorkspaceFileQuery(options),
+  useGitDiffQuery: (options: unknown) => gitDiffQuery(options),
+  useWorkspaceFilesQuery: (options: unknown) => workspaceFilesQuery(options),
+  useSearchWorkspaceFilesQuery: (options: unknown) => searchWorkspaceFilesQuery(options),
+  useGitStatusQuery: (options: unknown) => gitStatusQuery(options),
+}));
+
+describe("FileEditorView", () => {
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  beforeEach(() => {
+    class TestResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal("ResizeObserver", TestResizeObserver);
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      callback(0);
+      return 1;
+    });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+    Element.prototype.scrollIntoView = vi.fn();
+    readWorkspaceFileQuery.mockReset();
+    gitDiffQuery.mockReset();
+    workspaceFilesQuery.mockReset();
+    searchWorkspaceFilesQuery.mockReset();
+    gitStatusQuery.mockReset();
+    openFileMock.mockReset();
+    writeTextMock.mockClear();
+    workspaceFileContext = {
+      workspaceUiKey: "workspace-1",
+      materializedWorkspaceId: "workspace-1",
+      treeStateKey: "workspace-1",
+    };
+    readWorkspaceFileQuery.mockReturnValue({
+      data: undefined,
+      error: new Error("not found"),
+      isLoading: false,
+    });
+    gitDiffQuery.mockReturnValue({
+      isLoading: false,
+      data: {
+        patch: [
+          "diff --git a/src/deleted.ts b/src/deleted.ts",
+          "deleted file mode 100644",
+          "--- a/src/deleted.ts",
+          "+++ /dev/null",
+          "@@ -1 +0,0 @@",
+          "-deleted",
+        ].join("\n"),
+      },
+    });
+    workspaceFilesQuery.mockReturnValue({
+      data: {
+        entries: [
+          { kind: "directory", name: "src", path: "src" },
+          { kind: "file", name: "README.md", path: "README.md" },
+        ],
+      },
+      isError: false,
+      isLoading: false,
+    });
+    searchWorkspaceFilesQuery.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+    });
+    gitStatusQuery.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+    });
+    useWorkspaceViewerTabsStore.getState().reset();
+    useFileTreeStore.setState({
+      width: 400,
+      expandedPaths: new Set(),
+    });
+    useContentSearchStore.setState({
+      open: false,
+      query: "",
+      surface: "chat",
+      activeMatchIndex: 0,
+      activeMatchId: null,
+      unitsById: {},
+      nextUnitOrder: 0,
+    });
+  });
+
+  it("renders focused diffs without requiring a current file read", () => {
+    const target = fileDiffViewerTarget({
+      path: "src/deleted.ts",
+      scope: "unstaged",
+    }) as Extract<ViewerTarget, { kind: "fileDiff" }>;
+    const targetKey = viewerTargetKey(target);
+    useWorkspaceViewerTabsStore.setState({
+      materializedWorkspaceId: "workspace-1",
+    });
+    useWorkspaceViewerTabsStore.getState().openTarget(target);
+
+    render(createElement(FileEditorView, {
+      filePath: "src/deleted.ts",
+      targetKey,
+      diffTarget: target,
+    }));
+
+    expect(readWorkspaceFileQuery).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      path: "src/deleted.ts",
+      enabled: false,
+    });
+    expect(gitDiffQuery).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      path: "src/deleted.ts",
+      scope: "unstaged",
+      baseRef: null,
+      oldPath: null,
+    });
+    expect(screen.getByText("diff rendered")).toBeTruthy();
+    expect(screen.queryByText("not found")).toBeNull();
+    expect(screen.queryByLabelText("Find in file")).toBeNull();
+  });
+
+  it("renders source files with the read-only source viewer", async () => {
+    const target = fileViewerTarget("package.json");
+    const targetKey = viewerTargetKey(target);
+    useWorkspaceViewerTabsStore.setState({
+      materializedWorkspaceId: "workspace-1",
+    });
+    useWorkspaceViewerTabsStore.getState().openTarget(target);
+    readWorkspaceFileQuery.mockReturnValue({
+      data: {
+        content: "{\"ok\":true}",
+        isText: true,
+        path: "package.json",
+        sizeBytes: 11,
+        tooLarge: false,
+        versionToken: "v1",
+      },
+      error: null,
+      isLoading: false,
+    });
+
+    const { container } = render(createElement(FileEditorView, {
+      filePath: "package.json",
+      targetKey,
+    }));
+
+    expect(readWorkspaceFileQuery).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      path: "package.json",
+      enabled: true,
+    });
+    expect(screen.getByText("{\"ok\":true}")).toBeTruthy();
+    expect(screen.queryByText("editor")).toBeNull();
+    expect(screen.queryByText("Save")).toBeNull();
+    expect(container.querySelector("[data-file-source-view]")?.getAttribute("data-word-wrap"))
+      .toBe("false");
+    expect(container.querySelector("[data-file-source-virtualized]")).toBeTruthy();
+    expect(container.querySelector(".file-source-line-number")?.textContent).toBe("1");
+    expect(container.querySelector(".file-source-scroll")).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("File viewer options"));
+    // Native menu resolves unavailable async before the DOM fallback opens.
+    expect(await screen.findByText("Word wrap")).toBeTruthy();
+    fireEvent.click(screen.getByText("Copy content"));
+    expect(writeTextMock).toHaveBeenCalledWith("{\"ok\":true}");
+  });
+
+  it("virtualizes large source files instead of mounting every line", () => {
+    const target = fileViewerTarget("package.json");
+    const targetKey = viewerTargetKey(target);
+    const lines = Array.from({ length: 200_000 }, (_, index) =>
+      index === 0 ? "unique first line" : `line ${index % 10}`
+    );
+    useWorkspaceViewerTabsStore.setState({
+      materializedWorkspaceId: "workspace-1",
+    });
+    useWorkspaceViewerTabsStore.getState().openTarget(target);
+    readWorkspaceFileQuery.mockReturnValue({
+      data: {
+        content: lines.join("\n"),
+        isText: true,
+        path: "package.json",
+        sizeBytes: 5000,
+        tooLarge: false,
+        versionToken: "v1",
+      },
+      error: null,
+      isLoading: false,
+    });
+
+    const { container } = render(createElement(FileEditorView, {
+      filePath: "package.json",
+      targetKey,
+    }));
+
+    expect(screen.getByText("unique first line")).toBeTruthy();
+    expect(container.querySelectorAll("[data-source-line]").length).toBeLessThan(lines.length);
+  });
+
+  it("overlays the file browser without replacing the source view", () => {
+    const target = fileViewerTarget("package.json");
+    const targetKey = viewerTargetKey(target);
+    useWorkspaceViewerTabsStore.setState({
+      materializedWorkspaceId: "workspace-1",
+    });
+    useWorkspaceViewerTabsStore.getState().openTarget(target);
+    readWorkspaceFileQuery.mockReturnValue({
+      data: {
+        content: "{\"ok\":true}",
+        isText: true,
+        path: "package.json",
+        sizeBytes: 11,
+        tooLarge: false,
+        versionToken: "v1",
+      },
+      error: null,
+      isLoading: false,
+    });
+
+    const { container } = render(createElement(FileEditorView, {
+      filePath: "package.json",
+      targetKey,
+    }));
+
+    // Closed by default
+    expect(container.querySelector("[data-file-tree-overlay]")).toBeNull();
+
+    fireEvent.click(screen.getByLabelText("Show files"));
+
+    expect(screen.getByRole("dialog", { name: "Browse files" })).toBeTruthy();
+    expect(container.querySelector("[data-file-tree-overlay]")).toBeTruthy();
+    // Code viewer stays mounted behind the overlay
+    expect(screen.getByText("{\"ok\":true}")).toBeTruthy();
+    expect(screen.getByText("README.md")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Filter files…")).toBeTruthy();
+    expect(workspaceFilesQuery).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      path: "",
+      enabled: true,
+    });
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(container.querySelector("[data-file-tree-overlay]")).toBeNull();
+  });
+
+  it("groups filter matches by parent directory as a tree", () => {
+    const target = fileViewerTarget("package.json");
+    const targetKey = viewerTargetKey(target);
+    useWorkspaceViewerTabsStore.setState({
+      materializedWorkspaceId: "workspace-1",
+    });
+    useWorkspaceViewerTabsStore.getState().openTarget(target);
+    readWorkspaceFileQuery.mockReturnValue({
+      data: {
+        content: "{\"ok\":true}",
+        isText: true,
+        path: "package.json",
+        sizeBytes: 11,
+        tooLarge: false,
+        versionToken: "v1",
+      },
+      error: null,
+      isLoading: false,
+    });
+    searchWorkspaceFilesQuery.mockReturnValue({
+      data: {
+        results: [
+          { name: "Button.tsx", path: "src/components/Button.tsx" },
+          { name: "Badge.tsx", path: "src/components/Badge.tsx" },
+          { name: "button.css", path: "src/styles/button.css" },
+        ],
+      },
+      isLoading: false,
+    });
+
+    render(createElement(FileEditorView, {
+      filePath: "package.json",
+      targetKey,
+    }));
+
+    fireEvent.click(screen.getByLabelText("Show files"));
+    fireEvent.change(screen.getByPlaceholderText("Filter files…"), {
+      target: { value: "b" },
+    });
+
+    // Directory group rows
+    const componentsGroup = screen.getByRole("treeitem", { name: /src\/components/ });
+    expect(componentsGroup.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("treeitem", { name: /src\/styles/ })).toBeTruthy();
+    // Nested matched files
+    expect(screen.getByText("Button.tsx")).toBeTruthy();
+    expect(screen.getByText("button.css")).toBeTruthy();
+
+    // Collapsing the group hides its files
+    fireEvent.click(componentsGroup);
+    expect(screen.queryByText("Button.tsx")).toBeNull();
+    expect(screen.getByText("button.css")).toBeTruthy();
+  });
+
+  it("opens pane-local content search from the file viewer toolbar", () => {
+    const target = fileViewerTarget("package.json");
+    const targetKey = viewerTargetKey(target);
+    useWorkspaceViewerTabsStore.setState({
+      materializedWorkspaceId: "workspace-1",
+    });
+    useWorkspaceViewerTabsStore.getState().openTarget(target);
+    readWorkspaceFileQuery.mockReturnValue({
+      data: {
+        content: "{\"ok\":true}",
+        isText: true,
+        path: "package.json",
+        sizeBytes: 11,
+        tooLarge: false,
+        versionToken: "v1",
+      },
+      error: null,
+      isLoading: false,
+    });
+    const { container } = render(createElement(FileEditorView, {
+      filePath: "package.json",
+      targetKey,
+    }));
+
+    expect(screen.queryByLabelText("Search files")).toBeNull();
+    fireEvent.click(screen.getByLabelText("Find in file"));
+    expect(useContentSearchStore.getState().open).toBe(true);
+    expect(useContentSearchStore.getState().surface).toBe("file");
+    expect(container.querySelector('[data-content-search-surface="file"]')).toBeTruthy();
+    expect(screen.getByPlaceholderText("Search file…")).toBeTruthy();
+    expect(screen.queryByLabelText("Search chat")).toBeNull();
+    expect(screen.queryByLabelText("Search diffs")).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Search workspace files" })).toBeNull();
+    expect(searchWorkspaceFilesQuery.mock.calls.some(([options]) => options?.enabled === true))
+      .toBe(false);
+  });
+
+  it("clears file find highlights when the search overlay closes", () => {
+    const target = fileViewerTarget("package.json");
+    const targetKey = viewerTargetKey(target);
+    useWorkspaceViewerTabsStore.setState({
+      materializedWorkspaceId: "workspace-1",
+    });
+    useWorkspaceViewerTabsStore.getState().openTarget(target);
+    readWorkspaceFileQuery.mockReturnValue({
+      data: {
+        content: "{\"ok\":true}",
+        isText: true,
+        path: "package.json",
+        sizeBytes: 11,
+        tooLarge: false,
+        versionToken: "v1",
+      },
+      error: null,
+      isLoading: false,
+    });
+    const { container } = render(createElement(FileEditorView, {
+      filePath: "package.json",
+      targetKey,
+    }));
+
+    fireEvent.click(screen.getByLabelText("Find in file"));
+    fireEvent.change(screen.getByPlaceholderText("Search file…"), {
+      target: { value: "ok" },
+    });
+
+    expect(container.querySelector("mark.codex-thread-find-match")).toBeTruthy();
+
+    fireEvent.click(screen.getByLabelText("Close find"));
+    expect(container.querySelector("mark.codex-thread-find-match")).toBeNull();
+  });
+
+  it("switches rendered files back to source before opening file find", () => {
+    const target = fileViewerTarget("README.md");
+    const targetKey = viewerTargetKey(target);
+    useWorkspaceViewerTabsStore.setState({
+      materializedWorkspaceId: "workspace-1",
+    });
+    useWorkspaceViewerTabsStore.getState().openTarget(target);
+    readWorkspaceFileQuery.mockReturnValue({
+      data: {
+        content: "# Hello\n",
+        isText: true,
+        path: "README.md",
+        sizeBytes: 8,
+        tooLarge: false,
+        versionToken: "v1",
+      },
+      error: null,
+      isLoading: false,
+    });
+    render(createElement(FileEditorView, {
+      filePath: "README.md",
+      targetKey,
+    }));
+
+    fireEvent.click(screen.getByLabelText("Find in file"));
+
+    expect(useWorkspaceViewerTabsStore.getState().modeByTargetKey[targetKey]).toBe("source");
+    expect(useContentSearchStore.getState().surface).toBe("file");
+  });
+
+  it("leaves the rich preview when file search opens via the shortcut path", () => {
+    const target = fileViewerTarget("README.md");
+    const targetKey = viewerTargetKey(target);
+    useWorkspaceViewerTabsStore.setState({
+      materializedWorkspaceId: "workspace-1",
+    });
+    useWorkspaceViewerTabsStore.getState().openTarget(target);
+    readWorkspaceFileQuery.mockReturnValue({
+      data: {
+        content: "# Hello\n",
+        isText: true,
+        path: "README.md",
+        sizeBytes: 8,
+        tooLarge: false,
+        versionToken: "v1",
+      },
+      error: null,
+      isLoading: false,
+    });
+    render(createElement(FileEditorView, {
+      filePath: "README.md",
+      targetKey,
+    }));
+
+    // Markdown defaults to the rendered view; Cmd+F opens search through the
+    // store without going through the toolbar handler.
+    act(() => {
+      useContentSearchStore.getState().openSearch("file");
+    });
+
+    expect(useWorkspaceViewerTabsStore.getState().modeByTargetKey[targetKey]).toBe("source");
+  });
+});

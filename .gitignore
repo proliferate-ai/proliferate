@@ -92,3 +92,7 @@ design-system/
 # Python bytecode from running scripts/*.py locally
 __pycache__/
 *.pyc
+
+# Build-time copy of the agent catalog for @proliferate/product-client
+# (emitted by scripts/copy-product-client-assets.mjs from catalogs/agents/catalog.json)
+apps/packages/product-client/src/generated/

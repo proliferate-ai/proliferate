@@ -4,7 +4,7 @@ import type {
   EditorInfo,
   OpenTarget,
   PathKind,
-} from "@/lib/domain/open-targets/model";
+} from "@proliferate/product-client/internal/lib/domain/open-targets/model";
 
 export type {
   EditorIconId,
@@ -13,7 +13,7 @@ export type {
   OpenTargetIconId,
   OpenTargetKind,
   PathKind,
-} from "@/lib/domain/open-targets/model";
+} from "@proliferate/product-client/internal/lib/domain/open-targets/model";
 
 // ---------------------------------------------------------------------------
 // Low-level wrappers (1:1 with Rust commands)

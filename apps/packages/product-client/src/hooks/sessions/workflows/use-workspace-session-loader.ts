@@ -1,0 +1,103 @@
+import { useCallback } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { useWorkspaceSessionCache } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
+import type { WorkspaceSession } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
+import type { SessionLatencyFlowOptions } from "#product/hooks/sessions/workflows/session-selection-options";
+import {
+  ensureRuntimeReadyForSessions,
+  fetchWorkspaceSessions,
+} from "#product/hooks/sessions/workflows/session-selection-runtime";
+import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
+import { getLatencyFlowRequestHeaders } from "#product/lib/infra/measurement/measurement-port";
+import { recordMeasurementMetric } from "#product/lib/infra/measurement/measurement-port";
+import { parseTargetWorkspaceSyntheticId } from "#product/lib/domain/compute/target-workspace-id";
+import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import {
+  filterReplacedSessionTombstones,
+} from "#product/hooks/sessions/workflows/session-replacement-tombstones";
+
+export function useWorkspaceSessionLoader() {
+  const host = useProductHost();
+  const desktop = host.desktop;
+  const localRuntime = desktop?.runtime ?? null;
+  const ssh = desktop?.ssh ?? null;
+  const cloudClient = host.cloud.client;
+  const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
+  const {
+    getWorkspaceSessionCacheSnapshot,
+    setWorkspaceSessions,
+  } = useWorkspaceSessionCache();
+
+  const ensureWorkspaceSessions = useCallback(async (
+    workspaceId: string,
+    options?: SessionLatencyFlowOptions,
+  ): Promise<WorkspaceSession[]> => {
+    const blockedReason = getWorkspaceRuntimeBlockReason(workspaceId);
+    if (blockedReason) {
+      throw new Error(blockedReason);
+    }
+
+    const runtimeUrl = workspaceUsesResolvedRemoteRuntime(workspaceId)
+      ? useHarnessConnectionStore.getState().runtimeUrl
+      : await ensureRuntimeReadyForSessions(localRuntime);
+    const requestHeaders = getLatencyFlowRequestHeaders(options?.latencyFlowId);
+    const cacheSnapshot = getWorkspaceSessionCacheSnapshot(workspaceId);
+    if (options?.measurementOperationId) {
+      recordMeasurementMetric({
+        type: "cache",
+        category: "session.list",
+        operationId: options.measurementOperationId,
+        decision: cacheSnapshot.dataUpdatedAt
+          ? cacheSnapshot.isInvalidated ? "stale" : "hit"
+          : "miss",
+        source: "react_query",
+      });
+    }
+    if (
+      cacheSnapshot.sessions
+      && cacheSnapshot.dataUpdatedAt
+      && !cacheSnapshot.isInvalidated
+    ) {
+      return filterReplacedSessionTombstones(
+        workspaceId,
+        cacheSnapshot.sessions,
+      ) ?? [];
+    }
+
+    // Do not join a possibly hung automatic query for the same selected
+    // workspace. Session selection is the owning workflow and must either
+    // complete or fail independently so the shell cannot stay on
+    // "Preparing workspace" behind an unrelated header/sidebar fetch.
+    const loadedSessions = await fetchWorkspaceSessions(
+      runtimeUrl,
+      workspaceId,
+      {
+        requestHeaders,
+        measurementOperationId: options?.measurementOperationId,
+        ssh,
+        cloudClient,
+      },
+    );
+    const sessions = filterReplacedSessionTombstones(
+      workspaceId,
+      loadedSessions,
+    ) ?? [];
+    setWorkspaceSessions(workspaceId, () => sessions);
+    return sessions;
+  }, [
+    getWorkspaceRuntimeBlockReason,
+    getWorkspaceSessionCacheSnapshot,
+    localRuntime,
+    setWorkspaceSessions,
+    ssh,
+    cloudClient,
+  ]);
+
+  return { ensureWorkspaceSessions };
+}
+
+function workspaceUsesResolvedRemoteRuntime(workspaceId: string): boolean {
+  return parseCloudWorkspaceSyntheticId(workspaceId) !== null
+    || parseTargetWorkspaceSyntheticId(workspaceId) !== null;
+}

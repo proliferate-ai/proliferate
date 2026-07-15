@@ -2,7 +2,7 @@ import {
   ANONYMOUS_TELEMETRY_SCHEMA_VERSION,
   type AnonymousTelemetryPersistedState,
   createDefaultAnonymousTelemetryPersistedState,
-} from "@/lib/domain/telemetry/anonymous-events";
+} from "@proliferate/product-client/internal/lib/domain/telemetry/anonymous-events";
 import { getAppVersion } from "@/lib/access/tauri/updater";
 import {
   type AnonymousTelemetryBootstrapRecord,

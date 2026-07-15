@@ -1,0 +1,337 @@
+import type {
+  ReviewKind,
+  ReviewPersonaRequest,
+  StartCodeReviewRequest,
+  StartPlanReviewRequest,
+} from "@anyharness/sdk";
+import { REVIEW_DEFAULT_MODE_ID_BY_AGENT_KIND } from "#product/config/review-session-mode-defaults";
+import { listConfiguredSessionControlValues } from "#product/lib/domain/chat/session-controls/session-mode-control";
+import {
+  findReviewPersonaTemplateForReviewer,
+  isBuiltInReviewPersonaId,
+  listReviewPersonaTemplates,
+  type ReviewPersonaTemplate,
+} from "#product/lib/domain/reviews/review-personas";
+
+export const DEFAULT_REVIEW_MAX_ROUNDS = 2;
+export const MAX_REVIEWERS_PER_RUN = 4;
+export const MAX_REVIEW_ROUNDS = 10;
+
+export interface ReviewSetupReviewerDraft {
+  id: string;
+  label: string;
+  prompt: string;
+  agentKind: string;
+  modelId: string;
+  modeId: string;
+}
+
+export interface ReviewSetupDraft {
+  kind: ReviewKind;
+  maxRounds: number;
+  autoIterate: boolean;
+  reviewers: ReviewSetupReviewerDraft[];
+}
+
+export type StoredReviewKindReviewers =
+  | { mode: "inherit" }
+  | { mode: "custom"; items: ReviewSetupReviewerDraft[] };
+
+export interface StoredReviewKindDefaults {
+  maxRounds: number;
+  autoIterate: boolean;
+  agentKind: string;
+  modelId: string;
+  modeId: string;
+  reviewers: StoredReviewKindReviewers;
+}
+
+export type StoredReviewDefaultsByKind = Record<ReviewKind, StoredReviewKindDefaults | null>;
+
+export interface ReviewSessionDefaults {
+  agentKind: string;
+  modelId: string | null;
+  modeId: string | null;
+}
+
+export function createStoredReviewKindDefaults(): StoredReviewKindDefaults {
+  return {
+    maxRounds: DEFAULT_REVIEW_MAX_ROUNDS,
+    autoIterate: true,
+    agentKind: "",
+    modelId: "",
+    modeId: "",
+    reviewers: { mode: "inherit" },
+  };
+}
+
+export function createReviewSetupReviewerDraft(args: {
+  kind: ReviewKind;
+  sessionDefaults: ReviewSessionDefaults;
+  existingReviewers: ReviewSetupReviewerDraft[];
+  personalityTemplates?: ReviewPersonaTemplate[];
+  templateId?: string | null;
+}): ReviewSetupReviewerDraft | null {
+  const templates = args.personalityTemplates ?? listReviewPersonaTemplates(args.kind);
+  const template = templates.find(
+    (candidate) => candidate.id === args.templateId,
+  ) ?? templates[0] ?? null;
+  if (!template) {
+    return null;
+  }
+
+  return {
+    id: nextReviewReviewerId(template.id, args.existingReviewers),
+    label: template.label,
+    prompt: template.prompt,
+    agentKind: args.sessionDefaults.agentKind,
+    modelId: args.sessionDefaults.modelId ?? "",
+    modeId: resolveReviewExecutionModeIdForAgent(
+      args.sessionDefaults.agentKind,
+      args.sessionDefaults.modeId,
+    ),
+  };
+}
+
+export function nextReviewReviewerId(
+  baseId: string,
+  reviewers: ReviewSetupReviewerDraft[],
+  ignoredIndex: number | null = null,
+): string {
+  const used = new Set(
+    reviewers.flatMap((reviewer, index) => (
+      ignoredIndex === index ? [] : [reviewer.id]
+    )),
+  );
+  if (!used.has(baseId)) {
+    return baseId;
+  }
+  for (let index = 2; index <= MAX_REVIEWERS_PER_RUN + 1; index += 1) {
+    const candidate = `${baseId}-${index}`;
+    if (!used.has(candidate)) {
+      return candidate;
+    }
+  }
+  return `${baseId}-${Date.now()}`;
+}
+
+export function createReviewSetupDraft(args: {
+  kind: ReviewKind;
+  sessionDefaults: ReviewSessionDefaults;
+  storedDefaults: StoredReviewKindDefaults | null | undefined;
+  personalityTemplates?: ReviewPersonaTemplate[];
+}): ReviewSetupDraft {
+  const stored = args.storedDefaults;
+  const templates = args.personalityTemplates ?? listReviewPersonaTemplates(args.kind);
+  const defaultTemplates = templates.filter((template) =>
+    isBuiltInReviewPersonaId(args.kind, template.id)
+  );
+  const sourceReviewers = resolveStoredReviewers(
+    stored,
+    defaultTemplates.length ? defaultTemplates : templates,
+  );
+  const defaultAgentKind = stored?.agentKind || args.sessionDefaults.agentKind;
+  const defaultModelId = stored?.modelId || args.sessionDefaults.modelId || "";
+  const defaultModeId = stored?.modeId || args.sessionDefaults.modeId || null;
+
+  return {
+    kind: args.kind,
+    maxRounds: clampRounds(stored?.maxRounds ?? DEFAULT_REVIEW_MAX_ROUNDS),
+    autoIterate: stored?.autoIterate ?? true,
+    reviewers: sourceReviewers
+      .slice(0, MAX_REVIEWERS_PER_RUN)
+      .map((reviewer) => {
+        const template = findReviewPersonaTemplateForReviewer(templates, reviewer.id);
+        const reviewerAgentKind = reviewer.agentKind || defaultAgentKind;
+        return {
+          ...reviewer,
+          label: template?.label ?? reviewer.label,
+          prompt: template?.prompt ?? reviewer.prompt,
+          agentKind: reviewerAgentKind,
+          modelId: reviewer.modelId || defaultModelId,
+          modeId: resolveReviewExecutionModeIdForAgent(
+            reviewerAgentKind,
+            reviewer.modeId || defaultModeId,
+          ),
+        };
+      }),
+  };
+}
+
+export function resolveReviewDefaultReviewerRows(args: {
+  kind: ReviewKind;
+  defaults: StoredReviewKindDefaults;
+  personalityTemplates: ReviewPersonaTemplate[];
+}): ReviewSetupReviewerDraft[] {
+  if (args.defaults.reviewers.mode === "custom") {
+    return args.defaults.reviewers.items;
+  }
+
+  const builtInTemplates = args.personalityTemplates.filter((template) =>
+    isBuiltInReviewPersonaId(args.kind, template.id)
+  );
+  const sourceTemplates = builtInTemplates.length > 0
+    ? builtInTemplates
+    : args.personalityTemplates;
+  return sourceTemplates.slice(0, 2).map((template) => ({
+    id: template.id,
+    label: template.label,
+    prompt: template.prompt,
+    agentKind: args.defaults.agentKind,
+    modelId: args.defaults.modelId,
+    modeId: args.defaults.modeId,
+  }));
+}
+
+export function nextAvailableReviewPersonaTemplate(
+  personalityTemplates: ReviewPersonaTemplate[],
+  reviewers: ReviewSetupReviewerDraft[],
+): ReviewPersonaTemplate | null {
+  return personalityTemplates.find((template) => (
+    !reviewers.some((reviewer) => (
+      findReviewPersonaTemplateForReviewer([template], reviewer.id) !== null
+    ))
+  )) ?? personalityTemplates[0] ?? null;
+}
+
+export function reviewerMatchesReviewPersonaTemplate(
+  reviewer: ReviewSetupReviewerDraft,
+  template: ReviewPersonaTemplate,
+  reviewers: ReviewSetupReviewerDraft[],
+  reviewerIndex: number,
+): boolean {
+  return nextReviewReviewerId(template.id, reviewers, reviewerIndex) === reviewer.id
+    && reviewer.label === template.label
+    && reviewer.prompt === template.prompt;
+}
+
+export function reviewerPersonalityLabel(
+  personalityTemplates: ReviewPersonaTemplate[],
+  reviewer: ReviewSetupReviewerDraft,
+): string {
+  const exact = personalityTemplates.find((template) =>
+    findReviewPersonaTemplateForReviewer([template], reviewer.id)
+    && reviewer.label === template.label
+    && reviewer.prompt === template.prompt
+  );
+  if (exact) {
+    return exact.label;
+  }
+  const base = findReviewPersonaTemplateForReviewer(personalityTemplates, reviewer.id);
+  return base ? `${base.label} edited` : reviewer.label || "Choose personality";
+}
+
+function resolveStoredReviewers(
+  stored: StoredReviewKindDefaults | null | undefined,
+  fallbackTemplates: ReviewPersonaTemplate[],
+): ReviewSetupReviewerDraft[] {
+  if (stored?.reviewers.mode === "custom") {
+    return stored.reviewers.items;
+  }
+  return fallbackTemplates.map((template) => ({
+    id: template.id,
+    label: template.label,
+    prompt: template.prompt,
+    agentKind: "",
+    modelId: "",
+    modeId: "",
+  }));
+}
+
+export function resolveReviewExecutionModeIdForAgent(
+  agentKind: string,
+  preferredModeId: string | null | undefined,
+): string {
+  const values = listConfiguredSessionControlValues(agentKind, "mode");
+  const configuredDefault = REVIEW_DEFAULT_MODE_ID_BY_AGENT_KIND[agentKind];
+  return values.find((value) => value.value === configuredDefault)?.value
+    ?? values.find((value) => value.value === preferredModeId)?.value
+    ?? values.find((value) => value.value !== "plan")?.value
+    ?? values.find((value) => value.isDefault)?.value
+    ?? values[0]?.value
+    ?? "";
+}
+
+export function buildReviewRequest(
+  draft: ReviewSetupDraft,
+  parentSessionId: string,
+): {
+  request: StartPlanReviewRequest | StartCodeReviewRequest | null;
+  error: string | null;
+} {
+  const reviewersToRun = draft.reviewers;
+  if (reviewersToRun.length === 0) {
+    return { request: null, error: "Add at least one reviewer." };
+  }
+  if (reviewersToRun.length > MAX_REVIEWERS_PER_RUN) {
+    return { request: null, error: `Use up to ${MAX_REVIEWERS_PER_RUN} reviewers.` };
+  }
+
+  const reviewers: ReviewPersonaRequest[] = [];
+  for (const reviewer of reviewersToRun) {
+    const label = reviewer.label.trim();
+    const prompt = reviewer.prompt.trim();
+    const agentKind = reviewer.agentKind.trim();
+    const modelId = reviewer.modelId.trim();
+    const modeId = reviewer.modeId.trim();
+    if (!label || !prompt) {
+      return { request: null, error: "Every reviewer needs a label and prompt." };
+    }
+    if (!agentKind || !modelId || !modeId) {
+      return {
+        request: null,
+        error: "Every reviewer needs a resolved agent and model.",
+      };
+    }
+    reviewers.push({
+      personaId: reviewer.id,
+      label,
+      prompt,
+      agentKind,
+      modelId,
+      modeId,
+    });
+  }
+
+  return {
+    request: {
+      parentSessionId,
+      maxRounds: clampRounds(draft.maxRounds),
+      autoIterate: draft.autoIterate,
+      reviewers,
+    },
+    error: null,
+  };
+}
+
+export function draftToStoredReviewDefaults(
+  draft: ReviewSetupDraft,
+  personalityTemplates: ReviewPersonaTemplate[] = listReviewPersonaTemplates(draft.kind),
+): StoredReviewKindDefaults {
+  const firstReviewer = draft.reviewers[0] ?? null;
+  return {
+    maxRounds: clampRounds(draft.maxRounds),
+    autoIterate: draft.autoIterate,
+    agentKind: firstReviewer?.agentKind.trim() ?? "",
+    modelId: firstReviewer?.modelId.trim() ?? "",
+    modeId: firstReviewer?.modeId.trim() ?? "",
+    reviewers: {
+      mode: "custom",
+      items: draft.reviewers.slice(0, MAX_REVIEWERS_PER_RUN).map((reviewer) => {
+        const template = findReviewPersonaTemplateForReviewer(personalityTemplates, reviewer.id);
+        return {
+          id: reviewer.id,
+          label: (template?.label ?? reviewer.label).trim(),
+          prompt: (template?.prompt ?? reviewer.prompt).trim(),
+          agentKind: reviewer.agentKind.trim(),
+          modelId: reviewer.modelId.trim(),
+          modeId: reviewer.modeId.trim(),
+        };
+      }),
+    },
+  };
+}
+
+export function clampRounds(value: number): number {
+  return Math.min(MAX_REVIEW_ROUNDS, Math.max(1, Math.round(value)));
+}

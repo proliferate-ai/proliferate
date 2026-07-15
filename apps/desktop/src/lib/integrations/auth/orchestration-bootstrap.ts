@@ -10,12 +10,13 @@ import {
 import {
   anonymousAuthState,
   bootstrappingAuthStatePatch,
-} from "@/lib/domain/auth/auth-state-mapping";
-import { isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
+} from "@proliferate/product-client/internal/lib/domain/auth/auth-state-mapping";
+import { isDevAuthBypassed } from "@proliferate/product-client/internal/lib/domain/auth/auth-mode";
 import {
   isPendingDesktopAuthExpired,
 } from "@/lib/integrations/auth/proliferate-auth";
-import { checkControlPlaneReachable } from "@/lib/access/cloud/health";
+import { checkControlPlaneReachable } from "@proliferate/product-client/internal/lib/access/cloud/health";
+import { getProliferateApiBaseUrl } from "@/lib/infra/proliferate-api";
 import {
   elapsedStartupMs,
   logStartupDebug,
@@ -25,8 +26,8 @@ import {
 import {
   applyPersistedAuthenticatedAuthState,
   applyVolatileAuthenticatedAuthState,
-} from "@/lib/workflows/auth/apply-auth-state";
-import { storedSessionWithValidatedUser } from "@/lib/domain/auth/session-mapping";
+} from "@proliferate/product-client/internal/lib/workflows/auth/apply-auth-state";
+import { storedSessionWithValidatedUser } from "@proliferate/product-client/internal/lib/domain/auth/session-mapping";
 import { handleDesktopCallbackUrl } from "./orchestration-callback";
 import {
   applyAnonymousState,
@@ -54,7 +55,7 @@ export async function bootstrapAuth(deps: AuthOrchestrationDeps): Promise<void> 
   }
 
   const storedSession = await getStoredAuthSession();
-  const controlPlaneReachable = await checkControlPlaneReachable();
+  const controlPlaneReachable = await checkControlPlaneReachable(getProliferateApiBaseUrl());
   if (!controlPlaneReachable) {
     await clearStoredPendingAuthSession();
     deps.clearSessionRuntimeState();

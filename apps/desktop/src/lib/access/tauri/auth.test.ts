@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { StoredAuthSession } from "@/lib/domain/auth/stored-auth-session"
+import type { StoredAuthSession } from "@proliferate/product-client/internal/lib/domain/auth/stored-auth-session"
 
 const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),

@@ -2,3 +2,15 @@
 #
 # Format:
 # RULE_ID path count reason
+
+# WDU slice 04: sample diff/tool-call DISPLAY-PATH strings inside playground
+# fixtures and dev-only playground components. These are string-literal example
+# paths rendered in the diff viewer, NOT import specifiers — the text-based
+# boundary scanner matches the literal "apps/desktop/" substring. Several are
+# asserted verbatim by diff-display tests, so they are pinned here rather than
+# rewritten. Retire when the playground fixtures are refreshed post-move.
+PRODUCT_CLIENT_FORBIDDEN_IMPORT apps/packages/product-client/src/lib/domain/chat/__fixtures__/playground/git-diff-fixtures.ts 7 sample diff display-path strings, not imports
+PRODUCT_CLIENT_FORBIDDEN_IMPORT apps/packages/product-client/src/components/playground/transcript/PlaygroundToolTranscript.tsx 4 sample tool-call path strings in a dev playground, not imports
+PRODUCT_CLIENT_FORBIDDEN_IMPORT apps/packages/product-client/src/lib/domain/chat/__fixtures__/playground/plan-transcript-fixtures.ts 3 sample display-path strings, not imports
+PRODUCT_CLIENT_FORBIDDEN_IMPORT apps/packages/product-client/src/lib/domain/chat/__fixtures__/playground/subagent-tool-transcript-fixtures.ts 2 sample display-path strings, not imports
+PRODUCT_CLIENT_FORBIDDEN_IMPORT apps/packages/product-client/src/components/playground/composer-slots/PlaygroundPanelSlotFixtures.tsx 1 sample edit-title path string in a dev playground, not an import

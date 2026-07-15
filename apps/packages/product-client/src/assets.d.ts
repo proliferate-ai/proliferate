@@ -1,11 +1,12 @@
-// Ambient module declarations for the qualification build canary's resource
-// imports. Plain `tsc` cannot transform `?raw`, asset-URL, CSS, or font imports,
-// so these declarations keep the canary's declaration-level build passing while
-// tsc emits the import specifiers verbatim. The Vite host builds (Desktop and the
-// minimal browser host) resolve and emit the real resource URLs at build time.
+// Ambient module declarations for the moved product tree's resource imports.
+// Plain `tsc` cannot transform `?raw`, asset-URL, CSS, or font imports, so these
+// declarations keep the declaration-level build passing while tsc emits the
+// import specifiers verbatim. The Vite host builds (Desktop and the minimal
+// browser host) resolve and emit the real resource URLs at build time.
 //
-// This mirrors apps/desktop/src/assets.d.ts; when the mechanical move lands, the
-// package keeps this file and the Desktop copy is retired per the move ledger.
+// Split pair: apps/desktop/src/assets.d.ts remains as the HOST part (VITE_* env
+// declarations + the asset shapes retained host files need); this file is the
+// product part. They are deliberately distinct, not a forwarding mirror.
 
 declare module "*.png" {
   const src: string;

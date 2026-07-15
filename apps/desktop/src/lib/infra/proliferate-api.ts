@@ -1,4 +1,4 @@
-import { OFFICIAL_HOSTED_API_ORIGINS } from "@/config/capabilities";
+import { OFFICIAL_HOSTED_API_ORIGINS } from "@proliferate/product-client/internal/config/capabilities";
 import {
   type DesktopAppConfig,
   getDesktopAppConfig,

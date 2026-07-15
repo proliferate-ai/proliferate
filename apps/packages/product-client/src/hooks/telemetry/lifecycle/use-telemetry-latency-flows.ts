@@ -1,0 +1,38 @@
+import { useEffect } from "react";
+import { useActiveSessionSurfaceSnapshot } from "#product/hooks/chat/derived/use-active-session-transcript-state";
+import { useChatSurfaceState } from "#product/hooks/chat/derived/use-chat-surface-state";
+import {
+  finishLatencyFlow,
+  listActiveLatencyFlows,
+} from "#product/lib/infra/measurement/measurement-port";
+import { collectTelemetryLatencyFlowCompletions } from "#product/lib/domain/telemetry/latency-flow-completion";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+
+// Owns finishing telemetry latency flows when the visible app state catches up.
+// Does not own latency-flow stage planning; that pure decision lives in domain telemetry.
+export function useTelemetryLatencyFlows() {
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const { mode } = useChatSurfaceState();
+  const {
+    activeSessionId,
+    sessionViewState,
+  } = useActiveSessionSurfaceSnapshot();
+
+  useEffect(() => {
+    const completions = collectTelemetryLatencyFlowCompletions({
+      activeFlows: listActiveLatencyFlows(),
+      selectedWorkspaceId,
+      activeSessionId,
+      sessionViewState,
+      modeKind: mode.kind,
+    });
+    for (const completion of completions) {
+      finishLatencyFlow(completion.flowId, completion.stage);
+    }
+  }, [
+    activeSessionId,
+    mode.kind,
+    selectedWorkspaceId,
+    sessionViewState,
+  ]);
+}

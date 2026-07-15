@@ -1,0 +1,429 @@
+import { describe, expect, it } from "vitest";
+import {
+  buildPendingWorkspaceUiKey,
+  buildSubmittingPendingWorkspaceEntry,
+} from "#product/lib/domain/workspaces/creation/pending-entry";
+import { buildPendingSidebarProjection } from "#product/lib/domain/workspaces/sidebar/pending-sidebar-projection";
+import {
+  buildGroups,
+  makeCloudLogicalWorkspace,
+  makeLocalLogicalWorkspace,
+  makeRepoRoot,
+} from "#product/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
+
+describe("pending sidebar projection", () => {
+  it("projects a pending worktree into its repo group before materialization", () => {
+    const pendingWorkspaceEntry = buildSubmittingPendingWorkspaceEntry({
+      attemptId: "attempt-1",
+      selectedWorkspaceId: null,
+      source: "worktree-created",
+      displayName: "gulch",
+      repoLabel: "landing",
+      baseBranchName: "main",
+      request: {
+        kind: "worktree",
+        input: {
+          repoRootId: "landing-root",
+          workspaceName: "gulch",
+          branchName: "gulch",
+          baseBranch: "main",
+          targetPath: "/tmp/landing/gulch",
+        },
+      },
+    });
+    const pendingWorkspaceUiKey = buildPendingWorkspaceUiKey(pendingWorkspaceEntry);
+    const groups = buildGroups({
+      logicalWorkspaces: [],
+      repoRoots: [
+        makeRepoRoot({
+          id: "landing-root",
+          repoName: "landing",
+          sourceRoot: "/tmp/landing",
+        }),
+      ],
+      pendingWorkspaceEntry,
+      selectedLogicalWorkspaceId: pendingWorkspaceUiKey,
+    });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.sourceRoot).toBe("/tmp/landing");
+    expect(groups[0]?.items).toHaveLength(1);
+    expect(groups[0]?.items[0]).toMatchObject({
+      id: pendingWorkspaceUiKey,
+      name: "gulch",
+      defaultName: "gulch",
+      active: true,
+      variant: "worktree",
+      localWorkspaceId: null,
+      renameSupported: false,
+      lastInteracted: new Date(pendingWorkspaceEntry.createdAt).toISOString(),
+    });
+  });
+
+  it("projects a first local workspace into its existing repo-root group", () => {
+    const pendingWorkspaceEntry = buildSubmittingPendingWorkspaceEntry({
+      attemptId: "attempt-local-1",
+      selectedWorkspaceId: null,
+      source: "local-created",
+      displayName: "landing",
+      request: {
+        kind: "local",
+        sourceRoot: "/tmp/landing/",
+      },
+    });
+    const pendingWorkspaceUiKey = buildPendingWorkspaceUiKey(pendingWorkspaceEntry);
+    const repoRoot = makeRepoRoot({
+      id: "landing-root",
+      repoName: "landing",
+      sourceRoot: "/tmp/landing",
+    });
+
+    const groups = buildGroups({
+      logicalWorkspaces: [],
+      repoRoots: [repoRoot],
+      pendingWorkspaceEntry,
+      selectedLogicalWorkspaceId: pendingWorkspaceUiKey,
+    });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({
+      sourceRoot: "/tmp/landing",
+      name: "landing",
+      repoRootId: "landing-root",
+    });
+    expect(groups[0]?.items).toHaveLength(1);
+    expect(groups[0]?.items[0]).toMatchObject({
+      id: pendingWorkspaceUiKey,
+      name: "landing",
+      active: true,
+      variant: "local",
+    });
+  });
+
+  it("keeps a materializing first local workspace in one repo group", () => {
+    const pendingWorkspaceEntry = {
+      ...buildSubmittingPendingWorkspaceEntry({
+        attemptId: "attempt-local-1",
+        selectedWorkspaceId: null,
+        source: "local-created",
+        displayName: "landing",
+        request: {
+          kind: "local" as const,
+          sourceRoot: "/tmp/landing",
+        },
+      }),
+      workspaceId: "workspace-real",
+    };
+    const repoRoot = makeRepoRoot({
+      id: "landing-root",
+      repoName: "landing",
+      sourceRoot: "/tmp/landing",
+    });
+
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "real-logical",
+          workspaceId: "workspace-real",
+          repoKey: "github:proliferate-ai:landing",
+          repoName: "landing",
+        }),
+      ],
+      repoRoots: [repoRoot],
+      pendingWorkspaceEntry,
+      selectedWorkspaceId: "workspace-real",
+      selectedLogicalWorkspaceId: "real-logical",
+    });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.repoRootId).toBe("landing-root");
+    expect(groups[0]?.allLogicalWorkspaceIds).toEqual(["real-logical"]);
+    expect(groups[0]?.items).toHaveLength(1);
+    expect(groups[0]?.items[0]).toMatchObject({
+      id: "real-logical",
+      name: "landing",
+      active: true,
+      variant: "local",
+    });
+  });
+
+  it("counts pending creation as activity in the sort recency", () => {
+    const pendingWorkspaceEntry = buildSubmittingPendingWorkspaceEntry({
+      attemptId: "attempt-1",
+      selectedWorkspaceId: null,
+      source: "worktree-created",
+      displayName: "gulch",
+      repoLabel: "landing",
+      baseBranchName: "main",
+      request: {
+        kind: "worktree",
+        input: {
+          repoRootId: "landing-root",
+          workspaceName: "gulch",
+          branchName: "gulch",
+          baseBranch: "main",
+          targetPath: "/tmp/landing/gulch",
+        },
+      },
+    });
+    const repoRoot = makeRepoRoot({
+      id: "landing-root",
+      repoName: "landing",
+      sourceRoot: "/tmp/landing",
+    });
+
+    const projection = buildPendingSidebarProjection({
+      entry: pendingWorkspaceEntry,
+      repoRootsById: new Map([[repoRoot.id, repoRoot]]),
+      selectedLogicalWorkspaceId: null,
+      selectedWorkspaceId: null,
+      activeSessionTitle: null,
+    });
+
+    const createdAt = new Date(pendingWorkspaceEntry.createdAt).toISOString();
+    expect(projection?.sortRecency).toEqual({
+      activityAt: createdAt,
+      recordUpdatedAt: createdAt,
+      sortAt: createdAt,
+      displayAt: null,
+    });
+  });
+
+  it("sorts a pending workspace in a new repo group above older-activity and no-activity groups", () => {
+    const pendingWorkspaceEntry = {
+      ...buildSubmittingPendingWorkspaceEntry({
+        attemptId: "attempt-1",
+        selectedWorkspaceId: null,
+        source: "worktree-created",
+        displayName: "gulch",
+        repoLabel: "landing",
+        baseBranchName: "main",
+        request: {
+          kind: "worktree" as const,
+          input: {
+            repoRootId: "landing-root",
+            workspaceName: "gulch",
+            branchName: "gulch",
+            baseBranch: "main",
+            targetPath: "/tmp/landing/gulch",
+          },
+        },
+      }),
+      createdAt: Date.parse("2026-04-13T12:00:00.000Z"),
+    };
+
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "repo-a-workspace",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+        }),
+        makeLocalLogicalWorkspace({
+          id: "repo-b-workspace",
+          repoKey: "/tmp/repo-b",
+          repoName: "repo-b",
+        }),
+      ],
+      repoRoots: [
+        makeRepoRoot({
+          id: "landing-root",
+          repoName: "landing",
+          sourceRoot: "/tmp/landing",
+        }),
+      ],
+      pendingWorkspaceEntry,
+      workspaceLastInteracted: {
+        "repo-a-workspace": "2026-04-13T11:00:00.000Z",
+      },
+    });
+
+    expect(groups.map((group) => group.name)).toEqual(["landing", "repo-a", "repo-b"]);
+  });
+
+  it("keeps the group order stable across the pending-to-materialized handoff", () => {
+    const pendingWorkspaceEntry = {
+      ...buildSubmittingPendingWorkspaceEntry({
+        attemptId: "attempt-1",
+        selectedWorkspaceId: null,
+        source: "worktree-created",
+        displayName: "gulch",
+        repoLabel: "landing",
+        baseBranchName: "main",
+        request: {
+          kind: "worktree" as const,
+          input: {
+            repoRootId: "landing-root",
+            workspaceName: "gulch",
+            branchName: "gulch",
+            baseBranch: "main",
+            targetPath: "/tmp/landing/gulch",
+          },
+        },
+      }),
+      createdAt: Date.parse("2026-04-13T12:00:00.000Z"),
+    };
+    const otherLogicalWorkspaces = [
+      makeLocalLogicalWorkspace({
+        id: "repo-a-workspace",
+        repoKey: "/tmp/repo-a",
+        repoName: "repo-a",
+      }),
+      makeLocalLogicalWorkspace({
+        id: "repo-b-workspace",
+        repoKey: "/tmp/repo-b",
+        repoName: "repo-b",
+      }),
+    ];
+    const repoRoots = [
+      makeRepoRoot({
+        id: "landing-root",
+        repoName: "landing",
+        sourceRoot: "/tmp/landing",
+      }),
+    ];
+
+    const pendingGroups = buildGroups({
+      logicalWorkspaces: otherLogicalWorkspaces,
+      repoRoots,
+      pendingWorkspaceEntry,
+      workspaceLastInteracted: {
+        "repo-a-workspace": "2026-04-13T11:00:00.000Z",
+      },
+    });
+
+    const materializedGroups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "landing-gulch",
+          workspaceId: "workspace-gulch",
+          repoKey: "github:proliferate-ai:landing",
+          repoName: "landing",
+          kind: "worktree",
+          branch: "gulch",
+        }),
+        ...otherLogicalWorkspaces,
+      ],
+      repoRoots,
+      pendingWorkspaceEntry: null,
+      workspaceLastInteracted: {
+        "workspace-gulch": "2026-04-13T12:00:01.000Z",
+        "repo-a-workspace": "2026-04-13T11:00:00.000Z",
+      },
+    });
+
+    expect(pendingGroups.map((group) => group.name)).toEqual(["landing", "repo-a", "repo-b"]);
+    expect(materializedGroups.map((group) => group.name))
+      .toEqual(pendingGroups.map((group) => group.name));
+  });
+
+  it("uses the real logical id for a pending worktree during materialization handoff", () => {
+    const pendingWorkspaceEntry = {
+      ...buildSubmittingPendingWorkspaceEntry({
+        attemptId: "attempt-1",
+        selectedWorkspaceId: null,
+        source: "worktree-created",
+        displayName: "papaya",
+        repoLabel: "landing",
+        baseBranchName: "main",
+        request: {
+          kind: "worktree" as const,
+          input: {
+            repoRootId: "landing-root",
+            workspaceName: "papaya",
+            branchName: "papaya",
+            baseBranch: "main",
+            targetPath: "/tmp/landing/papaya",
+          },
+        },
+      }),
+      workspaceId: "workspace-real",
+    };
+
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "real-logical",
+          workspaceId: "workspace-real",
+          repoKey: "github:proliferate-ai:landing",
+          repoName: "landing",
+          kind: "worktree",
+          branch: "papaya",
+        }),
+      ],
+      repoRoots: [
+        makeRepoRoot({
+          id: "landing-root",
+          repoName: "landing",
+          sourceRoot: "/tmp/landing",
+        }),
+      ],
+      pendingWorkspaceEntry,
+      selectedWorkspaceId: "workspace-real",
+      selectedLogicalWorkspaceId: "real-logical",
+    });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.items).toHaveLength(1);
+    expect(groups[0]?.allLogicalWorkspaceIds).toEqual(["real-logical"]);
+    expect(groups[0]?.items[0]).toMatchObject({
+      id: "real-logical",
+      name: "papaya",
+      defaultName: "papaya",
+      active: true,
+      variant: "worktree",
+      localWorkspaceId: null,
+      renameSupported: false,
+    });
+  });
+
+  it("keeps a cloud-created select-existing pending row cloud-shaped during handoff", () => {
+    const pendingWorkspaceEntry = {
+      ...buildSubmittingPendingWorkspaceEntry({
+        attemptId: "attempt-1",
+        selectedWorkspaceId: null,
+        source: "cloud-created",
+        displayName: "feature-branch",
+        repoLabel: "proliferate-ai/proliferate",
+        baseBranchName: "main",
+        request: {
+          kind: "select-existing" as const,
+          workspaceId: "cloud:cloud-1",
+        },
+      }),
+      stage: "awaiting-cloud-ready" as const,
+      workspaceId: "cloud:cloud-1",
+    };
+
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeCloudLogicalWorkspace({
+          id: "logical-cloud",
+          cloudWorkspaceId: "cloud-1",
+          repoKey: "github:proliferate-ai:proliferate",
+          repoName: "proliferate",
+          branch: "feature-branch",
+        }),
+      ],
+      pendingWorkspaceEntry,
+      selectedWorkspaceId: "cloud:cloud-1",
+      selectedLogicalWorkspaceId: null,
+    });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.sourceRoot).toBe("github:proliferate-ai:proliferate");
+    expect(groups[0]?.items).toHaveLength(1);
+    expect(groups[0]?.allLogicalWorkspaceIds).toEqual([
+      buildPendingWorkspaceUiKey(pendingWorkspaceEntry),
+    ]);
+    expect(groups[0]?.items[0]).toMatchObject({
+      id: buildPendingWorkspaceUiKey(pendingWorkspaceEntry),
+      name: "feature-branch",
+      active: true,
+      variant: "cloud",
+      cloudWorkspaceId: "cloud-1",
+      localWorkspaceId: null,
+      renameSupported: false,
+    });
+  });
+});

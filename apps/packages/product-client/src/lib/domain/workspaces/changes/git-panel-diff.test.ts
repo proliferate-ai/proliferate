@@ -1,0 +1,173 @@
+import type { GitChangedFile, GitDiffFile } from "@anyharness/sdk";
+import { describe, expect, it } from "vitest";
+import {
+  buildGitPanelFiles,
+  buildGitPanelSections,
+  gitPanelRuntimeBlockWorkspaceId,
+  resolveGitPanelBaseRef,
+} from "#product/lib/domain/workspaces/changes/git-panel-diff";
+
+function changedFile(overrides: Partial<GitChangedFile>): GitChangedFile {
+  return {
+    path: "file.ts",
+    oldPath: null,
+    status: "modified",
+    additions: 1,
+    deletions: 0,
+    binary: false,
+    includedState: "excluded",
+    ...overrides,
+  };
+}
+
+function branchFile(overrides: Partial<GitDiffFile>): GitDiffFile {
+  return {
+    path: "branch.ts",
+    oldPath: null,
+    status: "modified",
+    additions: 1,
+    deletions: 0,
+    binary: false,
+    ...overrides,
+  };
+}
+
+describe("git panel diff domain", () => {
+  it("keeps dirty mode filtering compatible while hiding internal worktree paths", () => {
+    const statusFiles = [
+      changedFile({ path: "unstaged.ts", includedState: "excluded" }),
+      changedFile({ path: "partial.ts", includedState: "partial" }),
+      changedFile({ path: "staged.ts", includedState: "included" }),
+      changedFile({ path: ".claude/worktrees/hidden.ts", includedState: "excluded" }),
+    ];
+
+    expect(buildGitPanelFiles({
+      mode: "unstaged",
+      statusFiles,
+      branchFiles: [],
+    }).map((file) => file.path)).toEqual(["unstaged.ts", "partial.ts"]);
+
+    expect(buildGitPanelFiles({
+      mode: "staged",
+      statusFiles,
+      branchFiles: [],
+    }).map((file) => file.path)).toEqual(["partial.ts", "staged.ts"]);
+  });
+
+  it("preserves oldPath for branch rows", () => {
+    const files = buildGitPanelFiles({
+      mode: "branch",
+      statusFiles: [],
+      branchFiles: [
+        branchFile({ path: "new.ts", oldPath: "old.ts", status: "renamed" }),
+        branchFile({ path: "deleted.ts", status: "deleted" }),
+      ],
+    });
+
+    expect(files[0]).toMatchObject({
+      path: "new.ts",
+      oldPath: "old.ts",
+      displayPath: "old.ts -> new.ts",
+    });
+    expect(files[1]).toMatchObject({
+      path: "deleted.ts",
+      status: "deleted",
+    });
+  });
+
+  it("keeps last-turn touched files even when they no longer have a current diff", () => {
+    const sections = buildGitPanelSections({
+      mode: "last_turn",
+      statusFiles: [],
+      branchFiles: [],
+      lastTurnFiles: [
+        {
+          key: ":clean.md:edit",
+          path: "clean.md",
+          oldPath: null,
+          displayPath: "clean.md",
+          operation: "edit",
+          topLevel: true,
+        },
+        {
+          key: ":dirty.md:edit",
+          path: "dirty.md",
+          oldPath: null,
+          displayPath: "dirty.md",
+          operation: "edit",
+          topLevel: true,
+        },
+      ],
+      baseWorktreeFiles: [
+        branchFile({ path: "dirty.md", additions: 2 }),
+      ],
+    });
+
+    expect(sections).toHaveLength(1);
+    expect(sections[0].files.map((file) => file.path)).toEqual([
+      "clean.md",
+      "dirty.md",
+    ]);
+    expect(sections[0].files[0]).toMatchObject({
+      key: ":clean.md:edit",
+      path: "clean.md",
+      displayPath: "clean.md",
+      currentDiff: null,
+      touched: {
+        path: "clean.md",
+        operation: "edit",
+      },
+    });
+    expect(sections[0].files[1]).toMatchObject({
+      key: ":dirty.md:edit",
+      path: "dirty.md",
+      displayPath: "dirty.md",
+      currentDiff: {
+        path: "dirty.md",
+        additions: 2,
+      },
+      touched: {
+        path: "dirty.md",
+        operation: "edit",
+      },
+    });
+  });
+
+  it("resolves branch base-ref precedence", () => {
+    expect(resolveGitPanelBaseRef({
+      repoPreferenceDefaultBranch: " release ",
+      repoRootDefaultBranch: "main",
+      suggestedBaseBranch: "develop",
+    })).toBe("release");
+    expect(resolveGitPanelBaseRef({
+      repoPreferenceDefaultBranch: null,
+      repoRootDefaultBranch: "main",
+      suggestedBaseBranch: "develop",
+    })).toBe("main");
+    expect(resolveGitPanelBaseRef({
+      repoPreferenceDefaultBranch: null,
+      repoRootDefaultBranch: null,
+      suggestedBaseBranch: "develop",
+    })).toBe("develop");
+
+  });
+
+  it("checks runtime blocking against the materialized workspace selection", () => {
+    const blockedCloudWorkspaceId = "cloud:workspace-1";
+    const runtimeBlockReason = (workspaceId: string | null) => (
+      workspaceId === blockedCloudWorkspaceId
+        ? "Cloud workspace is reconnecting."
+        : null
+    );
+
+    expect(runtimeBlockReason(gitPanelRuntimeBlockWorkspaceId(
+      blockedCloudWorkspaceId,
+      "remote:github:owner:repo:main",
+    ))).toBe("Cloud workspace is reconnecting.");
+    expect(gitPanelRuntimeBlockWorkspaceId(
+      blockedCloudWorkspaceId,
+      "remote:github:owner:repo:main",
+    )).toBe(blockedCloudWorkspaceId);
+    expect(gitPanelRuntimeBlockWorkspaceId(null, "remote:github:owner:repo:main")).toBeNull();
+  });
+});

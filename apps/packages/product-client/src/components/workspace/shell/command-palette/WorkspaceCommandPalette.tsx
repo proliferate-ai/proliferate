@@ -1,0 +1,207 @@
+import { useState } from "react";
+import {
+  CommandPaletteGroup,
+  CommandPaletteInput,
+  CommandPaletteItem,
+  CommandPaletteList,
+  CommandPaletteRoot,
+  useCommandPaletteClose,
+} from "@proliferate/ui/primitives/CommandPalette";
+import { FileTreeEntryIcon } from "#product/components/workspace/files/file-icons";
+import { CommandPaletteGlyph } from "@proliferate/ui/command-palette-icons";
+import { useWorkspaceCommandPalette } from "#product/hooks/workspaces/facade/use-workspace-command-palette";
+import type {
+  CommandPaletteEntry,
+  CommandPaletteIconId,
+} from "#product/lib/domain/command-palette/entries";
+
+interface RunCommandState {
+  onRun: () => void;
+  canRun: boolean;
+  disabledReason: string | null;
+  isLaunching: boolean;
+}
+
+interface WorkspaceWebActionState {
+  openCurrentWorkspaceInWeb: () => void;
+  disabledReason: string | null;
+}
+
+interface WorkspaceRemoteAccessActionState {
+  syncToWeb: () => void;
+  syncToWebDisabledReason: string | null;
+}
+
+export interface WorkspaceCommandPaletteProps {
+  open: boolean;
+  onClose: () => void;
+  hasWorkspaceShell: boolean;
+  selectedWorkspaceId: string | null;
+  hasRuntimeReadyWorkspace: boolean;
+  runtimeBlockedReason: string | null;
+  repoSettingsHref: string | null;
+  canOpenRepositorySettings: boolean;
+  repositorySettingsDisabledReason: string | null;
+  runCommand: RunCommandState;
+  workspaceWebActions: WorkspaceWebActionState;
+  workspaceRemoteAccessActions: WorkspaceRemoteAccessActionState;
+  openTerminalPanel: () => boolean;
+  onToggleLeftSidebar: () => void;
+  onToggleRightPanel: () => void;
+}
+
+export function WorkspaceCommandPalette(props: WorkspaceCommandPaletteProps) {
+  if (!props.open) {
+    return null;
+  }
+
+  return <WorkspaceCommandPaletteContent {...props} />;
+}
+
+function WorkspaceCommandPaletteContent({
+  open,
+  onClose,
+  hasWorkspaceShell,
+  selectedWorkspaceId,
+  hasRuntimeReadyWorkspace,
+  runtimeBlockedReason,
+  repoSettingsHref,
+  canOpenRepositorySettings,
+  repositorySettingsDisabledReason,
+  runCommand,
+  workspaceWebActions,
+  workspaceRemoteAccessActions,
+  openTerminalPanel,
+  onToggleLeftSidebar,
+  onToggleRightPanel,
+}: WorkspaceCommandPaletteProps) {
+  const [query, setQuery] = useState("");
+  const state = useWorkspaceCommandPalette({
+    open,
+    query,
+    hasWorkspaceShell,
+    selectedWorkspaceId,
+    hasRuntimeReadyWorkspace,
+    runtimeBlockedReason,
+    repoSettingsHref,
+    canOpenRepositorySettings,
+    repositorySettingsDisabledReason,
+    runCommand,
+    workspaceWebActions,
+    workspaceRemoteAccessActions,
+    openTerminalPanel,
+    onToggleLeftSidebar,
+    onToggleRightPanel,
+  });
+
+  return (
+    <CommandPaletteRoot
+      open={open}
+      onClose={onClose}
+      label="Command palette"
+      className="flex min-h-0 flex-1 flex-col"
+    >
+      <div className="flex shrink-0 items-center border-b border-border-light px-3 py-2.5">
+        <CommandPaletteGlyph
+          name="search"
+          className="mr-2 size-4 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
+        <CommandPaletteInput
+          value={query}
+          onValueChange={setQuery}
+          placeholder="Search files, actions, agents..."
+          className="px-0"
+        />
+      </div>
+      <CommandPaletteList>
+        {state.groups.map((group) => (
+          <CommandPaletteGroup key={group.id} heading={group.label}>
+            {group.entries.map((entry) => (
+              <WorkspaceCommandPaletteRow key={entry.value} entry={entry} />
+            ))}
+          </CommandPaletteGroup>
+        ))}
+        {!state.hasEntries && (
+          <div
+            className="px-3 py-8 text-center text-xs text-muted-foreground"
+            data-telemetry-mask
+          >
+            No results
+          </div>
+        )}
+        {state.fileSearchError && (
+          <div
+            className="px-3 py-2 text-xs text-muted-foreground"
+            data-telemetry-mask
+          >
+            Failed to search files.
+          </div>
+        )}
+      </CommandPaletteList>
+    </CommandPaletteRoot>
+  );
+}
+
+function WorkspaceCommandPaletteRow({ entry }: { entry: CommandPaletteEntry }) {
+  const close = useCommandPaletteClose();
+  const isFile = entry.group === "files";
+
+  return (
+    <CommandPaletteItem
+      value={entry.value}
+      disabled={!!entry.disabledReason}
+      onSelect={() => {
+        if (entry.disabledReason) {
+          return;
+        }
+        close({ restoreFocus: false });
+        window.requestAnimationFrame(() => entry.execute());
+      }}
+    >
+      <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
+        {isFile ? (
+          <FileTreeEntryIcon
+            name={entry.label}
+            path={entry.detail ?? entry.label}
+            kind="file"
+            className="size-4"
+          />
+        ) : (
+          <WorkspaceCommandIcon icon={entry.icon} />
+        )}
+      </span>
+      <span className="flex min-w-0 flex-1 items-center gap-2">
+        <span className="truncate">{entry.label}</span>
+        {entry.detail && (
+          <span
+            className="min-w-0 truncate text-muted-foreground"
+            title={entry.detail}
+            data-telemetry-mask
+          >
+            {entry.detail}
+          </span>
+        )}
+      </span>
+      {entry.disabledReason ? (
+        <span className="shrink-0 truncate text-ui-sm text-muted-foreground">
+          {entry.disabledReason}
+        </span>
+      ) : entry.shortcut ? (
+        <kbd className="ml-auto flex h-4 shrink-0 items-center rounded-md bg-foreground/10 px-1.5 text-ui-sm leading-none text-muted-foreground">
+          {entry.shortcut}
+        </kbd>
+      ) : null}
+    </CommandPaletteItem>
+  );
+}
+
+function WorkspaceCommandIcon({ icon }: { icon?: CommandPaletteIconId }) {
+  return (
+    <CommandPaletteGlyph
+      name={icon ?? "command"}
+      className="size-4"
+      aria-hidden="true"
+    />
+  );
+}

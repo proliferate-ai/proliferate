@@ -1,0 +1,113 @@
+import { useNativeContextMenu } from "#product/hooks/ui/native/use-native-context-menu";
+import type {
+  NativeMenuItem,
+  OpenTarget,
+} from "@proliferate/product-client/host/desktop-bridge";
+
+export function useFileTreeNativeContextMenu({
+  targets,
+  onOpenInProliferate,
+  onOpenTarget,
+  onNewFile,
+  onNewFolder,
+  onRename,
+  onDelete,
+}: {
+  targets: OpenTarget[];
+  onOpenInProliferate: () => void;
+  onOpenTarget: (targetId: string) => void;
+  onNewFile?: () => void;
+  onNewFolder?: () => void;
+  onRename?: () => void;
+  onDelete?: () => void;
+}) {
+  // Product-specific native context menu wiring for the workspace file tree.
+  return useNativeContextMenu(() =>
+    buildFileTreeNativeContextMenuItems({
+      targets,
+      onOpenInProliferate,
+      onOpenTarget,
+      onNewFile,
+      onNewFolder,
+      onRename,
+      onDelete,
+    })
+  );
+}
+
+export function buildFileTreeNativeContextMenuItems({
+  targets,
+  onOpenInProliferate,
+  onOpenTarget,
+  onNewFile,
+  onNewFolder,
+  onRename,
+  onDelete,
+}: {
+  targets: readonly Pick<OpenTarget, "id" | "label">[];
+  onOpenInProliferate: () => void;
+  onOpenTarget: (targetId: string) => void;
+  onNewFile?: () => void;
+  onNewFolder?: () => void;
+  onRename?: () => void;
+  onDelete?: () => void;
+}): NativeMenuItem[] {
+  const items: NativeMenuItem[] = [
+    {
+      id: "open-in-proliferate",
+      label: "Open in Proliferate",
+      onSelect: onOpenInProliferate,
+    },
+  ];
+
+  const createItems: NativeMenuItem[] = [];
+  if (onNewFile) {
+    createItems.push({
+      id: "new-file",
+      label: "New File",
+      onSelect: onNewFile,
+    });
+  }
+  if (onNewFolder) {
+    createItems.push({
+      id: "new-folder",
+      label: "New Folder",
+      onSelect: onNewFolder,
+    });
+  }
+
+  const editItems: NativeMenuItem[] = [];
+  if (onRename) {
+    editItems.push({
+      id: "rename",
+      label: "Rename",
+      onSelect: onRename,
+    });
+  }
+  if (onDelete) {
+    editItems.push({
+      id: "delete",
+      label: "Delete",
+      onSelect: onDelete,
+    });
+  }
+
+  if (createItems.length > 0 || editItems.length > 0) {
+    items.push({ kind: "separator" }, ...createItems);
+    if (createItems.length > 0 && editItems.length > 0) {
+      items.push({ kind: "separator" });
+    }
+    items.push(...editItems);
+  }
+
+  if (targets.length > 0) {
+    items.push({ kind: "separator" });
+    items.push(...targets.map((target): NativeMenuItem => ({
+      id: `open-target:${target.id}`,
+      label: target.label,
+      onSelect: () => onOpenTarget(target.id),
+    })));
+  }
+
+  return items;
+}

@@ -1,0 +1,237 @@
+import { useCallback, useMemo, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
+import { ChatView } from "#product/components/workspace/chat/ChatView";
+import { MainSidebar } from "#product/components/workspace/shell/sidebar/MainSidebar";
+import { SidebarUpdatePill } from "#product/components/workspace/shell/sidebar/SidebarUpdatePill";
+import { IconButton } from "@proliferate/ui/primitives/IconButton";
+import { SplitPanelLeft } from "@proliferate/ui/icons";
+import { CoworkArtifactsPanel } from "#product/components/workspace/cowork/CoworkArtifactsPanel";
+import { CoworkWorkspaceHeader } from "#product/components/workspace/cowork/CoworkWorkspaceHeader";
+import { useResize } from "#product/hooks/ui/layout/use-resize";
+import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
+import { useTransparentChromeEnabled } from "#product/hooks/theme/derived/use-transparent-chrome";
+import { useUpdater } from "#product/hooks/access/tauri/use-updater";
+import { resolveCoworkWorkspaceChromeClasses } from "#product/lib/domain/preferences/workspace-chrome";
+import {
+  WORKSPACE_SIDEBAR_MAX_WIDTH,
+  WORKSPACE_SIDEBAR_MIN_WIDTH,
+} from "#product/lib/domain/preferences/workspace-ui/sidebar";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useCoworkUiStore } from "#product/stores/cowork/cowork-ui-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { WorkspacePathProvider } from "#product/providers/WorkspacePathProvider";
+
+interface CoworkWorkspaceShellProps {
+  workspaceId: string | null;
+  workspacePath: string | null;
+  visible?: boolean;
+  fallbackTitle?: string | null;
+}
+
+export function CoworkWorkspaceShell({
+  workspaceId,
+  workspacePath,
+  visible = true,
+  fallbackTitle,
+}: CoworkWorkspaceShellProps) {
+  // Cowork keeps its artifact pane width session-local until the shell chrome
+  // is extracted and shares the standard workspace frame state.
+  const [rightPanelWidth, setRightPanelWidth] = useState(420);
+  const {
+    sidebarOpen,
+    setSidebarOpen,
+    sidebarWidth,
+    setSidebarWidth,
+  } = useWorkspaceUiStore(useShallow((state) => ({
+    sidebarOpen: state.sidebarOpen,
+    setSidebarOpen: state.setSidebarOpen,
+    sidebarWidth: state.sidebarWidth,
+    setSidebarWidth: state.setSidebarWidth,
+  })));
+  const canShowArtifactPanel = workspaceId !== null;
+  const rightPanelOpen = useCoworkUiStore(
+    (state) => (workspaceId ? state.artifactPanelOpenByWorkspaceId[workspaceId] === true : false),
+  );
+  const setArtifactPanelOpen = useCoworkUiStore((state) => state.setArtifactPanelOpen);
+  const transparentChromeEnabled = useTransparentChromeEnabled();
+  const chromeClasses = resolveCoworkWorkspaceChromeClasses({
+    transparent: transparentChromeEnabled,
+    sidebarOpen,
+  });
+  const {
+    activeSessionId,
+  } = useSessionSelectionStore(useShallow((state) => ({
+    activeSessionId: state.activeSessionId,
+  })));
+  const activeSlot = useSessionDirectoryStore((state) =>
+    activeSessionId ? state.entriesById[activeSessionId] ?? null : null
+  );
+  const {
+    phase: updaterPhase,
+    downloadProgress,
+    restartWhenIdle,
+    downloadUpdate,
+    openRestartPrompt,
+  } = useUpdater();
+
+  const onLeftSeparatorDown = useResize({
+    direction: "horizontal",
+    size: sidebarWidth,
+    onResize: setSidebarWidth,
+    min: WORKSPACE_SIDEBAR_MIN_WIDTH,
+    max: WORKSPACE_SIDEBAR_MAX_WIDTH,
+  });
+  const onRightSeparatorDown = useResize({
+    direction: "horizontal",
+    size: rightPanelWidth,
+    onResize: setRightPanelWidth,
+    reverse: true,
+    min: 280,
+    max: 760,
+  });
+
+  const headerTitle = useMemo(() => {
+    if (workspaceId && activeSessionId && activeSlot?.workspaceId === workspaceId && activeSlot.title?.trim()) {
+      return activeSlot.title.trim();
+    }
+    return fallbackTitle?.trim() || "Untitled chat";
+  }, [activeSessionId, activeSlot?.title, activeSlot?.workspaceId, fallbackTitle, workspaceId]);
+
+  const toggleSidebar = useCallback(() => {
+    setSidebarOpen((value) => !value);
+  }, [setSidebarOpen]);
+
+  const toggleRightPanel = useCallback(() => {
+    if (!workspaceId) {
+      return false;
+    }
+
+    setArtifactPanelOpen(workspaceId, !rightPanelOpen);
+  }, [rightPanelOpen, setArtifactPanelOpen, workspaceId]);
+
+  useShortcutHandler("workspace.toggle-left-sidebar", toggleSidebar, {
+    enabled: visible && workspaceId !== null,
+  });
+  useShortcutHandler("workspace.toggle-right-panel", toggleRightPanel, {
+    enabled: visible && workspaceId !== null,
+  });
+
+  return (
+    <WorkspacePathProvider workspacePath={workspacePath}>
+      <div
+        className={`h-screen flex overflow-hidden ${chromeClasses.root}`}
+        data-telemetry-block
+      >
+        <div
+          id="cowork-sidebar"
+          className="flex shrink-0 flex-col overflow-hidden bg-sidebar transition-[width] duration-150 ease-in-out"
+          style={{ width: sidebarOpen ? sidebarWidth : 0 }}
+        >
+          <div className="flex h-10 shrink-0 items-center" data-tauri-drag-region="true">
+            <div className="flex h-full items-center gap-2 pl-[82px]">
+              <IconButton
+                tone="sidebar"
+                size="sm"
+                onClick={() => setSidebarOpen(false)}
+                title="Hide sidebar"
+                className="rounded-md"
+              >
+                <SplitPanelLeft className="size-4" />
+              </IconButton>
+              {/* The update pill's single home is the top-left, next to the
+                  sidebar toggle. */}
+              <SidebarUpdatePill
+                phase={updaterPhase}
+                downloadProgress={downloadProgress}
+                restartWhenIdle={restartWhenIdle}
+                onDownloadUpdate={downloadUpdate}
+                onOpenRestartPrompt={openRestartPrompt}
+              />
+            </div>
+          </div>
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <MainSidebar />
+          </div>
+        </div>
+
+        {sidebarOpen && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-controls="cowork-sidebar"
+            onMouseDown={onLeftSeparatorDown}
+            className="relative z-10 flex w-1 shrink-0 cursor-col-resize items-center justify-center -ml-1 hover:bg-primary/30 active:bg-primary/50 transition-colors"
+          />
+        )}
+
+        <div
+          className={`flex min-w-0 flex-1 flex-col overflow-hidden ${chromeClasses.contentShell}`}
+        >
+          <div
+            className={chromeClasses.header}
+            data-tauri-drag-region="true"
+          >
+            {!sidebarOpen && (
+              <div className="flex items-center gap-2 pl-[82px] pr-2">
+                <IconButton
+                  size="sm"
+                  onClick={() => setSidebarOpen(true)}
+                  title="Show sidebar"
+                  className="rounded-md"
+                >
+                  <SplitPanelLeft className="size-4" />
+                </IconButton>
+                <SidebarUpdatePill
+                  phase={updaterPhase}
+                  downloadProgress={downloadProgress}
+                  restartWhenIdle={restartWhenIdle}
+                  onDownloadUpdate={downloadUpdate}
+                  onOpenRestartPrompt={openRestartPrompt}
+                />
+              </div>
+            )}
+            <CoworkWorkspaceHeader
+              title={headerTitle}
+              sidebarOpen={sidebarOpen}
+              rightPanelOpen={rightPanelOpen}
+              showArtifactsToggle={canShowArtifactPanel}
+              onToggleSidebar={toggleSidebar}
+              onToggleRightPanel={toggleRightPanel}
+            />
+          </div>
+
+          <div className="flex min-h-0 flex-1 overflow-hidden bg-sidebar-background">
+            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-gradient-to-b from-background to-transparent"
+              />
+              <ChatView
+                showWorkspaceStatusPanels={false}
+              />
+            </div>
+
+            {canShowArtifactPanel && rightPanelOpen && (
+              <div
+                role="separator"
+                aria-orientation="vertical"
+                onMouseDown={onRightSeparatorDown}
+                className="relative z-10 flex w-1 shrink-0 cursor-col-resize items-center justify-center -mr-1 hover:bg-primary/30 active:bg-primary/50 transition-colors"
+              />
+            )}
+
+            <div
+              className="shrink-0 overflow-hidden transition-[width] duration-150 ease-in-out"
+              style={{ width: canShowArtifactPanel && rightPanelOpen ? rightPanelWidth : 0 }}
+            >
+              <div className="h-full" style={{ minWidth: 320 }}>
+                {workspaceId ? <CoworkArtifactsPanel workspaceId={workspaceId} /> : null}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </WorkspacePathProvider>
+  );
+}

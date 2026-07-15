@@ -38,26 +38,27 @@ vi.mock("@/hooks/auth/workflows/use-auth-actions", () => ({
 vi.mock("@/hooks/auth/workflows/use-auth-orchestration-effects", () => ({
   useAuthOrchestrationEffects: () => h.deps,
 }));
-vi.mock("@/hooks/capabilities/derived/use-app-capabilities", () => ({
+vi.mock("@proliferate/product-client/internal/hooks/capabilities/derived/use-app-capabilities", () => ({
   // The provider consumes the `*For` variant (explicit deployment base URL)
   // because it builds the host and cannot read it back through useProductHost.
   useAppCapabilitiesFor: () => ({ cloudEnabled: h.cloudEnabled }),
 }));
-vi.mock("@/hooks/access/cloud/auth/use-auth-methods", () => ({
+vi.mock("@proliferate/product-client/internal/hooks/access/cloud/auth/use-auth-methods", () => ({
   useDesktopAuthMethodsFor: () => ({ data: h.authMethods }),
 }));
-vi.mock("@/hooks/access/cloud/auth/use-github-auth-availability", () => ({
+vi.mock("@proliferate/product-client/internal/hooks/access/cloud/auth/use-github-auth-availability", () => ({
   useGitHubDesktopAuthAvailabilityFor: () => ({ data: h.github }),
 }));
-vi.mock("@/hooks/access/cloud/auth/use-sso-discovery", () => ({
+vi.mock("@proliferate/product-client/internal/hooks/access/cloud/auth/use-sso-discovery", () => ({
   useSsoDiscoveryFor: () => ({ data: h.sso }),
 }));
-vi.mock("@/lib/domain/auth/auth-mode", () => ({
+vi.mock("@proliferate/product-client/internal/lib/domain/auth/auth-mode", () => ({
   isProductAuthRequired: () => true,
 }));
 // The provider must never construct a second Cloud client.
 vi.mock("@/lib/access/cloud/client", () => ({
   getProliferateClient: h.getProliferateClient,
+  getDesktopCloudAccessToken: vi.fn(async () => "test-token"),
 }));
 // Stable bridge double, avoids loading the real Tauri bridge chain.
 vi.mock("@/lib/access/tauri/desktop-bridge", () => ({

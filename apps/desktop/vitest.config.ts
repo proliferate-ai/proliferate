@@ -5,6 +5,9 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
+      "@proliferate/product-client/internal": fileURLToPath(
+        new URL("../packages/product-client/src", import.meta.url),
+      ),
       "@anyharness/sdk": fileURLToPath(
         new URL("../../anyharness/sdk/src/index.ts", import.meta.url),
       ),

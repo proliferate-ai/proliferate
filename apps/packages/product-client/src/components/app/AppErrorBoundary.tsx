@@ -1,0 +1,56 @@
+import { Component, type ErrorInfo, type ReactNode } from "react";
+import { Button } from "@proliferate/ui/primitives/Button";
+import type { RenderErrorReport } from "@proliferate/product-client/host/desktop-bridge";
+
+interface Props {
+  children: ReactNode;
+  /**
+   * Forward a caught render-phase error to the host's native render diagnostics
+   * (ruling G3). ProductLifecycleRoot supplies this from
+   * `host.desktop?.diagnostics.reportRenderError`; it is absent (a no-op) on a
+   * host without native render diagnostics.
+   */
+  onRenderError?: (report: RenderErrorReport) => void;
+}
+
+interface State {
+  error: Error | null;
+}
+
+export class AppErrorBoundary extends Component<Props, State> {
+  state: State = { error: null };
+
+  static getDerivedStateFromError(error: Error): State {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    this.props.onRenderError?.({ error, componentStack: info.componentStack });
+    console.error("[AppErrorBoundary] Uncaught render error:", error);
+    console.error("[AppErrorBoundary] Component stack:", info.componentStack);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="flex h-screen w-screen flex-col items-center justify-center gap-4 bg-background p-8 text-foreground">
+          <p className="text-lg font-medium">Something went wrong</p>
+          <pre className="max-w-2xl overflow-auto rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
+            {this.state.error.message}
+          </pre>
+          <Button
+            type="button"
+            variant="unstyled"
+            size="unstyled"
+            onClick={() => this.setState({ error: null })}
+            className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground"
+          >
+            Try again
+          </Button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}

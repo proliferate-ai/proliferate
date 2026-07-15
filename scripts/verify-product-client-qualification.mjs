@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Verifies the ProductClient extraction build canary from both hosts.
+// Verifies the real ProductClient entry builds and code-splits from both hosts.
 //
 // It:
 //   1. Builds the shared package prerequisites and both qualification outputs
@@ -51,14 +51,14 @@ function run(command, args, cwd) {
 // ---------------------------------------------------------------------------
 function buildEverything() {
   // product-client build chains cloud-sdk + anyharness sdk/sdk-react +
-  // product-domain, then tsc, then copies the canary assets into dist.
+  // product-domain, then tsc-emits the package (ProductClient entry included).
   run("pnpm", ["--filter", "@proliferate/product-client", "build"], ".");
   // Host builds additionally consume shared product CSS and the Cloud SDK React
   // provider, so those dists must exist too.
   run("pnpm", ["--filter", "@proliferate/design", "build"], ".");
   run("pnpm", ["--filter", "@proliferate/cloud-sdk-react", "build"], ".");
 
-  // Desktop build canary (dedicated qualification config; does not touch the
+  // Desktop build fixture (dedicated qualification config; does not touch the
   // normal desktop build).
   run("pnpm", ["exec", "vite", "build", "--config", "vite.qualification.config.ts"], "apps/desktop");
   // Minimal browser host (production build). The browser-host directory is not
@@ -82,7 +82,7 @@ function buildEverything() {
 // ---------------------------------------------------------------------------
 // 2. Manifest inspection: prove the lazy authenticated split.
 // ---------------------------------------------------------------------------
-const AUTH_CANARY_NEEDLE = "AuthenticatedProductClientBuildCanary";
+const AUTH_CANARY_NEEDLE = "AuthenticatedProductClient";
 
 async function loadManifest(distDir) {
   const manifestPath = join(REPO_ROOT, distDir, ".vite", "manifest.json");

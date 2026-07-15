@@ -23,6 +23,7 @@ CHECK_ROOTS = [
     "cloud/sdk/src",
     "cloud/sdk-react/src",
     "apps/desktop/src",
+    "apps/packages/product-client/src",
     "apps/desktop/src-tauri/src",
     "apps/desktop/src-tauri/build.rs",
     "server/proliferate",

@@ -1,0 +1,202 @@
+import { useMemo } from "react";
+import { useShallow } from "zustand/react/shallow";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SETTINGS_CONTROL_WIDTH_CLASS, SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
+import { Button } from "@proliferate/ui/primitives/Button";
+import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
+import { Switch } from "@proliferate/ui/primitives/Switch";
+import { OpenTargetIcon } from "#product/components/workspace/open-target/OpenTargetIcon";
+import { useAvailableEditors } from "#product/hooks/access/tauri/shell/use-available-editors";
+import { resolvePreferredOpenTarget } from "#product/lib/domain/chat/composer/preference-resolvers";
+import { emitTurnEnd } from "#product/lib/infra/events/turn-end-events";
+import type { DefaultNewWorkspaceMode } from "#product/lib/domain/preferences/user/model";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
+
+type SettingsOpenTargetIconId =
+  | "cursor"
+  | "vscode"
+  | "windsurf"
+  | "zed"
+  | "sublime"
+  | "finder"
+  | "terminal";
+
+interface SettingsEditorInfo {
+  id: string;
+  label: string;
+  iconId?: SettingsOpenTargetIconId;
+}
+
+const EMPTY_EDITORS: SettingsEditorInfo[] = [];
+const FINDER_TARGET = { id: "finder", label: "Finder", iconId: "finder" as const };
+const TERMINAL_TARGET = { id: "terminal", label: "Terminal", iconId: "terminal" as const };
+const BRANCH_PREFIX_OPTIONS = [
+  { id: "none" as const, label: "None" },
+  { id: "proliferate" as const, label: "Proliferate" },
+  { id: "github_username" as const, label: "GitHub username" },
+];
+const NEW_WORKSPACE_MODE_OPTIONS: { id: DefaultNewWorkspaceMode; label: string }[] = [
+  { id: "worktree", label: "Worktree" },
+  { id: "local", label: "Local" },
+];
+export function GeneralPane() {
+  const { data: editors = EMPTY_EDITORS } = useAvailableEditors();
+  const preferences = useUserPreferencesStore(useShallow((state) => ({
+    defaultOpenInTargetId: state.defaultOpenInTargetId,
+    branchPrefixType: state.branchPrefixType,
+    defaultNewWorkspaceMode: state.defaultNewWorkspaceMode,
+    turnEndSoundEnabled: state.turnEndSoundEnabled,
+    subagentsEnabled: state.subagentsEnabled,
+    coworkWorkspaceDelegationEnabled: state.coworkWorkspaceDelegationEnabled,
+    pasteAttachmentsEnabled: state.pasteAttachmentsEnabled,
+    set: state.set,
+  })));
+
+  const targets = useMemo(() => {
+    const items: { id: string; label: string; iconId?: SettingsOpenTargetIconId }[] = editors.map((editor) => ({
+      id: editor.id,
+      label: editor.label,
+      iconId: editor.iconId,
+    }));
+    items.push(FINDER_TARGET);
+    items.push(TERMINAL_TARGET);
+    return items;
+  }, [editors]);
+
+  const currentTarget = resolvePreferredOpenTarget(targets, {
+    defaultOpenInTargetId: preferences.defaultOpenInTargetId,
+  });
+  const currentTargetLabel = currentTarget?.label ?? "Open";
+  const currentBranchPrefixLabel = BRANCH_PREFIX_OPTIONS.find(
+    (option) => option.id === preferences.branchPrefixType,
+  )?.label ?? "None";
+  const currentNewWorkspaceModeLabel = NEW_WORKSPACE_MODE_OPTIONS.find(
+    (option) => option.id === preferences.defaultNewWorkspaceMode,
+  )?.label ?? "Worktree";
+
+  return (
+    <section className="space-y-6">
+      <SettingsPageHeader title="General" />
+
+      <SettingsSection title="Preferences">
+          <SettingsRow
+            label="Default open in"
+            description="Which app the Open in button uses"
+          >
+            <SettingsMenu
+              label={currentTargetLabel}
+              leading={<OpenTargetIcon iconId={currentTarget?.iconId} className="size-4 rounded-sm" />}
+              className={SETTINGS_CONTROL_WIDTH_CLASS}
+              menuClassName={SETTINGS_CONTROL_WIDTH_CLASS}
+              groups={[{
+                id: "targets",
+                options: targets.map((target) => ({
+                  id: target.id,
+                  label: target.label,
+                  icon: <OpenTargetIcon iconId={target.iconId} className="size-4 rounded-sm" />,
+                  selected: currentTarget?.id === target.id,
+                  onSelect: () => preferences.set("defaultOpenInTargetId", target.id),
+                })),
+              }]}
+            />
+          </SettingsRow>
+
+          <SettingsRow
+            label="Git branch prefix"
+            description="Prefix for auto-generated branch names"
+          >
+            <SettingsMenu
+              label={currentBranchPrefixLabel}
+              className={SETTINGS_CONTROL_WIDTH_CLASS}
+              menuClassName={SETTINGS_CONTROL_WIDTH_CLASS}
+              groups={[{
+                id: "branch-prefix",
+                options: BRANCH_PREFIX_OPTIONS.map((option) => ({
+                  id: option.id,
+                  label: option.label,
+                  selected: preferences.branchPrefixType === option.id,
+                  onSelect: () => preferences.set("branchPrefixType", option.id),
+                })),
+              }]}
+            />
+          </SettingsRow>
+
+          <SettingsRow
+            label="New workspace"
+            description="What ⌘N creates by default"
+          >
+            <SettingsMenu
+              label={currentNewWorkspaceModeLabel}
+              className={SETTINGS_CONTROL_WIDTH_CLASS}
+              menuClassName={SETTINGS_CONTROL_WIDTH_CLASS}
+              groups={[{
+                id: "new-workspace-mode",
+                options: NEW_WORKSPACE_MODE_OPTIONS.map((option) => ({
+                  id: option.id,
+                  label: option.label,
+                  selected: preferences.defaultNewWorkspaceMode === option.id,
+                  onSelect: () => preferences.set("defaultNewWorkspaceMode", option.id),
+                })),
+              }]}
+            />
+          </SettingsRow>
+
+          <SettingsRow
+            label="Turn long pastes into attachments"
+          >
+            <Switch
+              checked={preferences.pasteAttachmentsEnabled}
+              onChange={(value) => preferences.set("pasteAttachmentsEnabled", value)}
+            />
+          </SettingsRow>
+      </SettingsSection>
+
+      <SettingsSection title="Sounds">
+          <SettingsRow
+            label="Turn end sound"
+            description="Play a sound when an agent finishes its turn"
+          >
+            <div className="flex items-center gap-2">
+              {preferences.turnEndSoundEnabled && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="px-2.5 text-xs"
+                  onClick={() => emitTurnEnd()}
+                >
+                  Test
+                </Button>
+              )}
+              <Switch
+                checked={preferences.turnEndSoundEnabled}
+                onChange={(value) => preferences.set("turnEndSoundEnabled", value)}
+              />
+            </div>
+          </SettingsRow>
+      </SettingsSection>
+
+      <SettingsSection title="Session policy">
+          <SettingsRow
+            label="Allow coding agents to spin up subagents"
+            description="Applies to new sessions. Existing sessions keep their saved delegation policy."
+          >
+            <Switch
+              checked={preferences.subagentsEnabled}
+              onChange={(value) => preferences.set("subagentsEnabled", value)}
+            />
+          </SettingsRow>
+          <SettingsRow
+            label="Allow cowork agents to create coding workspaces"
+            description="Applies to new cowork sessions. Existing cowork sessions keep their saved workspace policy."
+          >
+            <Switch
+              checked={preferences.coworkWorkspaceDelegationEnabled}
+              onChange={(value) => preferences.set("coworkWorkspaceDelegationEnabled", value)}
+            />
+          </SettingsRow>
+      </SettingsSection>
+    </section>
+  );
+}

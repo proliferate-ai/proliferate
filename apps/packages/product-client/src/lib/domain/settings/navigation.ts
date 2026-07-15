@@ -1,0 +1,313 @@
+import {
+  SETTINGS_CONTENT_SECTIONS,
+  SETTINGS_DEFAULT_SECTION,
+  type SettingsSection,
+} from "#product/config/settings";
+import { getSettingsScopeForSection } from "#product/lib/domain/settings/navigation-presentation";
+import {
+  cloudRepositoryKey,
+  isCloudRepository,
+  type SettingsRepositoryEntry,
+} from "#product/lib/domain/settings/repositories";
+import { isRepoSettingsContext } from "#product/lib/domain/settings/repo-scope-selection";
+
+const FOCUS_PARAM_NAMES = [
+  "focus",
+  "target",
+  "cloudRepoOwner",
+  "cloudRepoName",
+  "checkout",
+  "joinOrganizationId",
+  "context",
+  "flowId",
+  "status",
+  "failureCode",
+] as const;
+
+type SettingsFocusParam = (typeof FOCUS_PARAM_NAMES)[number];
+export type SettingsFocus = Partial<Record<SettingsFocusParam, string>>;
+
+export function isSettingsSection(value: string | null): value is SettingsSection {
+  return SETTINGS_CONTENT_SECTIONS.some((item) => item === value);
+}
+
+export function normalizeSettingsSection(value: string | null): SettingsSection {
+  if (value === "configuration") {
+    return "general";
+  }
+  if (value === "defaults" || value === "advanced" || value === "agent-defaults") {
+    // AGENT DEFAULTS PAGE REMOVED: legacy links land on the Claude harness page.
+    return "agent-claude";
+  }
+  if (value === "agent-authentication") {
+    // The Bifrost-era authentication pane was replaced by the API key pool page.
+    return "agent-api-keys";
+  }
+  if (value === "repo" || value === "cloudRepo") {
+    return "environments";
+  }
+  if (value === "slack-bot") {
+    // SLACK BOT PARKED: old direct links fall back to the default settings page.
+    return SETTINGS_DEFAULT_SECTION;
+  }
+  if (value === "shared-environments") {
+    return SETTINGS_DEFAULT_SECTION;
+  }
+  if (value === "keyboard") {
+    // KEYBOARD PANE REMOVED (owner rev 2026-07-01): the ⌘/ shortcuts modal is
+    // the only surface, so old settings links fall back to the default page.
+    return SETTINGS_DEFAULT_SECTION;
+  }
+  if (value === "archived-chats") {
+    // ARCHIVED CHATS PAGE REMOVED (owner rev 2026-07-02): archive/unarchive
+    // lives in the workspace sidebar, so old settings links fall back to the
+    // default page.
+    return SETTINGS_DEFAULT_SECTION;
+  }
+
+  return isSettingsSection(value) ? value : SETTINGS_DEFAULT_SECTION;
+}
+
+/**
+ * Sections that edit a picked repository (the whole Repo scope): they carry
+ * the `repo` selection and Cloud|Local `context` params. Keyed off the scope
+ * nav so WP2/WP3 section registration extends URL handling automatically.
+ */
+export function isRepoScopeSection(section: SettingsSection): boolean {
+  return getSettingsScopeForSection(section) === "repo";
+}
+
+interface SettingsNavigationTarget {
+  section: SettingsSection | "repo";
+  repo?: string | null;
+  focus?: SettingsFocus | null;
+  target?: string | null;
+  joinOrganizationId?: string | null;
+}
+
+export function buildSettingsHref(target: SettingsNavigationTarget): string {
+  const params = new URLSearchParams();
+  const section = target.section === "repo" ? "environments" : target.section;
+  params.set("section", section);
+  if (isRepoScopeSection(section) && target.repo) {
+    params.set("repo", target.repo);
+  }
+  const focus = target.focus ?? {};
+  for (const name of FOCUS_PARAM_NAMES) {
+    const value = focus[name];
+    if (value) {
+      params.set(name, value);
+    }
+  }
+  if (section === "account" && target.joinOrganizationId) {
+    params.set("joinOrganizationId", target.joinOrganizationId);
+  }
+  return `/settings?${params.toString()}`;
+}
+
+export function buildCloudRepoSettingsHref(
+  gitOwner: string,
+  gitRepoName: string,
+): string {
+  return buildSettingsHref({
+    section: "environments",
+    focus: {
+      cloudRepoOwner: gitOwner,
+      cloudRepoName: gitRepoName,
+    },
+  });
+}
+
+/**
+ * Repository settings link for a workspace: cloud repos deep-link into the
+ * cloud environment entry; local workspaces fall back to the repo root path
+ * (or the workspace path) and resolve to null when neither is known.
+ */
+export function resolveWorkspaceRepoSettingsHref(input: {
+  cloudRepoOwner?: string | null;
+  cloudRepoName?: string | null;
+  repoRootPath?: string | null;
+  workspacePath?: string | null;
+}): string | null {
+  const cloudOwner = input.cloudRepoOwner?.trim() ?? "";
+  const cloudName = input.cloudRepoName?.trim() ?? "";
+  if (cloudOwner && cloudName) {
+    return buildCloudRepoSettingsHref(cloudOwner, cloudName);
+  }
+  const localRepoPath = input.repoRootPath?.trim()
+    || input.workspacePath?.trim()
+    || "";
+  if (!localRepoPath) {
+    return null;
+  }
+  return buildSettingsHref({
+    section: "repo",
+    repo: localRepoPath,
+  });
+}
+
+export interface SettingsSelectionInput {
+  rawSection: string | null;
+  rawRepo?: string | null;
+  rawCloudRepoOwner?: string | null;
+  rawCloudRepoName?: string | null;
+  rawFocus?: string | null;
+  rawTarget?: string | null;
+  rawCheckout?: string | null;
+  rawJoinOrganizationId?: string | null;
+  rawContext?: string | null;
+  rawFlowId?: string | null;
+  rawStatus?: string | null;
+  rawFailureCode?: string | null;
+  repositories: SettingsRepositoryEntry[];
+}
+
+export interface SettingsSelection {
+  activeSection: SettingsSection;
+  activeRepoSourceRoot: string | null;
+  focus: SettingsFocus;
+  joinOrganizationId: string | null;
+}
+
+export function resolveSettingsSelection({
+  rawSection,
+  rawRepo = null,
+  rawCloudRepoOwner = null,
+  rawCloudRepoName = null,
+  rawFocus = null,
+  rawTarget = null,
+  rawCheckout = null,
+  rawJoinOrganizationId = null,
+  rawContext = null,
+  rawFlowId = null,
+  rawStatus = null,
+  rawFailureCode = null,
+  repositories,
+}: SettingsSelectionInput): SettingsSelection {
+  const repositoryRoots = new Set(repositories.map((repository) => repository.sourceRoot));
+  const cloudRepositoriesByKey = new Map<string, SettingsRepositoryEntry[]>();
+  for (const repository of repositories) {
+    if (!isCloudRepository(repository)) {
+      continue;
+    }
+    const key = cloudRepositoryKey(repository.gitOwner, repository.gitRepoName);
+    const entries = cloudRepositoriesByKey.get(key);
+    if (entries) {
+      entries.push(repository);
+    } else {
+      cloudRepositoriesByKey.set(key, [repository]);
+    }
+  }
+
+  let section: SettingsSection = normalizeSettingsSection(rawSection);
+  const focus: SettingsFocus = pickFocus({
+    focus: rawFocus,
+    target: rawTarget,
+    checkout: rawCheckout,
+    joinOrganizationId: rawJoinOrganizationId,
+    cloudRepoOwner: rawCloudRepoOwner,
+    cloudRepoName: rawCloudRepoName,
+    context: rawContext,
+    flowId: rawFlowId,
+    status: rawStatus,
+    failureCode: rawFailureCode,
+  });
+  let repoSourceRoot: string | null = isRepoScopeSection(section) ? rawRepo : null;
+
+  if (rawSection === "cloud") {
+    section = cloudRedirectSection(focus);
+  }
+
+  if (isRepoScopeSection(section) && rawRepo) {
+    repoSourceRoot = rawRepo;
+  }
+
+  if (rawSection === "cloudRepo") {
+    const cloudRepoKey = rawCloudRepoOwner && rawCloudRepoName
+      ? cloudRepositoryKey(rawCloudRepoOwner, rawCloudRepoName)
+      : null;
+    const matches = cloudRepoKey ? (cloudRepositoriesByKey.get(cloudRepoKey) ?? []) : [];
+    if (matches.length === 1) {
+      section = "environments";
+      repoSourceRoot = matches[0].sourceRoot;
+    } else {
+      section = "environments";
+      repoSourceRoot = null;
+    }
+  }
+
+  if (isRepoScopeSection(section)) {
+    if (!repoSourceRoot || !repositoryRoots.has(repoSourceRoot)) {
+      repoSourceRoot = null;
+    }
+    // Cloud deep links (cloudRepoOwner/cloudRepoName) select the matching
+    // repository entry — including cloud-only entries whose sourceRoot is
+    // `cloud:owner/name` — when no explicit repo selection survived.
+    if (!repoSourceRoot && rawCloudRepoOwner && rawCloudRepoName) {
+      const matches = cloudRepositoriesByKey.get(
+        cloudRepositoryKey(rawCloudRepoOwner, rawCloudRepoName),
+      ) ?? [];
+      repoSourceRoot = matches[0]?.sourceRoot ?? null;
+    }
+  }
+
+  return {
+    activeSection: section,
+    activeRepoSourceRoot: repoSourceRoot,
+    focus: sanitizeFocusForSection(section, focus),
+    joinOrganizationId: section === "account" ? rawJoinOrganizationId : null,
+  };
+}
+
+function pickFocus(
+  values: Partial<Record<SettingsFocusParam, string | null | undefined>>,
+): SettingsFocus {
+  const focus: SettingsFocus = {};
+  for (const name of FOCUS_PARAM_NAMES) {
+    const value = values[name];
+    if (value) {
+      focus[name] = value;
+    }
+  }
+  return focus;
+}
+
+function cloudRedirectSection(focus: SettingsFocus): SettingsSection {
+  if (focus.cloudRepoOwner || focus.cloudRepoName || focus.focus === "repo" || focus.focus === "environment") {
+    return "environments";
+  }
+  if (focus.focus === "billing" || focus.focus === "credits") {
+    return "billing";
+  }
+  return SETTINGS_DEFAULT_SECTION;
+}
+
+function sanitizeFocusForSection(
+  section: SettingsSection,
+  focus: SettingsFocus,
+): SettingsFocus {
+  if (isRepoScopeSection(section)) {
+    return pickFocus({
+      focus: focus.focus,
+      cloudRepoOwner: focus.cloudRepoOwner,
+      cloudRepoName: focus.cloudRepoName,
+      context: isRepoSettingsContext(focus.context) ? focus.context : null,
+    });
+  }
+  if (section === "billing") {
+    return pickFocus({ checkout: focus.checkout });
+  }
+  if (section === "account") {
+    return pickFocus({ joinOrganizationId: focus.joinOrganizationId });
+  }
+  if (section === "integrations") {
+    // OAuth browser-return deep links carry the flow outcome for the pane's
+    // arrival toast.
+    return pickFocus({
+      flowId: focus.flowId,
+      status: focus.status,
+      failureCode: focus.failureCode,
+    });
+  }
+  return {};
+}

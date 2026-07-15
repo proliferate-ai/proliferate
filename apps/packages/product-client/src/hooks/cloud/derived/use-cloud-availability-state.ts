@@ -1,0 +1,67 @@
+import { useEffect, useMemo } from "react";
+import { useGitHubDesktopAuthAvailability } from "#product/hooks/access/cloud/auth/use-github-auth-availability";
+import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
+import { logStartupDebug } from "#product/lib/infra/measurement/measurement-port";
+import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth";
+
+export function useCloudAvailabilityState() {
+  const authStatus = useProductAuthStatus();
+  const { cloudEnabled, cloudComputeEnabled } = useAppCapabilities();
+  const {
+    data: githubDesktopAuthAvailable,
+    isPending: githubDesktopAuthAvailabilityPending,
+  } = useGitHubDesktopAuthAvailability();
+  const cloudUnavailable = !cloudEnabled;
+  const cloudSignInChecking = cloudEnabled && githubDesktopAuthAvailabilityPending;
+  const cloudSignInAvailable = cloudEnabled && githubDesktopAuthAvailable?.enabled === true;
+  const cloudAuthUnavailable = cloudEnabled && !cloudSignInChecking && !cloudSignInAvailable;
+  const cloudActive = cloudComputeEnabled && authStatus === "authenticated";
+  const cloudRequiresSignIn = cloudSignInAvailable && authStatus === "anonymous";
+
+  useEffect(() => {
+    logStartupDebug("cloud.availability.derived_state", {
+      authStatus,
+      cloudEnabled,
+      githubDesktopAuthAvailable: githubDesktopAuthAvailable?.enabled ?? null,
+      githubDesktopAuthAvailabilityPending,
+      cloudUnavailable,
+      cloudSignInChecking,
+      cloudSignInAvailable,
+      cloudActive,
+      cloudComputeEnabled,
+    });
+  }, [
+    authStatus,
+    cloudActive,
+    cloudEnabled,
+    cloudSignInAvailable,
+    cloudSignInChecking,
+    cloudUnavailable,
+    githubDesktopAuthAvailabilityPending,
+    githubDesktopAuthAvailable,
+  ]);
+
+  return useMemo(() => {
+    return {
+      authStatus,
+      cloudEnabled,
+      cloudComputeEnabled,
+      cloudUnavailable,
+      cloudSignInChecking,
+      cloudSignInAvailable,
+      cloudAuthUnavailable,
+      cloudActive,
+      cloudRequiresSignIn,
+    };
+  }, [
+    authStatus,
+    cloudActive,
+    cloudComputeEnabled,
+    cloudAuthUnavailable,
+    cloudEnabled,
+    cloudRequiresSignIn,
+    cloudSignInAvailable,
+    cloudSignInChecking,
+    cloudUnavailable,
+  ]);
+}

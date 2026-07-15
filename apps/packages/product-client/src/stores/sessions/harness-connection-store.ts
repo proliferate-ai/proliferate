@@ -1,0 +1,26 @@
+import { create } from "zustand";
+import type { HarnessConnectionState } from "#product/stores/sessions/session-types";
+
+interface HarnessConnectionStoreState {
+  runtimeUrl: string;
+  connectionState: HarnessConnectionState;
+  error: string | null;
+  setRuntimeUrl: (runtimeUrl: string) => void;
+  setConnectionState: (connectionState: HarnessConnectionState) => void;
+  setError: (error: string | null) => void;
+  resetConnectionState: () => void;
+}
+
+export const useHarnessConnectionStore = create<HarnessConnectionStoreState>((set) => ({
+  runtimeUrl: "",
+  connectionState: "connecting",
+  error: null,
+  setRuntimeUrl: (runtimeUrl) => set({ runtimeUrl }),
+  setConnectionState: (connectionState) => set({ connectionState }),
+  setError: (error) => set({ error }),
+  resetConnectionState: () => set({
+    runtimeUrl: "",
+    connectionState: "connecting",
+    error: null,
+  }),
+}));

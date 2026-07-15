@@ -1,0 +1,559 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  clearWorktreeAutoDeleteLimitAdoption,
+  hasAppliedModelVisibilityDefaultsReset,
+  hasPendingWorktreeAutoDeleteLimitAdoption,
+  selectPersistedUserPreferencesSlice,
+} from "#product/lib/domain/preferences/persisted-metadata";
+import {
+  migrateUserPreferences,
+} from "#product/lib/domain/preferences/user/migration";
+import {
+  PERSISTED_RECORD_BACKFILL,
+  USER_PREFERENCE_DEFAULTS,
+  type UserPreferences,
+} from "#product/lib/domain/preferences/user/model";
+import {
+  loadUserPreferences,
+  persistUserPreferences,
+} from "#product/lib/workflows/preferences/user-preferences-persistence";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
+import {
+  createMemoryProductStorage,
+  type MemoryProductStorage,
+} from "#product/test/product-storage-test-utils";
+
+let memory: MemoryProductStorage;
+
+async function bootstrapUserPreferencesForTest(): Promise<void> {
+  const loaded = await loadUserPreferences(memory.context);
+  useUserPreferencesStore.getState().hydrate(loaded);
+  if (loaded.shouldPersist) {
+    await persistUserPreferences(memory.context, loaded.preferences, loaded.persistedMetadata);
+  }
+}
+
+async function markWorktreeAutoDeleteLimitAdoptedForTest(): Promise<void> {
+  const state = useUserPreferencesStore.getState();
+  const nextMetadata = clearWorktreeAutoDeleteLimitAdoption(state._persistedMetadata);
+  state.setPersistedMetadata(nextMetadata);
+  await persistUserPreferences(
+    memory.context,
+    selectPersistedUserPreferencesSlice(useUserPreferencesStore.getState()),
+    nextMetadata,
+  );
+}
+
+describe("user preference migration", () => {
+  beforeEach(() => {
+    memory = createMemoryProductStorage();
+    vi.unstubAllGlobals();
+    useUserPreferencesStore.setState({
+      ...USER_PREFERENCE_DEFAULTS,
+      _hydrated: false,
+      _persistedMetadata: {},
+    });
+  });
+
+  it("defaults true new users to Mono dark with transparent chrome disabled", async () => {
+    await bootstrapUserPreferencesForTest();
+
+    const preferences = useUserPreferencesStore.getState();
+    expect(preferences.themePreset).toBe("mono");
+    expect(preferences.colorMode).toBe("dark");
+    expect(preferences.uiFontSizeId).toBe("default");
+    expect(preferences.readableCodeFontSizeId).toBe("default");
+    expect(preferences.windowZoomId).toBe("default");
+    expect(preferences.defaultChatAgentKind).toBe("claude");
+    expect(preferences.transparentChromeEnabled).toBe(false);
+    expect(preferences.pasteAttachmentsEnabled).toBe(true);
+    expect(preferences.worktreeAutoDeleteLimit).toBe(20);
+  });
+
+  it("backfills legacy per-key users with old appearance defaults", async () => {
+    memory.values.set("defaultChatAgentKind", "claude");
+
+    await bootstrapUserPreferencesForTest();
+
+    const preferences = useUserPreferencesStore.getState();
+    expect(preferences.themePreset).toBe("mono");
+    expect(preferences.transparentChromeEnabled).toBe(true);
+    expect(preferences.defaultChatAgentKind).toBe("claude");
+  });
+
+  it("migrates legacy per-key scalar models into the primary harness map", async () => {
+    memory.values.set("defaultChatAgentKind", "claude");
+    memory.values.set("defaultChatModelId", "claude-sonnet-4-5");
+
+    await bootstrapUserPreferencesForTest();
+    const preferences = useUserPreferencesStore.getState();
+    expect(preferences.defaultChatAgentKind).toBe("claude");
+    expect(preferences.defaultChatModelIdByAgentKind).toEqual({
+      claude: "sonnet",
+    });
+
+    const persisted = memory.readJson<Record<string, unknown>>("user_preferences")!;
+    expect(persisted.defaultChatModelIdByAgentKind).toEqual({ claude: "sonnet" });
+    expect(persisted).not.toHaveProperty("defaultChatModelId");
+  });
+
+  it("backfills missing fields in existing unified preferences with old defaults", async () => {
+    memory.values.set("user_preferences", {
+      ...USER_PREFERENCE_DEFAULTS,
+      themePreset: "ship",
+      transparentChromeEnabled: undefined,
+    } as unknown as UserPreferences);
+
+    await bootstrapUserPreferencesForTest();
+
+    const preferences = useUserPreferencesStore.getState();
+    expect(preferences.themePreset).toBe("mono");
+    expect(preferences.transparentChromeEnabled).toBe(true);
+  });
+
+  it("marks missing worktree cleanup policy for adoption without persisting immediately", async () => {
+    const persisted = { ...USER_PREFERENCE_DEFAULTS } as Record<string, unknown>;
+    delete persisted.worktreeAutoDeleteLimit;
+    memory.values.set("user_preferences", persisted);
+
+    await bootstrapUserPreferencesForTest();
+    const preferences = useUserPreferencesStore.getState();
+    expect(preferences.worktreeAutoDeleteLimit).toBe(20);
+    expect(hasPendingWorktreeAutoDeleteLimitAdoption(
+      useUserPreferencesStore.getState()._persistedMetadata,
+    )).toBe(true);
+    const nextPersisted = memory.readJson<Record<string, unknown>>("user_preferences")!;
+    expect(nextPersisted.worktreeAutoDeleteLimit).toBeUndefined();
+    expect(nextPersisted.worktreeAutoDeleteLimitBackfilled).toBe(true);
+  });
+
+  it("consumes worktree cleanup adoption metadata after adoption", async () => {
+    const persisted = { ...USER_PREFERENCE_DEFAULTS } as Record<string, unknown>;
+    delete persisted.worktreeAutoDeleteLimit;
+    memory.values.set("user_preferences", persisted);
+
+    await bootstrapUserPreferencesForTest();
+    useUserPreferencesStore.getState().set("worktreeAutoDeleteLimit", 50);
+    await markWorktreeAutoDeleteLimitAdoptedForTest();
+    const nextPersisted = memory.readJson<Record<string, unknown>>("user_preferences")!;
+    expect(nextPersisted.worktreeAutoDeleteLimit).toBe(50);
+    expect(nextPersisted.worktreeAutoDeleteLimitBackfilled).toBeUndefined();
+  });
+
+  it("sanitizes invalid worktree cleanup policy values to the default", () => {
+    const result = migrateUserPreferences({
+      ...USER_PREFERENCE_DEFAULTS,
+      worktreeAutoDeleteLimit: 101,
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.preferences.worktreeAutoDeleteLimit).toBe(20);
+  });
+
+  it("normalizes retired theme presets to mono on read", async () => {
+    memory.values.set("user_preferences", {
+      ...USER_PREFERENCE_DEFAULTS,
+      themePreset: "ship",
+      transparentChromeEnabled: true,
+    } as unknown as UserPreferences);
+
+    await bootstrapUserPreferencesForTest();
+
+    const preferences = useUserPreferencesStore.getState();
+    expect(preferences.themePreset).toBe("mono");
+    expect(preferences.transparentChromeEnabled).toBe(true);
+
+    const persisted = memory.readJson<Record<string, unknown>>("user_preferences")!;
+    expect(persisted.themePreset).toBe("mono");
+  });
+
+  it("retires the tbpn-only gong turn-end sound to ding", () => {
+    const result = migrateUserPreferences({
+      ...USER_PREFERENCE_DEFAULTS,
+      turnEndSoundId: "gong",
+    } as unknown as UserPreferences);
+
+    expect(result.changed).toBe(true);
+    expect(result.preferences.turnEndSoundId).toBe("ding");
+  });
+
+  it("strips deprecated onboarding keys from existing unified preferences", async () => {
+    memory.values.set("user_preferences", {
+      ...USER_PREFERENCE_DEFAULTS,
+      futurePreference: true,
+      onboardingCompletedVersion: 1,
+      onboardingPrimaryGoalId: "build",
+      dismissedAvailableVersion: "0.3.25",
+      acknowledgedAvailableVersion: "0.3.25",
+    } as unknown as UserPreferences);
+
+    await bootstrapUserPreferencesForTest();
+    const state = useUserPreferencesStore.getState() as unknown as Record<string, unknown>;
+    expect(state.onboardingCompletedVersion).toBeUndefined();
+    expect(state.onboardingPrimaryGoalId).toBeUndefined();
+    expect(state.dismissedAvailableVersion).toBeUndefined();
+    expect(state.acknowledgedAvailableVersion).toBeUndefined();
+
+    const persisted = memory.readJson<Record<string, unknown>>("user_preferences")!;
+    expect(persisted.futurePreference).toBe(true);
+    expect(persisted.onboardingCompletedVersion).toBeUndefined();
+    expect(persisted.onboardingPrimaryGoalId).toBeUndefined();
+    expect(persisted.dismissedAvailableVersion).toBeUndefined();
+    expect(persisted.acknowledgedAvailableVersion).toBeUndefined();
+  });
+
+  it("preserves unrelated unknown keys while marking model visibility defaults reset", async () => {
+    memory.values.set("user_preferences", {
+      ...USER_PREFERENCE_DEFAULTS,
+      futurePreference: true,
+    } as unknown as UserPreferences);
+
+    await bootstrapUserPreferencesForTest();
+    const persisted = memory.readJson<Record<string, unknown>>("user_preferences")!;
+    expect(persisted.futurePreference).toBe(true);
+    expect(hasAppliedModelVisibilityDefaultsReset(persisted)).toBe(true);
+  });
+
+  it("preserves unrelated unknown keys when hydration rewrites known preferences", async () => {
+    memory.values.set("user_preferences", {
+      ...USER_PREFERENCE_DEFAULTS,
+      themePreset: "ship",
+      futurePreference: true,
+    } as unknown as UserPreferences);
+
+    await bootstrapUserPreferencesForTest();
+    const persisted = memory.readJson<Record<string, unknown>>("user_preferences")!;
+    expect(persisted.themePreset).toBe("mono");
+    expect(persisted.futurePreference).toBe(true);
+  });
+
+  it("preserves unrelated unknown keys when migrating known preferences", async () => {
+    memory.values.set("user_preferences", {
+      ...USER_PREFERENCE_DEFAULTS,
+      branchPrefixType: "invalid",
+      futurePreference: true,
+    } as unknown as UserPreferences);
+
+    await bootstrapUserPreferencesForTest();
+    const persisted = memory.readJson<Record<string, unknown>>("user_preferences")!;
+    expect(persisted.branchPrefixType).toBe(PERSISTED_RECORD_BACKFILL.branchPrefixType);
+    expect(persisted.futurePreference).toBe(true);
+  });
+
+  it("migrates old unified scalar model preferences into the primary harness map", async () => {
+    memory.values.set("user_preferences", {
+      ...USER_PREFERENCE_DEFAULTS,
+      defaultChatAgentKind: "codex",
+      defaultChatModelId: "gpt-5.4-mini",
+    });
+
+    await bootstrapUserPreferencesForTest();
+    const preferences = useUserPreferencesStore.getState();
+    expect(preferences.defaultChatModelIdByAgentKind).toEqual({
+      codex: "gpt-5.4-mini",
+    });
+
+    const persisted = memory.readJson<Record<string, unknown>>("user_preferences")!;
+    expect(persisted.defaultChatModelIdByAgentKind).toEqual({ codex: "gpt-5.4-mini" });
+    expect(persisted).not.toHaveProperty("defaultChatModelId");
+  });
+
+  it("sanitizes mixed scalar and map model preferences without overwriting valid map entries", () => {
+    const result = migrateUserPreferences({
+      ...USER_PREFERENCE_DEFAULTS,
+      defaultChatAgentKind: "claude",
+      defaultChatModelId: "claude-haiku-4-5",
+      defaultChatModelIdByAgentKind: {
+        claude: "sonnet",
+        codex: " gpt-5.4 ",
+        opencode: "",
+        cursor: null,
+      },
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.preferences.defaultChatModelIdByAgentKind).toEqual({
+      claude: "sonnet",
+      codex: "gpt-5.4",
+    });
+  });
+
+  it("uses the legacy scalar when the primary map entry is malformed", () => {
+    const result = migrateUserPreferences({
+      ...USER_PREFERENCE_DEFAULTS,
+      defaultChatAgentKind: "claude",
+      defaultChatModelId: "claude-haiku-4-5",
+      defaultChatModelIdByAgentKind: {
+        claude: "",
+      },
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.preferences.defaultChatModelIdByAgentKind).toEqual({
+      claude: "haiku",
+    });
+  });
+
+  it("normalizes Claude legacy model IDs in model maps", () => {
+    const result = migrateUserPreferences({
+      ...USER_PREFERENCE_DEFAULTS,
+      defaultChatModelIdByAgentKind: {
+        claude: "claude-opus-4-5",
+        codex: "gpt-5.4",
+      },
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.preferences.defaultChatModelIdByAgentKind).toEqual({
+      claude: "opus[1m]",
+      codex: "gpt-5.4",
+    });
+  });
+
+  it("sanitizes live session control default maps", () => {
+    const result = migrateUserPreferences({
+      ...USER_PREFERENCE_DEFAULTS,
+      defaultLiveSessionControlValuesByAgentKind: {
+        claude: {
+          reasoning: " extended ",
+          effort: "",
+          fast_mode: "enabled",
+          temperature: "1",
+        },
+        codex: null,
+        "": {
+          reasoning: "low",
+        },
+      } as unknown as typeof USER_PREFERENCE_DEFAULTS.defaultLiveSessionControlValuesByAgentKind,
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.preferences.defaultLiveSessionControlValuesByAgentKind).toEqual({
+      claude: {
+        reasoning: "extended",
+        fast_mode: "enabled",
+      },
+    });
+  });
+
+  it("preserves pinned Claude Opus 4.6 model preferences", () => {
+    const result = migrateUserPreferences({
+      ...USER_PREFERENCE_DEFAULTS,
+      defaultChatModelIdByAgentKind: {
+        claude: "claude-opus-4-6",
+        codex: "gpt-5.4",
+      },
+    });
+
+    expect(result.changed).toBe(false);
+    expect(result.preferences.defaultChatModelIdByAgentKind).toEqual({
+      claude: "claude-opus-4-6",
+      codex: "gpt-5.4",
+    });
+  });
+
+  it("keeps existing-record backfills distinct from new-user defaults", () => {
+    expect(USER_PREFERENCE_DEFAULTS.themePreset).toBe("mono");
+    expect(USER_PREFERENCE_DEFAULTS.defaultChatAgentKind).toBe("claude");
+    expect(USER_PREFERENCE_DEFAULTS.transparentChromeEnabled).toBe(false);
+    expect(PERSISTED_RECORD_BACKFILL.themePreset).toBe("mono");
+    expect(PERSISTED_RECORD_BACKFILL.defaultChatAgentKind).toBe("");
+    expect(PERSISTED_RECORD_BACKFILL.transparentChromeEnabled).toBe(true);
+  });
+
+  it("drops legacy coding-session plugin preference keys during bootstrap", async () => {
+    memory.values.set("user_preferences", {
+      themePreset: "ship",
+      pluginsInCodingSessionsEnabled: true,
+      powersInCodingSessionsEnabled: true,
+    });
+
+    await bootstrapUserPreferencesForTest();
+
+    const preferences = useUserPreferencesStore.getState();
+    expect(preferences).not.toHaveProperty("pluginsInCodingSessionsEnabled");
+    expect(preferences).not.toHaveProperty("powersInCodingSessionsEnabled");
+    const lastPersistedValue = memory.readJson<Record<string, unknown>>("user_preferences")!;
+    expect(lastPersistedValue).not.toHaveProperty(
+      "pluginsInCodingSessionsEnabled",
+    );
+    expect(lastPersistedValue).not.toHaveProperty(
+      "powersInCodingSessionsEnabled",
+    );
+  });
+
+  it("defaults long-paste attachments on", () => {
+    expect(USER_PREFERENCE_DEFAULTS.pasteAttachmentsEnabled).toBe(true);
+  });
+
+  it("defaults appearance preferences to default", () => {
+    expect(USER_PREFERENCE_DEFAULTS.uiFontSizeId).toBe("default");
+    expect(USER_PREFERENCE_DEFAULTS.readableCodeFontSizeId).toBe("default");
+    expect(USER_PREFERENCE_DEFAULTS.windowZoomId).toBe("default");
+    expect(PERSISTED_RECORD_BACKFILL.uiFontSizeId).toBe("default");
+    expect(PERSISTED_RECORD_BACKFILL.readableCodeFontSizeId).toBe("default");
+    expect(PERSISTED_RECORD_BACKFILL.windowZoomId).toBe("default");
+  });
+
+  it("migrates missing long-paste attachment preference to on", () => {
+    const legacy = {
+      ...USER_PREFERENCE_DEFAULTS,
+      pasteAttachmentsEnabled: undefined,
+    } as unknown as UserPreferences;
+
+    const result = migrateUserPreferences(legacy);
+
+    expect(result.changed).toBe(true);
+    expect(result.preferences.pasteAttachmentsEnabled).toBe(true);
+  });
+
+  it("migrates missing transparent chrome through existing-record backfill", () => {
+    const legacy = {
+      ...USER_PREFERENCE_DEFAULTS,
+      transparentChromeEnabled: undefined,
+    } as unknown as UserPreferences;
+
+    const result = migrateUserPreferences(legacy);
+
+    expect(result.changed).toBe(true);
+    expect(result.preferences.transparentChromeEnabled).toBe(true);
+  });
+
+  it("migrates missing appearance preferences to default", () => {
+    const legacy = {
+      ...USER_PREFERENCE_DEFAULTS,
+      uiFontSizeId: undefined,
+      readableCodeFontSizeId: undefined,
+      windowZoomId: undefined,
+    } as unknown as UserPreferences;
+
+    const result = migrateUserPreferences(legacy);
+
+    expect(result.changed).toBe(true);
+    expect(result.preferences.uiFontSizeId).toBe("default");
+    expect(result.preferences.readableCodeFontSizeId).toBe("default");
+    expect(result.preferences.windowZoomId).toBe("default");
+  });
+
+  it("sanitizes invalid appearance preferences", () => {
+    const result = migrateUserPreferences({
+      ...USER_PREFERENCE_DEFAULTS,
+      uiFontSizeId: "giant" as unknown as UserPreferences["uiFontSizeId"],
+      readableCodeFontSizeId: "tiny" as unknown as UserPreferences["readableCodeFontSizeId"],
+      windowZoomId: "125" as unknown as UserPreferences["windowZoomId"],
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.preferences.uiFontSizeId).toBe("default");
+    expect(result.preferences.readableCodeFontSizeId).toBe("default");
+    expect(result.preferences.windowZoomId).toBe("default");
+  });
+
+  it("preserves explicit valid appearance preferences", () => {
+    const result = migrateUserPreferences({
+      ...USER_PREFERENCE_DEFAULTS,
+      uiFontSizeId: "xxsmall",
+      readableCodeFontSizeId: "xxxlarge",
+      windowZoomId: "zoom90",
+    });
+
+    expect(result.changed).toBe(false);
+    expect(result.preferences.uiFontSizeId).toBe("xxsmall");
+    expect(result.preferences.readableCodeFontSizeId).toBe("xxxlarge");
+    expect(result.preferences.windowZoomId).toBe("zoom90");
+  });
+
+  it("sanitizes partially present review defaults", () => {
+    const result = migrateUserPreferences({
+      ...USER_PREFERENCE_DEFAULTS,
+      reviewDefaultsByKind: {
+        plan: {
+          maxRounds: 99,
+          autoIterate: true,
+          reviewers: [
+            {
+              id: "skeptic",
+              label: "Skeptic",
+              prompt: "Find planning gaps.",
+              agentKind: "codex",
+              modelId: "gpt-5.4",
+              modeId: "read-only",
+            },
+          ],
+        },
+        code: null,
+      },
+    } as unknown as UserPreferences);
+
+    expect(result.changed).toBe(true);
+    expect(result.preferences.reviewDefaultsByKind.plan?.maxRounds).toBe(10);
+    expect(result.preferences.reviewDefaultsByKind.plan?.reviewers).toMatchObject({
+      mode: "custom",
+      items: [
+        {
+          id: "skeptic",
+          label: "Skeptic",
+          prompt: "Find planning gaps.",
+          agentKind: "codex",
+          modelId: "gpt-5.4",
+          modeId: "read-only",
+        },
+      ],
+    });
+    expect(result.preferences.reviewDefaultsByKind.code).toBeNull();
+  });
+
+  it("preserves legacy auto-send review defaults during migration", () => {
+    const result = migrateUserPreferences({
+      ...USER_PREFERENCE_DEFAULTS,
+      reviewDefaultsByKind: {
+        plan: {
+          maxRounds: 2,
+          autoSendFeedback: false,
+          reviewers: [],
+        },
+        code: null,
+      },
+    } as unknown as UserPreferences);
+
+    expect(result.changed).toBe(true);
+    expect(result.preferences.reviewDefaultsByKind.plan?.autoIterate).toBe(false);
+    expect(result.preferences.reviewDefaultsByKind.plan?.reviewers).toEqual({ mode: "inherit" });
+  });
+
+  it("sanitizes reusable review personalities by kind", () => {
+    const result = migrateUserPreferences({
+      ...USER_PREFERENCE_DEFAULTS,
+      reviewPersonalitiesByKind: {
+        plan: [
+          {
+            id: " plan-skeptic ",
+            label: " Strict plan reviewer ",
+            prompt: " Find hidden plan gaps. ",
+          },
+          {
+            id: "plan-skeptic",
+            label: "Duplicate",
+            prompt: "Drop duplicate.",
+          },
+          {
+            id: "",
+            label: "Missing id",
+            prompt: "Drop invalid.",
+          },
+        ],
+        code: null as unknown as [],
+      },
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.preferences.reviewPersonalitiesByKind.plan).toEqual([
+      {
+        id: "plan-skeptic",
+        label: "Strict plan reviewer",
+        prompt: "Find hidden plan gaps.",
+      },
+    ]);
+    expect(result.preferences.reviewPersonalitiesByKind.code).toEqual([]);
+  });
+});

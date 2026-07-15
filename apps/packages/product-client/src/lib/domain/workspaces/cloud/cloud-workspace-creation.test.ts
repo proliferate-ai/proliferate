@@ -1,0 +1,283 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  buildCloudRepoActionBySourceRoot,
+  buildCloudWorkspaceAttemptFromRequest,
+  buildConfiguredCloudRepoKeys,
+  buildNextCloudWorkspaceAttempt,
+  collectTakenCloudWorkspaceSlugs,
+  getCloudWorkspaceRepoTarget,
+  isCloudWorkspaceBillingBlockError,
+  isCloudWorkspaceBranchConflictError,
+  isCreateCloudWorkspaceRequest,
+  resolveCloudRepoActionState,
+  resolveCloudWorkspaceCreateFailureMessage,
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
+
+describe("cloud workspace creation helpers", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("builds configured repo keys from configured summaries only", () => {
+    const keys = buildConfiguredCloudRepoKeys([
+      {
+        id: "repo-rocket",
+        gitProvider: "github",
+        gitOwner: "acme",
+        gitRepoName: "rocket",
+        commitInstructions: "",
+        environments: [{
+          id: "env-rocket-cloud",
+          repoConfigId: "repo-rocket",
+          kind: "cloud",
+          desktopInstallId: null,
+          localPath: null,
+          defaultBranch: "main",
+          setupScript: "",
+          runCommand: "",
+        }],
+      },
+      {
+        id: "repo-draft",
+        gitProvider: "github",
+        gitOwner: "acme",
+        gitRepoName: "draft",
+        commitInstructions: "",
+        environments: [{
+          id: "env-draft-local",
+          repoConfigId: "repo-draft",
+          kind: "local",
+          desktopInstallId: "desktop-1",
+          localPath: "/repos/draft",
+          defaultBranch: null,
+          setupScript: "",
+          runCommand: "",
+        }],
+      },
+    ]);
+
+    expect(keys.has("acme::rocket")).toBe(true);
+    expect(keys.has("acme::draft")).toBe(false);
+  });
+
+  it("resolves loading, configure, and create repo actions", () => {
+    expect(resolveCloudRepoActionState({
+      repoTarget: null,
+      configuredRepoKeys: new Set(),
+      isInitialConfigLoad: false,
+    })).toEqual({ kind: "hidden", label: null });
+
+    expect(resolveCloudRepoActionState({
+      repoTarget: { gitOwner: "acme", gitRepoName: "rocket" },
+      configuredRepoKeys: new Set(),
+      isInitialConfigLoad: true,
+    })).toEqual({ kind: "loading", label: "Loading cloud..." });
+
+    expect(resolveCloudRepoActionState({
+      repoTarget: { gitOwner: "acme", gitRepoName: "rocket" },
+      configuredRepoKeys: new Set(),
+      isInitialConfigLoad: false,
+    })).toEqual({ kind: "configure", label: "Configure cloud" });
+
+    expect(resolveCloudRepoActionState({
+      repoTarget: { gitOwner: "acme", gitRepoName: "rocket" },
+      configuredRepoKeys: new Set(["acme::rocket"]),
+      isInitialConfigLoad: false,
+    })).toEqual({ kind: "create", label: "New cloud workspace" });
+  });
+
+  it("builds cloud action state independently for each repository row", () => {
+    const actions = buildCloudRepoActionBySourceRoot({
+      repositories: [
+        {
+          sourceRoot: "/repos/rocket",
+          gitOwner: "acme",
+          gitRepoName: "rocket",
+        },
+        {
+          sourceRoot: "/repos/draft",
+          gitOwner: "acme",
+          gitRepoName: "draft",
+        },
+        {
+          sourceRoot: "/repos/local-only",
+          gitOwner: null,
+          gitRepoName: null,
+        },
+      ],
+      cloudActive: true,
+      configuredRepoKeys: new Set(["acme::rocket"]),
+      isInitialConfigLoad: false,
+    });
+
+    expect(actions["/repos/rocket"]).toEqual({ kind: "create", label: "New cloud workspace" });
+    expect(actions["/repos/draft"]).toEqual({ kind: "configure", label: "Configure cloud" });
+    expect(actions["/repos/local-only"]).toEqual({ kind: "hidden", label: null });
+  });
+
+  it("derives taken slugs from the active branch prefix only", () => {
+    const taken = collectTakenCloudWorkspaceSlugs({
+      branchPrefixType: "proliferate",
+      authUser: null,
+      knownBranchNames: new Set(["proliferate/abalone", "other/acacia", "release"]),
+      triedBranchNames: new Set(["proliferate/agate"]),
+    });
+
+    expect(taken).toEqual(new Set(["abalone", "agate"]));
+  });
+
+  it("builds the next cloud create attempt from a fresh branch candidate", () => {
+    vi.spyOn(globalThis.crypto, "getRandomValues").mockImplementation((typedArray) => {
+      (typedArray as Uint32Array)[0] = 0;
+      return typedArray;
+    });
+
+    const attempt = buildNextCloudWorkspaceAttempt({
+      target: { gitOwner: "acme", gitRepoName: "rocket" },
+      branchPrefixType: "proliferate",
+      authUser: null,
+      knownBranchNames: new Set(["proliferate/abalone"]),
+      triedBranchNames: new Set<string>(),
+    });
+
+    expect(attempt.branchName).toMatch(/^proliferate\/[a-z-]+$/);
+    expect(attempt.branchName).not.toBe("proliferate/abalone");
+    expect(attempt.request).toEqual({
+      gitProvider: "github",
+      gitOwner: "acme",
+      gitRepoName: "rocket",
+      baseBranch: undefined,
+      branchName: attempt.branchName,
+      displayName: null,
+      generatedName: true,
+    });
+    expect(attempt.triedBranchNames).toEqual(new Set([attempt.branchName]));
+  });
+
+  it("passes the selected base branch while keeping generated branch naming", () => {
+    vi.spyOn(globalThis.crypto, "getRandomValues").mockImplementation((typedArray) => {
+      (typedArray as Uint32Array)[0] = 0;
+      return typedArray;
+    });
+
+    const attempt = buildNextCloudWorkspaceAttempt({
+      target: {
+        gitOwner: "acme",
+        gitRepoName: "rocket",
+        baseBranch: "release",
+      },
+      branchPrefixType: "proliferate",
+      authUser: null,
+      knownBranchNames: new Set(),
+      triedBranchNames: new Set<string>(),
+    });
+
+    expect(attempt.branchName).not.toBe("release");
+    expect(attempt.request.baseBranch).toBe("release");
+    expect(attempt.request.branchName).toBe(attempt.branchName);
+  });
+
+  it("reuses an explicit cloud request without generating a new branch", () => {
+    const request = {
+      gitProvider: "github" as const,
+      gitOwner: "acme",
+      gitRepoName: "rocket",
+      branchName: "proliferate/acacia",
+      displayName: null,
+      generatedName: false,
+    };
+
+    expect(isCreateCloudWorkspaceRequest(request)).toBe(true);
+    expect(getCloudWorkspaceRepoTarget(request)).toEqual({
+      gitOwner: "acme",
+      gitRepoName: "rocket",
+    });
+    expect(buildCloudWorkspaceAttemptFromRequest(request)).toEqual({
+      branchName: "proliferate/acacia",
+      request,
+      triedBranchNames: new Set(["proliferate/acacia"]),
+    });
+  });
+
+  it("recognizes server-reported branch conflicts", () => {
+    expect(isCloudWorkspaceBranchConflictError(
+      cloudError("exists", "github_branch_already_exists"),
+    )).toBe(true);
+    expect(isCloudWorkspaceBranchConflictError(
+      cloudError("exists", "cloud_branch_already_exists"),
+    )).toBe(true);
+    expect(isCloudWorkspaceBranchConflictError(
+      cloudError("bad", "github_branch_not_found"),
+    )).toBe(false);
+  });
+
+  it("recognizes server-reported billing blocks", () => {
+    expect(isCloudWorkspaceBillingBlockError(
+      cloudError("out of hours", "billing_credits_exhausted"),
+    )).toBe(true);
+    expect(isCloudWorkspaceBillingBlockError(
+      cloudError("blocked", "billing_start_blocked"),
+    )).toBe(true);
+    expect(isCloudWorkspaceBillingBlockError(
+      cloudError("legacy", "billing_resume_blocked"),
+    )).toBe(true);
+    expect(isCloudWorkspaceBillingBlockError(
+      cloudError("nope", "github_branch_not_found"),
+    )).toBe(false);
+    expect(isCloudWorkspaceBillingBlockError(new Error("no code"))).toBe(false);
+  });
+
+  it("surfaces the server billing message with an upgrade pointer when exhausted", () => {
+    const message = resolveCloudWorkspaceCreateFailureMessage(
+      cloudError(
+        "Cloud usage is paused because your included sandbox hours are exhausted.",
+        "billing_credits_exhausted",
+      ),
+      "Failed to create cloud workspace.",
+    );
+    expect(message).toBe(
+      "Cloud usage is paused because your included sandbox hours are exhausted. "
+      + "Upgrade your plan in Settings → Billing.",
+    );
+  });
+
+  it("surfaces other billing block messages verbatim (no upgrade pointer)", () => {
+    const message = resolveCloudWorkspaceCreateFailureMessage(
+      cloudError("Cloud usage is paused because billing needs attention.", "billing_start_blocked"),
+      "Failed to create cloud workspace.",
+    );
+    expect(message).toBe("Cloud usage is paused because billing needs attention.");
+  });
+
+  it("falls back to the provided message for non-Error / message-less failures", () => {
+    expect(resolveCloudWorkspaceCreateFailureMessage("boom", "fallback")).toBe("fallback");
+    expect(resolveCloudWorkspaceCreateFailureMessage(new Error(""), "fallback")).toBe("fallback");
+  });
+
+  it("propagates an interrupted failureMessage into the home-launch toast text", () => {
+    // Mirrors use-create-cloud-workspace's interrupted result and the toast
+    // template in use-home-next-launch: an out-of-credits 402 must surface the
+    // real reason, not "Cloud workspace creation was interrupted."
+    const failureMessage = resolveCloudWorkspaceCreateFailureMessage(
+      cloudError(
+        "Cloud usage is paused because your included sandbox hours are exhausted.",
+        "billing_credits_exhausted",
+      ),
+      "Failed to create cloud workspace.",
+    );
+    const result = { status: "interrupted", failureMessage } as const;
+    const thrown = new Error(
+      result.failureMessage ?? "Cloud workspace creation was interrupted.",
+    );
+    expect(`Failed to start work: ${thrown.message}`).toBe(
+      "Failed to start work: Cloud usage is paused because your included sandbox hours "
+      + "are exhausted. Upgrade your plan in Settings → Billing.",
+    );
+  });
+});
+
+function cloudError(message: string, code: string): Error {
+  const error = new Error(message) as Error & { code: string };
+  error.code = code;
+  return error;
+}

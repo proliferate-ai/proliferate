@@ -1,0 +1,43 @@
+import {
+  anyHarnessRuntimeWorkspacesKey,
+  anyHarnessWorktreesInventoryKey,
+  anyHarnessWorktreesRetentionPolicyKey,
+  useAnyHarnessCacheScopeKey,
+} from "@anyharness/sdk-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
+import {
+  worktreeSettingsTargetInventoryKey,
+  worktreeSettingsTargetRetentionPolicyKey,
+} from "#product/hooks/access/anyharness/worktrees/query-keys";
+import { workspaceCollectionsScopeKey } from "#product/hooks/workspaces/cache/query-keys";
+import type { WorktreeSettingsTarget } from "#product/lib/domain/workspaces/worktrees/worktree-settings-target";
+
+// Owns cache invalidation for the product-composed Worktree Settings target view.
+export function useWorktreeSettingsTargetCache(workspaceCollectionsRuntimeUrl: string | null) {
+  const queryClient = useQueryClient();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
+
+  return useCallback(async (target: WorktreeSettingsTarget) => {
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: worktreeSettingsTargetInventoryKey(target),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: worktreeSettingsTargetRetentionPolicyKey(target),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: anyHarnessWorktreesInventoryKey(target.runtimeUrl, cacheScopeKey),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: anyHarnessWorktreesRetentionPolicyKey(target.runtimeUrl, cacheScopeKey),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: anyHarnessRuntimeWorkspacesKey(target.runtimeUrl, cacheScopeKey),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: workspaceCollectionsScopeKey(workspaceCollectionsRuntimeUrl ?? target.runtimeUrl),
+      }),
+    ]);
+  }, [cacheScopeKey, queryClient, workspaceCollectionsRuntimeUrl]);
+}

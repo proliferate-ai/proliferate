@@ -1,0 +1,243 @@
+import { useEffect, useRef } from "react";
+import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
+import { Button } from "@proliferate/ui/primitives/Button";
+import {
+  SETTINGS_DEFAULT_SECTION,
+  TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION,
+  type SettingsSection,
+} from "#product/config/settings";
+import { SettingsContentBoundary } from "./SettingsContentBoundary";
+import { renderSettingsSection } from "./render-settings-section";
+import {
+  type SettingsRepositoryEntry,
+} from "#product/lib/domain/settings/repositories";
+import { type SettingsFocus } from "#product/lib/domain/settings/navigation";
+import {
+  resolveRepoScopeSelection,
+  type RepoSettingsContext,
+} from "#product/lib/domain/settings/repo-scope-selection";
+import {
+  SETTINGS_SCOPE_LABELS,
+  SETTINGS_SCOPE_ORDER,
+  getFirstSectionForScope,
+  getSettingsScopeForSection,
+  isSettingsAdminOnlyScope,
+  isSettingsAdminOnlySection,
+  isSettingsHarnessSection,
+} from "#product/lib/domain/settings/navigation-presentation";
+import { RepoScopeHeaderControls } from "#product/components/settings/screen/RepoScopeHeaderControls";
+import { AgentScopeHeaderControls } from "#product/components/settings/screen/AgentScopeHeaderControls";
+import { SettingsSidebar } from "#product/components/settings/sidebar/SettingsSidebar";
+import { SettingsScopeTabs } from "@proliferate/product-ui/settings/SettingsScopeTabs";
+import { ArrowLeft } from "lucide-react";
+import { SETTINGS_COPY } from "#product/copy/settings/settings-copy";
+import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+import { useResize } from "#product/hooks/ui/layout/use-resize";
+import {
+  WORKSPACE_SIDEBAR_MAX_WIDTH,
+  WORKSPACE_SIDEBAR_MIN_WIDTH,
+} from "#product/lib/domain/preferences/workspace-ui/sidebar";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useUpdater } from "#product/hooks/access/tauri/use-updater";
+import { useIsAdmin } from "#product/hooks/access/cloud/organizations/use-is-admin";
+import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
+
+interface SettingsScreenProps {
+  activeSection: SettingsSection;
+  activeRepoSourceRoot: string | null;
+  focus: SettingsFocus;
+  repositories: SettingsRepositoryEntry[];
+  onNavigateHome: () => void;
+  onSelectSection: (section: SettingsSection) => void;
+  onSelectRepo: (sourceRoot: string) => void;
+  onSelectRepoContext: (context: RepoSettingsContext) => void;
+  onSelectCloudEnvironment: (gitOwner: string, gitRepoName: string) => void;
+}
+
+export function SettingsScreen({
+  activeSection,
+  activeRepoSourceRoot,
+  focus,
+  repositories,
+  onNavigateHome,
+  onSelectSection,
+  onSelectRepo,
+  onSelectRepoContext,
+  onSelectCloudEnvironment,
+}: SettingsScreenProps) {
+  const { cloudActive, cloudEnabled, cloudSignInAvailable, cloudSignInChecking } = useCloudAvailabilityState();
+  const { activeOrganizationId, organizationsQuery } = useActiveOrganization();
+  const admin = useIsAdmin(activeOrganizationId);
+  const {
+    phase,
+    checkNow,
+    updatesSupported,
+  } = useUpdater();
+  const repoSelection = resolveRepoScopeSelection({
+    repositories,
+    activeRepoSourceRoot,
+    focus,
+  });
+  const activeSectionIsAdminOnly = isSettingsAdminOnlySection(activeSection);
+  const adminAccessLoading = organizationsQuery.isLoading || admin.isLoading;
+  const isAdminConfirmed = admin.isAdmin === true;
+  // Single gating source: until admin status resolves to true, treat the
+  // user as non-admin so admin-only panes/tabs never flash during the
+  // useIsAdmin loading window.
+  const showAdminSettings = TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION || isAdminConfirmed;
+  const shouldRedirectAdminSection =
+    activeSectionIsAdminOnly
+    && !TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION
+    && !adminAccessLoading
+    && !isAdminConfirmed;
+  const effectiveActiveSection =
+    activeSectionIsAdminOnly && !showAdminSettings
+      ? SETTINGS_DEFAULT_SECTION
+      : activeSection;
+  const visibleScopeOrder = SETTINGS_SCOPE_ORDER.filter(
+    (scope) => !isSettingsAdminOnlyScope(scope) || showAdminSettings,
+  );
+  const redirectedAdminSectionRef = useRef<SettingsSection | null>(null);
+
+  useEffect(() => {
+    if (!shouldRedirectAdminSection) {
+      redirectedAdminSectionRef.current = null;
+      return;
+    }
+    if (redirectedAdminSectionRef.current === activeSection) {
+      return;
+    }
+    redirectedAdminSectionRef.current = activeSection;
+    onSelectSection(SETTINGS_DEFAULT_SECTION);
+  }, [activeSection, onSelectSection, shouldRedirectAdminSection]);
+
+  // The settings sidebar shares the main sidebar's persisted width, so
+  // resizing either surface keeps both in step.
+  const sidebarWidth = useWorkspaceUiStore((s) => s.sidebarWidth);
+  const setSidebarWidth = useWorkspaceUiStore((s) => s.setSidebarWidth);
+  const onSidebarSeparatorDown = useResize({
+    direction: "horizontal",
+    size: sidebarWidth,
+    onResize: setSidebarWidth,
+    min: WORKSPACE_SIDEBAR_MIN_WIDTH,
+    max: WORKSPACE_SIDEBAR_MAX_WIDTH,
+  });
+
+  const activeScope = getSettingsScopeForSection(effectiveActiveSection);
+  const handleScopeChange = (scope: typeof activeScope) => {
+    if (scope === activeScope) {
+      return;
+    }
+    onSelectSection(getFirstSectionForScope(scope));
+  };
+  return (
+    <div className="flex h-screen flex-col bg-background text-foreground" data-telemetry-block>
+      <header className="shrink-0 border-b border-border">
+        <div
+          className="flex h-10 items-center gap-2 pl-[82px] pr-3"
+          data-tauri-drag-region="true"
+        >
+          <Button
+            type="button"
+            variant="unstyled"
+            size="unstyled"
+            onClick={onNavigateHome}
+            className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-ui text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <ArrowLeft className="size-4" />
+            {SETTINGS_COPY.back}
+          </Button>
+        </div>
+        <div className="flex h-[46px] items-center gap-4 px-4">
+          <SettingsScopeTabs
+            items={visibleScopeOrder.map((scope) => ({
+              id: scope,
+              label: SETTINGS_SCOPE_LABELS[scope],
+            }))}
+            value={activeScope}
+            onChange={handleScopeChange}
+          />
+          <div className="ml-auto flex items-center gap-2.5">
+            {activeScope === "repo" ? (
+              <RepoScopeHeaderControls
+                repositories={repositories}
+                activeRepoSourceRoot={activeRepoSourceRoot}
+                focus={focus}
+                onSelectRepo={onSelectRepo}
+                onSelectRepoContext={onSelectRepoContext}
+                onSelectCloudEnvironment={onSelectCloudEnvironment}
+              />
+            ) : activeScope === "agents" && (isSettingsHarnessSection(effectiveActiveSection) || effectiveActiveSection === "agent-api-keys") ? (
+              <AgentScopeHeaderControls />
+            ) : null}
+          </div>
+        </div>
+      </header>
+
+      <div className="flex min-h-0 flex-1">
+        <div
+          id="settings-sidebar"
+          className="flex shrink-0 flex-col overflow-hidden border-r border-border"
+          style={{ width: sidebarWidth }}
+        >
+          <SettingsSidebar
+            activeScope={activeScope}
+            activeSection={effectiveActiveSection}
+            adminAccess={{
+              isAdmin: admin.isAdmin,
+              isLoading: admin.isLoading,
+            }}
+            onSelectSection={onSelectSection}
+            disabledSections={{
+              integrations: !cloudEnabled,
+              "organization-integrations": !cloudEnabled,
+              "agent-api-keys": !cloudEnabled,
+              "organization-secrets": !cloudEnabled,
+              "organization-sso": !cloudEnabled,
+              "personal-secrets": !cloudEnabled,
+            }}
+            onCheckForUpdates={() => { void checkNow(); }}
+            updateActionState={{
+              phase,
+              updatesSupported,
+            }}
+          />
+        </div>
+
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-controls="settings-sidebar"
+          onMouseDown={onSidebarSeparatorDown}
+          className="relative z-10 -ml-1 flex w-1 shrink-0 cursor-col-resize items-center justify-center transition-colors hover:bg-primary/30 active:bg-primary/50"
+        />
+
+        <div className="relative min-w-0 flex-1 bg-background">
+          <AutoHideScrollArea className="h-full" viewportClassName="px-10 pb-12 pt-10">
+            <div className="flex justify-center pb-8">
+              {/* The single settings page-width contract: panes never set their
+                  own max-w — they inherit this container's. */}
+              <div className="w-full max-w-[50rem] space-y-6">
+                <SettingsContentBoundary section={effectiveActiveSection}>
+                  {renderSettingsSection(
+                    effectiveActiveSection,
+                    repoSelection,
+                    cloudEnabled,
+                    cloudActive,
+                    cloudSignInChecking,
+                    cloudSignInAvailable,
+                    focus,
+                    onSelectSection,
+                    onSelectRepo,
+                    onSelectRepoContext,
+                    onSelectCloudEnvironment,
+                  )}
+                </SettingsContentBoundary>
+              </div>
+            </div>
+          </AutoHideScrollArea>
+        </div>
+      </div>
+    </div>
+  );
+}

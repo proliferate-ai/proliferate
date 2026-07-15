@@ -1,0 +1,87 @@
+import { create } from "zustand";
+import { WORKSPACE_UI_DEFAULTS } from "#product/lib/domain/preferences/workspace-ui/model";
+import type { PersistedWorkspaceGitStatusSnapshot } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
+import { createWorkspaceUiActivityActions } from "#product/stores/preferences/workspace-ui-activity-actions";
+import { createWorkspaceUiChatTabActions } from "#product/stores/preferences/workspace-ui-chat-tab-actions";
+import { createWorkspaceUiDismissalActions } from "#product/stores/preferences/workspace-ui-dismissal-actions";
+import { createWorkspaceUiGitStatusActions } from "#product/stores/preferences/workspace-ui-git-status-actions";
+import { createWorkspaceUiRightPanelActions } from "#product/stores/preferences/workspace-ui-right-panel-actions";
+import { createWorkspaceUiShellActions } from "#product/stores/preferences/workspace-ui-shell-actions";
+import { createWorkspaceUiSidebarActions } from "#product/stores/preferences/workspace-ui-sidebar-actions";
+import type { WorkspaceUiState } from "#product/stores/preferences/workspace-ui-store-types";
+
+export type { ShellIntentResult, WorkspaceUiState } from "#product/stores/preferences/workspace-ui-store-types";
+
+export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
+  ...WORKSPACE_UI_DEFAULTS,
+  _hydrated: false,
+  shellActivationEpochByWorkspace: {},
+  pendingChatActivationByWorkspace: {},
+  urgentHighlightedChatSessionByWorkspace: {},
+
+  hydrate: (state) => {
+    set({
+      ...state,
+      _hydrated: true,
+    });
+  },
+
+  ...createWorkspaceUiSidebarActions(set, get),
+  ...createWorkspaceUiRightPanelActions(set),
+  ...createWorkspaceUiShellActions(set, get),
+  ...createWorkspaceUiActivityActions(set, get),
+  ...createWorkspaceUiDismissalActions(set, get),
+  ...createWorkspaceUiChatTabActions(set, get),
+  ...createWorkspaceUiGitStatusActions(set, get),
+}));
+
+export function trackWorkspaceInteraction(workspaceId: string, timestamp: string) {
+  useWorkspaceUiStore.getState().updateWorkspaceLastInteracted(workspaceId, timestamp);
+}
+
+export function trackSessionInteraction(sessionId: string, timestamp: string) {
+  useWorkspaceUiStore.getState().updateSessionLastInteracted(sessionId, timestamp);
+}
+
+export function markWorkspaceViewed(workspaceId: string) {
+  useWorkspaceUiStore.getState().markWorkspaceViewed(workspaceId);
+}
+
+export function markWorkspaceViewedAt(workspaceId: string, timestamp: string) {
+  useWorkspaceUiStore.getState().markWorkspaceViewedAt(workspaceId, timestamp);
+}
+
+export function rememberLastViewedSession(workspaceId: string, sessionId: string) {
+  useWorkspaceUiStore.getState().setLastViewedSessionForWorkspace(workspaceId, sessionId);
+}
+
+export function clearLastViewedSession(workspaceId: string, sessionId?: string) {
+  useWorkspaceUiStore.getState().clearLastViewedSessionForWorkspace(workspaceId, sessionId);
+}
+
+export function markSessionErrorViewed(sessionId: string, errorAt: string) {
+  useWorkspaceUiStore.getState().markSessionErrorViewed(sessionId, errorAt);
+}
+
+export function clearViewedSessionErrors(sessionIds: string[]) {
+  useWorkspaceUiStore.getState().clearViewedSessionErrors(sessionIds);
+}
+
+export function ensureRepoGroupExpanded(repoKey: string) {
+  useWorkspaceUiStore.getState().ensureRepoGroupExpanded(repoKey);
+}
+
+export function recordWorkspaceGitStatusSnapshot(
+  logicalWorkspaceId: string,
+  snapshot: PersistedWorkspaceGitStatusSnapshot,
+) {
+  useWorkspaceUiStore.getState().recordWorkspaceGitStatusSnapshot(logicalWorkspaceId, snapshot);
+}
+
+export function stampWorkspaceGitPrompt(logicalWorkspaceId: string, at: string) {
+  useWorkspaceUiStore.getState().stampWorkspaceGitPrompt(logicalWorkspaceId, at);
+}
+
+export function pruneWorkspaceGitStatusSnapshots(liveLogicalWorkspaceIds: string[]) {
+  useWorkspaceUiStore.getState().pruneWorkspaceGitStatusSnapshots(liveLogicalWorkspaceIds);
+}

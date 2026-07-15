@@ -1,0 +1,24 @@
+import { describe, expect, it } from "vitest";
+import { APP_ROUTES, LEGACY_APP_ROUTES } from "#product/config/app-routes";
+
+describe("app routes", () => {
+  it("registers workflows as a top-level route", () => {
+    expect(APP_ROUTES.workflows).toBe("/workflows");
+  });
+
+  it("does not keep named constants for merged plugin, integration and automation routes", () => {
+    expect(APP_ROUTES).not.toHaveProperty("integrations");
+    expect(APP_ROUTES).not.toHaveProperty("plugins");
+    expect(APP_ROUTES).not.toHaveProperty("automations");
+    expect(LEGACY_APP_ROUTES.automations).toBe("/automations");
+  });
+
+  it("registers the workspaces page as a top-level route", () => {
+    expect(APP_ROUTES.workspaces).toBe("/workspaces");
+  });
+
+  it("does not keep a named constant for the retired powers route", () => {
+    expect(APP_ROUTES).not.toHaveProperty("powers");
+    expect(LEGACY_APP_ROUTES).not.toHaveProperty("powers");
+  });
+});

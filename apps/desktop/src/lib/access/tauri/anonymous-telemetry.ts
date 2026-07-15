@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AnonymousTelemetryPersistedState } from "@/lib/domain/telemetry/anonymous-events";
+import type { AnonymousTelemetryPersistedState } from "@proliferate/product-client/internal/lib/domain/telemetry/anonymous-events";
 
 export interface AnonymousTelemetryBootstrapRecord {
   installId: string;

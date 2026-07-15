@@ -2162,7 +2162,7 @@ lib/infra/measurement/typing-latency-probe.ts	retain		retain (Desktop host) per 
 lib/infra/persistence/preferences-persistence.ts	retain		audited exception: readPersistedValue/persistValue directly import getPreferencesStore from @/lib/access/tauri/store (raw Tauri store); consumed only by retained lib/access/tauri/ssh-target-profile.ts
 lib/infra/persistence/product-storage.test.ts	move	apps/packages/product-client/src/lib/infra/persistence/product-storage.test.ts	product module; default move per ledger rules; no host-retained runtime import
 lib/infra/persistence/product-storage.ts	move	apps/packages/product-client/src/lib/infra/persistence/product-storage.ts	product module; default move per ledger rules; no host-retained runtime import
-lib/infra/proliferate-api.ts	retain		retain (Desktop host) per brief retain bucket
+lib/infra/proliferate-api.ts	retain		retain (Desktop host) per brief retain bucket; AMENDED during the move to a split pair: host keeps the bootstrap/runtime singleton, a distinct pure-helper counterpart (explicit baseUrl args) was created at apps/packages/product-client/src/lib/infra/proliferate-api.ts for moved consumers (see d1h ruling #7)
 lib/infra/proliferate-web.ts	move	apps/packages/product-client/src/lib/infra/proliferate-web.ts	product module; default move per ledger rules; no host-retained runtime import
 lib/infra/query/query-client.test.ts	move	apps/packages/product-client/src/lib/infra/query/query-client.test.ts	product module; default move per ledger rules; no host-retained runtime import
 lib/infra/query/query-client.ts	move	apps/packages/product-client/src/lib/infra/query/query-client.ts	product module; default move per ledger rules; no host-retained runtime import
@@ -2344,6 +2344,62 @@ stores/workspaces/workspace-sidebar-show-more-store.ts	move	apps/packages/produc
 test/product-host-fixtures.ts	move	apps/packages/product-client/src/test/product-host-fixtures.ts	product module; default move per ledger rules; no host-retained runtime import
 test/product-host-test-utils.tsx	move	apps/packages/product-client/src/test/product-host-test-utils.tsx	product module; default move per ledger rules; no host-retained runtime import
 test/product-storage-test-utils.ts	move	apps/packages/product-client/src/test/product-storage-test-utils.ts	product module; default move per ledger rules; no host-retained runtime import
+```
+
+## Amendments (ratified during the move)
+
+The rows above are the binding classification and are **not** rewritten. This
+section records reclassifications the implementation owner ratified during the
+move (round-3 ruling **G6**), each with the evidence that made the original
+`retain` unsafe or stale. `check-product-client-move-ledger-postmove.py` reads
+the `` ```ledger-amendments `` block below and applies each `src -> new_class`
+override before checking, so the completion proof tracks these owner-blessed
+relocations without silently editing the binding rows.
+
+Every amendment below is `retain -> move` (except the trailing five
+`move -> delete` rows added during the origin/main post-merge reconciliation —
+files the git-review-v2 / status-card PRs deleted on main; see their per-row
+evidence). The `retain -> move` evidence is uniform: post-#1168
+each of these modules is a **pure `host.desktop.*` / product-facade consumer**
+(local agent credentials, native shell/editors, workspace scratch, the updater
+cluster, and macOS window chrome), not a raw-Tauri or host-transport importer.
+Their original `retain` was the coarse `hooks/access/tauri/**` bucket default
+from the D1g brief; the actual runtime access is a typed bridge port, so the
+product tree owns them and Desktop keeps only the thin bridge adapter. The
+updater cluster additionally routes its module-level scheduler telemetry and
+its `lastCheckedAt` persistence through injected product facades (round-3 **G1**)
+with byte-identical event names, payloads, intervals, and storage keys;
+`use-window-actions` calls the new `nativeUi.applyMacosWindowChrome` bridge port
+(round-3 **G5**). `use-update-restart-watcher` (854/855) is fully bridge-based
+(reads `host.desktop.updater` + the moved updater store / running-agent-count
+hooks — no raw Tauri), so it moves with the `DesktopProductLifecycleRoot` split
+that consumes it. Their tests move with them and run under the package vitest
+lane.
+
+```ledger-amendments
+hooks/access/tauri/app/query-keys.ts	move	G1 updater cluster: app-version query key; consumed only by the moved use-app-version
+hooks/access/tauri/app/use-app-version.ts	move	G1 updater cluster: reads host.desktop.updater.getVersion via bridge + product telemetry facade
+hooks/access/tauri/credentials/query-keys.ts	move	pure host.desktop.localCredentials consumer (F3 relocation); retain was a stale bucket default
+hooks/access/tauri/credentials/use-local-agent-credentials.test.tsx	move	test of the relocated localCredentials hook; runs in the package vitest lane
+hooks/access/tauri/credentials/use-local-agent-credentials.ts	move	pure host.desktop.localCredentials consumer (F3 relocation); retain was a stale bucket default
+hooks/access/tauri/shell/query-keys.ts	move	pure host.desktop.files consumer (F3 relocation); retain was a stale bucket default
+hooks/access/tauri/shell/use-available-editors.ts	move	pure host.desktop.files consumer (F3 relocation); retain was a stale bucket default
+hooks/access/tauri/use-update-restart-watcher.test.tsx	move	moves with the DesktopProductLifecycleRoot split; fully bridge-based (host.desktop.updater), no raw Tauri
+hooks/access/tauri/use-update-restart-watcher.ts	move	moves with the DesktopProductLifecycleRoot split; fully bridge-based (host.desktop.updater), no raw Tauri
+hooks/access/tauri/updater-dev-mock.test.ts	move	G1 updater cluster: dev-only mock test; runs in the package vitest lane
+hooks/access/tauri/updater-dev-mock.ts	move	G1 updater cluster: dev-only localStorage/import.meta.env mock, no host transport
+hooks/access/tauri/use-updater.test.ts	move	G1 updater cluster: use-updater test; runs in the package vitest lane
+hooks/access/tauri/use-updater.ts	move	G1 updater cluster: host.desktop.updater bridge consumer + injected telemetry/storage facades
+hooks/access/tauri/use-window-actions.ts	move	G5 window chrome: calls the new nativeUi.applyMacosWindowChrome bridge port
+hooks/access/tauri/workspace-scratch/query-keys.ts	move	pure host.desktop.scratch consumer (F3 relocation); retain was a stale bucket default
+hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad-mutations.ts	move	pure host.desktop.scratch consumer (F3 relocation); retain was a stale bucket default
+hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad.test.tsx	move	test of the relocated scratch hook; runs in the package vitest lane
+hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad.ts	move	pure host.desktop.scratch consumer (F3 relocation); retain was a stale bucket default
+components/workspace/git/GitReviewFileTree.tsx	delete	main merge (post-merge reconciliation): deleted on origin/main by the git-review-v2 PR #1214 (flat Codex-style review document replaces the tree/stage/badge components); source gone from apps/desktop/src, no product target
+components/workspace/git/GitReviewStageAction.tsx	delete	main merge: deleted on origin/main by git-review-v2 PR #1214; replaced by the flat review document
+components/workspace/git/GitReviewStatusBadge.tsx	delete	main merge: deleted on origin/main by git-review-v2 PR #1214; replaced by the flat review document
+hooks/chat/ui/use-composer-ultra-emphasis.ts	delete	main merge: deleted on origin/main by the workspace-status-card PR #1210 (composer ultra-emphasis removed)
+lib/domain/workspaces/changes/git-file-status-presentation.ts	delete	main merge: deleted on origin/main by git-review-v2 PR #1214 (git-file-status presentation folded into the new review model)
 ```
 
 ## Codemod evidence (S5)

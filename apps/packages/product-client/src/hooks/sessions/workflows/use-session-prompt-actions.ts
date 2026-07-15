@@ -1,0 +1,85 @@
+import { useCallback } from "react";
+import { useSessionPromptWorkflow } from "#product/hooks/sessions/workflows/use-session-prompt-workflow";
+import type { ActiveSessionPromptOptions } from "#product/hooks/sessions/workflows/session-control-contract";
+import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
+import {
+  getSessionRecord,
+  isPendingSessionId,
+} from "#product/stores/sessions/session-records";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { logLatency } from "#product/lib/infra/measurement/measurement-port";
+import { canPromptSessionSlot } from "#product/lib/domain/sessions/prompt-readiness";
+
+export function useSessionPromptActions() {
+  const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
+  const { promptSession } = useSessionPromptWorkflow();
+
+  const promptActiveSession = useCallback(async (
+    text: string,
+    options?: ActiveSessionPromptOptions,
+  ) => {
+    const state = useSessionSelectionStore.getState();
+    const sessionId = state.activeSessionId;
+    if (!sessionId) {
+      throw new Error("No active session");
+    }
+
+    const slot = getSessionRecord(sessionId);
+    if (!isPendingSessionId(sessionId) && !slot) {
+      logLatency("session.prompt.active.blocked", {
+        reason: "missing_slot",
+        sessionId,
+        selectedWorkspaceId: state.selectedWorkspaceId,
+      });
+      throw new Error("No active session");
+    }
+    if (!isPendingSessionId(sessionId) && slot && !canPromptSessionSlot(slot)) {
+      logLatency("session.prompt.active.blocked", {
+        reason: "transcript_not_hydrated",
+        sessionId,
+        selectedWorkspaceId: state.selectedWorkspaceId,
+        slotWorkspaceId: slot.workspaceId,
+        materializedSessionId: slot.materializedSessionId,
+        status: slot.status,
+        streamConnectionState: slot.streamConnectionState,
+        transcriptLastSeq: slot.transcript.lastSeq,
+        turnCount: slot.transcript.turnOrder.length,
+        pendingInteractionCount: slot.transcript.pendingInteractions.length,
+      });
+      throw new Error("Session is still loading. Try again in a moment.");
+    }
+    if (!isPendingSessionId(sessionId) && slot && !slot.transcriptHydrated) {
+      logLatency("session.prompt.active.unhydrated_open_stream_allowed", {
+        sessionId,
+        selectedWorkspaceId: state.selectedWorkspaceId,
+        slotWorkspaceId: slot.workspaceId,
+        materializedSessionId: slot.materializedSessionId,
+        status: slot.status,
+        streamConnectionState: slot.streamConnectionState,
+        transcriptLastSeq: slot.transcript.lastSeq,
+        turnCount: slot.transcript.turnOrder.length,
+        pendingInteractionCount: slot.transcript.pendingInteractions.length,
+      });
+    }
+
+    const workspaceId = slot?.workspaceId ?? null;
+    const blockedReason = getWorkspaceRuntimeBlockReason(workspaceId);
+    if (blockedReason) {
+      throw new Error(blockedReason);
+    }
+
+    await promptSession({
+      sessionId,
+      text,
+      blocks: options?.blocks,
+      attachmentSnapshots: options?.attachmentSnapshots,
+      optimisticContentParts: options?.optimisticContentParts,
+      workspaceId,
+      latencyFlowId: options?.latencyFlowId,
+      measurementOperationId: options?.measurementOperationId,
+      promptId: options?.promptId,
+    });
+  }, [getWorkspaceRuntimeBlockReason, promptSession]);
+
+  return { promptActiveSession };
+}

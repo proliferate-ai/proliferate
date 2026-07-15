@@ -1,0 +1,136 @@
+import { forwardRef, memo, type HTMLAttributes, type ReactNode } from "react";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
+import {
+  CHAT_COLUMN_CLASSNAME,
+  CHAT_DOCK_LOWER_BACKDROP_FADE_HEIGHT_PX,
+  CHAT_SURFACE_GUTTER_CLASSNAME,
+} from "#product/config/chat-layout";
+import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
+
+interface ChatComposerDockProps extends HTMLAttributes<HTMLDivElement> {
+  backdrop?: boolean;
+  outboundSlot?: ReactNode;
+  activeSlot?: ReactNode;
+  attachedSlot?: ReactNode;
+  footerSlot?: ReactNode;
+  lowerBackdropTopPx?: number | null;
+  shellClassName?: string;
+  children: ReactNode;
+}
+
+/**
+ * Shared dock shell for the composer area. Renders:
+ *   1. optional backdrop wrapper (blur + scrim) so the composer looks
+ *      layered over the transcript scroll
+ *   2. a padded max-width column
+ *   3. optional inset dock regions, top to bottom:
+ *      outbound work, active agent state, attached context/parallel work
+ *   4. children - usually `<ChatInput />` or a playground surface
+ *
+ * Consumed by `ChatView` (production) and `ChatPlaygroundPage` (dev) so
+ * both surfaces stay in sync automatically.
+ */
+export const ChatComposerDock = memo(forwardRef<HTMLDivElement, ChatComposerDockProps>(
+  function ChatComposerDock({
+    backdrop = true,
+    outboundSlot,
+    activeSlot,
+    attachedSlot,
+    footerSlot,
+    lowerBackdropTopPx,
+    shellClassName,
+    children,
+    className = "",
+    ...rest
+  }, ref) {
+    useDebugRenderCount("chat-composer-dock");
+    const baseShellClassName = shellClassName
+      ? "z-10 shrink-0"
+      : "relative z-10 mt-auto shrink-0";
+    const lowerBackdropFadeTopPx = lowerBackdropTopPx == null
+      ? null
+      : Math.max(0, lowerBackdropTopPx - CHAT_DOCK_LOWER_BACKDROP_FADE_HEIGHT_PX);
+    const dockSlots = [
+      { key: "outbound", content: outboundSlot },
+      { key: "active", content: activeSlot },
+      { key: "attached", content: attachedSlot },
+    ].filter((slot): slot is { key: string; content: ReactNode } => Boolean(slot.content));
+
+    return (
+      <DebugProfiler id="chat-composer-dock">
+        <div
+          ref={ref}
+          className={twMerge(
+            baseShellClassName,
+            shellClassName,
+          )}
+        >
+        {backdrop && (
+          <>
+            {lowerBackdropFadeTopPx == null ? (
+              <div className="pointer-events-none absolute inset-x-0 -top-8 z-0 h-10 bg-gradient-to-b from-transparent via-background/45 to-background/95" />
+            ) : (
+              <div
+                className="pointer-events-none absolute inset-x-0 z-0 bg-gradient-to-b from-transparent to-background/88"
+                style={{
+                  height: CHAT_DOCK_LOWER_BACKDROP_FADE_HEIGHT_PX,
+                  top: lowerBackdropFadeTopPx,
+                }}
+              />
+            )}
+            {/* PERF: no backdrop-blur here. This layer covers the transcript,
+                and backdrop-blur forces WKWebView to re-blur everything behind
+                it on every keystroke/caret/stream frame — measured at
+                200-400ms/keystroke of frame_to_paint on long sessions. At 95%
+                opacity the blur was invisible anyway. */}
+            <div
+              className="pointer-events-none absolute inset-x-0 bottom-0 z-0 bg-background/95"
+              style={{ top: lowerBackdropTopPx == null ? 0 : `${lowerBackdropTopPx}px` }}
+            />
+          </>
+        )}
+        <div className={twMerge("pointer-events-none relative z-10 pb-4", CHAT_SURFACE_GUTTER_CLASSNAME, className)} {...rest}>
+          <div
+            data-chat-composer-column="true"
+            className={twMerge(
+              "pointer-events-auto relative @container",
+              "[&:has([data-workspace-activity-trigger])_.chat-composer-surface]:rounded-t-none",
+              CHAT_COLUMN_CLASSNAME,
+            )}
+          >
+            {dockSlots.length > 0 && (
+              <DebugProfiler id="chat-composer-dock-slots">
+                <>
+                  {dockSlots.map((slot, index) => (
+                    <div
+                      key={slot.key}
+                      data-dock-slot={slot.key}
+                      className={twMerge(
+                        "relative flex flex-col px-5",
+                        index === 0
+                          ? "[&>*+*]:rounded-t-none [&>*+*]:border-border/60"
+                          : "[&>*]:rounded-t-none [&>*]:border-border/60",
+                      )}
+                    >
+                      {slot.content}
+                    </div>
+                  ))}
+                </>
+              </DebugProfiler>
+            )}
+            <DebugProfiler id="chat-composer-dock-input">
+              <>{children}</>
+            </DebugProfiler>
+            {footerSlot ? (
+              <DebugProfiler id="chat-composer-dock-footer">
+                <div className="mt-2" data-chat-composer-footer="true">{footerSlot}</div>
+              </DebugProfiler>
+            ) : null}
+          </div>
+        </div>
+        </div>
+      </DebugProfiler>
+    );
+  },
+));

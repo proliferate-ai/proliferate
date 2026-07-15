@@ -6,8 +6,8 @@ import {
   getActiveGitHubSignIn,
   rejectGitHubSignIn,
   resolveGitHubSignIn,
-} from "@/lib/domain/auth/github-signin-state";
-import { isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
+} from "@proliferate/product-client/internal/lib/domain/auth/github-signin-state";
+import { isDevAuthBypassed } from "@proliferate/product-client/internal/lib/domain/auth/auth-mode";
 import {
   exchangeDesktopAuthCode,
   isPendingDesktopAuthExpired,

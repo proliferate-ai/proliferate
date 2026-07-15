@@ -1,7 +1,7 @@
 import posthog from "posthog-js";
 import type { PostHogInterface } from "posthog-js/lib/src/types";
 import type { DesktopTelemetryConfig } from "./config";
-import type { DesktopProductEventMap } from "@/lib/domain/telemetry/events";
+import type { DesktopProductEventMap } from "@proliferate/product-client/internal/lib/domain/telemetry/events";
 import { scrubPostHogPayload, scrubTelemetryData } from "./scrub";
 
 let posthogInitialized = false;

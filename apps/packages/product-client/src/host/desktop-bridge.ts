@@ -1,4 +1,5 @@
 import type { AnyHarnessClientConnection } from "@anyharness/sdk-react";
+import type { ServerMeta } from "#product/lib/domain/auth/connect-server";
 
 /**
  * The typed Desktop bridge: product-level native capabilities grouped by
@@ -22,6 +23,7 @@ export interface DesktopBridge {
   ssh: DesktopSshBridge;
   scratch: DesktopScratchBridge;
   diagnostics: DesktopDiagnosticsBridge;
+  connect: DesktopConnectBridge;
 }
 
 /**
@@ -171,6 +173,46 @@ export interface DesktopNativeUiBridge {
   setRunningAgentCount(count: number): Promise<void>;
   setWorkspaceActivity(payload: WorkspaceActivityPayload): Promise<void>;
   setZoom(scale: number): Promise<void>;
+
+  /**
+   * Apply the macOS traffic-light window chrome (inset title bar / safe-area
+   * layout). The product renders the drag-region safe area and asks the host to
+   * (re)apply native chrome on mount and window focus. A no-op on a non-mac or
+   * non-native host; the product already gates the call on a mac desktop.
+   */
+  applyMacosWindowChrome(): Promise<void>;
+
+  /**
+   * Whether this render runs in the app's main native webview (dev-handoff
+   * window port, ruling R2b). `false` on a non-native host, so the dev
+   * browser-to-desktop handoff poll never starts there.
+   */
+  isMainWebviewAvailable(): boolean;
+  /**
+   * Bring the current native window forward (show + unminimize + focus) after a
+   * dev handoff navigates. A no-op on a non-native host. Dev-only.
+   */
+  revealCurrentWindow(): Promise<void>;
+}
+
+// --- Connect to server (self-hosted) ---------------------------------------
+
+/**
+ * Result of probing a candidate server's `/meta` endpoint. `ok:false` carries a
+ * user-facing reason (unreachable, or not a Proliferate server); it is never a
+ * thrown exception. The `meta` payload is the product-owned {@link ServerMeta}.
+ */
+export type ServerMetaProbeResult =
+  | { ok: true; meta: ServerMeta }
+  | { ok: false; error: string };
+
+/**
+ * The connect-to-self-hosted-server flow (ruling R2a). Only the `/meta` probe
+ * crosses the boundary; the product owns the flow's state machine and the
+ * deployment switch (through `host.deployment.switchDeployment`).
+ */
+export interface DesktopConnectBridge {
+  fetchServerMeta(url: string): Promise<ServerMetaProbeResult>;
 }
 
 // --- Updater ----------------------------------------------------------------
@@ -317,12 +359,32 @@ export interface RendererEventPayload {
 }
 
 /**
+ * A React render-phase error captured by the product's AppErrorBoundary,
+ * forwarded to Desktop's native renderer diagnostic log (not Sentry). The host
+ * owns dedup/fingerprint/suppression semantics so the product boundary stays a
+ * thin reporter. `error` crosses the boundary as-is; the host derives its
+ * message/stack. This is distinct from `logEvent`, which is a narrow lifecycle
+ * marker rather than a full error diagnostic.
+ */
+export interface RenderErrorReport {
+  error: unknown;
+  componentStack?: string | null;
+}
+
+/**
  * Support UI can use native logs and attachments without importing Tauri.
  * Collection and staging return `null` outside a working native host, matching
  * Desktop's current nullability.
  */
 export interface DesktopDiagnosticsBridge {
   logEvent(payload: RendererEventPayload): Promise<void>;
+  /**
+   * Report a product render-phase error to the native renderer diagnostic log.
+   * The host applies the same dedup/fingerprint/suppression the pre-move
+   * renderer diagnostics did; the product boundary just forwards the error.
+   * Fire-and-forget: never rejects into the render path.
+   */
+  reportRenderError(report: RenderErrorReport): void;
   collectSupportBundle(): Promise<SupportBundle | null>;
   saveJson(input: SaveJsonInput): Promise<string | null>;
 

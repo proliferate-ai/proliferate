@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from "react";
-import { registerCurrentAuthSessionProvider } from "@/lib/domain/auth/current-auth-session";
+import { registerCurrentAuthSessionProvider } from "@proliferate/product-client/internal/lib/domain/auth/current-auth-session";
 import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
 import { bootstrapAuth } from "@/lib/integrations/auth/orchestration-bootstrap";
 import { useAuthOrchestrationEffects } from "@/hooks/auth/workflows/use-auth-orchestration-effects";

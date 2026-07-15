@@ -27,13 +27,13 @@ vi.mock("@/lib/access/tauri/auth", () => ({
   setStoredAuthSession: m.setStoredAuthSession,
   clearStoredAuthSession: m.clearStoredAuthSession,
 }));
-vi.mock("@/lib/domain/auth/github-signin-state", () => ({
+vi.mock("@proliferate/product-client/internal/lib/domain/auth/github-signin-state", () => ({
   getActiveGitHubSignIn: m.getActiveGitHubSignIn,
   rejectGitHubSignIn: m.rejectGitHubSignIn,
   resolveGitHubSignIn: m.resolveGitHubSignIn,
   cancelGitHubSignIn: m.cancelGitHubSignIn,
 }));
-vi.mock("@/lib/domain/auth/auth-mode", () => ({
+vi.mock("@proliferate/product-client/internal/lib/domain/auth/auth-mode", () => ({
   isDevAuthBypassed: m.isDevAuthBypassed,
   createDevBypassSession: m.createDevBypassSession,
 }));

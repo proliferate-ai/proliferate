@@ -4,6 +4,7 @@ import type {
   LocalRuntimeConnection,
   LocalRuntimeSnapshot,
   ProductCommand,
+  RenderErrorReport,
   ScratchRecord,
   ScratchWriteResult,
   SshProfile,
@@ -30,7 +31,15 @@ import {
 } from "./shell";
 import { showNativeContextMenu } from "./context-menu";
 import { listenForShortcutMenuEvents } from "./menu";
-import { setRunningAgentCount, setWebviewZoom } from "./window";
+import {
+  applyMacWindowChrome,
+  isMainTauriWebviewAvailable,
+  revealCurrentWindow,
+  setRunningAgentCount,
+  setWebviewZoom,
+} from "./window";
+import { fetchServerMeta } from "./connect-server";
+import { reportReactRenderError } from "@/lib/integrations/telemetry/native-diagnostics";
 import { setWorkspaceActivityIndicator } from "./dock";
 import {
   checkForUpdate,
@@ -147,6 +156,9 @@ export const desktopBridge: DesktopBridge = {
     setRunningAgentCount,
     setWorkspaceActivity: setWorkspaceActivityIndicator,
     setZoom: setWebviewZoom,
+    applyMacosWindowChrome: applyMacWindowChrome,
+    isMainWebviewAvailable: isMainTauriWebviewAvailable,
+    revealCurrentWindow,
   },
 
   updater: {
@@ -226,6 +238,18 @@ export const desktopBridge: DesktopBridge = {
 
   diagnostics: {
     logEvent: logRendererEvent,
+    reportRenderError(report: RenderErrorReport): void {
+      // Dedup/fingerprint/suppression stays host-owned in reportReactRenderError.
+      const error =
+        report.error instanceof Error
+          ? report.error
+          : new Error(
+              typeof report.error === "string"
+                ? report.error
+                : String(report.error),
+            );
+      reportReactRenderError(error, report.componentStack ?? null);
+    },
     collectSupportBundle: collectSupportDiagnostics,
     saveJson(input) {
       return saveDiagnosticJson(input.suggestedFileName, input.contents);
@@ -233,5 +257,9 @@ export const desktopBridge: DesktopBridge = {
     stageAttachment: stageSupportReportAttachment,
     readAttachment: readStagedSupportReportAttachment,
     deleteAttachment: deleteStagedSupportReportAttachment,
+  },
+
+  connect: {
+    fetchServerMeta,
   },
 };

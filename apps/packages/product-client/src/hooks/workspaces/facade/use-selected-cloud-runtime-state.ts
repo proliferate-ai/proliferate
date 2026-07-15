@@ -1,0 +1,105 @@
+import type { CloudConnectionInfo, CloudWorkspaceStatus } from "@proliferate/cloud-sdk/types";
+import type { TerminalWebSocketAuthTransport } from "@anyharness/sdk";
+import { useMemo } from "react";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
+import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
+import {
+  buildSelectedCloudRuntimeViewModel,
+  type SelectedCloudRuntimeViewModel,
+} from "#product/lib/domain/workspaces/cloud/cloud-runtime-state";
+import { cloudWorkspaceUsesCloudRuntime } from "#product/lib/domain/workspaces/cloud/cloud-runtime-kind";
+import { resolveCloudWorkspaceStatus } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
+import { useCloudWorkspaceConnection } from "#product/hooks/access/cloud/use-cloud-workspace-connection";
+import { useSelectedCloudRuntimeActions } from "#product/hooks/workspaces/workflows/use-selected-cloud-runtime-actions";
+import { hasWorkspaceBootstrappedInSession } from "#product/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
+
+export interface SelectedCloudRuntimeState {
+  workspaceId: string | null;
+  cloudWorkspaceId: string | null;
+  state: SelectedCloudRuntimeViewModel | null;
+  connectionInfo: (CloudConnectionInfo & {
+    webSocketAuthTransport?: TerminalWebSocketAuthTransport;
+  }) | null;
+  retry: (() => void) | null;
+  claim: (() => void) | null;
+  claimPending: boolean;
+}
+
+export function useSelectedCloudRuntimeState(): SelectedCloudRuntimeState {
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const { data: workspaceCollections } = useWorkspaces();
+
+  const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
+  const selectedCloudWorkspace = workspaceCollections?.cloudWorkspaces.find(
+    (workspace) => workspace.id === cloudWorkspaceId,
+  ) ?? null;
+  const persistedStatus = resolveCloudWorkspaceStatus(selectedCloudWorkspace) as CloudWorkspaceStatus | null;
+  const usesCloudRuntime = cloudWorkspaceUsesCloudRuntime(selectedCloudWorkspace);
+  const usesDirectAttach = selectedCloudWorkspace ? !usesCloudRuntime : false;
+  const needsClaim = false;
+  const isWarm = selectedWorkspaceId !== null && hasWorkspaceBootstrappedInSession(selectedWorkspaceId);
+  const connectionQueryEnabled = persistedStatus === "ready" && !usesDirectAttach && !needsClaim;
+  const connectionQuery = useCloudWorkspaceConnection(
+    selectedCloudWorkspace?.id ?? null,
+    connectionQueryEnabled,
+  );
+
+  const connectionState = useMemo(() => {
+    if (persistedStatus !== "ready") {
+      return "resolving" as const;
+    }
+    if (usesDirectAttach) {
+      return "ready" as const;
+    }
+    if (connectionQuery.data) {
+      return "ready" as const;
+    }
+    if (!connectionQueryEnabled) {
+      return "failed" as const;
+    }
+    if (connectionQuery.fetchStatus !== "idle" || connectionQuery.status === "pending") {
+      return "resolving" as const;
+    }
+    if (connectionQuery.status === "error") {
+      return "failed" as const;
+    }
+    return "failed" as const;
+  }, [
+    connectionQuery.data,
+    connectionQuery.fetchStatus,
+    connectionQuery.status,
+    connectionQueryEnabled,
+    persistedStatus,
+    usesDirectAttach,
+  ]);
+  const canUseConnection = persistedStatus === "ready" && !usesDirectAttach && !needsClaim;
+  const runtimeActions = useSelectedCloudRuntimeActions({
+    canUseConnection,
+    refetchConnection: connectionQuery.refetch,
+  });
+
+  const state = useMemo(() => buildSelectedCloudRuntimeViewModel({
+    persistedStatus,
+    visibility: selectedCloudWorkspace?.visibility ?? null,
+    connectionState,
+    isWarm,
+  }), [
+    connectionState,
+    isWarm,
+    persistedStatus,
+    selectedCloudWorkspace?.visibility,
+  ]);
+
+  return {
+    workspaceId: selectedWorkspaceId,
+    cloudWorkspaceId,
+    state,
+    connectionInfo: canUseConnection
+      ? connectionQuery.data ?? null
+      : null,
+    retry: runtimeActions.retry,
+    claim: runtimeActions.claim,
+    claimPending: runtimeActions.claimPending,
+  };
+}

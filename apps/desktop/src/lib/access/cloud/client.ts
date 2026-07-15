@@ -9,15 +9,15 @@ import {
   type ProliferateStreamRequestInput,
   type ProliferateCloudClient,
 } from "@proliferate/cloud-sdk";
-import { applySelectedOrganizationHeaders } from "@/lib/access/cloud/owner-context-headers";
+import { applySelectedOrganizationHeaders } from "@proliferate/product-client/internal/lib/access/cloud/owner-context-headers";
 import {
   clearStoredAuthSession,
   getStoredAuthSession,
   setStoredAuthSession,
   type StoredAuthSession,
 } from "@/lib/access/tauri/auth";
-import { isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
-import { getCurrentAuthSession } from "@/lib/domain/auth/current-auth-session";
+import { isDevAuthBypassed } from "@proliferate/product-client/internal/lib/domain/auth/auth-mode";
+import { getCurrentAuthSession } from "@proliferate/product-client/internal/lib/domain/auth/current-auth-session";
 import { getProliferateApiBaseUrl } from "@/lib/infra/proliferate-api";
 import { recordMeasurementMetric } from "@/lib/infra/measurement/debug-measurement";
 import type { MeasurementOperationId } from "@/lib/infra/measurement/debug-measurement-catalog-types";

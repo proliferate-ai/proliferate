@@ -1,0 +1,256 @@
+// @vitest-environment jsdom
+
+import { act, cleanup, renderHook } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { MemoryRouter } from "react-router-dom";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useAppCommandActions } from "#product/hooks/app/workflows/use-app-command-actions";
+
+const hookMocks = vi.hoisted(() => ({
+  copyBranchName: vi.fn(),
+  copyWorkspaceLocation: vi.fn(),
+  createCloudWorkspaceAndEnter: vi.fn(() => Promise.resolve()),
+  createLocalWorkspaceAndEnter: vi.fn(() => Promise.resolve()),
+  createWorktreeAndEnter: vi.fn(() => Promise.resolve()),
+  goToTopLevelRoute: vi.fn(),
+  navigateToWorkspaceShell: vi.fn(),
+  openExternal: vi.fn(() => Promise.resolve()),
+  showToast: vi.fn(),
+  selectedWorkspaceId: null as string | null,
+  selectedLogicalWorkspace: null as unknown,
+  activeNewWorkspaceScope: null as unknown,
+  homeTargetSelection: {
+    destination: "repository",
+    repositorySelection: { kind: "repository", sourceRoot: "/repo-b" },
+    repoLaunchKind: "worktree",
+    selectedSshTargetId: null,
+    baseBranchOverride: "stale/from-other-repo",
+  },
+  homeRepositorySelection: {
+    selectedRepository: {
+      sourceRoot: "/repo-b",
+      name: "Repo B",
+      secondaryLabel: null,
+      workspaceCount: 1,
+      repoRootId: "repo-root-b",
+      localWorkspaceId: "workspace-local-b",
+      gitProvider: "github",
+      gitOwner: "proliferate-ai",
+      gitRepoName: "repo-b",
+    },
+    selectedBranchName: "main",
+    defaultBranchName: "main",
+  },
+}));
+
+vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
+  useCloudAvailabilityState: () => ({ cloudActive: true }),
+}));
+
+vi.mock("#product/hooks/cloud/facade/use-cloud-billing", () => ({
+  useCloudBilling: () => ({ data: null }),
+}));
+
+vi.mock("@proliferate/cloud-sdk-react", () => ({
+  useRepositories: () => ({
+    data: {
+      repositories: [{
+        id: "repo-config-1",
+        gitProvider: "github",
+        gitOwner: "proliferate-ai",
+        gitRepoName: "repo-b",
+        environments: [{
+          id: "repo-environment-1",
+          repoConfigId: "repo-config-1",
+          kind: "cloud",
+          desktopInstallId: null,
+          localPath: null,
+          defaultBranch: "main",
+          setupScript: "",
+          runCommand: "",
+        }],
+      }],
+    },
+    isPending: false,
+  }),
+}));
+
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => ({
+    links: { openExternal: hookMocks.openExternal },
+    auth: { authRequired: true, state: { status: "anonymous", methods: [] } },
+  }),
+}));
+
+vi.mock("#product/hooks/cloud/workflows/use-create-cloud-workspace", () => ({
+  useCreateCloudWorkspace: () => ({
+    createCloudWorkspaceAndEnter: hookMocks.createCloudWorkspaceAndEnter,
+    isCreatingCloudWorkspace: false,
+  }),
+}));
+
+vi.mock("#product/hooks/workspaces/derived/use-selected-logical-workspace", () => ({
+  useSelectedLogicalWorkspace: () => ({
+    selectedLogicalWorkspace: hookMocks.selectedLogicalWorkspace,
+  }),
+}));
+
+vi.mock("#product/hooks/workspaces/derived/use-standard-repo-projection", () => ({
+  useStandardRepoProjection: () => ({
+    repoRoots: [],
+    localWorkspaces: [],
+    cloudWorkspaces: [],
+  }),
+}));
+
+vi.mock("#product/hooks/workspaces/workflows/use-workspace-entry-actions", () => ({
+  useWorkspaceEntryActions: () => ({
+    createLocalWorkspaceAndEnter: hookMocks.createLocalWorkspaceAndEnter,
+    isCreatingLocalWorkspace: false,
+    createWorktreeAndEnter: hookMocks.createWorktreeAndEnter,
+    isCreatingWorktreeWorkspace: false,
+  }),
+}));
+
+vi.mock("#product/hooks/workspaces/workflows/use-add-repo", () => ({
+  useAddRepo: () => ({
+    canAddRepo: true,
+    addRepoDisabledReason: null,
+    isAddingRepo: false,
+  }),
+}));
+
+vi.mock("#product/hooks/workspaces/workflows/use-workspace-copy-actions", () => ({
+  useWorkspaceCopyActions: () => ({
+    copyWorkspaceLocation: hookMocks.copyWorkspaceLocation,
+    copyBranchName: hookMocks.copyBranchName,
+  }),
+}));
+
+vi.mock("#product/hooks/workspaces/workflows/use-workspace-navigation-workflow", () => ({
+  useWorkspaceNavigationWorkflow: () => ({
+    goToTopLevelRoute: hookMocks.goToTopLevelRoute,
+    navigateToWorkspaceShell: hookMocks.navigateToWorkspaceShell,
+  }),
+}));
+
+vi.mock("#product/hooks/home/ui/use-home-next-target-selection-state", () => ({
+  useHomeNextTargetSelectionSnapshot: () => hookMocks.homeTargetSelection,
+}));
+
+vi.mock("#product/hooks/home/derived/use-home-next-repository-selection", () => ({
+  useHomeNextRepositorySelection: () => hookMocks.homeRepositorySelection,
+}));
+
+vi.mock("#product/stores/sessions/session-selection-store", () => ({
+  useSessionSelectionStore: (selector: (state: { selectedWorkspaceId: string | null }) => unknown) =>
+    selector({ selectedWorkspaceId: hookMocks.selectedWorkspaceId }),
+}));
+
+vi.mock("#product/stores/toast/toast-store", () => ({
+  useToastStore: (selector: (state: { show: (message: string) => void }) => unknown) =>
+    selector({ show: hookMocks.showToast }),
+}));
+
+vi.mock("#product/stores/workspaces/new-workspace-command-scope-store", () => ({
+  useNewWorkspaceCommandScopeStore: (
+    selector: (state: { activeScope: unknown }) => unknown,
+  ) => selector({ activeScope: hookMocks.activeNewWorkspaceScope }),
+}));
+
+vi.mock("#product/lib/infra/measurement/measurement-port", () => ({
+  failLatencyFlow: vi.fn(),
+  startLatencyFlow: vi.fn(() => "latency-flow-1"),
+}));
+
+const webAppMocks = vi.hoisted(() => ({
+  webApp: { available: true, baseUrl: "https://web.proliferate.com" } as {
+    available: boolean;
+    baseUrl: string | null;
+  },
+}));
+
+vi.mock("#product/hooks/capabilities/derived/use-web-app-target", () => ({
+  useWebAppTarget: () => webAppMocks.webApp,
+}));
+
+// Support-kind routing itself is covered by
+// use-app-navigation-command-actions.test.tsx; here we only need it not to
+// pull in `useAppCapabilities`'s react-query calls (no QueryClientProvider
+// in this suite's wrapper).
+vi.mock("#product/hooks/support/derived/use-support-menu-action", () => ({
+  useSupportMenuAction: () => ({ kind: "vendor" as const }),
+}));
+
+function wrapper({ children }: { children: ReactNode }) {
+  return <MemoryRouter initialEntries={["/"]}>{children}</MemoryRouter>;
+}
+
+describe("useAppCommandActions", () => {
+  beforeEach(() => {
+    hookMocks.copyBranchName.mockClear();
+    hookMocks.copyWorkspaceLocation.mockClear();
+    hookMocks.createCloudWorkspaceAndEnter.mockClear();
+    hookMocks.createLocalWorkspaceAndEnter.mockClear();
+    hookMocks.createWorktreeAndEnter.mockClear();
+    hookMocks.goToTopLevelRoute.mockClear();
+    hookMocks.navigateToWorkspaceShell.mockClear();
+    hookMocks.openExternal.mockClear();
+    hookMocks.showToast.mockClear();
+    hookMocks.selectedWorkspaceId = null;
+    hookMocks.activeNewWorkspaceScope = null;
+    hookMocks.homeTargetSelection.baseBranchOverride = "stale/from-other-repo";
+    hookMocks.homeRepositorySelection.selectedBranchName = "main";
+    webAppMocks.webApp = { available: true, baseUrl: "https://web.proliferate.com" };
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("uses Home's resolved visible branch for new worktree shortcuts", () => {
+    const { result } = renderHook(() => useAppCommandActions(), { wrapper });
+
+    act(() => {
+      result.current.newWorktreeWorkspace.execute("shortcut");
+    });
+
+    expect(hookMocks.navigateToWorkspaceShell).toHaveBeenCalledTimes(1);
+    expect(hookMocks.createWorktreeAndEnter).toHaveBeenCalledWith({
+      repoRootId: "repo-root-b",
+      sourceWorkspaceId: "workspace-local-b",
+      baseBranch: "main",
+      defaultBranch: "main",
+    }, expect.objectContaining({
+      latencyFlowId: "latency-flow-1",
+      repoGroupKeyToExpand: "/repo-b",
+    }));
+  });
+
+  it("opens the web app with the configured base URL", () => {
+    const { result } = renderHook(() => useAppCommandActions(), { wrapper });
+
+    act(() => {
+      result.current.openWebApp.execute("shortcut");
+    });
+
+    expect(hookMocks.openExternal).toHaveBeenCalledWith("https://web.proliferate.com");
+    expect(hookMocks.showToast).toHaveBeenCalledWith("Opening web app...", "info");
+  });
+
+  it("disables the web-app action and never opens anything when this deployment has no web app", () => {
+    webAppMocks.webApp = { available: false, baseUrl: null };
+    const { result } = renderHook(() => useAppCommandActions(), { wrapper });
+
+    expect(result.current.openWebApp.disabledReason).toBe(
+      "The web app is not available for this server.",
+    );
+
+    act(() => {
+      result.current.openWebApp.execute("shortcut");
+    });
+
+    expect(hookMocks.openExternal).not.toHaveBeenCalled();
+    expect(hookMocks.showToast).toHaveBeenCalledWith("The web app is not available for this server.");
+  });
+});

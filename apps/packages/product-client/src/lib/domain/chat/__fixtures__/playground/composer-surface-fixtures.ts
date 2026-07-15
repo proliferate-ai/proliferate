@@ -1,0 +1,231 @@
+import type { ModelSelectorProps } from "#product/lib/domain/chat/models/model-selector-types";
+import type { SessionSlashCommandViewModel } from "#product/lib/domain/chat/composer/session-slash-command-policy";
+import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
+import type { ComposerWorkspaceActivityModel } from "#product/lib/domain/workspaces/activity/composer-workspace-activity";
+
+export function createPlaygroundWorkspaceActivityModel(): ComposerWorkspaceActivityModel {
+  return {
+    facts: [
+      { key: "sync", label: "2 ahead", tone: "default" },
+      { key: "changes", label: "12 changes", tone: "default" },
+      { key: "pull-request", label: "PR #1042 checks pending", tone: "default" },
+    ],
+    git: {
+      branchName: "codex/workspace-activity-popover",
+      changedFiles: 12,
+      stagedFiles: 3,
+      unstagedFiles: 9,
+      conflictedFiles: 0,
+      additions: 486,
+      deletions: 73,
+      ahead: 2,
+      behind: 0,
+      changeLabel: "12 changes",
+      stagingLabel: "3 staged · 9 unstaged",
+      syncLabel: "2 ahead",
+      pullRequestLabel: "PR #1042 · Open · Checks pending",
+      pushLabel: "Push",
+    },
+  };
+}
+
+export const PLAYGROUND_SLASH_COMMANDS: SessionSlashCommandViewModel[] = [
+  {
+    id: "compact",
+    name: "compact",
+    displayName: "/compact",
+    description: "Summarize the session context",
+    inputHint: null,
+    group: "Commands",
+  },
+  {
+    id: "mcp:linear:create_issue",
+    name: "mcp:linear:create_issue",
+    displayName: "/mcp:linear:create_issue",
+    description: "Create a Linear issue from the current context",
+    inputHint: "title",
+    group: "MCP",
+  },
+];
+
+export const PLAYGROUND_LONG_COMPOSER_DRAFT = [
+  "Clean up the workspace chat composer expansion behavior.",
+  "",
+  "The first line should stay pinned to the same visual top inset while the composer grows upward.",
+  "The surface should not become a nested scroll area.",
+  "The editor frame should not scroll.",
+  "The textarea should keep growing until the configured workspace cap.",
+  "After sixteen rows, only the textarea should scroll internally.",
+  "Model controls and send/cancel actions need to remain visible.",
+  "Attachment preview rows should not add a second top gap above the editor.",
+  "Plan reference rows should follow the same spacing rule as file attachments.",
+  "Queued-prompt editing should use the same autosize workflow.",
+  "The Home composer remains intentionally capped at eight rows.",
+  "The slash command tray still renders above the composer surface.",
+  "Focus behavior still depends on data-chat-composer-editor.",
+  "Telemetry masking stays on the editable text surface.",
+  "This scenario exists to make long prompt regressions visible in the playground.",
+  "It should be long enough to exceed the workspace cap.",
+  "It should make internal scrolling observable.",
+  "It should not require a live AnyHarness session.",
+  "It should share the production frame and autosize hook.",
+].join("\n");
+
+export function createPlaygroundModelSelectorProps(): ModelSelectorProps {
+  return {
+    connectionState: "healthy",
+    currentModel: {
+      kind: "codex",
+      displayName: "GPT 5.5",
+      pendingState: null,
+    },
+    groups: [
+      {
+        kind: "codex",
+        providerDisplayName: "Proliferate",
+        models: [
+          {
+            kind: "codex",
+            modelId: "gpt-5.5",
+            displayName: "GPT 5.5",
+            actionKind: "select",
+            isSelected: true,
+          },
+          {
+            kind: "codex",
+            modelId: "gpt-5.4",
+            displayName: "GPT 5.4",
+            actionKind: "select",
+            isSelected: false,
+          },
+        ],
+      },
+      {
+        kind: "claude",
+        providerDisplayName: "Claude Code",
+        models: [
+          {
+            kind: "claude",
+            modelId: "opus-4.1",
+            displayName: "Opus 4.1",
+            actionKind: "open_new_chat",
+            isSelected: false,
+          },
+        ],
+      },
+    ],
+    hasAgents: true,
+    isLoading: false,
+    onSelect: () => undefined,
+  };
+}
+
+/** Ultra-capable ladder (frontier model): the chip names the tier instead of
+ * rendering icon-only bars, and selecting the top rung is the ultra state. */
+export function createPlaygroundUltraSessionConfigControls(): LiveSessionControlDescriptor[] {
+  return createPlaygroundSessionConfigControls().map((control) => (
+    control.key === "effort"
+      ? {
+        ...control,
+        detail: "Ultra",
+        options: [
+          { value: "medium", label: "Medium", selected: false },
+          { value: "high", label: "High", selected: false },
+          { value: "xhigh", label: "Extra High", selected: false },
+          { value: "ultra", label: "Ultra", selected: true },
+        ],
+      }
+      : control
+  ));
+}
+
+export function createPlaygroundSessionConfigControls(): LiveSessionControlDescriptor[] {
+  return [
+    {
+      key: "collaboration_mode",
+      label: "Mode",
+      detail: "Default",
+      rawConfigId: "collaboration_mode",
+      settable: true,
+      pendingState: null,
+      kind: "select",
+      options: [
+        {
+          value: "default",
+          label: "Default",
+          description: "Standard collaboration behavior.",
+          selected: true,
+        },
+        {
+          value: "plan",
+          label: "Plan",
+          description: "Plan before applying changes.",
+          selected: false,
+        },
+      ],
+      onSelect: () => undefined,
+    },
+    {
+      key: "mode",
+      label: "Permissions",
+      detail: "Auto",
+      rawConfigId: "mode",
+      settable: true,
+      pendingState: null,
+      kind: "select",
+      options: [
+        {
+          value: "read-only",
+          label: "Read Only",
+          description: "Inspect and plan without editing.",
+          selected: false,
+        },
+        {
+          value: "auto",
+          label: "Auto",
+          description: "Auto-approve standard edits.",
+          selected: true,
+        },
+        {
+          value: "full-access",
+          label: "Full Access",
+          description: "Allow unrestricted changes.",
+          selected: false,
+        },
+      ],
+      onSelect: () => undefined,
+    },
+    {
+      key: "effort",
+      label: "Reasoning effort",
+      detail: "Xhigh",
+      rawConfigId: "effort",
+      settable: true,
+      pendingState: null,
+      kind: "select",
+      options: [
+        { value: "low", label: "Low", selected: false },
+        { value: "medium", label: "Medium", selected: false },
+        { value: "xhigh", label: "Extra High", selected: true },
+      ],
+      onSelect: () => undefined,
+    },
+    {
+      key: "fast_mode",
+      label: "Fast mode",
+      detail: "On",
+      rawConfigId: "fast_mode",
+      settable: true,
+      pendingState: null,
+      kind: "toggle",
+      enabledValue: "on",
+      disabledValue: "off",
+      isEnabled: true,
+      options: [
+        { value: "off", label: "Off", selected: false },
+        { value: "on", label: "On", selected: true },
+      ],
+      onSelect: () => undefined,
+    },
+  ];
+}

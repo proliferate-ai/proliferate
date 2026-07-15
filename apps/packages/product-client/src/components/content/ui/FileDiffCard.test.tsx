@@ -1,0 +1,135 @@
+import { readFileSync } from "node:fs";
+import { createElement, type ReactElement } from "react";
+import { renderToStaticMarkup as renderReactToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+import type { ProductHost } from "@proliferate/product-client/host/product-host";
+import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
+import { FileChangesCard } from "#product/components/content/ui/FileChangesCard";
+import { FileDiffCard } from "#product/components/content/ui/FileDiffCard";
+
+const webTestHost = { desktop: null } as ProductHost;
+
+function renderToStaticMarkup(ui: ReactElement) {
+  return renderReactToStaticMarkup(
+    <ProductHostProvider host={webTestHost}>{ui}</ProductHostProvider>,
+  );
+}
+
+describe("FileChangesCard and FileDiffCard", () => {
+  it("keeps aggregate headers clean and renders the sidebar-safe shared anatomy", () => {
+    const html = renderToStaticMarkup(
+      createElement(FileChangesCard, {
+        fileCount: 2,
+        children: createElement(
+          FileDiffCard,
+          {
+            filePath: "apps/desktop/src/components/workspace/git/GitPanel.tsx",
+            additions: 4,
+            deletions: 1,
+            isExpanded: true,
+            onToggleExpand: () => {},
+            surface: "sidebar",
+          },
+          createElement("div", null, "diff body"),
+        ),
+      }),
+    );
+
+    expect(html).toContain("2 files changed");
+    expect(html).not.toContain("+7");
+    expect(html).not.toContain(">-3</span>");
+    expect(html).toContain(">+4</span>");
+    expect(html).toContain(">-1</span>");
+    expect(html).toContain("bg-[var(--color-diff-panel-surface)]");
+    expect(html).toContain("text-chat leading-[var(--text-chat--line-height)]");
+    expect(html).not.toContain("thread-diff-virtualized");
+    expect(html).toContain("--codex-diffs-surface:var(--codex-diffs-surface-override, var(--color-diff-panel-surface))");
+    expect(html).toContain("data-diff-surface=\"sidebar\"");
+    expect(html).toContain("codex-review-diff-card");
+    expect(html).toContain("--codex-diffs-header-surface:var(--color-diff-sidebar-file-header-surface)");
+    expect(html).toContain("--codex-diffs-separator-surface:var(--color-diff-sidebar-file-header-hover-surface)");
+    expect(html).toContain("sticky top-0 bg-[color-mix(in_srgb,var(--codex-diffs-header-surface)_97%,transparent)]");
+    expect(html).not.toContain("backdrop-blur");
+    expect(html).not.toContain("#1c1c1c");
+    expect(html).toContain("data-app-action-review-file-expanded=\"true\"");
+    expect(html).toContain("data-app-action-review-file-toggle=\"\"");
+    expect(html).toContain("text-sidebar-foreground");
+    expect(html).toContain("hover:bg-sidebar-accent");
+    expect(html).toContain("diff body");
+  });
+
+  it("keeps diff header theme variables free of hard-coded dark surfaces", () => {
+    const desktopCss = readFileSync(
+      new URL("../../../../../../packages/design/src/css/product.css", import.meta.url),
+      "utf8",
+    );
+    const rootDiffVariables =
+      desktopCss.match(/\/\* -- Git diff backgrounds[\s\S]*?:root \{(?<body>[\s\S]*?)--diffs-min-number-column-width:/)
+        ?.groups?.body ?? "";
+
+    expect(rootDiffVariables).not.toContain("#232323");
+    expect(rootDiffVariables).not.toContain("#2b2b2b");
+    expect(rootDiffVariables).toContain(
+      "--color-diff-chat-file-header-surface: var(--color-diff-surface);",
+    );
+  });
+
+  it("keeps absolute paths compact in diff headers", () => {
+    const html = renderToStaticMarkup(
+      createElement(FileDiffCard, {
+        filePath: "/Users/pablo/.claude/plans/sorry-im-eant-liek-moonlit-goose.md",
+        additions: 20,
+        deletions: 0,
+        isExpanded: false,
+        onToggleExpand: () => {},
+        onOpenFile: () => {},
+      }),
+    );
+
+    expect(html).toContain("sorry-im-eant-liek-moonlit-goose.md");
+    expect(html).toContain(">.claude/plans/sorry-im-eant-liek-moonlit-goose.md</span>");
+    expect(html).not.toContain(">/Users/pablo/.claude/plans/sorry-im-eant-liek-moonlit-goose.md</span>");
+    expect(html).not.toContain("hover:underline");
+    expect(html).toContain("thread-diff-virtualized");
+    expect(html).toContain("--codex-diffs-header-surface:var(--color-diff-chat-file-header-surface)");
+    expect(html).toContain("hover:bg-[var(--color-diff-chat-file-header-hover-surface)]");
+    expect(html).toContain("group-hover/diff-header:opacity-100");
+    expect(html).not.toContain("group-hover/diff-header:block");
+
+    const rightActionsIndex = html.indexOf("ms-auto flex shrink-0 items-center gap-1.5");
+    expect(rightActionsIndex).toBeGreaterThan(-1);
+    expect(html.indexOf(">+20</span>")).toBeGreaterThan(rightActionsIndex);
+  });
+
+  it("marks truncated absolute path prefixes with an ellipsis", () => {
+    const html = renderToStaticMarkup(
+      createElement(FileDiffCard, {
+        filePath: "/Users/pablo/projects/proliferate/apps/desktop/src/components/ui/content/FileDiffCard.tsx",
+        additions: 1,
+        deletions: 0,
+        isExpanded: false,
+        onToggleExpand: () => {},
+        onOpenFile: () => {},
+      }),
+    );
+
+    expect(html).toContain(">.../ui/content/FileDiffCard.tsx</span>");
+  });
+
+  it("renders fallback metadata for zero-stat sidebar rows", () => {
+    const html = renderToStaticMarkup(
+      createElement(FileDiffCard, {
+        filePath: "new-file.ts",
+        additions: 0,
+        deletions: 0,
+        isExpanded: false,
+        onToggleExpand: () => {},
+        metadata: createElement("span", { "aria-label": "Added" }, "A"),
+        surface: "sidebar",
+      }),
+    );
+
+    expect(html).toContain("aria-label=\"Added\"");
+    expect(html).toContain(">A</span>");
+  });
+});

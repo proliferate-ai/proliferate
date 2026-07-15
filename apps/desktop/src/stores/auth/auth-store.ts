@@ -1,7 +1,7 @@
 import { create } from "zustand"
 import type { ProductAuthIssue } from "@proliferate/product-client/host/product-host"
-import type { AuthUser } from "@/lib/domain/auth/auth-user"
-import type { StoredAuthSession } from "@/lib/domain/auth/stored-auth-session"
+import type { AuthUser } from "@proliferate/product-client/internal/lib/domain/auth/auth-user"
+import type { StoredAuthSession } from "@proliferate/product-client/internal/lib/domain/auth/stored-auth-session"
 
 export type AuthStatus = "bootstrapping" | "anonymous" | "authenticated"
 
