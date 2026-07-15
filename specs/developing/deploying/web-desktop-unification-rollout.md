@@ -7,33 +7,32 @@ This document owns only the remaining execution order and cutover gates.
 ## Current handoff
 
 The ProductClient foundation, Desktop host boundary, shared identity,
-navigation, persistence, telemetry, and extraction mechanics have landed. The
-current migration step is the mechanical Desktop extraction:
+navigation, persistence, telemetry, extraction mechanics, and the mechanical
+Desktop extraction have landed. Desktop's product source now lives in
+`@proliferate/product-client`; Desktop is a thin native host. The completed
+move, its seam architecture, and the post-merge reconciliation against
+`origin/main` are recorded in
+[`d1h.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1h.md)
+— PR #1215, merge `c6e094b41`.
 
-1. Move the working Desktop product into ProductClient according to the
-   checked [move ledger](../../codebase/systems/product/clients/web-desktop-unification/move-ledger.md).
-2. Apply the proven import codemod and create the real application entry from
-   the [entry contract](../../codebase/systems/product/clients/web-desktop-unification/entry-contract.md).
-3. Delete the temporary qualification canary and every superseded Desktop
-   product path; do not leave parallel implementations.
-4. Leave Desktop as the thin native host while preserving its current visual
-   and behavioral baseline.
-5. Run the ProductClient package build, Desktop build, browser-host build,
+The current migration step is the legacy Web replacement:
+
+1. Delete the duplicate Web pages, chat implementation, polling, stores,
+   controllers, and product-specific logic.
+2. Mount the same compiled ProductClient from a thin browser host with
+   `desktop: null`.
+3. Run the ProductClient package build, Desktop build, browser-host build,
    structure checks, and focused behavior tests before review.
 
-The landed extraction proof and known follow-ups are recorded in
+The landed extraction proof is recorded in
 [`d1g.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1g.md).
-Refresh the live branch/worktree conflict inventory immediately before the
-large source move and agree on its landing window.
 
 ## Remaining sequence
 
-After the Desktop extraction:
+After the legacy Web replacement:
 
-1. Delete the duplicate Web product and mount the same ProductClient from a
-   thin browser host with `desktop: null`.
-2. Qualify Desktop and hosted Web, then cut over hosted Web.
-3. Add self-hosted Web configuration, deployment, and documentation.
+1. Qualify Desktop and hosted Web, then cut over hosted Web.
+2. Add self-hosted Web configuration, deployment, and documentation.
 
 Desktop remains the behavioral baseline throughout. There is no intermediate
 state in which two product implementations are maintained.

@@ -600,22 +600,25 @@ enforcement. Shared `product.css`, Desktop-only CSS, and ProductClient Tailwind
 scanning are established separately. The embedded workspace browser and its
 native child-WebView capability have been removed.
 
-Desktop now mounts the product through the typed host boundary. Native UI,
-local runtime, files, credentials, SSH, updater, support, shared identity,
-navigation, storage, and telemetry all route through that boundary while the
-product source still lives under `apps/desktop`.
+Desktop mounts the product through the typed host boundary. Native UI, local
+runtime, files, credentials, SSH, updater, support, shared identity,
+navigation, storage, and telemetry all route through that boundary.
 
-The extraction mechanics have also landed: the package entry shape is proven
-from Desktop and a minimal browser host, the source move has a checked ledger,
-and the import codemod is deterministic and idempotent. The durable inputs to
-the mechanical extraction are:
+The extraction mechanics landed, and the mechanical move has since completed:
+the package entry shape was proven from Desktop and a minimal browser host,
+the source move ran against a checked ledger with a deterministic and
+idempotent import codemod, and Desktop's product source now lives in
+`@proliferate/product-client` — Desktop is a thin native host. The durable
+records are:
 
-- [landed extraction proof](migration/d1g.md);
+- [extraction-mechanics proof](migration/d1g.md);
+- [completed Desktop move](migration/d1h.md) — PR #1215, merge `c6e094b41`;
 - [application-entry contract](entry-contract.md); and
 - [source move ledger](move-ledger.md).
 
-The next step is to perform that mechanical extraction and leave Desktop as a
-thin native host. The remaining order and Web cutover gates live in the
+The next step is to replace the legacy Web product with a thin browser host
+mounting the same ProductClient. The remaining order and Web cutover gates
+live in the
 [rollout procedure](../../../../../developing/deploying/web-desktop-unification-rollout.md).
 
 Related authoritative docs:
