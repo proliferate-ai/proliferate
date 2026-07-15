@@ -129,6 +129,7 @@ export type {
 
 export type {
   WorkspaceKind,
+  WorkspaceAvailability,
   WorkspaceSurface,
   WorkspaceExecutionPhase,
   WorkspaceExecutionSummary,

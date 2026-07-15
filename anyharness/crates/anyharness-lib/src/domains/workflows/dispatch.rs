@@ -161,9 +161,33 @@ pub(crate) async fn guarded_fail(
 pub(crate) fn map_create_error(error: &InternalSessionCreateError) -> WorkflowRunFailureCode {
     match error {
         InternalSessionCreateError::WorkspaceUnavailable(_)
-        | InternalSessionCreateError::Create(CreateAndStartSessionError::WorkspaceNotFound) => {
-            WorkflowRunFailureCode::WorkspaceUnavailable
-        }
+        | InternalSessionCreateError::Create(CreateAndStartSessionError::WorkspaceNotFound)
+        | InternalSessionCreateError::Create(
+            CreateAndStartSessionError::WorkspaceDirectoryMissing { .. },
+        ) => WorkflowRunFailureCode::WorkspaceUnavailable,
         InternalSessionCreateError::Create(_) => WorkflowRunFailureCode::SessionCreateFailed,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_workspace_directory_classifies_as_workspace_unavailable() {
+        let code = map_create_error(&InternalSessionCreateError::Create(
+            CreateAndStartSessionError::WorkspaceDirectoryMissing {
+                path: "/tmp/gone".to_string(),
+            },
+        ));
+        assert_eq!(code, WorkflowRunFailureCode::WorkspaceUnavailable);
+    }
+
+    #[test]
+    fn other_create_failures_classify_as_session_create_failed() {
+        let code = map_create_error(&InternalSessionCreateError::Create(
+            CreateAndStartSessionError::Invalid("bad".to_string()),
+        ));
+        assert_eq!(code, WorkflowRunFailureCode::SessionCreateFailed);
     }
 }

@@ -5,6 +5,7 @@ import { hasPromptContent } from "#product/lib/domain/chat/composer/prompt-input
 import { createPromptId } from "#product/lib/domain/chat/composer/prompt-id";
 import {
   formatSessionCreateFailureMessage,
+  isWorkspaceDirectoryMissingError,
   toSessionCreateFailureDisplayError,
 } from "#product/lib/domain/sessions/creation/create-session-error";
 import { pickLiveDefaultLaunchControls } from "#product/lib/domain/sessions/creation/launch-controls";
@@ -55,6 +56,8 @@ import {
   type ReplacementShellPreferencesTransaction,
 } from "#product/hooks/sessions/workflows/session-replacement-shell-preferences";
 import { cleanupSessionCreationFailure } from "#product/hooks/sessions/workflows/session-creation-failure-cleanup";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { useWorkspaceCollectionsInvalidationActions } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { resolveWorkspaceUiKey } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
 
 export function useSessionCreationActions() {
@@ -63,7 +66,9 @@ export function useSessionCreationActions() {
   const localRuntime = desktop?.runtime ?? null;
   const ssh = desktop?.ssh ?? null;
   const cloudClient = host.cloud.client;
-  const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
+  const { getWorkspaceRuntimeBlockError } = useWorkspaceRuntimeBlock();
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const { invalidateWorkspaceCollectionsForRuntime } = useWorkspaceCollectionsInvalidationActions();
   const { getWorkspaceSurface } = useWorkspaceSurfaceLookup();
   const { promptSession } = useSessionPromptWorkflow();
   const { activateSession, closeSessionSlotStream } = useSessionRuntimeActions();
@@ -85,9 +90,9 @@ export function useSessionCreationActions() {
       current.selectedLogicalWorkspaceId, workspaceId,
     ) ?? workspaceId;
 
-    const blockedReason = getWorkspaceRuntimeBlockReason(workspaceId);
-    if (blockedReason) {
-      throw new Error(blockedReason);
+    const blockedError = getWorkspaceRuntimeBlockError(workspaceId);
+    if (blockedError) {
+      throw blockedError;
     }
 
     const hasPrompt = hasPromptContent(options.text, options.blocks)
@@ -315,6 +320,13 @@ export function useSessionCreationActions() {
     }
 
     const cleanupCreateFailure = (error: unknown): void => {
+      if (isWorkspaceDirectoryMissingError(error)) {
+        // The collections cache still says the workspace is available (no
+        // refetch-on-focus), so nothing would mount the missing-worktree
+        // panel. Refresh availability so the panel, sidebar glyph, and send
+        // gate reflect the real state.
+        void invalidateWorkspaceCollectionsForRuntime(runtimeUrl);
+      }
       cleanupSessionCreationFailure({
         agentKind: options.agentKind,
         currentOwnedSessionId,
@@ -346,7 +358,10 @@ export function useSessionCreationActions() {
     if (hasPrompt) {
       void createPromise.catch((error) => {
         cleanupCreateFailure(error);
-        showToast(formatSessionCreateFailureMessage(error), "error");
+        // The missing-worktree composer panel owns that condition — no toast.
+        if (!isWorkspaceDirectoryMissingError(error)) {
+          showToast(formatSessionCreateFailureMessage(error), "error");
+        }
       }).finally(cleanupInFlight);
       return pendingSessionId;
     }
@@ -372,7 +387,9 @@ export function useSessionCreationActions() {
     closeSessionSlotStream,
     dismissSessionMutation,
     ensureCloudAgentCatalog,
-    getWorkspaceRuntimeBlockReason,
+    getWorkspaceRuntimeBlockError,
+    invalidateWorkspaceCollectionsForRuntime,
+    runtimeUrl,
     getWorkspaceSurface,
     localRuntime,
     ssh,

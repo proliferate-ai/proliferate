@@ -4826,6 +4826,7 @@ export interface components {
             workspaceId: string;
         };
         Workspace: {
+            availability: components["schemas"]["WorkspaceAvailability"];
             cleanupAttemptedAt?: string | null;
             cleanupErrorMessage?: string | null;
             cleanupFailedAt?: string | null;
@@ -4846,6 +4847,13 @@ export interface components {
             surface: components["schemas"]["WorkspaceSurface"];
             updatedAt: string;
         };
+        /**
+         * @description Whether a workspace can currently be operated on. Computed at read time
+         *     from the on-disk checkout, so the frontend can detect a deleted checkout on
+         *     workspace load/select rather than only when a session send fails.
+         * @enum {string}
+         */
+        WorkspaceAvailability: "available" | "workspace_directory_missing";
         /** @enum {string} */
         WorkspaceCleanupOperation: "retire" | "purge";
         /** @enum {string} */

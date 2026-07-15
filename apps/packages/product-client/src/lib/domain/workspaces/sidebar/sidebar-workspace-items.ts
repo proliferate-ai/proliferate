@@ -13,11 +13,13 @@ import type { WorkspaceGitStatus } from "#product/lib/domain/workspaces/git-stat
 import type { SidebarCloudWorkspaceStatus } from "#product/lib/domain/workspaces/sidebar/cloud-workspace";
 import { cloudSidebarEntryDefaultDisplayName } from "#product/lib/domain/workspaces/sidebar/sidebar-entries";
 import type { SidebarWorkspaceItemState } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
+import { isWorkspaceDirectoryMissing } from "#product/lib/domain/workspaces/availability";
 import {
   activeWorkspaceActivity,
   logicalWorkspaceSshTargetId,
   sidebarStatusIndicatorFromActivity,
   sidebarWorkspaceVariantForLogicalWorkspace,
+  worktreeMissingStatusIndicator,
 } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
 import { detailIndicatorsForWorkspace } from "#product/lib/domain/workspaces/sidebar/sidebar-detail-indicators";
 import { isWorkspaceNeedsReview } from "#product/lib/domain/workspaces/sidebar/sidebar-review";
@@ -162,11 +164,16 @@ function buildSidebarWorkspaceItem(
       active,
       archived,
       variant,
-      statusIndicator: sidebarStatusIndicatorFromActivity({
-        activity,
-        pendingPromptCount: logicalWorkspaceRelatedCount(args.pendingPromptCounts, entry),
-        errorAction: { kind: "open_workspace", workspaceId: entry.id },
-      }),
+      statusIndicator: entry.localWorkspace && isWorkspaceDirectoryMissing(entry.localWorkspace)
+        ? worktreeMissingStatusIndicator(
+          entry.localWorkspace.kind,
+          { kind: "open_workspace", workspaceId: entry.id },
+        )
+        : sidebarStatusIndicatorFromActivity({
+          activity,
+          pendingPromptCount: logicalWorkspaceRelatedCount(args.pendingPromptCounts, entry),
+          errorAction: { kind: "open_workspace", workspaceId: entry.id },
+        }),
       detailIndicators: detailIndicatorsForWorkspace(
         entry,
         variant,

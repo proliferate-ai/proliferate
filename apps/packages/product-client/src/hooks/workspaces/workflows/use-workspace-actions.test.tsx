@@ -223,6 +223,7 @@ function renderActions() {
 
 function localWorkspace(id: string): Workspace {
   return {
+    availability: "available",
     id,
     kind: "local",
     repoRootId: "repo-1",

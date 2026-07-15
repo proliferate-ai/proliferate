@@ -35,6 +35,7 @@ function branch(overrides: Partial<GitBranchRef> & { name: string }): GitBranchR
 
 function workspace(overrides: Partial<Workspace>): Workspace {
   return {
+    availability: "available",
     id: "workspace-1",
     kind: "worktree",
     repoRootId: "repo-root-1",

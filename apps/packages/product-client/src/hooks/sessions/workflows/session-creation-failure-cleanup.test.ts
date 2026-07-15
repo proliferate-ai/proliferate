@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanupSessionCreationFailure } from "#product/hooks/sessions/workflows/session-creation-failure-cleanup";
+import { workspaceDirectoryMissingBlockError } from "#product/lib/domain/sessions/creation/create-session-error";
 import {
   createEmptySessionRecord,
   getSessionRecord,
@@ -160,5 +161,76 @@ describe("replacement session creation failure", () => {
     expect(getSessionRecord("pending-claude")).toBeNull();
     expect(getSessionRecord("old-session")).not.toBeNull();
     expect(useSessionSelectionStore.getState().activeSessionId).toBe("old-session");
+  });
+});
+
+describe("prompt-bearing session creation failure", () => {
+  function enqueuePendingPrompt() {
+    putSessionRecord(createEmptySessionRecord("pending-claude", "claude", {
+      workspaceId: "workspace-1",
+      materializedSessionId: null,
+      modelId: "sonnet",
+    }));
+    useSessionIntentStore.getState().enqueuePrompt({
+      clientPromptId: "prompt-1",
+      clientSessionId: "pending-claude",
+      workspaceId: "workspace-1",
+      text: "fix the sidebar race",
+      blocks: [{ type: "text", text: "fix the sidebar race" }],
+    });
+    useSessionSelectionStore.getState().activateWorkspace({
+      logicalWorkspaceId: "logical-workspace-1",
+      workspaceId: "workspace-1",
+    });
+    useSessionSelectionStore.getState().setActiveSessionId("pending-claude");
+  }
+
+  function cleanupWith(error: unknown) {
+    cleanupSessionCreationFailure({
+      agentKind: "claude",
+      currentOwnedSessionId: "pending-claude",
+      error,
+      hadExistingProjectedRecord: false,
+      hasPrompt: true,
+      modeId: "agent",
+      modelId: "sonnet",
+      pendingSessionId: "pending-claude",
+      preserveProjectedSessionOnCreateFailure: false,
+      previousActiveSessionId: null,
+      recoveryWorkspaceUiKey: "logical-workspace-1",
+      replacementShellPreferences: null,
+      replacementTransaction: null,
+      rollbackOwnedShellIntent: () => true,
+      workspaceId: "workspace-1",
+    }, { activateSession: vi.fn(), captureException: vi.fn() });
+  }
+
+  it("keeps the projected shell for generic failures so the prompt can be retried in place", () => {
+    enqueuePendingPrompt();
+
+    cleanupWith(new Error("materialization failed"));
+
+    expect(getSessionRecord("pending-claude")).not.toBeNull();
+    expect(
+      useChatPromptRecoveryStore.getState().recoveriesByWorkspaceUiKey["logical-workspace-1"],
+    ).toBeUndefined();
+  });
+
+  it("discards the dead shell and moves the prompt to recovery when the checkout is missing", () => {
+    enqueuePendingPrompt();
+
+    cleanupWith(workspaceDirectoryMissingBlockError(
+      "Worktree no longer exists. Agents can't run in this workspace.",
+    ));
+
+    expect(getSessionRecord("pending-claude")).toBeNull();
+    const recovered = useChatPromptRecoveryStore.getState()
+      .recoveriesByWorkspaceUiKey["logical-workspace-1"];
+    expect(recovered).toEqual([
+      expect.objectContaining({
+        workspaceId: "workspace-1",
+        prompt: expect.objectContaining({ text: "fix the sidebar race" }),
+      }),
+    ]);
   });
 });

@@ -202,7 +202,7 @@ export function useWorkspaceSidebarActions() {
   };
 }
 
-function workspaceRetireBlockedMessage(result: WorkspaceRetireResponse | WorkspacePurgeResponse): string {
+export function workspaceRetireBlockedMessage(result: WorkspaceRetireResponse | WorkspacePurgeResponse): string {
   const blocker = result.preflight?.blockers[0];
   if (blocker) {
     const extraCount = (result.preflight?.blockers.length ?? 0) - 1;
