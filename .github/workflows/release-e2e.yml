@@ -64,6 +64,11 @@ on:
         options:
           - diagnostic
           - strict
+      selfhost_scenarios:
+        description: Comma-separated self-host scenario ids for the selfhost job (SELFHOST_SCENARIOS).
+        default: SELFHOST-INSTALL-1
+        required: false
+        type: string
   schedule:
     # Nightly, offset after the release train (which runs at 09:00 UTC) so it
     # exercises the freshly cut artifacts. README: "Nightly — Tier 3 lanes
@@ -691,7 +696,8 @@ jobs:
           set -euo pipefail
           make qualification-selfhost \
             PROFILE="ci-${{ github.run_id }}-${{ github.run_attempt }}" \
-            BEHAVIOR=strict
+            BEHAVIOR=strict \
+            SELFHOST_SCENARIOS="${{ inputs.selfhost_scenarios }}"
 
       - name: Upload V4 report and bounded diagnostic logs
         # Actions-durable (SHR-006): `if: always()` already runs this step on an

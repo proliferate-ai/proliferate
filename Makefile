@@ -1085,6 +1085,21 @@ qualification-local-functional:
 #                         PROFILE for two concurrent invocations (each run owns
 #                         its EC2 instance, SG, key pair, and DNS record).
 # BEHAVIOR=diagnostic|strict
+# SELFHOST_SCENARIOS=<comma-separated scenario ids>   Defaults to
+#                         SELFHOST-INSTALL-1 (current behavior). Passed
+#                         verbatim to `run.ts --scenarios`.
+# SELFHOST_API_BASE_URL=<https://...>   Optional. When set, replaces the
+#                         computed `print-selfhost-run-api-base-url.ts` value
+#                         baked into the candidate renderer — for postures
+#                         that need a fixed baked origin (e.g. the fixed-origin
+#                         serial lane at https://selfhost-fixed.qualification.
+#                         proliferate.com) instead of this run's own computed
+#                         subdomain. Run-scoped scenarios leave this unset and
+#                         get the computed value, unchanged. Example:
+#                           make qualification-selfhost PROFILE=$$(whoami)-1 \
+#                             BEHAVIOR=diagnostic \
+#                             SELFHOST_SCENARIOS=SELFHOST-INSTALL-1 \
+#                             SELFHOST_API_BASE_URL=https://selfhost-fixed.qualification.proliferate.com
 #
 # Locally, AWS/SSH/BYOK inputs come from the ignored, mode-0600 qualification
 # env file (never committed, never printed): RELEASE_E2E_SELFHOST_REGION,
@@ -1095,6 +1110,8 @@ qualification-local-functional:
 # environment and configured AWS credentials; this target does not read the
 # local file there.
 QUALIFICATION_SELFHOST_BASE_DIR ?= $(CURDIR)/tests/release/.output/selfhost-world
+SELFHOST_SCENARIOS ?= SELFHOST-INSTALL-1
+SELFHOST_API_BASE_URL ?=
 qualification-selfhost:
 	@test -n "$(PROFILE)" || { \
 		echo "PROFILE=<unique-name> is required, e.g. make qualification-selfhost PROFILE=$$(whoami)-1 BEHAVIOR=diagnostic"; \
@@ -1139,7 +1156,10 @@ qualification-selfhost:
 	shard_id="1"; \
 	run_dir="$(QUALIFICATION_SELFHOST_BASE_DIR)/$$run_id/$$shard_id"; \
 	mkdir -p "$$run_dir"; \
-	api_base_url=$$(cd tests/release && pnpm exec tsx src/cli/print-selfhost-run-api-base-url.ts "$$run_id" "$$shard_id") || exit $$?; \
+	api_base_url="$(SELFHOST_API_BASE_URL)"; \
+	if [ -z "$$api_base_url" ]; then \
+		api_base_url=$$(cd tests/release && pnpm exec tsx src/cli/print-selfhost-run-api-base-url.ts "$$run_id" "$$shard_id") || exit $$?; \
+	fi; \
 	build_summary=$$(node scripts/ci-cd/build-selfhost-qualification-candidates.mjs \
 		--run-id "$$run_id" --shard-id "$$shard_id" --run-dir "$$run_dir" \
 		--api-base-url "$$api_base_url") || exit $$?; \
@@ -1150,7 +1170,7 @@ qualification-selfhost:
 		--lane local \
 		--desktop web \
 		--agents claude \
-		--scenarios SELFHOST-INSTALL-1 \
+		--scenarios $(SELFHOST_SCENARIOS) \
 		--candidate-build-map "$$candidate_map" \
 		--run-id "$$run_id" --shard-id "$$shard_id" \
 		--output-dir "$$run_dir/evidence"

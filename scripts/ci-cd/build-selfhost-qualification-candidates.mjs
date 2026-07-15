@@ -22,17 +22,31 @@
 //     --run-id <run-id> --shard-id <shard-id> --run-dir <path> \
 //     [--source-sha <40-hex>] [--version <v>] [--target <rust-triple>] \
 //     [--platform linux/amd64|linux/arm64] \
-//     [--api-base-url https://<run>.qualification.proliferate.com]
+//     [--api-base-url https://<run>.qualification.proliferate.com] \
+//     [--second-ports]
 //
 // `--api-base-url` is baked into the web renderer as VITE_PROLIFERATE_API_BASE_URL
 // (see buildSelfHostQualificationCandidates); it is this run's own deterministic
 // self-host instance URL. Omit it only for offline unit tests (falls back to a
 // dead local origin — never a hosted API).
 //
+// `--second-ports` (opt-in, off by default) additionally allocates a SECOND
+// non-overlapping controller-local port set with the same allocation function
+// used for the first, and writes it as a sidecar `local-world-ports-b.json`
+// next to `local-world-ports.json` (same LocalWorldPorts shape: server,
+// postgres, redis, anyharness, renderer). This is for the cross-server
+// isolation scenario (SH-SWITCH-ISOLATION), which today derives its second
+// server's ports from the first by a fixed offset
+// (`tests/release/src/worlds/selfhost/world.ts` `SECOND_WORLD_PORT_OFFSET`) —
+// see the `TODO(builder-flag, other workstream)` there. With this flag off,
+// every output is byte-identical to before this flag existed.
+//
 // Prints one line of machine-readable JSON to stdout on success:
 //   {"run_id":...,"shard_id":...,"candidate_build_map":"<path>",
 //    "bundle_sha256sums":"<path>","ports_file":"<path>",
 //    "ports":{...},"platform":"linux/amd64"}
+//   plus, only when --second-ports is passed:
+//   {..., "second_ports_file":"<path>","second_ports":{...}}
 //
 // The `self-hosted-assets.SHA256SUMS` is written as a DETERMINISTIC SIBLING of
 // the bundle inside the map's artifacts dir; the self-host world derives its
@@ -93,6 +107,31 @@ function checkPlatform(platform) {
     throw new Error(`--platform must be linux/amd64 or linux/arm64, got "${platform}"`);
   }
   return platform;
+}
+
+const SECOND_PORTS_MAX_ATTEMPTS = 5;
+
+function portSetsOverlap(a, b) {
+  const taken = new Set(Object.values(a));
+  return Object.values(b).some((port) => taken.has(port));
+}
+
+/**
+ * Allocates a second controller-local port set that does not overlap `first`,
+ * using the same `alloc` function `first` came from. Ephemeral OS ports are
+ * not guaranteed distinct across two independent allocation passes (a freed
+ * port can be immediately reissued), so this retries a bounded number of
+ * times and fails closed (throws) rather than silently handing back a
+ * colliding set.
+ */
+export async function allocateSecondLocalWorldPorts(alloc, first, { ephemeralPort, maxAttempts = SECOND_PORTS_MAX_ATTEMPTS } = {}) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const candidate = await alloc({ ephemeralPort });
+    if (!portSetsOverlap(first, candidate)) {
+      return candidate;
+    }
+  }
+  throw new Error(`could not allocate a second, non-overlapping controller-local port set after ${maxAttempts} attempts`);
 }
 
 /**
@@ -213,6 +252,12 @@ export async function buildSelfHostQualificationCandidates(options, deps = {}) {
   log(`allocating controller-local ports for run=${runId} shard=${shardId}`);
   const ports = await alloc({ ephemeralPort: deps.ephemeralPort });
 
+  let secondPorts;
+  if (options.secondPorts) {
+    log(`allocating a second, non-overlapping controller-local port set for run=${runId} shard=${shardId}`);
+    secondPorts = await allocateSecondLocalWorldPorts(alloc, ports, { ephemeralPort: deps.ephemeralPort });
+  }
+
   const artifactsDir = path.join(runDir, "artifacts");
   const serverImageArchivePath = path.join(artifactsDir, "server-image.tar");
   const bundlePath = path.join(artifactsDir, "proliferate-deploy.tar.gz");
@@ -287,6 +332,15 @@ export async function buildSelfHostQualificationCandidates(options, deps = {}) {
   const portsPath = path.join(runDir, "local-world-ports.json");
   writeFileSync(portsPath, `${JSON.stringify(ports, null, 2)}\n`, "utf8");
 
+  // Sidecar second port set (opt-in, --second-ports). Same LocalWorldPorts
+  // shape/filename convention as local-world-ports.json, just "-b" suffixed —
+  // never written when the flag is off, so default output is untouched.
+  let secondPortsPath;
+  if (secondPorts) {
+    secondPortsPath = path.join(runDir, "local-world-ports-b.json");
+    writeFileSync(secondPortsPath, `${JSON.stringify(secondPorts, null, 2)}\n`, "utf8");
+  }
+
   return {
     run_id: runId,
     shard_id: shardId,
@@ -295,6 +349,7 @@ export async function buildSelfHostQualificationCandidates(options, deps = {}) {
     ports_file: portsPath,
     ports,
     platform,
+    ...(secondPortsPath ? { second_ports_file: secondPortsPath, second_ports: secondPorts } : {}),
   };
 }
 
@@ -314,6 +369,7 @@ async function main() {
       target: argValue("--target"),
       platform: argValue("--platform"),
       apiBaseUrl: argValue("--api-base-url"),
+      secondPorts: process.argv.includes("--second-ports"),
     },
     {
       log: (message) => console.error(`[build-selfhost-qualification-candidates] ${message}`),
