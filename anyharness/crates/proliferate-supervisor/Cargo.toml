@@ -12,6 +12,8 @@ path = "src/main.rs"
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
+proliferate-runtime-update-protocol.workspace = true
+reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sentry.workspace = true

@@ -340,6 +340,16 @@ async def get_worker_by_token_hash(
     return _worker_value(row) if row is not None else None
 
 
+async def get_worker(
+    db: AsyncSession,
+    *,
+    worker_id: UUID,
+) -> RuntimeWorkerValue | None:
+    """Load a worker by id, including revoked rows (callers check status)."""
+    row = await db.get(CloudRuntimeWorker, worker_id)
+    return _worker_value(row) if row is not None else None
+
+
 async def touch_worker_heartbeat(
     db: AsyncSession,
     *,

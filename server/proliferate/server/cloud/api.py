@@ -18,6 +18,9 @@ from proliferate.server.cloud.integrations.api import router as integrations_rou
 from proliferate.server.cloud.repos.api import router as repos_router
 from proliferate.server.cloud.repositories.api import router as repositories_router
 from proliferate.server.cloud.runtime_workers.api import (
+    admin_router as runtime_workers_admin_router,
+)
+from proliferate.server.cloud.runtime_workers.api import (
     router as runtime_workers_router,
 )
 from proliferate.server.cloud.runtime_workers.api import (
@@ -46,6 +49,7 @@ router.include_router(agent_gateway_organization_router)
 router.include_router(agent_run_config_router)
 router.include_router(runtime_workers_router)
 router.include_router(runtime_worker_router)
+router.include_router(runtime_workers_admin_router)
 router.include_router(integration_gateway_router)
 router.include_router(integrations_router)
 router.include_router(integrations_admin_router)

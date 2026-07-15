@@ -5,8 +5,25 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
+
+# A desired version flows into CDN redirect paths (runtime/stable/<pin>/...) and
+# into the Supervisor mailbox request as a path-embedded identifier, so it must
+# be a safe filename fragment — not merely bounded in length. Mirrors the
+# protocol crate's `validate_identifier` admission (alphanumeric plus . _ - +,
+# never empty / "." / "..").
+_VERSION_IDENTIFIER_EXTRA = frozenset("._-+")
+
+
+def _validate_version_identifier(value: str | None) -> str | None:
+    if value is None:
+        return None
+    if value in ("", ".", "..") or not all(
+        char.isascii() and (char.isalnum() or char in _VERSION_IDENTIFIER_EXTRA) for char in value
+    ):
+        raise ValueError("desired version must be a safe identifier (alphanumeric and . _ - +)")
+    return value
 
 
 class _CamelModel(BaseModel):
@@ -61,11 +78,65 @@ class WorkerDesiredVersions(_CamelModel):
     catalog_version: str | None = None
 
 
+class WorkerSupervisorBridge(_CamelModel):
+    """Server-materialized D5 bridge inputs for an already-provisioned legacy
+    target (R9R-002).
+
+    A legacy Worker's persisted config carries none of the supervisor-owned
+    fields, so without these it could never bridge. The server delivers the
+    Supervisor config TOML + a supervisor-owned Worker config TOML and the paths
+    to write them through the live heartbeat channel; the legacy Worker
+    materializes both, starts the Supervisor, and hands the box off. Absent for
+    Supervisor-first provisions (their on-disk config already carries the inputs)
+    and for every non-flag-enabled target.
+    """
+
+    supervisor_binary_path: str
+    supervisor_config_path: str
+    supervisor_config_toml: str
+    worker_config_path: str
+    worker_config_toml: str
+    marker_dir: str
+
+
 class WorkerHeartbeatResponse(_CamelModel):
     worker_id: str
     server_time: datetime
     heartbeat_interval_seconds: int
     desired_versions: WorkerDesiredVersions
+    # Make Managed Runtime Updates Supervisor-Owned, decision 6 (the D5
+    # bridge): "supervisor_owned" only for cloud-sandbox targets while
+    # `settings.supervisor_owned_runtime` is on, else None/absent. A legacy
+    # Worker that has never seen this field treats it exactly like an absent
+    # one (old-worker compat, same shape as `desired_versions`).
+    desired_topology: str | None = None
+    # R9R-002: the materialized bridge inputs delivered to an already-provisioned
+    # legacy target the server is migrating. Present only alongside
+    # ``desired_topology == "supervisor_owned"`` for a provisioned cloud-sandbox
+    # target with runtime credentials; absent otherwise. Old-worker compatible.
+    supervisor_bridge: WorkerSupervisorBridge | None = None
+
+
+class SetSandboxDesiredVersionsRequest(_CamelModel):
+    """Admin setter body for a sandbox's target-scoped desired versions.
+
+    ``None`` (the default, and the JSON explicit ``null``) clears the
+    override so the target inherits the global pin again.
+    """
+
+    desired_anyharness_version: str | None = Field(default=None, max_length=64)
+    desired_worker_version: str | None = Field(default=None, max_length=64)
+
+    @field_validator("desired_anyharness_version", "desired_worker_version")
+    @classmethod
+    def _safe_identifier(cls, value: str | None) -> str | None:
+        return _validate_version_identifier(value)
+
+
+class SetSandboxDesiredVersionsResponse(_CamelModel):
+    cloud_sandbox_id: str
+    desired_anyharness_version: str | None
+    desired_worker_version: str | None
 
 
 class DesktopWorkerEnrollmentRequest(_CamelModel):
