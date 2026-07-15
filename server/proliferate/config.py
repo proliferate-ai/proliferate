@@ -399,10 +399,18 @@ class Settings(BaseSettings):
     agent_gateway_default_user_budget_usd: str = "5"
     agent_gateway_default_org_budget_usd: str = "0"
     agent_gateway_backfill_interval_seconds: float = 300.0
-    agent_gateway_free_credit_usd: str = "5"
+    # One-time lifetime managed-LLM grant for a GitHub-backed free identity.
+    agent_gateway_free_credit_usd: str = "2"
+    # Margin applied to imported managed-LLM spend: the ledger debits provider
+    # cost x (1 + margin_pct/100), so a $10 top-up pack (bought at face value)
+    # meters at provider list + 15%.
+    agent_gateway_llm_margin_pct: str = "15"
     agent_gateway_usage_import_interval_seconds: float = 60.0
     agent_gateway_usage_import_overlap_seconds: float = 300.0
     agent_gateway_topup_interval_seconds: float = 300.0
+    # Auto top-up fires when the shared LLM pool drops below this balance; each
+    # trigger buys exactly one pack (face value ``agent_gateway_topup_amount_usd``)
+    # and there is deliberately no per-window cap (ruled 2026-07-14).
     agent_gateway_topup_threshold_usd: str = "2"
     agent_gateway_topup_amount_usd: str = "10"
     # Stripe price for one auto top-up charge; empty disables auto top-ups.
@@ -414,6 +422,13 @@ class Settings(BaseSettings):
     e2b_api_key: str = ""
     e2b_template_name: str = ""
     e2b_webhook_signature_secret: str = ""
+    # Managed-compute pricing: the metered/overage rate is derived as the E2B
+    # provider list price per sandbox-hour times a margin multiplier. Keeping
+    # the multiplier (not a fixed dollar rate) as the constant means margin
+    # survives provider price changes. Both the $15/seat compute allocation and
+    # the overage rate read this derivation (see ``billing/pricing.py``).
+    e2b_list_price_usd_per_hour: str = "2.00"
+    pro_compute_margin_multiplier: float = 1.5
     proliferate_target_installer_url: str = (
         "https://raw.githubusercontent.com/proliferate-ai/proliferate/main/"
         "install/proliferate-target-install.sh"

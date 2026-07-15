@@ -13,7 +13,6 @@ from proliferate.constants.billing import (
     FREE_INCLUDED_GRANT_TYPE,
     FREE_TRIAL_V2_GRANT_TYPE,
     MONTHLY_CLOUD_GRANT_TYPE,
-    PRO_OVERAGE_PRICE_PER_HOUR_CENTS,
     PRO_PERIOD_GRANT_TYPE,
     PRO_SEAT_PRORATION_GRANT_TYPE,
     REFILL_10H_GRANT_TYPE,
@@ -52,12 +51,16 @@ class GrantKind(StrEnum):
     REFILL = REFILL_10H_GRANT_TYPE
 
 
-def overage_seconds_to_cents(seconds: float, *, fractional_cents: float) -> tuple[int, float]:
-    raw_cents = max(fractional_cents, 0.0) + (
-        max(seconds, 0.0) * PRO_OVERAGE_PRICE_PER_HOUR_CENTS / 3600.0
-    )
-    whole_cents = math.floor(raw_cents)
-    return whole_cents, max(raw_cents - whole_cents, 0.0)
+def overage_seconds_to_cents(seconds: float, *, rate_cents_per_hour: int) -> int:
+    """Compute-overage cents for one closed usage segment, rounded UP.
+
+    Ruled 2026-07-14: overage is metered in whole cents rounded up per closed
+    segment. Each segment is the rounding unit — no fractional remainder is
+    carried across segments, so two segments round independently. ``rate`` is
+    the derived compute price (E2B list x margin) in cents per hour.
+    """
+    raw_cents = max(seconds, 0.0) * max(rate_cents_per_hour, 0) / 3600.0
+    return math.ceil(raw_cents)
 
 
 def grant_boundary_after(

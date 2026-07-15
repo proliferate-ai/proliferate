@@ -12,6 +12,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
+from proliferate.constants.agent_gateway import LLM_CREDIT_SOURCE_SEAT_POOL
 from proliferate.constants.billing import (
     BILLING_PRICE_CLASS_PRO,
     PRO_PERIOD_GRANT_TYPE,
@@ -19,6 +20,7 @@ from proliferate.constants.billing import (
 )
 from proliferate.db import engine as db_engine
 from proliferate.db.models.billing import BillingSubject, BillingSubscription
+from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store.billing_runtime_usage import (
     claim_webhook_event,
     mark_webhook_event_failed_by_id,
@@ -39,7 +41,11 @@ from proliferate.server.billing.domain.pricing import (
     monthly_subscription_price_ids,
     overage_subscription_price_ids,
 )
-from proliferate.server.billing.domain.seats import pro_period_grant_hours
+from proliferate.server.billing.domain.seats import (
+    pro_llm_pool_grant_source_ref,
+    pro_llm_pool_usd,
+    pro_period_grant_hours,
+)
 from proliferate.server.billing.domain.webhooks import (
     datetime_from_timestamp as _datetime_from_timestamp,
 )
@@ -74,6 +80,7 @@ from proliferate.server.billing.models import BillingServiceError, StripeWebhook
 from proliferate.server.billing.pricing import (
     billing_price_ids_from_settings,
     classify_monthly_price_id,
+    compute_hours_per_seat,
 )
 from proliferate.server.billing.seat_reconciliation import (
     reconcile_initial_org_subscription_seats,
@@ -497,6 +504,7 @@ async def _handle_invoice_paid(invoice: dict[str, Any]) -> tuple[BillingSlackNot
             grant_type=PRO_PERIOD_GRANT_TYPE,
             hours_granted=pro_period_grant_hours(
                 seat_quantity=subscription_record.seat_quantity,
+                hours_per_seat=compute_hours_per_seat(),
             ),
             effective_at=subscription_record.current_period_start,
             expires_at=subscription_record.current_period_end,
@@ -506,6 +514,23 @@ async def _handle_invoice_paid(invoice: dict[str, Any]) -> tuple[BillingSlackNot
             ),
             top_up_existing=True,
         )
+        # Grant the $5/seat managed-LLM allocation into the shared org LLM pool.
+        # Period-keyed source_ref makes it idempotent per period; expiring it at
+        # period end means the allocation resets on renewal (no roll-over),
+        # unlike the never-expiring top-up grants.
+        if settings.agent_gateway_enabled:
+            await _run_billing_store_write(
+                agent_gateway_store.create_llm_credit_grant,
+                billing_subject_id=subject.id,
+                user_id=subject.user_id,
+                source=LLM_CREDIT_SOURCE_SEAT_POOL,
+                amount_usd=pro_llm_pool_usd(subscription_record.seat_quantity),
+                expires_at=subscription_record.current_period_end,
+                source_ref=pro_llm_pool_grant_source_ref(
+                    subscription_id=subscription_record.stripe_subscription_id,
+                    period_start_unix=period_start_unix,
+                ),
+            )
     await _run_billing_store_write(clear_payment_failed_holds, billing_subject_id=subject.id)
     return notifications
 

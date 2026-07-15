@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
+
 from proliferate.config import settings
+from proliferate.constants.billing import (
+    PRO_COMPUTE_ALLOCATION_USD_PER_SEAT,
+)
 from proliferate.integrations import stripe as stripe_billing
 from proliferate.server.billing.domain.pricing import (
     BillingPriceClass,
@@ -25,6 +30,43 @@ from proliferate.server.billing.domain.pricing import (
     price_class_is_paid as price_class_is_paid_for_config,
 )
 from proliferate.server.billing.models import BillingServiceError
+
+
+def _e2b_list_price_per_hour_usd() -> Decimal:
+    try:
+        value = Decimal(settings.e2b_list_price_usd_per_hour)
+    except (InvalidOperation, ValueError):
+        return Decimal("0")
+    return value if value > 0 else Decimal("0")
+
+
+def compute_price_per_hour_usd() -> Decimal:
+    """Derived managed-compute price per sandbox-hour: E2B list x multiplier.
+
+    The multiplier (not a fixed dollar rate) is the constant, so margin
+    survives provider price changes. Used both to convert the $15/seat compute
+    allocation into included hours and to price compute overage.
+    """
+    multiplier = Decimal(str(settings.pro_compute_margin_multiplier))
+    price = _e2b_list_price_per_hour_usd() * multiplier
+    return price if price > 0 else Decimal("0")
+
+
+def compute_price_per_hour_cents() -> int:
+    """Managed-compute overage rate in whole cents per sandbox-hour."""
+    return int((compute_price_per_hour_usd() * 100).to_integral_value(rounding="ROUND_HALF_UP"))
+
+
+def compute_hours_per_seat() -> float:
+    """Sandbox-hours the $15/seat compute allocation buys at the current rate.
+
+    Returns 0.0 when compute is unpriced (misconfigured) rather than dividing by
+    zero — a zero allocation is fail-safe (no free hours) until pricing is set.
+    """
+    rate = compute_price_per_hour_usd()
+    if rate <= 0:
+        return 0.0
+    return float(PRO_COMPUTE_ALLOCATION_USD_PER_SEAT / rate)
 
 
 def billing_price_ids_from_settings() -> BillingPriceIds:

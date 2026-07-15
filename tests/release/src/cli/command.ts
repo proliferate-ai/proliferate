@@ -1,4 +1,7 @@
-import path from "node:path";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import path, { dirname } from "node:path";
 
 import { HELP_TEXT, parseArgs, type CliArgs } from "./args.js";
 import type { ScenarioDefinition } from "../scenarios/types.js";
@@ -121,6 +124,17 @@ export async function runReleaseCommand(argv: readonly string[], deps: CommandDe
       candidateBuildMap = map;
       runDir = path.dirname(path.resolve(args.candidateBuildMap));
       ports = await deps.loadLocalWorldPorts(runDir);
+    } catch (error) {
+      deps.error(error instanceof Error ? error.message : String(error));
+      return 2;
+    }
+  } else if (args.sourceCandidate) {
+    // No candidate-build-map machinery: this run boots the Server from source
+    // (Tier-2). `candidateBuildMap`/`runDir`/`ports` stay null — no world
+    // materialization is claimed — while `candidateBuild` still carries a
+    // non-null, honest identity so a strict report is not rejected.
+    try {
+      candidateBuild = synthesizeSourceCandidateBuild(identity.source_sha);
     } catch (error) {
       deps.error(error instanceof Error ? error.message : String(error));
       return 2;
@@ -255,6 +269,27 @@ function printSummary(report: TestRunReportV3, deps: Pick<CommandDeps, "log" | "
 
 function firstLine(message: string): string {
   return message.split("\n")[0];
+}
+
+// src/cli -> up four to repo root VERSION (same convention as
+// scenarios/upgrade/t4-sh-1.ts's VERSION_FILE resolution).
+const HERE = dirname(fileURLToPath(import.meta.url));
+const VERSION_FILE = path.resolve(HERE, "..", "..", "..", "..", "VERSION");
+
+/**
+ * Synthesizes `CandidateBuildEvidenceV1` for a Tier-2-style run that boots the
+ * Server from source (venv uvicorn) rather than a packaged candidate build
+ * (BRIEF §1/§7 deviation 1). Honest identity: names the exact Server commit
+ * under test without materializing or claiming any build artifact. Reuses the
+ * existing `server/<platform>` artifact id (adds no new id); the version is
+ * the repo VERSION file; the digest binds the source commit + artifact id so
+ * two different commits never collide.
+ */
+export function synthesizeSourceCandidateBuild(sourceSha: string): CandidateBuildEvidenceV1 {
+  const version = readFileSync(VERSION_FILE, "utf8").trim();
+  const artifactId = `server/${process.platform}`;
+  const sha256 = createHash("sha256").update(`${sourceSha}/${artifactId}`).digest("hex");
+  return { artifacts: [{ artifact_id: artifactId, version, sha256 }] };
 }
 
 function formatSelector(selector: string[] | "all"): string {

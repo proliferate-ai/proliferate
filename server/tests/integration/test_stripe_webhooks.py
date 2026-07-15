@@ -1166,7 +1166,9 @@ async def test_org_pro_subscription_sync_reconciles_active_seats_before_period_g
     )
     assert updates == [2]
     assert len(grants) == 1
-    assert grants[0].hours_granted == 40.0
+    # Ruled 2026-07-14: $15/seat compute at the default derived rate ($3.00/hr)
+    # => 5 hours/seat, so 2 seats grants 10 hours (was flat 20h/seat = 40).
+    assert grants[0].hours_granted == 10.0
 
     db_session.add(
         OrganizationMembership(
@@ -1206,7 +1208,8 @@ async def test_org_pro_subscription_sync_reconciles_active_seats_before_period_g
     assert updates == [2, 3]
     assert subscription.seat_quantity == 3
     assert len(grants) == 1
-    assert grants[0].hours_granted == 60.0
+    # 3 seats * 5 hours/seat (was flat 20h/seat = 60).
+    assert grants[0].hours_granted == 15.0
 
 
 @pytest.mark.asyncio

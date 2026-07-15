@@ -54,6 +54,30 @@ from proliferate.utils.time import utcnow
 logger = logging.getLogger(__name__)
 
 _ZERO = Decimal("0")
+_HUNDRED = Decimal("100")
+
+
+def llm_margin_multiplier() -> Decimal:
+    """1 + margin_pct/100 applied to imported managed-LLM spend.
+
+    Ruled 2026-07-14: managed LLM is metered at provider list price + 15%, so a
+    face-value $10 top-up pack funds $10 of purchase but bills spend at the
+    marked-up rate. A garbage/negative setting fails safe to no margin (x1).
+    """
+    try:
+        pct = Decimal(settings.agent_gateway_llm_margin_pct)
+    except (ArithmeticError, ValueError):
+        return Decimal("1")
+    if pct <= _ZERO:
+        return Decimal("1")
+    return Decimal("1") + (pct / _HUNDRED)
+
+
+def apply_llm_margin(spend: float) -> float:
+    """Provider spend marked up by the configured LLM margin (>= 0)."""
+    if spend <= 0:
+        return 0.0
+    return float(Decimal(str(spend)) * llm_margin_multiplier())
 
 # Keyset-pagination page size for the limit_reached sweep below.
 _LIMIT_REACHED_SWEEP_PAGE_SIZE = 500
@@ -211,7 +235,7 @@ async def run_usage_import(
             prompt_tokens=entry.prompt_tokens,
             completion_tokens=entry.completion_tokens,
             total_tokens=entry.total_tokens,
-            cost_usd=entry.spend,
+            cost_usd=apply_llm_margin(entry.spend),
             status=status,
             workspace_id=_metadata_str(entry, "proliferate_workspace_id"),
             session_id=_metadata_str(entry, "proliferate_session_id"),

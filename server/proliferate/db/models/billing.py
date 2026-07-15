@@ -56,10 +56,14 @@ class BillingSubject(Base):
         default=False,
         server_default=text("false"),
     )
+    # Historically a per-seat cap; reinterpreted (ruled 2026-07-14) as the flat
+    # org/month overage cap value. Default is $50/org/month
+    # (PRO_DEFAULT_OVERAGE_CAP_CENTS_PER_ORG_MONTH); an explicit non-default
+    # value is an operator-set org-level cap.
     overage_cap_cents_per_seat: Mapped[int] = mapped_column(
         Integer,
-        default=2000,
-        server_default=text("2000"),
+        default=5000,
+        server_default=text("5000"),
     )
     overage_preference_set_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),

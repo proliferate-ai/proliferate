@@ -442,7 +442,7 @@ class LlmCreditGrant(Base):
     __tablename__ = "llm_credit_grant"
     __table_args__ = (
         CheckConstraint(
-            "source IN ('free_signup', 'topup', 'admin')",
+            "source IN ('free_signup', 'topup', 'admin', 'seat_pool')",
             name="ck_llm_credit_grant_source",
         ),
         CheckConstraint(

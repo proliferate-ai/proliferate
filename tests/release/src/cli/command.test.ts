@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { runReleaseCommand, type CommandDeps } from "./command.js";
+import { runReleaseCommand, synthesizeSourceCandidateBuild, type CommandDeps } from "./command.js";
 import { BuildMapError, type CandidateBuildMapV1 } from "../artifacts/build-map.js";
 import type { LocalWorldPorts } from "../worlds/local-workspace/ports.js";
 import type { RunIdentityV1 } from "../runner/identity.js";
@@ -368,4 +368,34 @@ test("a malformed ports sidecar exits 2 before any setup side effect", async () 
   );
   assert.equal(exit, 2);
   assert.deepEqual(calls, ["identity", "select", "loadBuildMap", "loadLocalWorldPorts"]);
+});
+
+// ── --source-candidate (BRIEF §1/§7 deviation 1) ────────────────────────────
+
+test("synthesizeSourceCandidateBuild names the server/<platform> artifact with a non-empty version and a 64-hex digest", () => {
+  const evidence = synthesizeSourceCandidateBuild("a".repeat(40));
+  assert.equal(evidence.artifacts.length, 1);
+  const [artifact] = evidence.artifacts;
+  assert.equal(artifact.artifact_id, `server/${process.platform}`);
+  assert.ok(artifact.version.length > 0);
+  assert.match(artifact.sha256, /^[0-9a-f]{64}$/);
+});
+
+test("synthesizeSourceCandidateBuild binds the digest to the source sha (two different commits never collide)", () => {
+  const a = synthesizeSourceCandidateBuild("a".repeat(40));
+  const b = synthesizeSourceCandidateBuild("b".repeat(40));
+  assert.notEqual(a.artifacts[0].sha256, b.artifacts[0].sha256);
+});
+
+test("--source-candidate threads a non-null candidate_build into the written report with no map materialization", async () => {
+  const { deps } = makeDeps();
+  let written: TestRunReportV4 | undefined;
+  deps.write = async (_dir, report) => {
+    written = report;
+    return "/tmp/report.json";
+  };
+  const exit = await runReleaseCommand(["--behavior", "diagnostic", "--source-candidate"], deps);
+  assert.equal(exit, 0);
+  assert.ok(written?.candidate_build !== null, "candidate_build is non-null for a source-candidate run");
+  assert.equal(written?.candidate_build?.artifacts[0].artifact_id, `server/${process.platform}`);
 });

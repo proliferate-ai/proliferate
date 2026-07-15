@@ -126,3 +126,21 @@ test("diagnostic runs may omit the candidate build map", () => {
   const dry = parseArgs(["--behavior", "diagnostic", "--dry-run"]);
   assert.equal(dry.candidateBuildMap, undefined);
 });
+
+test("--source-candidate satisfies the strict candidate-identity requirement", () => {
+  const args = parseArgs(["--behavior", "strict", "--source-candidate"]);
+  assert.equal(args.sourceCandidate, true);
+  assert.equal(args.candidateBuildMap, undefined);
+});
+
+test("--source-candidate and --candidate-build-map are mutually exclusive", () => {
+  assert.throws(
+    () => parseArgs(["--behavior", "diagnostic", "--source-candidate", "--candidate-build-map", "map.json"]),
+    CliUsageError,
+  );
+});
+
+test("sourceCandidate defaults to false", () => {
+  const args = parseArgs(["--behavior", "diagnostic"]);
+  assert.equal(args.sourceCandidate, false);
+});

@@ -1,5 +1,7 @@
 """Billing-related constants."""
 
+from decimal import Decimal
+
 FREE_INCLUDED_GRANT_TYPE = "free_included"
 FREE_TRIAL_V2_GRANT_TYPE = "free_trial_v2"
 FREE_CLOUD_ALLOCATION_KIND_PERSONAL_TRIAL = "personal_trial"
@@ -19,9 +21,20 @@ BILLING_PRICE_CLASS_LEGACY_CLOUD = "legacy_cloud"
 BILLING_PRICE_CLASS_UNKNOWN = "unknown"
 
 PRO_SEAT_MONTHLY_AMOUNT_CENTS = 2000
-PRO_INCLUDED_MANAGED_CLOUD_HOURS_PER_SEAT = 20.0
-PRO_OVERAGE_PRICE_PER_HOUR_CENTS = 200
-PRO_DEFAULT_OVERAGE_CAP_CENTS_PER_SEAT = 2000
+# Each active billed seat ($20/mo) allocates a $5 managed-LLM contribution and a
+# $15-equivalent compute contribution into two *separate* shared org pools. The
+# compute allocation is expressed in dollars (not flat hours): metered
+# sandbox-hours are derived at grant time from the configured compute price
+# (E2B list price x margin multiplier), so the dollar value survives provider
+# price changes. See ``server/billing/pricing.py`` for the derivation helpers
+# and ``domain/seats.py`` / ``domain/accounting.py`` for the pure math.
+PRO_LLM_ALLOCATION_USD_PER_SEAT = Decimal("5")
+PRO_COMPUTE_ALLOCATION_USD_PER_SEAT = Decimal("15")
+# Default overage exposure is a flat org/month cap (not per-seat): at cap,
+# compute pauses (WORKSPACE_ACTION_BLOCK_KIND_CAP_EXHAUSTED) rather than
+# auto-writing-off usage. A per-subject ``overage_cap_cents_per_seat`` override
+# is reinterpreted as an org-level cap value when set.
+PRO_DEFAULT_OVERAGE_CAP_CENTS_PER_ORG_MONTH = 5000
 PRO_ACTIVE_ENVIRONMENTS_PER_SEAT = 2
 PRO_REPO_ENVIRONMENTS_PER_SEAT = 4
 PRO_FREE_TRIAL_HOURS = 1.0

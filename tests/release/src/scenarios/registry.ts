@@ -23,6 +23,8 @@ import { t3Sh3 } from "./selfhost/t3-sh-3.js";
 import { t3Sh4 } from "./selfhost/t3-sh-4.js";
 import { t3Sh5 } from "./selfhost/t3-sh-5.js";
 import { localWorldSmoke1 } from "./local-world-smoke-1.js";
+import { t2Bill } from "./tier2/t2-bill.js";
+import { t2AuthOrg } from "./tier2/t2-auth-org.js";
 
 /**
  * The tier-3 first wave (specs/developing/testing/scenarios.md#tier-3--first-wave),
@@ -57,6 +59,8 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
   t4Sh1,
   t4Sh2,
   localWorldSmoke1,
+  t2Bill,
+  t2AuthOrg,
 ];
 
 export function allScenarioIds(): string[] {

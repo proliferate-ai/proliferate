@@ -15,6 +15,15 @@ export interface CliArgs {
   attempt?: number;
   /** Path to a CandidateBuildMapV1 JSON file. Required for strict real runs. */
   candidateBuildMap?: string;
+  /**
+   * Synthesize a `CandidateBuildEvidenceV1` naming the source-built Server
+   * under test (VERSION file + `sha256(source_sha + "/server/<platform>")`)
+   * instead of materializing a candidate build map. For Tier-2 runs, which
+   * boot from source (venv uvicorn) and never build/package artifacts.
+   * Mutually exclusive with `--candidate-build-map`; satisfies the strict
+   * non-null `candidate_build` requirement without candidate-map machinery.
+   */
+  sourceCandidate: boolean;
   help: boolean;
 }
 
@@ -33,6 +42,7 @@ const DEFAULTS = {
   scenarios: "all" as string[] | "all",
   dryRun: false,
   fileIssues: false,
+  sourceCandidate: false,
   // Relative to this package's own cwd (`tests/release/`), which is what
   // both `make release-e2e` and a direct `pnpm exec tsx src/cli/run.ts` use
   // — found running this for real 2026-07-08: the previous default
@@ -92,6 +102,9 @@ export function parseArgs(argv: readonly string[]): CliArgs {
         args.candidateBuildMap = requireValue(argv, i, arg);
         i += 1;
         break;
+      case "--source-candidate":
+        args.sourceCandidate = true;
+        break;
       case "--dry-run":
         args.dryRun = true;
         break;
@@ -120,10 +133,14 @@ export function parseArgs(argv: readonly string[]): CliArgs {
   if (args.behavior === "strict" && args.dryRun) {
     throw new CliUsageError("--behavior strict cannot be combined with --dry-run.");
   }
+  if (args.candidateBuildMap !== undefined && args.sourceCandidate) {
+    throw new CliUsageError("--candidate-build-map and --source-candidate are mutually exclusive.");
+  }
   // Strict real runs are fail-closed on artifact identity: without a
-  // candidate build map the run cannot say which bytes it qualified.
-  if (args.behavior === "strict" && args.candidateBuildMap === undefined) {
-    throw new CliUsageError("--candidate-build-map <path> is required for strict runs.");
+  // candidate build map (or the source-candidate synthesis for from-source
+  // runs) the run cannot say which bytes it qualified.
+  if (args.behavior === "strict" && args.candidateBuildMap === undefined && !args.sourceCandidate) {
+    throw new CliUsageError("--candidate-build-map <path> (or --source-candidate) is required for strict runs.");
   }
   return { ...args, behavior: args.behavior };
 }
@@ -198,5 +215,6 @@ Flags:
   --shard-id <safe-id>       Optional shard identity override
   --attempt <n>              Optional attempt override (positive integer)
   --candidate-build-map <path>  CandidateBuildMapV1 JSON (required for strict; optional and recorded when supplied)
+  --source-candidate         Synthesize candidate_build for a from-source run (Tier-2); exclusive with --candidate-build-map
   --help                     Show this text
 `;

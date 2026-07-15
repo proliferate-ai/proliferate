@@ -54,10 +54,15 @@ AGENT_GATEWAY_BUDGET_STATUSES = (
 LLM_CREDIT_SOURCE_FREE_SIGNUP = "free_signup"
 LLM_CREDIT_SOURCE_TOPUP = "topup"
 LLM_CREDIT_SOURCE_ADMIN = "admin"
+# Per-seat managed-LLM allocation ($5/seat) granted into the shared org LLM pool
+# each paid period. Expires at period end so the allocation resets on renewal
+# (unused balance does not roll over); distinct from never-expiring top-ups.
+LLM_CREDIT_SOURCE_SEAT_POOL = "seat_pool"
 LLM_CREDIT_SOURCES = (
     LLM_CREDIT_SOURCE_FREE_SIGNUP,
     LLM_CREDIT_SOURCE_TOPUP,
     LLM_CREDIT_SOURCE_ADMIN,
+    LLM_CREDIT_SOURCE_SEAT_POOL,
 )
 
 # Bifrost-era free credits used period_key "registration" under the same
