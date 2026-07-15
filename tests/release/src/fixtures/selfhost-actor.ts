@@ -120,8 +120,10 @@ export const defaultSelfHostActorTransport: SelfHostActorTransport = {
       body: body.toString(),
     });
     if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`POST /setup -> ${response.status}: ${text.slice(0, 2000)}`);
+      // Do NOT echo the response body: a validation error can reflect the
+      // request's setup_token/password back, and those request-local secrets are
+      // not in the aggregate sanitizer's known-secret set. Status only.
+      throw new Error(`POST /setup failed with HTTP ${response.status}`);
     }
   },
   async loginWithPassword(apiBaseUrl, email, password) {
@@ -131,8 +133,10 @@ export const defaultSelfHostActorTransport: SelfHostActorTransport = {
       body: JSON.stringify({ email, password }),
     });
     if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`POST /auth/desktop/password/login -> ${response.status}: ${text.slice(0, 2000)}`);
+      // Do NOT echo the response body: a validation error can reflect the
+      // request's password back, and that request-local secret is not in the
+      // aggregate sanitizer's known-secret set. Status only.
+      throw new Error(`POST /auth/desktop/password/login failed with HTTP ${response.status}`);
     }
     return (await response.json()) as DesktopTokenResponse;
   },

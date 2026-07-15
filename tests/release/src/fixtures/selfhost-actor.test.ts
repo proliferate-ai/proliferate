@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
   claimSelfHostOwner,
   assertSecondClaimRejected,
+  defaultSelfHostActorTransport,
   inviteAndRegisterMember,
   isNotFoundError,
   type SelfHostActorTransport,
@@ -204,4 +205,69 @@ test("isNotFoundError distinguishes a 404 ApiRequestError", () => {
   assert.equal(isNotFoundError(new ApiRequestError("GET", "/setup", 404, "nope")), true);
   assert.equal(isNotFoundError(new ApiRequestError("GET", "/setup", 500, "boom")), false);
   assert.equal(isNotFoundError(new Error("other")), false);
+});
+
+/**
+ * SHR-F02: the setup-claim and password-login error paths must NOT copy the raw
+ * HTTP response body into the thrown error — a validation response can echo the
+ * request-local setup token / password, which are not in the aggregate
+ * sanitizer's known-secret set. Plant those secrets in a rejecting response body
+ * and assert the thrown error carries only the status, never the secret.
+ */
+const PLANTED_SETUP_TOKEN = "SETUP-TOKEN-PLANTED-2f8c1a";
+const PLANTED_PASSWORD = "PASSWORD-PLANTED-9d4e7b";
+
+async function withStubbedFetch(
+  response: () => Response,
+  body: () => Promise<unknown>,
+): Promise<void> {
+  const original = globalThis.fetch;
+  globalThis.fetch = (async () => response()) as typeof fetch;
+  try {
+    await body();
+  } finally {
+    globalThis.fetch = original;
+  }
+}
+
+test("claimSetup keeps the setup token/password out of the thrown error (SHR-F02)", async () => {
+  await withStubbedFetch(
+    () =>
+      new Response(`validation error: setup_token=${PLANTED_SETUP_TOKEN} password=${PLANTED_PASSWORD}`, {
+        status: 400,
+      }),
+    () =>
+      assert.rejects(
+        defaultSelfHostActorTransport.claimSetup({
+          apiBaseUrl: "https://box.example.com",
+          email: "owner@example.com",
+          password: PLANTED_PASSWORD,
+          setupToken: PLANTED_SETUP_TOKEN,
+          organizationName: "org",
+        }),
+        (error: unknown) => {
+          const message = error instanceof Error ? error.message : String(error);
+          assert.ok(!message.includes(PLANTED_SETUP_TOKEN), `error leaked the setup token: ${message}`);
+          assert.ok(!message.includes(PLANTED_PASSWORD), `error leaked the password: ${message}`);
+          assert.match(message, /400/);
+          return true;
+        },
+      ),
+  );
+});
+
+test("loginWithPassword keeps the password out of the thrown error (SHR-F02)", async () => {
+  await withStubbedFetch(
+    () => new Response(`unauthorized: password=${PLANTED_PASSWORD}`, { status: 401 }),
+    () =>
+      assert.rejects(
+        defaultSelfHostActorTransport.loginWithPassword("https://box.example.com", "owner@example.com", PLANTED_PASSWORD),
+        (error: unknown) => {
+          const message = error instanceof Error ? error.message : String(error);
+          assert.ok(!message.includes(PLANTED_PASSWORD), `error leaked the password: ${message}`);
+          assert.match(message, /401/);
+          return true;
+        },
+      ),
+  );
 });
