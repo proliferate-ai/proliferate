@@ -23,7 +23,7 @@
  */
 
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import path from "node:path";
 
 import { makeTier2MatrixScenario } from "./harness.js";
@@ -70,12 +70,18 @@ const GATEWAY_GAP_REASON =
  * function directly against the booted profile DB — the same "run the
  * product's own pass function out of process" convention `billing.ts` uses
  * for the accounting/reconciler/topup passes, scoped to
- * `ensure_user_free_credit_grant` (there is no HTTP route that calls it
- * without the agent-gateway enrollment path, which needs the gateway wiring
- * this shared boot lacks — see the module doc). Returns whether a grant was
- * newly issued. */
-function runFreeCreditGrantPass(userId: string): boolean {
-  const result = spawnSync(
+ * `ensure_user_free_credit_grant`.
+ *
+ * Returns whether the user OWNS the free-signup grant after the call — NOT
+ * whether this call newly created it. `ensure_user_free_credit_grant` is
+ * idempotent-by-ownership (the `free_cloud_allocation` guard returns True when
+ * the allocation already belongs to this subject, and the grant insert is
+ * `source_ref`-deduped), so a replay returns True too. The dedup guarantee is
+ * therefore "exactly one grant row", asserted via `llmCreditGrantCount`, not
+ * the boolean. Async (spawn, not spawnSync) so two calls can genuinely race the
+ * `source_ref` unique constraint in the concurrency case (T2-BILL-14). */
+function runFreeCreditGrantPass(userId: string): Promise<boolean> {
+  const child = spawn(
     path.join(REPO_ROOT, "server", ".venv", "bin", "python"),
     [
       "-c",
@@ -89,12 +95,13 @@ function runFreeCreditGrantPass(userId: string): boolean {
         "    async with async_session_factory() as db:\n" +
         `        granted = await ensure_user_free_credit_grant(db, "${userId}")\n` +
         "        await db.commit()\n" +
-        "        print('GRANTED' if granted else 'NOT_GRANTED')\n" +
+        // Unambiguous tokens: 'NOT_GRANTED' contains 'GRANTED' as a substring,
+        // so the reader below matches a distinct marker instead.
+        "        print('GRANT_YES' if granted else 'GRANT_NO')\n" +
         "asyncio.run(_m())\n",
     ],
     {
       cwd: path.join(REPO_ROOT, "server"),
-      encoding: "utf8",
       env: {
         ...process.env,
         DATABASE_URL: b.databaseUrl(),
@@ -103,10 +110,24 @@ function runFreeCreditGrantPass(userId: string): boolean {
       },
     },
   );
-  if (result.status !== 0) {
-    throw new Error(`free-credit pass failed (${result.status}): ${(result.stderr || result.stdout || "").trim()}`);
-  }
-  return result.stdout.includes("GRANTED");
+  let stdout = "";
+  let stderr = "";
+  child.stdout?.on("data", (c: Buffer) => {
+    stdout += c.toString();
+  });
+  child.stderr?.on("data", (c: Buffer) => {
+    stderr += c.toString();
+  });
+  return new Promise<boolean>((resolve, reject) => {
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(`free-credit pass failed (${code}): ${(stderr || stdout).trim()}`));
+        return;
+      }
+      resolve(stdout.includes("GRANT_YES"));
+    });
+  });
 }
 
 /** Seed a real `auth_identity` GitHub link for `userId` (the free-credit
@@ -120,6 +141,19 @@ async function linkGithubIdentity(userId: string, providerSubject: string): Prom
       [userId, providerSubject],
     ),
   );
+}
+
+/** Drive the seat-adjustment pass repeatedly to drain ALL pending adjustments.
+ * `process_pending_seat_adjustments` claims with `FOR UPDATE OF subscription
+ * SKIP LOCKED`, so at most one adjustment per subscription advances per pass:
+ * when several pending adjustments share one subscription (e.g. a non-trivial
+ * initial-reconcile from `subscription.created` plus an invite proration — the
+ * shape a long-lived org DB produces), each needs its own pass. The background
+ * loop achieves this over ticks; a deterministic test drains explicitly. */
+function drainSeatAdjustments(times = 5): void {
+  for (let i = 0; i < times; i++) {
+    b.processSeatAdjustments();
+  }
 }
 
 async function llmCreditGrantCount(subjectId: string, source?: string): Promise<number> {
@@ -225,12 +259,13 @@ const t2Bill2: Tier2CellHandler = async (ctx: Tier2CellContext): Promise<Tier2Ca
   await linkGithubIdentity(memberId, githubSubject);
   const subject = await b.ensurePersonalSubject(memberId);
 
-  const grantedFirst = runFreeCreditGrantPass(memberId);
+  const grantedFirst = await runFreeCreditGrantPass(memberId);
   assert.equal(grantedFirst, true, "first attempt grants the free credit");
-  const grantedSecond = runFreeCreditGrantPass(memberId);
-  assert.equal(grantedSecond, false, "replayed attempt grants nothing (deduped)");
+  // A replay owns the same grant (idempotent), so the pass still reports owned;
+  // the dedup guarantee is that NO SECOND ROW is created — asserted by count.
+  await runFreeCreditGrantPass(memberId);
   const freeGrantCount = await llmCreditGrantCount(subject.id, "free_signup");
-  assert.equal(freeGrantCount, 1, "exactly one lifetime free-signup grant");
+  assert.equal(freeGrantCount, 1, "exactly one lifetime free-signup grant (replay creates no second row)");
   const freeGrantAmount = await b.withDb(async (db) => {
     const r = await db.query(`SELECT amount_usd FROM llm_credit_grant WHERE billing_subject_id = $1 AND source = 'free_signup'`, [subject.id]);
     return Number(r.rows[0].amount_usd);
@@ -241,7 +276,7 @@ const t2Bill2: Tier2CellHandler = async (ctx: Tier2CellContext): Promise<Tier2Ca
   const email2 = `t2bill2-nogh-${Date.now()}@example.com`;
   const noGhToken = await seed.registerFreshMember(token, organizationId, email2, PASSWORD, "member");
   const noGhUserId = await userIdFor(noGhToken);
-  const grantedNoGh = runFreeCreditGrantPass(noGhUserId);
+  const grantedNoGh = await runFreeCreditGrantPass(noGhUserId);
   assert.equal(grantedNoGh, false, "no GitHub identity -> no grant");
 
   // Core seat pools: subscribe the org to Pro at N seats and confirm the
@@ -337,23 +372,23 @@ const t2Bill3: Tier2CellHandler = async (): Promise<Tier2CaseResult> => {
   assert.ok(bump!.grant_quantity >= 1);
 
   const prorationBefore = (await b.listGrants(subject.id)).filter((g) => g.grant_type === "pro_seat_proration").length;
-  b.processSeatAdjustments();
+  drainSeatAdjustments();
   adjustments = await b.listSeatAdjustments(subject.id);
-  assert.equal(adjustments.at(-1)!.status, "succeeded");
+  assert.equal(adjustments.at(-1)!.status, "succeeded", "the invite proration seat adjustment converges");
   const prorationAfter = (await b.listGrants(subject.id)).filter((g) => g.grant_type === "pro_seat_proration").length;
   assert.equal(prorationAfter - prorationBefore, 1, "one proration grant for the added seat");
 
   const members = await seed.listMembers(token, organizationId);
   const member = members.find((m) => m.email === email)!;
   await seed.removeMembership(token, organizationId, member.membershipId);
-  b.processSeatAdjustments();
+  drainSeatAdjustments();
   adjustments = await b.listSeatAdjustments(subject.id);
   assert.equal(adjustments.at(-1)!.grant_quantity, 0, "removal issues no refund grant");
 
   const reinvite = await seed.inviteMember(token, organizationId, email, "member");
   const reaccept = await seed.acceptCurrentInvitation(memberToken, reinvite.id);
   assert.ok([200, 201].includes(reaccept.status));
-  b.processSeatAdjustments();
+  drainSeatAdjustments();
   const prorationFinal = (await b.listGrants(subject.id)).filter((g) => g.grant_type === "pro_seat_proration").length;
   assert.equal(prorationFinal - prorationBefore, 1, "no second proration grant on same-period re-invite (no double grant)");
 
@@ -884,15 +919,13 @@ const t2Bill14: Tier2CellHandler = async (): Promise<Tier2CaseResult> => {
   await linkGithubIdentity(memberId, githubSubject);
   const subject = await b.ensurePersonalSubject(memberId);
 
-  // Concurrent attempts: the DB-level ensure-allocation guard reserves the
-  // allocation once per GitHub identity even under a concurrent race.
-  const [g1, g2] = await Promise.all([
-    Promise.resolve().then(() => runFreeCreditGrantPass(memberId)),
-    Promise.resolve().then(() => runFreeCreditGrantPass(memberId)),
-  ]);
-  assert.equal([g1, g2].filter(Boolean).length, 1, "concurrent attempts grant exactly once");
+  // Concurrent attempts genuinely race (async spawn): the `free_cloud_allocation`
+  // guard + the `source_ref`-unique grant insert reserve the allocation once per
+  // GitHub identity even under the race. Both passes may report "owns the grant"
+  // (idempotent); the guarantee is EXACTLY ONE grant row.
+  await Promise.all([runFreeCreditGrantPass(memberId), runFreeCreditGrantPass(memberId)]);
   const freeGrantCount = await llmCreditGrantCount(subject.id, "free_signup");
-  assert.equal(freeGrantCount, 1);
+  assert.equal(freeGrantCount, 1, "concurrent attempts create exactly one free-signup grant row");
 
   // Activated Core creates an org budget subject (an org-scoped billing
   // subject), not another personal free-credit entitlement for the owner.
