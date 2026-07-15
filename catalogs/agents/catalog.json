@@ -16,7 +16,7 @@
           "source": {
             "kind": "git",
             "repo": "https://github.com/proliferate-ai/claude-agent-acp.git",
-            "gitRef": "c0077e4da626991e4320f28cd18cb366cd5c8c67",
+            "gitRef": "50049b3a0ea21ee7aef5fb8b0f936727a7a4592a",
             "executableRelpath": "node_modules/.bin/claude-agent-acp"
           }
         },
