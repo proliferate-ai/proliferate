@@ -48,6 +48,11 @@ pub struct SessionEventSink {
     /// (goal continuation/evaluation) rather than begun by a prompt. Only
     /// such turns may be auto-closed by terminal goal events.
     engine_initiated_turn: bool,
+    /// Whether the open engine-initiated turn has carried anything beyond its
+    /// own TurnStarted. A tag-opened turn whose goal update the observer then
+    /// drops (stale echo, idempotent no-op) stays empty — the post-dispatch
+    /// sweep closes it so it cannot dangle as a phantom in-progress turn.
+    engine_turn_has_events: bool,
     open_assistant_item: Option<StreamingItemState>,
     open_reasoning_item: Option<StreamingItemState>,
     open_plan_item: Option<PlanItemState>,
@@ -72,6 +77,7 @@ impl SessionEventSink {
             store,
             current_turn_id: None,
             engine_initiated_turn: false,
+            engine_turn_has_events: false,
             open_assistant_item: None,
             open_reasoning_item: None,
             open_plan_item: None,
@@ -97,6 +103,7 @@ impl SessionEventSink {
             store,
             current_turn_id: None,
             engine_initiated_turn: false,
+            engine_turn_has_events: false,
             open_assistant_item: None,
             open_reasoning_item: None,
             open_plan_item: None,
@@ -127,6 +134,13 @@ impl SessionEventSink {
         let goal_reached_quiescence = envelopes
             .iter()
             .any(|envelope| goal_event_quiesces_turn(&envelope.event));
+        if self.engine_initiated_turn
+            && envelopes
+                .iter()
+                .any(|envelope| envelope.turn_id == self.current_turn_id)
+        {
+            self.engine_turn_has_events = true;
+        }
         for envelope in envelopes {
             if envelope.seq >= self.next_seq {
                 self.next_seq = envelope.seq + 1;

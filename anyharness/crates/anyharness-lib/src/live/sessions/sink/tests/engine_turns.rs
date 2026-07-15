@@ -213,3 +213,65 @@ fn begin_turn_sweeps_dangling_engine_initiated_turn() {
         .unwrap();
     assert!(last_ended_seq < last_started_seq);
 }
+
+/// A goal_updated tag opens the engine turn before the observer classifies
+/// the update; when the observer drops it (stale echo) the post-dispatch
+/// sweep must close the empty turn so it can't dangle as a phantom.
+#[test]
+fn sweep_closes_engine_turn_that_never_received_content() {
+    let store = seeded_store();
+    let (tx, mut rx) = broadcast::channel(64);
+    let mut sink = SessionEventSink::new(
+        "session-1".to_string(),
+        "claude".to_string(),
+        PathBuf::from("/tmp/workspace"),
+        tx,
+        Arc::new(store.clone()),
+    );
+
+    sink.begin_turn("hello".to_string(), None, Vec::new(), None);
+    sink.turn_ended(StopReason::EndTurn);
+    // Tag-opened engine turn (as ingest does for goal_updated), observer drops.
+    sink.ensure_open_turn();
+    sink.sweep_empty_engine_turn();
+    assert_eq!(sink.current_turn_id(), None, "empty engine turn must close");
+
+    let events = drain_events(&mut rx);
+    let started = events
+        .iter()
+        .filter(|e| e.event.event_type() == "turn_started")
+        .count();
+    let ended = events
+        .iter()
+        .filter(|e| e.event.event_type() == "turn_ended")
+        .count();
+    assert_eq!(started, 2);
+    assert_eq!(ended, 2, "the empty engine turn closes immediately");
+}
+
+/// The sweep must NOT close an engine turn that received content — the
+/// continuation is still running and quiescence/next-prompt owns its close.
+#[test]
+fn sweep_keeps_engine_turn_with_content_open() {
+    let store = seeded_store();
+    let (tx, _rx) = broadcast::channel(64);
+    let mut sink = SessionEventSink::new(
+        "session-1".to_string(),
+        "claude".to_string(),
+        PathBuf::from("/tmp/workspace"),
+        tx,
+        Arc::new(store.clone()),
+    );
+
+    sink.begin_turn("hello".to_string(), None, Vec::new(), None);
+    sink.turn_ended(StopReason::EndTurn);
+    sink.agent_message_chunk(AcpChunkPayload {
+        content: json!("continuation"),
+        ..Default::default()
+    });
+    sink.sweep_empty_engine_turn();
+    assert!(
+        sink.current_turn_id().is_some(),
+        "engine turn with content stays open for its quiescence close"
+    );
+}

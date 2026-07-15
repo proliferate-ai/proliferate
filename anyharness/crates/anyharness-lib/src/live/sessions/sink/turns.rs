@@ -94,6 +94,7 @@ impl SessionEventSink {
         tracing::debug!(turn_id = %turn_id, "event_sink: opening engine-initiated turn");
         self.current_turn_id = Some(turn_id.clone());
         self.engine_initiated_turn = true;
+        self.engine_turn_has_events = false;
         self.emit_with_ids(
             SessionEvent::TurnStarted(TurnStartedEvent::default()),
             Some(turn_id.clone()),
@@ -106,6 +107,22 @@ impl SessionEventSink {
     /// turns are owned by the prompt lifecycle and never auto-closed.
     pub(super) fn end_engine_initiated_turn_if_open(&mut self) {
         if self.engine_initiated_turn && self.current_turn_id.is_some() {
+            self.turn_ended(StopReason::EndTurn);
+        }
+    }
+
+    /// Closes an engine-initiated turn that never received content. A
+    /// goal_updated tag opens the turn eagerly (before the goal observer
+    /// classifies the update); when the observer drops it (stale accounting
+    /// echo after a clear, idempotent duplicate) nothing would ever close the
+    /// bare TurnStarted and the transcript would show a phantom in-progress
+    /// turn. Called after each notification's observer dispatch; the empty
+    /// started/ended pair renders as nothing.
+    pub fn sweep_empty_engine_turn(&mut self) {
+        if self.engine_initiated_turn
+            && self.current_turn_id.is_some()
+            && !self.engine_turn_has_events
+        {
             self.turn_ended(StopReason::EndTurn);
         }
     }

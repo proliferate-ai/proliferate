@@ -41,6 +41,9 @@ impl SessionEventSink {
     }
 
     pub fn tool_call_update(&mut self, payload: AcpToolPayload) {
+        // Update-first continuation output (no prior tool_call) must still
+        // open the engine turn — same rule as tool_call.
+        self.ensure_open_turn();
         let existing = self.tool_items.get(&payload.tool_call_id).cloned();
         let item = self.build_tool_item(&payload, existing.as_ref());
         let item_id = payload.tool_call_id.clone();

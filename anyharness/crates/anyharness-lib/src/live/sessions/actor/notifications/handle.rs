@@ -143,4 +143,10 @@ pub(in crate::live::sessions::actor) async fn handle_notification_with_resume_re
         outcome.observations,
     )
     .await;
+
+    // A goal_updated tag opens an engine-initiated turn before the goal
+    // observer classifies the update; if the observer dropped it (stale echo,
+    // idempotent no-op) the turn is still empty — close it now so it cannot
+    // dangle as a phantom in-progress turn.
+    event_sink.lock().await.sweep_empty_engine_turn();
 }
