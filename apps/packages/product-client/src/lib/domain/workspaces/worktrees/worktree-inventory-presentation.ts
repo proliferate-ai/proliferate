@@ -109,6 +109,21 @@ export function formatWorktreeStorageDetail(
   return parts.length > 0 ? parts.join(" + ") : null;
 }
 
+/** Compact size for status-card rows: total when reported, otherwise the
+ * checkout + logs sum; undefined when the runtime gave no estimate at all. */
+export function worktreeSizeMeta(
+  storage: WorktreeStorageEstimate | null | undefined,
+): string | undefined {
+  const parts = [storage?.worktreeBytes, storage?.sqliteBytes]
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  const total = typeof storage?.totalBytes === "number" && Number.isFinite(storage.totalBytes)
+    ? storage.totalBytes
+    : parts.length > 0
+      ? parts.reduce((sum, value) => sum + value, 0)
+      : null;
+  return total !== null ? `~${formatBytes(total)}` : undefined;
+}
+
 function fileCountDetail(status: WorktreeGitStatusSummary): string | null {
   const parts: string[] = [];
   if (status.changedFileCount > 0) {

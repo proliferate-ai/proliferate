@@ -26,6 +26,11 @@ import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/sess
 import { noop } from "#product/components/playground/PlaygroundComposerActions";
 import { WorkspaceStatusComposerControl } from "#product/components/workspace/chat/input/workspace-status/WorkspaceStatusComposerControl";
 import { createPlaygroundWorkspaceStatusModel } from "#product/lib/domain/chat/__fixtures__/playground/workspace-status-fixtures";
+import { RuntimeEnvironmentControl } from "#product/components/workspace/chat/input/RuntimePressureIndicator";
+import {
+  createPlaygroundEnvironmentAdvancedControls,
+  createPlaygroundEnvironmentTargetState,
+} from "#product/lib/domain/chat/__fixtures__/playground/environment-fixtures";
 
 export function renderComposerSurfaceForScenario(scenario: ScenarioKey): ReactNode {
   switch (scenario) {
@@ -33,6 +38,8 @@ export function renderComposerSurfaceForScenario(scenario: ScenarioKey): ReactNo
       return <PlaygroundLongInputComposerSurface />;
     case "composer-ultra":
       return <PlaygroundComposerSurface ultra />;
+    case "environment-card":
+      return <PlaygroundComposerSurface statusControl={<PlaygroundEnvironmentControl />} />;
     case "workspace-status-card":
       return (
         <PlaygroundComposerSurface
@@ -164,6 +171,22 @@ function PlaygroundSlashCommandComposerSurface({
  * to stepping (reasoning level swap, fast-mode toggle) can be exercised in
  * the playground.
  */
+/** Environment card scenario: fixture worktrees + interactive advanced
+ * controls behind the pressure-ring trigger. */
+function PlaygroundEnvironmentControl() {
+  const baseControls = useMemo(createPlaygroundEnvironmentAdvancedControls, []);
+  const advancedControls = usePlaygroundLiveControls(baseControls);
+  const targetState = useMemo(createPlaygroundEnvironmentTargetState, []);
+  return (
+    <RuntimeEnvironmentControl
+      targetState={targetState}
+      actions={{ pruneOrphan: noop, purgeWorkspace: noop }}
+      advancedControls={advancedControls}
+      agentKind="codex"
+    />
+  );
+}
+
 function usePlaygroundLiveControls(controls: LiveSessionControlDescriptor[]) {
   const [selectedByKey, setSelectedByKey] = useState<Record<string, string>>({});
   return controls.map((control) => {

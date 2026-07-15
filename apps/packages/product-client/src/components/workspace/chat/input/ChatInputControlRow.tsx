@@ -3,7 +3,6 @@ import { ChatComposerActions } from "./ChatComposerActions";
 import { ComposerModelSelectorControl } from "./ComposerModelSelectorControl";
 import { ComposerReasoningEffortBars } from "./ComposerReasoningEffortBars";
 import { ComposerFastModeToggle } from "./ComposerFastModeToggle";
-import { ComposerOverflowControl } from "./ComposerOverflowControl";
 import type { ModelSelectorProps } from "#product/lib/domain/chat/models/model-selector-types";
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 import { ComposerIntegrationsControl } from "./ComposerIntegrationsControl";
@@ -208,23 +207,21 @@ export function ComposerTrailingControls({
         />
       )}
 
-      {/* 8. Runtime pressure */}
-      <RuntimePressureIndicator />
-
-      {/* 8b. Workspace status — ambient background work + environment */}
-      {statusControl}
-
-      {/* 9. Overflow three-dots */}
+      {/* 8. Environment — pressure ring; its card also carries the advanced
+          session config that used to live in the "..." overflow menu. */}
       <span
         className={`inline-flex shrink-0 ${
           runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
         }`}
       >
-        <ComposerOverflowControl
+        <RuntimePressureIndicator
+          advancedControls={controlGroups.overflowControls}
           agentKind={agentKind}
-          controls={controlGroups.overflowControls}
         />
       </span>
+
+      {/* 8b. Workspace status — ambient background work + environment */}
+      {statusControl}
     </>
   );
 }

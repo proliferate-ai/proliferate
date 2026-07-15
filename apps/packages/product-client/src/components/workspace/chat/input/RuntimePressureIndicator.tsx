@@ -1,48 +1,127 @@
 import { useState } from "react";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
-import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
+import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
+import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import {
   type RuntimePressureTargetState,
   type RuntimePressureTone,
   useRuntimePressureControlState,
 } from "#product/hooks/workspaces/facade/use-runtime-pressure-control-state";
-import { RuntimePressureDetailsDialog } from "#product/components/workspace/chat/input/RuntimePressureDetailsDialog";
+import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
+import {
+  EnvironmentStatusCard,
+  type EnvironmentCardActions,
+} from "#product/components/workspace/chat/input/EnvironmentStatusCard";
 
-export function RuntimePressureIndicator() {
+/**
+ * The composer's environment control: the pressure ring stays the trigger,
+ * but it now opens a composer-anchored card (EnvironmentStatusCard) instead
+ * of the old worktree-table modal — worktrees + runtime pressure + the
+ * session's advanced config (absorbed from the old "..." overflow menu).
+ */
+export function RuntimePressureIndicator({
+  advancedControls = [],
+  agentKind = null,
+}: {
+  advancedControls?: LiveSessionControlDescriptor[];
+  agentKind?: string | null;
+}) {
   const pressure = useRuntimePressureControlState();
-  const [open, setOpen] = useState(false);
 
-  if (!pressure.visible || !pressure.indicator) {
+  const indicator = pressure.visible ? pressure.indicator : null;
+  // Advanced config must stay reachable even when no runtime target reports
+  // pressure (the ring just renders quiet/empty).
+  if (!indicator && advancedControls.length === 0) {
     return null;
   }
 
-  const indicator = pressure.indicator;
-  const tooltip = compactPressureTooltip(indicator);
+  return (
+    <RuntimeEnvironmentControl
+      targetState={indicator}
+      loading={pressure.isDiscovering || !!indicator?.isLoading}
+      actions={pressure.actions}
+      advancedControls={advancedControls}
+      agentKind={agentKind}
+    />
+  );
+}
+
+/** Pure control (trigger + card + purge confirm) — playground renders this
+ * directly with fixture state. */
+export function RuntimeEnvironmentControl({
+  targetState,
+  loading = false,
+  actions,
+  advancedControls,
+  agentKind,
+}: {
+  targetState: RuntimePressureTargetState | null;
+  loading?: boolean;
+  actions: EnvironmentCardActions;
+  advancedControls: LiveSessionControlDescriptor[];
+  agentKind: string | null;
+}) {
+  const [confirmPurge, setConfirmPurge] = useState<{
+    workspaceId: string;
+    label: string;
+  } | null>(null);
+
+  const tooltip = targetState
+    ? compactPressureTooltip(targetState)
+    : "Environment & advanced options";
 
   return (
     <>
-      <Tooltip content={tooltip}>
-        <ComposerControlButton
-          iconOnly
-          label="Workspace pressure"
-          aria-label="Open pruning details"
-          aria-haspopup="dialog"
-          aria-expanded={open}
-          icon={(
-            <RuntimePressureRing
-              tone={indicator.tone}
-              progressPercent={indicator.ringProgressPercent}
-              loading={pressure.isDiscovering || indicator.isLoading}
-            />
-          )}
-          onClick={() => setOpen(true)}
-        />
-      </Tooltip>
-      <RuntimePressureDetailsDialog
-        open={open}
-        targetState={indicator}
-        actions={pressure.actions}
-        onClose={() => setOpen(false)}
+      <PopoverButton
+        trigger={(
+          <ComposerControlButton
+            iconOnly
+            label="Environment"
+            aria-label="Open environment details"
+            title={tooltip}
+            icon={(
+              <RuntimePressureRing
+                tone={targetState?.tone ?? "quiet"}
+                progressPercent={targetState?.ringProgressPercent}
+                loading={loading}
+              />
+            )}
+          />
+        )}
+        side="top"
+        align="end"
+        offset={8}
+        className="w-auto border-0 bg-transparent p-0 shadow-none"
+      >
+        {() => (
+          <EnvironmentStatusCard
+            targetState={targetState}
+            advancedControls={advancedControls}
+            agentKind={agentKind}
+            onRequestPurge={(workspaceId, label) => setConfirmPurge({ workspaceId, label })}
+            onDeleteOrphan={(path) => {
+              if (targetState) {
+                actions.pruneOrphan(targetState.target, { path });
+              }
+            }}
+          />
+        )}
+      </PopoverButton>
+      <ConfirmationDialog
+        open={confirmPurge !== null}
+        title={`Delete runtime history for ${confirmPurge?.label ?? "this workspace"}?`}
+        description="This permanently deletes the AnyHarness runtime workspace record, chats, raw events, normalized events, checkout, and local agent artifacts for this runtime. Git commits, branches, pull requests, and Cloud product records are preserved."
+        confirmLabel="Delete"
+        confirmVariant="destructive"
+        onClose={() => setConfirmPurge(null)}
+        onConfirm={() => {
+          const pending = confirmPurge;
+          if (!pending || !targetState) {
+            return;
+          }
+          setConfirmPurge(null);
+          actions.purgeWorkspace(targetState.target, pending.workspaceId);
+        }}
       />
     </>
   );
