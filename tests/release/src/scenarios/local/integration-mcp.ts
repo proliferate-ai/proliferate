@@ -518,27 +518,44 @@ async function openAppSettings(page: Page): Promise<void> {
  * gated behind the cloud sign-in state (cloudActive=false). */
 async function openIntegrationsSettings(page: Page, namespace: string): Promise<void> {
   await openAppSettings(page);
+  // The nav row's accessible name is the label PLUS the shortcut <kbd> badge
+  // the sidebar stamps on section rows (SidebarNavRow renders SettingsSidebar's
+  // shortcutLabel as a <kbd> inside the button, and kbd text joins the
+  // accessible-name computation), so `exact: true` on the bare label never
+  // matches — run 3's 30s "waiting for getByRole('button', { name:
+  // 'Integrations', exact: true })" timeout. Anchor a prefix match instead,
+  // exactly how the proven per-harness settings nav matches its rows.
   // Integrations is a user-scope section (the default landing scope), so no
   // scope-tab switch is needed; click the sidebar row by its label.
-  await page.getByRole("button", { name: "Integrations", exact: true }).first().click();
+  await page.getByRole("button", { name: /^Integrations/ }).first().click();
   const trigger = page.locator("[data-integration-connect-trigger], [data-integration-connected]").first();
   const gate = page.getByText(/Proliferate Cloud|Sign in to/i).first();
   const deadline = Date.now() + 30_000;
+  // The Integrations pane is gated on `authStatus === "authenticated"` (the
+  // control-plane auth signal, NOT cloud compute — render-settings-section.ts
+  // feeds CloudGuard an `authGate` keyed on `authenticated`). On first render
+  // `authStatus` is transiently `"loading"`, so CloudSignInRequiredPane flashes
+  // before auth settles and the connect UI mounts. Poll for the connect trigger
+  // until the deadline; treat the sign-in gate as a TERMINAL condition only if
+  // it is still showing when time runs out (fail-closed, but not on the
+  // transient loading flash — that was the run-4 false gate).
+  let gateSeen = false;
   while (Date.now() < deadline) {
     if (await trigger.isVisible().catch(() => false)) {
       return;
     }
-    if (await gate.isVisible().catch(() => false)) {
-      throw new CloudSurfaceGatedError(
-        `the Integrations settings pane is gated behind the cloud sign-in state (cloudActive=false) for ` +
-          `namespace "${namespace}". The desktop derives cloudActive from the server capability contract's ` +
-          "cloudWorkspaces flag (server: cloud_provisioning_configured / E2B cloud-compute). The local " +
-          "qualification world configures no cloud compute, so this UI cannot be driven. Resolution is a " +
-          "ruling: the qual world declares cloud provisioning, or the product decouples the integrations UI " +
-          "from the cloud-compute gate.",
-      );
-    }
+    gateSeen = await gate.isVisible().catch(() => false);
     await sleep(500);
+  }
+  if (gateSeen) {
+    throw new CloudSurfaceGatedError(
+      `the Integrations settings pane is gated behind the cloud sign-in state (cloudActive=false) for ` +
+        `namespace "${namespace}". The desktop derives cloudActive from the server capability contract's ` +
+        "cloudWorkspaces flag (server: cloud_provisioning_configured / E2B cloud-compute). The local " +
+        "qualification world configures no cloud compute, so this UI cannot be driven. Resolution is a " +
+        "ruling: the qual world declares cloud provisioning, or the product decouples the integrations UI " +
+        "from the cloud-compute gate.",
+    );
   }
   throw new Error(`openIntegrationsSettings: the integrations connect controls never rendered for "${namespace}".`);
 }
