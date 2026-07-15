@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { configuredAgentEnvVarsKey } from "./query-keys";
-import { useAgentCredentialsStore } from "@/stores/agents/agent-credentials-store";
+import { useAgentCredentialsStore } from "@proliferate/product-client/internal/stores/agents/agent-credentials-store";
 
 const EMPTY_CONFIGURED_ENV_VARS: string[] = [];
 

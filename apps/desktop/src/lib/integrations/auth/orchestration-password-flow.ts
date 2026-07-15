@@ -1,6 +1,6 @@
-import { isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
-import type { AuthSignInSource, AuthTelemetryProvider } from "@/lib/domain/telemetry/events";
-import { checkControlPlaneReachable } from "@/lib/access/cloud/health";
+import { isDevAuthBypassed } from "@proliferate/product-client/internal/lib/domain/auth/auth-mode";
+import type { AuthSignInSource, AuthTelemetryProvider } from "@proliferate/product-client/internal/lib/domain/telemetry/events";
+import { checkControlPlaneReachable } from "@proliferate/product-client/internal/lib/access/cloud/health";
 import { AuthRequestError } from "@/lib/integrations/auth/proliferate-auth";
 import { signInWithDesktopPassword } from "@/lib/integrations/auth/proliferate-auth-password";
 import {

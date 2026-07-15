@@ -8,7 +8,7 @@ import {
   startStartupTimer,
   summarizeStartupError,
 } from "@/lib/infra/measurement/debug-startup"
-import type { AuthUser } from "@/lib/domain/auth/auth-user"
+import type { AuthUser } from "@proliferate/product-client/internal/lib/domain/auth/auth-user"
 import {
   abortError,
   AuthRequestError,

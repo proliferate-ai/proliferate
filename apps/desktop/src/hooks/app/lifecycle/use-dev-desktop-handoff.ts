@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   markDevDesktopHandoffOpened,
   takeDevDesktopHandoff,
-} from "@/lib/access/cloud/dev-desktop-handoff";
+} from "@proliferate/product-client/internal/lib/access/cloud/dev-desktop-handoff";
 import {
   isMainTauriWebviewAvailable,
   revealCurrentWindow,
@@ -11,7 +11,7 @@ import {
 import {
   decodeDesktopProductEntry,
   productEntryRoute,
-} from "@/lib/domain/auth/desktop-navigation";
+} from "@proliferate/product-client/internal/lib/domain/auth/desktop-navigation";
 
 const DEV_HANDOFF_POLL_MS = 1000;
 const handledDevHandoffIds = new Set<string>();

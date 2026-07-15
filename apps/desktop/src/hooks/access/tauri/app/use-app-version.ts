@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { useProductTelemetry } from "@/hooks/telemetry/facade/use-product-telemetry";
+import { useProductTelemetry } from "@proliferate/product-client/internal/hooks/telemetry/facade/use-product-telemetry";
 import { appVersionKey } from "./query-keys";
 
 export function useAppVersion() {

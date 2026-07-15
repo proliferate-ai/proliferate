@@ -2,7 +2,7 @@
 
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useUpdaterStore } from "@/stores/updater/updater-store";
+import { useUpdaterStore } from "@proliferate/product-client/internal/stores/updater/updater-store";
 
 const updaterMocks = vi.hoisted(() => ({
   check: vi.fn(),
@@ -26,7 +26,7 @@ vi.mock("@/lib/integrations/telemetry/client", () => ({
   captureTelemetryException: vi.fn(),
 }));
 
-vi.mock("@/lib/domain/telemetry/failures", () => ({
+vi.mock("@proliferate/product-client/internal/lib/domain/telemetry/failures", () => ({
   classifyTelemetryFailure: vi.fn(() => "unknown"),
 }));
 

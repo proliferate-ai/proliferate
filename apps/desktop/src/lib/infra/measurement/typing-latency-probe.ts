@@ -1,7 +1,7 @@
 import type {
   MeasurementOperationId,
   MeasurementSurface,
-} from "@/lib/domain/telemetry/debug-measurement-catalog";
+} from "@proliferate/product-client/internal/lib/domain/telemetry/debug-measurement-catalog";
 import {
   onMeasurementOperationFinish,
   recordMeasurementMetric,

@@ -1,13 +1,13 @@
-import { OFFICIAL_HOSTED_API_ORIGINS } from "@/config/capabilities";
+import { OFFICIAL_HOSTED_API_ORIGINS } from "@proliferate/product-client/internal/config/capabilities";
 import {
   handleAnonymousProductEvent,
 } from "@/lib/integrations/telemetry/anonymous";
-import type { DesktopProductEventMap } from "@/lib/domain/telemetry/events";
+import type { DesktopProductEventMap } from "@proliferate/product-client/internal/lib/domain/telemetry/events";
 import {
   type DesktopTelemetryRoutingState,
   resolveDesktopTelemetryRoutingState,
-} from "@/lib/domain/telemetry/mode";
-import type { AuthUser } from "@/lib/domain/auth/auth-user";
+} from "@proliferate/product-client/internal/lib/domain/telemetry/mode";
+import type { AuthUser } from "@proliferate/product-client/internal/lib/domain/auth/auth-user";
 import {
   getProliferateApiBaseUrl,
   getProliferateApiOrigin,

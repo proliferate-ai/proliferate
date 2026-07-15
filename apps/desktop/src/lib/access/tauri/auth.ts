@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core"
 
-import type { KeychainTelemetryOperation } from "@/lib/domain/telemetry/events"
+import type { KeychainTelemetryOperation } from "@proliferate/product-client/internal/lib/domain/telemetry/events"
 
 export interface StoredAuthSession {
   access_token: string

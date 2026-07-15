@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { AuthUser } from "@/lib/domain/auth/auth-user";
-import type { DesktopTelemetryRoutingState } from "@/lib/domain/telemetry/mode";
+import type { AuthUser } from "@proliferate/product-client/internal/lib/domain/auth/auth-user";
+import type { DesktopTelemetryRoutingState } from "@proliferate/product-client/internal/lib/domain/telemetry/mode";
 
 const mocks = vi.hoisted(() => {
   let runtimeState: DesktopTelemetryRoutingState = {
@@ -57,7 +57,7 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("@/lib/domain/telemetry/mode", () => ({
+vi.mock("@proliferate/product-client/internal/lib/domain/telemetry/mode", () => ({
   resolveDesktopTelemetryRoutingState: mocks.resolveRoutingStateMock,
 }));
 

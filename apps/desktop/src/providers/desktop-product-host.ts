@@ -14,7 +14,7 @@ import type {
   ProductTelemetry,
 } from "@proliferate/product-client/host/product-host";
 
-import type { AuthUser } from "@/lib/domain/auth/auth-user";
+import type { AuthUser } from "@proliferate/product-client/internal/lib/domain/auth/auth-user";
 import type { AuthOrchestrationDeps } from "@/lib/integrations/auth/orchestration-effects";
 import type { GitHubDesktopSignInOptions } from "@/lib/integrations/auth/proliferate-auth";
 import type { DesktopSsoSignInOptions } from "@/lib/integrations/auth/proliferate-sso-auth";
@@ -28,7 +28,7 @@ import { copyText, openExternal } from "@/lib/access/tauri/shell";
 import {
   decodeDesktopProductEntry,
   encodeDesktopReturnUrl,
-} from "@/lib/domain/auth/desktop-navigation";
+} from "@proliferate/product-client/internal/lib/domain/auth/desktop-navigation";
 import { subscribeDeepLinkUrls } from "@/lib/access/tauri/deep-link";
 import {
   captureTelemetryException,
@@ -39,7 +39,7 @@ import {
   setTelemetryUser,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
-import { markLoginNotAttempted } from "@/lib/domain/telemetry/errors";
+import { markLoginNotAttempted } from "@proliferate/product-client/internal/lib/domain/telemetry/errors";
 import { handleDesktopCallbackUrl } from "@/lib/integrations/auth/orchestration-callback";
 import { discoverDesktopSso } from "@/lib/integrations/auth/proliferate-sso-auth";
 import { DESKTOP_AUTH_REDIRECT_URI } from "@/lib/integrations/auth/proliferate-auth";

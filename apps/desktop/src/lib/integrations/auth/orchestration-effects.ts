@@ -5,11 +5,11 @@ import {
   setStoredPendingAuthSession,
   type StoredPendingAuthSession,
 } from "@/lib/access/tauri/auth";
-import { markTelemetryHandled } from "@/lib/domain/telemetry/errors";
+import { markTelemetryHandled } from "@proliferate/product-client/internal/lib/domain/telemetry/errors";
 import {
   cancelGitHubSignIn,
-} from "@/lib/domain/auth/github-signin-state";
-import { createDevBypassSession } from "@/lib/domain/auth/auth-mode";
+} from "@proliferate/product-client/internal/lib/domain/auth/github-signin-state";
+import { createDevBypassSession } from "@proliferate/product-client/internal/lib/domain/auth/auth-mode";
 import type { ProductAuthIssue } from "@proliferate/product-client/host/product-host";
 import {
   anonymousAuthState,
@@ -17,12 +17,12 @@ import {
   authIssueStatePatch,
   type AuthClientState,
   type AuthClientStatePatch,
-} from "@/lib/domain/auth/auth-state-mapping";
+} from "@proliferate/product-client/internal/lib/domain/auth/auth-state-mapping";
 import {
   storedSessionWithValidatedUser,
-} from "@/lib/domain/auth/session-mapping";
-import type { AuthUser } from "@/lib/domain/auth/auth-user";
-import type { StoredAuthSession } from "@/lib/domain/auth/stored-auth-session";
+} from "@proliferate/product-client/internal/lib/domain/auth/session-mapping";
+import type { AuthUser } from "@proliferate/product-client/internal/lib/domain/auth/auth-user";
+import type { StoredAuthSession } from "@proliferate/product-client/internal/lib/domain/auth/stored-auth-session";
 import {
   AuthRequestError,
   fetchCurrentDesktopUser,
@@ -36,7 +36,7 @@ import {
   applyAnonymousAuthState,
   applyPersistedAuthenticatedAuthState,
   applyVolatileAuthenticatedAuthState,
-} from "@/lib/workflows/auth/apply-auth-state";
+} from "@proliferate/product-client/internal/lib/workflows/auth/apply-auth-state";
 
 export interface AuthOrchestrationDeps {
   getAuthState(): AuthClientState;

@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 import type { DesktopUpdaterBridge } from "@proliferate/product-client/host/desktop-bridge";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { useUpdaterStore } from "@/stores/updater/updater-store";
+import { useUpdaterStore } from "@proliferate/product-client/internal/stores/updater/updater-store";
 import {
   persistValue,
   readPersistedValue,
 } from "@/lib/infra/persistence/preferences-persistence";
-import type { UpdaterErrorSource, UpdaterPhase } from "@/stores/updater/updater-store";
+import type { UpdaterErrorSource, UpdaterPhase } from "@proliferate/product-client/internal/stores/updater/updater-store";
 import {
   trackProductEvent,
   captureTelemetryException,
 } from "@/lib/integrations/telemetry/client";
-import { classifyTelemetryFailure } from "@/lib/domain/telemetry/failures";
-import { normalizeReleaseTitle } from "@/lib/domain/updates/release-notice";
+import { classifyTelemetryFailure } from "@proliferate/product-client/internal/lib/domain/telemetry/failures";
+import { normalizeReleaseTitle } from "@proliferate/product-client/internal/lib/domain/updates/release-notice";
 import {
   clearDevUpdaterMockDownload,
   DEV_UPDATER_MOCK_EVENT,

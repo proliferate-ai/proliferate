@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useState } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { CONNECT_SERVER_LABELS } from "@/copy/auth/auth-copy";
+import { CONNECT_SERVER_LABELS } from "@proliferate/product-client/internal/copy/auth/auth-copy";
 import { fetchServerMeta } from "@/lib/access/tauri/connect-server";
-import { isDesktopVersionSupported } from "@/lib/domain/capabilities/version-compat";
+import { isDesktopVersionSupported } from "@proliferate/product-client/internal/lib/domain/capabilities/version-compat";
 import {
   getRuntimeDesktopAppConfig,
   isOfficialHostedApiBaseUrl,
@@ -10,7 +10,7 @@ import {
 import {
   normalizeServerUrl,
   type ServerMeta,
-} from "@/lib/domain/auth/connect-server";
+} from "@proliferate/product-client/internal/lib/domain/auth/connect-server";
 
 export type ConnectServerStep =
   | "closed"

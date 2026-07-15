@@ -1,4 +1,4 @@
-import type { DesktopProductEventMap } from "@/lib/domain/telemetry/events";
+import type { DesktopProductEventMap } from "@proliferate/product-client/internal/lib/domain/telemetry/events";
 import {
   copyAnonymousUsageCounters,
   createDefaultAnonymousTelemetryPersistedState,
@@ -9,8 +9,8 @@ import {
   type AnonymousTelemetryDirective,
   type AnonymousTelemetryRecordType,
   type AnonymousVersionPayload,
-} from "@/lib/domain/telemetry/anonymous-events";
-import type { DesktopTelemetryMode } from "@/lib/domain/telemetry/mode";
+} from "@proliferate/product-client/internal/lib/domain/telemetry/anonymous-events";
+import type { DesktopTelemetryMode } from "@proliferate/product-client/internal/lib/domain/telemetry/mode";
 import {
   loadAnonymousTelemetryBootstrap,
   saveAnonymousTelemetryState,

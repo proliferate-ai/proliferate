@@ -11,6 +11,10 @@
     }
   },
   "exports": {
+    "./internal/*": {
+      "types": "./src/*",
+      "default": "./dist/*.js"
+    },
     "./host/product-host": {
       "types": "./dist/host/product-host.d.ts",
       "import": "./dist/host/product-host.js"

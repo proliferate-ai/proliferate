@@ -4,8 +4,8 @@ import {
   getGitHubDesktopAuthAvailability,
   type GitHubDesktopAuthAvailability,
 } from "@/lib/integrations/auth/proliferate-auth";
-import { useControlPlaneHealthFor } from "@/hooks/access/cloud/use-control-plane-health";
-import { githubDesktopAuthAvailabilityKey } from "./query-keys";
+import { useControlPlaneHealthFor } from "@proliferate/product-client/internal/hooks/access/cloud/use-control-plane-health";
+import { githubDesktopAuthAvailabilityKey } from "@proliferate/product-client/internal/hooks/access/cloud/auth/query-keys";
 
 // `useGitHubDesktopAuthAvailabilityFor` takes the deployment base URL explicitly
 // so the host provider (which builds the host and cannot read it back) can reuse

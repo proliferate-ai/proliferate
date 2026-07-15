@@ -38,7 +38,7 @@ vi.mock("@/hooks/auth/workflows/use-auth-actions", () => ({
 vi.mock("@/hooks/auth/workflows/use-auth-orchestration-effects", () => ({
   useAuthOrchestrationEffects: () => h.deps,
 }));
-vi.mock("@/hooks/capabilities/derived/use-app-capabilities", () => ({
+vi.mock("@proliferate/product-client/internal/hooks/capabilities/derived/use-app-capabilities", () => ({
   // The provider consumes the `*For` variant (explicit deployment base URL)
   // because it builds the host and cannot read it back through useProductHost.
   useAppCapabilitiesFor: () => ({ cloudEnabled: h.cloudEnabled }),
@@ -52,7 +52,7 @@ vi.mock("@/hooks/access/cloud/auth/use-github-auth-availability", () => ({
 vi.mock("@/hooks/access/cloud/auth/use-sso-discovery", () => ({
   useSsoDiscoveryFor: () => ({ data: h.sso }),
 }));
-vi.mock("@/lib/domain/auth/auth-mode", () => ({
+vi.mock("@proliferate/product-client/internal/lib/domain/auth/auth-mode", () => ({
   isProductAuthRequired: () => true,
 }));
 // The provider must never construct a second Cloud client.

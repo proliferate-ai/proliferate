@@ -10,7 +10,7 @@ export function isTauriRuntimeAvailable(): boolean {
 }
 
 export type FetchServerMetaResult =
-  | { ok: true; meta: import("@/lib/domain/auth/connect-server").ServerMeta }
+  | { ok: true; meta: import("@proliferate/product-client/internal/lib/domain/auth/connect-server").ServerMeta }
   | { ok: false; error: string };
 
 /**
@@ -23,7 +23,7 @@ export type FetchServerMetaResult =
 const FETCH_SERVER_META_TIMEOUT_MS = 8_000;
 
 export async function fetchServerMeta(url: string): Promise<FetchServerMetaResult> {
-  const { isServerMetaShape } = await import("@/lib/domain/auth/connect-server");
+  const { isServerMetaShape } = await import("@proliferate/product-client/internal/lib/domain/auth/connect-server");
   const abortController = typeof AbortController !== "undefined" ? new AbortController() : null;
   const timeoutId = abortController
     ? globalThis.setTimeout(() => abortController.abort(), FETCH_SERVER_META_TIMEOUT_MS)

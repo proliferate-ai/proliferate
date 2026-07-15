@@ -12,12 +12,12 @@ import type {
   CloudAgentRunConfigListResponse,
   ListCloudAgentRunConfigsOptions,
 } from "@/lib/access/cloud/client";
-import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
+import { useCloudAvailabilityState } from "@proliferate/product-client/internal/hooks/cloud/derived/use-cloud-availability-state";
 import {
   agentRunConfigDefaultsKey,
   agentRunConfigKey,
   agentRunConfigsListKey,
-} from "./query-keys";
+} from "@proliferate/product-client/internal/hooks/access/cloud/agent-run-configs/query-keys";
 
 export function useAgentRunConfigs(
   options: ListCloudAgentRunConfigsOptions = {},

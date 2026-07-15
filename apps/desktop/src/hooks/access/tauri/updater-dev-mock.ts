@@ -1,5 +1,5 @@
-import type { UpdaterErrorSource, UpdaterPhase } from "@/stores/updater/updater-store";
-import { normalizeReleaseTitle } from "@/lib/domain/updates/release-notice";
+import type { UpdaterErrorSource, UpdaterPhase } from "@proliferate/product-client/internal/stores/updater/updater-store";
+import { normalizeReleaseTitle } from "@proliferate/product-client/internal/lib/domain/updates/release-notice";
 
 const DEV_UPDATER_MOCK_KEY = "proliferate.dev.updaterMock";
 export const DEV_UPDATER_MOCK_EVENT = "proliferate:dev-updater-mock";

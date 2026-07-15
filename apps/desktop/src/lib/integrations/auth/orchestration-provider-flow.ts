@@ -7,9 +7,9 @@ import {
   getActiveGitHubSignIn,
   resolveGitHubSignIn,
   startGitHubSignIn,
-} from "@/lib/domain/auth/github-signin-state";
-import { isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
-import type { AuthSignInSource, AuthTelemetryProvider } from "@/lib/domain/telemetry/events";
+} from "@proliferate/product-client/internal/lib/domain/auth/github-signin-state";
+import { isDevAuthBypassed } from "@proliferate/product-client/internal/lib/domain/auth/auth-mode";
+import type { AuthSignInSource, AuthTelemetryProvider } from "@proliferate/product-client/internal/lib/domain/telemetry/events";
 import type { GitHubDesktopSignInOptions } from "@/lib/integrations/auth/proliferate-auth";
 import type { DesktopSsoSignInOptions } from "@/lib/integrations/auth/proliferate-sso-auth";
 import {
@@ -27,7 +27,7 @@ import {
   beginDesktopSsoSignIn,
   discoverDesktopSso,
 } from "@/lib/integrations/auth/proliferate-sso-auth";
-import { checkControlPlaneReachable } from "@/lib/access/cloud/health";
+import { checkControlPlaneReachable } from "@proliferate/product-client/internal/lib/access/cloud/health";
 import { revokeDesktopWorkerServerSide } from "@/lib/integrations/auth/desktop-worker-revocation";
 import {
   applyAnonymousState,

@@ -13,7 +13,7 @@ const handoffMocks = vi.hoisted(() => ({
   revealCurrentWindow: vi.fn(),
 }));
 
-vi.mock("@/lib/access/cloud/dev-desktop-handoff", () => ({
+vi.mock("@proliferate/product-client/internal/lib/access/cloud/dev-desktop-handoff", () => ({
   markDevDesktopHandoffOpened: handoffMocks.markDevDesktopHandoffOpened,
   takeDevDesktopHandoff: handoffMocks.takeDevDesktopHandoff,
 }));

@@ -1,4 +1,4 @@
-import { createAppQueryClient } from "@/lib/infra/query/query-client";
+import { createAppQueryClient } from "@proliferate/product-client/internal/lib/infra/query/query-client";
 import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
 
 /**

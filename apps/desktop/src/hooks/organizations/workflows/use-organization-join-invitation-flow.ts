@@ -7,21 +7,21 @@ import {
 } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { useAuditedAuth } from "@/hooks/auth/facade/use-audited-auth";
+import { useAuditedAuth } from "@proliferate/product-client/internal/hooks/auth/facade/use-audited-auth";
 import {
   useConnectServer,
   type UseConnectServerResult,
 } from "@/hooks/auth/workflows/use-connect-server";
 import {
   canFallbackToStandardInviteSignIn,
-} from "@/lib/domain/organizations/join-auth";
+} from "@proliferate/product-client/internal/lib/domain/organizations/join-auth";
 import {
   clearPendingOrganizationJoinTarget,
   readPendingOrganizationJoinTarget,
   writePendingOrganizationJoinTarget,
-} from "@/lib/access/persistence/organization-join-target";
-import { useProductStorageContext } from "@/hooks/persistence/facade/use-product-storage-context";
-import { buildSettingsHref } from "@/lib/domain/settings/navigation";
+} from "@proliferate/product-client/internal/lib/access/persistence/organization-join-target";
+import { useProductStorageContext } from "@proliferate/product-client/internal/hooks/persistence/facade/use-product-storage-context";
+import { buildSettingsHref } from "@proliferate/product-client/internal/lib/domain/settings/navigation";
 import { getDesktopAuthMethods } from "@/lib/integrations/auth/proliferate-auth-password";
 import {
   getRuntimeDesktopAppConfig,
