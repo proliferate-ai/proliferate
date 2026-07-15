@@ -9,6 +9,7 @@
 //
 //   node scripts/agent-catalog/resolve-pins.mjs [--agent claude,codex]
 //       [--agent-process-only]
+//       [--catalog-version YYYY-MM-DD.N]
 //       [--no-download]   resolve URLs only, leave sha256 empty (inspection)
 //       [--catalog PATH] [--registry PATH]
 //
@@ -110,6 +111,14 @@ for (const agent of catalog.agents) {
   if (ap.version) agent.harness.agentProcess.version = ap.version;
   agent.harness.agentProcess.source = ap.source;
   console.log(`   agentProcess  ${ap.version ?? "(kept)"}  (${ap.source.kind})`);
+}
+
+if (args.catalogVersion) {
+  catalog.catalogVersion = args.catalogVersion;
+  catalog.probedAgainst = {
+    ...(catalog.probedAgainst ?? {}),
+    registryVersion: registry.registryVersion ?? null,
+  };
 }
 
 writeFileSync(catalogPath, `${JSON.stringify(catalog, null, 2)}\n`);
@@ -272,6 +281,7 @@ function parseArgs(argv) {
     const a = argv[i];
     if (a === "--no-download") out.noDownload = true;
     else if (a === "--agent-process-only") out.agentProcessOnly = true;
+    else if (a === "--catalog-version") out.catalogVersion = argv[++i];
     else if (a === "--agent") out.agent = argv[++i];
     else if (a === "--platforms") out.platforms = argv[++i];
     else if (a === "--catalog") out.catalog = argv[++i];

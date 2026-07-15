@@ -29,6 +29,8 @@ test("agent-process-only updates selected adapter refs without resolving native 
       catalogPath,
       `${JSON.stringify(
         {
+          catalogVersion: "2026-07-14.1",
+          probedAgainst: { registryVersion: "2026-07-14.1" },
           agents: [
             {
               kind: "codex",
@@ -56,6 +58,7 @@ test("agent-process-only updates selected adapter refs without resolving native 
       registryPath,
       `${JSON.stringify(
         {
+          registryVersion: "2026-07-15.1",
           agents: [
             {
               kind: "codex",
@@ -92,6 +95,8 @@ test("agent-process-only updates selected adapter refs without resolving native 
       "--agent",
       "codex",
       "--agent-process-only",
+      "--catalog-version",
+      "2026-07-15.1",
     ]);
 
     const resolved = JSON.parse(readFileSync(catalogPath, "utf8"));
@@ -101,6 +106,8 @@ test("agent-process-only updates selected adapter refs without resolving native 
       "0.18.1-proliferate.1",
     );
     assert.equal(resolved.agents[0].harness.agentProcess.source.gitRef, "new-ref");
+    assert.equal(resolved.catalogVersion, "2026-07-15.1");
+    assert.equal(resolved.probedAgainst.registryVersion, "2026-07-15.1");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
