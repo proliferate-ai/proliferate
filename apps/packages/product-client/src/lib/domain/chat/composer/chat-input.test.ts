@@ -3,7 +3,6 @@ import {
   resolveChatDraftWorkspaceId,
   resolveChatInputAvailability,
 } from "#product/lib/domain/chat/composer/chat-input";
-import { WORKTREE_MISSING_SEND_BLOCKED_REASON } from "#product/lib/domain/workspaces/availability";
 
 describe("resolveChatDraftWorkspaceId", () => {
   it("prefers the logical workspace when one is selected", () => {
@@ -158,7 +157,7 @@ describe("resolveChatInputAvailability", () => {
     const availability = resolveChatInputAvailability({
       selectedWorkspaceId: "workspace-1",
       isCloudWorkspaceSelected: false,
-      isWorkspaceDirectoryMissing: true,
+      workspaceDirectoryMissingSendReason: "Worktree no longer exists. Agents can't run in this workspace.",
       connectionState: "healthy",
       selectedCloudWorkspaceStatus: null,
       selectedCloudWorkspaceActionBlockReason: null,
@@ -174,17 +173,17 @@ describe("resolveChatInputAvailability", () => {
     expect(availability).toEqual({
       isDisabled: false,
       disabledReason: null,
-      sendBlockedReason: WORKTREE_MISSING_SEND_BLOCKED_REASON,
+      sendBlockedReason: "Worktree no longer exists. Agents can't run in this workspace.",
       areRuntimeControlsDisabled: true,
       selectedWorkspaceKind: "local",
     });
   });
 
-  it("ignores the missing-directory flag for cloud workspaces", () => {
+  it("ignores the missing-directory reason for cloud workspaces", () => {
     expect(resolveChatInputAvailability({
       selectedWorkspaceId: "cloud:workspace-1",
       isCloudWorkspaceSelected: true,
-      isWorkspaceDirectoryMissing: true,
+      workspaceDirectoryMissingSendReason: "Worktree no longer exists. Agents can't run in this workspace.",
       connectionState: "healthy",
       selectedCloudWorkspaceStatus: "ready",
       selectedCloudWorkspaceActionBlockReason: null,

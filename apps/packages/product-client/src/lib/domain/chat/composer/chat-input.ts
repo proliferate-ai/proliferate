@@ -1,10 +1,11 @@
-import { WORKTREE_MISSING_SEND_BLOCKED_REASON } from "#product/lib/domain/workspaces/availability";
-
 interface ChatInputAvailabilityArgs {
   selectedWorkspaceId: string | null;
   isCloudWorkspaceSelected: boolean;
-  /** Selected local workspace's checkout directory is gone from disk. */
-  isWorkspaceDirectoryMissing?: boolean;
+  /**
+   * Non-null when the selected local workspace's checkout directory is gone
+   * from disk; carries the kind-worded copy (see workspace-availability-copy).
+   */
+  workspaceDirectoryMissingSendReason?: string | null;
   connectionState: string;
   selectedCloudWorkspaceStatus: string | null;
   selectedCloudWorkspaceActionBlockReason: string | null;
@@ -75,7 +76,7 @@ export function resolveChatDraftWorkspaceId(
 export function resolveChatInputAvailability({
   selectedWorkspaceId,
   isCloudWorkspaceSelected,
-  isWorkspaceDirectoryMissing = false,
+  workspaceDirectoryMissingSendReason = null,
   connectionState,
   selectedCloudWorkspaceStatus,
   selectedCloudWorkspaceActionBlockReason,
@@ -123,11 +124,11 @@ export function resolveChatInputAvailability({
 
   // A missing worktree is a persistent workspace condition: the draft stays
   // editable (nothing is lost) while send is refused with an explicit reason.
-  if (!isCloudWorkspaceSelected && isWorkspaceDirectoryMissing) {
+  if (!isCloudWorkspaceSelected && workspaceDirectoryMissingSendReason) {
     return {
       isDisabled: false,
       disabledReason: null,
-      sendBlockedReason: WORKTREE_MISSING_SEND_BLOCKED_REASON,
+      sendBlockedReason: workspaceDirectoryMissingSendReason,
       areRuntimeControlsDisabled: true,
       selectedWorkspaceKind,
     };

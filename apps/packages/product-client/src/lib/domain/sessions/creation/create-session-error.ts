@@ -1,5 +1,4 @@
 import { AnyHarnessError } from "@anyharness/sdk";
-import { WORKTREE_MISSING_SEND_BLOCKED_REASON } from "#product/lib/domain/workspaces/availability";
 
 const UNSUPPORTED_SESSION_MODEL_CODE = "SESSION_MODEL_UNSUPPORTED";
 const UNSUPPORTED_SESSION_MODE_CODE = "SESSION_MODE_UNSUPPORTED";
@@ -13,16 +12,35 @@ const GATED_SESSION_MODEL_CODE = "SESSION_MODEL_GATED";
 const WORKSPACE_DIRECTORY_MISSING_CODE = "WORKSPACE_DIRECTORY_MISSING";
 
 /**
- * True for both the runtime's typed pre-flight refusal and the client-side
- * creation gate (which throws the shared blocked-reason string).
+ * Client-side pre-flight refusal, mirroring the runtime's 409. Carries the
+ * stable machine code on the error object so detection is structural — the
+ * display copy can change freely without breaking suppression.
+ */
+export function workspaceDirectoryMissingBlockError(reason: string): Error {
+  const error = new Error(reason);
+  (error as Error & { code?: string }).code = WORKSPACE_DIRECTORY_MISSING_CODE;
+  return error;
+}
+
+/**
+ * True for both the runtime's typed pre-flight refusal (problem code) and the
+ * client-side creation gate (coded Error), following cause chains. The walk
+ * is depth-capped so a (buggy) self-referential cause chain cannot recurse
+ * forever.
  */
 export function isWorkspaceDirectoryMissingError(error: unknown): boolean {
-  if (error instanceof AnyHarnessError) {
-    return error.problem.code === WORKSPACE_DIRECTORY_MISSING_CODE;
-  }
-  if (error instanceof Error) {
-    return error.message === WORKTREE_MISSING_SEND_BLOCKED_REASON
-      || isWorkspaceDirectoryMissingError((error as Error & { cause?: unknown }).cause);
+  let current: unknown = error;
+  for (let depth = 0; depth < 8 && current != null; depth += 1) {
+    if (current instanceof AnyHarnessError) {
+      return current.problem.code === WORKSPACE_DIRECTORY_MISSING_CODE;
+    }
+    if (!(current instanceof Error)) {
+      return false;
+    }
+    if ((current as Error & { code?: unknown }).code === WORKSPACE_DIRECTORY_MISSING_CODE) {
+      return true;
+    }
+    current = (current as Error & { cause?: unknown }).cause;
   }
   return false;
 }

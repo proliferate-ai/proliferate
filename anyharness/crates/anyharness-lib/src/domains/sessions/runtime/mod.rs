@@ -119,6 +119,12 @@ pub enum EnsureLiveSessionError {
     SessionClosed,
     RestartRequired(String),
     Invalid(String),
+    /// The session's workspace local checkout directory has been deleted from
+    /// disk. Surfaced from the common live-start seam so resume/prompt converge
+    /// on the same typed condition instead of a generic ACP-start failure.
+    WorkspaceDirectoryMissing {
+        path: String,
+    },
     MissingDataKey,
     /// See [`CreateAndStartSessionError::RouteAuth`].
     RouteAuth(RouteAuthError),
@@ -135,6 +141,12 @@ pub struct SessionMcpRefresh {
 pub enum SetSessionConfigOptionError {
     SessionNotFound(String),
     Rejected(String),
+    /// The session's workspace local checkout directory has been deleted from
+    /// disk. Config mutations lazy-start the live actor and hit the same
+    /// live-start seam; surfaced typed so it maps to the shared 409 code.
+    WorkspaceDirectoryMissing {
+        path: String,
+    },
     Internal(anyhow::Error),
 }
 
@@ -143,6 +155,12 @@ pub enum SendPromptError {
     SessionNotFound(String),
     SessionClosed,
     EmptyPrompt,
+    /// The session's workspace local checkout directory has been deleted from
+    /// disk. Lazy-start on prompt hits the common live-start seam, which refuses
+    /// with this typed condition instead of a generic ACP-start failure.
+    WorkspaceDirectoryMissing {
+        path: String,
+    },
     InvalidPrompt(crate::domains::sessions::prompt::PromptValidationError),
     Internal(anyhow::Error),
 }
@@ -294,6 +312,13 @@ pub struct McpElicitationUrlReveal {
 #[derive(Debug)]
 pub(super) enum StartSessionError {
     WorkspaceNotFound,
+    /// The workspace's local checkout directory has been deleted from disk.
+    /// Caught at the common live-start seam so any runtime start against a
+    /// missing checkout (create, resume, prompt, fork, config) converges on the
+    /// same typed condition instead of a generic ACP-start failure.
+    WorkspaceDirectoryMissing {
+        path: String,
+    },
     AgentDescriptorNotFound(String),
     Closed,
     MissingDataKey,

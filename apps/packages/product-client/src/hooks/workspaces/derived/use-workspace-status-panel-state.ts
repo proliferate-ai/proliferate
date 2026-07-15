@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import type { Workspace } from "@anyharness/sdk";
 import { useSetupStatusQuery } from "@anyharness/sdk-react";
 import type { CloudWorkspaceStatusScreenModel } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
 import {
@@ -69,6 +70,7 @@ export type WorkspaceStatusPanelState =
     kind: "directory-missing";
     workspaceId: string;
     logicalWorkspaceId: string | null;
+    workspaceKind: Workspace["kind"];
     workspacePath: string;
     originalBranch: string | null;
   };
@@ -230,6 +232,7 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
         kind: "directory-missing",
         workspaceId: selectedWorkspaceId,
         logicalWorkspaceId: selectedLogicalWorkspaceId,
+        workspaceKind: selectedWorkspace.kind,
         workspacePath: selectedWorkspace.path,
         originalBranch: selectedWorkspace.originalBranch ?? null,
       };

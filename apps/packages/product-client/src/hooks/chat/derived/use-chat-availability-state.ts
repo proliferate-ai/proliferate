@@ -9,6 +9,7 @@ import {
   type ChatInputAvailabilityState,
 } from "#product/lib/domain/chat/composer/chat-input";
 import { isWorkspaceDirectoryMissing } from "#product/lib/domain/workspaces/availability";
+import { missingCheckoutCopy } from "#product/copy/workspaces/workspace-availability-copy";
 import { launchSelectionIsAvailable } from "#product/lib/domain/chat/models/launch-selection-defaults";
 import { getProviderDisplayName } from "#product/lib/domain/agents/provider-display";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
@@ -55,7 +56,10 @@ export function useChatAvailabilityState(options?: {
   const availability = useMemo(() => resolveChatInputAvailability({
     selectedWorkspaceId,
     isCloudWorkspaceSelected: selectedCloudWorkspaceId !== null,
-    isWorkspaceDirectoryMissing: isWorkspaceDirectoryMissing(selectedLocalWorkspace),
+    workspaceDirectoryMissingSendReason:
+      selectedLocalWorkspace && isWorkspaceDirectoryMissing(selectedLocalWorkspace)
+        ? missingCheckoutCopy(selectedLocalWorkspace.kind).sendBlockedReason
+        : null,
     connectionState,
     selectedCloudWorkspaceStatus,
     selectedCloudWorkspaceActionBlockReason: selectedCloudWorkspace?.actionBlockReason ?? null,

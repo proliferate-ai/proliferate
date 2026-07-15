@@ -159,6 +159,10 @@ pub(super) fn map_ensure_live_session_error(error: EnsureLiveSessionError) -> Ap
         EnsureLiveSessionError::Invalid(detail) => {
             ApiError::bad_request(detail, "SESSION_RESUME_FAILED")
         }
+        EnsureLiveSessionError::WorkspaceDirectoryMissing { path } => ApiError::conflict(
+            format!("workspace directory is missing: {path}"),
+            "WORKSPACE_DIRECTORY_MISSING",
+        ),
         EnsureLiveSessionError::MissingDataKey => {
             ApiError::internal(SessionMcpBindingsError::missing_data_key_detail())
         }
@@ -178,6 +182,10 @@ pub(super) fn map_set_session_config_option_error(error: SetSessionConfigOptionE
         SetSessionConfigOptionError::Rejected(detail) => {
             ApiError::bad_request(detail, "SESSION_CONFIG_REJECTED")
         }
+        SetSessionConfigOptionError::WorkspaceDirectoryMissing { path } => ApiError::conflict(
+            format!("workspace directory is missing: {path}"),
+            "WORKSPACE_DIRECTORY_MISSING",
+        ),
         SetSessionConfigOptionError::Internal(error) => ApiError::internal(error.to_string()),
     }
 }
@@ -190,6 +198,10 @@ pub(super) fn map_send_prompt_error(error: SendPromptError) -> ApiError {
         ),
         SendPromptError::SessionClosed => ApiError::conflict("session is closed", "SESSION_CLOSED"),
         SendPromptError::EmptyPrompt => ApiError::bad_request("empty prompt", "EMPTY_PROMPT"),
+        SendPromptError::WorkspaceDirectoryMissing { path } => ApiError::conflict(
+            format!("workspace directory is missing: {path}"),
+            "WORKSPACE_DIRECTORY_MISSING",
+        ),
         SendPromptError::InvalidPrompt(error) => ApiError::bad_request(error.detail, error.code),
         // {error:#} keeps the anyhow cause chain; to_string() would drop it.
         SendPromptError::Internal(error) => ApiError::internal(format!("{error:#}")),
@@ -350,6 +362,50 @@ mod tests {
         .into_response();
 
         assert_eq!(response.status(), StatusCode::CONFLICT);
+    }
+
+    #[test]
+    fn resume_missing_workspace_directory_maps_to_conflict_with_code() {
+        use crate::domains::sessions::runtime::EnsureLiveSessionError;
+        let error = super::map_ensure_live_session_error(
+            EnsureLiveSessionError::WorkspaceDirectoryMissing {
+                path: "/tmp/gone".to_string(),
+            },
+        );
+        assert_eq!(error.code(), Some("WORKSPACE_DIRECTORY_MISSING"));
+        assert_eq!(error.into_response().status(), StatusCode::CONFLICT);
+    }
+
+    #[test]
+    fn prompt_missing_workspace_directory_maps_to_conflict_with_code() {
+        use crate::domains::sessions::runtime::SendPromptError;
+        let error = super::map_send_prompt_error(SendPromptError::WorkspaceDirectoryMissing {
+            path: "/tmp/gone".to_string(),
+        });
+        assert_eq!(error.code(), Some("WORKSPACE_DIRECTORY_MISSING"));
+        assert_eq!(error.into_response().status(), StatusCode::CONFLICT);
+    }
+
+    #[test]
+    fn config_missing_workspace_directory_maps_to_conflict_with_code() {
+        use crate::domains::sessions::runtime::SetSessionConfigOptionError;
+        let error = super::map_set_session_config_option_error(
+            SetSessionConfigOptionError::WorkspaceDirectoryMissing {
+                path: "/tmp/gone".to_string(),
+            },
+        );
+        assert_eq!(error.code(), Some("WORKSPACE_DIRECTORY_MISSING"));
+        assert_eq!(error.into_response().status(), StatusCode::CONFLICT);
+    }
+
+    #[test]
+    fn fork_missing_workspace_directory_maps_to_conflict_with_code() {
+        use crate::domains::sessions::runtime::ForkSessionError;
+        let error = super::map_fork_session_error(ForkSessionError::WorkspaceDirectoryMissing {
+            path: "/tmp/gone".to_string(),
+        });
+        assert_eq!(error.code(), Some("WORKSPACE_DIRECTORY_MISSING"));
+        assert_eq!(error.into_response().status(), StatusCode::CONFLICT);
     }
 
     #[test]

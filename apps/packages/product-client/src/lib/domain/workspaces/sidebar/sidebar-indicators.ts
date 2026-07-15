@@ -4,7 +4,7 @@ import { isMainThreadMeasurementEnabled } from "#product/lib/infra/measurement/m
 import type { SidebarSessionActivityState } from "@proliferate/product-domain/sessions/activity";
 import { resolveWorkspaceExecutionSidebarActivityState } from "@proliferate/product-domain/sessions/activity";
 import type { ComputeTargetAppearance } from "#product/lib/domain/compute/target-appearance";
-import { WORKTREE_MISSING_TITLE } from "#product/lib/domain/workspaces/availability";
+import { missingCheckoutCopy } from "#product/copy/workspaces/workspace-availability-copy";
 import { isCloudWorkspacePending } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
 import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
 import { cloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
@@ -113,11 +113,12 @@ export function logicalWorkspaceSshTargetId(workspace: LogicalWorkspace): string
 // session-activity glyphs: the user should understand the workspace's state
 // before opening it.
 export function worktreeMissingStatusIndicator(
+  workspaceKind: Workspace["kind"],
   action: SidebarIndicatorAction | null,
 ): SidebarStatusIndicator {
   return {
     kind: "worktree_missing",
-    tooltip: WORKTREE_MISSING_TITLE,
+    tooltip: missingCheckoutCopy(workspaceKind).title,
     action,
   };
 }

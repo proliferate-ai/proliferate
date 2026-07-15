@@ -28,7 +28,7 @@ export function useWorktreeMissingActions(args: {
     }
   }, [refresh]);
 
-  const deleteWorkspace = useCallback(async () => {
+  const deleteWorkspace = useCallback(async (): Promise<boolean> => {
     setIsDeleting(true);
     try {
       const result = await markDone(args.workspaceId, {
@@ -36,12 +36,16 @@ export function useWorktreeMissingActions(args: {
       });
       if (result.outcome === "blocked") {
         showToast(workspaceRetireBlockedMessage(result));
-      } else if (result.outcome === "cleanup_failed") {
+        return false;
+      }
+      if (result.outcome === "cleanup_failed") {
         showToast("Workspace delete started, but cleanup needs attention.");
       }
+      return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       showToast(`Failed to delete workspace: ${message}`);
+      return false;
     } finally {
       setIsDeleting(false);
     }

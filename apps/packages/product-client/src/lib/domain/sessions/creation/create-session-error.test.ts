@@ -5,8 +5,8 @@ import {
   formatSessionCreateToastMessage,
   isWorkspaceDirectoryMissingError,
   toSessionCreateFailureDisplayError,
+  workspaceDirectoryMissingBlockError,
 } from "#product/lib/domain/sessions/creation/create-session-error";
-import { WORKTREE_MISSING_SEND_BLOCKED_REASON } from "#product/lib/domain/workspaces/availability";
 
 describe("session create failure presentation", () => {
   it("maps unsupported model errors to target update guidance", () => {
@@ -60,7 +60,9 @@ describe("session create failure presentation", () => {
       "WORKSPACE_DIRECTORY_MISSING",
       "workspace directory is missing: /tmp/gone",
     );
-    const clientGateError = new Error(WORKTREE_MISSING_SEND_BLOCKED_REASON);
+    const clientGateError = workspaceDirectoryMissingBlockError(
+      "Workspace folder no longer exists. Agents can't run in this workspace.",
+    );
     const wrapped = new Error("Failed to create session");
     (wrapped as Error & { cause?: unknown }).cause = runtimeError;
 

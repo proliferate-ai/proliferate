@@ -282,6 +282,9 @@ fn map_start_error_to_prompt(error: StartSessionError) -> SendPromptError {
         StartSessionError::WorkspaceNotFound => {
             SendPromptError::Internal(anyhow::anyhow!("workspace not found for session"))
         }
+        StartSessionError::WorkspaceDirectoryMissing { path } => {
+            SendPromptError::WorkspaceDirectoryMissing { path }
+        }
         StartSessionError::AgentDescriptorNotFound(agent_kind) => {
             SendPromptError::Internal(anyhow::anyhow!("agent descriptor not found: {agent_kind}"))
         }

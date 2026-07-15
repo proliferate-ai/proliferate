@@ -194,13 +194,28 @@ pub async fn get_cowork_managed_workspaces(
         .cowork_runtime
         .managed_workspaces_context(&session_id)
         .await
-        .map_err(|error| match error {
-            crate::domains::cowork::delegation::service::CoworkDelegationError::CoworkThreadNotFound(_) => {
-                ApiError::not_found("cowork thread not found", "COWORK_THREAD_NOT_FOUND")
-            }
-            other => ApiError::internal(other.to_string()),
-        })?;
+        .map_err(map_cowork_delegation_error)?;
     Ok(Json(cowork_managed_workspaces_to_contract(context)))
+}
+
+/// Shared HTTP mapping for cowork delegation failures. Only the typed refusals
+/// clients act on get stable codes; everything else stays a 500. The missing-
+/// checkout refusal reuses the session-wide `WORKSPACE_DIRECTORY_MISSING` 409
+/// so every surface converges on one code.
+fn map_cowork_delegation_error(
+    error: crate::domains::cowork::delegation::service::CoworkDelegationError,
+) -> ApiError {
+    use crate::domains::cowork::delegation::service::CoworkDelegationError;
+    match error {
+        CoworkDelegationError::CoworkThreadNotFound(_) => {
+            ApiError::not_found("cowork thread not found", "COWORK_THREAD_NOT_FOUND")
+        }
+        CoworkDelegationError::WorkspaceDirectoryMissing(path) => ApiError::conflict(
+            format!("workspace directory is missing: {path}"),
+            "WORKSPACE_DIRECTORY_MISSING",
+        ),
+        other => ApiError::internal(other.to_string()),
+    }
 }
 
 fn map_create_cowork_thread_error(error: CoworkCreateThreadError) -> ApiError {
@@ -526,5 +541,17 @@ mod tests {
         ));
         let response = super::map_create_cowork_thread_error(error).into_response();
         assert_eq!(response.status(), StatusCode::CONFLICT);
+    }
+
+    /// A deleted managed-checkout refusal from cowork delegation converges on
+    /// the shared session-wide 409 code.
+    #[test]
+    fn delegation_missing_workspace_directory_maps_to_conflict_with_code() {
+        use crate::domains::cowork::delegation::service::CoworkDelegationError;
+        let error = super::map_cowork_delegation_error(
+            CoworkDelegationError::WorkspaceDirectoryMissing("/tmp/gone".to_string()),
+        );
+        assert_eq!(error.code(), Some("WORKSPACE_DIRECTORY_MISSING"));
+        assert_eq!(error.into_response().status(), StatusCode::CONFLICT);
     }
 }

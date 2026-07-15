@@ -41,6 +41,8 @@ import {
   startLatencyFlow,
 } from "#product/lib/infra/measurement/measurement-port";
 import { useGitPromptSnapshotEffects } from "#product/hooks/workspaces/workflows/use-git-prompt-snapshot-effects";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { useWorkspaceCollectionsInvalidationActions } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { completeChatPromptSubmitSideEffects } from "#product/lib/workflows/chat/complete-chat-prompt-submit-side-effects";
 
 export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
@@ -74,6 +76,8 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
   });
   const scopedLaunchIdentity = forceNewSession ? null : currentLaunchIdentity;
   const configuredLaunch = useConfiguredLaunchReadiness(scopedLaunchIdentity);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const { invalidateWorkspaceCollectionsForRuntime } = useWorkspaceCollectionsInvalidationActions();
   const gitPromptEffects = useGitPromptSnapshotEffects();
   const telemetry = useProductTelemetry();
 
@@ -252,8 +256,12 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
       });
 
       // The persistent missing-worktree composer panel owns this condition;
-      // a transient toast would just restate it with internal wording.
-      if (!isWorkspaceDirectoryMissingError(error)) {
+      // a transient toast would just restate it with internal wording. The
+      // collections cache still says the workspace is available (no
+      // refetch-on-focus), so refresh availability to mount the panel.
+      if (isWorkspaceDirectoryMissingError(error)) {
+        void invalidateWorkspaceCollectionsForRuntime(runtimeUrl);
+      } else {
         const message = error instanceof Error ? error.message : String(error);
         showToast(`Failed to send message: ${message}`);
       }
@@ -270,10 +278,12 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
     gitPromptEffects,
     hasSlot,
     forceNewSession,
+    invalidateWorkspaceCollectionsForRuntime,
     isDisabled,
     pendingWorkspaceEntry,
     promptActiveSession,
     promptSession,
+    runtimeUrl,
     selectedLogicalWorkspaceId,
     selectedWorkspaceId,
     sendBlockedReason,

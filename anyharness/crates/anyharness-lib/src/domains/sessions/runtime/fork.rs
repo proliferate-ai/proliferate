@@ -228,24 +228,20 @@ impl SessionRuntime {
 }
 
 impl SessionRuntime {
-    /// Pre-flight the parent workspace's local checkout before forking. Shares
-    /// the `WorkspaceRecord::checkout_directory_missing` predicate with session
-    /// creation so a deleted checkout is refused before a fork child row is
-    /// inserted. Remote/cloud-style workspaces are never blocked.
+    /// Pre-flight the parent workspace's local checkout before forking. Reuses
+    /// the shared `workspace_checkout_missing_path` admission (same predicate as
+    /// session creation and the live-start seam) so a deleted checkout is
+    /// refused before a fork child row is inserted. Remote/cloud-style
+    /// workspaces are never blocked.
     fn assert_fork_workspace_checkout_present(
         &self,
         workspace_id: &str,
     ) -> Result<(), ForkSessionError> {
-        let workspace = self
-            .workspace_runtime
-            .get_workspace(workspace_id)
-            .map_err(ForkSessionError::Internal)?;
-        if let Some(workspace) = workspace {
-            if workspace.checkout_directory_missing() {
-                return Err(ForkSessionError::WorkspaceDirectoryMissing {
-                    path: workspace.path,
-                });
-            }
+        if let Some(path) = self
+            .workspace_checkout_missing_path(workspace_id)
+            .map_err(ForkSessionError::Internal)?
+        {
+            return Err(ForkSessionError::WorkspaceDirectoryMissing { path });
         }
         Ok(())
     }
@@ -278,6 +274,9 @@ fn map_start_error_to_fork(error: StartSessionError) -> ForkSessionError {
     match error {
         StartSessionError::WorkspaceNotFound => {
             ForkSessionError::Internal(anyhow::anyhow!("workspace not found for session"))
+        }
+        StartSessionError::WorkspaceDirectoryMissing { path } => {
+            ForkSessionError::WorkspaceDirectoryMissing { path }
         }
         StartSessionError::AgentDescriptorNotFound(agent_kind) => {
             ForkSessionError::Internal(anyhow::anyhow!("agent descriptor not found: {agent_kind}"))

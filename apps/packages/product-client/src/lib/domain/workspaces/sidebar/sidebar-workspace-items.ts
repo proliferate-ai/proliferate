@@ -164,8 +164,11 @@ function buildSidebarWorkspaceItem(
       active,
       archived,
       variant,
-      statusIndicator: isWorkspaceDirectoryMissing(entry.localWorkspace)
-        ? worktreeMissingStatusIndicator({ kind: "open_workspace", workspaceId: entry.id })
+      statusIndicator: entry.localWorkspace && isWorkspaceDirectoryMissing(entry.localWorkspace)
+        ? worktreeMissingStatusIndicator(
+          entry.localWorkspace.kind,
+          { kind: "open_workspace", workspaceId: entry.id },
+        )
         : sidebarStatusIndicatorFromActivity({
           activity,
           pendingPromptCount: logicalWorkspaceRelatedCount(args.pendingPromptCounts, entry),
