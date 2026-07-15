@@ -50,6 +50,11 @@ IMAGE_REPO="ghcr.io/proliferate-ai/proliferate-server"
 ASSUME_YES=0
 DRY_RUN=0
 NO_START=0
+# Local (air-gapped / candidate) bundle: install from an already-downloaded,
+# checksum-verified proliferate-deploy.tar.gz instead of fetching a GitHub
+# release. BUNDLE_SUMS_PATH defaults to a sibling self-hosted-assets.SHA256SUMS.
+BUNDLE_PATH=""
+BUNDLE_SUMS_PATH=""
 
 # Overridable download endpoints (also honored by common.sh) for tests/forks.
 REPO_SLUG="${PROLIFERATE_REPO:-proliferate-ai/proliferate}"
@@ -70,6 +75,13 @@ Options:
                            rerun.
       --telemetry-mode M   PROLIFERATE_TELEMETRY_MODE (default: self_managed).
       --image-repo REPO    Server image repository (default GHCR).
+      --bundle PATH        Install from a local, checksum-verified deploy bundle
+                           (proliferate-deploy.tar.gz) instead of downloading a
+                           GitHub release. For air-gapped installs and for
+                           installing pre-built candidate bytes.
+      --bundle-sha256sums PATH
+                           Checksum file for --bundle (default: a sibling
+                           self-hosted-assets.SHA256SUMS next to the bundle).
       --install-root DIR   Durable install root (default: /opt/proliferate).
       --no-start           Fetch and configure only; do not bootstrap the stack.
       --dry-run            Print the resolved plan and exit without changing
@@ -117,6 +129,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --image-repo)
       IMAGE_REPO="${2:-}"
+      shift 2
+      ;;
+    --bundle)
+      BUNDLE_PATH="${2:-}"
+      shift 2
+      ;;
+    --bundle-sha256sums)
+      BUNDLE_SUMS_PATH="${2:-}"
       shift 2
       ;;
     --install-root)
@@ -332,6 +352,37 @@ download_and_verify_bundle() {
     || die "bundle did not extract to a proliferate-deploy/ directory."
 }
 
+# Install from a local --bundle instead of a GitHub release. Verifies the
+# provided checksum with the SAME `sha256sum -c --ignore-missing` guard the
+# download path uses (never extract unverified bytes), then extracts. No
+# network, no release resolution.
+verify_and_extract_local_bundle() {
+  [[ -f "$BUNDLE_PATH" ]] || die "--bundle path not found: $BUNDLE_PATH"
+  local sums="$BUNDLE_SUMS_PATH"
+  if [[ -z "$sums" ]]; then
+    sums="$(cd "$(dirname "$BUNDLE_PATH")" && pwd)/self-hosted-assets.SHA256SUMS"
+  fi
+  [[ -f "$sums" ]] || die "checksum file not found for --bundle (looked for '$sums'); pass --bundle-sha256sums PATH."
+
+  FETCH_TMP="$(mktemp -d "${TMPDIR:-/tmp}/proliferate-install.XXXXXX")"
+  cp "$BUNDLE_PATH" "$FETCH_TMP/proliferate-deploy.tar.gz"
+  cp "$sums" "$FETCH_TMP/self-hosted-assets.SHA256SUMS"
+
+  log "Verifying checksum of the local bundle before extraction"
+  (
+    cd "$FETCH_TMP"
+    # --ignore-missing: the sums file may also cover runtime tarballs / the AWS
+    # template that a local bundle does not carry.
+    sha256sum -c --ignore-missing self-hosted-assets.SHA256SUMS
+  ) || die "checksum verification FAILED for the local --bundle. The file is corrupt or does not match its checksums; not extracting."
+  info "Checksum OK"
+
+  log "Extracting local bundle"
+  tar xzf "$FETCH_TMP/proliferate-deploy.tar.gz" -C "$FETCH_TMP"
+  [[ -d "$FETCH_TMP/proliferate-deploy" ]] \
+    || die "bundle did not extract to a proliferate-deploy/ directory."
+}
+
 install_bundle_files() {
   # Refresh scripts/compose/example/VERSION without ever clobbering operator
   # config or data (.env.static, .env.local, .env.generated, .env.runtime).
@@ -500,19 +551,45 @@ EOF
 
 main() {
   check_host
-  resolve_version
 
-  if [[ "$DRY_RUN" -eq 1 ]]; then
+  if [[ -n "$BUNDLE_PATH" ]]; then
+    # Local-bundle install: extract first so VERSION can come from the bundle
+    # when --version was not pinned, then reuse the identical install path.
+    verify_and_extract_local_bundle
+    if [[ -n "$VERSION" ]]; then
+      VERSION="${VERSION#server-v}"
+      VERSION="${VERSION#v}"
+      info "Using pinned image tag: $VERSION"
+    else
+      VERSION="$(tr -d '[:space:]' <"$FETCH_TMP/proliferate-deploy/VERSION" 2>/dev/null || true)"
+      [[ -n "$VERSION" ]] || die "--bundle has no VERSION file; pass --version X.Y.Z to pin the image tag."
+      info "Using bundle VERSION: $VERSION"
+    fi
+
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+      print_plan
+      log "Dry run: no changes made."
+      exit 0
+    fi
+
     print_plan
-    log "Dry run: no changes made."
-    exit 0
+    confirm
+    install_bundle_files
+  else
+    resolve_version
+
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+      print_plan
+      log "Dry run: no changes made."
+      exit 0
+    fi
+
+    print_plan
+    confirm
+
+    download_and_verify_bundle
+    install_bundle_files
   fi
-
-  print_plan
-  confirm
-
-  download_and_verify_bundle
-  install_bundle_files
 
   configure
   record_version

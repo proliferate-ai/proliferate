@@ -49,6 +49,11 @@ on:
         default: all
         required: false
         type: string
+      selfhost:
+        description: Also run the SELFHOST-INSTALL-1 EC2 job (provisions a real box).
+        default: false
+        required: false
+        type: boolean
   schedule:
     # Nightly, offset after the release train (which runs at 09:00 UTC) so it
     # exercises the freshly cut artifacts. README: "Nightly — Tier 3 lanes
@@ -514,5 +519,84 @@ jobs:
           name: tier2-billing-evidence
           path: |
             tests/release/.output/tier2/*/*/evidence/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # Self-host install — "Prove One Real Self-Hosted Installation": builds the
+  # exact self-host candidate (Server image archive for the box arch +
+  # release-shaped proliferate-deploy.tar.gz + controller AnyHarness +
+  # renderer), provisions a run-scoped EC2 box behind a Route53 A record +
+  # Caddy/Let's-Encrypt TLS, runs the SHIPPED install.sh on the candidate bytes,
+  # and drives the four SELFHOST-INSTALL-1 cells (install/claim, desktop owner,
+  # BYOK base turn, invitee). Like the local-world-smoke job it is
+  # `workflow_dispatch` only and — deliberately — NOT `continue-on-error`: a red
+  # command stays red with its real exit code (no skip-as-success in the strict
+  # lane). It runs `make qualification-selfhost`, the exact same entrypoint a
+  # laptop uses; only the AWS/SSH/BYOK input source differs (the protected
+  # `Qualification` GitHub environment's vars/secrets + configured AWS creds,
+  # never the ignored local secret profile). Gated on the `selfhost` dispatch
+  # input so a manual tier-2/local run does not also spin up the EC2 box.
+  release-e2e-selfhost-install:
+    name: selfhost-install-1 (manual, strict)
+    if: github.event_name == 'workflow_dispatch' && inputs.selfhost
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: Qualification
+    permissions:
+      contents: read
+      # OIDC federation to assume the run-scoped AWS role (EC2 + Route53).
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "."
+      # docker + buildx ship on ubuntu-latest; ensure a builder exists for the
+      # single-platform `buildx build --load` the server-image candidate uses.
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Configure AWS credentials (run-scoped EC2 + Route53 role)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.RELEASE_E2E_SELFHOST_AWS_ROLE_ARN }}
+          aws-region: ${{ vars.RELEASE_E2E_SELFHOST_REGION }}
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the self-host candidate and run SELFHOST-INSTALL-1 (strict)
+        env:
+          # Mapped directly from the protected `Qualification` environment.
+          # Arbitrary PR code never runs this job or sees these.
+          RELEASE_E2E_SELFHOST_REGION: ${{ vars.RELEASE_E2E_SELFHOST_REGION }}
+          RELEASE_E2E_SELFHOST_HOSTED_ZONE_ID: ${{ vars.RELEASE_E2E_SELFHOST_HOSTED_ZONE_ID }}
+          RELEASE_E2E_SELFHOST_INSTANCE_TYPE: ${{ vars.RELEASE_E2E_SELFHOST_INSTANCE_TYPE }}
+          RELEASE_E2E_SELFHOST_SSH_USER: ${{ vars.RELEASE_E2E_SELFHOST_SSH_USER }}
+          # Bounded BYOK provider keys — secrets, never printed, never stored in
+          # evidence (only safe id hashes leave the fixtures).
+          RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY: ${{ secrets.RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY }}
+          RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY: ${{ secrets.RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY }}
+        run: |
+          set -euo pipefail
+          make qualification-selfhost \
+            PROFILE="ci-${{ github.run_id }}-${{ github.run_attempt }}" \
+            BEHAVIOR=strict
+
+      - name: Upload V4 report and bounded diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selfhost-install-1-evidence
+          path: |
+            tests/release/.output/selfhost-world/*/*/evidence/
+            tests/release/.output/selfhost-world/*/*/logs/
           retention-days: 7
           if-no-files-found: ignore

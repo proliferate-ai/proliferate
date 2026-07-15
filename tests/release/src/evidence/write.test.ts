@@ -17,6 +17,7 @@ import {
   validateReportV4,
   type CellEvidenceV1,
   type LocalWorkspaceTurnEvidenceV1,
+  type SelfHostInstallClaimEvidenceV1,
   type TestRunReportV3,
   type TestRunReportV4,
 } from "./schema.js";
@@ -720,6 +721,16 @@ function failedCleanupSmokeReportV4(): TestRunReportV4 {
   return report;
 }
 
+// Narrows the first result's evidence to the local-workspace-turn kind so tests
+// can reach kind-specific fields (litellm, cleanup.virtual_key_deleted) now that
+// CellEvidenceV1 is a discriminated union across multiple worlds. Returns the
+// live object reference, so in-place mutation still edits the report.
+function smokeTurn(report: TestRunReportV4): LocalWorkspaceTurnEvidenceV1 {
+  const evidence = report.results[0].evidence;
+  assert.ok(evidence && evidence.kind === "local_workspace_turn");
+  return evidence;
+}
+
 test("validateReportV4 accepts schema_version 4 with null evidence on an ordinary cell", () => {
   validateReportV4(validReportV4());
 });
@@ -752,7 +763,7 @@ test("validateReportV4 rejects an extra field on evidence or nested objects", ()
   assert.throws(() => validateReportV4(report), /undeclared or missing field/);
 
   const nested = validSmokeReportV4();
-  ((nested.results[0].evidence as LocalWorkspaceTurnEvidenceV1).litellm as unknown as Record<string, unknown>).extra = "x";
+  (smokeTurn(nested).litellm as unknown as Record<string, unknown>).extra = "x";
   assert.throws(() => validateReportV4(nested), /litellm has undeclared/);
 
   const cleanupExtra = validSmokeReportV4();
@@ -769,51 +780,51 @@ test("validateReportV4 rejects unsafe strings: paths and secret-like markers", (
   assert.throws(() => validateReportV4(traversal), /artifact_ids\[0\] is missing or unsafe/);
 
   const redactedLooking = validSmokeReportV4();
-  (redactedLooking.results[0].evidence as LocalWorkspaceTurnEvidenceV1).litellm.token_id_hash = "[REDACTED]";
+  smokeTurn(redactedLooking).litellm.token_id_hash = "[REDACTED]";
   assert.throws(() => validateReportV4(redactedLooking), /token_id_hash must be a lowercase 64-hex digest/);
 });
 
 test("validateReportV4 rejects invalid or inconsistent token counts", () => {
   const mismatched = validSmokeReportV4();
-  (mismatched.results[0].evidence as LocalWorkspaceTurnEvidenceV1).litellm.total_tokens = 999;
+  smokeTurn(mismatched).litellm.total_tokens = 999;
   assert.throws(() => validateReportV4(mismatched), /token counts are internally inconsistent/);
 
   const zero = validSmokeReportV4();
-  (zero.results[0].evidence as LocalWorkspaceTurnEvidenceV1).litellm.prompt_tokens = 0;
+  smokeTurn(zero).litellm.prompt_tokens = 0;
   assert.throws(() => validateReportV4(zero), /prompt_tokens must be a positive integer/);
 
   const negative = validSmokeReportV4();
-  (negative.results[0].evidence as LocalWorkspaceTurnEvidenceV1).litellm.completion_tokens = -1;
+  smokeTurn(negative).litellm.completion_tokens = -1;
   assert.throws(() => validateReportV4(negative), /completion_tokens must be a positive integer/);
 });
 
 test("validateReportV4 rejects non-positive spend", () => {
   const zeroSpend = validSmokeReportV4();
-  (zeroSpend.results[0].evidence as LocalWorkspaceTurnEvidenceV1).litellm.spend_usd = 0;
+  smokeTurn(zeroSpend).litellm.spend_usd = 0;
   assert.throws(() => validateReportV4(zeroSpend), /spend_usd must be positive/);
 
   const negativeSpend = validSmokeReportV4();
-  (negativeSpend.results[0].evidence as LocalWorkspaceTurnEvidenceV1).litellm.spend_usd = -0.01;
+  smokeTurn(negativeSpend).litellm.spend_usd = -0.01;
   assert.throws(() => validateReportV4(negativeSpend), /spend_usd must be positive/);
 });
 
 test("validateReportV4 rejects unsorted/duplicate/oversized request_ids", () => {
   const unsorted = validSmokeReportV4();
-  (unsorted.results[0].evidence as LocalWorkspaceTurnEvidenceV1).litellm.request_ids = ["req-2", "req-1"];
+  smokeTurn(unsorted).litellm.request_ids = ["req-2", "req-1"];
   assert.throws(() => validateReportV4(unsorted), /must be sorted ascending/);
 
   const duplicated = validSmokeReportV4();
-  (duplicated.results[0].evidence as LocalWorkspaceTurnEvidenceV1).litellm.request_ids = ["req-1", "req-1"];
+  smokeTurn(duplicated).litellm.request_ids = ["req-1", "req-1"];
   assert.throws(() => validateReportV4(duplicated), /duplicate entry/);
 
   const oversized = validSmokeReportV4();
-  (oversized.results[0].evidence as LocalWorkspaceTurnEvidenceV1).litellm.request_ids = Array.from({ length: 51 }, (_, i) => `req-${String(i).padStart(3, "0")}`);
+  smokeTurn(oversized).litellm.request_ids = Array.from({ length: 51 }, (_, i) => `req-${String(i).padStart(3, "0")}`);
   assert.throws(() => validateReportV4(oversized), /exceeds the bounded cap/);
 });
 
 test("validateReportV4 rejects a green cell whose cleanup has a false deletion flag or a failure", () => {
   const incomplete = validSmokeReportV4();
-  (incomplete.results[0].evidence as LocalWorkspaceTurnEvidenceV1).cleanup.virtual_key_deleted = false;
+  smokeTurn(incomplete).cleanup.virtual_key_deleted = false;
   assert.throws(() => validateReportV4(incomplete), /incomplete on a green result/);
 
   const failed = validSmokeReportV4();
@@ -835,11 +846,12 @@ test("sanitizeCellEvidence redacts secrets so validation then rejects the mangle
   const secret = "sk-live-leaked";
   const evidence: CellEvidenceV1 = validCellEvidence({ model_id: `claude-haiku-4-5-${secret}` });
   const sanitized = sanitizeCellEvidence(evidence, [secret]);
-  assert.ok(sanitized && (sanitized as LocalWorkspaceTurnEvidenceV1).model_id.includes("[REDACTED]"));
+  assert.ok(sanitized && sanitized.kind === "local_workspace_turn");
+  assert.ok(sanitized.model_id.includes("[REDACTED]"));
   assert.throws(
     () =>
       validateReportV4(
-        validSmokeReportV4({ model_id: (sanitized as LocalWorkspaceTurnEvidenceV1).model_id }),
+        validSmokeReportV4({ model_id: sanitized.model_id }),
       ),
     /model_id is missing or unsafe/,
   );
@@ -893,6 +905,178 @@ test("writeReportV4 refuses to persist evidence carrying a resolved secret", asy
     const poisoned = validSmokeReportV4({ model_id: `claude-haiku-4-5-${secret}` });
     await assert.rejects(writeReportV4(dir, poisoned, [secret]), ReportValidationError);
     await assert.rejects(readFile(reportPath(dir, poisoned), "utf8"));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ── PR 3 self-host evidence (validateSelfHostCellEvidence / sanitizeSelfHostCellEvidence) ──
+
+function validSelfHostInstallClaimEvidence(
+  overrides: Partial<SelfHostInstallClaimEvidenceV1> = {},
+): SelfHostInstallClaimEvidenceV1 {
+  return {
+    kind: "selfhost_install_claim",
+    artifact_ids: ["server/linux-amd64", "selfhost-bundle/linux-amd64", "anyharness/x86_64-unknown-linux-gnu", "desktop-renderer/browser"],
+    server_version: "0.3.27",
+    anyharness_version: "0.3.27",
+    harness: "claude",
+    api_origin: "sh-run-1.qualification.proliferate.com",
+    controller_runtime_origin: "127.0.0.1:8542",
+    running_image_digest: "sha256:" + "d".repeat(64),
+    bundle_sha256: "e".repeat(64),
+    setup_token_hash: "f".repeat(64),
+    owner_user_id_hash: "0".repeat(64),
+    org_id_hash: "1".repeat(64),
+    tls_verified: true,
+    second_claim_rejected: true,
+    restart_persisted: true,
+    cleanup: {
+      ledger_id_hash: "9".repeat(64),
+      registered: 7,
+      reconciled: 7,
+      failed: 0,
+      ec2_terminated: true,
+      security_group_deleted: true,
+      key_pair_deleted: true,
+      route53_record_deleted: true,
+      browser_closed: true,
+      processes_stopped: true,
+      local_paths_removed: true,
+    },
+    ...overrides,
+  };
+}
+
+/** V4 report with one green SELFHOST-INSTALL-1 SH-INSTALL-CLAIM cell carrying complete evidence. */
+function validSelfHostReportV4(
+  evidenceOverrides: Partial<SelfHostInstallClaimEvidenceV1> = {},
+): TestRunReportV4 {
+  const report = validReportV4();
+  const cellId = "SELFHOST-INSTALL-1/selfhost/cell=SH-INSTALL-CLAIM,harness=claude";
+  report.selected_cells[0] = {
+    ...report.selected_cells[0],
+    cell_id: cellId,
+    scenario_id: "SELFHOST-INSTALL-1",
+    registry_flow_ref: "specs#SELFHOST-INSTALL-1",
+    runtime_lane: "selfhost",
+    dimensions: { cell: "SH-INSTALL-CLAIM", harness: "claude" },
+  };
+  report.results[0] = {
+    ...report.results[0],
+    cell_id: cellId,
+    scenario_id: "SELFHOST-INSTALL-1",
+    registry_flow_ref: "specs#SELFHOST-INSTALL-1",
+    runtime_lane: "selfhost",
+    dimensions: { cell: "SH-INSTALL-CLAIM", harness: "claude" },
+    evidence: validSelfHostInstallClaimEvidence(evidenceOverrides),
+  };
+  return report;
+}
+
+test("validateReportV4 accepts a green SELFHOST-INSTALL-1 cell with complete self-host evidence", () => {
+  validateReportV4(validSelfHostReportV4());
+});
+
+test("validateReportV4 rejects a green SELFHOST-INSTALL-1 cell with null evidence", () => {
+  const report = validSelfHostReportV4();
+  report.results[0].evidence = null;
+  assert.throws(() => validateReportV4(report), /requires complete evidence/);
+});
+
+test("validateReportV4 rejects self-host evidence with an unknown kind", () => {
+  const report = validSelfHostReportV4();
+  (report.results[0].evidence as { kind: string }).kind = "selfhost_unknown_kind";
+  assert.throws(() => validateReportV4(report), /kind is unknown/);
+});
+
+test("validateReportV4 rejects self-host evidence with an undeclared extra field", () => {
+  const report = validSelfHostReportV4();
+  (report.results[0].evidence as unknown as Record<string, unknown>).extra_field = "x";
+  assert.throws(() => validateReportV4(report), /undeclared or missing field/);
+
+  const cleanupExtra = validSelfHostReportV4();
+  (cleanupExtra.results[0].evidence as unknown as { cleanup: Record<string, unknown> }).cleanup.extra = "x";
+  assert.throws(() => validateReportV4(cleanupExtra), /cleanup has undeclared/);
+});
+
+test("validateReportV4 rejects api_origin === controller_runtime_origin (never implies AnyHarness ran on the box)", () => {
+  const report = validSelfHostReportV4({ controller_runtime_origin: "sh-run-1.qualification.proliferate.com" });
+  assert.throws(() => validateReportV4(report), /must be distinct/);
+});
+
+test("validateReportV4 rejects unsafe self-host string fields", () => {
+  const leaked = validSelfHostReportV4({ running_image_digest: "/tmp/leaked-local-path" });
+  assert.throws(() => validateReportV4(leaked), /running_image_digest is missing or unsafe/);
+
+  const redactedHash = validSelfHostReportV4({ setup_token_hash: "[REDACTED]" });
+  assert.throws(() => validateReportV4(redactedHash), /setup_token_hash must be a lowercase 64-hex digest/);
+});
+
+test("validateReportV4 rejects a false witness boolean on self-host evidence", () => {
+  const report = validSelfHostReportV4();
+  (report.results[0].evidence as unknown as { tls_verified: boolean }).tls_verified = false;
+  assert.throws(() => validateReportV4(report), /tls_verified must be true/);
+});
+
+test("validateReportV4 rejects a green self-host cell whose cleanup has a false deletion flag or a failure", () => {
+  const incomplete = validSelfHostReportV4({
+    cleanup: { ...validSelfHostInstallClaimEvidence().cleanup, ec2_terminated: false },
+  });
+  assert.throws(() => validateReportV4(incomplete), /incomplete on a green result/);
+
+  const failed = validSelfHostReportV4({
+    cleanup: { ...validSelfHostInstallClaimEvidence().cleanup, failed: 1 },
+  });
+  assert.throws(() => validateReportV4(failed), /cleanup.failed must be 0/);
+});
+
+test("validateReportV4 accepts a failed self-host cell whose cleanup evidence records failed>0", () => {
+  const report = validSelfHostReportV4({
+    cleanup: { ...validSelfHostInstallClaimEvidence().cleanup, failed: 1, ec2_terminated: false },
+  });
+  report.run.behavior = "strict";
+  report.candidate_build = STRICT_CB;
+  report.results[0].status = "failed";
+  report.results[0].reason = { code: "scenario_failure", message: "world cleanup did not fully reconcile (failed=1)" };
+  const byStatus = Object.fromEntries(ALL_FINAL_STATUSES.map((status) => [status, 0])) as Record<
+    FinalTestStatus,
+    number
+  >;
+  byStatus.failed = 1;
+  report.summary.by_status = byStatus;
+  report.summary.intended_exit_code = 1;
+  report.verdict.status = "selected_cells_failed";
+  withDerivedReasons(report as unknown as TestRunReportV3);
+  validateReportV4(report);
+});
+
+test("sanitizeCellEvidence redacts secrets in self-host evidence so validation then rejects the mangled value", () => {
+  const secret = "sk-ant-live-leaked";
+  const evidence: CellEvidenceV1 = validSelfHostInstallClaimEvidence({
+    running_image_digest: `sha256:leaked-${secret}`,
+  });
+  const sanitized = sanitizeCellEvidence(evidence, [secret]);
+  assert.ok(sanitized && "running_image_digest" in sanitized && sanitized.running_image_digest.includes("[REDACTED]"));
+  assert.throws(
+    () =>
+      validateReportV4(
+        validSelfHostReportV4({ running_image_digest: (sanitized as SelfHostInstallClaimEvidenceV1).running_image_digest }),
+      ),
+    /running_image_digest is missing or unsafe/,
+  );
+  assert.deepEqual(sanitizeCellEvidence(validSelfHostInstallClaimEvidence(), []), validSelfHostInstallClaimEvidence());
+});
+
+test("writeReportV4 writes a SELFHOST-INSTALL-1 artifact with self-host evidence intact", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "q1-evidence-v4-selfhost-"));
+  try {
+    const written = await writeReportV4(dir, validSelfHostReportV4());
+    const raw = await readFile(written, "utf8");
+    const parsed = JSON.parse(raw);
+    assert.equal(parsed.schema_version, 4);
+    assert.equal(parsed.results[0].evidence.kind, "selfhost_install_claim");
+    assert.equal(parsed.results[0].evidence.api_origin, "sh-run-1.qualification.proliferate.com");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

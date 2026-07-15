@@ -16,10 +16,17 @@ export type TargetLane = "local" | "staging";
  * Which runtime a scenario drives, per T3-FIXTURE in scenarios.md:
  * - "local": desktop (web-port mode) + local AnyHarness runtime.
  * - "sandbox": cloud workspace on real E2B.
+ * - "selfhost": a run-scoped self-hosted control plane on EC2 (candidate bytes,
+ *   real DNS/TLS) driven through the real Desktop renderer + a controller-local
+ *   candidate AnyHarness. Append-only addition for PR 3 (see "Parallel Tracks -
+ *   Extension Contract"); it is a runtime lane, not a `--lane` target — the
+ *   self-host world provisions its own box, so scenarios that declare
+ *   `lanes: ["selfhost"]` produce `<scenario>/selfhost/...` cells regardless of
+ *   the `--lane` (TargetLane) flag.
  */
-export type RuntimeLane = "local" | "sandbox";
+export type RuntimeLane = "local" | "sandbox" | "selfhost";
 
-export const ALL_RUNTIME_LANES: readonly RuntimeLane[] = ["local", "sandbox"];
+export const ALL_RUNTIME_LANES: readonly RuntimeLane[] = ["local", "sandbox", "selfhost"];
 
 export type DesktopMode = "web" | "native";
 
