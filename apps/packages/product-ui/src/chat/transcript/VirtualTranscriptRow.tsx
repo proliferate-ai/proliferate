@@ -1,5 +1,6 @@
-import { memo, type ReactNode } from "react";
+import { memo, useMemo, type ReactNode } from "react";
 import type { TranscriptVirtualRow as TranscriptVirtualRowModel } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
+import { ChatTranscriptRowProvider } from "./ChatContentSearchContext";
 
 export type TranscriptVirtualRowRenderer = (
   row: TranscriptVirtualRowModel,
@@ -19,6 +20,10 @@ export const MemoizedVirtualTranscriptRow = memo(function MemoizedVirtualTranscr
   renderRow: TranscriptVirtualRowRenderer;
   measureElement: (element: Element | null) => void;
 }) {
+  const rowContext = useMemo(
+    () => ({ rowUnitId: `chatrow:${row.key}`, rowIndex }),
+    [row.key, rowIndex],
+  );
   return (
     <div
       ref={measureElement}
@@ -26,7 +31,9 @@ export const MemoizedVirtualTranscriptRow = memo(function MemoizedVirtualTranscr
       data-index={virtualIndex}
       className="w-full"
     >
-      {renderRow(row, rowIndex)}
+      <ChatTranscriptRowProvider value={rowContext}>
+        {renderRow(row, rowIndex)}
+      </ChatTranscriptRowProvider>
     </div>
   );
 }, (prev, next) =>

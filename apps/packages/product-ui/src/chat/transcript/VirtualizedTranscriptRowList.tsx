@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { TranscriptVirtualizationMode } from "@proliferate/product-domain/chats/transcript/transcript-virtualization-config";
 import {
@@ -59,6 +59,7 @@ export function VirtualizedTranscriptRowList({
   gutterClassName,
   onFallback,
   virtualizationMode,
+  scrollHandleRef,
 }: VirtualizedTranscriptRowListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -105,6 +106,23 @@ export function VirtualizedTranscriptRowList({
     initialOffset: () => estimatedInitialBottomOffset,
     useAnimationFrameWithResizeObserver: true,
   });
+  // Content-search jump-to-match: bring an off-screen row into view so its
+  // painted marks mount before the overlay queries the DOM for the active one.
+  useImperativeHandle(scrollHandleRef, () => ({
+    scrollToRowKey: (rowKey: string) => {
+      const index = renderableRows.findIndex(
+        (row) => row.kind === "transcript" && row.key === rowKey,
+      );
+      if (index < 0) {
+        return;
+      }
+      setPinned(false);
+      notifyProgrammaticScroll(() => {
+        virtualizer.scrollToIndex(index, { align: "center" });
+      });
+    },
+  }), [notifyProgrammaticScroll, renderableRows, setPinned, virtualizer]);
+
   const virtualItems = virtualizer.getVirtualItems();
   const totalContentHeight = virtualizer.getTotalSize();
   const firstVirtualItem = virtualItems[0] ?? null;
