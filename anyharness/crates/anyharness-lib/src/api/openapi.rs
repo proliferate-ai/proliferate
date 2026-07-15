@@ -1,5 +1,3 @@
-use utoipa::OpenApi;
-
 use anyharness_contract::v1::{
     AdvanceReplaySessionResponse, AgentCliAuthState, AgentCredentialState, AgentInstallState,
     AgentLaunchModelOption, AgentLaunchOption, AgentLaunchOptionsResponse,
@@ -111,6 +109,7 @@ use anyharness_contract::v1::{
     WorktreeNameConflictPolicy, WorktreeStorageEstimate, WriteWorkspaceFileRequest,
     WriteWorkspaceFileResponse,
 };
+use utoipa::OpenApi;
 
 #[derive(OpenApi)]
 #[openapi(
