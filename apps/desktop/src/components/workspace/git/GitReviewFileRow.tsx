@@ -307,7 +307,7 @@ export function GitReviewFileRow({
       >
         {!currentDiff ? (
           <GitReviewInlineEmptyState
-            icon={<FileIcon className="size-4" />}
+            icon={<FileIcon className="size-3.5" />}
             title="No current diff"
             description="This file was touched, but there are no current changes to review against the selected base."
             onOpenFile={() => void openFile(file.path)}
@@ -320,7 +320,7 @@ export function GitReviewFileRow({
           />
         ) : waitingForDiffPermit ? (
           <GitReviewInlineEmptyState
-            icon={<RefreshCw className="size-4" />}
+            icon={<RefreshCw className="size-3.5" />}
             title="Waiting to load diff"
             description="This file will load when review capacity is available."
           />
@@ -332,7 +332,7 @@ export function GitReviewFileRow({
           />
         ) : diffErrorMessage ? (
           <GitReviewInlineEmptyState
-            icon={<CircleAlert className="size-4" />}
+            icon={<CircleAlert className="size-3.5" />}
             title="Diff unavailable"
             description={diffErrorMessage}
             onOpenFile={() => void openFile(file.path)}
@@ -458,22 +458,25 @@ function GitReviewFileSectionShell({
                 <span className="text-sidebar-foreground">{name}</span>
               </span>
             </span>
+            {/* Stats trail the title directly (Codex changes-pane layout),
+                not right-aligned; only hover actions pin to the edge. */}
+            <span className="flex shrink-0 items-center gap-1.5">
+              {showStagedChip && <GitReviewHeaderChip label="staged" />}
+              {statusChip && <GitReviewHeaderChip label={statusChip} />}
+              {binary && additions === 0 && deletions === 0 ? (
+                <span className="text-[length:var(--text-ui-sm)] text-sidebar-muted-foreground">
+                  binary
+                </span>
+              ) : (
+                <FileChangeStats
+                  additions={additions}
+                  deletions={deletions}
+                  className="leading-none"
+                />
+              )}
+            </span>
           </div>
-          <span className="flex shrink-0 items-center gap-1.5">
-            {showStagedChip && <GitReviewHeaderChip label="staged" />}
-            {statusChip && <GitReviewHeaderChip label={statusChip} />}
-            {binary && additions === 0 && deletions === 0 ? (
-              <span className="text-[length:var(--text-ui-sm)] text-sidebar-muted-foreground">
-                binary
-              </span>
-            ) : (
-              <FileChangeStats
-                additions={additions}
-                deletions={deletions}
-                className="leading-none"
-              />
-            )}
-            <span className="flex items-center gap-0.5 opacity-0 transition-opacity duration-200 group-hover/diff-header:opacity-100 group-focus-within/diff-header:opacity-100">
+          <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-200 group-hover/diff-header:opacity-100 group-focus-within/diff-header:opacity-100">
               <Button
                 type="button"
                 variant="ghost"
@@ -508,7 +511,6 @@ function GitReviewFileSectionShell({
                   }`}
                 />
               </Button>
-            </span>
           </span>
         </div>
       </div>
@@ -521,9 +523,10 @@ function GitReviewFileSectionShell({
   );
 }
 
+/** Quiet status word (staged / deleted / renamed…) — plain muted text, no pill. */
 function GitReviewHeaderChip({ label }: { label: string }) {
   return (
-    <span className="rounded bg-sidebar-accent px-1 py-px text-[length:var(--text-ui-sm)] leading-[var(--text-ui-sm--line-height)] text-sidebar-muted-foreground">
+    <span className="text-[length:var(--text-ui-sm)] leading-[var(--text-ui-sm--line-height)] text-sidebar-muted-foreground">
       {label}
     </span>
   );

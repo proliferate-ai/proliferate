@@ -4,7 +4,6 @@ import { GitPanelHeader } from "./GitPanelHeader";
 import { SkeletonBlock, shimmerDelay } from "@/components/feedback/Skeleton";
 import { GitPanelReviewBody } from "./GitPanelReviewBody";
 import { formatGitPanelUndoError } from "./GitPanelReviewChrome";
-import { useWorkspaceShellActions } from "@/components/workspace/shell/providers/WorkspaceShellActionsContext";
 import { useDiffReviewMeasurement } from "@/hooks/workspaces/ui/files/use-diff-review-measurement";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/facade/files/use-workspace-file-actions";
 import { useWorkspaceFileContext } from "@/hooks/workspaces/derived/files/use-workspace-file-context";
@@ -127,11 +126,6 @@ function GitPanelContent({
   });
   const revertPatchesMutation = useRevertGitPatchesMutation({ workspaceId: activeWorkspaceId });
   const showToast = useToastStore((state) => state.show);
-  const shellActions = useWorkspaceShellActions();
-  const currentBranch = useMemo(
-    () => branchRefs.find((ref) => ref.isHead && !ref.isRemote)?.name ?? null,
-    [branchRefs],
-  );
   const effectiveLastTurnRevertPatches =
     lastTurnRevertPatches ?? EMPTY_LAST_TURN_REVERT_PATCHES;
   const lastTurnUndoCompleted = Boolean(lastTurn?.turnId && undoneTurnIds.has(lastTurn.turnId));
@@ -304,7 +298,6 @@ function GitPanelContent({
         isRuntimeReady={isRuntimeReady}
         branchRefs={branchRefs}
         baseRef={baseRef}
-        currentBranch={currentBranch}
         layout={layout}
         wrapLongLines={wrapLongLines}
         allFilesCollapsed={allFilesCollapsed}
@@ -316,7 +309,6 @@ function GitPanelContent({
         onToggleAllFiles={handleToggleAllFiles}
         onFocusFile={focusReviewFile}
         onRefresh={() => void refetch()}
-        onOpenPublish={shellActions ? shellActions.openPublishDialog : null}
       />
 
       <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">

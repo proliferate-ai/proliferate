@@ -175,7 +175,6 @@ describe("GitPanel", () => {
       isRuntimeReady: true,
       branchRefs: [{ name: "origin/main", isDefault: true, isHead: false, isRemote: true, upstream: null }],
       baseRef: "origin/main",
-      currentBranch: null,
       layout: "unified" as const,
       wrapLongLines: true,
       allFilesCollapsed: false,
@@ -187,7 +186,6 @@ describe("GitPanel", () => {
       onToggleAllFiles: vi.fn(),
       onFocusFile: vi.fn(),
       onRefresh: vi.fn(),
-      onOpenPublish: null,
     };
 
     const unstagedHtml = renderToStaticMarkup(
@@ -216,8 +214,7 @@ describe("GitPanel", () => {
         isRuntimeReady: true,
         branchRefs: [],
         baseRef: null,
-        currentBranch: null,
-        layout: "unified",
+          layout: "unified",
         wrapLongLines: false,
         allFilesCollapsed: false,
         reviewEntries: [],
@@ -229,8 +226,7 @@ describe("GitPanel", () => {
         onToggleAllFiles: vi.fn(),
         onFocusFile: vi.fn(),
         onRefresh: vi.fn(),
-        onOpenPublish: null,
-      }),
+        }),
     );
 
     expect(html).toContain("border-transparent bg-transparent");

@@ -3,19 +3,15 @@ import type { GitBranchRef } from "@anyharness/sdk";
 import { GitReviewOptionsMenu } from "./GitReviewOptionsMenu";
 import { GitReviewBaseSelector } from "./GitReviewBaseSelector";
 import { GitReviewTargetSelector } from "./GitReviewTargetSelector";
-import { Button } from "@proliferate/ui/primitives/Button";
 import {
-  ChevronDown,
   CollapseAll,
   ExpandAll,
-  GitCommit,
   Search,
 } from "@proliferate/ui/icons";
 import { PaneIconButton } from "@proliferate/ui/layout/PaneIconButton";
 import { PopoverButton, POPOVER_SURFACE_CLASS } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchField";
-import type { PublishIntent } from "@/lib/domain/workspaces/creation/publish-workflow-model";
 import type { GitPanelMode } from "@/lib/domain/workspaces/changes/git-panel-diff";
 import type { GitReviewFileEntry } from "@/lib/domain/workspaces/changes/git-review-entries";
 
@@ -27,7 +23,6 @@ interface GitPanelHeaderProps {
   isRuntimeReady: boolean;
   branchRefs: readonly GitBranchRef[];
   baseRef: string | null;
-  currentBranch: string | null;
   layout: "unified" | "split";
   wrapLongLines: boolean;
   allFilesCollapsed: boolean;
@@ -39,7 +34,6 @@ interface GitPanelHeaderProps {
   onToggleAllFiles: () => void;
   onFocusFile: (entry: GitReviewFileEntry) => void;
   onRefresh: () => void;
-  onOpenPublish: ((intent: PublishIntent) => void) | null;
 }
 
 export function GitPanelHeader({
@@ -50,7 +44,6 @@ export function GitPanelHeader({
   isRuntimeReady,
   branchRefs,
   baseRef,
-  currentBranch,
   layout,
   wrapLongLines,
   allFilesCollapsed,
@@ -62,13 +55,12 @@ export function GitPanelHeader({
   onToggleAllFiles,
   onFocusFile,
   onRefresh,
-  onOpenPublish,
 }: GitPanelHeaderProps) {
   const showTargetSelector = changesFilter === "branch";
 
   return (
     <div
-      className="z-20 flex shrink-0 flex-col gap-0.5 [container-name:review-header] [container-type:inline-size] border-b border-sidebar-border/70 bg-sidebar-background px-2 py-1 text-sidebar-muted-foreground"
+      className="z-20 flex shrink-0 flex-col [container-name:review-header] [container-type:inline-size] border-b border-sidebar-border/70 bg-sidebar-background px-2 py-1 text-sidebar-muted-foreground"
     >
       <div className="flex min-h-7 min-w-0 items-center gap-1">
         <GitReviewBaseSelector
@@ -112,79 +104,6 @@ export function GitPanelHeader({
           />
         </div>
       </div>
-      {(currentBranch || onOpenPublish) && (
-        <div className="flex min-h-6 min-w-0 items-center gap-1.5 pb-0.5">
-          <span className="flex min-w-0 items-center gap-1 truncate px-1.5 text-sm text-sidebar-muted-foreground">
-            {currentBranch && <span className="truncate">{currentBranch}</span>}
-            {changesFilter === "branch" && baseRef && (
-              <>
-                <span aria-hidden="true" className="shrink-0">→</span>
-                <span className="truncate">{baseRef}</span>
-              </>
-            )}
-          </span>
-          {onOpenPublish && <GitReviewCommitSplitButton onOpenPublish={onOpenPublish} />}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function GitReviewCommitSplitButton({
-  onOpenPublish,
-}: {
-  onOpenPublish: (intent: PublishIntent) => void;
-}) {
-  const segmentClass =
-    "h-6 border border-sidebar-border bg-sidebar-background px-2 py-0 text-sm leading-none text-sidebar-foreground hover:bg-sidebar-accent";
-  return (
-    <div className="ms-auto flex shrink-0 items-center">
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={() => onOpenPublish("publish")}
-        className={`${segmentClass} gap-1 rounded-md rounded-e-none border-e-0`}
-      >
-        <GitCommit className="size-3.5" />
-        <span className="hidden [@container_review-header_(min-width:280px)]:inline">
-          Commit or push
-        </span>
-      </Button>
-      <PopoverButton
-        align="end"
-        className={`min-w-[200px] ${POPOVER_SURFACE_CLASS}`}
-        trigger={(
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label="More git actions"
-            className={`${segmentClass} w-5 rounded-md rounded-s-none px-0 text-sidebar-muted-foreground`}
-          >
-            <ChevronDown className="size-3" />
-          </Button>
-        )}
-      >
-        {(close) => (
-          <div className="flex flex-col gap-px">
-            <PopoverMenuItem
-              label="Commit…"
-              onClick={() => {
-                onOpenPublish("commit");
-                close();
-              }}
-            />
-            <PopoverMenuItem
-              label="Create pull request…"
-              onClick={() => {
-                onOpenPublish("pull_request");
-                close();
-              }}
-            />
-          </div>
-        )}
-      </PopoverButton>
     </div>
   );
 }
@@ -250,7 +169,7 @@ function GitReviewJumpToFileMenu({
                       <span className="flex min-w-0 items-baseline gap-1.5">
                         <span className="truncate">{baseName}</span>
                         {dirPath && (
-                          <span className="min-w-0 truncate text-base text-muted-foreground">
+                          <span className="min-w-0 truncate text-muted-foreground">
                             {dirPath}
                           </span>
                         )}
@@ -287,7 +206,7 @@ function GitPanelAggregateStats({
 }) {
   return (
     <div
-      className="flex shrink-0 items-center gap-1 text-sm font-medium leading-none tabular-nums"
+      className="flex shrink-0 items-center gap-1 text-ui leading-none tabular-nums tracking-tight"
       aria-label={`${additions} additions, ${deletions} deletions`}
     >
       <span className={additions > 0 ? "text-git-green" : "text-sidebar-muted-foreground/70"}>

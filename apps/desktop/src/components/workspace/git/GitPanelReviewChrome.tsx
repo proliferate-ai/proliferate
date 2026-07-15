@@ -1,5 +1,5 @@
 import { Button } from "@proliferate/ui/primitives/Button";
-import { CheckCircleFilled, GitBranchIcon, RefreshCw, Undo } from "@proliferate/ui/icons";
+import { RefreshCw, Undo } from "@proliferate/ui/icons";
 import {
   GitReviewEmptyState,
   GitReviewEmptyStateAction,
@@ -72,10 +72,8 @@ export function GitReviewNoChangesState({
   baseRef: string | null;
   onRefresh: () => void;
 }) {
-  const Icon = mode === "branch" ? GitBranchIcon : CheckCircleFilled;
   return (
     <GitReviewEmptyState
-      icon={<Icon className="size-4" />}
       title={gitPanelEmptyMessage(mode)}
       description={gitPanelEmptyDescription(mode, baseRef)}
       action={
