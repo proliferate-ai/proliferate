@@ -1,4 +1,4 @@
-import { buildProliferateApiUrl } from "@/lib/infra/proliferate-api";
+import { buildProliferateApiUrl } from "#product/lib/infra/proliferate-api";
 import {
   elapsedStartupMs,
   logStartupDebug,
@@ -13,7 +13,7 @@ export function getLastKnownControlPlaneReachable(): boolean | null {
   return lastKnownControlPlaneReachable;
 }
 
-export async function checkControlPlaneReachable(apiBaseUrl?: string): Promise<boolean> {
+export async function checkControlPlaneReachable(apiBaseUrl: string): Promise<boolean> {
   const startedAt = startStartupTimer();
   logStartupDebug("control_plane.health.start");
   const abortController = typeof AbortController !== "undefined"

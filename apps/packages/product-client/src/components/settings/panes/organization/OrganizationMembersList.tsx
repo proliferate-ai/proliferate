@@ -10,7 +10,7 @@ import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { SettingsEyebrow } from "@proliferate/product-ui/settings/SettingsEyebrow";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { Avatar } from "#product/components/settings/panes/organization/OrganizationLogo";
-import { buildProliferateApiUrl } from "@/lib/infra/proliferate-api";
+import { buildProliferateApiUrl } from "#product/lib/infra/proliferate-api";
 import {
   membershipStatusBadge,
   type OrganizationInvitationRecord,
@@ -181,13 +181,16 @@ function InvitationRow({
   updating: boolean;
   onRevokeInvitation?: (invitationId: string) => void;
 }) {
-  const { writeText } = useProductHost().clipboard;
+  const host = useProductHost();
+  const { writeText } = host.clipboard;
+  const apiBaseUrl = host.deployment.apiBaseUrl;
   const showToast = useToastStore((state) => state.show);
   const deliveryHint = invitationDeliveryHint(invitation.deliveryStatus);
 
   async function handleCopyInviteLink() {
     const url = buildProliferateApiUrl(
       `/register?token=${invitation.id}&email=${encodeURIComponent(invitation.email)}`,
+      apiBaseUrl,
     );
     try {
       await writeText(url);

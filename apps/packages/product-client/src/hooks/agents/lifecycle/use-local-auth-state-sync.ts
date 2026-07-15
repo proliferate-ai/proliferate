@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react";
 import { useAgentAuthState } from "@proliferate/cloud-sdk-react";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { applyAgentAuthState } from "#product/lib/access/anyharness/agent-auth";
-import { getProliferateApiOrigin } from "@/lib/infra/proliferate-api";
+import { getProliferateApiOrigin } from "#product/lib/infra/proliferate-api";
 import { planLocalAuthStatePush, stampIssuingServerOrigin } from "#product/lib/domain/agents/local-auth-state";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
@@ -21,6 +22,7 @@ import { useHarnessConnectionStore } from "#product/stores/sessions/harness-conn
  */
 export function useLocalAuthStateSync() {
   const { cloudActive } = useCloudAvailabilityState();
+  const apiBaseUrl = useProductHost().deployment.apiBaseUrl;
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const connectionState = useHarnessConnectionStore((state) => state.connectionState);
   const stateQuery = useAgentAuthState("local", cloudActive);
@@ -45,7 +47,10 @@ export function useLocalAuthStateSync() {
       return;
     }
     let cancelled = false;
-    const stamped = stampIssuingServerOrigin(state, getProliferateApiOrigin());
+    const stamped = stampIssuingServerOrigin(
+      state,
+      getProliferateApiOrigin(apiBaseUrl),
+    );
     applyAgentAuthState({ runtimeUrl }, stamped)
       .then(() => {
         if (!cancelled) {

@@ -16,6 +16,7 @@ import {
   isPendingDesktopAuthExpired,
 } from "@/lib/integrations/auth/proliferate-auth";
 import { checkControlPlaneReachable } from "@proliferate/product-client/internal/lib/access/cloud/health";
+import { getProliferateApiBaseUrl } from "@/lib/infra/proliferate-api";
 import {
   elapsedStartupMs,
   logStartupDebug,
@@ -54,7 +55,7 @@ export async function bootstrapAuth(deps: AuthOrchestrationDeps): Promise<void> 
   }
 
   const storedSession = await getStoredAuthSession();
-  const controlPlaneReachable = await checkControlPlaneReachable();
+  const controlPlaneReachable = await checkControlPlaneReachable(getProliferateApiBaseUrl());
   if (!controlPlaneReachable) {
     await clearStoredPendingAuthSession();
     deps.clearSessionRuntimeState();

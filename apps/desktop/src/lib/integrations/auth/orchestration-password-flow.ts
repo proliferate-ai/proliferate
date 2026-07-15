@@ -1,6 +1,7 @@
 import { isDevAuthBypassed } from "@proliferate/product-client/internal/lib/domain/auth/auth-mode";
 import type { AuthSignInSource, AuthTelemetryProvider } from "@proliferate/product-client/internal/lib/domain/telemetry/events";
 import { checkControlPlaneReachable } from "@proliferate/product-client/internal/lib/access/cloud/health";
+import { getProliferateApiBaseUrl } from "@/lib/infra/proliferate-api";
 import { AuthRequestError } from "@/lib/integrations/auth/proliferate-auth";
 import { signInWithDesktopPassword } from "@/lib/integrations/auth/proliferate-auth-password";
 import {
@@ -32,7 +33,7 @@ export async function signInWithPassword(
     };
   }
 
-  const controlPlaneReachable = await checkControlPlaneReachable();
+  const controlPlaneReachable = await checkControlPlaneReachable(getProliferateApiBaseUrl());
   if (!controlPlaneReachable) {
     throw new AuthRequestError(
       "Signing in requires a reachable control plane.",

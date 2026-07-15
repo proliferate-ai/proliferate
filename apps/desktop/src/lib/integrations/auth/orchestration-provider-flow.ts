@@ -56,7 +56,7 @@ export async function signInWithGitHub(
     };
   }
 
-  const controlPlaneReachable = await checkControlPlaneReachable();
+  const controlPlaneReachable = await checkControlPlaneReachable(getProliferateApiBaseUrl());
   if (!controlPlaneReachable) {
     throw new AuthRequestError(
       "GitHub sign-in requires a reachable control plane.",
@@ -165,7 +165,7 @@ export async function linkDesktopProvider(
     throw new AuthRequestError("Sign in before linking another provider.", 401);
   }
 
-  const controlPlaneReachable = await checkControlPlaneReachable();
+  const controlPlaneReachable = await checkControlPlaneReachable(getProliferateApiBaseUrl());
   if (!controlPlaneReachable) {
     throw new AuthRequestError(
       "Provider linking requires a reachable control plane.",
@@ -256,7 +256,7 @@ export async function signInWithSso(
     };
   }
 
-  const controlPlaneReachable = await checkControlPlaneReachable();
+  const controlPlaneReachable = await checkControlPlaneReachable(getProliferateApiBaseUrl());
   if (!controlPlaneReachable) {
     throw new AuthRequestError(
       "SSO sign-in requires a reachable control plane.",

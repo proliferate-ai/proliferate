@@ -8,7 +8,7 @@ import {
   deriveAppCapabilities,
   resolveEffectiveContract,
 } from "#product/lib/domain/capabilities/app-capabilities";
-import { isOfficialHostedApiBaseUrl } from "@/lib/infra/proliferate-api";
+import { isOfficialHostedApiBaseUrl } from "#product/lib/infra/proliferate-api";
 
 function connectedServerHost(apiBaseUrl: string): string | null {
   try {

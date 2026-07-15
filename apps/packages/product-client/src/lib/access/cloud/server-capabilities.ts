@@ -1,4 +1,4 @@
-import { buildProliferateApiUrl } from "@/lib/infra/proliferate-api";
+import { buildProliferateApiUrl } from "#product/lib/infra/proliferate-api";
 import {
   parseServerCapabilities,
   type ServerCapabilityContract,
@@ -14,7 +14,7 @@ const SERVER_CAPABILITIES_TIMEOUT_MS = 2_500;
  * conservatively; the official-hosted fallback is applied one layer up.
  */
 export async function fetchServerCapabilities(
-  apiBaseUrl?: string,
+  apiBaseUrl: string,
 ): Promise<ServerCapabilityContract | null> {
   const abortController =
     typeof AbortController !== "undefined" ? new AbortController() : null;

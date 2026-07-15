@@ -18,7 +18,7 @@ describe("control plane health", () => {
     } as Response));
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(checkControlPlaneReachable()).resolves.toBe(true);
+    await expect(checkControlPlaneReachable("http://control-plane.test")).resolves.toBe(true);
 
     expect(getLastKnownControlPlaneReachable()).toBe(true);
     expect(fetchMock).toHaveBeenCalledWith(
@@ -43,7 +43,7 @@ describe("control plane health", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const reachable = checkControlPlaneReachable();
+    const reachable = checkControlPlaneReachable("http://control-plane.test");
 
     await vi.advanceTimersByTimeAsync(2_500);
 
