@@ -389,28 +389,44 @@ const t2Bill3: Tier2CellHandler = async (): Promise<Tier2CaseResult> => {
   const fullSub = b.retrieveSubscription(sub.id);
   await b.deliverEvent({ type: "customer.subscription.created", object: fullSub });
 
+  const adjustmentsBeforeAccept = (await b.listSeatAdjustments(subject.id)).length;
   const invitation = await seed.inviteMember(token, organizationId, email, "member");
   const accept = await seed.acceptCurrentInvitation(memberToken, invitation.id);
   assert.ok([200, 201].includes(accept.status), "accept succeeds");
 
+  // The subject is shared with sibling cells on this booted stack, so don't
+  // trust at(-1): assert on the rows THIS accept appended (a positive seat
+  // bump must be among them).
   let adjustments = await b.listSeatAdjustments(subject.id);
-  const bump = adjustments.at(-1);
-  assert.ok(bump, "invite+accept created a seat adjustment");
-  assert.ok(bump!.grant_quantity >= 1);
+  const appended = adjustments.slice(adjustmentsBeforeAccept);
+  assert.ok(appended.length >= 1, "invite+accept created a seat adjustment");
+  assert.ok(
+    appended.some((a) => a.grant_quantity >= 1),
+    "the accept's seat adjustment grants at least one seat",
+  );
 
   const prorationBefore = (await b.listGrants(subject.id)).filter((g) => g.grant_type === "pro_seat_proration").length;
   await drainSeatAdjustments(subject.id);
   adjustments = await b.listSeatAdjustments(subject.id);
-  assert.equal(adjustments.at(-1)!.status, "succeeded", "the invite proration seat adjustment converges");
+  assert.ok(
+    adjustments.slice(adjustmentsBeforeAccept).every((a) => a.status === "succeeded"),
+    "the invite proration seat adjustment converges",
+  );
   const prorationAfter = (await b.listGrants(subject.id)).filter((g) => g.grant_type === "pro_seat_proration").length;
   assert.equal(prorationAfter - prorationBefore, 1, "one proration grant for the added seat");
 
   const members = await seed.listMembers(token, organizationId);
   const member = members.find((m) => m.email === email)!;
+  const adjustmentsBeforeRemoval = (await b.listSeatAdjustments(subject.id)).length;
   await seed.removeMembership(token, organizationId, member.membershipId);
   await drainSeatAdjustments(subject.id);
   adjustments = await b.listSeatAdjustments(subject.id);
-  assert.equal(adjustments.at(-1)!.grant_quantity, 0, "removal issues no refund grant");
+  const removalRows = adjustments.slice(adjustmentsBeforeRemoval);
+  assert.ok(removalRows.length >= 1, "removal created a seat adjustment");
+  assert.ok(
+    removalRows.every((a) => a.grant_quantity === 0),
+    "removal issues no refund grant",
+  );
 
   const reinvite = await seed.inviteMember(token, organizationId, email, "member");
   const reaccept = await seed.acceptCurrentInvitation(memberToken, reinvite.id);
