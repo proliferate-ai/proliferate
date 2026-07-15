@@ -673,18 +673,27 @@ the recorded entry contract is
 and the move ledger is
 [`web-desktop-product-client-move-ledger.md`](move-ledger.md).
 
-Move the Desktop Product into ProductClient is the current implementation slice
-(base `1d00437565d4cdce47cf4dc41f2ea19eb2f31f28`). Executing the D1g ledger and
-codemod, it has landed and proven the pure mechanical move — all 2069 `move`
-rows relocated to `apps/packages/product-client/src` exactly once, the 130
-`retain` host modules intact, the one `delete` removed, the codemod's second run
-empty, and `apps/desktop/src` reduced to a host-only tree — plus the thin Desktop
-host that mounts the real `ProductClient` entry and the deletion of the temporary
-qualification canary. It is **blocked at the seam architecture**: 18 `split` rows
-remain, and three items are contract stop conditions requiring an owner ruling —
-the host-supplied measurement facade mechanism, new DesktopBridge ports for the
-`connect-server` and `window` probes, and the package's host-facing public export
-surface for the reverse seam. The complete living record is
+Move the Desktop Product into ProductClient is **complete and green pending
+review** (base `1d00437565d4cdce47cf4dc41f2ea19eb2f31f28`). Executing the D1g
+ledger and codemod, it landed the pure mechanical move — all `move` rows
+relocated to `apps/packages/product-client/src` exactly once, the `retain` host
+modules intact, the one `delete` removed, the codemod's second run empty, and
+`apps/desktop/src` reduced to a host-only tree (114 files: `lib`/`hooks`/
+`providers`, the retained `stores/auth/auth-store.ts`, `main.tsx`, `assets.d.ts`;
+no product pages, routes, or non-auth stores) — plus the thin Desktop host that
+mounts the real `ProductClient` entry and the deletion of the temporary
+qualification canary. The full seam architecture then landed across three owner-
+ruling rounds (R1–R5, G1–G7): the measurement port (swappable no-op sink, host
+injects the retained engine), the reverse-seam `./internal/*` export lane, the
+build-emission asset/catalog copy step, the new DesktopBridge/ProductHost
+capabilities (connect-server meta probe, dev-handoff window port, updater
+telemetry/persistence DI, anonymous-install-id accessor, native render-error
+diagnostics, cloud sandbox-gateway token accessor, macOS window chrome), and the
+9 ratified `retain → move` ledger amendments. Package typecheck/build, the
+desktop build (with a verified lazy authenticated split), desktop and package
+vitest, the qualification build proof, and every boundary/structure/ledger scan
+are green; the only red is 12 base-proven pre-existing test failures across 6
+files (inherited, not move-caused). The complete living record is
 [`web-desktop-client-unification-d1h.md`](migration/d1h.md).
 
 Related authoritative docs:

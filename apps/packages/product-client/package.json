@@ -41,10 +41,10 @@
     }
   },
   "scripts": {
-    "prepare": "node ../../../scripts/copy-product-client-assets.mjs",
-    "sync-assets": "node ../../../scripts/copy-product-client-assets.mjs",
-    "build": "node ../../../scripts/copy-product-client-assets.mjs && pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/product-domain build && tsc -p tsconfig.json && node ../../../scripts/copy-product-client-assets.mjs --dist",
-    "typecheck": "node ../../../scripts/copy-product-client-assets.mjs && pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/product-domain build && tsc -p tsconfig.json --noEmit",
+    "prepare": "node scripts/copy-product-client-assets.mjs",
+    "sync-assets": "node scripts/copy-product-client-assets.mjs",
+    "build": "node scripts/copy-product-client-assets.mjs && pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/product-domain build && tsc -p tsconfig.json && node scripts/copy-product-client-assets.mjs --dist",
+    "typecheck": "node scripts/copy-product-client-assets.mjs && pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/product-domain build && tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
   "dependencies": {

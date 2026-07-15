@@ -1,11 +1,15 @@
 # Move the Desktop Product into ProductClient (D1h)
 
-Status: **current implementation slice — mechanical move + all
-mechanically-clean seam cohorts landed (rounds 1–2 rulings R1–R5 + auth-probe
-promotion executed); package `tsc` 315 → 47. Blocked to green on five NEW
-capability/ownership gaps absent from the ledger and rounds 1–2 (contract stop
-conditions). F4 landed the R5 gate config, ran the full battery/scans, and
-recorded the divergences below.**
+Status: **complete — green pending review.** The mechanical move and the full
+seam architecture landed across three owner-ruling rounds (R1–R5 + G1–G7 + 9
+ratified ledger amendments). Package `tsc` **315 → 0**;
+`PRODUCT_CLIENT_FORBIDDEN_IMPORT` **272 → 0**. Package typecheck/build, the
+Desktop build (verified lazy authenticated split), desktop + package vitest, the
+qualification proof, and every boundary/structure/max-lines/docs/ledger scan pass.
+The only red is **12 base-proven pre-existing test failures across 6 files**
+(inherited, not move-caused — see "Inherited pre-existing test failures"). Rounds
+1–2 (§F1–F4 below) and the F3/F4 STOP analyses are retained as a historical
+record; the authoritative final state is **"Round 3 (G1–G7) + green — final"**.
 
 - Exact implementation base:
   `1d00437565d4cdce47cf4dc41f2ea19eb2f31f28`
@@ -33,10 +37,14 @@ the `git mv`s land because its source paths stop existing) reports:
 
 | Classification | Ledger rows | Post-move state |
 | --- | --- | --- |
-| move | 2069 | all landed exactly once (target present, source gone) |
+| move | 2087 | all landed exactly once (target present, source gone) |
 | delete | 1 | removed |
-| retain | 130 | intact under `apps/desktop/src` |
-| split | 20 | 2 resolved; **18 pending (S2 seam step)** |
+| retain | 112 | intact under `apps/desktop/src` |
+| split | 20 | **all 20 resolved** (product target present) |
+
+(Counts are the final post-round-3 state, after the 18 ratified `retain → move`
+amendments were applied by the checker — see G6. The earlier "2069 move / 130
+retain / 18 split pending" figures reflect the F1 head and are superseded.)
 
 Additional verified facts at this slice's head:
 
@@ -516,7 +524,167 @@ is surfaced as an **owner-ratification item**: either bless the reclassification
 relocation. It is recorded, not resolved. (The 18 `split` rows remain pending as
 expected — the checker also lists those, blocked on the (A) rulings.)
 
+## Round 3 (G1–G7) + green — final (authoritative)
+
+Round 3 ruled the five NEW capability/ownership gaps the F3 STOP surfaced plus
+the coupled behavior-sensitive items, and all of it landed. The F1–F4 narrative
+above (and the F3/F4 STOP analyses and RED matrices) is retained as a historical
+record; **this section is the authoritative final state.** Package `tsc`
+**47 → 0** and `PRODUCT_CLIENT_FORBIDDEN_IMPORT` **50 → 0**. No product behavior
+changed — every resolution routes through an existing or newly-ruled
+ProductHost/DesktopBridge capability, and all promoted fetchers/URL helpers are
+base-URL-explicit (no host-config default in the package).
+
+### Round-3 rulings, as executed (with rationale)
+
+- **G1 Updater cluster** (`use-updater`, `use-app-version`, `updater-dev-mock`,
+  `use-update-restart-watcher` + their tests + `app/query-keys`). Moved into the
+  package (ratified `retain → move`; their `retain` was the coarse
+  `hooks/access/tauri/**` bucket default — they are `host.desktop.updater` bridge
+  consumers, not raw-Tauri). Hook-level telemetry goes through the typed product
+  facade; the **module-level auto-check scheduler** receives an injected
+  `{track, captureException}` armed from the hook (same DI pattern as the
+  measurement sink), so no raw host telemetry import survives in product. Updater
+  metadata (`lastCheckedAt` etc.) persists through the injected `ProductStorage`
+  with **identical keys** — the Desktop adapter is the same Tauri preferences
+  store, so existing values keep working byte-compatibly. `updater-dev-mock`'s dev
+  flag also via `ProductStorage` (dev-only key). Event names/payloads/intervals
+  byte-identical.
+- **G2 Anonymous install id.** New narrow `ProductTelemetry.getAnonymousInstallId():
+  Promise<string | null>` (`host/product-host.ts`). Desktop reads the existing
+  anonymous-telemetry bootstrap; returns `null` when unavailable/off-Desktop; the
+  two consumer hooks omit the `desktopInstallId` field on `null` (preserving the
+  current bootstrap-failure behavior). Rationale: this id is a `crypto.randomUUID()`
+  provably distinct from the worker install id, so the worker bridge is not a
+  behavior-safe substitute — it needs its own accessor.
+- **G3 Native render diagnostics.** New `DesktopDiagnosticsBridge.reportRenderError(report)`
+  (`host/desktop-bridge.ts`); the dedup/fingerprint semantics moved into the
+  Desktop impl (not product). `AppErrorBoundary` calls
+  `host.desktop?.diagnostics.reportRenderError`, skipping when `desktop` is null.
+  **Not** diverted to `host.telemetry.captureException` (that would send render
+  errors to Sentry instead of the native renderer log — a behavior change).
+- **G4 Cloud gateway token.** New `host.cloud.getSandboxGatewayAccessToken():
+  Promise<string>` (`host/product-host.ts`), armed in the package via
+  `lib/access/cloud/sandbox-gateway-access.ts`. Rationale: this is a scoped
+  sandbox-gateway resource token the product already carried to the connection
+  layer pre-move — **not** the auth session/refresh credential barred by slice-01;
+  acquisition/refresh stays host-owned. Replaces the `getDesktopCloudAccessToken`
+  holdout that F1 deferred.
+- **G5 Window chrome.** New `nativeUi.applyMacosWindowChrome` bridge port; no-op
+  off-Desktop; `use-window-actions` moved with it (replacing the raw
+  `apply_macos_window_chrome` Tauri op).
+- **G6 Ledger amendments.** An "Amendments (ratified during the move)" section was
+  appended to `move-ledger.md` — the binding rows are **not** rewritten. It carries
+  a fenced ` ```ledger-amendments ` block of **18 `retain → move` overrides** (the
+  9 credentials/shell/workspace-scratch subtree files from F3 + the G1 updater
+  cluster + `use-window-actions` + `use-update-restart-watcher`), each with
+  evidence that the original `retain` was a stale bucket default.
+  `check-product-client-move-ledger-postmove.py` reads that block and applies the
+  overrides before checking, so the completion proof is green without silently
+  editing the binding ledger.
+- **G7 remaining deferred.** R2 bridge ports landed —
+  `DesktopConnectServerBridge.fetchServerMeta(url)` (connect-server meta probe) and
+  the dev-handoff window port (`isMainWebviewAvailable()` + `revealCurrentWindow()`,
+  dev-only) — with `use-connect-server` and `use-dev-desktop-handoff` moved onto
+  them. The `use-organization-join-invitation-flow` split, the
+  `DesktopProductLifecycleRoot` split (capability-gated product subtree moves;
+  residual raw-tauri stays host), the `ensure-desktop-worker` `captureException` DI,
+  and the auth-store test doubles all landed. `desktop: null` fails these paths
+  closed by not mounting (both hooks already gate on `desktop`).
+
+### New host / bridge capabilities added (for the PR description)
+
+| Capability | Surface | Gap |
+| --- | --- | --- |
+| `ProductTelemetry.getAnonymousInstallId(): Promise<string \| null>` | `host.telemetry` | G2 |
+| `DesktopDiagnosticsBridge.reportRenderError(report)` | `host.desktop.diagnostics` | G3 |
+| `host.cloud.getSandboxGatewayAccessToken(): Promise<string>` | `host.cloud` | G4 |
+| `nativeUi.applyMacosWindowChrome(...)` | `host.desktop.nativeUi` | G5 |
+| `DesktopConnectServerBridge.fetchServerMeta(url): Promise<ServerMetaProbeResult>` | `host.desktop` (connect-server) | R2a / G7 |
+| dev-handoff window port: `isMainWebviewAvailable(): boolean` + `revealCurrentWindow(): Promise<void>` | `host.desktop` (dev-only) | R2b / G7 |
+| Injected updater facades: module-scheduler `{track, captureException}` + updater metadata via `ProductStorage` (identical keys) | DI, not a new interface | G1 |
+| Measurement port: swappable `MeasurementSink` (no-op default; host injects retained engine) | `./infra/measurement` export | R1 |
+| Reverse seam: public `./internal/*` export lane (host-only, to be narrowed after Web) | package exports | R3 |
+
+### Final battery / scan matrix (this slice's head)
+
+| Command | Result |
+| --- | --- |
+| `pnpm --filter @proliferate/product-client typecheck` | **GREEN** (exit 0; `tsc` 315 → 0) |
+| `pnpm --filter @proliferate/product-client build` | **GREEN** (exit 0; dist + 85 non-code assets mirrored) |
+| `pnpm --filter @proliferate/product-client test` | 503/509 files, 2946/2958 tests pass; **6 files / 12 tests fail — all base-proven pre-existing** |
+| `pnpm --filter proliferate build` (desktop) | **GREEN** (exit 0; `AuthenticatedProductClient-*.js` emitted as a separate lazy chunk) |
+| `pnpm --dir apps/desktop exec vitest run` | **GREEN** (exit 0; 23 files / 162 tests) |
+| `pnpm --filter @proliferate/web build` | **GREEN** (exit 0; Web untouched) |
+| `python3 scripts/check_frontend_boundaries.py` | **GREEN** (`PRODUCT_CLIENT_FORBIDDEN_IMPORT` 272 → 0) |
+| `python3 scripts/report_frontend_structure.py --strict --summary-only` | **GREEN** (TOTAL 0; `LARGE_FRONTEND_FILE` 0) |
+| `python3 scripts/check_max_lines.py` | **PASS** |
+| `python3 scripts/check_docs.py` | **PASS** (216 Markdown files) |
+| `git diff --check` | **clean** |
+| `node scripts/migrate-desktop-product-client.mjs --check` | **0 rewrites** (second run empty; 1985 move modules scanned) |
+| `python3 scripts/check-product-client-move-ledger-postmove.py` | **GREEN** (move=2087 split=20 resolved=20 pending=0 retain=112 delete=1; 18 amendments applied) |
+| `node scripts/verify-product-client-qualification.mjs` | **GREEN** (lazy authenticated split verified desktop + browser; 335 served asset URLs all HTTP 200 incl. CSS/font/png/mp3/svg) |
+
+### Scan results
+
+- **`apps/desktop/src` is host-only** (114 files): `lib` (101), `hooks` (3),
+  `providers` (7), the retained `stores/auth/auth-store.ts` (1), `main.tsx`,
+  `assets.d.ts`. `pages/` and `components/` are **empty**; no product route tree
+  or non-auth stores.
+- **No dual code ownership.** Only two files share a relative path across the two
+  trees, both intended splits (verified non-identical): `assets.d.ts` (host keeps
+  Sentry/PostHog env + asset decls; package split env into `vite-env.d.ts`) and
+  `lib/infra/proliferate-api.ts` (host bootstrap/default vs package pure helpers).
+- **Canary gone:** no `ProductClientBuildCanary` reference in package or host
+  (source or exports).
+- **Desktop prod-build lazy-split proof:** `apps/desktop/dist/index.html` does
+  **not** reference `AuthenticatedProductClient-*.js` (public shell does not
+  eagerly load the authenticated root); the chunk, `index-*.css`, and the font
+  set (Geist/GeistMono/Inter/Manrope `.woff2`) are all emitted under
+  `dist/assets`.
+
+### Inherited pre-existing test failures — final (do NOT attribute to the move)
+
+12 tests across 6 files fail; **all fail byte-identically at the clean base**
+`1d0043756` (verified in H1 via a fresh base worktree with `make shared-build` +
+product-client built), so they are inherited, not move-caused:
+
+| File | Fail | Root cause (base-identical) |
+| --- | --- | --- |
+| `lib/domain/shortcuts/keyboard-resolution.test.ts` | 4 | documented pre-existing |
+| `config/playground.test.ts` | 3 | stale `2200ms` default (component is `2400ms`) + composer surface renders `useNavigate` with no Router |
+| `lib/domain/settings/navigation.test.ts` | 2 | documented pre-existing |
+| `lib/infra/editor/highlighting.test.ts` | 1 | test asserts `#FF678D` vs the theme's shipped `#F22C3D` (since PR #927) |
+| `hooks/workspaces/workflows/workspace-bootstrap-empty-session.test.ts` | 1 | `.catch()` on a bare `vi.fn()` (test/code logic mismatch) |
+| `components/automations/controls/AutomationRunLocationSelector.test.tsx` | 1 | see resolution below |
+
+The brief's "6" pre-existing count referred only to `keyboard-resolution` (4) +
+`navigation` (2); the other 6 (highlighting 1, playground 3, workspace-bootstrap
+1, AutomationRunLocationSelector 1) were masked in prior stages that never ran the
+suite on a clean shared-build (stale dist) — consistent with D1g seeing 15 at its
+earlier base. All 12 are base-proven.
+
+### AutomationRunLocationSelector — final resolution (round-3 ruling)
+
+The round-2 R5 premise (duplicate-React, fix via `resolve.dedupe`) was **wrong**:
+an A/B run proved the `resolve.dedupe: ["react","react-dom"]` change (kept as
+correct package-boundary hygiene) does not affect this test. Root-caused per the
+round-3 ruling: it is **not** a package-lane duplicate-render/config diff — it
+fails identically at the clean base because the component inherently renders
+"Organization cloud" **4×** through the shared `PopoverButton`, so
+`getByText` finding >1 element is correct behavior. It is therefore
+**unfixable via test-lane config without weakening the assertion**, and the ruling
+forbids quarantine and any component/test weakening → reported and left as-is
+(the only honest resolution). This is the one previously "move-induced test-infra"
+suspect now retired to the inherited/base-proven bucket.
+
 ## Blocked: the S2 seam architecture (three owner rulings required)
+
+> **HISTORICAL — RESOLVED.** The three stop conditions below (measurement facade,
+> new DesktopBridge ports, host-facing public export surface) were ruled in
+> rounds 1–2 (R1/R2/R3) and the 18 split rows + five NEW gaps were ruled and
+> landed in round 3 (G1–G7). See "Round 3 (G1–G7) + green — final" above for the
+> authoritative state. The text below is preserved as the record of the STOP.
 
 The 18 pending split rows are the entire remaining seam. Green (package
 typecheck/build, Desktop build, full test suites, qualification) is
@@ -586,7 +754,11 @@ providers/DesktopProductLifecycleRoot.tsx          (+ .test.tsx)
   qualification-asset copy script was removed with the canary), or the emitted
   asset/catalog URLs 404.
 
-## Verification matrix at this slice's head
+## Verification matrix (F1 head — SUPERSEDED)
+
+> **HISTORICAL.** This is the F1-head matrix. The authoritative final matrix is in
+> "Round 3 (G1–G7) + green — final" above (everything green except the 12
+> base-proven inherited failures). Preserved to show the seam-resolution arc.
 
 | Command | Result |
 | --- | --- |

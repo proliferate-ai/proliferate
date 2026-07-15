@@ -38,8 +38,10 @@ canonical feature spec are the durable handoff.
 Current handoff:
 
 - Current PR: Move the Desktop Product into ProductClient — implementation
-  (mechanical move landed; blocked at the seam architecture pending three owner
-  rulings — see §9).
+  complete, green pending review. Mechanical move + full seam architecture
+  landed (rounds 1–3 rulings R1–R5 + G1–G7 + 9 ratified ledger amendments); the
+  whole battery/scans are green except 12 base-proven pre-existing test failures
+  (6 files, inherited) — see §9.
 - Next PR: Legacy Web replacement — provisional.
 
 - Repository: `proliferate-ai/proliferate`.
@@ -103,7 +105,7 @@ Current handoff:
 | Route Shared Identity and Navigation Through ProductHost | Read normalized auth identity/operations, deployment base URL, and the single Cloud client through the host; close the ordered-query-pairs and fragment/callback contract gaps; route each inbound deep link through one lossless `ProductEntry` lifecycle and delete the legacy parallel navigation decoder. | [`web-desktop-client-unification-d1e.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1e.md), base `0eab251fd35d26022165f7f0852db2885a8c4093`; PR #1180 merge `06bf880a1b98c6694bcf029badcc9fe5823111de` | Complete |
 | Route Shared Persistence and Telemetry Through ProductHost | Re-back product storage onto the existing Tauri store and route movable product persistence through `host.storage` with zero migration; route product telemetry identity/tags/route-classification/single `screen_viewed`/capture through the typed `host.telemetry` facade; make the Query client product-owned with injected capture; split the mount into host-owned `DesktopHostProviders`, `ProductProviderRoot`, and `ProductLifecycleRoot`. | [`web-desktop-client-unification-d1f.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1f.md), base `06bf880a1b98c6694bcf029badcc9fe5823111de`; PR #1182 merge `f93afce8190bba943277d588c9bfb0d051c615c9` | Complete |
 | Prove ProductClient Extraction Mechanics | Prove the host mount envelope, compiled assets/builds, move ledger/import codemod, minimal browser host, and fail-closed migration boundaries before the source move. | [`web-desktop-client-unification-d1g.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1g.md), base `f93afce8190bba943277d588c9bfb0d051c615c9`; PR #1195 merge `9757e86de` | Complete |
-| Move the Desktop Product into ProductClient | Move the working Desktop product into ProductClient and leave Desktop as a thin native host. | [`web-desktop-client-unification-d1h.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1h.md), base `1d00437565d4cdce47cf4dc41f2ea19eb2f31f28`. Mechanical move + all mechanically-clean seam cohorts landed (rounds 1–2 rulings R1/R3/R4/R5 + auth-probe promotion; package `tsc` 315 → 47); blocked to green on five NEW capability/ownership gaps absent from the ledger and rounds 1–2 — see §9. | Implementation |
+| Move the Desktop Product into ProductClient | Move the working Desktop product into ProductClient and leave Desktop as a thin native host. | [`web-desktop-client-unification-d1h.md`](../../codebase/systems/product/clients/web-desktop-unification/migration/d1h.md), base `1d00437565d4cdce47cf4dc41f2ea19eb2f31f28`. Mechanical move + full seam architecture landed (rounds 1–3 rulings R1–R5 + G1–G7 + 9 ratified ledger amendments); package typecheck/build, desktop build (lazy authenticated split verified), desktop + package vitest, qualification proof, and all boundary/structure/ledger scans green; 12 base-proven pre-existing test failures (6 files) remain inherited — see §9. | Implementation (green, pending review) |
 | Legacy Web replacement | Delete the duplicate Web product and mount the same ProductClient from a thin browser host with `desktop: null`. | Browser host/auth contract and shared-product proof required. | Directional |
 | Hosted Web qualification and cutover | Qualify both hosts, Web performance, managed-cloud flows, and every external callback/return producer. | §11 external-configuration gate applies. | Directional |
 | Self-hosted Web | Add self-hosted Web configuration, deployment, and documentation after hosted Web is clean. | Separate follow-up contract. | Deferred follow-up |
@@ -381,43 +383,56 @@ qualification canary deleted. A post-move completion proof
 the pre-move ledger checker necessarily fails once the `git mv`s land) reports
 every `move`/`delete`/`retain` row satisfied exactly once.
 
-Rounds 1–2 resolved the original three stop conditions above (R1 measurement
-port, R2 bridge ports, R3 reverse seam) and F1–F4 landed the mechanically-clean
-work: R1 (F1), the forward-seam cohorts + auth-probe promotion (F3), R3 + R4 (F2),
-and R5 gate config (F4). Package `tsc` fell **315 → 47** and
-`PRODUCT_CLIENT_FORBIDDEN_IMPORT` **272 → 50**.
+Rounds 1–2 resolved the original three stop conditions (R1 measurement port, R2
+bridge ports, R3 reverse seam); **round 3 (G1–G7) ruled the five NEW
+capability/ownership gaps and the coupled behavior-sensitive items**, and all of
+it has now landed. Package `tsc` fell **315 → 0**, `PRODUCT_CLIENT_FORBIDDEN_IMPORT`
+**272 → 0**, and `LARGE_FRONTEND_FILE`/structure-report totals to **0**.
 
-Still blocked to green on **five NEW capability/ownership gaps** absent from both
-the ledger and rounds 1–2 (contract stop conditions — surfaced, not resolved by
-inventing capabilities or changing behavior):
+Round-3 rulings, all executed:
 
-1. **Updater cluster** (`use-updater`/`use-app-version`/`updater-dev-mock`, 16
-   errors) — `retain` yet product-consumed stateful hooks reaching raw host
-   telemetry + persistence from a module-level scheduler; needs a move ruling + DI
-   to `host.telemetry`/`host.storage`.
-2. **Anonymous-telemetry install id** (2) — a `crypto.randomUUID()` provably
-   distinct from the worker install id; needs a new host capability.
-3. **Native render diagnostics** (1) — `AppErrorBoundary` writes the raw-Tauri
-   renderer log; `host.telemetry.captureException` would divert to Sentry
-   (behavior change); needs a capability or an accepted delta.
-4. **Cloud access-token holdout** (3) — `getDesktopCloudAccessToken`; needs a
-   `host.auth` token accessor.
-5. **`use-window-actions`** (1) — raw `apply_macos_window_chrome`; needs a
-   `nativeUi` bridge method or an off-Desktop no-op ruling.
+1. **G1 Updater cluster** (`use-updater`/`use-app-version`/`updater-dev-mock`) —
+   moved into the package; hook-level telemetry via the typed product facade; the
+   module-level auto-check scheduler receives an injected `{track, captureException}`
+   armed from the hook; updater metadata persisted through `ProductStorage` with
+   identical keys (byte-compatible with the existing Tauri store). Events/payloads/
+   intervals byte-identical.
+2. **G2 Anonymous install id** — new narrow `ProductTelemetry.getAnonymousInstallId()`
+   accessor; Desktop reads the existing anonymous-telemetry bootstrap; `null`
+   off-Desktop and consumers omit the field.
+3. **G3 Native render diagnostics** — new `DesktopDiagnosticsBridge.reportRenderError`
+   (dedup/fingerprint moved into the Desktop impl); `AppErrorBoundary` calls it and
+   skips when `desktop` is null. Not diverted to Sentry.
+4. **G4 Cloud gateway token** — new `host.cloud.getSandboxGatewayAccessToken()`
+   (scoped sandbox-gateway resource token, not the auth session credential);
+   acquisition/refresh stays host-owned.
+5. **G5 Window chrome** — new `DesktopNativeUiBridge.applyMacWindowChrome`; no-op
+   off-Desktop; `use-window-actions` moved with it.
+6. **G6 Ledger amendments** — an "Amendments (ratified during the move)" section
+   appended to `move-ledger.md` listing the 9 relocated `retain → move` rows
+   (credentials/shell/workspace-scratch subtrees) plus the G1 updater rows, each
+   with evidence; `check-product-client-move-ledger-postmove.py` reads that section
+   and passes.
+7. **G7 remaining deferred** — R2 bridge ports (connect-server meta probe,
+   dev-handoff window port), the `use-organization-join-invitation-flow` split, the
+   `DesktopProductLifecycleRoot` split, `ensure-desktop-worker` `captureException`
+   DI, and the auth-store test doubles all landed.
 
-Coupled, landable-once-ruled but behavior-sensitive and deferred to the same unit:
-R2 bridge ports, `use-organization-join-invitation-flow`, `DesktopProductLifecycleRoot`,
-`ensure-desktop-worker` DI, and the auth-store test doubles.
+Every resolution routes through an existing or newly-ruled ProductHost/DesktopBridge
+capability; all promoted fetchers/URL helpers are base-URL-explicit (no host-config
+default in the package). No product behavior changed.
 
-Until these are ruled and built, package typecheck/build, the Desktop build, the
-qualification verify, `apps/desktop` vitest, and the frontend boundary/structure
-boundary scans stay red on the unresolved seams; Web build stays green (untouched)
-and the mechanical move + clean cohorts are complete and proven. **Open divergence
-(owner ratification):** F3 relocated the bridge-based
-`hooks/access/tauri/{credentials,shell,workspace-scratch}/**` subtrees (9 files),
-but the binding ledger still classifies them `retain`, so
-`check-product-client-move-ledger-postmove.py` fails on those 9 rows — bless the
-reclassification or revert the relocation.
+**State at this slice's head: green pending review.** Package typecheck/build,
+the Desktop build (with a verified lazy authenticated split — the public shell
+does not eagerly load the authenticated root; 335 served asset URLs all HTTP 200),
+desktop + package vitest, the qualification proof, and every boundary/structure/
+max-lines/docs/ledger scan pass. The only red is **12 base-proven pre-existing
+test failures across 6 files** (`keyboard-resolution` 4, `playground` 3,
+`navigation` 2, `highlighting` 1, `workspace-bootstrap-empty-session` 1,
+`AutomationRunLocationSelector` 1) — all fail byte-identically at the clean base
+`1d0043756` and are inherited, not move-caused. The previous divergence (F3's
+`retain → move` relocation of the bridge-based subtrees) is now resolved by the
+G6 ledger amendments and the postmove checker passes green.
 
 ## 10. Remaining migration map and gates
 

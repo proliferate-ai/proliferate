@@ -21,8 +21,8 @@ import { cpSync, existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
-const PKG_DIR = join(REPO_ROOT, "apps", "packages", "product-client");
+const PKG_DIR = fileURLToPath(new URL("..", import.meta.url));
+const REPO_ROOT = join(PKG_DIR, "..", "..", "..");
 const SRC_DIR = join(PKG_DIR, "src");
 const DIST_DIR = join(PKG_DIR, "dist");
 
@@ -34,10 +34,15 @@ const emitDist = process.argv.includes("--dist");
 
 function syncGeneratedCatalog() {
   if (!existsSync(CATALOG_SOURCE)) {
-    console.error(
-      `[copy-product-client-assets] missing catalog source: ${CATALOG_SOURCE}`,
+    // Pruned build contexts (e.g. the Vercel web deploy ignores /catalogs)
+    // install workspace packages without needing product-client's assets.
+    // Keep an already-synced copy if present; otherwise skip with a warning —
+    // the desktop/browser host builds always run from a full checkout.
+    if (existsSync(CATALOG_DEST)) return;
+    console.warn(
+      `[copy-product-client-assets] catalog source missing (pruned checkout?): ${CATALOG_SOURCE} — skipping sync`,
     );
-    process.exit(1);
+    return;
   }
   mkdirSync(GENERATED_DIR, { recursive: true });
   cpSync(CATALOG_SOURCE, CATALOG_DEST);
