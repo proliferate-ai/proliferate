@@ -1,4 +1,5 @@
 import type { AnyHarnessClientConnection } from "@anyharness/sdk-react";
+import type { ServerMeta } from "#product/lib/domain/auth/connect-server";
 
 /**
  * The typed Desktop bridge: product-level native capabilities grouped by
@@ -22,6 +23,7 @@ export interface DesktopBridge {
   ssh: DesktopSshBridge;
   scratch: DesktopScratchBridge;
   diagnostics: DesktopDiagnosticsBridge;
+  connect: DesktopConnectBridge;
 }
 
 /**
@@ -179,6 +181,38 @@ export interface DesktopNativeUiBridge {
    * non-native host; the product already gates the call on a mac desktop.
    */
   applyMacosWindowChrome(): Promise<void>;
+
+  /**
+   * Whether this render runs in the app's main native webview (dev-handoff
+   * window port, ruling R2b). `false` on a non-native host, so the dev
+   * browser-to-desktop handoff poll never starts there.
+   */
+  isMainWebviewAvailable(): boolean;
+  /**
+   * Bring the current native window forward (show + unminimize + focus) after a
+   * dev handoff navigates. A no-op on a non-native host. Dev-only.
+   */
+  revealCurrentWindow(): Promise<void>;
+}
+
+// --- Connect to server (self-hosted) ---------------------------------------
+
+/**
+ * Result of probing a candidate server's `/meta` endpoint. `ok:false` carries a
+ * user-facing reason (unreachable, or not a Proliferate server); it is never a
+ * thrown exception. The `meta` payload is the product-owned {@link ServerMeta}.
+ */
+export type ServerMetaProbeResult =
+  | { ok: true; meta: ServerMeta }
+  | { ok: false; error: string };
+
+/**
+ * The connect-to-self-hosted-server flow (ruling R2a). Only the `/meta` probe
+ * crosses the boundary; the product owns the flow's state machine and the
+ * deployment switch (through `host.deployment.switchDeployment`).
+ */
+export interface DesktopConnectBridge {
+  fetchServerMeta(url: string): Promise<ServerMetaProbeResult>;
 }
 
 // --- Updater ----------------------------------------------------------------

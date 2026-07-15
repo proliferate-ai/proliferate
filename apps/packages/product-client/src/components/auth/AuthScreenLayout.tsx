@@ -5,7 +5,7 @@ import { AuthAppearanceBoundary } from "#product/components/auth/AuthAppearanceB
 import { ConnectServerDialog } from "#product/components/auth/ConnectServerDialog";
 import { PasswordSignInForm } from "#product/components/auth/PasswordSignInForm";
 import { ThinkingText } from "#product/components/feedback/ThinkingText";
-import { useConnectServer } from "@/hooks/auth/workflows/use-connect-server";
+import { useConnectServer } from "#product/hooks/auth/workflows/use-connect-server";
 import { ArrowRight, GitHub } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { AUTH_LOGIN_LABELS, AUTH_SCREEN_LABELS, CONNECT_SERVER_LABELS } from "#product/copy/auth/auth-copy";

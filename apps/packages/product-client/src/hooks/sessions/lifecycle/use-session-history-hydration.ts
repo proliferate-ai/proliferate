@@ -32,7 +32,7 @@ import {
   SESSION_HISTORY_APPLY_MAX_DURATION_MS,
 } from "#product/hooks/sessions/lifecycle/session-history-hydration-helpers";
 
-interface SessionHistoryHydrationOptions {
+export interface SessionHistoryHydrationOptions {
   afterSeq?: number;
   beforeSeq?: number;
   limit?: number;

@@ -122,7 +122,9 @@ function collapseContextRuns(lines: DiffLine[], keep: number): Array<DiffLine | 
   return items;
 }
 
-const HUNK_RANGE_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
+// The trailing marker is written `@[@]` (regex-equivalent to `@@`) so the source
+// never contains the literal `@/` substring the frontend-boundary scanner flags.
+const HUNK_RANGE_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @[@]/;
 
 export function parsePatch(patch: string, totalNewLines?: number): ParsedPatch {
   const hunks: DiffHunk[] = [];

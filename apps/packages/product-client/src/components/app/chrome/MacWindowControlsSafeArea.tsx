@@ -1,10 +1,6 @@
 import { useEffect } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useTauriWindowActions } from "#product/hooks/access/tauri/use-window-actions";
-
-function isTauriDesktop(): boolean {
-  return typeof window !== "undefined"
-    && "__TAURI_INTERNALS__" in (window as unknown as Record<string, unknown>);
-}
 
 function isMacPlatform(): boolean {
   if (typeof navigator === "undefined") {
@@ -19,7 +15,10 @@ function isMacPlatform(): boolean {
 }
 
 export function MacWindowControlsSafeArea() {
-  const shouldRender = isTauriDesktop() && isMacPlatform();
+  // `host.desktop !== null` is the same distinction the raw `__TAURI_INTERNALS__`
+  // probe made pre-move: a native Desktop host with window chrome to inset.
+  const isDesktop = useProductHost().desktop !== null;
+  const shouldRender = isDesktop && isMacPlatform();
   const { applyMacWindowChrome } = useTauriWindowActions();
 
   useEffect(() => {

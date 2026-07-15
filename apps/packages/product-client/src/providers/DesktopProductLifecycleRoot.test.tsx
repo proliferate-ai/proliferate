@@ -9,8 +9,8 @@ import type {
 } from "@proliferate/product-client/host/product-host";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 
-import { useSessionDirectoryStore } from "@proliferate/product-client/internal/stores/sessions/session-directory-store";
-import { useHarnessConnectionStore } from "@proliferate/product-client/internal/stores/sessions/harness-connection-store";
+import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
 const runtimeMocks = vi.hoisted(() => ({
   bootstrapHarnessRuntime: vi.fn().mockResolvedValue(undefined),
@@ -20,13 +20,13 @@ const lifecycleMocks = vi.hoisted(() => ({
   useDesktopWorkerEnrollment: vi.fn(),
 }));
 
-vi.mock("@proliferate/product-client/internal/lib/access/anyharness/runtime-bootstrap", () => ({
+vi.mock("#product/lib/access/anyharness/runtime-bootstrap", () => ({
   bootstrapHarnessRuntime: runtimeMocks.bootstrapHarnessRuntime,
 }));
 vi.mock("@/hooks/access/tauri/use-update-restart-watcher", () => ({
   useUpdateRestartWatcher: lifecycleMocks.useUpdateRestartWatcher,
 }));
-vi.mock("@proliferate/product-client/internal/hooks/cloud/lifecycle/use-desktop-worker-enrollment", () => ({
+vi.mock("#product/hooks/cloud/lifecycle/use-desktop-worker-enrollment", () => ({
   useDesktopWorkerEnrollment: lifecycleMocks.useDesktopWorkerEnrollment,
 }));
 
@@ -34,20 +34,20 @@ vi.mock("@proliferate/product-domain/sessions/activity", () => ({
   isSessionSlotBusy: (snapshot: { busy?: boolean } | null) =>
     snapshot?.busy === true,
 }));
-vi.mock("@proliferate/product-client/internal/lib/domain/sessions/directory/directory-activity", () => ({
+vi.mock("#product/lib/domain/sessions/directory/directory-activity", () => ({
   activitySnapshotFromDirectoryEntry: (entry: unknown) => entry,
   // Also mocked because the session-directory store imports it at module load.
   activityFromTranscript: () => ({}),
 }));
-vi.mock("@proliferate/product-client/internal/hooks/app/lifecycle/use-workspace-activity-indicator", () => ({
+vi.mock("#product/hooks/app/lifecycle/use-workspace-activity-indicator", () => ({
   useWorkspaceActivityIndicator: vi.fn(),
 }));
-vi.mock("@proliferate/product-client/internal/hooks/preferences/lifecycle/use-desktop-zoom-preference-lifecycle", () => ({
+vi.mock("#product/hooks/preferences/lifecycle/use-desktop-zoom-preference-lifecycle", () => ({
   useDesktopZoomPreferenceLifecycle: vi.fn(),
 }));
 
-import { useWorkspaceActivityIndicator } from "@proliferate/product-client/internal/hooks/app/lifecycle/use-workspace-activity-indicator";
-import { useDesktopZoomPreferenceLifecycle } from "@proliferate/product-client/internal/hooks/preferences/lifecycle/use-desktop-zoom-preference-lifecycle";
+import { useWorkspaceActivityIndicator } from "#product/hooks/app/lifecycle/use-workspace-activity-indicator";
+import { useDesktopZoomPreferenceLifecycle } from "#product/hooks/preferences/lifecycle/use-desktop-zoom-preference-lifecycle";
 import { DesktopProductLifecycleRoot } from "./DesktopProductLifecycleRoot";
 
 type Entries = Record<string, { busy: boolean }>;
@@ -98,7 +98,10 @@ function makeHost(
       cancelLogin: async () => {},
       logout: async () => ({ provider: "github" }),
     },
-    cloud: { client: null },
+    cloud: {
+      client: null,
+      getSandboxGatewayAccessToken: async () => "test-token",
+    },
     storage: {
       getItem: async () => null,
       setItem: async () => {},
@@ -117,6 +120,7 @@ function makeHost(
       setTag: () => {},
       routeChanged: () => {},
       getSupportContext: () => ({ clientReleaseId: "test" }),
+      getAnonymousInstallId: async () => null,
     },
     desktop,
   };

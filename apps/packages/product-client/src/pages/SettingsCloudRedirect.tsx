@@ -1,13 +1,9 @@
 import { useEffect } from "react"
 import { Navigate, useLocation } from "react-router-dom"
 import { RedirectCallbackScreen } from "@proliferate/product-ui/auth/RedirectCallbackScreen"
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider"
 
 const LOCALHOST_NAMES = new Set(["localhost", "127.0.0.1", "::1"])
-
-function isTauriDesktop(): boolean {
-  return typeof window !== "undefined"
-    && "__TAURI_INTERNALS__" in (window as unknown as Record<string, unknown>)
-}
 
 function desktopDeepLinkScheme(): "proliferate" | "proliferate-local" {
   return LOCALHOST_NAMES.has(window.location.hostname)
@@ -51,7 +47,11 @@ function StripeReturnHandoff({ deepLinkUrl }: { deepLinkUrl: string }) {
 
 export function SettingsCloudRedirect() {
   const location = useLocation()
-  if (!isTauriDesktop()) {
+  // In a browser (no Desktop bridge) hand the Stripe return off to the desktop
+  // app via deep link; on Desktop navigate in-app. `host.desktop !== null` is
+  // the same distinction the raw `__TAURI_INTERNALS__` probe made pre-move.
+  const isDesktop = useProductHost().desktop !== null
+  if (!isDesktop) {
     return <StripeReturnHandoff deepLinkUrl={cloudSettingsDeepLink(location.search)} />
   }
 

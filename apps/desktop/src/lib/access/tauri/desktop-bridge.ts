@@ -33,9 +33,12 @@ import { showNativeContextMenu } from "./context-menu";
 import { listenForShortcutMenuEvents } from "./menu";
 import {
   applyMacWindowChrome,
+  isMainTauriWebviewAvailable,
+  revealCurrentWindow,
   setRunningAgentCount,
   setWebviewZoom,
 } from "./window";
+import { fetchServerMeta } from "./connect-server";
 import { reportReactRenderError } from "@/lib/integrations/telemetry/native-diagnostics";
 import { setWorkspaceActivityIndicator } from "./dock";
 import {
@@ -154,6 +157,8 @@ export const desktopBridge: DesktopBridge = {
     setWorkspaceActivity: setWorkspaceActivityIndicator,
     setZoom: setWebviewZoom,
     applyMacosWindowChrome: applyMacWindowChrome,
+    isMainWebviewAvailable: isMainTauriWebviewAvailable,
+    revealCurrentWindow,
   },
 
   updater: {
@@ -252,5 +257,9 @@ export const desktopBridge: DesktopBridge = {
     stageAttachment: stageSupportReportAttachment,
     readAttachment: readStagedSupportReportAttachment,
     deleteAttachment: deleteStagedSupportReportAttachment,
+  },
+
+  connect: {
+    fetchServerMeta,
   },
 };

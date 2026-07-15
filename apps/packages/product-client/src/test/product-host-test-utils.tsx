@@ -1,5 +1,5 @@
 import type { ReactElement, ReactNode } from "react";
-import { render } from "@testing-library/react";
+import { render, type RenderResult } from "@testing-library/react";
 
 import type { ProductHost } from "@proliferate/product-client/host/product-host";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
@@ -27,7 +27,7 @@ export {
 export function renderWithProductHost(
   ui: ReactElement,
   options?: TestProductHostOptions,
-) {
+): RenderResult & { host: ProductHost } {
   const host = makeTestProductHost(options);
   return {
     host,

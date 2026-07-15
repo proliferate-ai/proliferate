@@ -1,16 +1,12 @@
 import { useCallback, useMemo, useState } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { CONNECT_SERVER_LABELS } from "@proliferate/product-client/internal/copy/auth/auth-copy";
-import { fetchServerMeta } from "@/lib/access/tauri/connect-server";
-import { isDesktopVersionSupported } from "@proliferate/product-client/internal/lib/domain/capabilities/version-compat";
-import {
-  getRuntimeDesktopAppConfig,
-  isOfficialHostedApiBaseUrl,
-} from "@/lib/infra/proliferate-api";
+import { CONNECT_SERVER_LABELS } from "#product/copy/auth/auth-copy";
+import { isDesktopVersionSupported } from "#product/lib/domain/capabilities/version-compat";
+import { isOfficialHostedApiBaseUrl } from "#product/lib/infra/proliferate-api";
 import {
   normalizeServerUrl,
   type ServerMeta,
-} from "@proliferate/product-client/internal/lib/domain/auth/connect-server";
+} from "#product/lib/domain/auth/connect-server";
 
 export type ConnectServerStep =
   | "closed"
@@ -70,17 +66,17 @@ export function useConnectServer(): UseConnectServerResult {
   const [pendingUrl, setPendingUrl] = useState<string | null>(null);
   const [versionWarning, setVersionWarning] = useState<string | null>(null);
 
-  const currentConfig = getRuntimeDesktopAppConfig();
+  const currentApiBaseUrl = deployment.apiBaseUrl;
   const connectedServerHost = useMemo(() => {
-    if (!currentConfig.apiBaseUrl || isOfficialHostedApiBaseUrl(currentConfig.apiBaseUrl)) {
+    if (!currentApiBaseUrl || isOfficialHostedApiBaseUrl(currentApiBaseUrl)) {
       return null;
     }
     try {
-      return new URL(currentConfig.apiBaseUrl).host;
+      return new URL(currentApiBaseUrl).host;
     } catch {
-      return currentConfig.apiBaseUrl;
+      return currentApiBaseUrl;
     }
-  }, [currentConfig.apiBaseUrl]);
+  }, [currentApiBaseUrl]);
 
   const open = useCallback(() => {
     if (!available) return;
@@ -99,7 +95,7 @@ export function useConnectServer(): UseConnectServerResult {
   }, []);
 
   const runCheck = useCallback(async (rawUrl: string) => {
-    if (!available) return;
+    if (!available || !desktop) return;
     const normalized = normalizeServerUrl(rawUrl);
     if (!normalized.ok) {
       setError(normalized.error);
@@ -109,7 +105,7 @@ export function useConnectServer(): UseConnectServerResult {
 
     setError(null);
     setStep("checking");
-    const result = await fetchServerMeta(normalized.url);
+    const result = await desktop.connect.fetchServerMeta(normalized.url);
     if (!result.ok) {
       setError(result.error);
       setStep("entry");
@@ -132,7 +128,7 @@ export function useConnectServer(): UseConnectServerResult {
     }
     setVersionWarning(warning);
     setStep("trust-confirm");
-  }, [available, updater]);
+  }, [available, desktop, updater]);
 
   const submitUrl = useCallback(async () => {
     await runCheck(url);

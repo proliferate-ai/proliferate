@@ -2367,8 +2367,11 @@ updater cluster additionally routes its module-level scheduler telemetry and
 its `lastCheckedAt` persistence through injected product facades (round-3 **G1**)
 with byte-identical event names, payloads, intervals, and storage keys;
 `use-window-actions` calls the new `nativeUi.applyMacosWindowChrome` bridge port
-(round-3 **G5**). Their tests move with them and run under the package vitest
-lane. The raw-Tauri `use-update-restart-watcher` (854/855) stays `retain`.
+(round-3 **G5**). `use-update-restart-watcher` (854/855) is fully bridge-based
+(reads `host.desktop.updater` + the moved updater store / running-agent-count
+hooks — no raw Tauri), so it moves with the `DesktopProductLifecycleRoot` split
+that consumes it. Their tests move with them and run under the package vitest
+lane.
 
 ```ledger-amendments
 hooks/access/tauri/app/query-keys.ts	move	G1 updater cluster: app-version query key; consumed only by the moved use-app-version
@@ -2378,6 +2381,8 @@ hooks/access/tauri/credentials/use-local-agent-credentials.test.tsx	move	test of
 hooks/access/tauri/credentials/use-local-agent-credentials.ts	move	pure host.desktop.localCredentials consumer (F3 relocation); retain was a stale bucket default
 hooks/access/tauri/shell/query-keys.ts	move	pure host.desktop.files consumer (F3 relocation); retain was a stale bucket default
 hooks/access/tauri/shell/use-available-editors.ts	move	pure host.desktop.files consumer (F3 relocation); retain was a stale bucket default
+hooks/access/tauri/use-update-restart-watcher.test.tsx	move	moves with the DesktopProductLifecycleRoot split; fully bridge-based (host.desktop.updater), no raw Tauri
+hooks/access/tauri/use-update-restart-watcher.ts	move	moves with the DesktopProductLifecycleRoot split; fully bridge-based (host.desktop.updater), no raw Tauri
 hooks/access/tauri/updater-dev-mock.test.ts	move	G1 updater cluster: dev-only mock test; runs in the package vitest lane
 hooks/access/tauri/updater-dev-mock.ts	move	G1 updater cluster: dev-only localStorage/import.meta.env mock, no host transport
 hooks/access/tauri/use-updater.test.ts	move	G1 updater cluster: use-updater test; runs in the package vitest lane

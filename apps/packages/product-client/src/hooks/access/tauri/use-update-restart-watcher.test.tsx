@@ -4,11 +4,11 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DesktopUpdaterBridge } from "@proliferate/product-client/host/desktop-bridge";
 
-import { useUpdaterStore } from "@proliferate/product-client/internal/stores/updater/updater-store";
+import { useUpdaterStore } from "#product/stores/updater/updater-store";
 
 const runningAgentState = vi.hoisted(() => ({ count: 0 }));
 
-vi.mock("@proliferate/product-client/internal/hooks/app/lifecycle/use-running-agent-count", () => ({
+vi.mock("#product/hooks/app/lifecycle/use-running-agent-count", () => ({
   useRunningAgentCount: () => runningAgentState.count,
 }));
 

@@ -28,7 +28,7 @@ import {
   useSessionInteractionResolutionActions,
 } from "#product/hooks/sessions/workflows/use-session-interaction-resolution-actions";
 
-interface SendPromptInput {
+export interface SendPromptInput {
   sessionId: string;
   text: string;
   blocks?: PromptInputBlock[];

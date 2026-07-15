@@ -13,7 +13,7 @@ import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-vi
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
 
-interface WorkspaceFileConnectionContext {
+export interface WorkspaceFileConnectionContext {
   materializedWorkspaceId: string;
   anyharnessWorkspaceId: string;
   runtimeUrl: string;

@@ -4,7 +4,7 @@ import type { DesktopDiagnosticsBridge } from "@proliferate/product-client/host/
 
 import { useConnectivityListeners } from "#product/hooks/app/lifecycle/use-connectivity-listeners"
 import { useDebugSessionActivity } from "#product/hooks/app/lifecycle/use-debug-session-activity"
-import { useDevDesktopHandoff } from "@/hooks/app/lifecycle/use-dev-desktop-handoff"
+import { useDevDesktopHandoff } from "#product/hooks/app/lifecycle/use-dev-desktop-handoff"
 import { useProductEntryRouting } from "#product/hooks/app/lifecycle/use-product-entry-routing"
 import { useOrganizationJoinAuthLaunch } from "#product/hooks/organizations/lifecycle/use-organization-join-auth-launch"
 import { useAppShortcuts } from "#product/hooks/app/lifecycle/use-app-shortcuts"
@@ -36,7 +36,7 @@ import {
   recordBootDiagnosticOnce,
 } from "#product/lib/infra/measurement/measurement-port"
 import { AppCommandActionsProvider } from "#product/providers/AppCommandActionsProvider"
-import { DesktopProductLifecycleRoot } from "@/providers/DesktopProductLifecycleRoot"
+import { DesktopProductLifecycleRoot } from "#product/providers/DesktopProductLifecycleRoot"
 import { AppErrorBoundary } from "#product/components/app/AppErrorBoundary"
 import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth"
 

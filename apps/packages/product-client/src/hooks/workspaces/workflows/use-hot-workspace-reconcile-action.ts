@@ -32,7 +32,7 @@ import {
 const EMPTY_WORKSPACES = [] as const;
 const WORKSPACE_RECONCILE_SESSION_LIST_TIMEOUT_MS = 3_000;
 
-interface ReconcileHotWorkspaceInput {
+export interface ReconcileHotWorkspaceInput {
   workspaceId: string;
   logicalWorkspaceId: string;
   workspaceConnection: AnyHarnessResolvedConnection;

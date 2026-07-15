@@ -13,14 +13,15 @@ const tauriMocks = vi.hoisted(() => ({
 vi.mock("@proliferate/cloud-sdk", () => ({
   enrollDesktopWorker: sdkMocks.enrollDesktopWorker,
 }));
-vi.mock("@/lib/integrations/telemetry/client", () => ({
-  captureTelemetryException: vi.fn(),
-}));
 
 import {
   ensureDesktopWorker,
   teardownDesktopWorker,
 } from "#product/lib/workflows/cloud/ensure-desktop-worker";
+
+// The telemetry capture is now injected (ruling G7); the workflow no longer
+// imports a telemetry client.
+const captureException = vi.fn();
 
 const worker = {
   getInstallId: tauriMocks.getDesktopInstallId,
@@ -41,7 +42,7 @@ describe("ensureDesktopWorker", () => {
 
   it("enrolls with the caller-supplied organization id", async () => {
     await expect(
-      ensureDesktopWorker("org-1", worker, { onFailure: vi.fn() }),
+      ensureDesktopWorker("org-1", worker, { onFailure: vi.fn(), captureException }),
     ).resolves.toBe(true);
 
     expect(sdkMocks.enrollDesktopWorker).toHaveBeenCalledWith("install-1", "org-1");
@@ -53,7 +54,7 @@ describe("ensureDesktopWorker", () => {
 
   it("enrolls org-less users with a null organization id", async () => {
     await expect(
-      ensureDesktopWorker(null, worker, { onFailure: vi.fn() }),
+      ensureDesktopWorker(null, worker, { onFailure: vi.fn(), captureException }),
     ).resolves.toBe(true);
 
     expect(sdkMocks.enrollDesktopWorker).toHaveBeenCalledWith("install-1", null);
@@ -64,7 +65,7 @@ describe("ensureDesktopWorker", () => {
     const onFailure = vi.fn();
     sdkMocks.enrollDesktopWorker.mockRejectedValue(error);
 
-    await expect(ensureDesktopWorker(null, worker, { onFailure })).resolves.toBe(false);
+    await expect(ensureDesktopWorker(null, worker, { onFailure, captureException })).resolves.toBe(false);
 
     expect(tauriMocks.ensureDesktopDispatchWorker).not.toHaveBeenCalled();
     expect(onFailure).toHaveBeenCalledWith(error);
@@ -78,6 +79,7 @@ describe("ensureDesktopWorker", () => {
         onFailure: () => {
           throw new Error("toast unavailable");
         },
+        captureException,
       }),
     ).resolves.toBe(false);
   });
@@ -85,7 +87,7 @@ describe("ensureDesktopWorker", () => {
   it("stops the local worker through the bridge", async () => {
     tauriMocks.stopDesktopDispatchWorker.mockResolvedValue(undefined);
 
-    await teardownDesktopWorker(worker);
+    await teardownDesktopWorker(worker, captureException);
 
     expect(tauriMocks.stopDesktopDispatchWorker).toHaveBeenCalledTimes(1);
   });

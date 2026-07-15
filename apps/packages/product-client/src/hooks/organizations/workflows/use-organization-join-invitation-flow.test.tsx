@@ -4,7 +4,7 @@ import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import { useAuthStore } from "#product/test/auth-store-double";
 import { useOrganizationJoinInvitationFlow } from "./use-organization-join-invitation-flow";
 
 const hostMocks = vi.hoisted(() => ({
@@ -29,8 +29,8 @@ const authMethodsMocks = vi.hoisted(() => ({
 // The flow launches auth through host.auth.startLogin; bridge the store so the
 // anonymous/authenticated gating still steers via setState.
 vi.mock("@proliferate/product-client/host/ProductHostProvider", async () => {
-  const { useAuthStore } = await import("@/stores/auth/auth-store");
-  const { authStoreBridgedHost } = await import("@proliferate/product-client/internal/test/product-host-fixtures");
+  const { useAuthStore } = await import("#product/test/auth-store-double");
+  const { authStoreBridgedHost } = await import("#product/test/product-host-fixtures");
   return {
     useProductHost: () =>
       authStoreBridgedHost(
@@ -41,7 +41,7 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", async () => {
   };
 });
 
-vi.mock("@/hooks/auth/workflows/use-connect-server", () => ({
+vi.mock("#product/hooks/auth/workflows/use-connect-server", () => ({
   useConnectServer: () => ({
     available: connectServerMocks.available,
     step: connectServerMocks.step,

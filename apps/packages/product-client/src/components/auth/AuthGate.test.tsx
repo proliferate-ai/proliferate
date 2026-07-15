@@ -14,7 +14,7 @@ import { SessionCheckScreen } from "#product/components/auth/SessionCheckScreen"
 // through useProductHost, and reading the store selector here re-subscribes the
 // gate so a setState still re-renders it.
 vi.mock("@proliferate/product-client/host/ProductHostProvider", async () => {
-  const { useAuthStore } = await import("@/stores/auth/auth-store");
+  const { useAuthStore } = await import("#product/test/auth-store-double");
   return {
     useProductHost: () => {
       const status = useAuthStore((s) => s.status);
@@ -91,7 +91,7 @@ import {
   DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES,
   UI_FONT_SCALES,
 } from "#product/lib/domain/preferences/appearance";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import { useAuthStore } from "#product/test/auth-store-double";
 
 afterEach(() => {
   cleanup();

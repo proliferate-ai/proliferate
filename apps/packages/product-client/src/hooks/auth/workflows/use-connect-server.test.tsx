@@ -22,19 +22,21 @@ const hostState = vi.hoisted(() => ({
   },
   desktop: {
     updater: { getVersion: mocks.getVersion },
-  } as { updater: { getVersion: () => Promise<string> } } | null,
+    connect: { fetchServerMeta: mocks.fetchServerMeta },
+  } as {
+    updater: { getVersion: () => Promise<string> };
+    connect: { fetchServerMeta: (url: string) => Promise<unknown> };
+  } | null,
 }));
 
 vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   useProductHost: () => hostState,
 }));
 
-vi.mock("@/lib/access/tauri/connect-server", () => ({
-  fetchServerMeta: mocks.fetchServerMeta,
-}));
-
-vi.mock("@/lib/infra/proliferate-api", () => ({
-  getRuntimeDesktopAppConfig: () => ({ apiBaseUrl: null }),
+// The connect-server meta probe is now a Desktop bridge port (ruling R2a); the
+// deployment origin is read from host.deployment. Keep the official-host check
+// returning true so connectedServerHost stays null, matching the prior mock.
+vi.mock("#product/lib/infra/proliferate-api", () => ({
   isOfficialHostedApiBaseUrl: () => true,
 }));
 
@@ -43,7 +45,10 @@ import { useConnectServer } from "./use-connect-server";
 describe("useConnectServer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    hostState.desktop = { updater: { getVersion: mocks.getVersion } };
+    hostState.desktop = {
+      updater: { getVersion: mocks.getVersion },
+      connect: { fetchServerMeta: mocks.fetchServerMeta },
+    };
     hostState.deployment.resetDeployment = mocks.resetDeployment;
     hostState.deployment.switchDeployment = mocks.switchDeployment;
     mocks.fetchServerMeta.mockResolvedValue({

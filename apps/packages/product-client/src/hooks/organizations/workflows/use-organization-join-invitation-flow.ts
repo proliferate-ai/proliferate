@@ -7,27 +7,23 @@ import {
 } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { useAuditedAuth } from "@proliferate/product-client/internal/hooks/auth/facade/use-audited-auth";
+import { useAuditedAuth } from "#product/hooks/auth/facade/use-audited-auth";
 import {
   useConnectServer,
   type UseConnectServerResult,
-} from "@/hooks/auth/workflows/use-connect-server";
+} from "#product/hooks/auth/workflows/use-connect-server";
 import {
   canFallbackToStandardInviteSignIn,
-} from "@proliferate/product-client/internal/lib/domain/organizations/join-auth";
+} from "#product/lib/domain/organizations/join-auth";
 import {
   clearPendingOrganizationJoinTarget,
   readPendingOrganizationJoinTarget,
   writePendingOrganizationJoinTarget,
-} from "@proliferate/product-client/internal/lib/access/persistence/organization-join-target";
-import { useProductStorageContext } from "@proliferate/product-client/internal/hooks/persistence/facade/use-product-storage-context";
-import { buildSettingsHref } from "@proliferate/product-client/internal/lib/domain/settings/navigation";
-import { getDesktopAuthMethods } from "@proliferate/product-client/internal/lib/access/cloud/auth-probes";
-import {
-  getProliferateApiBaseUrl,
-  getRuntimeDesktopAppConfig,
-  isOfficialHostedApiBaseUrl,
-} from "@/lib/infra/proliferate-api";
+} from "#product/lib/access/persistence/organization-join-target";
+import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
+import { buildSettingsHref } from "#product/lib/domain/settings/navigation";
+import { getDesktopAuthMethods } from "#product/lib/access/cloud/auth-probes";
+import { isOfficialHostedApiBaseUrl } from "#product/lib/infra/proliferate-api";
 
 /**
  * Normalize a URL to its origin (scheme + host + port, no path or trailing
@@ -51,8 +47,10 @@ function toOrigin(value: string | null | undefined): string | null {
  * itself an official hosted origin "matches" (Cloud invite on Cloud desktop —
  * no switch needed).
  */
-function joinServerOriginMatchesCurrent(joinServerOrigin: string): boolean {
-  const currentBaseUrl = getRuntimeDesktopAppConfig().apiBaseUrl;
+function joinServerOriginMatchesCurrent(
+  joinServerOrigin: string,
+  currentBaseUrl: string,
+): boolean {
   if (!currentBaseUrl || isOfficialHostedApiBaseUrl(currentBaseUrl)) {
     return isOfficialHostedApiBaseUrl(joinServerOrigin);
   }
@@ -76,7 +74,8 @@ export interface UseOrganizationJoinInvitationFlowResult {
 export function useOrganizationJoinInvitationFlow(): UseOrganizationJoinInvitationFlowResult {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { auth } = useProductHost();
+  const { auth, deployment } = useProductHost();
+  const apiBaseUrl = deployment.apiBaseUrl;
   const storage = useProductStorageContext();
   const authStatus = auth.state.status;
   const { startLogin } = useAuditedAuth();
@@ -127,7 +126,7 @@ export function useOrganizationJoinInvitationFlow(): UseOrganizationJoinInvitati
   const requiresServerSwitch = Boolean(
     transientJoinServerOrigin
     && connectServer.available
-    && !joinServerOriginMatchesCurrent(transientJoinServerOrigin),
+    && !joinServerOriginMatchesCurrent(transientJoinServerOrigin, apiBaseUrl),
   );
 
   useEffect(() => {
@@ -220,7 +219,7 @@ export function useOrganizationJoinInvitationFlow(): UseOrganizationJoinInvitati
       // a dead redirect. Cloud advertises github, so it keeps today's behavior;
       // a fetch failure also falls through to the SSO/GitHub path.
       try {
-        const methods = await getDesktopAuthMethods(getProliferateApiBaseUrl());
+        const methods = await getDesktopAuthMethods(apiBaseUrl);
         if (methods.passwordLogin && !methods.github) {
           setStatusMessage(
             "Sign in to accept this invitation. Use the sign-in form below.",

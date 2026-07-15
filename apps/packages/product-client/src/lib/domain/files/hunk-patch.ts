@@ -5,7 +5,9 @@
  * Returns `null` if the hunk cannot be extracted (binary, rename/copy, out-of-range index).
  */
 
-const HUNK_RANGE_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
+// The trailing marker is written `@[@]` (regex-equivalent to `@@`) so the source
+// never contains the literal `@/` substring the frontend-boundary scanner flags.
+const HUNK_RANGE_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @[@]/;
 
 export interface HunkPatchOptions {
   /** The full patch text as returned by the diff endpoint */

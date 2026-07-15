@@ -4,14 +4,14 @@ import type {
 } from "@proliferate/product-client/host/desktop-bridge";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 
-import { useExportRunningAgentCount } from "@proliferate/product-client/internal/hooks/app/lifecycle/use-export-running-agent-count";
-import { useDesktopRuntimeBootstrapLifecycle } from "@proliferate/product-client/internal/hooks/app/lifecycle/use-desktop-runtime-bootstrap-lifecycle";
-import { useUpdateRestartWatcher } from "@/hooks/access/tauri/use-update-restart-watcher";
-import { useDesktopWorkerEnrollment } from "@proliferate/product-client/internal/hooks/cloud/lifecycle/use-desktop-worker-enrollment";
-import { useWorkspaceActivityIndicator } from "@proliferate/product-client/internal/hooks/app/lifecycle/use-workspace-activity-indicator";
-import { useDesktopZoomPreferenceLifecycle } from "@proliferate/product-client/internal/hooks/preferences/lifecycle/use-desktop-zoom-preference-lifecycle";
-import { useNativeMenuCommandDispatcher } from "@proliferate/product-client/internal/hooks/shortcuts/lifecycle/use-native-menu-command-dispatcher";
-import { recordBootDiagnosticOnce } from "@/lib/infra/measurement/boot-stall-diagnostics";
+import { useExportRunningAgentCount } from "#product/hooks/app/lifecycle/use-export-running-agent-count";
+import { useDesktopRuntimeBootstrapLifecycle } from "#product/hooks/app/lifecycle/use-desktop-runtime-bootstrap-lifecycle";
+import { useUpdateRestartWatcher } from "#product/hooks/access/tauri/use-update-restart-watcher";
+import { useDesktopWorkerEnrollment } from "#product/hooks/cloud/lifecycle/use-desktop-worker-enrollment";
+import { useWorkspaceActivityIndicator } from "#product/hooks/app/lifecycle/use-workspace-activity-indicator";
+import { useDesktopZoomPreferenceLifecycle } from "#product/hooks/preferences/lifecycle/use-desktop-zoom-preference-lifecycle";
+import { useNativeMenuCommandDispatcher } from "#product/hooks/shortcuts/lifecycle/use-native-menu-command-dispatcher";
+import { recordBootDiagnosticOnce } from "#product/lib/infra/measurement/measurement-port";
 
 /**
  * The single Desktop product-lifecycle root, mounted outside auth and route

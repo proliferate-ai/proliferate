@@ -8,6 +8,7 @@ import {
 } from "#product/lib/workflows/cloud/ensure-desktop-worker";
 import { useOrganizationStore } from "#product/stores/organizations/organization-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
+import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
 
 // (user, org) key the desktop worker is currently enrolled for. Module-level
 // so remounts (or StrictMode double-effects) don't re-enroll for the same
@@ -54,6 +55,7 @@ export function useDesktopWorkerEnrollment(
     (state) => state.activeOrganizationId,
   );
   const showToast = useToastStore((state) => state.show);
+  const { captureException } = useProductTelemetry();
   const [retryNonce, setRetryNonce] = useState(0);
   useEffect(() => {
     if (authStatus === "loading") {
@@ -64,7 +66,7 @@ export function useDesktopWorkerEnrollment(
       // (any user) re-enrolls with a fresh identity.
       if (enrolledIdentityKey !== null) {
         enrolledIdentityKey = null;
-        void teardownDesktopWorker(worker);
+        void teardownDesktopWorker(worker, captureException);
       }
       return;
     }
@@ -87,6 +89,7 @@ export function useDesktopWorkerEnrollment(
         }
         showToast(desktopWorkerStartupFailureCopy(error), "error");
       },
+      captureException,
     }).then((enrolled) => {
       if (enrolled || enrolledIdentityKey !== nextIdentityKey) {
         return;
@@ -108,5 +111,5 @@ export function useDesktopWorkerEnrollment(
         window.clearTimeout(retryTimer);
       }
     };
-  }, [authStatus, authUserId, activeOrganizationId, retryNonce, showToast, worker]);
+  }, [authStatus, authUserId, activeOrganizationId, retryNonce, showToast, worker, captureException]);
 }

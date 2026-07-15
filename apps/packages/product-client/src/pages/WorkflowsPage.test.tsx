@@ -10,7 +10,7 @@ import {
   useLocation,
 } from "react-router-dom";
 import { WorkflowsPage } from "#product/pages/WorkflowsPage";
-import { useAuthStore } from "@/stores/auth/auth-store";
+import { useAuthStore } from "#product/test/auth-store-double";
 
 const workflowSurface = vi.hoisted(() => vi.fn());
 const authMode = vi.hoisted(() => ({ devBypassed: false }));
@@ -30,7 +30,7 @@ vi.mock("#product/lib/domain/auth/auth-mode", () => ({
 // WorkflowsPage reads normalized auth through the host; bridge the store so the
 // existing setState-driven tests keep steering it.
 vi.mock("@proliferate/product-client/host/ProductHostProvider", async () => {
-  const { useAuthStore } = await import("@/stores/auth/auth-store");
+  const { useAuthStore } = await import("#product/test/auth-store-double");
   const { authStoreBridgedHost } = await import("#product/test/product-host-fixtures");
   return {
     useProductHost: () =>

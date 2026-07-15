@@ -8,8 +8,8 @@ import type {
  * Product-owned measurement port (WDU slice 04, ruling R1).
  *
  * The moved product tree calls the Desktop diagnostics/measurement subsystem in
- * ~170 hot-path sites. That subsystem stays host-retained (`apps/desktop/src/lib/
- * infra/measurement/**`) and is deliberately NOT a `ProductHost` capability — it
+ * ~170 hot-path sites. That subsystem stays host-retained (in the Desktop host's
+ * `lib/infra/measurement` tree) and is deliberately NOT a `ProductHost` capability — it
  * is dev-only instrumentation. This module is the single seam the moved code
  * imports instead: it re-exposes exactly the functions/types those call sites
  * use (identical names, so call sites change only their import path) and routes

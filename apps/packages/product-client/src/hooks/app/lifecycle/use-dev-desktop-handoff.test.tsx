@@ -4,7 +4,7 @@ import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
-import { useDevDesktopHandoff } from "@/hooks/app/lifecycle/use-dev-desktop-handoff";
+import { useDevDesktopHandoff } from "./use-dev-desktop-handoff";
 
 const handoffMocks = vi.hoisted(() => ({
   markDevDesktopHandoffOpened: vi.fn(),
@@ -13,14 +13,23 @@ const handoffMocks = vi.hoisted(() => ({
   revealCurrentWindow: vi.fn(),
 }));
 
-vi.mock("@proliferate/product-client/internal/lib/access/cloud/dev-desktop-handoff", () => ({
+vi.mock("#product/lib/access/cloud/dev-desktop-handoff", () => ({
   markDevDesktopHandoffOpened: handoffMocks.markDevDesktopHandoffOpened,
   takeDevDesktopHandoff: handoffMocks.takeDevDesktopHandoff,
 }));
 
-vi.mock("@/lib/access/tauri/window", () => ({
-  isMainTauriWebviewAvailable: handoffMocks.isMainTauriWebviewAvailable,
-  revealCurrentWindow: handoffMocks.revealCurrentWindow,
+// The window ops are now Desktop bridge ports (ruling R2b); the hook reads them
+// from host.desktop.nativeUi and the deployment base URL from host.deployment.
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
+  useProductHost: () => ({
+    deployment: { apiBaseUrl: "https://api.example.test" },
+    desktop: {
+      nativeUi: {
+        isMainWebviewAvailable: handoffMocks.isMainTauriWebviewAvailable,
+        revealCurrentWindow: handoffMocks.revealCurrentWindow,
+      },
+    },
+  }),
 }));
 
 describe("useDevDesktopHandoff", () => {
@@ -67,7 +76,10 @@ describe("useDevDesktopHandoff", () => {
       );
     });
     expect(handoffMocks.revealCurrentWindow).toHaveBeenCalledTimes(1);
-    expect(handoffMocks.markDevDesktopHandoffOpened).toHaveBeenCalledWith("handoff-1");
+    expect(handoffMocks.markDevDesktopHandoffOpened).toHaveBeenCalledWith(
+      expect.any(String),
+      "handoff-1",
+    );
   });
 
   it("ignores replayed handoff ids after navigating once", async () => {

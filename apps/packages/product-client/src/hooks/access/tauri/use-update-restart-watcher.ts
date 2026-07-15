@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { DesktopUpdaterBridge } from "@proliferate/product-client/host/desktop-bridge";
-import { useUpdaterStore } from "@proliferate/product-client/internal/stores/updater/updater-store";
-import { useRunningAgentCount } from "@proliferate/product-client/internal/hooks/app/lifecycle/use-running-agent-count";
+import { useUpdaterStore } from "#product/stores/updater/updater-store";
+import { useRunningAgentCount } from "#product/hooks/app/lifecycle/use-running-agent-count";
 
 // Once the user picks "Restart when they finish", wait until the app is genuinely idle
 // before relaunching. The short debounce avoids relaunching on a transient gap between

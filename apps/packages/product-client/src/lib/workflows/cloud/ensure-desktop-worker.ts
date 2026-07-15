@@ -1,6 +1,16 @@
 import { enrollDesktopWorker } from "@proliferate/cloud-sdk";
 import type { DesktopWorkerBridge } from "@proliferate/product-client/host/desktop-bridge";
-import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
+import type { ErrorContext } from "@proliferate/product-client/host/product-host";
+
+/**
+ * Capture an exception through the injected product telemetry facade
+ * (ruling G7). These fire-and-forget lifecycle workflows have no React host
+ * handle, so the calling hook passes `useProductTelemetry().captureException`.
+ */
+export type CaptureWorkerException = (
+  error: unknown,
+  context?: ErrorContext,
+) => void;
 
 // ensureDesktopWorker and teardownDesktopWorker both mutate the single
 // physical worker process, but their callers dispatch them fire-and-forget.
@@ -11,6 +21,7 @@ let workerLifecycleChain: Promise<unknown> = Promise.resolve();
 
 export interface EnsureDesktopWorkerDeps {
   onFailure: (error: unknown) => void;
+  captureException: CaptureWorkerException;
 }
 
 function enqueueWorkerLifecycleTask<T>(task: () => Promise<T>): Promise<T> {
@@ -45,7 +56,7 @@ export function ensureDesktopWorker(
       });
       return true;
     } catch (error) {
-      captureTelemetryException(error, {
+      deps.captureException(error, {
         tags: {
           action: "ensure-desktop-worker",
           domain: "cloud",
@@ -54,7 +65,7 @@ export function ensureDesktopWorker(
       try {
         deps.onFailure(error);
       } catch (notificationError) {
-        captureTelemetryException(notificationError, {
+        deps.captureException(notificationError, {
           tags: {
             action: "notify-desktop-worker-failure",
             domain: "cloud",
@@ -72,12 +83,15 @@ export function ensureDesktopWorker(
 // separately in Desktop auth transport (while the auth token is still valid)
 // and via the predecessor-retiring enrollment of the next identity.
 // Never blocks or throws.
-export function teardownDesktopWorker(worker: DesktopWorkerBridge): Promise<void> {
+export function teardownDesktopWorker(
+  worker: DesktopWorkerBridge,
+  captureException: CaptureWorkerException,
+): Promise<void> {
   return enqueueWorkerLifecycleTask(async () => {
     try {
       await worker.stop();
     } catch (error) {
-      captureTelemetryException(error, {
+      captureException(error, {
         tags: {
           action: "teardown-desktop-worker",
           domain: "cloud",

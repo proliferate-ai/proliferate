@@ -36,7 +36,7 @@ import {
 } from "#product/hooks/auth/facade/use-product-auth";
 import { useAuditedAuth } from "#product/hooks/auth/facade/use-audited-auth";
 import { useGitHubSignIn } from "#product/hooks/auth/workflows/use-github-sign-in";
-import { useOrganizationJoinInvitationFlow } from "@/hooks/organizations/workflows/use-organization-join-invitation-flow";
+import { useOrganizationJoinInvitationFlow } from "#product/hooks/organizations/workflows/use-organization-join-invitation-flow";
 import { useJoinedOrganizationActivation } from "#product/hooks/organizations/workflows/use-joined-organization-activation";
 import { buildGitHubOAuthAppSettingsUrl } from "#product/lib/access/cloud/auth-probes";
 import type { OrganizationInvitationRecord } from "#product/lib/domain/organizations/organization-records";
