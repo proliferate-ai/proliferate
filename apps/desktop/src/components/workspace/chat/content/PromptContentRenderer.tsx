@@ -14,6 +14,8 @@ import {
 } from "@proliferate/product-domain/chats/composer/prompt-display-parts";
 import type { PromptDraftAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-attachment-rules";
 import { tokenizeSerializedFileLinks } from "@/lib/domain/chat/composer/file-mention-links";
+import { useChatContentSearchPaint } from "@proliferate/product-ui/chat/transcript/ChatContentSearchContext";
+import { markSearchChildren } from "@proliferate/product-ui/chat/transcript/MarkdownContentSearchMarks";
 
 type PromptContentRendererVariant = "transcript" | "compact";
 type PromptContentRendererLayout = "stack" | "wrap" | "auto";
@@ -127,12 +129,23 @@ function PromptDisplayPartView({
 
 function FileLinkedText({ text }: { text: string }) {
   const tokens = tokenizeSerializedFileLinks(text);
+  // Chat content-search paint for user-message prose. Only applies inside a
+  // committed transcript turn row (not the composer or in-flight prompt rows,
+  // which the search index doesn't cover).
+  const paint = useChatContentSearchPaint();
+  const searchPaint = paint?.rowUnitId.startsWith("chatrow:turn:") ? paint : null;
 
   return (
     <div className="whitespace-pre-wrap break-words text-[length:var(--prose-text-size,var(--text-chat))] leading-[var(--prose-text-line-height,var(--text-chat--line-height))]">
       {tokens.map((token, index) => {
         if (token.type === "text") {
-          return <Fragment key={`text-${index}`}>{token.text}</Fragment>;
+          return (
+            <Fragment key={`text-${index}`}>
+              {searchPaint
+                ? markSearchChildren(token.text, searchPaint.query, searchPaint.rowUnitId)
+                : token.text}
+            </Fragment>
+          );
         }
         return (
           <FilePathLink key={`${token.path}-${index}`} rawPath={token.path}>
