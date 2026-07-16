@@ -113,8 +113,10 @@ Moved modules resolve package-private imports through the compiled package:
 `ProductClient` is a lightweight public/auth shell. The authenticated product
 root is internal and lazy-loaded via `#product/app/AuthenticatedProductClient`,
 so Web login and callback entrypoints do not eagerly load editor, terminal, or
-other authenticated-only chunks. The mechanical move applies this exact shape to
-the real Desktop product.
+other authenticated-only chunks. Connected repository/workspace action hosts
+also mount inside that authenticated root; they must not be imported by the
+public `App` shell. The mechanical move applies this exact shape to the real
+Desktop product.
 
 ## Reserved-file rule
 
