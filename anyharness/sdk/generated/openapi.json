@@ -5704,6 +5704,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }

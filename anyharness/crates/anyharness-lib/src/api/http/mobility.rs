@@ -250,6 +250,7 @@ pub async fn install_workspace_mobility_archive(
     params(("workspace_id" = String, Path, description = "Workspace ID")),
     request_body = DestroyWorkspaceMobilitySourceRequest,
     responses(
+        (status = 409, description = "Session execution is controlled by an active workflow run", body = anyharness_contract::v1::ProblemDetails),
         (status = 200, description = "Destroyed the old workspace source materialization", body = DestroyWorkspaceMobilitySourceResponse),
         (status = 404, description = "Workspace not found", body = anyharness_contract::v1::ProblemDetails),
     ),

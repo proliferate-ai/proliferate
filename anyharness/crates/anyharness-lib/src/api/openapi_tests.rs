@@ -243,6 +243,21 @@ fn openapi_registers_workspace_session_and_event_schemas() {
 }
 
 #[test]
+fn destroy_source_documents_workflow_controlled_409() {
+    // PR1227-MOBILITY-CONTRACT-01: the destroy-source handler fails closed with
+    // 409 SESSION_CONTROLLED_BY_WORKFLOW exactly like the other fenced routes
+    // (retire, purge, mobility export), so its published contract MUST document
+    // the 409 response. Pin it against the generated OpenAPI document.
+    let spec: Value = serde_json::from_str(&openapi_json()).expect("parse OpenAPI JSON");
+    let responses = &spec["paths"]["/v1/workspaces/{workspace_id}/mobility/destroy-source"]["post"]
+        ["responses"];
+    assert!(
+        responses.get("409").is_some(),
+        "destroy-source must document the 409 workflow-controlled contract response"
+    );
+}
+
+#[test]
 fn pending_prompt_reorder_schema_requires_compare_and_swap_orders() {
     let spec: Value = serde_json::from_str(&openapi_json()).expect("parse OpenAPI JSON");
     let schema = &spec["components"]["schemas"]["ReorderPendingPromptsRequest"];
