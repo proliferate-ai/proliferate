@@ -119,6 +119,15 @@ services:
     restart: unless-stopped
     env_file:
       - ${PROLIFERATE_ENV_FILE:-.env}
+    # Serve the compiled ProductClient Web application same-origin from the
+    # server image. The image bakes the Web distribution at /app/web-dist (see
+    # server/Dockerfile); pointing WEB_DIST_DIR at it enables self-hosted Web by
+    # default for every ordinary install — no new profile and no new public
+    # port. Caddy still exposes the single SITE_ADDRESS and proxies everything
+    # but /llm/* to this service. An operator can disable Web serving by
+    # overriding WEB_DIST_DIR to empty in .env.local.
+    environment:
+      WEB_DIST_DIR: ${WEB_DIST_DIR:-/app/web-dist}
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
