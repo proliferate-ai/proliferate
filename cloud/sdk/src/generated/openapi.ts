@@ -4462,11 +4462,33 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "ready" | "missing_user_authorization" | "expired_user_authorization" | "missing_installation" | "repo_not_covered" | "missing_user_repo_access" | "error";
+            status: "ready" | "missing_user_authorization" | "expired_user_authorization" | "missing_installation" | "repo_not_covered" | "missing_user_repo_access" | "operator_configuration_required" | "error";
             /** Action */
             action?: ("authorize_user" | "reauthorize_user" | "install_app" | "grant_repo_access") | null;
             /** Message */
             message?: string | null;
+        };
+        /**
+         * GitHubRepositoryAccessCapability
+         * @description Operator readiness of GitHub repository discovery/authority.
+         *
+         *     ``disabled`` means the operator intentionally configured no GitHub App;
+         *     ``operator_configuration_required`` means a partial App config that only
+         *     the operator can repair (clients must not offer user authorization);
+         *     ``ready`` means the App runtime config is complete. Independent of
+         *     managed-Cloud execution: an App-ready/E2B-disabled deployment can browse
+         *     and clone repositories without advertising Cloud workspaces.
+         */
+        GitHubRepositoryAccessCapability: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "disabled" | "operator_configuration_required" | "ready";
+            /** Provider */
+            provider: "github_app" | null;
+            /** Displayname */
+            displayName: string | null;
         };
         /**
          * GitProvider
@@ -4676,6 +4698,24 @@ export interface components {
             usedUsd: number;
             /** Remainingusd */
             remainingUsd: number;
+        };
+        /**
+         * ManagedCloudCapability
+         * @description Operator readiness of managed-Cloud workspace execution.
+         *
+         *     Requires both E2B provisioning and ready GitHub repository authority,
+         *     because workspace mutations enforce GitHub App authority server-side.
+         *     ``repositoryAuthority`` names the authority provider when one is
+         *     involved in the managed-Cloud path.
+         */
+        ManagedCloudCapability: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "disabled" | "operator_configuration_required" | "ready";
+            /** Repositoryauthority */
+            repositoryAuthority: "github_app" | null;
         };
         /** ManagedCloudWorkflowTarget */
         ManagedCloudWorkflowTarget: {
@@ -5508,7 +5548,8 @@ export interface components {
          *
          *     Defaults are disabled: a capability is true only when the operator
          *     configured the underlying feature. The desktop treats an absent contract
-         *     (older servers) as all-off + self-managed.
+         *     (older servers) as all-off + self-managed. ``cloudWorkspaces`` is a v1
+         *     compatibility projection of ``managedCloud.status == "ready"``.
          */
         ServerCapabilities: {
             /** Contractversion */
@@ -5525,6 +5566,8 @@ export interface components {
             webApp: components["schemas"]["WebAppCapability"];
             support: components["schemas"]["SupportCapability"];
             pricing: components["schemas"]["PricingCapability"];
+            githubRepositoryAccess: components["schemas"]["GitHubRepositoryAccessCapability"];
+            managedCloud: components["schemas"]["ManagedCloudCapability"];
         };
         /** SetIntegrationEnabledRequest */
         SetIntegrationEnabledRequest: {

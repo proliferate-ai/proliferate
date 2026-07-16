@@ -50,6 +50,7 @@ RepoAuthorityStatus = Literal[
     "missing_installation",
     "repo_not_covered",
     "missing_user_repo_access",
+    "operator_configuration_required",
     "error",
 ]
 

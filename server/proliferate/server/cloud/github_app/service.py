@@ -583,7 +583,13 @@ def _repo_authority_status_for_error(
     if code == "github_app_repo_not_covered":
         return "repo_not_covered", "grant_repo_access"
     if code == "github_repo_access_required":
-        return "missing_user_repo_access", "authorize_user"
+        # The user's own GitHub account lacks access to the repository.
+        # Reauthorizing the App cannot repair that, so no action is offered.
+        return "missing_user_repo_access", None
+    if code == "github_app_not_configured":
+        # Deployment-level App misconfiguration; only the operator can
+        # repair it, so no user action is offered.
+        return "operator_configuration_required", None
     return "error", None
 
 

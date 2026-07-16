@@ -28,6 +28,8 @@
 import { expect, test } from "@playwright/test";
 import { bootStack, type BootedStack } from "../stack/boot.ts";
 
+type CapabilityStatus = "disabled" | "operator_configuration_required" | "ready";
+
 interface MetaResponse {
   serverVersion: string;
   capabilities: {
@@ -39,6 +41,15 @@ interface MetaResponse {
     webApp: { available: boolean; baseUrl: string | null };
     support: { kind: string; email: string | null; url: string | null };
     pricing: { available: boolean; url: string | null };
+    githubRepositoryAccess: {
+      status: CapabilityStatus;
+      provider: string | null;
+      displayName: string | null;
+    };
+    managedCloud: {
+      status: CapabilityStatus;
+      repositoryAuthority: string | null;
+    };
   };
 }
 
@@ -67,6 +78,13 @@ test.describe("T2-SH-5: /meta capability contract — self-managed, every add-on
         INSTANCE_LOGO_URL: "",
         INSTANCE_SUPPORT_EMAIL: "",
         INSTANCE_SUPPORT_URL: "",
+        GITHUB_APP_ID: "",
+        GITHUB_APP_SLUG: "",
+        GITHUB_APP_CLIENT_ID: "",
+        GITHUB_APP_CLIENT_SECRET: "",
+        GITHUB_APP_WEBHOOK_SECRET: "",
+        GITHUB_APP_PRIVATE_KEY: "",
+        GITHUB_APP_PRIVATE_KEY_PATH: "",
       },
     });
   });
@@ -91,6 +109,12 @@ test.describe("T2-SH-5: /meta capability contract — self-managed, every add-on
     expect(meta.capabilities.support.kind).toBe("none");
     expect(meta.capabilities.support.email).toBeNull();
     expect(meta.capabilities.pricing.available).toBe(false);
+    // Contract v2: the two operator capabilities are independent and both
+    // intentionally off on a bare self-managed deployment.
+    expect(meta.capabilities.githubRepositoryAccess.status).toBe("disabled");
+    expect(meta.capabilities.githubRepositoryAccess.provider).toBeNull();
+    expect(meta.capabilities.managedCloud.status).toBe("disabled");
+    expect(meta.capabilities.managedCloud.repositoryAuthority).toBeNull();
   });
 });
 
@@ -109,6 +133,15 @@ test.describe("T2-SH-5: /meta capability contract — hosted mode advertises ful
         E2B_API_KEY: "e2b_capability_contract_test_placeholder",
         E2B_TEMPLATE_NAME: "proliferate-runtime-cloud",
         FRONTEND_BASE_URL: "https://web.proliferate.example.test",
+        // Contract v2: managedCloud (and the cloudWorkspaces projection) is
+        // ready only when GitHub App repository authority is also complete,
+        // because workspace mutations enforce it server-side.
+        GITHUB_APP_ID: "12345",
+        GITHUB_APP_SLUG: "proliferate-cloud-test",
+        GITHUB_APP_CLIENT_ID: "Iv1.capability-contract-test",
+        GITHUB_APP_CLIENT_SECRET: "capability_contract_test_client_secret",
+        GITHUB_APP_WEBHOOK_SECRET: "capability_contract_test_webhook_secret",
+        GITHUB_APP_PRIVATE_KEY: "-----BEGIN RSA PRIVATE KEY-----\\ntest\\n-----END RSA PRIVATE KEY-----",
       },
     });
   });
@@ -128,5 +161,12 @@ test.describe("T2-SH-5: /meta capability contract — hosted mode advertises ful
     expect(meta.capabilities.webApp.baseUrl).toBe("https://web.proliferate.example.test");
     expect(meta.capabilities.support.kind).toBe("vendor");
     expect(meta.capabilities.pricing.available).toBe(true);
+    // Contract v2: both independent capabilities ready; cloudWorkspaces above
+    // is their compatibility projection, not a standalone flag.
+    expect(meta.capabilities.githubRepositoryAccess.status).toBe("ready");
+    expect(meta.capabilities.githubRepositoryAccess.provider).toBe("github_app");
+    expect(meta.capabilities.githubRepositoryAccess.displayName).toBe("proliferate-cloud-test");
+    expect(meta.capabilities.managedCloud.status).toBe("ready");
+    expect(meta.capabilities.managedCloud.repositoryAuthority).toBe("github_app");
   });
 });
