@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -6,6 +6,10 @@ use std::time::Duration;
 
 use anyharness_contract::v1::{WorkspaceRetireBlocker, WorktreeRetentionRowOutcome};
 
+use crate::domains::sessions::admission::{
+    SessionMutationAdmission, SessionMutationConflict, SessionMutationKind, SessionMutationPermit,
+    SessionMutationSource,
+};
 use crate::domains::sessions::store::SessionStore;
 use crate::domains::terminals::store::TerminalStore;
 use crate::domains::workspaces::checkout_gate::{CheckoutDeletionGate, CheckoutPathLockKey};
@@ -39,10 +43,27 @@ pub struct WorkspaceRetentionService {
     preflight_checker: Arc<RetirePreflightChecker>,
     operation_gate: Arc<WorkspaceOperationGate>,
     checkout_gate: Arc<CheckoutDeletionGate>,
+    admission: Arc<SessionMutationAdmission>,
     runtime_home: std::path::PathBuf,
     running: Arc<AtomicBool>,
     auto_run_enabled: bool,
     defer_startup_pass: bool,
+}
+
+/// PR1227-RETENTION-FENCE-01: the result of the up-front per-candidate session
+/// admission snapshot — either the held permits plus the admitted id set, or a
+/// skip because a session is workflow-controlled.
+enum RetentionAdmission {
+    Admitted {
+        /// Held across the whole destructive operation for this candidate; never
+        /// inspected.
+        permits: Vec<SessionMutationPermit>,
+        /// The exact session ids admitted (and permit-held) up front.
+        session_ids: BTreeSet<String>,
+    },
+    Blocked {
+        message: String,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -78,6 +99,7 @@ impl WorkspaceRetentionService {
         preflight_checker: Arc<RetirePreflightChecker>,
         operation_gate: Arc<WorkspaceOperationGate>,
         checkout_gate: Arc<CheckoutDeletionGate>,
+        admission: Arc<SessionMutationAdmission>,
         runtime_home: std::path::PathBuf,
     ) -> Self {
         let auto_run_enabled = std::env::var_os(ANYHARNESS_ENABLE_AUTOMATIC_WORKTREE_RETENTION_ENV)
@@ -93,6 +115,7 @@ impl WorkspaceRetentionService {
             preflight_checker,
             operation_gate,
             checkout_gate,
+            admission,
             runtime_home,
             running: Arc::new(AtomicBool::new(false)),
             auto_run_enabled,
@@ -237,6 +260,48 @@ impl WorkspaceRetentionService {
                     continue;
                 }
 
+                // PR1227-RETENTION-FENCE-01: admit every current session of this
+                // candidate (sorted permits) BEFORE the exclusive lease. A
+                // nonterminal workflow controller conflicts here — including the
+                // dead-actor case that presents no preflight blocker — so
+                // retention fails closed (skips) instead of dematerializing a
+                // controlled session's workspace. Permits are held across the
+                // whole destructive op for this candidate.
+                let (_admission_permits, admitted_session_ids) =
+                    match self.admit_retention_sessions(&workspace.id).await {
+                        Ok(RetentionAdmission::Admitted {
+                            permits,
+                            session_ids,
+                        }) => (permits, session_ids),
+                        Ok(RetentionAdmission::Blocked { message }) => {
+                            blocked_count += 1;
+                            rows.push(row(
+                                workspace,
+                                WorktreeRetentionRowOutcome::Blocked,
+                                message,
+                            ));
+                            continue;
+                        }
+                        Err(error) => {
+                            failed_count += 1;
+                            rows.push(row(
+                                workspace,
+                                WorktreeRetentionRowOutcome::Failed,
+                                display_safe_error("workspace session admission failed", &error),
+                            ));
+                            continue;
+                        }
+                    };
+
+                // PR1227-RETENTION-FENCE-01 proof seam (test-only, no-op in
+                // production): park between the up-front admission snapshot (now
+                // complete) and the exclusive lease so a proof can bind a
+                // workflow-controlled session in exactly the gap the under-lease
+                // re-check guards. Keyed by workspace id; absent keys change
+                // nothing.
+                #[cfg(test)]
+                retention_barriers::at_pre_exclusive(&workspace.id).await;
+
                 let exclusive = match tokio::time::timeout(
                     RETENTION_OPERATION_GATE_TIMEOUT,
                     self.operation_gate.acquire_exclusive(&workspace.id),
@@ -254,6 +319,38 @@ impl WorkspaceRetentionService {
                         continue;
                     }
                 };
+
+                // PR1227-RETENTION-FENCE-01: under the exclusive lease (which
+                // excludes the shared SessionStart lease workflow session
+                // creation holds), re-enumerate and skip if a session appeared
+                // after the snapshot (FENCE-02 analog) or a nonterminal workflow
+                // now controls one (FENCE-01 analog).
+                match self
+                    .reject_retention_if_workflow_controlled(&workspace.id, &admitted_session_ids)
+                    .await
+                {
+                    Ok(None) => {}
+                    Ok(Some(message)) => {
+                        blocked_count += 1;
+                        rows.push(row(
+                            workspace,
+                            WorktreeRetentionRowOutcome::Blocked,
+                            message,
+                        ));
+                        drop(exclusive);
+                        continue;
+                    }
+                    Err(error) => {
+                        failed_count += 1;
+                        rows.push(row(
+                            workspace,
+                            WorktreeRetentionRowOutcome::Failed,
+                            display_safe_error("workspace control re-check failed", &error),
+                        ));
+                        drop(exclusive);
+                        continue;
+                    }
+                }
 
                 let Some(reloaded) = self.workspace_runtime.get_workspace(&workspace.id)? else {
                     skipped_count += 1;
@@ -404,6 +501,110 @@ impl WorkspaceRetentionService {
         })
     }
 
+    /// PR1227-RETENTION-FENCE-01: acquire SORTED session-mutation permits for
+    /// every current session of the candidate workspace, mirroring the
+    /// caller-facing `admit_all_workspace_sessions`. Acquired BEFORE the
+    /// exclusive workspace lease (canonical `permit -> operation lease` order).
+    /// A session controlled by a NONTERMINAL workflow conflicts here (an
+    /// External source is denied), so the dead-actor case — a running workflow
+    /// step whose bound session has no live actor and thus zero preflight
+    /// blockers — is caught at admission before any destructive effect. Returns
+    /// `Blocked` for a workflow conflict (retention is a sweep, not a
+    /// caller-facing 409); propagates only true infrastructure failures.
+    async fn admit_retention_sessions(
+        &self,
+        workspace_id: &str,
+    ) -> anyhow::Result<RetentionAdmission> {
+        let mut sessions = self
+            .session_store
+            .list_with_dismissed_by_workspace(workspace_id)?;
+        sessions.sort_by(|a, b| a.id.cmp(&b.id));
+        let mut permits = Vec::with_capacity(sessions.len());
+        let mut session_ids = BTreeSet::new();
+        for session in &sessions {
+            match self
+                .admission
+                .acquire(
+                    &session.id,
+                    SessionMutationKind::WorkspaceRetire,
+                    &SessionMutationSource::external(),
+                )
+                .await
+            {
+                Ok(permit) => {
+                    permits.push(permit);
+                    session_ids.insert(session.id.clone());
+                }
+                Err(SessionMutationConflict::ControlledByWorkflow { run_id }) => {
+                    tracing::info!(
+                        workspace_id = %workspace_id,
+                        session_id = %session.id,
+                        controlling_run_id = %run_id,
+                        "retention skipped workspace: a workflow controls a session"
+                    );
+                    return Ok(RetentionAdmission::Blocked {
+                        message: "session execution is controlled by an active workflow run"
+                            .to_string(),
+                    });
+                }
+                Err(SessionMutationConflict::Internal(error)) => return Err(error),
+            }
+        }
+        Ok(RetentionAdmission::Admitted {
+            permits,
+            session_ids,
+        })
+    }
+
+    /// PR1227-RETENTION-FENCE-01 (FENCE-02/01 analog): under the already-held
+    /// exclusive workspace lease, re-enumerate the workspace session set and
+    /// return a skip message if either (02) an enumerated session id is absent
+    /// from the up-front admitted set (bound after the admission snapshot, even
+    /// if its workflow already terminalized), or (01) a nonterminal workflow now
+    /// controls a session. Pure read-only lookup + in-memory set comparison — no
+    /// permit, no lease — so it adds no edge to the lock order.
+    async fn reject_retention_if_workflow_controlled(
+        &self,
+        workspace_id: &str,
+        admitted_session_ids: &BTreeSet<String>,
+    ) -> anyhow::Result<Option<String>> {
+        let session_ids = self
+            .session_store
+            .list_with_dismissed_by_workspace(workspace_id)?
+            .into_iter()
+            .map(|session| session.id)
+            .collect::<Vec<_>>();
+        if let Some(unadmitted) = session_ids
+            .iter()
+            .find(|id| !admitted_session_ids.contains(*id))
+        {
+            tracing::info!(
+                workspace_id = %workspace_id,
+                session_id = %unadmitted,
+                "retention skipped workspace: a session appeared after the admission snapshot"
+            );
+            return Ok(Some(
+                "a session appeared after the retention admission snapshot".to_string(),
+            ));
+        }
+        if let Some((session_id, run_id)) = self
+            .admission
+            .find_workflow_controlled_session(session_ids)
+            .await?
+        {
+            tracing::info!(
+                workspace_id = %workspace_id,
+                session_id = %session_id,
+                controlling_run_id = %run_id,
+                "retention skipped workspace: a workflow controls a session created after admission"
+            );
+            return Ok(Some(
+                "session execution is controlled by an active workflow run".to_string(),
+            ));
+        }
+        Ok(None)
+    }
+
     fn list_retention_worktrees_by_activity(&self) -> anyhow::Result<Vec<WorkspaceRecord>> {
         let mut workspaces = self.workspace_store.list_standard_active_worktrees()?;
         order_worktrees_by_activity(
@@ -545,6 +746,61 @@ struct RunningGuard<'a>(&'a AtomicBool);
 impl Drop for RunningGuard<'_> {
     fn drop(&mut self) {
         self.0.store(false, Ordering::SeqCst);
+    }
+}
+
+/// PR1227-RETENTION-FENCE-01 proof seam. A keyed, test-only barrier that parks
+/// the retention pass between the up-front `admit_retention_sessions` snapshot
+/// and the exclusive workspace lease, so a deterministic proof can bind a
+/// workflow-controlled session in exactly the window the under-lease re-check
+/// exists to catch. Absent keys cost one mutex lookup and change nothing.
+/// Test-only by construction.
+#[cfg(test)]
+pub(crate) mod retention_barriers {
+    use std::collections::HashMap;
+    use std::sync::Mutex as StdMutex;
+
+    use tokio::sync::oneshot;
+
+    #[derive(Default)]
+    pub(crate) struct RetentionBarrier {
+        /// Fired when the pass reaches the pre-exclusive-lease point.
+        pub(crate) reached_tx: Option<oneshot::Sender<()>>,
+        /// Awaited before acquiring the exclusive lease when present.
+        pub(crate) resume_rx: Option<oneshot::Receiver<()>>,
+    }
+
+    static BARRIERS: StdMutex<Option<HashMap<String, RetentionBarrier>>> = StdMutex::new(None);
+
+    pub(crate) fn install(workspace_id: &str, barrier: RetentionBarrier) {
+        BARRIERS
+            .lock()
+            .expect("retention barrier lock")
+            .get_or_insert_with(HashMap::new)
+            .insert(workspace_id.to_string(), barrier);
+    }
+
+    pub(crate) fn clear(workspace_id: &str) {
+        if let Some(map) = BARRIERS.lock().expect("retention barrier lock").as_mut() {
+            map.remove(workspace_id);
+        }
+    }
+
+    pub(super) async fn at_pre_exclusive(workspace_id: &str) {
+        let barrier = BARRIERS
+            .lock()
+            .expect("retention barrier lock")
+            .as_mut()
+            .and_then(|map| map.remove(workspace_id));
+        let Some(mut barrier) = barrier else {
+            return;
+        };
+        if let Some(tx) = barrier.reached_tx.take() {
+            let _ = tx.send(());
+        }
+        if let Some(rx) = barrier.resume_rx.take() {
+            let _ = rx.await;
+        }
     }
 }
 

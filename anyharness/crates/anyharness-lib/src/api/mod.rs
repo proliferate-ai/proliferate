@@ -15,3 +15,7 @@ mod workflow_runs_portable_contract_tests;
 mod workflow_runs_scripted_tests;
 #[cfg(test)]
 mod workflow_runs_tests;
+#[cfg(test)]
+mod session_admission_tests;
+#[cfg(test)]
+mod review_admission_tests;

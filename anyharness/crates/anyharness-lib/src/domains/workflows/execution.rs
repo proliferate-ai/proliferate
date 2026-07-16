@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use anyharness_contract::v1::ConfigApplyState;
 
+use crate::domains::sessions::admission::{SessionMutationAdmission, SessionMutationSource};
 use crate::domains::sessions::runtime::{InternalSessionCreateInput, SessionRuntime};
 use crate::domains::workflows::control::WorkflowRunGates;
 use crate::domains::workflows::dispatch::{
@@ -33,17 +34,31 @@ pub(crate) async fn execute(
     session_runtime: Arc<SessionRuntime>,
     operation_gate: Arc<WorkspaceOperationGate>,
     gates: Arc<WorkflowRunGates>,
+    admission: Arc<SessionMutationAdmission>,
     plan: WorkflowExecutionPlan,
 ) {
     let run_id = plan.run_id.clone();
-    match run_execution(&service, &session_runtime, &operation_gate, &gates, plan).await {
+    match run_execution(
+        &service,
+        &session_runtime,
+        &operation_gate,
+        &gates,
+        &admission,
+        plan,
+    )
+    .await
+    {
         Ok(()) => {}
         Err(ExecutionAbort::Fail(code)) => {
             // Every classified execution-failure terminalization uses the
-            // same run gate (spec §6.2).
+            // same run gate (spec §6.2); with a bound session, the terminal
+            // CAS additionally holds the session mutation permit (spec 2b,
+            // canonical order run gate -> permit). Pre-binding failures have
+            // no controlled session and terminalize under the gate alone.
             match gates.slot(&run_id) {
                 Ok(gate) => {
                     let _guard = gate.lock_owned().await;
+                    let _permit = acquire_bound_session_permit(&service, &admission, &run_id).await;
                     guarded_fail(&service, &run_id, code).await;
                 }
                 Err(_poisoned) => {
@@ -67,6 +82,7 @@ async fn run_execution(
     session_runtime: &Arc<SessionRuntime>,
     operation_gate: &Arc<WorkspaceOperationGate>,
     gates: &Arc<WorkflowRunGates>,
+    admission: &Arc<SessionMutationAdmission>,
     plan: WorkflowExecutionPlan,
 ) -> Result<(), ExecutionAbort> {
     let run_id = plan.run_id.clone();
@@ -94,6 +110,9 @@ async fn run_execution(
         .acquire_shared(&plan.workspace_id, WorkspaceOperationKind::SessionStart)
         .await;
 
+    #[cfg(test)]
+    test_barriers::at_session_start_lease(&run_id).await;
+
     // 3+4. Reacquire the gate: recheck nonterminal/uncancelled state, then
     // hold through durable session creation plus session_id binding. If
     // cancellation won the recheck, no session is created; if creation wins,
@@ -111,12 +130,35 @@ async fn run_execution(
             return Ok(());
         }
 
+        // Ruling 2b-1: preselect the session id and reserve its mutation
+        // gate BEFORE the row exists, inside the held run gate (canonical
+        // order run gate -> permit). Foreign callers racing this id wait on
+        // the permit and then observe the bound controller; there is no
+        // externally writable gap. The permit is held through creation and
+        // binding and released only after binding commits (scope end).
+        let preselected_session_id = uuid::Uuid::new_v4().to_string();
+        let workflow_source = SessionMutationSource::workflow_run(&run_id);
+        let _creation_permit = match admission
+            .reserve_new_session(&preselected_session_id, &workflow_source)
+            .await
+        {
+            Ok(permit) => permit,
+            Err(_conflict) => {
+                tracing::error!(
+                    run_id = %run_id,
+                    "workflow session reservation infrastructure failed"
+                );
+                return Err(ExecutionAbort::Infra);
+            }
+        };
+
         let create_input = InternalSessionCreateInput {
             workspace_id: plan.workspace_id.clone(),
             agent_kind: plan.agent_kind.clone(),
             model_id: plan.model_id.clone(),
             mode_id: plan.mode_id.clone(),
             origin: OriginContext::system_local_runtime(),
+            preselected_session_id: Some(preselected_session_id.clone()),
         };
         let session = {
             let session_runtime = session_runtime.clone();
@@ -140,6 +182,9 @@ async fn run_execution(
                 }
             }
         };
+
+        #[cfg(test)]
+        test_barriers::at_reserved(&run_id, &session.id).await;
 
         // Persist session_id BEFORE startup, still under the gate. A `false`
         // here means cancellation terminalized the run after creation won; the
@@ -278,6 +323,21 @@ pub(crate) mod test_barriers {
 
     #[derive(Default)]
     pub(crate) struct ExecutionBarrier {
+        /// Fired after the shared `SessionStart` lease is held, BEFORE session
+        /// creation (PR1227-WORKSPACE-FENCE-01 window: a destructive path's
+        /// up-front admission snapshot can run here, before this run's session
+        /// exists).
+        pub(crate) session_start_lease_tx: Option<oneshot::Sender<()>>,
+        /// Awaited (still holding the shared `SessionStart` lease) before
+        /// session creation when present.
+        pub(crate) resume_create_rx: Option<oneshot::Receiver<()>>,
+        /// Fired with the preselected session id after the reservation
+        /// permit is held and the durable session row exists, BEFORE binding
+        /// (spec 2b creation-race window).
+        pub(crate) reserved_tx: Option<oneshot::Sender<String>>,
+        /// Awaited (still holding gate + reservation permit) before binding
+        /// when present.
+        pub(crate) resume_bind_rx: Option<oneshot::Receiver<()>>,
         /// Fired with the bound session id after `bind_session`, before
         /// startup (step 5).
         pub(crate) session_bound_tx: Option<oneshot::Sender<String>>,
@@ -301,7 +361,11 @@ pub(crate) mod test_barriers {
 
     impl ExecutionBarrier {
         fn is_spent(&self) -> bool {
-            self.session_bound_tx.is_none()
+            self.session_start_lease_tx.is_none()
+                && self.resume_create_rx.is_none()
+                && self.reserved_tx.is_none()
+                && self.resume_bind_rx.is_none()
+                && self.session_bound_tx.is_none()
                 && self.resume_startup_rx.is_none()
                 && self.recheck_tx.is_none()
                 && self.pre_dispatch_tx.is_none()
@@ -347,6 +411,34 @@ pub(crate) mod test_barriers {
             .expect("barrier lock")
             .get_or_insert_with(HashMap::new)
             .insert(run_id.to_string(), barrier);
+    }
+
+    pub(super) async fn at_session_start_lease(run_id: &str) {
+        let Some(mut barrier) = take(run_id) else {
+            return;
+        };
+        if let Some(tx) = barrier.session_start_lease_tx.take() {
+            let _ = tx.send(());
+        }
+        let resume = barrier.resume_create_rx.take();
+        put_back(run_id, barrier);
+        if let Some(rx) = resume {
+            let _ = rx.await;
+        }
+    }
+
+    pub(super) async fn at_reserved(run_id: &str, session_id: &str) {
+        let Some(mut barrier) = take(run_id) else {
+            return;
+        };
+        if let Some(tx) = barrier.reserved_tx.take() {
+            let _ = tx.send(session_id.to_string());
+        }
+        let resume = barrier.resume_bind_rx.take();
+        put_back(run_id, barrier);
+        if let Some(rx) = resume {
+            let _ = rx.await;
+        }
     }
 
     pub(super) async fn at_session_bound(run_id: &str, session_id: &str) {
@@ -411,6 +503,44 @@ async fn acquire_run_gate(
         Err(_poisoned) => {
             tracing::error!(run_id = %run_id, "workflow run gate unavailable");
             Err(ExecutionAbort::Infra)
+        }
+    }
+}
+
+/// With a bound session, terminal workflow CAS paths hold that session's
+/// mutation permit (spec 2b); without one there is no controlled session and
+/// the run gate alone suffices. Permit-acquisition infrastructure failure
+/// degrades to gate-only terminalization: a missed serialization window is
+/// recoverable by fencing, an unterminalized run is worse.
+pub(crate) async fn acquire_bound_session_permit(
+    service: &Arc<WorkflowRunService>,
+    admission: &Arc<SessionMutationAdmission>,
+    run_id: &str,
+) -> Option<crate::domains::sessions::admission::SessionMutationPermit> {
+    let lookup_service = service.clone();
+    let lookup_run_id = run_id.to_string();
+    let session_id = tokio::task::spawn_blocking(move || lookup_service.get(&lookup_run_id))
+        .await
+        .ok()?
+        .ok()??
+        .run
+        .session_id?;
+    match admission
+        .acquire(
+            &session_id,
+            crate::domains::sessions::admission::SessionMutationKind::WorkflowTerminal,
+            &SessionMutationSource::workflow_run(run_id),
+        )
+        .await
+    {
+        Ok(permit) => Some(permit),
+        Err(_conflict) => {
+            tracing::error!(
+                run_id = %run_id,
+                session_id = %session_id,
+                "session permit unavailable for terminal workflow CAS; proceeding under run gate alone"
+            );
+            None
         }
     }
 }

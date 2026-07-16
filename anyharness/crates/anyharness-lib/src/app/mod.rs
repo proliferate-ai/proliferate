@@ -153,6 +153,7 @@ pub struct AppState {
     pub goal_service: Arc<GoalService>,
     pub goal_runtime: Arc<GoalRuntime>,
     pub workflow_run_runtime: Arc<WorkflowRunRuntime>,
+    pub session_admission: Arc<crate::domains::sessions::admission::SessionMutationAdmission>,
     pub loop_service: Arc<LoopService>,
     pub loop_runtime: Arc<LoopRuntime>,
     pub activity_service: Arc<ActivityService>,
@@ -362,6 +363,7 @@ impl AppState {
         // Workflow runs — phase 1 (before SessionRuntime::new): service,
         // startup fencing, main-handle capture, completion extension.
         let workflow_wiring = workflows::wire_workflows_before_sessions(&db)?;
+        let session_admission = workflow_wiring.admission.clone();
         let workflow_run_session_extension = workflow_wiring.session_extension.clone();
         let session_extensions: Vec<
             Arc<dyn crate::domains::sessions::extensions::SessionExtension>,
@@ -415,6 +417,7 @@ impl AppState {
             SessionStore::new(db.clone()),
             PromptAttachmentStorage::new(runtime_home.clone()),
             workspace_operation_gate.clone(),
+            session_admission.clone(),
             checkout_deletion_gate.clone(),
             retire_preflight_checker.clone(),
             runtime_home.clone(),
@@ -428,6 +431,7 @@ impl AppState {
             retire_preflight_checker.clone(),
             workspace_operation_gate.clone(),
             checkout_deletion_gate.clone(),
+            session_admission.clone(),
             runtime_home.clone(),
         ));
         let workspace_worktree_runtime = Arc::new(WorkspaceWorktreeRuntime::new(
@@ -549,6 +553,7 @@ impl AppState {
             goal_service,
             goal_runtime,
             workflow_run_runtime,
+            session_admission,
             loop_service,
             loop_runtime,
             activity_service,

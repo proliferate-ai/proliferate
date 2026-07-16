@@ -1,5 +1,10 @@
 use anyharness_contract::v1::{ProposedPlanDecisionState, ProposedPlanNativeResolutionState};
 use rusqlite::{params, types::Type, Connection, OptionalExtension, Row};
+#[cfg(test)]
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
 use super::model::{PlanHandoffRecord, PlanInteractionLinkRecord, PlanRecord};
 use crate::domains::sessions::model::SessionEventRecord;
@@ -8,11 +13,17 @@ use crate::persistence::Db;
 #[derive(Clone)]
 pub struct PlanStore {
     db: Db,
+    #[cfg(test)]
+    fail_next_find_by_id: Arc<AtomicBool>,
 }
 
 impl PlanStore {
     pub fn new(db: Db) -> Self {
-        Self { db }
+        Self {
+            db,
+            #[cfg(test)]
+            fail_next_find_by_id: Arc::new(AtomicBool::new(false)),
+        }
     }
 
     pub fn with_tx<F, T>(&self, f: F) -> anyhow::Result<T>
@@ -30,10 +41,19 @@ impl PlanStore {
     }
 
     pub fn find_by_id(&self, plan_id: &str) -> anyhow::Result<Option<PlanRecord>> {
+        #[cfg(test)]
+        if self.fail_next_find_by_id.swap(false, Ordering::SeqCst) {
+            anyhow::bail!("injected plan lookup failure: private-test-marker");
+        }
         self.db.with_conn(|conn| {
             conn.query_row("SELECT * FROM plans WHERE id = ?1", [plan_id], map_plan)
                 .optional()
         })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn fail_next_find_by_id_for_test(&self) {
+        self.fail_next_find_by_id.store(true, Ordering::SeqCst);
     }
 
     pub fn list_by_workspace(

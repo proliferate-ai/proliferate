@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use tokio::runtime::Handle;
 
+use crate::domains::sessions::admission::SessionMutationAdmission;
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::workflows::control::{
     cancel_workflow_run, WorkflowCancelError, WorkflowRunGates,
@@ -63,6 +64,7 @@ pub struct WorkflowRunRuntime {
     operation_gate: Arc<WorkspaceOperationGate>,
     access_gate: Arc<WorkspaceAccessGate>,
     gates: Arc<WorkflowRunGates>,
+    admission: Arc<SessionMutationAdmission>,
     main_handle: Handle,
 }
 
@@ -73,6 +75,7 @@ impl WorkflowRunRuntime {
         operation_gate: Arc<WorkspaceOperationGate>,
         access_gate: Arc<WorkspaceAccessGate>,
         gates: Arc<WorkflowRunGates>,
+        admission: Arc<SessionMutationAdmission>,
         main_handle: Handle,
     ) -> Self {
         Self {
@@ -81,6 +84,7 @@ impl WorkflowRunRuntime {
             operation_gate,
             access_gate,
             gates,
+            admission,
             main_handle,
         }
     }
@@ -112,6 +116,7 @@ impl WorkflowRunRuntime {
         let operation_gate = self.operation_gate.clone();
         let access_gate = self.access_gate.clone();
         let gates = self.gates.clone();
+        let admission = self.admission.clone();
         let execution_handle = self.main_handle.clone();
 
         let handoff = self.main_handle.spawn(async move {
@@ -130,12 +135,14 @@ impl WorkflowRunRuntime {
                     match outcome {
                         Ok(AcceptOutcome::Created { plan, view }) => {
                             let gates_for_execute = gates.clone();
+                            let admission_for_execute = admission.clone();
                             execution_handle.spawn(async move {
                                 execute(
                                     service,
                                     session_runtime,
                                     operation_gate,
                                     gates_for_execute,
+                                    admission_for_execute,
                                     plan,
                                 )
                                 .await;
@@ -256,12 +263,14 @@ impl WorkflowRunRuntime {
                                 prompt_id: plan.prompt_id.clone(),
                             };
                             let gates_for_execute = gates.clone();
+                            let admission_for_execute = admission.clone();
                             execution_handle.spawn(async move {
                                 execute(
                                     service,
                                     session_runtime,
                                     operation_gate,
                                     gates_for_execute,
+                                    admission_for_execute,
                                     execution_plan,
                                 )
                                 .await;
@@ -313,8 +322,9 @@ impl WorkflowRunRuntime {
         let service = self.service.clone();
         let session_runtime = self.session_runtime.clone();
         let gates = self.gates.clone();
+        let admission = self.admission.clone();
         let handoff = self.main_handle.spawn(async move {
-            cancel_workflow_run(service, session_runtime, gates, run_id).await
+            cancel_workflow_run(service, session_runtime, gates, admission, run_id).await
         });
         handoff
             .await

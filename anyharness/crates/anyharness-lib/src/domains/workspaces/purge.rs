@@ -1,7 +1,9 @@
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::domains::agents::portability::delete_session_agent_artifacts;
+use crate::domains::sessions::admission::SessionMutationAdmission;
 use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::store::SessionStore;
@@ -28,6 +30,19 @@ pub enum WorkspacePurgeServiceOutcome {
         workspace: WorkspaceRecord,
         message: String,
     },
+    /// PR1227-WORKSPACE-FENCE-01: a session controlled by a nonterminal
+    /// workflow was observed under the exclusive workspace lease (a workflow
+    /// created+bound it inside the up-front admission window). The destructive
+    /// path fails closed before any effect; carries the controlling run id for
+    /// logging only.
+    ControlledByWorkflow { run_id: String },
+    /// PR1227-WORKSPACE-FENCE-02: a session id enumerated under the exclusive
+    /// workspace lease was NOT in the set the up-front admission snapshotted and
+    /// holds permits for (a workflow bound it after the snapshot, and its
+    /// controller may already have terminalized — escaping the nonterminal-only
+    /// FENCE-01 re-check). The destructive path fails closed before any effect;
+    /// carries the unadmitted session id for the conflict detail only.
+    SessionAppearedAfterAdmission { session_id: String },
 }
 
 #[derive(Clone)]
@@ -38,12 +53,14 @@ pub struct WorkspacePurgeService {
     session_store: SessionStore,
     attachment_storage: PromptAttachmentStorage,
     operation_gate: Arc<WorkspaceOperationGate>,
+    admission: Arc<SessionMutationAdmission>,
     checkout_gate: Arc<CheckoutDeletionGate>,
     preflight_checker: Arc<RetirePreflightChecker>,
     runtime_home: PathBuf,
 }
 
 impl WorkspacePurgeService {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         workspace_runtime: Arc<WorkspaceRuntime>,
         session_runtime: Arc<SessionRuntime>,
@@ -51,6 +68,7 @@ impl WorkspacePurgeService {
         session_store: SessionStore,
         attachment_storage: PromptAttachmentStorage,
         operation_gate: Arc<WorkspaceOperationGate>,
+        admission: Arc<SessionMutationAdmission>,
         checkout_gate: Arc<CheckoutDeletionGate>,
         preflight_checker: Arc<RetirePreflightChecker>,
         runtime_home: PathBuf,
@@ -62,6 +80,7 @@ impl WorkspacePurgeService {
             session_store,
             attachment_storage,
             operation_gate,
+            admission,
             checkout_gate,
             preflight_checker,
             runtime_home,
@@ -73,7 +92,37 @@ impl WorkspacePurgeService {
         workspace_id: &str,
         retry_only: bool,
     ) -> anyhow::Result<WorkspacePurgeServiceOutcome> {
+        self.purge_with_admitted_session_ids(workspace_id, retry_only, None)
+            .await
+    }
+
+    /// `admitted_session_ids` is the set of session ids the HTTP layer's
+    /// up-front `admit_all_workspace_sessions` snapshotted and holds permits for
+    /// (PR1227-WORKSPACE-FENCE-02). `None` means the caller admitted nothing
+    /// up front (e.g. the purge-retry path, which re-uses an already-admitted
+    /// purge tombstone); the admitted-set membership check is then skipped and
+    /// only the nonterminal FENCE-01 re-check applies.
+    pub async fn purge_with_admitted_session_ids(
+        &self,
+        workspace_id: &str,
+        retry_only: bool,
+        admitted_session_ids: Option<BTreeSet<String>>,
+    ) -> anyhow::Result<WorkspacePurgeServiceOutcome> {
         let _workspace_lease = self.operation_gate.acquire_exclusive(workspace_id).await;
+        // PR1227-WORKSPACE-FENCE-01/02: under the exclusive lease (which excludes
+        // the shared SessionStart lease every workflow session creation holds),
+        // re-enumerate the session set and fail closed if (01) a workflow now
+        // controls one the HTTP up-front admission could not have seen, OR (02)
+        // any enumerated session id was NOT in the up-front admitted set — even
+        // if its workflow already terminalized (the bind->terminalize race that
+        // slips past the nonterminal-only FENCE-01 check). Read only: no permit,
+        // no further lease — no ABBA edge.
+        if let Some(outcome) = self
+            .reject_if_workflow_controlled(workspace_id, admitted_session_ids.as_ref())
+            .await?
+        {
+            return Ok(outcome);
+        }
         let Some(workspace) = self.workspace_runtime.get_workspace(workspace_id)? else {
             return Ok(WorkspacePurgeServiceOutcome::Deleted {
                 already_deleted: true,
@@ -184,6 +233,63 @@ impl WorkspacePurgeService {
             already_deleted: false,
             cleanup_attempted: true,
         })
+    }
+
+    /// PR1227-WORKSPACE-FENCE-01/02: re-check, under the already-held exclusive
+    /// workspace lease, the workspace session set. Fails closed when either
+    /// (01) a workspace session is controlled by a NONTERMINAL workflow, or
+    /// (02) an enumerated session id is absent from `admitted_session_ids` (the
+    /// up-front admission snapshot the HTTP layer holds permits for) — even if
+    /// its workflow already terminalized. FENCE-02 is checked FIRST because it
+    /// catches the bind->terminalize race that FENCE-01 structurally cannot see
+    /// (a terminal controller yields `None`).
+    async fn reject_if_workflow_controlled(
+        &self,
+        workspace_id: &str,
+        admitted_session_ids: Option<&BTreeSet<String>>,
+    ) -> anyhow::Result<Option<WorkspacePurgeServiceOutcome>> {
+        let session_ids = self
+            .session_store
+            .list_with_dismissed_by_workspace(workspace_id)?
+            .into_iter()
+            .map(|session| session.id)
+            .collect::<Vec<_>>();
+        // PR1227-WORKSPACE-FENCE-02: pure in-memory set-membership comparison
+        // over ids enumerated under the already-held exclusive lease — no
+        // permit, no lease acquired, so no edge added to the canonical lock
+        // order. Any id not in the up-front admitted set was bound after the
+        // snapshot and was never admitted; fail closed regardless of whether
+        // its controlling workflow is still nonterminal.
+        if let Some(admitted) = admitted_session_ids {
+            if let Some(unadmitted) = session_ids.iter().find(|id| !admitted.contains(*id)) {
+                tracing::info!(
+                    workspace_id = %workspace_id,
+                    session_id = %unadmitted,
+                    "workspace purge rejected under exclusive lease: a session appeared after the destruction admission snapshot"
+                );
+                return Ok(Some(
+                    WorkspacePurgeServiceOutcome::SessionAppearedAfterAdmission {
+                        session_id: unadmitted.clone(),
+                    },
+                ));
+            }
+        }
+        if let Some((session_id, run_id)) = self
+            .admission
+            .find_workflow_controlled_session(session_ids)
+            .await?
+        {
+            tracing::info!(
+                workspace_id = %workspace_id,
+                session_id = %session_id,
+                controlling_run_id = %run_id,
+                "workspace purge rejected under exclusive lease: a workflow controls a session created after admission"
+            );
+            return Ok(Some(WorkspacePurgeServiceOutcome::ControlledByWorkflow {
+                run_id,
+            }));
+        }
+        Ok(None)
     }
 
     fn acquire_checkout_lease(

@@ -834,7 +834,8 @@ fn fail_nonterminal_leaves_terminal_rows_untouched() {
 
 #[test]
 fn later_run_may_reuse_a_historical_session_id() {
-    // No unique constraint on session_id: two runs may share one.
+    // Spec 2b (0063 partial uniqueness): at most one NONTERMINAL run may bind
+    // one session; a TERMINAL run's session id may be reused by a later run.
     let svc = service();
     let first = new_run_id();
     let second = new_run_id();
@@ -843,7 +844,19 @@ fn later_run_may_reuse_a_historical_session_id() {
     assert!(svc.begin_run(&first).expect("begin a"));
     assert!(svc.begin_run(&second).expect("begin b"));
     assert!(svc.bind_session(&first, "shared-session").expect("bind a"));
-    assert!(svc.bind_session(&second, "shared-session").expect("bind b"));
+
+    // Concurrent nonterminal reuse is rejected by the partial unique index.
+    assert!(
+        svc.bind_session(&second, "shared-session").is_err(),
+        "a second nonterminal run must not bind the controlled session"
+    );
+
+    // Terminalize the first run: historical reuse becomes legal again.
+    svc.fail_nonterminal(&first, WorkflowRunFailureCode::SessionStartFailed)
+        .expect("terminalize a");
+    assert!(svc
+        .bind_session(&second, "shared-session")
+        .expect("bind b after terminal"));
 }
 
 #[test]

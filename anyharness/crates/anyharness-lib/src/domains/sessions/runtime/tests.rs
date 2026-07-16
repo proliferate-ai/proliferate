@@ -768,6 +768,7 @@ async fn create_persisted_internal_session_rejects_missing_checkout_without_inse
             model_id: None,
             mode_id: None,
             origin: OriginContext::api_local_runtime(),
+            preselected_session_id: None,
         })
         .expect_err("missing checkout should be refused");
 

@@ -1011,6 +1011,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -1683,6 +1693,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -1724,6 +1744,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -1758,6 +1788,16 @@
           },
           "404": {
             "description": "Review run not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
             "content": {
               "application/json": {
                 "schema": {
@@ -1919,6 +1959,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -1953,6 +2003,16 @@
           },
           "404": {
             "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
             "content": {
               "application/json": {
                 "schema": {
@@ -2021,6 +2081,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -2055,6 +2125,16 @@
           },
           "404": {
             "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
             "content": {
               "application/json": {
                 "schema": {
@@ -2478,6 +2558,16 @@
           },
           "404": {
             "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
             "content": {
               "application/json": {
                 "schema": {
@@ -2915,6 +3005,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       },
@@ -2974,6 +3074,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -3025,6 +3135,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -3069,6 +3189,16 @@
           },
           "404": {
             "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
             "content": {
               "application/json": {
                 "schema": {
@@ -4199,6 +4329,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/WorkspacePurgeResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -5564,6 +5704,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -5608,6 +5758,16 @@
           },
           "404": {
             "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
             "content": {
               "application/json": {
                 "schema": {
@@ -5889,6 +6049,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -5979,6 +6149,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -6026,6 +6206,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PlanDecisionResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -6092,6 +6282,16 @@
           },
           "404": {
             "description": "Plan or session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
             "content": {
               "application/json": {
                 "schema": {
@@ -6293,6 +6493,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -6419,6 +6629,16 @@
           },
           "400": {
             "description": "Invalid review request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session execution is controlled by an active workflow run",
             "content": {
               "application/json": {
                 "schema": {

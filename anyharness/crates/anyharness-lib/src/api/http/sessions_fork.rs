@@ -1,3 +1,5 @@
+use crate::api::http::access::admit_session_mutation;
+use crate::domains::sessions::admission::SessionMutationKind;
 use anyharness_contract::v1::{ForkChildStartStatus, ForkSessionRequest, ForkSessionResponse};
 use axum::{
     body::Bytes,
@@ -37,6 +39,8 @@ pub async fn fork_session(
     body: Bytes,
 ) -> Result<Json<ForkSessionResponse>, ApiError> {
     assert_session_auth_scope(&state, &auth, &session_id)?;
+    let _admission_permit =
+        admit_session_mutation(&state, &session_id, SessionMutationKind::Fork).await?;
     let req = parse_optional_fork_request(body)?;
     let _lease = acquire_session_exclusive_operation_lease(
         &state,

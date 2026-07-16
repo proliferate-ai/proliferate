@@ -6065,6 +6065,15 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     list_repo_roots: {
@@ -6569,6 +6578,15 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     send_review_feedback: {
@@ -6601,6 +6619,15 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     stop_review: {
@@ -6626,6 +6653,15 @@ export interface operations {
             };
             /** @description Review run not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6753,6 +6789,15 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     close_session: {
@@ -6778,6 +6823,15 @@ export interface operations {
             };
             /** @description Session not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6830,6 +6884,15 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     dismiss_session: {
@@ -6855,6 +6918,15 @@ export interface operations {
             };
             /** @description Session not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7144,6 +7216,15 @@ export interface operations {
             };
             /** @description Not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7470,6 +7551,15 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     edit_pending_prompt: {
@@ -7501,6 +7591,15 @@ export interface operations {
             };
             /** @description Session or pending prompt not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7542,6 +7641,15 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     prompt_session: {
@@ -7571,6 +7679,15 @@ export interface operations {
             };
             /** @description Session not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8446,6 +8563,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspacePurgeResponse"];
+                };
+            };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -9426,6 +9552,15 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     export_workspace_mobility_archive: {
@@ -9455,6 +9590,15 @@ export interface operations {
             };
             /** @description Workspace not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9652,6 +9796,15 @@ export interface operations {
                     "application/json": components["schemas"]["PlanDecisionResponse"];
                 };
             };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     get_plan_document: {
@@ -9706,6 +9859,15 @@ export interface operations {
                     "application/json": components["schemas"]["HandoffPlanResponse"];
                 };
             };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     reject_plan: {
@@ -9733,6 +9895,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlanDecisionResponse"];
+                };
+            };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -9775,6 +9946,15 @@ export interface operations {
             };
             /** @description Plan or session not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9932,6 +10112,15 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     retry_retire_cleanup: {
@@ -10025,6 +10214,15 @@ export interface operations {
             };
             /** @description Invalid review request */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session execution is controlled by an active workflow run */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
