@@ -4480,10 +4480,13 @@ export interface components {
          *     and clone repositories without advertising Cloud workspaces.
          */
         GitHubRepositoryAccessCapability: {
-            /** Status */
-            status: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "disabled" | "operator_configuration_required" | "ready";
             /** Provider */
-            provider: string | null;
+            provider: "github_app" | null;
             /** Displayname */
             displayName: string | null;
         };
@@ -4706,10 +4709,13 @@ export interface components {
          *     involved in the managed-Cloud path.
          */
         ManagedCloudCapability: {
-            /** Status */
-            status: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "disabled" | "operator_configuration_required" | "ready";
             /** Repositoryauthority */
-            repositoryAuthority: string | null;
+            repositoryAuthority: "github_app" | null;
         };
         /** ManagedCloudWorkflowTarget */
         ManagedCloudWorkflowTarget: {

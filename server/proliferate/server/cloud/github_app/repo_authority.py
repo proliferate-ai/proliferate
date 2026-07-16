@@ -8,6 +8,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.config import settings
 from proliferate.db.store import github_app as github_app_store
 from proliferate.integrations.github import (
     GitHubAppInstallationInfo,
@@ -147,6 +148,23 @@ async def _refresh_github_app_authorization(
     )
 
 
+def require_github_app_runtime_configured() -> None:
+    """Fail closed when the operator's GitHub App config is incomplete.
+
+    Checked before any user-state lookup so an unconfigured or partially
+    configured deployment reports an operator problem instead of sending the
+    user to an authorization flow that cannot work — even when a cached user
+    authorization exists from before the config regressed.
+    """
+    if not settings.github_app_configured:
+        raise CloudApiError(
+            "github_app_not_configured",
+            "The GitHub App is not fully configured for this deployment. "
+            "An operator must complete the GitHub App configuration.",
+            status_code=503,
+        )
+
+
 async def require_github_cloud_repo_authority(
     db: AsyncSession,
     *,
@@ -154,6 +172,7 @@ async def require_github_cloud_repo_authority(
     git_owner: str,
     git_repo_name: str,
 ) -> GitHubCloudRepoAuthority:
+    require_github_app_runtime_configured()
     authorization = await ensure_fresh_github_app_authorization(db, user_id=user_id)
     installations = await github_app_store.list_active_github_app_installations_for_owner(
         db,

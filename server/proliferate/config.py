@@ -522,14 +522,15 @@ class Settings(BaseSettings):
         """Presence of each GitHub App runtime requirement, order-stable.
 
         One entry per field group the App runtime path needs: App id (JWT
-        signing subject), OAuth client id + secret (user authorization and
-        token exchange), webhook secret (webhook validation), and a private
-        key in exactly one of its two forms (App JWT signing). Internal
-        helper for the aggregate predicates below; never expose per-field
-        presence publicly.
+        signing subject), App slug (installation URL construction), OAuth
+        client id + secret (user authorization and token exchange), webhook
+        secret (webhook validation), and a private key in exactly one of its
+        two forms (App JWT signing). Internal helper for the aggregate
+        predicates below; never expose per-field presence publicly.
         """
         return (
             bool(self.github_app_id.strip()),
+            bool(self.github_app_slug.strip()),
             bool(self.github_app_client_id.strip()),
             bool(self.github_app_client_secret.strip()),
             bool(self.github_app_webhook_secret.strip()),
@@ -561,10 +562,17 @@ class Settings(BaseSettings):
 
     @property
     def cloud_provisioning_partially_configured(self) -> bool:
-        """True when E2B config is started but incomplete (non-debug only)."""
+        """True when E2B config is started but incomplete (non-debug only).
+
+        Either half alone (API key without template, or template without API
+        key) is an operator error the capability contract reports as
+        operator configuration required rather than disabled.
+        """
         if self.debug:
             return False
-        return bool(self.e2b_api_key.strip()) and not bool(self.e2b_template_name.strip())
+        key_present = bool(self.e2b_api_key.strip())
+        template_present = bool(self.e2b_template_name.strip())
+        return key_present != template_present
 
     @property
     def single_org_mode(self) -> bool:
