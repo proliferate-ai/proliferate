@@ -2442,6 +2442,12 @@ const GREEN_EVIDENCE_REQUIRED_SCENARIOS: ReadonlySet<string> = new Set([
   "T2-AUTH-ORG",
   SELFHOST_INSTALL_1_SCENARIO_ID,
   "CLOUD-PROVISION-1",
+  // Every SELFHOST-QUAL-1 cell (SH-GITHUB-AUTH / SH-GATEWAY / SH-CLOUD-ADDON)
+  // emits its kind-scoped evidence on green (a bare string here, not a scenario
+  // import, to keep schema.ts free of a scenario→schema cycle — matching
+  // CLOUD-PROVISION-1). Enforces the frozen Acceptance rule "Green requires
+  // complete evidence" for the optional-capability lane.
+  "SELFHOST-QUAL-1",
 ]);
 
 function scenarioRequiresGreenEvidence(scenarioId: string): boolean {

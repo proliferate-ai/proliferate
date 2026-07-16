@@ -703,6 +703,87 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     lanes: ["selfhost"],
   },
   {
+    name: "RELEASE_E2E_SELFHOST_CLOUD_E2B_API_KEY",
+    description:
+      "E2B API key the SELFHOST-QUAL-1 SH-CLOUD-ADDON cell writes into the instance env (E2B_API_KEY) so the " +
+      "self-host box's OWN server process provisions its personal cloud sandbox under this account. This is the " +
+      "INSTANCE's provider key (distinct from the harness-side RELEASE_E2E_E2B_API_KEY ground-truth backdoor); the " +
+      "cell also passes it to the E2B reap so the separate-account sandbox is torn down with the box's own key. " +
+      "Absent -> the cell fails CLOSED (a required case is green or red, never a silent skip). Pending founder provisioning.",
+    whereItLives:
+      "A dedicated qualification E2B account/team key. Local: `~/.proliferate-local/dev/qualification-infra.env` " +
+      "(mode 0600). CI: the `Qualification` environment's `RELEASE_E2E_SELFHOST_CLOUD_E2B_API_KEY` secret.",
+    secret: true,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_CLOUD_E2B_TEMPLATE_NAME",
+    description:
+      "The immutable self-built E2B runtime template ref (candidate runtime bytes) the SH-CLOUD-ADDON cell writes " +
+      "as E2B_TEMPLATE_NAME — the E2B_API_KEY + E2B_TEMPLATE_NAME complete pair is what common.sh gates the " +
+      "cloud-workspaces compose profile on. Recorded as the evidence's e2b_template_id receipt. Absent -> the cell " +
+      "fails CLOSED. Pending founder provisioning.",
+    whereItLives:
+      "The self-built qualification runtime template published to the RELEASE_E2E_SELFHOST_CLOUD_E2B_API_KEY account. " +
+      "Local: `~/.proliferate-local/dev/qualification-infra.env` (mode 0600). CI: the `Qualification` environment's " +
+      "`RELEASE_E2E_SELFHOST_CLOUD_E2B_TEMPLATE_NAME` variable.",
+    secret: false,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_ID",
+    description:
+      "GitHub App id of the INSTANCE's own cloud add-on GitHub App (written as GITHUB_APP_ID), used by the " +
+      "SH-CLOUD-ADDON cell's real product GitHub-authorization path that binds a covered repo to the personal " +
+      "sandbox. This is a self-host-box App on the fixed origin, DISTINCT from the managed-cloud " +
+      "RELEASE_E2E_CLOUD_GITHUB_APP_* set (which targets the harness's managed-cloud staging installation). " +
+      "Recorded (hashed) as the evidence's github_app_installation_id_hash. Absent -> the cell fails CLOSED. Pending " +
+      "founder provisioning.",
+    whereItLives:
+      "A standing `Proliferate Self-Host Qualification Cloud` GitHub App (proliferate-e2e org) installed on the e2e " +
+      "fixture repo, callback on the fixed origin. Local: `~/.proliferate-local/dev/qualification-infra.env` (0600). " +
+      "CI: the `Qualification` environment's `RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_ID` variable.",
+    secret: false,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_CLIENT_ID",
+    description:
+      "OAuth client id of the instance cloud add-on GitHub App (written as GITHUB_APP_CLIENT_ID). Pairs with " +
+      "RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_ID. Absent -> the SH-CLOUD-ADDON cell fails CLOSED. Pending founder provisioning.",
+    whereItLives:
+      "Same `Proliferate Self-Host Qualification Cloud` GitHub App. Local: " +
+      "`~/.proliferate-local/dev/qualification-infra.env` (0600). CI: the `Qualification` environment's " +
+      "`RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_CLIENT_ID` variable.",
+    secret: false,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_CLIENT_SECRET",
+    description:
+      "OAuth client SECRET of the instance cloud add-on GitHub App (written as GITHUB_APP_CLIENT_SECRET into a 0600 " +
+      "file scp'd to the box, never argv). Pairs with RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_CLIENT_ID. Never stored " +
+      "in evidence. Absent -> the SH-CLOUD-ADDON cell fails CLOSED. Pending founder provisioning.",
+    whereItLives:
+      "Same GitHub App. Local: `~/.proliferate-local/dev/qualification-infra.env` (mode 0600). CI: the " +
+      "`Qualification` environment's `RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_CLIENT_SECRET` secret.",
+    secret: true,
+    lanes: ["selfhost"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_PRIVATE_KEY",
+    description:
+      "The PEM private key of the instance cloud add-on GitHub App (written inline as GITHUB_APP_PRIVATE_KEY into a " +
+      "0600 file scp'd to the box, never argv). Signs the App JWT the server exchanges for installation tokens. Never " +
+      "stored in evidence. Absent -> the SH-CLOUD-ADDON cell fails CLOSED. Pending founder provisioning.",
+    whereItLives:
+      "Same GitHub App's generated private key (multi-line PEM). Local: `~/.proliferate-local/dev/qualification-infra.env` " +
+      "(mode 0600, newlines preserved). CI: the `Qualification` environment's " +
+      "`RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_PRIVATE_KEY` secret.",
+    secret: true,
+    lanes: ["selfhost"],
+  },
+  {
     name: "RELEASE_E2E_CLOUD_AWS_REGION",
     description:
       "AWS region hosting CLOUD-PROVISION-1's run-scoped EC2 ingress box (Ec2ProvisionConfig.region). " +

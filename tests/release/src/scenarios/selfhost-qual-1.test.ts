@@ -6,17 +6,28 @@ import {
   REPRESENTATIVE_HARNESS,
   SELFHOST_QUAL_1_ID,
   SELFHOST_QUAL_CELL_ORDER,
+  SH_CLOUD_ADDON,
   SH_GATEWAY,
   SH_GITHUB_AUTH,
   attachCleanupEvidence,
+  runCloudAddonCell,
   runGatewayCell,
   runGithubAuthCell,
   runSelfHostQualCells,
+  type CloudAddonCellOps,
+  type CloudAddonProvisionResult,
   type GatewayCellOps,
   type QualCellEvidenceNoCleanup,
   type SelfHostQualCellResult,
   type SelfHostQualDriver,
 } from "./selfhost-qual-1.js";
+import {
+  renderCloudAddonEnvLines,
+  resolveCloudAddonConfig,
+  stripCloudAddonKeysSedProgram,
+  CLOUD_ADDON_ENV_KEYS,
+  type CloudAddonEnvSource,
+} from "../worlds/selfhost/cloud-addon.js";
 import type { ScenarioRunContext } from "./types.js";
 import type { CandidateBuildMapV1 } from "../artifacts/build-map.js";
 import type { EnvResolution } from "../config/env-resolution.js";
@@ -59,6 +70,16 @@ const OAUTH_ENV: Record<string, string> = {
   RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_B_STATE: "/tmp/b.json",
   RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_A_EMAIL: "identity-a@example.com",
   RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_B_EMAIL: "identity-b@example.com",
+};
+
+/** Full add-on env (all six founder inputs present) so resolveCloudAddonConfig succeeds. */
+const CLOUD_ADDON_ENV: Record<string, string> = {
+  RELEASE_E2E_SELFHOST_CLOUD_E2B_API_KEY: "e2b-key",
+  RELEASE_E2E_SELFHOST_CLOUD_E2B_TEMPLATE_NAME: "tmpl-selfhost-1",
+  RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_ID: "123456",
+  RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_CLIENT_ID: "Iv1.cloud",
+  RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_CLIENT_SECRET: "cloud-secret",
+  RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_PRIVATE_KEY: "-----BEGIN KEY-----\nabc\n-----END KEY-----",
 };
 
 function fakeCandidateMap(): CandidateBuildMapV1 {
@@ -192,6 +213,21 @@ function greenEvidenceFor(cellName: string): QualCellEvidenceNoCleanup {
       methods_advertise_github: true,
     };
   }
+  if (cellName === SH_CLOUD_ADDON) {
+    return {
+      ...base,
+      kind: "selfhost_cloud_addon",
+      github_app_installation_id_hash: "6".repeat(64),
+      e2b_template_id: "tmpl-selfhost-1",
+      sandbox_id_hash: "7".repeat(64),
+      workspace_id_hash: "8".repeat(64),
+      session_id_hash: "9".repeat(64),
+      turn_completed: true,
+      pause_wake_state_intact: true,
+      disable_truthful: true,
+      base_healthy_after_disable: true,
+    };
+  }
   return {
     ...base,
     kind: "selfhost_gateway",
@@ -226,15 +262,20 @@ function allGreenDriver(probe: DriverProbe = { fixedSubdomains: [], ownerEmails:
     },
     runGithubAuth: () => green(SH_GITHUB_AUTH),
     runGateway: () => green(SH_GATEWAY),
+    runCloudAddon: () => green(SH_CLOUD_ADDON),
     closeWorld: async () => cleanCleanup(),
   };
 }
 
 // ── Orchestration tests (fake driver) ────────────────────────────────────────
 
-test("runSelfHostQualCells: both cells green with a clean teardown", async () => {
-  const outcomes = await runSelfHostQualCells(fakeCtx({ env: fakeEnv(OAUTH_ENV) }), allCells(), allGreenDriver());
-  assert.equal(outcomes.length, 2);
+test("runSelfHostQualCells: all cells green with a clean teardown", async () => {
+  const outcomes = await runSelfHostQualCells(
+    fakeCtx({ env: fakeEnv({ ...OAUTH_ENV, ...CLOUD_ADDON_ENV }) }),
+    allCells(),
+    allGreenDriver(),
+  );
+  assert.equal(outcomes.length, SELFHOST_QUAL_CELL_ORDER.length);
   for (const outcome of outcomes) {
     assert.equal(outcome.status, "green", JSON.stringify(outcome));
     assert.ok(outcome.evidence, `${outcome.cellId} missing evidence`);
@@ -516,6 +557,134 @@ test("runGatewayCell: fails when the gateway does not persist across restart", a
   assert.match(result.reason?.message ?? "", /did not persist across restart/);
 });
 
+// ── SH-CLOUD-ADDON cell logic (fake ops) ─────────────────────────────────────
+
+const CLOUD_ADDON_ENV_SOURCE: CloudAddonEnvSource = { get: (name) => CLOUD_ADDON_ENV[name] };
+
+function greenCloudAddonOps(): CloudAddonCellOps {
+  let enabled = false;
+  return {
+    async fetchCloudWorkspacesCapability() {
+      return { agentGateway: false, cloudWorkspaces: enabled };
+    },
+    async configureAndEnableCloudAddon() {
+      enabled = true;
+    },
+    async provisionAndRunTurn() {
+      return {
+        githubAppInstallationId: "inst-1",
+        e2bTemplateId: "tmpl-selfhost-1",
+        sandboxId: "sbx-1",
+        workspaceId: "ws-1",
+        sessionId: "sess-1",
+        providerSandboxId: "e2b-sbx-1",
+        turn: { ended: true },
+      } satisfies CloudAddonProvisionResult;
+    },
+    async registerSandboxReap() {
+      // no-op in the fake; the real op registers a durable reap
+    },
+    async pauseWakeStateIntact() {
+      return { intact: true };
+    },
+    async disableAndReassert() {
+      enabled = false;
+      return { cloudWorkspacesFalse: true, baseHealthy: true };
+    },
+  };
+}
+
+test("runCloudAddonCell: green through enable → provision+turn → pause/wake → truthful disable", async () => {
+  const result = await runCloudAddonCell(fakeWorld(), FAKE_OWNER, CLOUD_ADDON_ENV_SOURCE, greenCloudAddonOps());
+  assert.equal(result.status, "green", JSON.stringify(result));
+  assert.equal(result.evidence?.kind, "selfhost_cloud_addon");
+  assert.equal((result.evidence as { e2b_template_id: string }).e2b_template_id, "tmpl-selfhost-1");
+});
+
+test("runCloudAddonCell: fails closed when the add-on env is absent", async () => {
+  const result = await runCloudAddonCell(fakeWorld(), FAKE_OWNER, { get: () => undefined }, greenCloudAddonOps());
+  assert.equal(result.status, "failed");
+  assert.match(result.reason?.message ?? "", /missing required cloud add-on env/);
+  assert.equal(result.evidence, undefined);
+});
+
+test("runCloudAddonCell: fails when cloudWorkspaces is already true before enabling (mismatch)", async () => {
+  const ops = greenCloudAddonOps();
+  ops.fetchCloudWorkspacesCapability = async () => ({ agentGateway: false, cloudWorkspaces: true });
+  const result = await runCloudAddonCell(fakeWorld(), FAKE_OWNER, CLOUD_ADDON_ENV_SOURCE, ops);
+  assert.equal(result.status, "failed");
+  assert.match(result.reason?.message ?? "", /already true before/);
+});
+
+test("runCloudAddonCell: fails when cloudWorkspaces does not flip to true after enabling", async () => {
+  const ops = greenCloudAddonOps();
+  ops.fetchCloudWorkspacesCapability = async () => ({ agentGateway: false, cloudWorkspaces: false });
+  const result = await runCloudAddonCell(fakeWorld(), FAKE_OWNER, CLOUD_ADDON_ENV_SOURCE, ops);
+  assert.equal(result.status, "failed");
+  assert.match(result.reason?.message ?? "", /did not flip to true/);
+});
+
+test("runCloudAddonCell: fails closed when provisioning/turn errors", async () => {
+  const ops = greenCloudAddonOps();
+  ops.provisionAndRunTurn = async () => ({
+    githubAppInstallationId: "",
+    e2bTemplateId: "",
+    sandboxId: "",
+    workspaceId: "",
+    sessionId: "",
+    providerSandboxId: "e2b-sbx-1",
+    turn: { ended: false, error: "authorization drive not wired" },
+  });
+  const result = await runCloudAddonCell(fakeWorld(), FAKE_OWNER, CLOUD_ADDON_ENV_SOURCE, ops);
+  assert.equal(result.status, "failed");
+  assert.match(result.reason?.message ?? "", /provisioning\/turn errored/);
+});
+
+test("runCloudAddonCell: registers the provisioned E2B sandbox for reap before judging the turn", async () => {
+  const reaped: string[] = [];
+  const ops = greenCloudAddonOps();
+  ops.registerSandboxReap = async (_world, providerSandboxId) => {
+    reaped.push(providerSandboxId);
+  };
+  // Even when the turn later fails, the sandbox must already be registered.
+  ops.provisionAndRunTurn = async () => ({
+    githubAppInstallationId: "inst-1",
+    e2bTemplateId: "tmpl-selfhost-1",
+    sandboxId: "sbx-1",
+    workspaceId: "ws-1",
+    sessionId: "sess-1",
+    providerSandboxId: "e2b-sbx-9",
+    turn: { ended: false, error: "turn timed out" },
+  });
+  const result = await runCloudAddonCell(fakeWorld(), FAKE_OWNER, CLOUD_ADDON_ENV_SOURCE, ops);
+  assert.equal(result.status, "failed");
+  assert.deepEqual(reaped, ["e2b-sbx-9"]);
+});
+
+test("runCloudAddonCell: fails when the sandbox state does not survive pause/wake", async () => {
+  const ops = greenCloudAddonOps();
+  ops.pauseWakeStateIntact = async () => ({ intact: false });
+  const result = await runCloudAddonCell(fakeWorld(), FAKE_OWNER, CLOUD_ADDON_ENV_SOURCE, ops);
+  assert.equal(result.status, "failed");
+  assert.match(result.reason?.message ?? "", /did not survive a pause\/wake/);
+});
+
+test("runCloudAddonCell: fails when disabling leaves cloudWorkspaces stale-true (not truthful)", async () => {
+  const ops = greenCloudAddonOps();
+  ops.disableAndReassert = async () => ({ cloudWorkspacesFalse: false, baseHealthy: true });
+  const result = await runCloudAddonCell(fakeWorld(), FAKE_OWNER, CLOUD_ADDON_ENV_SOURCE, ops);
+  assert.equal(result.status, "failed");
+  assert.match(result.reason?.message ?? "", /stale-true|disable not truthful/);
+});
+
+test("runCloudAddonCell: fails when the base product is unhealthy after disable", async () => {
+  const ops = greenCloudAddonOps();
+  ops.disableAndReassert = async () => ({ cloudWorkspacesFalse: true, baseHealthy: false });
+  const result = await runCloudAddonCell(fakeWorld(), FAKE_OWNER, CLOUD_ADDON_ENV_SOURCE, ops);
+  assert.equal(result.status, "failed");
+  assert.match(result.reason?.message ?? "", /base product was not healthy/);
+});
+
 // ── Pure helper tests ────────────────────────────────────────────────────────
 
 test("correlateGatewaySpend: correlated + master-key-not-used when only the virtual key spent", () => {
@@ -675,6 +844,79 @@ test("classifyGithubInterstitial: an unexpected re-login is login_required; unkn
   assert.equal(classifyGithubInterstitial("about:blank", null), "unknown");
 });
 
+test("resolveCloudAddonConfig: ok with all six inputs; records template + app id receipts", () => {
+  const result = resolveCloudAddonConfig(CLOUD_ADDON_ENV_SOURCE, "https://box.qualification.proliferate.com");
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.value.e2bTemplateName, "tmpl-selfhost-1");
+    assert.equal(result.value.githubAppId, "123456");
+    assert.equal(result.value.block.githubAppCallbackBaseUrl, "https://box.qualification.proliferate.com/auth/");
+    assert.equal(result.value.block.e2bApiKey, "e2b-key");
+  }
+});
+
+test("resolveCloudAddonConfig: fails closed naming every missing var", () => {
+  const result = resolveCloudAddonConfig({ get: () => undefined }, "https://box.example.com");
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.match(result.reason, /RELEASE_E2E_SELFHOST_CLOUD_E2B_API_KEY/);
+    assert.match(result.reason, /RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_PRIVATE_KEY/);
+    assert.match(result.reason, /fails closed/);
+  }
+});
+
+test("resolveCloudAddonConfig: a single missing input still fails closed and names it", () => {
+  const partial = { ...CLOUD_ADDON_ENV };
+  delete partial.RELEASE_E2E_SELFHOST_CLOUD_E2B_TEMPLATE_NAME;
+  const result = resolveCloudAddonConfig({ get: (name) => partial[name] }, "https://box.example.com");
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.match(result.reason, /RELEASE_E2E_SELFHOST_CLOUD_E2B_TEMPLATE_NAME/);
+  }
+});
+
+test("stripCloudAddonKeysSedProgram + append overrides a shipped blank E2B_API_KEY", () => {
+  // Same grep -m1 first-occurrence gotcha as the gateway block: strip then append.
+  const shippedStatic = ["PROLIFERATE_HOSTNAME=box.example.com", "E2B_API_KEY=", "KEEP=me", ""].join("\n");
+  const block = renderCloudAddonEnvLines({
+    e2bApiKey: "REAL-E2B",
+    e2bTemplateName: "tmpl-x",
+    githubAppId: "999",
+    githubAppClientId: "Iv1.x",
+    githubAppClientSecret: "SECRET",
+    githubAppPrivateKey: "-----BEGIN-----\npem\n-----END-----",
+    githubAppCallbackBaseUrl: "https://box.example.com/auth/",
+  });
+  const stripped = shippedStatic
+    .split("\n")
+    .filter((line) => !CLOUD_ADDON_ENV_KEYS.some((key) => line.startsWith(`${key}=`)))
+    .join("\n");
+  const resolved = `${stripped}\n${block}`;
+  const firstValue = (key: string): string | undefined =>
+    resolved.split("\n").find((line) => line.startsWith(`${key}=`))?.slice(key.length + 1);
+  assert.equal(firstValue("E2B_API_KEY"), "REAL-E2B");
+  assert.equal(firstValue("E2B_TEMPLATE_NAME"), "tmpl-x");
+  assert.equal(firstValue("KEEP"), "me");
+  assert.equal(firstValue("PROLIFERATE_HOSTNAME"), "box.example.com");
+  const program = stripCloudAddonKeysSedProgram();
+  for (const key of CLOUD_ADDON_ENV_KEYS) {
+    assert.ok(program.includes(`/^${key}=/d`), `sed program should delete ${key}`);
+  }
+});
+
+test("renderCloudAddonEnvLines: single-quotes the inline PEM so embedded newlines survive", () => {
+  const lines = renderCloudAddonEnvLines({
+    e2bApiKey: "k",
+    e2bTemplateName: "t",
+    githubAppId: "1",
+    githubAppClientId: "c",
+    githubAppClientSecret: "s",
+    githubAppPrivateKey: "-----BEGIN-----\nmid\n-----END-----",
+    githubAppCallbackBaseUrl: "https://b/auth/",
+  });
+  assert.match(lines, /GITHUB_APP_PRIVATE_KEY='-----BEGIN-----\nmid\n-----END-----'/);
+});
+
 test("resolveGithubOauthConfig: names every missing var", () => {
   const result = resolveGithubOauthConfig({ get: () => undefined });
   assert.equal(result.ok, false);
@@ -754,9 +996,11 @@ function reportWith(cellName: string, evidence: CellEvidenceV1): TestRunReportV4
   return report;
 }
 
-test("validateReportV4 accepts emitted green SH-GITHUB-AUTH + SH-GATEWAY evidence", () => {
+test("validateReportV4 accepts emitted green SH-GITHUB-AUTH + SH-GATEWAY + SH-CLOUD-ADDON evidence", () => {
   const github = attachCleanupEvidence(greenEvidenceFor(SH_GITHUB_AUTH), cleanCleanup());
   const gateway = attachCleanupEvidence(greenEvidenceFor(SH_GATEWAY), cleanCleanup());
+  const cloudAddon = attachCleanupEvidence(greenEvidenceFor(SH_CLOUD_ADDON), cleanCleanup());
   validateReportV4(reportWith(SH_GITHUB_AUTH, github));
   validateReportV4(reportWith(SH_GATEWAY, gateway));
+  validateReportV4(reportWith(SH_CLOUD_ADDON, cloudAddon));
 });

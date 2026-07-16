@@ -35,6 +35,20 @@ export type SelfHostCleanupResourceKind = Extract<
   | "extracted_artifacts"
   | "run_directory"
   | "port_registration"
+  // SH-CLOUD-ADDON only (SELFHOST-QUAL-1): when the cloud add-on is enabled on a
+  // self-host box it provisions a personal E2B sandbox from a self-built E2B
+  // template — SEPARATE-account resources that survive the EC2 box's teardown, so
+  // they must be reaped through this same durable, reverse-order, replay-by-run
+  // ledger (SHR-006), not a cell-local finally. They are DELIBERATELY absent from
+  // `SELFHOST_EVIDENCE_CATEGORIES` below: those categories are the green-gating
+  // deletion booleans every self-host scenario shares, and a category requiring
+  // ≥1 registration would make INSTALL-1/ISOLATION-1/CFN-1 (which never touch
+  // E2B) look dirty. E2B reap therefore folds into the generic
+  // `registered`/`reconciled`/`failed` counts (a failed reap makes `failed > 0`,
+  // which downgrades the cell) plus the cell's own `disable_truthful` evidence —
+  // no new named cleanup boolean, no sibling-scenario blast radius.
+  | "e2b_sandbox"
+  | "e2b_template"
 >;
 
 /**
