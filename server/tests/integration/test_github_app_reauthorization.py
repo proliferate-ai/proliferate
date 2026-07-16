@@ -17,6 +17,21 @@ from proliferate.server.cloud.materialization.materialize import github_credenti
 from tests.integration.cloud_api_helpers import register_and_login
 
 
+def _configure_github_app(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make user-authorization tests exercise a complete operator config."""
+    values = {
+        "github_app_id": "12345",
+        "github_app_slug": "test-cloud",
+        "github_app_client_id": "Iv1.test-client",
+        "github_app_client_secret": "test-client-secret",
+        "github_app_webhook_secret": "test-webhook-secret",
+        "github_app_private_key": "-----BEGIN RSA PRIVATE KEY-----",
+        "github_app_private_key_path": "",
+    }
+    for field, value in values.items():
+        monkeypatch.setattr(repo_authority.settings, field, value)
+
+
 async def _seed_expired_authorization(
     db_session: AsyncSession,
     *,
@@ -108,6 +123,7 @@ async def test_authority_endpoint_returns_actionable_response_and_persists_reaut
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _configure_github_app(monkeypatch)
     session = await register_and_login(
         client,
         f"github-authority-reauth-{uuid4().hex[:8]}@example.com",
