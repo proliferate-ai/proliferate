@@ -10,5 +10,9 @@
   "include": [
     "**/*.ts",
     "**/*.tsx"
+  ],
+  "exclude": [
+    "**/*.test.ts",
+    "vitest.config.ts"
   ]
 }
