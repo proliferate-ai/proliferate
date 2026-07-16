@@ -2245,6 +2245,23 @@ function validateSelfHostCellEvidence(
       requireEvidenceHash(`${where}.byok_key_id_hash`, e.byok_key_id_hash);
       requireProviderClaim(`${where}.no_litellm_spend`, e.no_litellm_spend);
       requireProviderClaim(`${where}.no_e2b`, e.no_e2b);
+      // Defense-in-depth for PR7-CONTROL-010: the frozen contract folds the
+      // provider-absence guarantees into SH-BASE-TURN, so an UNPROVEN required
+      // subclaim cannot contribute a GREEN result. A green base-turn must have
+      // BOTH claims `observed_absent`; `unproven` on green is rejected here even
+      // if the cell logic ever regressed to returning green with unproven claims.
+      if (status === "green") {
+        if (e.no_litellm_spend !== "observed_absent") {
+          throw new ReportValidationError(
+            `${where}.no_litellm_spend is "${e.no_litellm_spend}" on a GREEN result; a green SH-BASE-TURN requires "observed_absent".`,
+          );
+        }
+        if (e.no_e2b !== "observed_absent") {
+          throw new ReportValidationError(
+            `${where}.no_e2b is "${e.no_e2b}" on a GREEN result; a green SH-BASE-TURN requires "observed_absent".`,
+          );
+        }
+      }
       return;
     }
     case "selfhost_invitee": {

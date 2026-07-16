@@ -458,10 +458,15 @@ function greenBaseTurnOps(closed: { value: boolean }, overrides: Partial<BaseTur
   };
 }
 
-test("runBaseTurnCell: green through UI create → turn → runtime reopen → product-native reload", async () => {
+test("runBaseTurnCell: BYOK-direct turn proven, but resolves EXPECTED_FAIL while provider-absence is unproven (PR7-CONTROL-010)", async () => {
+  // The turn/reopen/reload machinery all pass, and the evidence attaches; but the
+  // folded provider-absence guarantees are unproven, so SH-BASE-TURN must NOT be
+  // green — it reports expected_fail (an accepted gap), never a false green.
   const closed = { value: false };
   const result = await runBaseTurnCell(baseTurnWorld(), FAKE_OWNER, greenBaseTurnOps(closed));
-  assert.equal(result.status, "green", JSON.stringify(result));
+  assert.equal(result.status, "expected_fail", JSON.stringify(result));
+  assert.equal(result.reason?.code, "known_gap");
+  assert.match(result.reason?.message ?? "", /provider-absence guarantee.*unproven|no_litellm_spend|no_e2b/);
   assert.equal(result.evidence?.kind, "selfhost_base_turn");
   const evidence = result.evidence as {
     model_id: string;
@@ -498,10 +503,11 @@ test("runBaseTurnCell: no launchable model is blocked, not failed", async () => 
   assert.equal(closed.value, true);
 });
 
-test("runBaseTurnCell: records no_litellm_spend/no_e2b as \"unproven\", not a false absence (PR7-CONTROL-010)", async () => {
+test("runBaseTurnCell: an unproven provider-absence subclaim never yields green (PR7-CONTROL-010)", async () => {
   const closed = { value: false };
   const result = await runBaseTurnCell(baseTurnWorld(), FAKE_OWNER, greenBaseTurnOps(closed));
-  assert.equal(result.status, "green", JSON.stringify(result));
+  assert.notEqual(result.status, "green");
+  assert.equal(result.status, "expected_fail");
   const ev = result.evidence as { no_litellm_spend: string; no_e2b: string };
   assert.equal(ev.no_litellm_spend, "unproven");
   assert.equal(ev.no_e2b, "unproven");

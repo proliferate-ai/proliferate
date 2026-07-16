@@ -25,6 +25,7 @@ import {
   type LocalRouteTurnEvidenceV1,
   type LocalSessionTabsEvidenceV1,
   type LocalWorkspaceTurnEvidenceV1,
+  type SelfHostBaseTurnEvidenceV1,
   type SelfHostInstallClaimEvidenceV1,
   type TestRunReportV3,
   type TestRunReportV4,
@@ -1129,6 +1130,58 @@ test("validateReportV4 rejects a green self-host cell whose cleanup has a false 
     cleanup: { ...validSelfHostInstallClaimEvidence().cleanup, failed: 1 },
   });
   assert.throws(() => validateReportV4(failed), /cleanup.failed must be 0/);
+});
+
+/** A base-turn report with the given cell status + provider-absence claims. */
+function selfHostBaseTurnReportV4(
+  status: "green" | "expected_fail",
+  claim: "unproven" | "observed_absent",
+): TestRunReportV4 {
+  const report = validSelfHostReportV4();
+  const cellId = "SELFHOST-INSTALL-1/selfhost/cell=SH-BASE-TURN,harness=claude";
+  const evidence: SelfHostBaseTurnEvidenceV1 = {
+    kind: "selfhost_base_turn",
+    artifact_ids: ["server/linux-amd64"],
+    server_version: "0.3.27",
+    anyharness_version: "0.3.27",
+    harness: "claude",
+    api_origin: "sh-run-1.qualification.proliferate.com",
+    controller_runtime_origin: "127.0.0.1:8542",
+    model_id: "claude-haiku-4-5",
+    workspace_id_hash: "a".repeat(64),
+    session_id_hash: "b".repeat(64),
+    transcript_reopened: true,
+    byok_route: "api_key",
+    byok_key_id_hash: "c".repeat(64),
+    no_litellm_spend: claim,
+    no_e2b: claim,
+    cleanup: validSelfHostInstallClaimEvidence().cleanup,
+  };
+  const dims = { cell: "SH-BASE-TURN", harness: "claude" };
+  report.selected_cells[0] = { ...report.selected_cells[0], cell_id: cellId, dimensions: dims };
+  const reason =
+    status === "expected_fail" ? { code: "known_gap" as const, message: "provider-absence unproven" } : null;
+  report.results[0] = { ...report.results[0], cell_id: cellId, dimensions: dims, status, reason, evidence };
+  // Keep summary.by_status consistent with the single result's status.
+  report.summary.by_status.green = status === "green" ? 1 : 0;
+  report.summary.by_status.expected_fail = status === "expected_fail" ? 1 : 0;
+  report.verdict.reasons = expectedVerdict(report).reasons;
+  return report;
+}
+
+test("validateReportV4 REJECTS a GREEN SH-BASE-TURN with unproven provider-absence claims (PR7-CONTROL-010)", () => {
+  assert.throws(
+    () => validateReportV4(selfHostBaseTurnReportV4("green", "unproven")),
+    /no_litellm_spend is "unproven" on a GREEN result/,
+  );
+});
+
+test("validateReportV4 accepts an EXPECTED_FAIL SH-BASE-TURN with unproven claims (honest gap, PR7-CONTROL-010)", () => {
+  validateReportV4(selfHostBaseTurnReportV4("expected_fail", "unproven"));
+});
+
+test("validateReportV4 accepts a GREEN SH-BASE-TURN once provider absence is observed_absent (PR7-CONTROL-010)", () => {
+  validateReportV4(selfHostBaseTurnReportV4("green", "observed_absent"));
 });
 
 test("validateReportV4 accepts a failed self-host cell whose cleanup evidence records failed>0", () => {

@@ -20,6 +20,7 @@ import type {
   SelfHostDesktopOwnerEvidenceV1,
   SelfHostInstallClaimEvidenceV1,
   SelfHostInviteeEvidenceV1,
+  SelfHostProviderClaim,
 } from "../evidence/schema.js";
 import { SELFHOST_INSTALL_1_SCENARIO_ID } from "../evidence/schema.js";
 import type { PlannedCellV1, ResultReason, ScenarioDeclarableStatus } from "../runner/result.js";
@@ -697,6 +698,17 @@ export async function runBaseTurnCell(
     // container probe (PR7-CONTROL-010 — an earlier catch-to-empty container
     // observation could false-green and has been removed).
 
+    // Honest claim status (PR7-CONTROL-010): the frozen run-window spend/traffic
+    // observation is not performed by PR 7 for a gateway-OFF base install, so
+    // these are "unproven" rather than a false absence assertion. When a real
+    // run-window observation is later wired it sets "observed_absent" and the
+    // cell can go green.
+    // Typed as the union (not narrowed to the "unproven" literal) so the
+    // green-gate comparison below is meaningful and the fields flip to
+    // "observed_absent" cleanly once a real run-window observation is wired.
+    const noLitellmSpend = "unproven" as SelfHostProviderClaim;
+    const noE2b = "unproven" as SelfHostProviderClaim;
+
     const evidence: SelfHostBaseTurnEvidenceNoCleanup = {
       kind: "selfhost_base_turn",
       artifact_ids: artifactIds(world),
@@ -711,12 +723,38 @@ export async function runBaseTurnCell(
       transcript_reopened: true,
       byok_route: "api_key",
       byok_key_id_hash: sha256Hex(selection.apiKeyId),
-      // Honest claim status (PR7-CONTROL-010): the frozen run-window spend/traffic
-      // observation is not performed by PR 7 for a gateway-OFF base install, so
-      // these are "unproven" rather than a false absence assertion.
-      no_litellm_spend: "unproven",
-      no_e2b: "unproven",
+      no_litellm_spend: noLitellmSpend,
+      no_e2b: noE2b,
     };
+
+    // The frozen contract folds the provider-absence guarantees into
+    // SH-BASE-TURN, so an UNPROVEN required subclaim must NOT contribute a green
+    // result (PR7-CONTROL-010). The cell resolves to `expected_fail` (a known,
+    // accepted gap) with a bounded reason — the genuinely-proven BYOK-direct turn
+    // evidence still attaches, but the aggregate honestly reports the guarantee
+    // as unproven rather than green. It goes green only once both subclaims are
+    // `observed_absent` (a real run-window spend/traffic observation).
+    const unprovenClaims: string[] = [];
+    if (noLitellmSpend !== "observed_absent") {
+      unprovenClaims.push("no_litellm_spend");
+    }
+    if (noE2b !== "observed_absent") {
+      unprovenClaims.push("no_e2b");
+    }
+    if (unprovenClaims.length > 0) {
+      return {
+        status: "expected_fail",
+        reason: {
+          code: "known_gap",
+          message:
+            `SH-BASE-TURN: the BYOK-direct turn is proven, but the folded provider-absence guarantee(s) ` +
+            `[${unprovenClaims.join(", ")}] are unproven — PR 7 does not perform the frozen run-window ` +
+            `spend/traffic observation for a gateway-OFF base install. Reporting expected_fail (accepted gap), ` +
+            `not green, until that observation is wired.`,
+        },
+        evidence,
+      };
+    }
     return { status: "green", evidence };
   } finally {
     await page.close().catch(() => undefined);
