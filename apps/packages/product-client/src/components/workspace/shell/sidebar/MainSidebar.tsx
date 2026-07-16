@@ -29,6 +29,7 @@ import { CAPABILITY_COPY } from "#product/copy/capabilities/capability-copy";
 import { APP_ROUTES } from "#product/config/app-routes";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+import { useSidebarRepoAvailabilityActions } from "#product/hooks/workspaces/workflows/use-sidebar-repo-availability-actions";
 import { useCloudBilling } from "#product/hooks/cloud/facade/use-cloud-billing";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 import { useSidebarShortcutTargets } from "#product/hooks/workspaces/derived/use-sidebar-shortcut-targets";
@@ -264,6 +265,13 @@ export const MainSidebar = memo(function MainSidebar() {
     navigate(buildCloudRepoSettingsHref(target.gitOwner, target.gitRepoName));
   }, [navigate]);
 
+  const {
+    isDesktopHost,
+    managedCloudAvailable,
+    handleSetUpCloud,
+    handleAddToThisMac,
+  } = useSidebarRepoAvailabilityActions();
+
   const cloudWorkspaceBlocked = billingPlan?.billingMode === "enforce" && billingPlan.startBlocked;
   const cloudWorkspaceTooltip = cloudUnavailable
     ? CAPABILITY_COPY.cloudDisabledTooltip
@@ -357,6 +365,11 @@ export const MainSidebar = memo(function MainSidebar() {
               onRenameWorkspace={handleRenameWorkspace}
               onRemoveRepo={handleRemoveRepo}
               onOpenRepoSettings={handleOpenRepoSettings}
+              isDesktopHost={isDesktopHost}
+              managedCloudAvailable={managedCloudAvailable}
+              onOpenCloudRepoSettingsForGroup={handleOpenCloudRepoSettings}
+              onSetUpCloudForGroup={handleSetUpCloud}
+              onAddToThisMac={handleAddToThisMac}
             />
           </DebugProfiler>
           <CoworkThreadsSection />

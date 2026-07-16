@@ -7,16 +7,15 @@ import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { Button } from "@proliferate/ui/primitives/Button";
 import type { GitHubRepoAuthorityAction } from "@proliferate/cloud-sdk";
+import { isManagedCloudOperatorGateUnmet } from "@proliferate/product-domain/repos/repo-readiness";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
+import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
+import { isSettingsAdminRole } from "#product/lib/domain/settings/admin-roles";
+import { buildCloudAdminRequestMessage } from "#product/lib/domain/settings/github-app-copy";
 import { useGitHubAppInstallation } from "#product/hooks/settings/workflows/use-github-app-installation";
 import { useGitHubAppUserAuthorization } from "#product/hooks/settings/workflows/use-github-app-user-authorization";
 import { type CloudRepoEnvironmentEditor } from "#product/hooks/settings/workflows/use-cloud-repo-environment-editor";
-
-// Land the GitHub authorization callback on the cloud environments settings
-// surface (the same return target the add-repo flow uses).
-const INSTALLATION_RETURN_TO =
-  "proliferate://settings/environments?source=github_app_installation_callback";
 
 interface RepoCloudGateProps {
   editor: CloudRepoEnvironmentEditor;
@@ -54,11 +53,32 @@ export function RepoCloudGate({
   cloudSignInAvailable,
   children,
 }: RepoCloudGateProps) {
+  const capabilities = useAppCapabilities();
+
   if (!editor.cloudRepository) {
     return (
       <CloudEnvironmentNotice
         label="Not available"
         description="Cloud environments are available for GitHub-backed repositories."
+      />
+    );
+  }
+
+  // PR2-GATING-01: the operator-configuration gate comes from the SAME shared
+  // resolver every cloud-repo surface uses — never a user-auth CTA.
+  if (isManagedCloudOperatorGateUnmet({
+    githubRepositoryAccess: capabilities.githubRepositoryAccessStatus,
+    managedCloud: capabilities.managedCloudStatus,
+  })) {
+    const appName = capabilities.githubRepositoryAccessDisplayName;
+    return (
+      <CloudEnvironmentNotice
+        label="Not configured"
+        description={
+          appName
+            ? `Cloud repository access for ${appName} isn't fully configured on this deployment. An operator must finish configuring it.`
+            : "Managed Cloud isn't fully configured on this deployment. An operator must finish configuring it before repositories can be set up in Cloud."
+        }
       />
     );
   }
@@ -158,6 +178,9 @@ export function RepoCloudGate({
  * repository access. Gaps a user can't self-serve (no active org for install)
  * stay explanatory messages.
  */
+// GitHub's per-user installation settings page (grant repository access).
+const INSTALLATION_SETTINGS_URL = "https://github.com/settings/installations";
+
 function RepoCloudAuthorizationRequired({
   status,
   action,
@@ -169,8 +192,9 @@ function RepoCloudAuthorizationRequired({
   message: string | null;
   onAuthorizationReturn: () => void;
 }) {
-  const { activeOrganizationId } = useActiveOrganization();
-  const { links } = useProductHost();
+  const { activeOrganization, activeOrganizationId } = useActiveOrganization();
+  const { links, clipboard } = useProductHost();
+  const canManageInstallation = isSettingsAdminRole(activeOrganization?.membership?.role);
   const userAuthorization = useGitHubAppUserAuthorization({
     returnTo: links.buildReturnUrl({
       kind: "settings",
@@ -181,9 +205,57 @@ function RepoCloudAuthorizationRequired({
   });
   const installation = useGitHubAppInstallation({
     organizationId: activeOrganizationId,
-    returnTo: INSTALLATION_RETURN_TO,
+    // Host-truthful install return (Desktop → custom scheme, Web → the browser
+    // origin) via the same buildReturnUrl strategy the sibling user-auth return
+    // above uses, rather than a hard-coded `proliferate://` deep link that would
+    // strand a Web-initiated installation (PR2-WEB-03).
+    returnTo: links.buildReturnUrl({
+      kind: "settings",
+      section: "environments",
+      query: [["source", "github_app_installation_callback"]],
+    }),
     onInstallationReturn: onAuthorizationReturn,
   });
+
+  // Operator configuration is repaired by the operator, never by the user:
+  // never show a user-auth/install/grant CTA here (PR 1 returns action=null).
+  if (status === "operator_configuration_required") {
+    return (
+      <SettingsEmptyState
+        icon={<Cloud aria-hidden="true" />}
+        title="Cloud is not configured on this deployment"
+        description={
+          message
+          ?? "Managed Cloud isn't fully configured on this deployment. An operator must finish configuring the Proliferate GitHub App before repositories can be set up in Cloud."
+        }
+      />
+    );
+  }
+
+  // A member who cannot install/grant is offered a copy-request instead of an
+  // install/grant CTA they cannot complete.
+  if ((action === "install_app" || action === "grant_repo_access") && !canManageInstallation) {
+    return (
+      <RepoAuthorityActionState
+        title="Ask an admin"
+        description={
+          message
+          ?? "You don't have permission to install or grant access to the Proliferate GitHub App. Copy a request to send to an organization admin."
+        }
+        actionLabel="Copy request"
+        error={null}
+        onAction={() => {
+          void clipboard.writeText(
+            buildCloudAdminRequestMessage({
+              orgName: activeOrganization?.name ?? null,
+              repo: null,
+              installUrl: INSTALLATION_SETTINGS_URL,
+            }),
+          );
+        }}
+      />
+    );
+  }
 
   if (action === "authorize_user" || action === "reauthorize_user") {
     const reconnect = action === "reauthorize_user";
@@ -301,6 +373,8 @@ function authorizationRequiredTitle(status: string): string {
       return "Repository not covered";
     case "missing_user_repo_access":
       return "No access to this repository";
+    case "operator_configuration_required":
+      return "Cloud is not configured on this deployment";
     default:
       return "GitHub App access needed";
   }
@@ -313,7 +387,9 @@ function repoAuthorityNotice(status: string): string {
     case "repo_not_covered":
       return "Update the Proliferate GitHub App installation so it has access to this repository.";
     case "missing_user_repo_access":
-      return "Your GitHub user does not have access to this repository.";
+      return "Your GitHub user does not have access to this repository. Ask a repository admin on GitHub to grant you access.";
+    case "operator_configuration_required":
+      return "An operator must finish configuring the Proliferate GitHub App on this deployment.";
     default:
       return "GitHub App repository access is not ready for this cloud environment.";
   }

@@ -266,10 +266,10 @@ export function resolveNewWorkspaceCommandTarget(
   if (cloudRepoAction.kind === "loading") {
     return disabledTarget("cloud", "Cloud repository settings are loading.");
   }
-  if (cloudRepoAction.kind === "configure") {
-    return disabledTarget("cloud", cloudRepoAction.label);
-  }
 
+  // A "configure" state stays actionable rather than becoming a disabled dead
+  // command: the executor routes it into the Cloud action/recovery surface so
+  // the user can repair the first unmet prerequisite (PR 2 §Cloud action dialog).
   return {
     commandKind: "cloud",
     cloudActionKind: cloudRepoAction.kind,
