@@ -99,6 +99,16 @@ export interface ScenarioCellSpec {
   dimensions: Record<string, string>;
   /** Extra requirements beyond the scenario-level requiredEnv, if any. */
   requiredEnv?: readonly string[];
+  /**
+   * Env vars this cell READS (via `ctx.env.get`) but does NOT require to plan:
+   * they are resolved into `ctx.env` when present so supplying them makes the
+   * cell exercise its real path, yet their absence does NOT block the cell —
+   * the cell's own logic fails CLOSED (red with a bounded reason) instead. This
+   * is how founder-gated live inputs (OAuth app, cloud add-on, LiteLLM pin, CFN
+   * bucket/repo) become reachable without turning a fail-closed red into a
+   * silently-blocked cell (PR7-CONTROL-004). Every name must be manifest-declared.
+   */
+  optionalEnv?: readonly string[];
 }
 
 /**

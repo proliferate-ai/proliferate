@@ -122,6 +122,36 @@ export const SH_CLOUD_ADDON = "SH-CLOUD-ADDON";
 export const SELFHOST_QUAL_CELL_ORDER = [SH_GITHUB_AUTH, SH_GATEWAY, SH_CLOUD_ADDON] as const;
 export type SelfHostQualCellName = (typeof SELFHOST_QUAL_CELL_ORDER)[number];
 
+/**
+ * The founder-gated live inputs each cell READS through `ctx.env.get` but does
+ * not require to plan (PR7-CONTROL-004): declared as the cell's `optionalEnv` so
+ * they are resolved into `ctx.env` when supplied (making the cell exercise its
+ * real path) while their absence stays a fail-closed cell red — never a
+ * runner-blocked cell, and SH-GATEWAY stays runnable without SH-GITHUB-AUTH's
+ * OAuth app. Every name is manifest-declared. `RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY`
+ * is scenario-level required already; the `_B_` upstream key is the gateway's
+ * preferred (optional) separate-spend key.
+ */
+export const SELFHOST_QUAL_CELL_OPTIONAL_ENV: Record<SelfHostQualCellName, readonly string[]> = {
+  [SH_GITHUB_AUTH]: [
+    "RELEASE_E2E_SELFHOST_GITHUB_OAUTH_CLIENT_ID",
+    "RELEASE_E2E_SELFHOST_GITHUB_OAUTH_SECRET",
+    "RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_A_STATE",
+    "RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_B_STATE",
+    "RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_A_EMAIL",
+    "RELEASE_E2E_SELFHOST_GITHUB_IDENTITY_B_EMAIL",
+  ],
+  [SH_GATEWAY]: ["RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY", "RELEASE_E2E_SELFHOST_LITELLM_IMAGE_TAG"],
+  [SH_CLOUD_ADDON]: [
+    "RELEASE_E2E_SELFHOST_CLOUD_E2B_API_KEY",
+    "RELEASE_E2E_SELFHOST_CLOUD_E2B_TEMPLATE_NAME",
+    "RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_ID",
+    "RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_CLIENT_ID",
+    "RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_CLIENT_SECRET",
+    "RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_PRIVATE_KEY",
+  ],
+};
+
 /** The fixed serial-lane DNS label the SH-GITHUB-AUTH OAuth callback is registered against. */
 export const FIXED_SUBDOMAIN_LABEL = "selfhost-fixed";
 
@@ -153,7 +183,15 @@ export const selfhostQual1: ScenarioDefinition = {
   lanes: ["selfhost"],
   requiredEnv: SELFHOST_QUAL_REQUIRED_ENV,
   expandCells: (): ScenarioCellSpec[] =>
-    SELFHOST_QUAL_CELL_ORDER.map((cell) => ({ dimensions: { cell, harness: REPRESENTATIVE_HARNESS } })),
+    SELFHOST_QUAL_CELL_ORDER.map((cell) => ({
+      dimensions: { cell, harness: REPRESENTATIVE_HARNESS },
+      // Per-cell founder-gated live inputs are OPTIONAL env: resolved into
+      // ctx.env when present so the cell exercises its real path, but absent →
+      // the cell fails CLOSED (red) rather than being runner-blocked, and
+      // SH-GATEWAY stays runnable without the SH-GITHUB-AUTH OAuth app
+      // (PR7-CONTROL-004).
+      optionalEnv: SELFHOST_QUAL_CELL_OPTIONAL_ENV[cell as SelfHostQualCellName],
+    })),
   planCell: (_ctx, cell: PlannedCellV1): ScenarioPlanStep[] => planForCell(cell),
   runCells: async (ctx, cells): Promise<ScenarioCellOutcome[]> =>
     runSelfHostQualCells(ctx, cells, defaultSelfHostQualDriver),

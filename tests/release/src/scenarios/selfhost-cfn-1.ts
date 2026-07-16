@@ -123,7 +123,14 @@ export const selfhostCfn1: ScenarioDefinition = {
   // the orchestrator and FAIL CLOSED (red, never blocked) when absent.
   requiredEnv: ["RELEASE_E2E_SELFHOST_REGION", "RELEASE_E2E_SELFHOST_HOSTED_ZONE_ID"],
   expandCells: (): ScenarioCellSpec[] => [
-    { dimensions: { cell: SH_CFN_WRAPPER, harness: REPRESENTATIVE_HARNESS } },
+    {
+      dimensions: { cell: SH_CFN_WRAPPER, harness: REPRESENTATIVE_HARNESS },
+      // The CFN bucket + image repo are founder-gated OPTIONAL env: resolved
+      // into ctx.env when present so the stack proof runs for real, absent →
+      // the cell fails CLOSED (red) rather than being runner-blocked
+      // (PR7-CONTROL-004).
+      optionalEnv: [RELEASE_E2E_SELFHOST_CFN_BUCKET, RELEASE_E2E_SELFHOST_CFN_IMAGE_REPO],
+    },
   ],
   planCell: (_ctx, cell: PlannedCellV1): ScenarioPlanStep[] => planForCell(cell),
   runCells: async (ctx, cells): Promise<ScenarioCellOutcome[]> =>

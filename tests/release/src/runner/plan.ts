@@ -106,6 +106,7 @@ export async function buildPlannedCells(
           runtime_lane: runtimeLane,
           dimensions: {},
           required_env: [...scenario.requiredEnv],
+          optional_env: [],
         });
         continue;
       }
@@ -128,6 +129,11 @@ export async function buildPlannedCells(
           runtime_lane: runtimeLane,
           dimensions: sortedDimensions(spec.dimensions),
           required_env: [...new Set([...scenario.requiredEnv, ...(spec.requiredEnv ?? [])])],
+          // Optional env is resolved into ctx.env but never blocks planning; a
+          // var that is also in required_env stays required (required wins).
+          optional_env: [...new Set(spec.optionalEnv ?? [])].filter(
+            (name) => !scenario.requiredEnv.includes(name) && !(spec.requiredEnv ?? []).includes(name),
+          ),
         });
       }
     }
