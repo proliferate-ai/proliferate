@@ -159,10 +159,10 @@ jobs:
           fi
           echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         if: steps.preflight.outputs.enabled == 'true'
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         if: steps.preflight.outputs.enabled == 'true'
         with:
           node-version: "22"
@@ -292,7 +292,7 @@ jobs:
         # this. Upload whenever the job ran the runner; the step no-ops when
         # there are no reports.
         if: always() && steps.preflight.outputs.enabled == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-e2e-reports
           path: tests/release/.output/
@@ -339,9 +339,9 @@ jobs:
           fi
           echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         if: steps.preflight.outputs.enabled == 'true'
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         if: steps.preflight.outputs.enabled == 'true'
         with:
           node-version: "22"
@@ -378,7 +378,7 @@ jobs:
 
       - name: Upload failure reports
         if: always() && steps.preflight.outputs.enabled == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-e2e-reports-staging
           path: tests/release/.output/
@@ -409,8 +409,8 @@ jobs:
     timeout-minutes: 60
     environment: Qualification
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
       - uses: pnpm/action-setup@v6
@@ -448,7 +448,7 @@ jobs:
 
       - name: Upload V4 report and bounded diagnostic logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: local-world-smoke-1-evidence
           path: |
@@ -496,8 +496,8 @@ jobs:
           --health-timeout 3s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
       - uses: pnpm/action-setup@v6
@@ -547,7 +547,7 @@ jobs:
 
       - name: Upload V4 report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tier2-billing-evidence
           path: |
@@ -580,8 +580,8 @@ jobs:
     timeout-minutes: 90
     environment: Qualification
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
       - uses: pnpm/action-setup@v6
@@ -637,7 +637,7 @@ jobs:
 
       - name: Upload V4 report and bounded diagnostic logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: local-functional-evidence
           path: |
@@ -674,8 +674,8 @@ jobs:
       # OIDC federation to assume the run-scoped AWS role (EC2 + Route53).
       id-token: write
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
       - uses: pnpm/action-setup@v6
@@ -687,10 +687,10 @@ jobs:
           workspaces: "."
       # docker + buildx ship on ubuntu-latest; ensure a builder exists for the
       # single-platform `buildx build --load` the server-image candidate uses.
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - name: Configure AWS credentials (run-scoped EC2 + Route53 role)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.RELEASE_E2E_SELFHOST_AWS_ROLE_ARN }}
           aws-region: ${{ vars.RELEASE_E2E_SELFHOST_REGION }}
@@ -819,7 +819,7 @@ jobs:
         # itself always ran. See `cleanup-ledger-artifact-upload.test.ts` for the
         # unit proof that the ledger's on-disk path matches this glob.
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: selfhost-evidence
           # SHR-006 / PR7-CONTROL-008: upload EVERY run's cleanup ledger, not just
@@ -860,8 +860,8 @@ jobs:
     timeout-minutes: 90
     environment: Qualification
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
       - uses: pnpm/action-setup@v6
@@ -939,7 +939,7 @@ jobs:
 
       - name: Upload V4 report and bounded diagnostic logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cloud-provision-1-evidence
           path: |
