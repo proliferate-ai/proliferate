@@ -17,11 +17,18 @@ from proliferate.integrations.anyharness import (
     get_execution_store_identity,
 )
 from proliferate.integrations.anyharness.errors import CloudRuntimeReconnectError
-from proliferate.integrations.sandbox import SandboxProviderError
-from proliferate.integrations.sandbox.e2b import E2BRuntimeError
+from proliferate.integrations.sandbox import (
+    SandboxProviderConfigurationError,
+    SandboxProviderTargetUnavailableError,
+    SandboxProviderUnavailableError,
+)
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.materialization import operation
-from proliferate.server.cloud.materialization.locks import CloudMaterializationLockTimeout
+from proliferate.server.cloud.materialization.locks import (
+    CloudMaterializationLockLost,
+    CloudMaterializationLockTimeout,
+    CloudMaterializationLockUnavailable,
+)
 from proliferate.server.cloud.materialization.materialize import workflow_runtime
 from proliferate.server.cloud.materialization.materialize.repo_environment import (
     CloudRepoCheckoutError,
@@ -60,8 +67,16 @@ def classify_delivery_error(error: BaseException) -> ManagedDeliveryError:
         return ManagedDeliveryError("workflow_repo_checkout_conflict", False)
     if isinstance(error, operation.CloudMaterializationTargetUnavailable):
         return ManagedDeliveryError("workflow_target_unavailable", False)
+    if isinstance(error, SandboxProviderTargetUnavailableError):
+        return ManagedDeliveryError("workflow_target_unavailable", False)
+    if isinstance(error, SandboxProviderConfigurationError):
+        return ManagedDeliveryError("workflow_provider_configuration_invalid", False)
+    if isinstance(error, SandboxProviderUnavailableError):
+        return ManagedDeliveryError("workflow_target_unreachable", True)
     if isinstance(error, CloudMaterializationLockTimeout):
         return ManagedDeliveryError("workflow_materialization_busy", True)
+    if isinstance(error, (CloudMaterializationLockUnavailable, CloudMaterializationLockLost)):
+        return ManagedDeliveryError("workflow_materialization_unavailable", True)
     if isinstance(error, CloudApiError):
         return ManagedDeliveryError(error.code[:128], error.status_code >= 500)
     if isinstance(
@@ -69,8 +84,6 @@ def classify_delivery_error(error: BaseException) -> ManagedDeliveryError:
         (
             CloudMaterializationCommandError,
             CloudRuntimeReconnectError,
-            E2BRuntimeError,
-            SandboxProviderError,
         ),
     ):
         return ManagedDeliveryError("workflow_target_unreachable", True)

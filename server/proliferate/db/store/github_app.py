@@ -170,6 +170,7 @@ async def get_github_app_authorization_for_user(
     *,
     user_id: UUID,
     lock_row: bool = False,
+    refresh: bool = False,
 ) -> GitHubAppAuthorizationValue | None:
     statement = select(GitHubAppAuthorization).where(
         GitHubAppAuthorization.user_id == user_id,
@@ -177,6 +178,8 @@ async def get_github_app_authorization_for_user(
     )
     if lock_row:
         statement = statement.with_for_update()
+    if refresh:
+        statement = statement.execution_options(populate_existing=True)
     row = (await db.execute(statement)).scalar_one_or_none()
     return _authorization_value(row) if row is not None else None
 

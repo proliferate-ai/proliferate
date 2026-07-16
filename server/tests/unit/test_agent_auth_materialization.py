@@ -335,6 +335,15 @@ def _install_spy(
     previous_manifest: dict[str, object] | None,
 ) -> _SandboxIOSpy:
     spy = _SandboxIOSpy(previous_manifest)
+
+    async def _release(_db: object) -> None:
+        return None
+
+    monkeypatch.setattr(
+        agent_auth.cloud_sandbox_transactions,
+        "commit_cloud_sandbox_session",
+        _release,
+    )
     monkeypatch.setattr(
         agent_auth.sandbox_io, "write_private_file_atomic", spy.write_private_file_atomic
     )

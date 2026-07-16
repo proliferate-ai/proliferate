@@ -1,5 +1,6 @@
 import httpx
 import pytest
+from e2b import exceptions as e2b_exceptions
 
 from proliferate.integrations.sandbox import e2b as e2b_runtime
 
@@ -9,6 +10,24 @@ class _FakeSandboxInstance:
 
     def get_host(self, port: int) -> str:
         return f"sandbox.example:{port}"
+
+
+@pytest.mark.parametrize(
+    ("error", "expected_type"),
+    [
+        (OSError("network down"), e2b_runtime.E2BUnavailableError),
+        (e2b_exceptions.RateLimitException(), e2b_runtime.E2BUnavailableError),
+        (e2b_exceptions.SandboxNotFoundException(), e2b_runtime.E2BTargetUnavailableError),
+        (e2b_exceptions.AuthenticationException(), e2b_runtime.E2BRuntimeError),
+    ],
+)
+def test_translate_e2b_exception_classifies_provider_failures(
+    error: Exception,
+    expected_type: type[Exception],
+) -> None:
+    translated = e2b_runtime._translate_e2b_exception(error, operation="sandbox connect")
+
+    assert isinstance(translated, expected_type)
 
 
 def test_create_sandbox_prefers_timeout_ms(monkeypatch) -> None:

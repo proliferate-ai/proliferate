@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -8,6 +9,7 @@ from uuid import uuid4
 import pytest
 
 from proliferate.integrations.github import GitHubAppInvalidGrant, GitHubIntegrationError
+from proliferate.integrations.redis_lock import RedisLeaseUnavailable
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.github_app import repo_authority
 from proliferate.server.cloud.github_app.errors import GitHubAppReauthorizationRequired
@@ -25,6 +27,22 @@ def _expired_authorization(*, refresh_token: str | None = "refresh-token") -> Si
     )
 
 
+def _install_refresh_boundary_stubs(monkeypatch: pytest.MonkeyPatch) -> None:
+    @asynccontextmanager
+    async def _lock(_user_id):  # type: ignore[no-untyped-def]
+        yield
+
+    async def _release(_db: object) -> None:
+        return None
+
+    monkeypatch.setattr(repo_authority, "_authorization_refresh_lock", _lock)
+    monkeypatch.setattr(
+        repo_authority.github_app_transactions,
+        "release_github_app_transaction",
+        _release,
+    )
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "integration_error",
@@ -37,6 +55,7 @@ async def test_refresh_transient_or_config_failure_stays_502_without_reauth(
     monkeypatch: pytest.MonkeyPatch,
     integration_error: GitHubIntegrationError,
 ) -> None:
+    _install_refresh_boundary_stubs(monkeypatch)
     authorization = _expired_authorization()
     marked: list[object] = []
 
@@ -76,6 +95,7 @@ async def test_refresh_transient_or_config_failure_stays_502_without_reauth(
 async def test_refresh_invalid_grant_stages_reauth_for_request_boundary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _install_refresh_boundary_stubs(monkeypatch)
     authorization = _expired_authorization()
     marked: list[object] = []
 
@@ -115,6 +135,7 @@ async def test_refresh_invalid_grant_stages_reauth_for_request_boundary(
 async def test_refresh_invalid_grant_preserves_concurrent_rotated_authorization(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _install_refresh_boundary_stubs(monkeypatch)
     expired = _expired_authorization(refresh_token="rotated-away")
     current = _expired_authorization(refresh_token="new-refresh-token")
     current.id = expired.id
@@ -156,6 +177,7 @@ async def test_refresh_invalid_grant_preserves_concurrent_rotated_authorization(
 async def test_refresh_success_preserves_newer_concurrent_authorization(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _install_refresh_boundary_stubs(monkeypatch)
     expired = _expired_authorization(refresh_token="old-refresh-token")
     current = _expired_authorization(refresh_token="new-refresh-token")
     current.id = expired.id
@@ -195,3 +217,33 @@ async def test_refresh_success_preserves_newer_concurrent_authorization(
     )
 
     assert resolved is current
+
+
+@pytest.mark.asyncio
+async def test_refresh_redis_failure_is_safe_503(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _release(_db: object) -> None:
+        return None
+
+    @asynccontextmanager
+    async def _unavailable(_user_id):  # type: ignore[no-untyped-def]
+        raise RedisLeaseUnavailable("secret redis endpoint")
+        yield
+
+    monkeypatch.setattr(
+        repo_authority.github_app_transactions,
+        "release_github_app_transaction",
+        _release,
+    )
+    monkeypatch.setattr(repo_authority, "_authorization_refresh_lock", _unavailable)
+
+    with pytest.raises(CloudApiError) as exc_info:
+        await repo_authority._refresh_github_app_authorization(
+            object(),
+            user_id=uuid4(),
+        )
+
+    assert exc_info.value.code == "github_app_refresh_unavailable"
+    assert exc_info.value.status_code == 503
+    assert "secret" not in exc_info.value.message

@@ -14,8 +14,16 @@ from proliferate.db.models.background import BackgroundOutboxTask
 from proliferate.db.store import workflow_managed_delivery as delivery_store
 from proliferate.db.store import workflow_managed_execution as managed_store
 from proliferate.integrations.anyharness.errors import WorkflowRuntimeError
+from proliferate.integrations.sandbox import (
+    SandboxProviderConfigurationError,
+    SandboxProviderTargetUnavailableError,
+    SandboxProviderUnavailableError,
+)
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.materialization import operation
+from proliferate.server.cloud.materialization.locks import (
+    CloudMaterializationLockUnavailable,
+)
 from proliferate.server.cloud.materialization.materialize.repo_environment import (
     CloudRepoCheckoutError,
 )
@@ -130,6 +138,14 @@ async def test_observe_and_cancel_access_backoff_use_consecutive_failures(
             "workflow_target_unavailable",
         ),
         (
+            SandboxProviderTargetUnavailableError("sandbox is gone"),
+            "workflow_target_unavailable",
+        ),
+        (
+            SandboxProviderConfigurationError("operator action required"),
+            "workflow_provider_configuration_invalid",
+        ),
+        (
             CloudApiError(
                 "github_app_authorization_required",
                 "Authorization is required.",
@@ -195,15 +211,24 @@ async def test_transient_target_failure_queues_one_successor(
     invocation_id, _sandbox_id = await _seed_target_plan(client, db_session, owner)
     factory = async_sessionmaker(test_engine, expire_on_commit=False)
 
+    transient_failures = iter(
+        (
+            CloudMaterializationCommandError("provider temporarily unavailable"),
+            SandboxProviderUnavailableError("provider temporarily unavailable"),
+            CloudMaterializationLockUnavailable("redis is unavailable"),
+        )
+    )
+
     async def unavailable(*_args: object, **_kwargs: object) -> None:
-        raise CloudMaterializationCommandError("provider temporarily unavailable")
+        raise next(transient_failures)
 
     monkeypatch.setattr(delivery, "runtime_access", unavailable)
-    await delivery.run_delivery_task(
-        factory,
-        invocation_id=invocation_id,
-        generation=2,
-    )
+    for generation in (2, 3, 4):
+        await delivery.run_delivery_task(
+            factory,
+            invocation_id=invocation_id,
+            generation=generation,
+        )
 
     async with factory() as db:
         settled = await managed_store.get_managed_execution(
@@ -212,11 +237,11 @@ async def test_transient_target_failure_queues_one_successor(
         )
         successor = await db.scalar(
             select(BackgroundOutboxTask).where(
-                BackgroundOutboxTask.idempotency_key == f"workflow:deliver:{invocation_id}:3"
+                    BackgroundOutboxTask.idempotency_key == f"workflow:deliver:{invocation_id}:5"
             )
         )
     assert settled is not None
     assert settled.delivery_status == "queued"
-    assert settled.delivery_generation == 3
-    assert settled.last_delivery_error_code == "workflow_target_unreachable"
+    assert settled.delivery_generation == 5
+    assert settled.last_delivery_error_code == "workflow_materialization_unavailable"
     assert successor is not None

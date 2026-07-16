@@ -81,6 +81,7 @@ from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store import cloud_sandboxes as cloud_sandboxes_store
 from proliferate.db.store.agent_gateway import AgentAuthSelectionRecord
 from proliferate.server.cloud.agent_gateway.budget import is_gateway_budget_available
+from proliferate.server.cloud.cloud_sandboxes import transactions as cloud_sandbox_transactions
 from proliferate.server.cloud.materialization import operation, paths, sandbox_io
 
 logger = logging.getLogger("proliferate.cloud.materialization")
@@ -322,7 +323,7 @@ async def materialize_agent_auth(
     state, fingerprint = await build_agent_auth_state(db, user_id)
     # The state read is complete. Release its PostgreSQL transaction before
     # reading or mutating the remote sandbox.
-    await db.commit()
+    await cloud_sandbox_transactions.commit_cloud_sandbox_session(db)
     state_path = paths.agent_auth_state_path()
     manifest_path = paths.agent_auth_manifest_path()
 
