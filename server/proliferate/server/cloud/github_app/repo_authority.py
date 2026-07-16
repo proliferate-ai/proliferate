@@ -137,7 +137,7 @@ async def _refresh_github_app_authorization(
     except GitHubAppInvalidGrant as exc:
         marked = await github_app_store.mark_github_app_authorization_needs_reauth_if_unchanged(
             db,
-            authorization_id,
+            authorization_id=authorization_id,
             expected_updated_at=authorization_updated_at,
         )
         if marked:
@@ -159,10 +159,24 @@ async def _refresh_github_app_authorization(
             "Could not refresh GitHub App authorization.",
             status_code=502,
         ) from exc
-    return await github_app_store.upsert_github_app_authorization(
+    replaced = await github_app_store.replace_github_app_authorization_if_unchanged(
+        db,
+        authorization_id=authorization_id,
+        expected_updated_at=authorization_updated_at,
+        authorization=refreshed,
+    )
+    if replaced is not None:
+        return replaced
+    current = await github_app_store.get_github_app_authorization_for_user(
         db,
         user_id=user_id,
-        authorization=refreshed,
+    )
+    if current is not None and _github_app_authorization_is_current(current):
+        return current
+    raise CloudApiError(
+        "github_app_refresh_failed",
+        "Could not refresh GitHub App authorization.",
+        status_code=502,
     )
 
 

@@ -237,8 +237,8 @@ async def mark_github_app_authorization_needs_reauth(
 
 async def mark_github_app_authorization_needs_reauth_if_unchanged(
     db: AsyncSession,
-    authorization_id: UUID,
     *,
+    authorization_id: UUID,
     expected_updated_at: datetime,
 ) -> bool:
     """Stage reauthorization only if no concurrent refresh replaced the grant."""
@@ -254,6 +254,47 @@ async def mark_github_app_authorization_needs_reauth_if_unchanged(
         .returning(GitHubAppAuthorization.id)
     )
     return result.scalar_one_or_none() is not None
+
+
+async def replace_github_app_authorization_if_unchanged(
+    db: AsyncSession,
+    *,
+    authorization_id: UUID,
+    expected_updated_at: datetime,
+    authorization: GitHubAppUserAuthorizationPayload,
+) -> GitHubAppAuthorizationValue | None:
+    """Store a rotated authorization only if its source grant is still current."""
+
+    row = (
+        await db.execute(
+            update(GitHubAppAuthorization)
+            .where(
+                GitHubAppAuthorization.id == authorization_id,
+                GitHubAppAuthorization.updated_at == expected_updated_at,
+                GitHubAppAuthorization.status == "ready",
+            )
+            .values(
+                github_user_id=authorization.github_user_id,
+                github_login=authorization.github_login,
+                access_token_ciphertext=encrypt_text(authorization.access_token),
+                refresh_token_ciphertext=(
+                    encrypt_text(authorization.refresh_token)
+                    if authorization.refresh_token
+                    else None
+                ),
+                token_expires_at=authorization.expires_at,
+                refresh_token_expires_at=authorization.refresh_token_expires_at,
+                permissions_json=json.dumps(
+                    authorization.permissions,
+                    separators=(",", ":"),
+                ),
+                revoked_at=None,
+                updated_at=utcnow(),
+            )
+            .returning(GitHubAppAuthorization)
+        )
+    ).scalar_one_or_none()
+    return _authorization_value(row) if row is not None else None
 
 
 async def upsert_github_app_installation(

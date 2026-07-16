@@ -150,3 +150,48 @@ async def test_refresh_invalid_grant_preserves_concurrent_rotated_authorization(
     )
 
     assert resolved is current
+
+
+@pytest.mark.asyncio
+async def test_refresh_success_preserves_newer_concurrent_authorization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expired = _expired_authorization(refresh_token="old-refresh-token")
+    current = _expired_authorization(refresh_token="new-refresh-token")
+    current.id = expired.id
+    current.user_id = expired.user_id
+    current.access_token = "new-access-token"
+    current.token_expires_at = datetime.now(UTC) + timedelta(hours=8)
+    reads = iter((expired, current))
+    refreshed = SimpleNamespace(access_token="racing-access-token")
+
+    async def _get_authorization(*_args: object, **_kwargs: object) -> SimpleNamespace:
+        return next(reads)
+
+    async def _refresh(**_kwargs: object) -> SimpleNamespace:
+        return refreshed
+
+    async def _replace(*_args: object, **kwargs: object) -> None:
+        assert kwargs["authorization_id"] == expired.id
+        assert kwargs["expected_updated_at"] == expired.updated_at
+        assert kwargs["authorization"] is refreshed
+        return None
+
+    monkeypatch.setattr(
+        repo_authority.github_app_store,
+        "get_github_app_authorization_for_user",
+        _get_authorization,
+    )
+    monkeypatch.setattr(repo_authority, "refresh_github_app_user_authorization", _refresh)
+    monkeypatch.setattr(
+        repo_authority.github_app_store,
+        "replace_github_app_authorization_if_unchanged",
+        _replace,
+    )
+
+    resolved = await repo_authority._refresh_github_app_authorization(
+        SimpleNamespace(commit=AsyncMock()),
+        user_id=expired.user_id,
+    )
+
+    assert resolved is current
