@@ -1525,7 +1525,8 @@ function validateCleanupEvidence(
 const GREEN_EVIDENCE_REQUIRED_SCENARIOS: ReadonlySet<string> = new Set([
   "LOCAL-WORLD-SMOKE-1",
   "T2-BILL",
-  "T2-AUTH-ORG",
+  "T2-IDENTITY-ORG",
+  "T2-REPO-POLICY",
   SELFHOST_INSTALL_1_SCENARIO_ID,
   "CLOUD-PROVISION-1",
 ]);

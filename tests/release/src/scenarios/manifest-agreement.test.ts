@@ -54,11 +54,15 @@ const manifest = JSON.parse(readFileSync(MANIFEST_PATH, "utf8")) as Manifest;
 const manifestById = new Map(manifest.requiredScenarios.map((row) => [row.id, row]));
 
 /**
- * Registered Tier-2 case ids that predate the authoritative manifest. Each is
- * a PR-4 representative cell pending its PR-8 port onto real manifest rows.
- * Append-only registries may not grow this list; ports remove entries.
+ * Registered Tier-2 case ids that predate the authoritative manifest. Each
+ * was a PR-4 representative cell pending its PR-8 port onto real manifest
+ * rows. Append-only registries may not grow this list; ports remove entries.
+ * Empty as of PR 8 workstream 1 (T2-AUTH-REP/T2-ORG-ROLES-REP/T2-INVITE-REP
+ * ported onto T2-AUTH-1/T2-INV-1/T2-INV-2/T2-ORG-1/T2-ORG-2 in
+ * `tier2/t2-identity-org.ts`) — the mechanism stays in place for any future
+ * legacy port.
  */
-const LEGACY_TIER2_CASE_IDS = new Set(["T2-AUTH-REP", "T2-ORG-ROLES-REP", "T2-INVITE-REP"]);
+const LEGACY_TIER2_CASE_IDS = new Set<string>([]);
 
 /** Every Tier-2 matrix case id, with its owning scenario id. */
 async function collectTier2CaseIds(): Promise<Map<string, string>> {

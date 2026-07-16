@@ -62,7 +62,7 @@ export interface Tier2CaseResult {
 export type Tier2CellHandler = (ctx: Tier2CellContext) => Promise<Tier2CaseResult>;
 
 export interface Tier2ScenarioConfig {
-  /** Scenario id, also the green-evidence gate key: "T2-BILL" | "T2-AUTH-ORG". */
+  /** Scenario id, also the green-evidence gate key: "T2-BILL" | "T2-IDENTITY-ORG". */
   id: string;
   title: string;
   registryFlowRef: string;
@@ -76,7 +76,7 @@ export interface Tier2ScenarioConfig {
    * grant, LLM exhaustion / auto-top-up, the real `run_usage_import`, and the
    * enrollment/virtual-key path all read `settings.agent_gateway_enabled=true`
    * and talk to the LiteLLM admin plane. The fake is closed at teardown and the
-   * published gateway env cleared. Default false (T2-AUTH-ORG boots plain). */
+   * published gateway env cleared. Default false (T2-IDENTITY-ORG boots plain). */
   gatewayFake?: boolean;
   /** Authoritative manifest case id -> handler (e.g. "T2-BILL-2" -> fn). */
   cases: Record<string, Tier2CellHandler>;

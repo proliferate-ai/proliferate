@@ -23,7 +23,8 @@ import { t3Sh4 } from "./selfhost/t3-sh-4.js";
 import { t3Sh5 } from "./selfhost/t3-sh-5.js";
 import { localWorldSmoke1 } from "./local-world-smoke-1.js";
 import { t2Bill } from "./tier2/t2-bill.js";
-import { t2AuthOrg } from "./tier2/t2-auth-org.js";
+import { t2IdentityOrg } from "./tier2/t2-identity-org.js";
+import { t2RepoPolicy } from "./tier2/t2-repo-policy.js";
 import { selfhostInstall1 } from "./selfhost-install-1.js";
 import { cloudProvision1 } from "./cloud-provision-1.js";
 
@@ -70,7 +71,8 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
   t4Sh2,
   localWorldSmoke1,
   t2Bill,
-  t2AuthOrg,
+  t2IdentityOrg,
+  t2RepoPolicy,
   selfhostInstall1,
   cloudProvision1,
 ];
