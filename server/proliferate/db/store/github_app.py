@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from typing import Protocol
 from uuid import UUID
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -233,6 +233,27 @@ async def mark_github_app_authorization_needs_reauth(
     row.status = "needs_reauth"
     row.updated_at = utcnow()
     await db.flush()
+
+
+async def mark_github_app_authorization_needs_reauth_if_unchanged(
+    db: AsyncSession,
+    authorization_id: UUID,
+    *,
+    expected_updated_at: datetime,
+) -> bool:
+    """Stage reauthorization only if no concurrent refresh replaced the grant."""
+
+    result = await db.execute(
+        update(GitHubAppAuthorization)
+        .where(
+            GitHubAppAuthorization.id == authorization_id,
+            GitHubAppAuthorization.status == "ready",
+            GitHubAppAuthorization.updated_at == expected_updated_at,
+        )
+        .values(status="needs_reauth", updated_at=utcnow())
+        .returning(GitHubAppAuthorization.id)
+    )
+    return result.scalar_one_or_none() is not None
 
 
 async def upsert_github_app_installation(

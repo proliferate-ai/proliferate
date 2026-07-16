@@ -70,7 +70,7 @@ async def test_prior_invocation_schema_upgrades_and_backfills_exact_defaults() -
                                 "SELECT delivery_status, delivery_checkpoint, desired_state, "
                                 "freshness_basis, execution_status, delivery_generation, "
                                 "observation_generation, cancel_generation, "
-                                "created_at, updated_at "
+                                "cancel_requested_at, created_at, updated_at "
                                 "FROM workflow_managed_execution WHERE invocation_id = :id"
                             ),
                             {"id": invocation_id},
@@ -90,6 +90,7 @@ async def test_prior_invocation_schema_upgrades_and_backfills_exact_defaults() -
                         "delivery_generation",
                         "observation_generation",
                         "cancel_generation",
+                        "cancel_requested_at",
                     )
                 } == {
                     "delivery_status": "prepared",
@@ -100,6 +101,7 @@ async def test_prior_invocation_schema_upgrades_and_backfills_exact_defaults() -
                     "delivery_generation": 1,
                     "observation_generation": 0,
                     "cancel_generation": 0,
+                    "cancel_requested_at": None,
                 }
                 assert row["created_at"] is not None
                 assert row["updated_at"] is not None

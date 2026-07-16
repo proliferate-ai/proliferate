@@ -97,7 +97,6 @@ async def _refresh_github_app_authorization(
     authorization = await github_app_store.get_github_app_authorization_for_user(
         db,
         user_id=user_id,
-        lock_row=True,
     )
     if authorization is None:
         raise CloudApiError(
@@ -125,16 +124,35 @@ async def _refresh_github_app_authorization(
             authorization.id,
         )
         raise GitHubAppReauthorizationRequired(authorization.id)
+    authorization_id = authorization.id
+    refresh_token = authorization.refresh_token
+    authorization_updated_at = authorization.updated_at
+    # Never retain a PostgreSQL transaction while refreshing with GitHub.
+    # Concurrent refreshes converge through the existing upsert.
+    await db.commit()
     try:
         refreshed = await refresh_github_app_user_authorization(
-            refresh_token=authorization.refresh_token,
+            refresh_token=refresh_token,
         )
     except GitHubAppInvalidGrant as exc:
-        await github_app_store.mark_github_app_authorization_needs_reauth(
+        marked = await github_app_store.mark_github_app_authorization_needs_reauth_if_unchanged(
             db,
-            authorization.id,
+            authorization_id,
+            expected_updated_at=authorization_updated_at,
         )
-        raise GitHubAppReauthorizationRequired(authorization.id) from exc
+        if marked:
+            raise GitHubAppReauthorizationRequired(authorization_id) from exc
+        current = await github_app_store.get_github_app_authorization_for_user(
+            db,
+            user_id=user_id,
+        )
+        if current is not None and _github_app_authorization_is_current(current):
+            return current
+        raise CloudApiError(
+            "github_app_refresh_failed",
+            "Could not refresh GitHub App authorization.",
+            status_code=502,
+        ) from exc
     except GitHubIntegrationError as exc:
         raise CloudApiError(
             "github_app_refresh_failed",
@@ -179,6 +197,7 @@ async def require_github_cloud_repo_authority(
         owner=git_owner,
     )
     if not installations:
+        await db.commit()
         await _refresh_installation_cache(db)
         installations = await github_app_store.list_active_github_app_installations_for_owner(
             db,
@@ -210,6 +229,7 @@ async def require_github_cloud_repo_authority(
             break
 
         try:
+            await db.commit()
             coverage = await fetch_installation_repo_coverage_from_github(
                 user_access_token=authorization.access_token,
                 installation_id=installation.github_installation_id,
@@ -242,6 +262,7 @@ async def require_github_cloud_repo_authority(
         )
 
     try:
+        await db.commit()
         actor_has_access = await verify_github_app_user_repo_access(
             user_access_token=authorization.access_token,
             git_owner=git_owner,

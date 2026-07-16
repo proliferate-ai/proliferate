@@ -93,9 +93,13 @@ class ManagedWorkflowHistoryItem(WorkflowInvocationWireModel):
     title: str
     placement_kind: Literal["repositoryWorktree", "scratch"]
     target_kind: Literal["managedCloud"]
-    delivery_status: str
-    desired_state: str
-    execution_status: str | None
+    delivery_status: Literal[
+        "prepared", "queued", "delivering", "accepted", "delivery_failed", "delivery_cancelled"
+    ]
+    desired_state: Literal["active", "cancelled"]
+    execution_status: (
+        Literal["accepted", "running", "completed", "failed", "cancelled", "interrupted"] | None
+    )
     freshness: Literal["pending", "live", "stale", "unreachable", "target_lost"]
     latest_observed_at: datetime | None
     cloud_workspace_id: UUID | None

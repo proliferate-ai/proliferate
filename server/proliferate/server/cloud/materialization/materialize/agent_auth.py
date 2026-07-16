@@ -320,6 +320,9 @@ async def materialize_agent_auth(
 ) -> None:
     """Reconcile the agent-auth state file inside an already-connected sandbox."""
     state, fingerprint = await build_agent_auth_state(db, user_id)
+    # The state read is complete. Release its PostgreSQL transaction before
+    # reading or mutating the remote sandbox.
+    await db.commit()
     state_path = paths.agent_auth_state_path()
     manifest_path = paths.agent_auth_manifest_path()
 

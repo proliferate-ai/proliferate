@@ -242,8 +242,10 @@ async def request_cancellation(
     }
     if delivery_terminal or execution_terminal:
         return snapshot_managed_execution(row), False
+    now = utcnow()
     row.desired_state = "cancelled"
-    row.updated_at = utcnow()
+    row.cancel_requested_at = row.cancel_requested_at or now
+    row.updated_at = now
     enqueue_cancel = row.delivery_checkpoint in {"run_put_started", "accepted"}
     if enqueue_cancel:
         row.cancel_generation += 1

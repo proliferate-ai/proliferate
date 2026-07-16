@@ -36,6 +36,7 @@ class WorkflowManagedExecutionSnapshot:
     consecutive_unchanged_count: int
     last_delivery_error_code: str | None
     last_observation_error_code: str | None
+    cancel_requested_at: datetime | None
     created_at: datetime
     updated_at: datetime
     accepted_at: datetime | None
@@ -70,6 +71,7 @@ def snapshot_managed_execution(
         consecutive_unchanged_count=row.consecutive_unchanged_count,
         last_delivery_error_code=row.last_delivery_error_code,
         last_observation_error_code=row.last_observation_error_code,
+        cancel_requested_at=row.cancel_requested_at,
         created_at=row.created_at,
         updated_at=row.updated_at,
         accepted_at=row.accepted_at,

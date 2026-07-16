@@ -32,11 +32,10 @@ from proliferate.server.workflows.domain.managed_execution import (
     execution_is_terminal,
 )
 from proliferate.server.workflows.worker.coordination import (
+    classify_delivery_error,
     enqueue,
     load_delivery,
-    retryable,
     runtime_access,
-    safe_error_code,
 )
 from proliferate.server.workflows.worker.target_plan import freeze_target_plan
 from proliferate.server.workflows.worker.telemetry import emit_attempt
@@ -102,7 +101,7 @@ async def _target_bound(
     generation: int,
 ) -> None:
     async with session_factory() as db:
-        _invocation, managed = await load_delivery(db, invocation_id)
+        invocation, managed = await load_delivery(db, invocation_id)
         plan = managed.target_plan_json or {}
         sandbox_id = UUID(str(plan["cloudSandboxId"]))
         if plan.get("kind") == "repositoryWorktree":
@@ -117,6 +116,7 @@ async def _target_bound(
         session_factory,
         sandbox_id=sandbox_id,
         expected_store_id=None,
+        prepare_agent_auth_for_user_id=invocation.user_id,
     )
     async with session_factory() as db, db.begin():
         advanced = await delivery_store.advance_delivery(
@@ -281,7 +281,8 @@ async def _handle_error(
     generation: int,
     error: BaseException,
 ) -> None:
-    code = safe_error_code(error)
+    classification = classify_delivery_error(error)
+    code = classification.code
     async with session_factory() as db, db.begin():
         current = await managed_store.get_managed_execution(
             db,
@@ -292,8 +293,8 @@ async def _handle_error(
         action = delivery_error_action(
             checkpoint=current.delivery_checkpoint,
             code=code,
-            retryable=retryable(error),
-            authentication=(isinstance(error, WorkflowRuntimeError) and error.authentication),
+            retryable=classification.retryable,
+            authentication=classification.authentication,
             previous_code=current.last_delivery_error_code,
         )
         if (

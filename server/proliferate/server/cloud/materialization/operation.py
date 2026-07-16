@@ -15,21 +15,25 @@ class CloudMaterializationError(RuntimeError):
     pass
 
 
+class CloudMaterializationTargetUnavailable(CloudMaterializationError):
+    """The exact frozen managed target no longer exists."""
+
+
 @dataclass(frozen=True)
 class MaterializationContext:
     sandbox: CloudSandboxValue
     target: sandbox_io.SandboxIOTarget
 
 
-async def run_cloud_sandbox_operation(
+async def run_cloud_sandbox_operation[T](
     db: AsyncSession,
     *,
     sandbox: CloudSandboxValue,
     operation_key: str,
     lock_ttl_seconds: int = 600,
     wait_timeout_seconds: int = 300,
-    run: Callable[[MaterializationContext], Awaitable[None]],
-) -> None:
+    run: Callable[[MaterializationContext], Awaitable[T]],
+) -> T:
     del operation_key
     async with locks.redis_materialization_lock(
         f"cloud-sandbox:{sandbox.id}",
@@ -37,4 +41,4 @@ async def run_cloud_sandbox_operation(
         wait_timeout_seconds=wait_timeout_seconds,
     ):
         target = await sandbox_io.connect_ready_sandbox(db, sandbox=sandbox)
-        await run(MaterializationContext(sandbox=sandbox, target=target))
+        return await run(MaterializationContext(sandbox=sandbox, target=target))

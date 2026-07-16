@@ -38,6 +38,9 @@ async def materialize_github_credentials(
         raise sandbox_io.CloudMaterializationCommandError(
             "GitHub App authorization did not produce an access token."
         )
+    # Authorization lookup/refresh is complete; remote sandbox writes must not
+    # inherit its PostgreSQL transaction.
+    await db.commit()
 
     issued_at = utcnow()
     expires_at = authorization.token_expires_at or issued_at + timedelta(hours=8)

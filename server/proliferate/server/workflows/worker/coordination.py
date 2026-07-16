@@ -9,7 +9,6 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from proliferate.background.config import DEFAULT_QUEUE
-from proliferate.db.store import cloud_sandboxes as sandbox_store
 from proliferate.db.store import workflow_invocations as invocation_store
 from proliferate.db.store import workflow_managed_execution as managed_store
 from proliferate.db.store.background_outbox import enqueue_outbox_task
@@ -17,9 +16,19 @@ from proliferate.integrations.anyharness import (
     WorkflowRuntimeError,
     get_execution_store_identity,
 )
-from proliferate.server.cloud.cloud_sandboxes import service as sandbox_service
+from proliferate.integrations.anyharness.errors import CloudRuntimeReconnectError
+from proliferate.integrations.sandbox import SandboxProviderError
+from proliferate.integrations.sandbox.e2b import E2BRuntimeError
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.materialization.sandbox_io import connect_ready_sandbox
+from proliferate.server.cloud.materialization import operation
+from proliferate.server.cloud.materialization.locks import CloudMaterializationLockTimeout
+from proliferate.server.cloud.materialization.materialize import workflow_runtime
+from proliferate.server.cloud.materialization.materialize.repo_environment import (
+    CloudRepoCheckoutError,
+)
+from proliferate.server.cloud.materialization.sandbox_io.target import (
+    CloudMaterializationCommandError,
+)
 from proliferate.utils.time import utcnow
 
 
@@ -31,21 +40,49 @@ class RuntimeAccess:
     execution_store_id: str
 
 
-def safe_error_code(error: BaseException) -> str:
+@dataclass(frozen=True)
+class ManagedDeliveryError:
+    code: str
+    retryable: bool
+    authentication: bool = False
+
+
+def classify_delivery_error(error: BaseException) -> ManagedDeliveryError:
+    """Map only known delivery failures into durable retry policy."""
+
     if isinstance(error, WorkflowRuntimeError):
-        return error.code
+        return ManagedDeliveryError(
+            code=error.code,
+            retryable=error.retryable or error.authentication,
+            authentication=error.authentication,
+        )
+    if isinstance(error, CloudRepoCheckoutError):
+        return ManagedDeliveryError("workflow_repo_checkout_conflict", False)
+    if isinstance(error, operation.CloudMaterializationTargetUnavailable):
+        return ManagedDeliveryError("workflow_target_unavailable", False)
+    if isinstance(error, CloudMaterializationLockTimeout):
+        return ManagedDeliveryError("workflow_materialization_busy", True)
     if isinstance(error, CloudApiError):
-        code = getattr(error, "code", None)
-        if isinstance(code, str) and code:
-            return code[:128]
-    return f"managed_workflow_{type(error).__name__.lower()}"[:128]
+        return ManagedDeliveryError(error.code[:128], error.status_code >= 500)
+    if isinstance(
+        error,
+        (
+            CloudMaterializationCommandError,
+            CloudRuntimeReconnectError,
+            E2BRuntimeError,
+            SandboxProviderError,
+        ),
+    ):
+        return ManagedDeliveryError("workflow_target_unreachable", True)
+    return ManagedDeliveryError("managed_workflow_internal_error", False)
+
+
+def safe_error_code(error: BaseException) -> str:
+    return classify_delivery_error(error).code
 
 
 def retryable(error: BaseException) -> bool:
-    if isinstance(error, WorkflowRuntimeError):
-        return error.retryable or error.authentication
-    status_code = getattr(error, "status_code", None)
-    return not isinstance(status_code, int) or status_code >= 500
+    return classify_delivery_error(error).retryable
 
 
 async def enqueue(
@@ -72,31 +109,31 @@ async def runtime_access(
     *,
     sandbox_id: UUID,
     expected_store_id: str | None,
+    prepare_agent_auth_for_user_id: UUID | None = None,
 ) -> RuntimeAccess:
     async with session_factory() as db:
-        sandbox = await sandbox_store.load_cloud_sandbox_by_id(db, sandbox_id)
-        if sandbox is None or sandbox.destroyed_at is not None or sandbox.status == "destroyed":
-            raise WorkflowRuntimeError("workflow_target_destroyed", not_found=True)
-        await db.commit()
-        await connect_ready_sandbox(db, sandbox=sandbox)
-        sandbox = await sandbox_store.load_cloud_sandbox_by_id(db, sandbox_id)
-        if sandbox is None:
-            raise WorkflowRuntimeError("workflow_target_destroyed", not_found=True)
-        (
-            runtime_url,
-            access_token,
-            _data_key,
-        ) = await sandbox_service.load_cloud_sandbox_runtime_access(sandbox)
-        await db.commit()
-        identity = await get_execution_store_identity(runtime_url, access_token)
-    if expected_store_id is not None and identity.execution_store_id != expected_store_id:
+
+        async def _probe(runtime_url: str, access_token: str) -> RuntimeAccess:
+            identity = await get_execution_store_identity(runtime_url, access_token)
+            return RuntimeAccess(
+                sandbox_id=sandbox_id,
+                runtime_url=runtime_url,
+                access_token=access_token,
+                execution_store_id=identity.execution_store_id,
+            )
+
+        try:
+            access = await workflow_runtime.run_managed_workflow_runtime_operation(
+                db,
+                sandbox_id=sandbox_id,
+                user_id=prepare_agent_auth_for_user_id,
+                run=_probe,
+            )
+        except operation.CloudMaterializationTargetUnavailable as error:
+            raise WorkflowRuntimeError("workflow_target_destroyed", not_found=True) from error
+    if expected_store_id is not None and access.execution_store_id != expected_store_id:
         raise WorkflowRuntimeError("workflow_execution_store_changed", not_found=True)
-    return RuntimeAccess(
-        sandbox_id=sandbox_id,
-        runtime_url=runtime_url,
-        access_token=access_token,
-        execution_store_id=identity.execution_store_id,
-    )
+    return access
 
 
 async def load_delivery(
