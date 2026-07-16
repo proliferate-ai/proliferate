@@ -75,9 +75,7 @@ async def materialize_repo_environment(
             repo_environment.user_id,
         )
         if sandbox is None or sandbox.id != expected_cloud_sandbox_id:
-            raise CloudMaterializationCommandError(
-                "Managed Workflow target sandbox is no longer available."
-            )
+            raise operation.CloudMaterializationTargetUnavailable()
     materialization = await repo_mat_store.begin_repo_environment_materialization(
         db,
         cloud_sandbox_id=sandbox.id,
@@ -126,6 +124,9 @@ async def materialize_repo_environment_in_context(
     if repo_environment is None or repo_environment.environment_kind != "cloud":
         return
     try:
+        # Release the repository read before GitHub or sandbox I/O. Each
+        # materializer below owns its own short persistence phases.
+        await db.commit()
         await require_github_cloud_repo_authority(
             db,
             user_id=repo_environment.user_id,

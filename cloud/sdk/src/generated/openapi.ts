@@ -4951,12 +4951,18 @@ export interface components {
              * @constant
              */
             targetKind: "managedCloud";
-            /** Deliverystatus */
-            deliveryStatus: string;
-            /** Desiredstate */
-            desiredState: string;
+            /**
+             * Deliverystatus
+             * @enum {string}
+             */
+            deliveryStatus: "prepared" | "queued" | "delivering" | "accepted" | "delivery_failed" | "delivery_cancelled";
+            /**
+             * Desiredstate
+             * @enum {string}
+             */
+            desiredState: "active" | "cancelled";
             /** Executionstatus */
-            executionStatus: string | null;
+            executionStatus: ("accepted" | "running" | "completed" | "failed" | "cancelled" | "interrupted") | null;
             /**
              * Freshness
              * @enum {string}

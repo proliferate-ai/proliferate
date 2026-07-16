@@ -46,6 +46,7 @@ def upgrade() -> None:
         sa.Column("consecutive_unchanged_count", sa.Integer(), nullable=False),
         sa.Column("last_delivery_error_code", sa.String(length=128), nullable=True),
         sa.Column("last_observation_error_code", sa.String(length=128), nullable=True),
+        sa.Column("cancel_requested_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -72,6 +73,10 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "desired_state IN ('active', 'cancelled')",
             name="ck_workflow_managed_execution_desired_state",
+        ),
+        sa.CheckConstraint(
+            "desired_state = 'active' OR cancel_requested_at IS NOT NULL",
+            name="ck_workflow_managed_execution_cancel_requested_at",
         ),
         sa.CheckConstraint(
             "execution_status IS NULL OR execution_status IN "
@@ -104,7 +109,7 @@ def upgrade() -> None:
     op.create_index(
         "ix_workflow_managed_execution_cancellation",
         "workflow_managed_execution",
-        ["desired_state", "updated_at"],
+        ["desired_state", "cancel_requested_at"],
     )
     op.execute(
         """

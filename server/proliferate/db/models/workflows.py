@@ -149,6 +149,10 @@ class WorkflowManagedExecution(Base):
             name="ck_workflow_managed_execution_desired_state",
         ),
         CheckConstraint(
+            "desired_state = 'active' OR cancel_requested_at IS NOT NULL",
+            name="ck_workflow_managed_execution_cancel_requested_at",
+        ),
+        CheckConstraint(
             "execution_status IS NULL OR execution_status IN "
             "('accepted', 'running', 'completed', 'failed', 'cancelled', 'interrupted')",
             name="ck_workflow_managed_execution_execution_status",
@@ -176,7 +180,7 @@ class WorkflowManagedExecution(Base):
         Index(
             "ix_workflow_managed_execution_cancellation",
             "desired_state",
-            "updated_at",
+            "cancel_requested_at",
         ),
     )
 
@@ -210,6 +214,10 @@ class WorkflowManagedExecution(Base):
     consecutive_unchanged_count: Mapped[int] = mapped_column(Integer, default=0)
     last_delivery_error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
     last_observation_error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=utcnow,

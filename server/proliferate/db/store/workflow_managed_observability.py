@@ -56,7 +56,9 @@ async def get_managed_workflow_telemetry_snapshot(
                 func.count().filter(accepted_nonterminal),
                 func.min(WorkflowManagedExecution.latest_observed_at).filter(accepted_nonterminal),
                 func.count().filter(pending_cancellation),
-                func.min(WorkflowManagedExecution.updated_at).filter(pending_cancellation),
+                func.min(WorkflowManagedExecution.cancel_requested_at).filter(
+                    pending_cancellation
+                ),
                 func.count().filter(WorkflowManagedExecution.freshness_basis == "unreachable"),
                 func.count().filter(WorkflowManagedExecution.freshness_basis == "target_lost"),
                 func.count().filter(

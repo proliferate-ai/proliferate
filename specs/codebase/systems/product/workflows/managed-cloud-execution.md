@@ -41,10 +41,19 @@ until the exact AnyHarness workspace, ordinary `CloudWorkspace`, and active
 `managed_cloud` materialization ledger agree on owner, sandbox, and workspace
 identity.
 
+Cold create/resume/launch, selected agent-auth reconciliation, refreshed
+runtime credential access, and the first execution-store probe all run under
+the existing per-sandbox Cloud materialization lock. Duplicate task claims can
+therefore replay workspace/run PUTs, but cannot establish competing provider or
+runtime custody.
+
 `run_put_started` is the response-ambiguity boundary. Cancellation before it
 invalidates delivery and creates no run. Cancellation at or after it reconciles
 the exact idempotent run PUT, then calls the Workflow cancel endpoint. Cloud
 never substitutes direct session cancellation.
+The first cancellation request also persists an immutable
+`cancelRequestedAt`; projection heartbeats may update the row without resetting
+pending-cancellation age.
 
 ## Background execution
 
@@ -60,7 +69,7 @@ Idempotency keys are `workflow:<operation>:<invocationId>:<generation>`. Each
 attempt claims one generation, performs at most one bounded external phase,
 then commits a guarded result and one successor. Escaped crashes are broker
 retried; duplicate delivery is expected and safe. No managed-execution row lock
-or transaction spans E2B or AnyHarness I/O.
+or PostgreSQL transaction spans GitHub, E2B, or AnyHarness I/O.
 
 Observation accepts only an explicit secret-free run DTO. `stateVersion`
 orders projections: higher applies, equal-identical refreshes reachability,

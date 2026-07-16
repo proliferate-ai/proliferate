@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
@@ -254,11 +255,15 @@ async def test_managed_telemetry_snapshot_reports_pending_and_invariant_truth(
         error_code="workflow_runtime_unreachable",
     )
     assert unreachable is not None
+    requested_at = datetime(2026, 7, 16, 12, tzinfo=UTC)
+    monkeypatch.setattr(delivery_store, "utcnow", lambda: requested_at)
     cancelled, enqueue_cancel = await delivery_store.request_cancellation(
         db_session,
         invocation_id=invocation_id,
     )
     assert cancelled is not None and enqueue_cancel
+    observed_at = requested_at + timedelta(hours=2)
+    monkeypatch.setattr(projection_store, "utcnow", lambda: observed_at)
     conflict = await projection_store.apply_projection(
         db_session,
         invocation_id=invocation_id,
@@ -268,13 +273,21 @@ async def test_managed_telemetry_snapshot_reports_pending_and_invariant_truth(
     )
     assert conflict is not None
 
+    monkeypatch.setattr(observability_store, "utcnow", lambda: observed_at)
     snapshot = await observability_store.get_managed_workflow_telemetry_snapshot(db_session)
     assert snapshot.accepted_nonterminal_count == 1
     assert snapshot.pending_cancellation_count == 1
     assert snapshot.unreachable_count == 0
     assert snapshot.invariant_conflict_count == 1
     assert snapshot.oldest_accepted_observation_age_seconds >= 0
-    assert snapshot.oldest_pending_cancellation_age_seconds >= 0
+    assert snapshot.oldest_pending_cancellation_age_seconds == 7200
+    current = await managed_store.get_managed_execution(
+        db_session,
+        invocation_id=invocation_id,
+    )
+    assert current is not None
+    assert current.cancel_requested_at == requested_at
+    assert current.updated_at == observed_at
 
 
 @pytest.mark.asyncio

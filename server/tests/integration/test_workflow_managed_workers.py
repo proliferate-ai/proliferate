@@ -152,6 +152,48 @@ async def test_cancel_before_runtime_work_invalidates_stale_delivery_task(
 
 
 @pytest.mark.asyncio
+async def test_target_bound_requires_owner_agent_auth_before_advancing(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_engine: AsyncEngine,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "workflow_managed_runs_enabled", True)
+    owner = await register_and_login(client, "managed-worker-agent-auth@example.com")
+    invocation_id, sandbox_id = await _seed_target_plan(client, db_session, owner)
+    factory = async_sessionmaker(test_engine, expire_on_commit=False)
+
+    async def auth_failure(
+        *_args: object,
+        prepare_agent_auth_for_user_id: UUID | None = None,
+        **_kwargs: object,
+    ) -> RuntimeAccess:
+        assert prepare_agent_auth_for_user_id == UUID(owner["user_id"])
+        raise WorkflowRuntimeError(
+            "workflow_agent_auth_unavailable",
+            authentication=True,
+        )
+
+    monkeypatch.setattr(delivery, "runtime_access", auth_failure)
+    await delivery.run_delivery_task(
+        factory,
+        invocation_id=invocation_id,
+        generation=2,
+    )
+
+    async with factory() as db:
+        current = await managed_store.get_managed_execution(
+            db,
+            invocation_id=invocation_id,
+        )
+    assert current is not None
+    assert current.target_cloud_sandbox_id == sandbox_id
+    assert current.delivery_checkpoint == "target_plan_frozen"
+    assert current.target_execution_store_id is None
+    assert current.delivery_status == "queued"
+
+
+@pytest.mark.asyncio
 async def test_delivery_replays_lost_responses_and_observation_stops_terminal(
     client: AsyncClient,
     db_session: AsyncSession,

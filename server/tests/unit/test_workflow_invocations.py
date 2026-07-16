@@ -351,6 +351,45 @@ def test_invocation_openapi_pins_exact_request_and_response_shapes() -> None:
     )
 
 
+def test_managed_workflow_openapi_pins_required_nullable_and_status_contracts() -> None:
+    schemas = create_app().openapi()["components"]["schemas"]
+    managed = schemas["ManagedWorkflowExecutionResponse"]
+    assert set(managed["required"]) == set(managed["properties"])
+    for field in (
+        "execution",
+        "openTarget",
+        "deliveryErrorCode",
+        "observationErrorCode",
+        "acceptedAt",
+    ):
+        assert {branch.get("type") for branch in managed["properties"][field]["anyOf"]} & {"null"}
+
+    history = schemas["ManagedWorkflowHistoryItem"]
+    assert set(history["required"]) == set(history["properties"])
+    assert set(history["properties"]["deliveryStatus"]["enum"]) == {
+        "prepared",
+        "queued",
+        "delivering",
+        "accepted",
+        "delivery_failed",
+        "delivery_cancelled",
+    }
+    assert set(history["properties"]["desiredState"]["enum"]) == {
+        "active",
+        "cancelled",
+    }
+    execution_status = history["properties"]["executionStatus"]["anyOf"]
+    assert any(branch.get("type") == "null" for branch in execution_status)
+    assert next(branch for branch in execution_status if "enum" in branch)["enum"] == [
+        "accepted",
+        "running",
+        "completed",
+        "failed",
+        "cancelled",
+        "interrupted",
+    ]
+
+
 @pytest.mark.asyncio
 async def test_workflow_invocation_422_redacts_argument_values_only_for_this_route() -> None:
     body = {
