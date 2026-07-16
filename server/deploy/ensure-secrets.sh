@@ -57,7 +57,7 @@ copy_unmanaged_env_values() {
     return 0
   fi
 
-  managed_pattern="^(POSTGRES_PASSWORD|DATABASE_URL|JWT_SECRET|CLOUD_SECRET_KEY|SITE_ADDRESS|API_BASE_URL|PROLIFERATE_PUBLIC_HEALTHCHECK_URL|PROLIFERATE_USE_SSLIP_FALLBACK)$"
+  managed_pattern="^(POSTGRES_PASSWORD|DATABASE_URL|JWT_SECRET|CLOUD_SECRET_KEY|SITE_ADDRESS|API_BASE_URL|FRONTEND_BASE_URL|PROLIFERATE_PUBLIC_HEALTHCHECK_URL|PROLIFERATE_USE_SSLIP_FALLBACK)$"
 
   if [[ -n "$override_file" && -f "$override_file" ]]; then
     awk -F= -v managed_pattern="$managed_pattern" '
@@ -195,11 +195,23 @@ if [[ -z "$PUBLIC_HEALTHCHECK_URL" ]]; then
 fi
 
 # The server embeds API_BASE_URL in configuration it pushes to workspaces.
-# Operators can set it explicitly; otherwise derive it from SITE_ADDRESS so
-# the sslip fallback (where SITE_ADDRESS is resolved at runtime) works too.
+# Operators can repeat the same origin explicitly; otherwise derive it from
+# SITE_ADDRESS so the sslip fallback (where SITE_ADDRESS is resolved at
+# runtime) works too. preflight.sh rejects a different origin.
 API_BASE_URL="$(read_config_env_value API_BASE_URL)"
 if [[ -z "$API_BASE_URL" ]]; then
   API_BASE_URL="$(site_url_from_address "$SITE_ADDRESS" "")"
+fi
+
+# Self-hosted Web is served same-origin from the server image, so the frontend
+# base URL is the same public origin as the API. An explicit value may repeat
+# that origin; preflight.sh rejects a different one. Otherwise derive it from
+# SITE_ADDRESS exactly like API_BASE_URL (this preserves the explicit
+# http://localhost posture that site_url_from_address already honors). This is
+# trusted operator configuration, never an incoming Host/forwarded header.
+FRONTEND_BASE_URL="$(read_config_env_value FRONTEND_BASE_URL)"
+if [[ -z "$FRONTEND_BASE_URL" ]]; then
+  FRONTEND_BASE_URL="$(site_url_from_address "$SITE_ADDRESS" "")"
 fi
 
 POSTGRES_PASSWORD="$(resolve_value \
@@ -230,6 +242,7 @@ EOF
   copy_unmanaged_env_values "$LOCAL_ENV_FILE"
   printf 'SITE_ADDRESS=%s\n' "$SITE_ADDRESS"
   printf 'API_BASE_URL=%s\n' "$API_BASE_URL"
+  printf 'FRONTEND_BASE_URL=%s\n' "$FRONTEND_BASE_URL"
   printf 'PROLIFERATE_PUBLIC_HEALTHCHECK_URL=%s\n' "$PUBLIC_HEALTHCHECK_URL"
   printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD"
   printf 'DATABASE_URL=postgresql+asyncpg://%s:%s@db:5432/%s\n' "$POSTGRES_USER" "$POSTGRES_PASSWORD" "$POSTGRES_DB"

@@ -32,6 +32,24 @@ binding legacy-Web bundle baseline recorded here.
 Desktop remains the behavioral baseline throughout. There is no intermediate
 state in which two product implementations are maintained.
 
+## Phase 7 — self-hosted Web (server-image serving)
+
+The server image now compiles and serves the ProductClient Web application
+same-origin with the API (`Browser -> Caddy -> server image`), so a normal
+self-hosted install serves the real Web application at its single
+`SITE_ADDRESS`. Caddy stays a separate container and the image runs no Node
+server. `WEB_DIST_DIR` (default `/app/web-dist` in
+`docker-compose.production.yml`) gates the behavior, the fail-closed SPA
+fallback preserves every API/auth/setup route, and `SITE_ADDRESS` derives both
+`API_BASE_URL` and `FRONTEND_BASE_URL`. The Web artifact bakes no managed API
+hostname; the browser resolves its API from `window.location.origin`. The
+managed Vercel deployment is unchanged. The blocking self-host qualification
+(`.github/workflows/self-host-smoke.yml`) builds the exact production image and
+proves the served, browser-executed Web application. Provider-login behavior is
+owned by a parallel effort and is out of scope for this phase. The canonical
+operating truth is
+[Self-hosted deployment](self-hosted-deploy.md#web-served-from-the-server-image).
+
 ## Binding legacy-Web bundle baseline (phase 6 cutover gate)
 
 This is the **binding** cutover baseline required before hosted Web cutover

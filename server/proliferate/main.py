@@ -80,6 +80,7 @@ from proliferate.server.setup.lifecycle import ensure_first_run_setup_token
 from proliferate.server.support.api import router as support_router
 from proliferate.server.support.feed.api import router as support_feed_router
 from proliferate.server.version import server_version
+from proliferate.server.web_app import mount_web_app
 from proliferate.server.workflows.api import invocations_router as workflow_invocations_router
 from proliferate.server.workflows.api import router as workflows_router
 from proliferate.utils.logging import configure_server_logging
@@ -333,6 +334,12 @@ def create_app() -> FastAPI:
     # domain is retargeted from deleted cloud_repo_config rows to RepoEnvironment.
     # app.include_router(automations_router, prefix=f"{api_prefix}/v1", tags=["automations"])
     app.include_router(devtools_router, prefix=f"{api_prefix}/v1", tags=["devtools"])
+
+    # Serve the compiled ProductClient Web application (self-hosted Web) after
+    # every API/auth/setup route is registered, so the fail-closed SPA fallback
+    # only catches genuinely unmatched browser navigation. No-op when
+    # WEB_DIST_DIR is empty (API-only).
+    mount_web_app(app, settings.web_dist_dir, api_prefix)
 
     return app
 

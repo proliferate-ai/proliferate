@@ -490,6 +490,87 @@ grep -q 'reverse_proxy api:8000' "$CADDYFILE" && ok "default route still proxies
 # common.sh profile mechanism agrees with the compose file's profile names.
 grep -q '"cloud-workspaces"' "$DEPLOY_DIR/common.sh" && ok "common.sh knows the cloud-workspaces profile name" || no "common.sh missing the cloud-workspaces profile name"
 
+# Compose enables self-hosted Web by default: the server image ships a compiled
+# Web distribution at /app/web-dist and WEB_DIST_DIR points at it (no new
+# profile, no new public port). Caddy still exposes the single SITE_ADDRESS.
+web_dist_line="$(grep -E '^\s*WEB_DIST_DIR:' "$COMPOSE_FILE" | head -1)"
+[[ -n "$web_dist_line" ]] \
+  && ok "compose sets WEB_DIST_DIR for the api service" || no "compose missing WEB_DIST_DIR (self-hosted Web not enabled)"
+printf '%s' "$web_dist_line" | grep -q '/app/web-dist' \
+  && ok "WEB_DIST_DIR points at the in-image Web distribution (/app/web-dist)" || no "WEB_DIST_DIR should point at /app/web-dist: $web_dist_line"
+printf '%s' "$web_dist_line" | grep -q '\${WEB_DIST_DIR-/app/web-dist}' \
+  && ok "an explicitly empty WEB_DIST_DIR preserves the API-only escape hatch" || no "WEB_DIST_DIR must default only when unset: $web_dist_line"
+
+# ---------------------------------------------------------------------------
+group "11. ensure-secrets: FRONTEND_BASE_URL / API_BASE_URL derivation"
+# ---------------------------------------------------------------------------
+# The deployment derives BOTH API_BASE_URL and FRONTEND_BASE_URL from
+# SITE_ADDRESS so same-origin self-hosted Web needs no extra configuration.
+# Explicit values win; explicit http://localhost stays HTTP.
+es_run() {
+  # es_run <static-file> : run ensure-secrets against an isolated env set and
+  # echo the resulting .env.runtime path.
+  local static="$1"
+  local dir
+  dir="$(dirname "$static")"
+  PROLIFERATE_STATIC_ENV_FILE="$static" \
+    PROLIFERATE_LOCAL_ENV_FILE="$dir/.env.local" \
+    PROLIFERATE_GENERATED_ENV_FILE="$dir/.env.generated" \
+    PROLIFERATE_ENV_FILE="$dir/.env.runtime" \
+    "$DEPLOY_DIR/ensure-secrets.sh" >/dev/null 2>&1
+  printf '%s' "$dir/.env.runtime"
+}
+es_val() { grep -m1 "^$2=" "$1" | cut -d= -f2-; }
+
+ESDIR="$SCRATCH/es-derive"
+mkdir -p "$ESDIR"
+printf 'SITE_ADDRESS=proliferate.company.com\n' >"$ESDIR/.env.static"
+RT="$(es_run "$ESDIR/.env.static")"
+[[ "$(es_val "$RT" API_BASE_URL)" == "https://proliferate.company.com" ]] \
+  && ok "API_BASE_URL derives https from SITE_ADDRESS" || no "API_BASE_URL derivation wrong: $(es_val "$RT" API_BASE_URL)"
+[[ "$(es_val "$RT" FRONTEND_BASE_URL)" == "https://proliferate.company.com" ]] \
+  && ok "FRONTEND_BASE_URL derives https from SITE_ADDRESS" || no "FRONTEND_BASE_URL derivation wrong: $(es_val "$RT" FRONTEND_BASE_URL)"
+
+# Repeating the same FRONTEND_BASE_URL origin is accepted (including a harmless
+# trailing slash) and does not disturb the derived API_BASE_URL.
+ESDIR2="$SCRATCH/es-explicit-frontend"
+mkdir -p "$ESDIR2"
+printf 'SITE_ADDRESS=proliferate.company.com\nFRONTEND_BASE_URL=https://proliferate.company.com/\n' >"$ESDIR2/.env.static"
+RT2="$(es_run "$ESDIR2/.env.static")"
+[[ "$(es_val "$RT2" FRONTEND_BASE_URL)" == "https://proliferate.company.com/" ]] \
+  && ok "same-origin FRONTEND_BASE_URL is preserved" || no "same-origin FRONTEND_BASE_URL not honored: $(es_val "$RT2" FRONTEND_BASE_URL)"
+[[ "$(es_val "$RT2" API_BASE_URL)" == "https://proliferate.company.com" ]] \
+  && ok "same-origin FRONTEND_BASE_URL leaves API_BASE_URL derived" || no "API_BASE_URL wrongly affected: $(es_val "$RT2" API_BASE_URL)"
+pf "$RT2" && ok "same-origin explicit frontend passes preflight" || no "same-origin explicit frontend should pass preflight"
+
+# A different explicit API or frontend origin is retained in the generated file
+# so preflight can report the operator's exact error, then blocks deployment.
+ESDIR3="$SCRATCH/es-explicit-api"
+mkdir -p "$ESDIR3"
+printf 'SITE_ADDRESS=proliferate.company.com\nAPI_BASE_URL=https://api.example.net\n' >"$ESDIR3/.env.static"
+RT3="$(es_run "$ESDIR3/.env.static")"
+[[ "$(es_val "$RT3" API_BASE_URL)" == "https://api.example.net" ]] \
+  && ok "mismatched API_BASE_URL remains visible to preflight" || no "explicit API_BASE_URL not retained: $(es_val "$RT3" API_BASE_URL)"
+[[ "$(es_val "$RT3" FRONTEND_BASE_URL)" == "https://proliferate.company.com" ]] \
+  && ok "mismatched API_BASE_URL leaves FRONTEND_BASE_URL derived" || no "FRONTEND_BASE_URL wrongly affected: $(es_val "$RT3" FRONTEND_BASE_URL)"
+pf "$RT3" && no "mismatched API_BASE_URL should BLOCK" || ok "mismatched API_BASE_URL blocks"
+
+ESDIR5="$SCRATCH/es-mismatched-frontend"
+mkdir -p "$ESDIR5"
+printf 'SITE_ADDRESS=proliferate.company.com\nFRONTEND_BASE_URL=https://app.example.net\n' >"$ESDIR5/.env.static"
+RT5="$(es_run "$ESDIR5/.env.static")"
+pf "$RT5" && no "mismatched FRONTEND_BASE_URL should BLOCK" || ok "mismatched FRONTEND_BASE_URL blocks"
+
+# An explicit http://localhost SITE_ADDRESS stays HTTP for both.
+ESDIR4="$SCRATCH/es-localhost"
+mkdir -p "$ESDIR4"
+printf 'SITE_ADDRESS=http://localhost\n' >"$ESDIR4/.env.static"
+RT4="$(es_run "$ESDIR4/.env.static")"
+[[ "$(es_val "$RT4" API_BASE_URL)" == "http://localhost" ]] \
+  && ok "http://localhost SITE_ADDRESS keeps http API_BASE_URL" || no "localhost API_BASE_URL wrong: $(es_val "$RT4" API_BASE_URL)"
+[[ "$(es_val "$RT4" FRONTEND_BASE_URL)" == "http://localhost" ]] \
+  && ok "http://localhost SITE_ADDRESS keeps http FRONTEND_BASE_URL" || no "localhost FRONTEND_BASE_URL wrong: $(es_val "$RT4" FRONTEND_BASE_URL)"
+
 # ---------------------------------------------------------------------------
 printf '\n== Summary ==\n  %d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

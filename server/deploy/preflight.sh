@@ -79,6 +79,35 @@ else
   ok "SITE_ADDRESS resolved."
 fi
 
+# Self-hosted Web is served by this same FastAPI image and resolves API calls
+# from window.location.origin. SITE_ADDRESS is therefore the one public
+# authority: callback URLs and server-generated workspace configuration must
+# not advertise a second origin that the browser is not using.
+site_origin_from_address() {
+  local address="${1%/}"
+  if [[ "$address" == http://* || "$address" == https://* ]]; then
+    printf '%s' "$address"
+  else
+    printf 'https://%s' "$address"
+  fi
+}
+
+if [[ -n "$SITE_ADDRESS" ]]; then
+  EXPECTED_ORIGIN="$(site_origin_from_address "$SITE_ADDRESS")"
+  ORIGIN_ERRORS_BEFORE="$ERRORS"
+  API_BASE_URL_VAL="$(get API_BASE_URL)"
+  FRONTEND_BASE_URL_VAL="$(get FRONTEND_BASE_URL)"
+  if [[ -n "$API_BASE_URL_VAL" && "${API_BASE_URL_VAL%/}" != "$EXPECTED_ORIGIN" ]]; then
+    err "API_BASE_URL must equal the SITE_ADDRESS origin ($EXPECTED_ORIGIN) for same-origin self-hosted Web; got $API_BASE_URL_VAL."
+  fi
+  if [[ -n "$FRONTEND_BASE_URL_VAL" && "${FRONTEND_BASE_URL_VAL%/}" != "$EXPECTED_ORIGIN" ]]; then
+    err "FRONTEND_BASE_URL must equal the SITE_ADDRESS origin ($EXPECTED_ORIGIN) for same-origin self-hosted Web; got $FRONTEND_BASE_URL_VAL."
+  fi
+  if [[ "$ERRORS" -eq "$ORIGIN_ERRORS_BEFORE" && -n "$API_BASE_URL_VAL" && -n "$FRONTEND_BASE_URL_VAL" ]]; then
+    ok "SITE_ADDRESS, API_BASE_URL, and FRONTEND_BASE_URL share one public origin."
+  fi
+fi
+
 # --- 2. E2B pairing (the whole-instance crash-loop guard) --------------------
 #
 # server/proliferate/main.py::_validate_e2b_template_configuration() raises at
@@ -257,6 +286,8 @@ trap 'rm -f "$known_keys_file"' EXIT
   cat <<'MANAGED'
 DATABASE_URL
 API_BASE_URL
+FRONTEND_BASE_URL
+WEB_DIST_DIR
 PROLIFERATE_USE_SSLIP_FALLBACK
 LITELLM_POSTGRES_DB
 LITELLM_POSTGRES_USER
