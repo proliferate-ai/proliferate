@@ -74,13 +74,13 @@ export function mobileCloudChatForWorkspace(
   const session = workspace.lastSessionSummary;
   return {
     workspaceId: workspace.id,
-    workspaceName: workspace.displayName ?? session?.title ?? workspace.repo.name,
-    repoLabel: `${workspace.repo.owner}/${workspace.repo.name}`,
-    branchLabel: workspace.repo.branch ?? workspace.repo.baseBranch ?? "main",
+    workspaceName: workspace.displayName ?? session?.title ?? workspace.repo?.name ?? "Workspace",
+    repoLabel: workspace.repo ? `${workspace.repo.owner}/${workspace.repo.name}` : "",
+    branchLabel: workspace.repo?.branch ?? workspace.repo?.baseBranch ?? "main",
     targetId: session?.targetId ?? workspace.targetId ?? null,
     workspaceRuntimeId: session?.workspaceId ?? cloudWorkspaceRuntimeId(workspace),
     sessionId: item?.defaultSessionId ?? session?.sessionId ?? null,
-    title: session?.title ?? item?.title ?? workspace.displayName ?? workspace.repo.name,
+    title: session?.title ?? item?.title ?? workspace.displayName ?? workspace.repo?.name ?? "Workspace",
     status: session?.status ?? workspace.workspaceStatus ?? workspace.status,
     visibility: workspace.visibility,
   };

@@ -27,6 +27,16 @@ export type {
   RecentWorkStatusIndicatorTone,
   RecentWorkStatusIndicatorView,
 } from "./cloud-work-inventory-types";
+export type { CloudWorkspaceBackingKind } from "./backing-kind";
+export {
+  isRepositoryWorktree,
+  isScratchWorkspace,
+  workspaceBackingKind,
+  workspaceBranchLabel,
+  workspaceDisplayTitle,
+  workspaceRepoLabel,
+  workspaceRepoRef,
+} from "./backing-kind";
 export { buildCloudWorkRecencyInventory } from "./cloud-work-filters";
 export { recentWorkSourceForWorkspace } from "./cloud-work-items";
 export {

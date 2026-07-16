@@ -243,6 +243,10 @@
       "types": "./dist/workspaces/model.d.ts",
       "import": "./dist/workspaces/model.js"
     },
+    "./workspaces/backing-kind": {
+      "types": "./dist/workspaces/backing-kind.d.ts",
+      "import": "./dist/workspaces/backing-kind.js"
+    },
     "./workspaces/cloud-work-inventory": {
       "types": "./dist/workspaces/cloud-work-inventory.d.ts",
       "import": "./dist/workspaces/cloud-work-inventory.js"

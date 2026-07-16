@@ -151,12 +151,13 @@ export function collectKnownCloudBranchNames(args: {
 }): Set<string> {
   return new Set(
     args.cloudWorkspaces
+      // Repository-only: scratch workspaces have no repo and never collide.
       .filter((workspace) =>
-        workspace.repo.provider === "github"
+        workspace.repo?.provider === "github"
         && workspace.repo.owner === args.target.gitOwner
         && workspace.repo.name === args.target.gitRepoName
       )
-      .map((workspace) => workspace.repo.branch.trim())
+      .map((workspace) => workspace.repo?.branch.trim() ?? "")
       .filter(Boolean),
   );
 }

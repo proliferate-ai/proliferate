@@ -1,5 +1,10 @@
 import type { CloudWorkspaceSummary } from "@proliferate/cloud-sdk";
 
+import {
+  workspaceBranchLabel,
+  workspaceRepoLabel,
+  workspaceRepoRef,
+} from "./backing-kind";
 import type { CloudWorkItemView, CloudWorkSource, RecentWorkSourceKind } from "./cloud-work-inventory-types";
 import {
   SOURCE_LABELS,
@@ -31,9 +36,13 @@ export function cloudWorkItemForWorkspace(
   workspace: CloudWorkspaceSummary,
   options: { nowMs?: number } = {},
 ): CloudWorkItemView {
-  const repoLabel = `${workspace.repo.owner}/${workspace.repo.name}`;
-  const branchLabel = workspace.repo.branch ?? workspace.repo.baseBranch ?? "main";
-  const title = workspace.displayName ?? workspace.lastSessionSummary?.title ?? workspace.repo.name;
+  const repoLabel = workspaceRepoLabel(workspace) ?? "";
+  const branchLabel = workspaceBranchLabel(workspace);
+  const title =
+    workspace.displayName ??
+    workspace.lastSessionSummary?.title ??
+    workspaceRepoRef(workspace)?.name ??
+    branchLabel;
   const sessionTitle = workspace.lastSessionSummary?.title ?? null;
   const sourceAgentKind = cloudWorkSourceAgentKind(workspace);
   const source = cloudWorkSourceForWorkspace(workspace);

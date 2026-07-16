@@ -40,6 +40,7 @@ from proliferate.server.cloud.repos.service import get_repo_branches_for_credent
 from proliferate.server.cloud.workspaces.domain.origin import resolve_workspace_origin_entrypoint
 from proliferate.server.cloud.workspaces.models import (
     CloudRuntimeStatus,
+    CloudWorkspaceBackingKind,
     CloudWorkspaceRuntimeStatusResponse,
     CloudWorkspaceStatus,
     CreateCloudWorkspaceRequest,
@@ -342,6 +343,17 @@ async def restore_cloud_workspace_for_user(
     workspace_id: UUID,
 ) -> WorkspaceDetail:
     workspace = await _load_user_workspace(db, user_id=user_id, workspace_id=workspace_id)
+    # Scratch workspaces carry no repository backing and are exempt from
+    # repository branch uniqueness.
+    if workspace.repo_environment_id is None:
+        restored = await cloud_workspace_store.restore_cloud_workspace(db, workspace)
+        if restored is None:
+            raise CloudApiError(
+                "cloud_workspace_restore_failed",
+                "Cloud workspace could not be restored.",
+                status_code=409,
+            )
+        return await _workspace_payload(db, restored, detail=True)
     active_branches = (
         await cloud_workspace_store.list_active_workspace_branches_for_repo_environment(
             db,
@@ -526,8 +538,14 @@ async def _load_user_workspace(
 
 async def _load_repo_environment(
     db: AsyncSession,
-    repo_environment_id: UUID,
+    repo_environment_id: UUID | None,
 ) -> RepoEnvironmentValue:
+    if repo_environment_id is None:
+        raise CloudApiError(
+            "cloud_repo_environment_not_found",
+            "Cloud repo environment not found.",
+            status_code=404,
+        )
     repo_environment = await repositories_store.get_repo_environment_by_id(
         db,
         repo_environment_id,
@@ -553,7 +571,6 @@ async def _workspace_payload(
     *,
     detail: bool = False,
 ) -> WorkspaceSummary:
-    repo_environment = await _load_repo_environment(db, workspace.repo_environment_id)
     sandbox = await cloud_sandbox_store.load_personal_cloud_sandbox(
         db,
         workspace.owner_user_id,
@@ -562,25 +579,42 @@ async def _workspace_payload(
     status = _workspace_status(workspace)
     stalled = _materialization_is_stalled(workspace)
     runtime_status = _runtime_status(sandbox)
-    return payload_type(
-        id=str(workspace.id),
-        target_id=None,
-        repo_environment_id=str(workspace.repo_environment_id),
-        display_name=workspace.display_name,
-        repo=RepoRef(
+
+    # Scratch workspaces have no repository backing: repo and repoEnvironmentId
+    # are null (never fabricated) and no repo environment is loaded onto the
+    # runtime.
+    if workspace.workspace_kind == "scratch":
+        repo_environment_id = None
+        repo = None
+        runtime_environment_id = None
+        workspace_kind: CloudWorkspaceBackingKind = "scratch"
+    else:
+        repo_environment = await _load_repo_environment(db, workspace.repo_environment_id)
+        repo_environment_id = str(repo_environment.id)
+        repo = RepoRef(
             provider=repo_environment.git_provider,
             owner=repo_environment.git_owner,
             name=repo_environment.git_repo_name,
             branch=workspace.git_branch,
             base_branch=workspace.git_base_branch or repo_environment.default_branch or "main",
-        ),
+        )
+        runtime_environment_id = str(repo_environment.id)
+        workspace_kind = "repositoryWorktree"
+
+    return payload_type(
+        id=str(workspace.id),
+        target_id=None,
+        workspace_kind=workspace_kind,
+        repo_environment_id=repo_environment_id,
+        display_name=workspace.display_name,
+        repo=repo,
         status=status,
         workspace_status=status,
         status_detail=_STALLED_STATUS_DETAIL if stalled else None,
         last_error=_STALLED_LAST_ERROR if stalled else None,
         product_lifecycle="archived" if workspace.archived_at is not None else "active",
         runtime=WorkspaceRuntimeSummary(
-            environment_id=str(repo_environment.id),
+            environment_id=runtime_environment_id,
             status=runtime_status,
             generation=sandbox.runtime_generation if sandbox is not None else 0,
         ),

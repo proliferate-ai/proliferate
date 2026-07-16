@@ -206,7 +206,9 @@ export function useCreateCloudWorkspace() {
         telemetry.track("cloud_workspace_created", {
           workspace_kind: "cloud",
           status: workspaceStatus,
-          git_provider: workspace.repo.provider,
+          // Workspace creation is repository-only; scratch workspaces never
+          // come from this flow, but the payload type is placement-neutral.
+          git_provider: workspace.repo?.provider ?? "github",
           attempt_count: attemptCount,
           retry_count: retryCount,
         });
@@ -228,7 +230,7 @@ export function useCreateCloudWorkspace() {
           ...nextEntry,
           stage: workspaceStatus === "ready" ? "submitting" : "awaiting-cloud-ready",
           workspaceId,
-          baseBranchName: workspace.repo.baseBranch,
+          baseBranchName: workspace.repo?.baseBranch ?? null,
           request: { kind: "select-existing", workspaceId },
         };
         setPendingWorkspaceEntry(updatedEntry);

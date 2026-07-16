@@ -31,6 +31,13 @@ export type CloudWorkspaceSandboxType =
   | "managed_shared"
   | "self_hosted";
 
+// Placement-neutral backing kind for a lightweight cloud workspace. A
+// repository worktree carries real repository metadata; a scratch workspace has
+// no repository backing (managed Workflow runs) and serializes repo/
+// repoEnvironmentId as null. Absent (older servers) is treated as
+// repositoryWorktree by the product-domain derivation.
+export type CloudWorkspaceBackingKind = "repositoryWorktree" | "scratch";
+
 export type CloudWorkspaceProductLifecycle = "active" | "archived" | "deleted";
 export type CloudWorkspaceExecutionTargetKind =
   | "local_desktop"
@@ -204,9 +211,10 @@ export interface CurrentTeamCheckoutResponse {
 export interface CloudWorkspaceSummary {
   id: string;
   targetId?: string | null;
+  workspaceKind?: CloudWorkspaceBackingKind;
   repoEnvironmentId?: string | null;
   displayName: string | null;
-  repo: RepoRef;
+  repo: RepoRef | null;
   status: CloudWorkspaceStatus;
   workspaceStatus: CloudWorkspaceStatus;
   productLifecycle?: CloudWorkspaceProductLifecycle;

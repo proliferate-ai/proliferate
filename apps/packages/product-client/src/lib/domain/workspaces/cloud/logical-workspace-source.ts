@@ -4,6 +4,7 @@ import {
   workspaceCurrentBranchName,
 } from "#product/lib/domain/workspaces/creation/branch-naming";
 import {
+  buildCloudWorkspaceLogicalWorkspaceId,
   buildPathLogicalWorkspaceId,
   buildRemoteLogicalWorkspaceId,
   buildRepoRootLogicalWorkspaceId,
@@ -20,7 +21,7 @@ export function workspaceBranchKey(workspace: Workspace): string {
 }
 
 export function cloudBranchKey(workspace: CloudWorkspaceSummary): string {
-  return normalizeLogicalWorkspaceBranchKey(workspace.repo.branch);
+  return normalizeLogicalWorkspaceBranchKey(workspace.repo?.branch);
 }
 
 export function remoteRepoKey(
@@ -87,6 +88,13 @@ export function compareLocalWorkspaceCanonicalOrder(
 export function buildLogicalWorkspaceIdForCloudWorkspace(
   workspace: CloudWorkspaceSummary,
 ): string {
+  // Repository-less (scratch) cloud workspaces have no remote coordinates. They
+  // must be keyed by their real id so two scratch rows are two distinct logical
+  // workspaces instead of folding onto a fabricated ``remote::::HEAD`` slot.
+  if (workspace.workspaceKind === "scratch" || !workspace.repo) {
+    return buildCloudWorkspaceLogicalWorkspaceId(workspace.id);
+  }
+
   return buildRemoteLogicalWorkspaceId(
     workspace.repo.provider,
     workspace.repo.owner,

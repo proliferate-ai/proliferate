@@ -107,13 +107,13 @@ export function mobileLinkedChatForWorkspace(
     : sortedSessions[0] ?? null;
   return {
     workspaceId: workspace.id,
-    workspaceName: workspace.displayName ?? workspace.repo.name,
-    repoLabel: `${workspace.repo.owner}/${workspace.repo.name}`,
-    branchLabel: workspace.repo.branch ?? workspace.repo.baseBranch ?? "main",
+    workspaceName: workspace.displayName ?? workspace.repo?.name ?? "Workspace",
+    repoLabel: workspace.repo ? `${workspace.repo.owner}/${workspace.repo.name}` : "",
+    branchLabel: workspace.repo?.branch ?? workspace.repo?.baseBranch ?? "main",
     targetId: session?.targetId ?? workspace.targetId ?? null,
     workspaceRuntimeId: session?.workspaceId ?? workspace.anyharnessWorkspaceId ?? null,
     sessionId: session?.sessionId ?? null,
-    title: session?.title ?? workspace.displayName ?? workspace.repo.name,
+    title: session?.title ?? workspace.displayName ?? workspace.repo?.name ?? "Workspace",
     status: session?.status ?? workspace.workspaceStatus ?? workspace.status,
     visibility: workspace.visibility,
   };

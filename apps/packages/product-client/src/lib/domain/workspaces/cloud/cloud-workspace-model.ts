@@ -138,8 +138,11 @@ export interface CloudWorkspaceCloudAccessSummary {
 export interface CloudWorkspaceSummary {
   id: string;
   targetId?: string | null;
+  // Placement-neutral backing kind; absent (older servers) means
+  // repositoryWorktree. Scratch workspaces have repo = null, never fabricated.
+  workspaceKind?: "repositoryWorktree" | "scratch";
   displayName: string | null;
-  repo: CloudWorkspaceRepoRef;
+  repo: CloudWorkspaceRepoRef | null;
   status: CloudWorkspaceStatus;
   workspaceStatus: CloudWorkspaceStatus;
   productLifecycle?: CloudWorkspaceProductLifecycle;
