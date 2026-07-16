@@ -185,7 +185,11 @@ async def set_personal_secret_env_var(
     name: str,
     value: str,
 ) -> tuple[CloudSecretSetValue, CloudSandboxSecretMaterializationValue | None]:
-    secret_set, _ = await get_personal_secrets(db, user_id=user_id)
+    secret_set = await secret_store.get_or_create_personal_secret_set(
+        db,
+        user_id=user_id,
+        actor_user_id=user_id,
+    )
     updated = await secret_store.upsert_secret_env_var(
         db,
         secret_set_id=secret_set.id,
@@ -206,7 +210,11 @@ async def delete_personal_secret_env_var(
     user_id: UUID,
     name: str,
 ) -> tuple[CloudSecretSetValue, CloudSandboxSecretMaterializationValue | None]:
-    secret_set, _ = await get_personal_secrets(db, user_id=user_id)
+    secret_set = await secret_store.get_or_create_personal_secret_set(
+        db,
+        user_id=user_id,
+        actor_user_id=user_id,
+    )
     updated = await secret_store.delete_secret_env_var(
         db,
         secret_set_id=secret_set.id,
@@ -227,7 +235,11 @@ async def set_personal_secret_file(
     path: str,
     content: str,
 ) -> tuple[CloudSecretSetValue, CloudSandboxSecretMaterializationValue | None]:
-    secret_set, _ = await get_personal_secrets(db, user_id=user_id)
+    secret_set = await secret_store.get_or_create_personal_secret_set(
+        db,
+        user_id=user_id,
+        actor_user_id=user_id,
+    )
     updated = await secret_store.upsert_secret_file(
         db,
         secret_set_id=secret_set.id,
@@ -248,7 +260,11 @@ async def delete_personal_secret_file(
     user_id: UUID,
     path: str,
 ) -> tuple[CloudSecretSetValue, CloudSandboxSecretMaterializationValue | None]:
-    secret_set, _ = await get_personal_secrets(db, user_id=user_id)
+    secret_set = await secret_store.get_or_create_personal_secret_set(
+        db,
+        user_id=user_id,
+        actor_user_id=user_id,
+    )
     updated = await secret_store.delete_secret_file(
         db,
         secret_set_id=secret_set.id,
@@ -292,10 +308,10 @@ async def set_organization_secret_env_var(
     value: str,
 ) -> tuple[CloudSecretSetValue, CloudSandboxSecretMaterializationValue | None]:
     await _require_organization_admin(db, user_id=user_id, organization_id=organization_id)
-    secret_set, _ = await get_organization_secrets(
+    secret_set = await secret_store.get_or_create_organization_secret_set(
         db,
-        user_id=user_id,
         organization_id=organization_id,
+        actor_user_id=user_id,
     )
     updated = await secret_store.upsert_secret_env_var(
         db,
@@ -319,10 +335,10 @@ async def delete_organization_secret_env_var(
     name: str,
 ) -> tuple[CloudSecretSetValue, CloudSandboxSecretMaterializationValue | None]:
     await _require_organization_admin(db, user_id=user_id, organization_id=organization_id)
-    secret_set, _ = await get_organization_secrets(
+    secret_set = await secret_store.get_or_create_organization_secret_set(
         db,
-        user_id=user_id,
         organization_id=organization_id,
+        actor_user_id=user_id,
     )
     updated = await secret_store.delete_secret_env_var(
         db,
@@ -346,10 +362,10 @@ async def set_organization_secret_file(
     content: str,
 ) -> tuple[CloudSecretSetValue, CloudSandboxSecretMaterializationValue | None]:
     await _require_organization_admin(db, user_id=user_id, organization_id=organization_id)
-    secret_set, _ = await get_organization_secrets(
+    secret_set = await secret_store.get_or_create_organization_secret_set(
         db,
-        user_id=user_id,
         organization_id=organization_id,
+        actor_user_id=user_id,
     )
     updated = await secret_store.upsert_secret_file(
         db,
@@ -373,10 +389,10 @@ async def delete_organization_secret_file(
     path: str,
 ) -> tuple[CloudSecretSetValue, CloudSandboxSecretMaterializationValue | None]:
     await _require_organization_admin(db, user_id=user_id, organization_id=organization_id)
-    secret_set, _ = await get_organization_secrets(
+    secret_set = await secret_store.get_or_create_organization_secret_set(
         db,
-        user_id=user_id,
         organization_id=organization_id,
+        actor_user_id=user_id,
     )
     updated = await secret_store.delete_secret_file(
         db,
