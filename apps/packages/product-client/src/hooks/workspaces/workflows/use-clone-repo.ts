@@ -42,9 +42,15 @@ function describeCloneFailure(error: unknown): string {
   return error instanceof Error ? error.message : "Failed to clone repository.";
 }
 
+export interface CloneRepoAttempt {
+  /** Unique to one chosen destination, and reused only when retrying it. */
+  operationId: string;
+  destinationPath: string;
+}
+
 export type CloneRepoResult =
   | { succeeded: true; sourceRoot: string }
-  | { succeeded: false; error: string; cancelled?: boolean };
+  | { succeeded: false; error: string; cancelled?: boolean; attempt?: CloneRepoAttempt };
 
 export function useCloneRepo() {
   const desktop = useProductHost().desktop ?? null;
@@ -91,27 +97,36 @@ export function useCloneRepo() {
     });
   }, [saveEnvironment, worker]);
 
-  /** Clone `repo` into a subfolder of the user-picked parent directory. The
-   * native folder picker chooses the parent; the clone lands in
-   * `<parent>/<repoName>`. `operationId` must be stable across retries. */
+  /** Clone `repo` into a subfolder of the user-picked parent directory.
+   *
+   * A fresh attempt receives a random operation id only AFTER its destination
+   * is known. A retry passes the returned attempt back verbatim. This keeps the
+   * id stable for one destination without incorrectly reusing it for every
+   * future clone of the same repository (PR5-CLONE-ID-02). */
   const cloneRepo = useCallback(async (
     repo: ExpectedRepoIdentity,
-    operationId: string,
+    retryAttempt?: CloneRepoAttempt,
   ): Promise<CloneRepoResult> => {
     if (!files) {
       return { succeeded: false, error: "Cloning is only available in Desktop." };
     }
-    const parent = await files.pickDirectory();
-    if (!parent) {
-      return { succeeded: false, error: "Clone cancelled.", cancelled: true };
+    let attempt = retryAttempt;
+    if (!attempt) {
+      const parent = await files.pickDirectory();
+      if (!parent) {
+        return { succeeded: false, error: "Clone cancelled.", cancelled: true };
+      }
+      attempt = {
+        operationId: `clone:${crypto.randomUUID()}`,
+        destinationPath: `${parent.replace(/\/+$/u, "")}/${repo.gitRepoName}`,
+      };
     }
-    const destinationPath = `${parent.replace(/\/+$/u, "")}/${repo.gitRepoName}`;
     setIsCloning(true);
     try {
       const repoRoot = await runCloneRepoWorkflow({
         repo,
-        destinationPath,
-        operationId,
+        destinationPath: attempt.destinationPath,
+        operationId: attempt.operationId,
         ensureRuntimeReady: () => ensureRuntimeReady(localRuntime),
         materializeRepoRoot: (input) => materializeRepoRoot(input),
         upsertRepoRootInWorkspaceCollections,
@@ -123,7 +138,7 @@ export function useCloneRepo() {
     } catch (error) {
       const message = describeCloneFailure(error);
       showToast(message);
-      return { succeeded: false, error: message };
+      return { succeeded: false, error: message, attempt };
     } finally {
       setIsCloning(false);
     }

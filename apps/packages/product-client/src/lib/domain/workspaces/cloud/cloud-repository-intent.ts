@@ -26,14 +26,9 @@ export interface CreateCloudWorkspaceContinuation {
  * construction: on cold restart the store is empty and nothing resumes; the
  * settings surfaces are the recovery path.
  *
- * NOTE (PR5-DEAD-04): local clone-from-GitHub is NOT an intent here. It runs
- * entirely inside AddRepoFlowHost's clone picker (`useAddRepoFlowStore` "clone"
- * step → `useCloneRepo`), which owns its own repo picker + GitHub-App gating and
- * does not need this readiness-gate/continuation host. A `clone_from_github`
- * intent kind was previously declared here but never begun by any surface, so it
- * was removed rather than left as dead code. If clone ever needs the browser
- * authorization round-trip this host provides, reintroduce it with a real
- * `begin({ kind: "clone_from_github" })` call site.
+ * Clone is a first-class intent because it needs the same user/install/repo
+ * authority gates and callback recovery as Cloud operations, while requiring
+ * only `github_repository_access` rather than managed Cloud.
  */
 export type CloudRepositoryIntent =
   | { kind: "set_up_cloud"; repo: CloudRepoIdentity }
@@ -42,17 +37,19 @@ export type CloudRepositoryIntent =
     repo: CloudRepoIdentity;
     continuation: CreateCloudWorkspaceContinuation;
   }
+  | { kind: "clone_from_github"; repo: CloudRepoIdentity }
   | { kind: "add_cloud_repository"; repo: CloudRepoIdentity };
 
 /**
- * The capability an intent depends on. Every intent this host owns requires
- * managed-Cloud execution readiness (the local clone path is not an intent; see
- * the type note above).
+ * The capability an intent depends on. Clone deliberately remains available on
+ * an App-ready deployment whose managed-Cloud executor is disabled.
  */
 export function requirementForCloudRepositoryIntent(
-  _intent: CloudRepositoryIntent,
+  intent: CloudRepositoryIntent,
 ): RepositoryCapabilityRequirement {
-  return "managed_cloud";
+  return intent.kind === "clone_from_github"
+    ? "github_repository_access"
+    : "managed_cloud";
 }
 
 /** The repository an intent targets. */
@@ -82,9 +79,15 @@ export async function continueCloudRepositoryIntent(args: {
   ) => Promise<void>;
   /** Complete the original Add Repository flow after registration succeeds. */
   onRepositoryRegistered?: (repo: CloudRepoIdentity) => void;
+  /** Clone the selected repository locally after GitHub authority is ready. */
+  cloneFromGitHub: (repo: CloudRepoIdentity) => Promise<void>;
 }): Promise<void> {
   const { intent } = args;
 
+  if (intent.kind === "clone_from_github") {
+    await args.cloneFromGitHub(intent.repo);
+    return;
+  }
   // Ensure the Cloud repo environment exists first. A retry that already has an
   // environment skips the save so it is not recreated.
   if (!args.cloudEnvironmentConfigured) {

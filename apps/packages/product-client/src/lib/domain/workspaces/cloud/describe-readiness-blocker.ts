@@ -1,9 +1,13 @@
-import type { RepositoryReadiness } from "@proliferate/product-domain/repos/repo-readiness";
+import type {
+  RepositoryCapabilityRequirement,
+  RepositoryReadiness,
+} from "@proliferate/product-domain/repos/repo-readiness";
 import type { CloudRepoPickerBlockerView } from "@proliferate/product-ui/repos/CloudRepoPicker";
 import type { CloudRepoIdentity } from "#product/lib/domain/workspaces/cloud/cloud-repository-intent";
 
 export interface ReadinessBlockerInputs {
   readiness: RepositoryReadiness;
+  requirement: RepositoryCapabilityRequirement;
   repo: CloudRepoIdentity | null;
   githubAccessDisplayName: string | null;
   orgName: string | null;
@@ -39,21 +43,23 @@ export function describeReadinessBlocker(
   input: ReadinessBlockerInputs,
 ): CloudRepoPickerBlockerView | null {
   const { readiness } = input;
+  const operation = input.requirement === "github_repository_access"
+    ? "clone this repository"
+    : "set up this repository in Cloud";
   switch (readiness.action) {
     case "none":
       return operatorOrHumanBlocker(readiness.gate, input);
     case "sign_in":
       return {
         title: "Sign in to continue",
-        description: "Sign in to Proliferate to set up this repository in Cloud.",
+        description: `Sign in to Proliferate to ${operation}.`,
         actionLabel: "Sign in",
         onAction: input.onSignIn,
       };
     case "authorize_user":
       return {
         title: "Connect GitHub App",
-        description:
-          "Authorize the Proliferate GitHub App to set up this repository in Cloud.",
+        description: `Authorize the Proliferate GitHub App to ${operation}.`,
         actionLabel: input.userAuthorization.authorizing ? "Opening GitHub…" : "Connect GitHub App",
         actionLoading: input.userAuthorization.authorizing,
         onAction: input.userAuthorization.authorize,
@@ -62,7 +68,7 @@ export function describeReadinessBlocker(
       return {
         title: "Reconnect GitHub App",
         description:
-          "Your GitHub App authorization expired. Reconnect it to set up this repository in Cloud.",
+          `Your GitHub App authorization expired. Reconnect it to ${operation}.`,
         actionLabel: input.userAuthorization.authorizing ? "Opening GitHub…" : "Reconnect GitHub App",
         actionLoading: input.userAuthorization.authorizing,
         onAction: input.userAuthorization.authorize,
@@ -71,7 +77,7 @@ export function describeReadinessBlocker(
       return {
         title: "Install Proliferate GitHub App",
         description:
-          "Install the Proliferate GitHub App for your organization to set up this repository in Cloud.",
+          `Install the Proliferate GitHub App for your organization to ${operation}.`,
         actionLabel: input.installation.installing ? "Opening GitHub…" : "Install Proliferate GitHub App",
         actionLoading: input.installation.installing,
         onAction: input.installation.install,
@@ -127,6 +133,16 @@ function operatorOrHumanBlocker(
   }
   // Gate 1 (and a per-repo operator_configuration_required) = operator config.
   const appName = input.githubAccessDisplayName;
+  if (input.requirement === "github_repository_access") {
+    return {
+      title: "GitHub repository access is not configured",
+      description: appName
+        ? `GitHub repository access for ${appName} isn't fully configured on this deployment. An operator must finish configuring the GitHub App.`
+        : "GitHub repository access isn't configured on this deployment. An operator must install and configure the GitHub App before repositories can be cloned.",
+      actionLabel: null,
+      onAction: null,
+    };
+  }
   return {
     title: "Cloud is not configured on this deployment",
     description: appName

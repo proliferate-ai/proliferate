@@ -5,6 +5,7 @@ import { describeReadinessBlocker, type ReadinessBlockerInputs } from "./describ
 function inputs(readiness: RepositoryReadiness, overrides: Partial<ReadinessBlockerInputs> = {}): ReadinessBlockerInputs {
   return {
     readiness,
+    requirement: "managed_cloud",
     repo: { gitProvider: "github", gitOwner: "acme", gitRepoName: "app" },
     githubAccessDisplayName: "proliferate-app",
     orgName: "Acme",
@@ -34,6 +35,15 @@ describe("describeReadinessBlocker", () => {
   it("reserves the operator-not-configured copy for the true operator gate (gate 1)", () => {
     const blocker = describeReadinessBlocker(inputs({ gate: 1, action: "none" }));
     expect(blocker?.title).toBe("Cloud is not configured on this deployment");
+  });
+
+  it("names GitHub repository access—not Cloud—for a blocked Clone", () => {
+    const blocker = describeReadinessBlocker(inputs(
+      { gate: 1, action: "none" },
+      { requirement: "github_repository_access" },
+    ));
+    expect(blocker?.title).toBe("GitHub repository access is not configured");
+    expect(blocker?.actionLabel).toBeNull();
   });
 
   it("keeps human-access copy for gate 8", () => {

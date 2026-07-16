@@ -94,9 +94,10 @@ vi.mock("react-router-dom", () => ({ useNavigate: () => vi.fn() }));
 
 // Expose the resolved cloudPicker.blocker title the host hands the flow.
 vi.mock("@proliferate/product-ui/repos/AddRepoFlow", () => ({
-  AddRepoFlow: ({ cloudPicker }: AddRepoFlowProps) => (
-    <div>{cloudPicker?.blocker ? `blocker:${cloudPicker.blocker.title}` : "no-blocker"}</div>
-  ),
+  AddRepoFlow: ({ step, cloudPicker, clonePicker }: AddRepoFlowProps) => {
+    const picker = step.kind === "clone" ? clonePicker : cloudPicker;
+    return <div>{picker?.blocker ? `blocker:${picker.blocker.title}` : "no-blocker"}</div>;
+  },
 }));
 
 afterEach(() => {
@@ -115,6 +116,12 @@ afterEach(() => {
 function openCloudStep() {
   act(() => {
     useAddRepoFlowStore.setState({ open: true, step: { kind: "cloud" }, onCompleted: null });
+  });
+}
+
+function openCloneStep() {
+  act(() => {
+    useAddRepoFlowStore.setState({ open: true, step: { kind: "clone" }, onCompleted: null });
   });
 }
 
@@ -186,5 +193,31 @@ describe("AddRepoFlowHost cloud gating (PR2-GATING-01)", () => {
         gitRepoName: "Rocket",
       },
     });
+  });
+
+  it("gates Clone on GitHub repository access, not managed Cloud", () => {
+    capabilities.value = {
+      githubRepositoryAccessStatus: "ready",
+      managedCloudStatus: "disabled",
+      githubRepositoryAccessDisplayName: "proliferate-app",
+    };
+    render(<AddRepoFlowHost />);
+    openCloneStep();
+
+    // The GitHub-only preflight is ready, so the picker owns the next gate.
+    expect(screen.getByText(/^blocker:Authorize GitHub App$/)).toBeTruthy();
+  });
+
+  it("shows the operator blocker before Clone when GitHub access is disabled", () => {
+    capabilities.value = {
+      githubRepositoryAccessStatus: "disabled",
+      managedCloudStatus: "ready",
+      githubRepositoryAccessDisplayName: null,
+    };
+    render(<AddRepoFlowHost />);
+    openCloneStep();
+
+    expect(screen.getByText(/^blocker:GitHub repository access is not configured$/)).toBeTruthy();
+    expect(screen.queryByText(/blocker:Authorize GitHub App/)).toBeNull();
   });
 });
