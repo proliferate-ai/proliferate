@@ -19,6 +19,7 @@ from proliferate.integrations.github import (
     verify_github_app_user_repo_access,
 )
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.github_app.errors import GitHubAppReauthorizationRequired
 from proliferate.utils.time import utcnow
 
 
@@ -122,11 +123,7 @@ async def _refresh_github_app_authorization(
             db,
             authorization.id,
         )
-        raise CloudApiError(
-            "github_app_authorization_expired",
-            "Reconnect the Proliferate GitHub App before using GitHub Cloud repos.",
-            status_code=409,
-        )
+        raise GitHubAppReauthorizationRequired(authorization.id)
     try:
         refreshed = await refresh_github_app_user_authorization(
             refresh_token=authorization.refresh_token,
@@ -136,11 +133,7 @@ async def _refresh_github_app_authorization(
             db,
             authorization.id,
         )
-        raise CloudApiError(
-            "github_app_authorization_expired",
-            "Reconnect the Proliferate GitHub App before using GitHub Cloud repos.",
-            status_code=409,
-        ) from exc
+        raise GitHubAppReauthorizationRequired(authorization.id) from exc
     except GitHubIntegrationError as exc:
         raise CloudApiError(
             "github_app_refresh_failed",

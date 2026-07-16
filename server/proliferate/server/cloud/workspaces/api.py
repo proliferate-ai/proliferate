@@ -12,6 +12,9 @@ from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
+from proliferate.server.cloud.github_app.transactions import (
+    commit_github_app_reauthorization_on_error,
+)
 from proliferate.server.cloud.workspaces.models import (
     CloudWorkspaceRuntimeStatusResponse,
     CreateCloudWorkspaceRequest,
@@ -29,6 +32,8 @@ from proliferate.server.cloud.workspaces.service import (
     restore_cloud_workspace_for_user,
     sync_cloud_workspace_display_name,
 )
+
+_REAUTH_TRANSACTION_DEPENDENCIES = [Depends(commit_github_app_reauthorization_on_error)]
 
 router = APIRouter()
 
@@ -49,7 +54,11 @@ async def list_cloud_workspaces_endpoint(
         raise_cloud_error(error)
 
 
-@router.post("/workspaces", response_model=WorkspaceDetail)
+@router.post(
+    "/workspaces",
+    response_model=WorkspaceDetail,
+    dependencies=_REAUTH_TRANSACTION_DEPENDENCIES,
+)
 async def create_cloud_workspace_endpoint(
     body: CreateCloudWorkspaceRequest,
     user: User = Depends(current_product_user),

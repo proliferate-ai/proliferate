@@ -5,6 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.engine import get_async_session
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
+from proliferate.server.cloud.github_app.transactions import (
+    commit_github_app_reauthorization_on_error,
+)
 from proliferate.server.cloud.repos.access import CloudRepoGitHubCredentialsDependency
 from proliferate.server.cloud.repos.models import (
     CloudGitRepositoriesResponse,
@@ -18,7 +21,7 @@ from proliferate.server.cloud.repos.service import (
     list_cloud_repositories,
 )
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(commit_github_app_reauthorization_on_error)])
 
 
 @router.get("/repos", response_model=CloudGitRepositoriesResponse)

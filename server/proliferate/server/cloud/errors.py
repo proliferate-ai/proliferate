@@ -34,4 +34,4 @@ def raise_cloud_error(error: CloudApiError) -> NoReturn:
         status_code=error.status_code,
         detail={"code": error.code, "message": error.message, **error.extra_detail},
         headers=error.headers or None,
-    )
+    ) from error

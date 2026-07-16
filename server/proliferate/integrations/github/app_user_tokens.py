@@ -60,7 +60,7 @@ async def _post_token(data: dict[str, str]) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise GitHubIntegrationError("GitHub App authorization response was invalid.")
     error = payload.get("error")
-    if error == "invalid_grant":
+    if error in {"invalid_grant", "bad_refresh_token"}:
         raise GitHubAppInvalidGrant("GitHub App authorization expired.")
     if response.status_code >= 300 or error:
         raise GitHubIntegrationError("Could not exchange GitHub App authorization.")

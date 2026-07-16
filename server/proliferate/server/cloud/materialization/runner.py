@@ -13,6 +13,7 @@ from proliferate.db.engine import async_session_factory
 from proliferate.db.engine import run_after_commit as db_run_after_commit
 from proliferate.integrations.sentry import report_critical
 from proliferate.server.billing.authorization import CloudSandboxResumeBlockedError
+from proliferate.server.cloud.github_app.errors import GitHubAppReauthorizationRequired
 
 logger = logging.getLogger("proliferate.cloud.materialization")
 
@@ -78,6 +79,19 @@ async def _run_with_fresh_session(
         try:
             await fn(db, **kwargs)
             await db.commit()
+        except GitHubAppReauthorizationRequired as exc:
+            # The refresh gate holds the authorization row lock and has staged
+            # ``needs_reauth``. This fresh-session runner owns the background
+            # transaction, so it must commit that permanent transition instead
+            # of sending it through the generic rollback path.
+            await db.commit()
+            logger.info(
+                "github_app_reauthorization_required",
+                extra={
+                    "authorization_id": str(exc.authorization_id),
+                    "fn": getattr(fn, "__name__", repr(fn)),
+                },
+            )
         except CloudSandboxResumeBlockedError as exc:
             await db.rollback()
             _log_billing_block(exc, fn=getattr(fn, "__name__", repr(fn)))
