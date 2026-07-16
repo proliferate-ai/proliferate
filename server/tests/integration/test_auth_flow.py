@@ -27,6 +27,21 @@ from proliferate.integrations.github import GitHubUserProfile
 from proliferate.utils.crypto import encrypt_text
 
 
+def _configure_github_app(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make point-of-use auth tests exercise a ready operator deployment."""
+
+    for field, value in {
+        "github_app_id": "12345",
+        "github_app_slug": "test-cloud",
+        "github_app_client_id": "Iv1.test-client",
+        "github_app_client_secret": "test-client-secret",
+        "github_app_webhook_secret": "test-webhook-secret",
+        "github_app_private_key": "-----BEGIN RSA PRIVATE KEY-----",
+        "github_app_private_key_path": "",
+    }.items():
+        monkeypatch.setattr(settings, field, value)
+
+
 def _make_pkce_pair() -> tuple[str, str]:
     verifier = "test-code-verifier-that-is-long-enough-for-pkce"
     digest = hashlib.sha256(verifier.encode("ascii")).digest()
@@ -604,6 +619,7 @@ class TestSingleOrgProductUserBypass:
         """
         monkeypatch.setattr(settings, "password_auth_enabled", True)
         monkeypatch.setattr(settings, "single_org_mode_override", True)
+        _configure_github_app(monkeypatch)
         await _create_password_user("single-org-no-github@example.com", self.password)
 
         login = await client.post(
