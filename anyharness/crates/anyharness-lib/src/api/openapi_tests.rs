@@ -255,6 +255,17 @@ fn destroy_source_documents_workflow_controlled_409() {
         responses.get("409").is_some(),
         "destroy-source must document the 409 workflow-controlled contract response"
     );
+    // The 409 must resolve to the shared ProblemDetails schema (body =
+    // anyharness_contract::v1::ProblemDetails), so clients get the same
+    // structured error shape as the other fenced routes rather than an
+    // undocumented ad-hoc body.
+    let schema_ref = responses["409"]["content"]["application/json"]["schema"]["$ref"]
+        .as_str()
+        .expect("destroy-source 409 must reference a JSON schema via $ref");
+    assert_eq!(
+        schema_ref, "#/components/schemas/ProblemDetails",
+        "destroy-source 409 must reference the ProblemDetails schema"
+    );
 }
 
 #[test]

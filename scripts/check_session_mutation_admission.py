@@ -178,6 +178,67 @@ def load_non_http_owners() -> list[tuple[str, str, str, list[str]]]:
     return owners
 
 
+def strip_rust_comments_and_strings(text: str) -> str:
+    """Remove Rust line/block comments and string literals from `text`, leaving
+    everything else (including whitespace) in place.
+
+    Without this, a decoy inside a comment or string literal — e.g.
+    `let _s = "admit_retention_sessions";` or `//admit_retention_sessions()` —
+    would satisfy the flatten+search below even after the real admission call
+    was deleted. Handled forms: `//` line comments, `/* */` block comments
+    (non-greedy; nested blocks are not required), regular `"..."` strings with
+    backslash escapes, and raw strings `r"..."` / `r#"..."#` (any hash count).
+    Comment/string contents are dropped entirely so nothing inside them can be
+    matched as code."""
+    out: list[str] = []
+    i = 0
+    n = len(text)
+    while i < n:
+        ch = text[i]
+        # Raw string: r"...", r#"..."#, r##"..."##, ...
+        if ch == "r" and i + 1 < n and text[i + 1] in ('"', "#"):
+            j = i + 1
+            hashes = 0
+            while j < n and text[j] == "#":
+                hashes += 1
+                j += 1
+            if j < n and text[j] == '"':
+                closing = '"' + ("#" * hashes)
+                end = text.find(closing, j + 1)
+                i = (end + len(closing)) if end >= 0 else n
+                continue
+            out.append(ch)
+            i += 1
+            continue
+        # Regular string literal with escape handling.
+        if ch == '"':
+            j = i + 1
+            while j < n:
+                if text[j] == "\\":
+                    j += 2
+                    continue
+                if text[j] == '"':
+                    j += 1
+                    break
+                j += 1
+            i = j
+            continue
+        # Comments.
+        if ch == "/" and i + 1 < n:
+            nxt = text[i + 1]
+            if nxt == "/":
+                end = text.find("\n", i + 2)
+                i = end if end >= 0 else n
+                continue
+            if nxt == "*":
+                end = text.find("*/", i + 2)
+                i = (end + 2) if end >= 0 else n
+                continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
 def owner_body(rel_path: str, fn: str) -> str | None:
     """Extract the brace-balanced body of `fn` in `rel_path` (relative to the
     anyharness-lib src dir). Returns None if the file or function is absent —
@@ -213,7 +274,11 @@ def check_non_http_owners() -> list[str]:
     destructive owner calls its admission helper BEFORE any of its destructive
     effect surfaces. Absent admission call or an effect ordered ahead of it =
     failure; a listed owner whose function no longer exists = stale-entry
-    failure (mirrors the HTTP checker's stale-entry teeth)."""
+    failure (mirrors the HTTP checker's stale-entry teeth).
+
+    Rust line/block comments and string literals are stripped from the body
+    BEFORE the flatten+search so a decoy token in a comment or string cannot
+    satisfy the check when the real admission call has been deleted."""
     failures: list[str] = []
     for rel_path, fn, admit_call, effects in load_non_http_owners():
         body = owner_body(rel_path, fn)
@@ -223,8 +288,10 @@ def check_non_http_owners() -> list[str]:
                 f"(remove it or fix the entry)"
             )
             continue
-        # Whitespace-collapsed view so rustfmt line splits don't affect ordering.
-        flat = re.sub(r"\s+", "", body)
+        # Strip comments/string literals, then collapse whitespace so rustfmt
+        # line splits don't affect ordering and no decoy in a comment/string can
+        # be matched as code.
+        flat = re.sub(r"\s+", "", strip_rust_comments_and_strings(body))
         # Word-boundary match so a rename/removal (e.g. `admit_x` -> `no_admit_x`)
         # is caught rather than matching as a substring.
         admit_match = re.search(rf"(?<![A-Za-z0-9_]){re.escape(admit_call)}(?![A-Za-z0-9_])", flat)
