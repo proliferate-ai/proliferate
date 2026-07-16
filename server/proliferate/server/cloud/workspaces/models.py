@@ -10,6 +10,60 @@ from pydantic import BaseModel, Field
 CloudWorkspaceStatus = Literal["pending", "materializing", "ready", "archived", "error"]
 CloudRuntimeStatus = Literal["pending", "running", "paused", "error", "disabled"]
 
+MaterializationTargetKind = Literal["managed_cloud", "local_desktop"]
+MaterializationState = Literal[
+    "pending",
+    "hydrating",
+    "hydrated",
+    "missing",
+    "inconsistent",
+    "failed",
+]
+ReportableMaterializationState = Literal["hydrated", "missing", "inconsistent", "failed"]
+
+
+class WorkspaceMaterializationSummary(BaseModel):
+    id: str
+    target_kind: MaterializationTargetKind = Field(serialization_alias="targetKind")
+    desktop_install_id: str | None = Field(serialization_alias="desktopInstallId")
+    anyharness_workspace_id: str | None = Field(serialization_alias="anyharnessWorkspaceId")
+    worktree_path: str | None = Field(serialization_alias="worktreePath")
+    state: MaterializationState
+    generation: int
+    expected_head_sha: str | None = Field(serialization_alias="expectedHeadSha")
+    observed_head_sha: str | None = Field(serialization_alias="observedHeadSha")
+    observed_branch: str | None = Field(serialization_alias="observedBranch")
+    failure_code: str | None = Field(serialization_alias="failureCode")
+    last_reported_at: str | None = Field(serialization_alias="lastReportedAt")
+
+
+class CreateMaterializationIntentRequest(BaseModel):
+    target_kind: Literal["local_desktop"] = Field(alias="targetKind")
+    desktop_install_id: str = Field(alias="desktopInstallId")
+
+
+class MaterializationIntentSource(BaseModel):
+    repository: RepoRef
+    branch_name: str = Field(serialization_alias="branchName")
+    head_sha: str = Field(serialization_alias="headSha")
+
+
+class MaterializationIntentResponse(BaseModel):
+    materialization: WorkspaceMaterializationSummary
+    operation_id: str = Field(serialization_alias="operationId")
+    source: MaterializationIntentSource
+
+
+class ReportMaterializationRequest(BaseModel):
+    generation: int
+    state: ReportableMaterializationState
+    anyharness_workspace_id: str | None = Field(default=None, alias="anyharnessWorkspaceId")
+    worktree_path: str | None = Field(default=None, alias="worktreePath")
+    observed_branch: str | None = Field(default=None, alias="observedBranch")
+    observed_head_sha: str | None = Field(default=None, alias="observedHeadSha")
+    failure_code: str | None = Field(default=None, alias="failureCode")
+    failure_detail: str | None = Field(default=None, alias="failureDetail")
+
 
 class CreateCloudWorkspaceRequest(BaseModel):
     git_provider: Literal["github"] = Field(default="github", alias="gitProvider")
@@ -74,9 +128,15 @@ class WorkspaceCloudAccessSummary(BaseModel):
 class WorkspaceSummary(BaseModel):
     id: str
     target_id: str | None = Field(default=None, serialization_alias="targetId")
-    repo_environment_id: str = Field(serialization_alias="repoEnvironmentId")
+    # Nullable for a repo-less workspace (no repository identity). This branch's
+    # store never yields one (``cloud_workspace.repo_environment_id`` is NOT NULL
+    # here), but #1245 (slice 5a) makes it nullable for scratch workspaces; a
+    # repo-less row then serializes with ``repoEnvironmentId``/``repo`` null
+    # rather than crashing the read path. See PR4-BASE-02. Convergent with the
+    # merged #1245 response model, which is already nullable here.
+    repo_environment_id: str | None = Field(serialization_alias="repoEnvironmentId")
     display_name: str = Field(serialization_alias="displayName")
-    repo: RepoRef
+    repo: RepoRef | None
     status: CloudWorkspaceStatus
     workspace_status: CloudWorkspaceStatus = Field(serialization_alias="workspaceStatus")
     product_lifecycle: Literal["active", "archived"] = Field(
@@ -91,9 +151,13 @@ class WorkspaceSummary(BaseModel):
         default=None,
         serialization_alias="selectedMaterializationId",
     )
-    primary_materialization: None = Field(
+    primary_materialization: WorkspaceMaterializationSummary | None = Field(
         default=None,
         serialization_alias="primaryMaterialization",
+    )
+    materializations: list[WorkspaceMaterializationSummary] = Field(
+        default_factory=list,
+        serialization_alias="materializations",
     )
     cloud_access: WorkspaceCloudAccessSummary = Field(
         default_factory=WorkspaceCloudAccessSummary,

@@ -7,13 +7,13 @@ import httpx
 from proliferate.integrations.anyharness.client import auth_headers
 from proliferate.integrations.anyharness.errors import CloudRuntimeReconnectError
 from proliferate.integrations.anyharness.models import (
+    RemoteGitStatusSnapshot,
     RemoteWorkspaceSummary,
     ResolvedRemoteWorkspace,
 )
 
-_MOBILITY_DESTINATION_PREPARE_TIMEOUT_SECONDS = 180.0
-_MOBILITY_DESTROY_SOURCE_TIMEOUT_SECONDS = 60.0
 _CREATE_WORKTREE_TIMEOUT_SECONDS = 180.0
+_GIT_STATUS_TIMEOUT_SECONDS = 15.0
 
 
 def _runtime_status_error_message(
@@ -102,55 +102,6 @@ async def resolve_runtime_workspace(
         invalid_message="Cloud runtime did not return a valid AnyHarness workspace id.",
         workspace_id_message="Cloud runtime did not return a valid AnyHarness workspace id.",
         repo_root_message="Cloud runtime did not return a valid AnyHarness repo root id.",
-    )
-
-
-async def prepare_runtime_mobility_destination(
-    runtime_url: str,
-    access_token: str,
-    *,
-    repo_root_id: str,
-    requested_branch: str,
-    requested_base_sha: str,
-    destination_id: str,
-    preferred_workspace_name: str | None = None,
-) -> ResolvedRemoteWorkspace:
-    try:
-        async with httpx.AsyncClient(
-            timeout=_MOBILITY_DESTINATION_PREPARE_TIMEOUT_SECONDS
-        ) as client:
-            response = await client.post(
-                f"{runtime_url}/v1/repo-roots/{repo_root_id}/mobility/prepare-destination",
-                headers=auth_headers(access_token),
-                json={
-                    "requestedBranch": requested_branch,
-                    "requestedBaseSha": requested_base_sha,
-                    "destinationId": destination_id,
-                    "preferredWorkspaceName": preferred_workspace_name,
-                },
-            )
-            response.raise_for_status()
-            try:
-                payload = response.json()
-            except ValueError as exc:
-                raise CloudRuntimeReconnectError(
-                    "Cloud runtime returned invalid JSON when preparing a worktree destination."
-                ) from exc
-    except httpx.HTTPStatusError as exc:
-        raise CloudRuntimeReconnectError(
-            _runtime_status_error_message(
-                exc.response,
-                "Failed to prepare worktree destination.",
-            )
-        ) from exc
-    except httpx.HTTPError as exc:
-        raise CloudRuntimeReconnectError("Failed to prepare worktree destination.") from exc
-
-    return _parse_resolved_workspace(
-        payload,
-        invalid_message="Cloud runtime did not return a valid prepared workspace.",
-        workspace_id_message="Cloud runtime did not return a valid prepared workspace id.",
-        repo_root_message="Cloud runtime did not return a valid prepared repo root id.",
     )
 
 
@@ -263,30 +214,95 @@ async def list_runtime_workspaces(
     return summaries
 
 
-async def destroy_runtime_mobility_source(
+def _require_str(payload: dict[str, object], key: str) -> str:
+    value = payload.get(key)
+    if not isinstance(value, str) or not value:
+        raise CloudRuntimeReconnectError(f"Cloud runtime git status is missing a valid '{key}'.")
+    return value
+
+
+def _require_bool(payload: dict[str, object], key: str) -> bool:
+    value = payload.get(key)
+    if not isinstance(value, bool):
+        raise CloudRuntimeReconnectError(f"Cloud runtime git status is missing a valid '{key}'.")
+    return value
+
+
+def _require_int(payload: dict[str, object], key: str) -> int:
+    value = payload.get(key)
+    # bool is a subclass of int; reject it explicitly.
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise CloudRuntimeReconnectError(f"Cloud runtime git status is missing a valid '{key}'.")
+    return value
+
+
+def _optional_str(payload: dict[str, object], key: str) -> str | None:
+    value = payload.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise CloudRuntimeReconnectError(f"Cloud runtime git status returned an invalid '{key}'.")
+    return value
+
+
+_GIT_STATUS_OPERATIONS = {"none", "merge", "rebase", "cherry_pick", "revert"}
+
+
+def _parse_git_status_snapshot(payload: object) -> RemoteGitStatusSnapshot:
+    if not isinstance(payload, dict):
+        raise CloudRuntimeReconnectError("Cloud runtime returned an invalid git status snapshot.")
+    operation = _require_str(payload, "operation")
+    if operation not in _GIT_STATUS_OPERATIONS:
+        raise CloudRuntimeReconnectError("Cloud runtime git status returned an unknown operation.")
+    return RemoteGitStatusSnapshot(
+        workspace_id=_require_str(payload, "workspaceId"),
+        workspace_path=_require_str(payload, "workspacePath"),
+        repo_root_path=_require_str(payload, "repoRootPath"),
+        current_branch=_optional_str(payload, "currentBranch"),
+        head_oid=_require_str(payload, "headOid"),
+        detached=_require_bool(payload, "detached"),
+        upstream_branch=_optional_str(payload, "upstreamBranch"),
+        suggested_base_branch=_optional_str(payload, "suggestedBaseBranch"),
+        ahead=_require_int(payload, "ahead"),
+        behind=_require_int(payload, "behind"),
+        operation=operation,
+        conflicted=_require_bool(payload, "conflicted"),
+        clean=_require_bool(payload, "clean"),
+    )
+
+
+async def get_runtime_git_status(
     runtime_url: str,
     access_token: str,
     *,
     anyharness_workspace_id: str,
-) -> None:
+) -> RemoteGitStatusSnapshot:
+    """Read the AnyHarness workspace git status as a typed, fail-closed snapshot.
+
+    Transport failures and missing/malformed required fields raise
+    ``CloudRuntimeReconnectError`` — a status read is never interpreted as clean.
+    """
     try:
-        async with httpx.AsyncClient(timeout=_MOBILITY_DESTROY_SOURCE_TIMEOUT_SECONDS) as client:
-            response = await client.post(
-                f"{runtime_url}/v1/workspaces/{anyharness_workspace_id}/mobility/destroy-source",
+        async with httpx.AsyncClient(timeout=_GIT_STATUS_TIMEOUT_SECONDS) as client:
+            response = await client.get(
+                f"{runtime_url}/v1/workspaces/{anyharness_workspace_id}/git/status",
                 headers=auth_headers(access_token),
-                json={},
             )
-            if response.status_code == 404:
-                return
             response.raise_for_status()
+            try:
+                payload = response.json()
+            except ValueError as exc:
+                raise CloudRuntimeReconnectError(
+                    "Cloud runtime returned invalid JSON for git status."
+                ) from exc
     except httpx.HTTPStatusError as exc:
         raise CloudRuntimeReconnectError(
             _runtime_status_error_message(
                 exc.response,
-                "Failed to destroy old AnyHarness mobility source.",
+                "Failed to read cloud workspace git status.",
             )
         ) from exc
     except httpx.HTTPError as exc:
-        raise CloudRuntimeReconnectError(
-            "Failed to destroy old AnyHarness mobility source."
-        ) from exc
+        raise CloudRuntimeReconnectError("Failed to read cloud workspace git status.") from exc
+
+    return _parse_git_status_snapshot(payload)

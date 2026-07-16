@@ -136,19 +136,18 @@ function sessionRecencyMs(
 function cloudWorkspaceOption(
   workspace: CloudWorkspaceSummary,
 ): SupportReportWorkspaceOption {
-  const branch = workspace.repo.branch || workspace.repo.baseBranch || null;
+  const branch = workspace.repo?.branch || workspace.repo?.baseBranch || null;
   const materialization = workspace.primaryMaterialization;
   const targetId = workspace.targetId
     ?? workspace.executionTarget?.targetId
-    ?? materialization?.targetId
     ?? workspace.directTargetContext?.targetId
     ?? null;
   return {
     id: cloudWorkspaceSyntheticId(workspace.id),
     label: workspace.displayName?.trim()
-      || (branch ? humanizeBranchName(branch) : workspace.repo.name),
+      || (branch ? humanizeBranchName(branch) : workspace.repo?.name ?? "Workspace"),
     location: "cloud",
-    path: `${workspace.repo.owner}/${workspace.repo.name}`,
+    path: workspace.repo ? `${workspace.repo.owner}/${workspace.repo.name}` : "",
     branch,
     status: workspace.status,
     updatedAt: workspace.updatedAt ?? workspace.readyAt ?? workspace.createdAt ?? null,

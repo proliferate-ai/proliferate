@@ -91,7 +91,8 @@ export function useWorktreeSettingsTargets() {
         key,
         label: environmentId
           ? `Cloud runtime ${environmentId.slice(0, 8)}`
-          : workspace.displayName ?? `${workspace.repo.owner}/${workspace.repo.name}`,
+          : workspace.displayName
+            ?? (workspace.repo ? `${workspace.repo.owner}/${workspace.repo.name}` : "Workspace"),
         location: "cloud",
         runtimeUrl: connection.runtimeUrl,
         runtimeGeneration: generation,

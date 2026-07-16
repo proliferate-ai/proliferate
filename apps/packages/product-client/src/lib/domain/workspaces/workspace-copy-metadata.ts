@@ -44,7 +44,7 @@ export function workspaceCopyMetadataForLogicalWorkspace(
       : null;
   const branchName = firstTrimmed([
     localWorkspace ? workspaceCurrentBranchName(localWorkspace) : null,
-    workspace?.cloudWorkspace?.repo.branch,
+    workspace?.cloudWorkspace?.repo?.branch,
     workspace?.mobilityWorkspace?.repo.branch,
     workspace?.branchKey,
   ]);

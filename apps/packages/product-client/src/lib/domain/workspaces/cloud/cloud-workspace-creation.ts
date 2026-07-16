@@ -152,11 +152,11 @@ export function collectKnownCloudBranchNames(args: {
   return new Set(
     args.cloudWorkspaces
       .filter((workspace) =>
-        workspace.repo.provider === "github"
+        workspace.repo?.provider === "github"
         && workspace.repo.owner === args.target.gitOwner
         && workspace.repo.name === args.target.gitRepoName
       )
-      .map((workspace) => workspace.repo.branch.trim())
+      .map((workspace) => workspace.repo?.branch.trim() ?? "")
       .filter(Boolean),
   );
 }

@@ -12,6 +12,7 @@ from proliferate.integrations.anyharness.errors import (
 from proliferate.integrations.anyharness.models import (
     RemoteAgentInstallResult,
     RemoteAgentSummary,
+    RemoteGitStatusSnapshot,
     RemoteSession,
     RemoteTerminalCommandRun,
     RemoteWorkspaceFileState,
@@ -43,9 +44,8 @@ from proliferate.integrations.anyharness.workspace_ops import (
 )
 from proliferate.integrations.anyharness.workspaces import (
     create_remote_worktree_workspace,
-    destroy_runtime_mobility_source,
+    get_runtime_git_status,
     list_runtime_workspaces,
-    prepare_runtime_mobility_destination,
     resolve_runtime_workspace,
 )
 from proliferate.integrations.anyharness.worktrees import (
@@ -60,6 +60,7 @@ __all__ = [
     "CloudRuntimeRequestRejectedError",
     "RemoteAgentInstallResult",
     "RemoteAgentSummary",
+    "RemoteGitStatusSnapshot",
     "RemoteSession",
     "RemoteTerminalCommandRun",
     "RemoteWorkspaceFileState",
@@ -76,12 +77,11 @@ __all__ = [
     "close_runtime_session",
     "create_runtime_session",
     "create_remote_worktree_workspace",
-    "destroy_runtime_mobility_source",
     "get_remote_terminal_command_run",
+    "get_runtime_git_status",
     "install_runtime_agent",
     "list_runtime_agents",
     "list_runtime_workspaces",
-    "prepare_runtime_mobility_destination",
     "probe_runtime_health",
     "prompt_runtime_session",
     "read_remote_workspace_file_state",

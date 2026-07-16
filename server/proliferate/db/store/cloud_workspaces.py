@@ -21,7 +21,12 @@ CloudWorkspaceLifecycle = Literal["active", "archived", "all"]
 class CloudWorkspaceValue:
     id: UUID
     owner_user_id: UUID
-    repo_environment_id: UUID
+    # Nullable for forward-compatibility with #1245 (slice 5a): a merged scratch
+    # workspace has no repository backing (``repo_environment_id IS NULL``). This
+    # branch's schema still enforces NOT NULL, so the store never yields None
+    # here today; the type lets the read/intent guards below stay correct once
+    # #1245 lands. See PR4-BASE-02.
+    repo_environment_id: UUID | None
     display_name: str
     git_branch: str
     git_base_branch: str | None

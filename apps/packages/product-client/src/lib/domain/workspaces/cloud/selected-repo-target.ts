@@ -44,7 +44,7 @@ export function getCloudRepoTargetForSelectedWorkspace(
   const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
   if (cloudWorkspaceId) {
     const cloudWorkspace = cloudWorkspaces.find((workspace) => workspace.id === cloudWorkspaceId);
-    if (cloudWorkspace?.repo.provider !== "github") {
+    if (cloudWorkspace?.repo?.provider !== "github") {
       return null;
     }
 

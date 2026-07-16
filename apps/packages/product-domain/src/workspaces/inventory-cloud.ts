@@ -288,13 +288,15 @@ function workspaceExposureLabel(
 }
 
 function repoLabel(workspace: CloudWorkspaceSummary): string {
-  return `${workspace.repo.owner}/${workspace.repo.name}`;
+  // repo is null for a repo-less workspace (no repository backing); render empty
+  // rather than crashing. See PR4-BASE-02.
+  return workspace.repo ? `${workspace.repo.owner}/${workspace.repo.name}` : "";
 }
 
 function workspaceBranchLabel(workspace: CloudWorkspaceSummary): string {
   return (
-    nonEmptyText(workspace.repo.branch) ??
-    nonEmptyText(workspace.repo.baseBranch) ??
+    nonEmptyText(workspace.repo?.branch) ??
+    nonEmptyText(workspace.repo?.baseBranch) ??
     "main"
   );
 }
@@ -302,7 +304,7 @@ function workspaceBranchLabel(workspace: CloudWorkspaceSummary): string {
 function workspaceDisplayLabel(workspace: CloudWorkspaceSummary): string {
   return (
     nonEmptyText(workspace.displayName) ??
-    nonEmptyText(workspace.repo.name) ??
+    nonEmptyText(workspace.repo?.name) ??
     workspaceBranchLabel(workspace) ??
     repoLabel(workspace)
   );

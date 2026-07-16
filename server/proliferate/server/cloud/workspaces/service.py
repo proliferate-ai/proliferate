@@ -8,15 +8,21 @@ stores the returned workspace id.
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from typing import Literal, Protocol
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store import cloud_sandboxes as cloud_sandbox_store
+from proliferate.db.store import cloud_workspace_materializations as materialization_store
 from proliferate.db.store import cloud_workspaces as cloud_workspace_store
 from proliferate.db.store import repositories as repositories_store
+from proliferate.db.store import runtime_workers as runtime_workers_store
 from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
+from proliferate.db.store.cloud_workspace_materializations import (
+    CloudWorkspaceMaterializationValue,
+)
 from proliferate.db.store.cloud_workspaces import CloudWorkspaceValue
 from proliferate.db.store.repositories import RepoEnvironmentValue
 from proliferate.integrations.anyharness.errors import CloudRuntimeReconnectError
@@ -38,6 +44,10 @@ from proliferate.server.cloud.materialization.materialize.repo_environment impor
 from proliferate.server.cloud.repos.domain.github_credentials import CloudRepoGitHubCredentials
 from proliferate.server.cloud.repos.service import get_repo_branches_for_credentials
 from proliferate.server.cloud.workspaces.domain.origin import resolve_workspace_origin_entrypoint
+from proliferate.server.cloud.workspaces.materializations.summaries import (
+    materialization_summary,
+    select_primary,
+)
 from proliferate.server.cloud.workspaces.models import (
     CloudRuntimeStatus,
     CloudWorkspaceRuntimeStatusResponse,
@@ -93,14 +103,20 @@ async def list_cloud_workspaces_for_user(
     user_id: UUID,
     *,
     lifecycle: Literal["active", "archived", "all"] = "active",
+    desktop_install_id: str | None = None,
 ) -> list[WorkspaceSummary]:
     workspaces = await cloud_workspace_store.list_cloud_workspaces(
         db,
         user_id,
         lifecycle=lifecycle,
     )
+    resolved_install_id = await _resolve_owned_install(
+        db,
+        user_id=user_id,
+        desktop_install_id=desktop_install_id,
+    )
     return [
-        await _workspace_payload(db, workspace)
+        await _workspace_payload(db, workspace, requesting_install_id=resolved_install_id)
         for workspace in workspaces
         if workspace is not None
     ]
@@ -110,9 +126,46 @@ async def get_cloud_workspace_detail(
     db: AsyncSession,
     user_id: UUID,
     workspace_id: UUID,
+    *,
+    desktop_install_id: str | None = None,
 ) -> WorkspaceDetail:
     workspace = await _load_user_workspace(db, user_id=user_id, workspace_id=workspace_id)
-    return await _workspace_payload(db, workspace, detail=True)
+    resolved_install_id = await _resolve_owned_install(
+        db,
+        user_id=user_id,
+        desktop_install_id=desktop_install_id,
+    )
+    return await _workspace_payload(
+        db,
+        workspace,
+        detail=True,
+        requesting_install_id=resolved_install_id,
+    )
+
+
+async def _resolve_owned_install(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    desktop_install_id: str | None,
+) -> str | None:
+    """Return the install id only when it is owned by the caller.
+
+    Selection preference and un-redaction apply solely to an install the caller
+    actually owns; an unowned or unknown install id is ignored (treated as no
+    install), so it can never un-redact another device's local materialization.
+    """
+    if desktop_install_id is None:
+        return None
+    cleaned = desktop_install_id.strip()
+    if not cleaned:
+        return None
+    worker = await runtime_workers_store.get_active_desktop_worker_for_user(
+        db,
+        owner_user_id=user_id,
+        desktop_install_id=cleaned,
+    )
+    return cleaned if worker is not None else None
 
 
 async def create_cloud_workspace_for_user(
@@ -290,10 +343,22 @@ async def create_cloud_workspace_for_user(
         setup_script=repo_environment.setup_script,
         source=body.source or "desktop",
     )
+    # Dual-write: the legacy top-level id and the managed-Cloud materialization
+    # are written together, after AnyHarness returns. A failure before this point
+    # fabricates nothing. The sandbox link is the owner's active personal sandbox
+    # (implicit workspace<->sandbox linkage today); NULL when none resolves.
+    sandbox = await cloud_sandbox_store.load_personal_cloud_sandbox(db, user.id)
     workspace = await cloud_workspace_store.update_workspace_anyharness_workspace_id(
         db,
         anyharness_workspace_id=anyharness_workspace.workspace_id,
         workspace=workspace,
+    )
+    await materialization_store.insert_managed_cloud_materialization(
+        db,
+        cloud_workspace_id=workspace.id,
+        cloud_sandbox_id=sandbox.id if sandbox is not None else None,
+        anyharness_workspace_id=anyharness_workspace.workspace_id,
+        state="hydrated",
     )
     return await _workspace_payload(db, workspace, detail=True)
 
@@ -526,8 +591,14 @@ async def _load_user_workspace(
 
 async def _load_repo_environment(
     db: AsyncSession,
-    repo_environment_id: UUID,
+    repo_environment_id: UUID | None,
 ) -> RepoEnvironmentValue:
+    if repo_environment_id is None:
+        raise CloudApiError(
+            "cloud_repo_environment_not_found",
+            "This workspace has no repository backing.",
+            status_code=409,
+        )
     repo_environment = await repositories_store.get_repo_environment_by_id(
         db,
         repo_environment_id,
@@ -552,8 +623,26 @@ async def _workspace_payload(
     workspace: CloudWorkspaceValue,
     *,
     detail: bool = False,
+    requesting_install_id: str | None = None,
 ) -> WorkspaceSummary:
-    repo_environment = await _load_repo_environment(db, workspace.repo_environment_id)
+    # A repo-less workspace (no repository identity) has no repo environment to
+    # load and serializes with repo/repoEnvironmentId null rather than crashing.
+    # This branch's store never yields one; #1245 (scratch workspaces) does. The
+    # runtime environment id is only populated for repository workspaces.
+    if workspace.repo_environment_id is None:
+        repo_environment = None
+        repo_ref = None
+        runtime_environment_id = None
+    else:
+        repo_environment = await _load_repo_environment(db, workspace.repo_environment_id)
+        repo_ref = RepoRef(
+            provider=repo_environment.git_provider,
+            owner=repo_environment.git_owner,
+            name=repo_environment.git_repo_name,
+            branch=workspace.git_branch,
+            base_branch=workspace.git_base_branch or repo_environment.default_branch or "main",
+        )
+        runtime_environment_id = str(repo_environment.id)
     sandbox = await cloud_sandbox_store.load_personal_cloud_sandbox(
         db,
         workspace.owner_user_id,
@@ -562,34 +651,139 @@ async def _workspace_payload(
     status = _workspace_status(workspace)
     stalled = _materialization_is_stalled(workspace)
     runtime_status = _runtime_status(sandbox)
+
+    active_materializations = (
+        await materialization_store.list_active_materializations_for_workspace(
+            db,
+            cloud_workspace_id=workspace.id,
+        )
+    )
+    active_materializations = _apply_legacy_managed_fallback(
+        active_materializations,
+        workspace,
+        sandbox,
+    )
+    active_materializations = await _reconcile_managed_cloud_state(db, active_materializations)
+    primary = select_primary(
+        active_materializations,
+        requesting_desktop_install_id=requesting_install_id,
+    )
+    materialization_payloads = [
+        materialization_summary(value, requesting_desktop_install_id=requesting_install_id)
+        for value in active_materializations
+    ]
+    primary_payload = (
+        materialization_summary(primary, requesting_desktop_install_id=requesting_install_id)
+        if primary is not None
+        else None
+    )
     return payload_type(
         id=str(workspace.id),
         target_id=None,
-        repo_environment_id=str(workspace.repo_environment_id),
-        display_name=workspace.display_name,
-        repo=RepoRef(
-            provider=repo_environment.git_provider,
-            owner=repo_environment.git_owner,
-            name=repo_environment.git_repo_name,
-            branch=workspace.git_branch,
-            base_branch=workspace.git_base_branch or repo_environment.default_branch or "main",
+        repo_environment_id=(
+            str(workspace.repo_environment_id)
+            if workspace.repo_environment_id is not None
+            else None
         ),
+        display_name=workspace.display_name,
+        repo=repo_ref,
         status=status,
         workspace_status=status,
         status_detail=_STALLED_STATUS_DETAIL if stalled else None,
         last_error=_STALLED_LAST_ERROR if stalled else None,
         product_lifecycle="archived" if workspace.archived_at is not None else "active",
         runtime=WorkspaceRuntimeSummary(
-            environment_id=str(repo_environment.id),
+            environment_id=runtime_environment_id,
             status=runtime_status,
             generation=sandbox.runtime_generation if sandbox is not None else 0,
         ),
+        selected_materialization_id=str(primary.id) if primary is not None else None,
+        primary_materialization=primary_payload,
+        materializations=materialization_payloads,
         updated_at=workspace.updated_at.isoformat() if workspace.updated_at else None,
         created_at=workspace.created_at.isoformat() if workspace.created_at else None,
         ready_at=workspace.created_at.isoformat() if workspace.created_at else None,
         visibility="archived" if workspace.archived_at is not None else "private",
         anyharness_workspace_id=workspace.anyharness_workspace_id,
     )
+
+
+def _apply_legacy_managed_fallback(
+    materializations: list[CloudWorkspaceMaterializationValue],
+    workspace: CloudWorkspaceValue,
+    sandbox: CloudSandboxValue | None,
+) -> list[CloudWorkspaceMaterializationValue]:
+    """Synthesize a managed-Cloud materialization from the legacy top-level id.
+
+    Reads prefer the ledger row and fall back to the legacy
+    ``anyharness_workspace_id`` only when no active managed row exists — e.g. a
+    workspace created before this PR whose backfill row was somehow absent, or a
+    pre-migration transient. Null-id workspaces get no synthetic row (they keep
+    ``materializations = []`` and the age-based stall semantics).
+    """
+    if workspace.anyharness_workspace_id is None:
+        return materializations
+    if any(m.target_kind == "managed_cloud" for m in materializations):
+        return materializations
+    now = workspace.updated_at
+    synthetic = CloudWorkspaceMaterializationValue(
+        id=workspace.id,
+        cloud_workspace_id=workspace.id,
+        target_kind="managed_cloud",
+        cloud_sandbox_id=sandbox.id if sandbox is not None else None,
+        desktop_install_id=None,
+        anyharness_workspace_id=workspace.anyharness_workspace_id,
+        worktree_path=None,
+        state="hydrated",
+        generation=1,
+        expected_head_sha=None,
+        observed_head_sha=None,
+        observed_branch=None,
+        failure_code=None,
+        failure_detail=None,
+        last_reported_at=None,
+        unlinked_at=None,
+        created_at=workspace.created_at,
+        updated_at=now,
+    )
+    return [synthetic, *materializations]
+
+
+async def _reconcile_managed_cloud_state(
+    db: AsyncSession,
+    materializations: list[CloudWorkspaceMaterializationValue],
+) -> list[CloudWorkspaceMaterializationValue]:
+    """Present managed-Cloud state as ``missing`` when its recorded sandbox is gone.
+
+    Health is reconciled against the EXACT sandbox recorded on each managed row
+    (``cloud_sandbox_id``), never the caller's current personal sandbox. A
+    managed row whose recorded sandbox is missing/destroyed (or unrecorded) is
+    ``missing``: after sandbox S1 is destroyed and replaced by S2, an S1-scoped
+    materialization must not present as hydrated just because the owner now has a
+    live S2. This is a presentation-only overlay — the persisted row is untouched
+    here. See PR4-TARGET-03.
+    """
+    reconciled: list[CloudWorkspaceMaterializationValue] = []
+    sandbox_cache: dict[UUID, CloudSandboxValue | None] = {}
+    for value in materializations:
+        if value.target_kind != "managed_cloud" or value.state != "hydrated":
+            reconciled.append(value)
+            continue
+        recorded = None
+        if value.cloud_sandbox_id is not None:
+            if value.cloud_sandbox_id not in sandbox_cache:
+                sandbox_cache[
+                    value.cloud_sandbox_id
+                ] = await cloud_sandbox_store.load_cloud_sandbox_by_id(
+                    db,
+                    value.cloud_sandbox_id,
+                )
+            recorded = sandbox_cache[value.cloud_sandbox_id]
+        if recorded is None or recorded.status == "destroyed":
+            reconciled.append(replace(value, state="missing"))
+        else:
+            reconciled.append(value)
+    return reconciled
 
 
 def _materialization_is_stalled(workspace: CloudWorkspaceValue) -> bool:

@@ -109,7 +109,9 @@ export function useWorkspaceCollectionsMutationCache(runtimeUrl: string) {
             displayName: workspace.displayName,
             repo: {
               ...candidate.repo,
-              branch: workspace.repo.branch,
+              // repo is null for a repo-less workspace; keep the candidate's
+              // existing branch in that case. See PR4-BASE-02.
+              branch: workspace.repo?.branch ?? candidate.repo.branch,
             },
             updatedAt: workspace.updatedAt,
           }

@@ -29,6 +29,7 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
         "cloud_secret_file",
         "cloud_secret_set",
         "cloud_workspace",
+        "cloud_workspace_materialization",
         "desktop_auth_code",
         "github_app_authorizations",
         "github_app_installations",

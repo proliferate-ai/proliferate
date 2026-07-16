@@ -309,9 +309,9 @@ export function buildLogicalWorkspaces(args: {
         : entry.cloudWorkspace
           ? repoRootsByRemoteKey.get(
             remoteRepoKey(
-              entry.cloudWorkspace.repo.provider,
-              entry.cloudWorkspace.repo.owner,
-              entry.cloudWorkspace.repo.name,
+              entry.cloudWorkspace.repo?.provider,
+              entry.cloudWorkspace.repo?.owner,
+              entry.cloudWorkspace.repo?.name,
             )!,
           ) ?? null
           : entry.mobilityWorkspace
@@ -351,17 +351,17 @@ export function buildLogicalWorkspaces(args: {
         repoRoot,
         provider:
           repoRoot?.remoteProvider
-          ?? entry.cloudWorkspace?.repo.provider
+          ?? entry.cloudWorkspace?.repo?.provider
           ?? entry.mobilityWorkspace?.repo.provider
           ?? null,
         owner:
           repoRoot?.remoteOwner
-          ?? entry.cloudWorkspace?.repo.owner
+          ?? entry.cloudWorkspace?.repo?.owner
           ?? entry.mobilityWorkspace?.repo.owner
           ?? null,
         repoName:
           repoRoot?.remoteRepoName
-          ?? entry.cloudWorkspace?.repo.name
+          ?? entry.cloudWorkspace?.repo?.name
           ?? entry.mobilityWorkspace?.repo.name
           ?? null,
         branchKey: entry.localWorkspace

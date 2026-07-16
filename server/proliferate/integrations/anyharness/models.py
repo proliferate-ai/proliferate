@@ -73,3 +73,28 @@ class RemoteTerminalCommandRun:
 class RemoteWorkspaceSummary:
     workspace_id: str | None
     live_session_count: int
+
+
+@dataclass(frozen=True)
+class RemoteGitStatusSnapshot:
+    """Typed server-side view of the AnyHarness ``GitStatusSnapshot`` contract.
+
+    Field names mirror the runtime wire contract exactly (``currentBranch`` —
+    not ``branch``). Required fields that are missing or malformed raise a
+    ``CloudRuntimeReconnectError`` in the parser; a status read can never be
+    interpreted as a clean source on failure.
+    """
+
+    workspace_id: str
+    workspace_path: str
+    repo_root_path: str
+    current_branch: str | None
+    head_oid: str
+    detached: bool
+    upstream_branch: str | None
+    suggested_base_branch: str | None
+    ahead: int
+    behind: int
+    operation: str
+    conflicted: bool
+    clean: bool
