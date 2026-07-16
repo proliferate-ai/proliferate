@@ -97,7 +97,12 @@ def _resolve_within(dist_dir: Path, url_path: str) -> Path | None:
     relative = url_path.lstrip("/")
     if not relative:
         return None
-    candidate = (dist_dir / relative).resolve()
+    try:
+        candidate = (dist_dir / relative).resolve()
+    except (ValueError, OSError):
+        # e.g. an embedded null byte (/foo%00bar) raises ValueError; treat any
+        # unresolvable path as not-a-file instead of propagating a 500.
+        return None
     if candidate != dist_dir and dist_dir not in candidate.parents:
         return None
     if not candidate.is_file():
@@ -151,9 +156,11 @@ def mount_web_app(app: FastAPI, dist_dir_setting: str, api_prefix: str) -> None:
             return await http_exception_handler(request, exc)
         # A real root-level static file (favicon, etc.) is served as itself. A
         # missing file under a non-reserved path resolves to the SPA shell so a
-        # client route can be refreshed directly.
+        # client route can be refreshed directly. A direct GET /index.html is
+        # the shell too and must carry the same no-cache policy, or a CDN could
+        # pin a stale shell at that URL.
         real_file = _resolve_within(dist_dir, path)
-        if real_file is not None:
+        if real_file is not None and real_file != index_file:
             return FileResponse(real_file)
         return FileResponse(index_file, headers={"cache-control": INDEX_CACHE_CONTROL})
 
