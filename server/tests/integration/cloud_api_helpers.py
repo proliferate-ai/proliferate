@@ -102,6 +102,19 @@ async def seed_github_app_repo_authority(
     user_id: str,
     git_owner: str = "proliferate-ai",
 ) -> None:
+    # Repo-backed Cloud mutations fail closed unless the operator's GitHub App
+    # runtime config is complete (require_github_app_runtime_configured), so
+    # seeding user authority also configures the App for the test deployment.
+    for field, value in {
+        "github_app_id": "12345",
+        "github_app_slug": "proliferate-test",
+        "github_app_client_id": "Iv1.integration-test",
+        "github_app_client_secret": "integration-test-client-secret",
+        "github_app_webhook_secret": "integration-test-webhook-secret",
+        "github_app_private_key": "-----BEGIN RSA PRIVATE KEY-----",
+        "github_app_private_key_path": "",
+    }.items():
+        monkeypatch.setattr(repo_authority.settings, field, value)
     await github_app_store.upsert_github_app_authorization(
         db_session,
         user_id=uuid.UUID(user_id),
