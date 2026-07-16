@@ -1,2 +1,7 @@
-@import "@xterm/xterm/css/xterm.css";
+/* Shared product theme (tokens, base, component CSS, Tailwind utilities). The
+ * xterm terminal stylesheet is intentionally NOT imported here: the phase-6
+ * cutover contract forbids the login/callback shell from eagerly loading
+ * xterm/terminal CSS, and this file is pulled by the eager ProductClient
+ * entry. xterm.css is imported inside `use-xterm-surface.ts` instead, so it
+ * rides the lazy authenticated terminal chunk with the xterm runtime. */
 @import "@proliferate/design/product.css";

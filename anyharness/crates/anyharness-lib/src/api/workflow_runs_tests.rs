@@ -414,11 +414,16 @@ async fn real_workspace_with_unsupported_model_fails_session_create_failed() {
         test_state()
     };
     let workspace_id = "30000000-0000-4000-8000-000000000033";
+    // The checkout must exist on disk: the internal creation seam now refuses
+    // a missing checkout as workspace_unavailable before model validation, and
+    // this test targets the model-unsupported → session_create_failed path.
+    let workspace_dir = std::env::temp_dir().join(format!("wf-model-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&workspace_dir).expect("create workspace dir");
     test_support::seed_workspace_with_repo_root(
         &state.db,
         workspace_id,
         "worktree",
-        "/tmp/wf-model",
+        workspace_dir.to_str().expect("utf-8 workspace path"),
     );
     let run_id = uuid::Uuid::new_v4().to_string();
 

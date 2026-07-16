@@ -18618,12 +18618,16 @@
           "repoRootId",
           "path",
           "surface",
+          "availability",
           "lifecycleState",
           "cleanupState",
           "createdAt",
           "updatedAt"
         ],
         "properties": {
+          "availability": {
+            "$ref": "#/components/schemas/WorkspaceAvailability"
+          },
           "cleanupAttemptedAt": {
             "type": [
               "string",
@@ -18728,6 +18732,14 @@
             "type": "string"
           }
         }
+      },
+      "WorkspaceAvailability": {
+        "type": "string",
+        "description": "Whether a workspace can currently be operated on. Computed at read time\nfrom the on-disk checkout, so the frontend can detect a deleted checkout on\nworkspace load/select rather than only when a session send fails.",
+        "enum": [
+          "available",
+          "workspace_directory_missing"
+        ]
       },
       "WorkspaceCleanupOperation": {
         "type": "string",

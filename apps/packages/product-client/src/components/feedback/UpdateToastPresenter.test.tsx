@@ -233,8 +233,11 @@ describe("UpdateToastPresenter", () => {
 
     render(<UpdateToastPresenter />);
 
+    // Title is the badge-styled announcement node, not a bare string.
     expect(sonnerMocks.toast).toHaveBeenCalledWith(
-      "You're up to date",
+      expect.objectContaining({
+        props: expect.objectContaining({ title: "You're up to date" }),
+      }),
       expect.objectContaining({
         id: UP_TO_DATE_TOAST_ID,
         description: "Proliferate 0.1.22 is the latest.",

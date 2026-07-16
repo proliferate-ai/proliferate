@@ -39,6 +39,8 @@ export function SidebarStatusGlyph({
   switch (indicator.kind) {
     case "error":
       return <CircleAlert className="size-3.5 text-destructive" />;
+    case "worktree_missing":
+      return <CircleAlert className="size-3.5 text-warning-foreground" />;
     case "waiting_input":
     case "waiting_plan":
       return <Clock className="size-3.5 text-info" />;

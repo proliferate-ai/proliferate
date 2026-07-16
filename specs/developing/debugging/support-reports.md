@@ -12,6 +12,53 @@ Product behavior is defined in
 The accepted closed-loop contract is in
 [`../../codebase/systems/engineering/issue-lifecycle/support-loop.md`](../../codebase/systems/engineering/issue-lifecycle/support-loop.md).
 
+## Quick access from a tracker issue
+
+A tracker issue at `issues.proliferate.com` holds only a safe pointer: title,
+reporter identity, user/release, and the `reportId` (the issue `sourceKey` is
+`support:<reportId>`). The message body, diagnostics, and attachments (images
+etc.) live only in the private S3 bundle. To go from an issue to the raw detail:
+
+1. **Get the reportId.** From the tracker issue's `sourceKey`
+   (`support:<reportId>`) or the `reportId` field on its reporter/occurrence.
+2. **Fastest human path:** open the admin surface at
+   `SUPPORT_REPORT_INTERNAL_BASE_URL` (prod:
+   `https://app.proliferate.com/admin/support/reports`) and look up the report.
+3. **Ops / agent path (S3):** the object prefix is deterministic —
+   `<SUPPORT_REPORT_S3_PREFIX>/<YYYY>/<MM>/<DD>/<reportId>/`, where the date is
+   the report's **creation** day (UTC). Prod values (from the server ECS task
+   def, do not hardcode elsewhere): bucket `proliferate-support-reports-prod`,
+   prefix `support/reports`, region `us-east-1`. Prefer the DB `s3_bucket` /
+   `s3_prefix` columns when in doubt (see "Database first").
+
+```bash
+# List everything captured for a report (message, diagnostics, attachments)
+BUCKET=proliferate-support-reports-prod
+RID=<reportId>                       # e.g. from tracker sourceKey support:<reportId>
+DAY=<YYYY/MM/DD>                     # the report's created_at day, UTC
+aws s3api list-objects-v2 --bucket "$BUCKET" \
+  --prefix "support/reports/$DAY/$RID/" \
+  --query 'Contents[].{Key:Key,Size:Size}' --output table
+```
+
+To pull an **attachment/image** (filenames often contain spaces, so resolve the
+exact key via the API instead of quoting a path by hand):
+
+```bash
+install -d -m 700 /tmp/proliferate-support-report
+KEY=$(aws s3api list-objects-v2 --bucket "$BUCKET" \
+  --prefix "support/reports/$DAY/$RID/attachments/" \
+  --query 'Contents[0].Key' --output text)
+aws s3api get-object --bucket "$BUCKET" --key "$KEY" \
+  /tmp/proliferate-support-report/attachment
+# ...inspect, then:
+rm -rf /tmp/proliferate-support-report
+```
+
+Everything below is the full runbook. Obey the **Privacy rules** section:
+download only to a `700` temp dir, remove it after, and never paste the message
+body, attachment, S3 key, or presigned URL into a public issue or Slack.
+
 ## Mental model
 
 The `support_report` row is the durable pivot. The private S3 bundle is its case

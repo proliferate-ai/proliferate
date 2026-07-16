@@ -72,7 +72,9 @@ describe("RuntimePressureDetailsDialog", () => {
 
     expect(screen.getAllByRole("heading", { name: "Worktrees" }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("heading", { name: "Pruning" })).toBeNull();
-    expect(screen.getAllByText("Local runtime · proliferate — 5 of 20 worktrees").length).toBeGreaterThan(0);
+    // Card-anatomy body: the Worktrees section carries the "N of M" detail.
+    expect(screen.getAllByText("5 of 20").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Local runtime").length).toBeGreaterThan(0);
   });
 
   it("titles itself Worktrees and keeps cloud phrasing in the summary", () => {
@@ -113,10 +115,15 @@ describe("RuntimePressureDetailsDialog", () => {
     );
 
     expect(screen.getAllByRole("heading", { name: "Worktrees" }).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Cloud sandbox — CPU 42% · RAM 31%").length).toBeGreaterThan(0);
+    // Cloud pressure renders as CPU / Memory rows in the runtime section.
+    expect(screen.getAllByText("Cloud sandbox").length).toBeGreaterThan(0);
+    expect(screen.getByText("CPU")).toBeTruthy();
+    expect(screen.getByText("42%")).toBeTruthy();
+    expect(screen.getByText("Memory")).toBeTruthy();
+    expect(screen.getByText("31%")).toBeTruthy();
   });
 
-  it("keeps the tilde on the footer storage totals only", () => {
+  it("renders one card row per checkout with a compact estimated size", () => {
     render(
       <RuntimePressureDetailsDialog
         open
@@ -149,8 +156,8 @@ describe("RuntimePressureDetailsDialog", () => {
       />,
     );
 
-    expect(screen.getByText("~33 MB checkout + ~653 KB logs")).not.toBeNull();
-    expect(screen.getByText("33 MB")).not.toBeNull();
-    expect(screen.queryByText("~33 MB")).toBeNull();
+    // One row per checkout: name + compact ~total (checkout + logs summed).
+    expect(screen.getByText("thread/abc")).not.toBeNull();
+    expect(screen.getByText("~34 MB")).not.toBeNull();
   });
 });

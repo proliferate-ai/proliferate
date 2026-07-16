@@ -8,6 +8,8 @@ import {
   resolveChatInputAvailability,
   type ChatInputAvailabilityState,
 } from "#product/lib/domain/chat/composer/chat-input";
+import { isWorkspaceDirectoryMissing } from "#product/lib/domain/workspaces/availability";
+import { missingCheckoutCopy } from "#product/copy/workspaces/workspace-availability-copy";
 import { launchSelectionIsAvailable } from "#product/lib/domain/chat/models/launch-selection-defaults";
 import { getProviderDisplayName } from "#product/lib/domain/agents/provider-display";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
@@ -42,6 +44,10 @@ export function useChatAvailabilityState(options?: {
   const { currentLaunchIdentity } = useActiveSessionLaunchState();
 
   const selectedCloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
+  const selectedLocalWorkspace = selectedCloudWorkspaceId === null
+    ? workspaceCollections?.workspaces.find((workspace) => workspace.id === selectedWorkspaceId)
+      ?? null
+    : null;
   const selectedCloudWorkspace =
     workspaceCollections?.cloudWorkspaces.find((workspace) => workspace.id === selectedCloudWorkspaceId)
     ?? null;
@@ -50,6 +56,10 @@ export function useChatAvailabilityState(options?: {
   const availability = useMemo(() => resolveChatInputAvailability({
     selectedWorkspaceId,
     isCloudWorkspaceSelected: selectedCloudWorkspaceId !== null,
+    workspaceDirectoryMissingSendReason:
+      selectedLocalWorkspace && isWorkspaceDirectoryMissing(selectedLocalWorkspace)
+        ? missingCheckoutCopy(selectedLocalWorkspace.kind).sendBlockedReason
+        : null,
     connectionState,
     selectedCloudWorkspaceStatus,
     selectedCloudWorkspaceActionBlockReason: selectedCloudWorkspace?.actionBlockReason ?? null,
@@ -87,6 +97,7 @@ export function useChatAvailabilityState(options?: {
     selectedCloudRuntime.state?.phase,
     selectedCloudWorkspace?.actionBlockReason,
     selectedCloudWorkspaceStatus,
+    selectedLocalWorkspace,
     selectedWorkspaceId,
     selectedCloudWorkspaceId,
   ]);

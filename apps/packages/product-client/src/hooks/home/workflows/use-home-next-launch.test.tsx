@@ -21,7 +21,6 @@ import { useSessionSelectionStore } from "#product/stores/sessions/session-selec
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import { useDeferredHomeLaunchStore } from "#product/stores/home/deferred-home-launch-store";
-import { useToastStore } from "#product/stores/toast/toast-store";
 import { useHomeNextLaunch } from "#product/hooks/home/workflows/use-home-next-launch";
 
 const mocks = vi.hoisted(() => ({
@@ -95,7 +94,6 @@ describe("useHomeNextLaunch", () => {
     useSessionSelectionStore.getState().clearSelection();
     useChatLaunchIntentStore.setState({ activeIntent: null });
     useDeferredHomeLaunchStore.setState({ launches: {} });
-    useToastStore.setState({ toasts: [] });
   });
 
   it("projects one destination prompt for a Home worktree launch", async () => {

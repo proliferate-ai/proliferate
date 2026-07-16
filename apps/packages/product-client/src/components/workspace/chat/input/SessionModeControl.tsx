@@ -6,7 +6,7 @@ import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/sess
 import type { ConfiguredSessionControlKey } from "#product/lib/domain/chat/session-controls/presentation";
 import { SessionControlIcon } from "#product/components/session-controls/SessionControlIcon";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { Check, ChevronDown } from "@proliferate/ui/icons";
+import { Check } from "@proliferate/ui/icons";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { PendingConfigIndicator } from "#product/components/workspace/chat/input/PendingConfigIndicator";
@@ -40,18 +40,10 @@ export function SessionModeControl({
   const triggerIcon = compactTrigger
     ? undefined
     : <SessionControlIcon icon={currentPresentation.icon} className="size-3.5" />;
-  const triggerTrailing = control.pendingState || (compactTrigger && control.settable)
-    ? (
-      <span className="flex items-center gap-1">
-        <PendingConfigIndicator pendingState={control.pendingState} />
-        {compactTrigger && control.settable && (
-          <ChevronDown
-            className="size-3 shrink-0 text-[color:var(--color-composer-control-muted-foreground)]"
-            aria-hidden
-          />
-        )}
-      </span>
-    )
+  // No disclosure chevron on the compact trigger: the mode name alone is the
+  // whole affordance; the popover still opens on click.
+  const triggerTrailing = control.pendingState
+    ? <PendingConfigIndicator pendingState={control.pendingState} />
     : null;
 
   if (!control.settable) {

@@ -863,6 +863,10 @@ importers:
         version: 5.9.3
 
   tests/release:
+    dependencies:
+      e2b:
+        specifier: ^2.30.0
+        version: 2.30.0
     devDependencies:
       '@types/node':
         specifier: ^24.13.2

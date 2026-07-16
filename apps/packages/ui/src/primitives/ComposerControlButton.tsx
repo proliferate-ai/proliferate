@@ -55,7 +55,10 @@ export const ComposerControlButton = forwardRef<HTMLButtonElement, ComposerContr
         className={buttonClassName}
         {...props}
       >
-        {icon && <span className="shrink-0">{icon}</span>}
+        {/* flex, not inline: an inline wrapper baseline-aligns inline-flex
+            icons (e.g. the level bars) instead of letting the button's
+            items-center actually center them. */}
+        {icon && <span className="flex shrink-0 items-center">{icon}</span>}
         {iconOnly ? (
           <span className="sr-only">{iconOnlyLabel}</span>
         ) : (

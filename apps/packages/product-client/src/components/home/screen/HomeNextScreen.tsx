@@ -190,8 +190,6 @@ export function HomeNextScreen() {
             controlsTrailingSlot={(
               <ComposerTrailingControls
                 runtimeControlsDisabled={false}
-                agentKind={homeAgentKind}
-                sessionConfigControls={homeSessionConfigControls}
                 isEditingQueuedPrompt={false}
                 chatDisabled={false}
                 isSubmitting={false}

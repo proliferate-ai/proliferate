@@ -134,7 +134,7 @@ export const t3Bill4: ScenarioDefinition = {
     //     grant, proving org work bills the org pool, not personal credits. ---
     const personalOverview = await billing.overview(personal);
     assert.ok(
-      personalOverview.remainingHours > 0,
+      (personalOverview.remainingHours ?? 0) > 0,
       `T3-BILL-4: the durable user's personal subject should still carry its free grant (#1047 org work bills ` +
         `the org subject, not personal); got remainingHours=${personalOverview.remainingHours}`,
     );

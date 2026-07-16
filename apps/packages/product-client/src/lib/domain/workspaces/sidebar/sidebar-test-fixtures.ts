@@ -27,6 +27,7 @@ export function makeWorkspace(args: {
   origin?: Workspace["origin"];
   creatorContext?: Workspace["creatorContext"];
   executionSummary?: Workspace["executionSummary"];
+  availability?: Workspace["availability"];
   updatedAt?: string;
   path?: string;
 }): Workspace {
@@ -42,6 +43,7 @@ export function makeWorkspace(args: {
     origin = null,
     creatorContext = null,
     executionSummary = null,
+    availability = "available",
     updatedAt = DEFAULT_UPDATED_AT,
     path = kind === "local" ? sourceRoot : `${sourceRoot}/${id}`,
   } = args;
@@ -58,6 +60,7 @@ export function makeWorkspace(args: {
     origin,
     creatorContext,
     executionSummary,
+    availability,
     lifecycleState: "active",
     cleanupState: "none",
     createdAt: updatedAt,
@@ -215,6 +218,7 @@ export function makeLocalLogicalWorkspace(args: {
   origin?: Workspace["origin"];
   creatorContext?: Workspace["creatorContext"];
   executionSummary?: Workspace["executionSummary"];
+  availability?: Workspace["availability"];
   updatedAt?: string;
 }): LogicalWorkspace {
   const {
@@ -228,6 +232,7 @@ export function makeLocalLogicalWorkspace(args: {
     origin,
     creatorContext,
     executionSummary,
+    availability,
     updatedAt = DEFAULT_UPDATED_AT,
   } = args;
   const localWorkspace = makeWorkspace({
@@ -240,6 +245,7 @@ export function makeLocalLogicalWorkspace(args: {
     origin,
     creatorContext,
     executionSummary,
+    availability,
     updatedAt,
   });
 

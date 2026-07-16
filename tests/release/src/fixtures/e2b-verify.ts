@@ -26,9 +26,30 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 
+/** One live provider (E2B) sandbox tagged with a given cloud_sandbox_id. */
+export interface E2BSandboxMatch {
+  providerSandboxId: string;
+  state: "running" | "paused";
+  /** The E2B template id the sandbox was actually spawned from (observed, for MCW-003). */
+  templateId: string | null;
+  /** RFC3339 provider start time, or null (the observed running-interval source for step 4). */
+  startedAt: string | null;
+}
+
 export interface E2BFindResult {
+  /** First match's id (back-compat for existing single-match callers). */
   providerSandboxId: string | null;
+  /** First match's state (back-compat). */
   state: "running" | "paused" | null;
+  /**
+   * EVERY live provider sandbox tagged with the queried cloud_sandbox_id.
+   * CLOUD-PROVISION-1 step 3 asserts exactly one; more than one is the
+   * duplicate/orphan anomaly the scenario proves the product does not produce
+   * (MCW-002). Absent on older probe output → callers default to `[]`.
+   */
+  matches?: E2BSandboxMatch[];
+  /** `matches.length` from the probe (absent on older output). */
+  count?: number;
 }
 
 export interface E2BStateResult {
@@ -86,6 +107,12 @@ async function runProbe<T>(args: readonly string[], env: NodeJS.ProcessEnv, stdi
     child.on("error", reject);
     child.on("exit", (code) => {
       if (code !== 0) {
+        // Surface the raw probe stderr to the runner stream (the make log, NOT
+        // persisted evidence) so an in-sandbox exec failure names itself instead
+        // of being redacted to "(response body withheld)".
+        process.stderr.write(
+          `[e2b-verify] probe ${args[0]} exited ${code}: ${(stderr || stdout).trim().slice(0, 800)}\n`,
+        );
         reject(new Error(`e2b_sandbox_probe.py ${args[0]} exited ${code}: ${stderr || stdout}`));
         return;
       }
@@ -118,6 +145,14 @@ export async function getProviderSandboxState(
   return runProbe<E2BStateResult>(["state", providerSandboxId], env);
 }
 
+/** Idempotent provider-sandbox kill for run cleanup (an absent sandbox counts as killed). */
+export async function killProviderSandbox(
+  providerSandboxId: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<{ killed: boolean }> {
+  return runProbe<{ killed: boolean }>(["kill", providerSandboxId], env);
+}
+
 /** Pauses the sandbox directly via the E2B SDK -- there is no product pause endpoint. */
 export async function pauseProviderSandbox(
   providerSandboxId: string,
@@ -131,7 +166,10 @@ export async function execInProviderSandbox(
   command: readonly string[],
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<E2BExecResult> {
-  return runProbe<E2BExecResult>(["exec", providerSandboxId, ...command], env);
+  // `--` terminates argparse option parsing: exec'd argv routinely contains
+  // dash-prefixed tokens (`sh -c …`, `… --version`) that argparse would
+  // otherwise reject with exit 2 before any API call.
+  return runProbe<E2BExecResult>(["exec", providerSandboxId, "--", ...command], env);
 }
 
 /** Writes `content` to `path` inside the sandbox via `sandbox.files.write` (content passed over stdin, never argv). */

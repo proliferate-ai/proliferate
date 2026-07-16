@@ -2,6 +2,8 @@ import { useCallback } from "react";
 import { useActiveSessionLaunchState } from "#product/hooks/chat/derived/use-active-session-config-state";
 import { useConfiguredLaunchReadiness } from "#product/hooks/chat/derived/use-configured-launch-readiness";
 import { useSessionCreationActions } from "#product/hooks/sessions/workflows/use-session-creation-actions";
+import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
+import { isWorkspaceDirectoryMissingError } from "#product/lib/domain/sessions/creation/create-session-error";
 import { useChatTabVisibilityActions } from "#product/hooks/workspaces/workflows/tabs/use-chat-tab-visibility-actions";
 import { useWorkspaceHeaderTabsViewModel } from "#product/hooks/workspaces/facade/tabs/use-workspace-header-tabs-view-model";
 import { useWorkspaceShellActivation } from "#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
@@ -32,6 +34,8 @@ export function useWorkspaceCommandPaletteTabs() {
   const { currentLaunchIdentity } = useActiveSessionLaunchState();
   const configuredLaunch = useConfiguredLaunchReadiness(currentLaunchIdentity);
   const { createEmptySessionWithResolvedConfig } = useSessionCreationActions();
+  const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
+  const runtimeBlockReason = getWorkspaceRuntimeBlockReason(selectedWorkspaceId);
 
   const activateWorkspaceTab = useCallback((tab: WorkspaceShellTab) => {
     if (tab.kind === "chat") {
@@ -72,7 +76,7 @@ export function useWorkspaceCommandPaletteTabs() {
   );
 
   const openNewSessionTab = useCallback(() => {
-    if (!selectedWorkspaceId) {
+    if (!selectedWorkspaceId || runtimeBlockReason) {
       return false;
     }
     const selection = resolveAvailableLaunchSelection(
@@ -96,7 +100,10 @@ export function useWorkspaceCommandPaletteTabs() {
       reuseInFlightEmptySession: false,
     }).catch((error) => {
       failLatencyFlow(latencyFlowId, "session_create_failed");
-      showToast(error instanceof Error ? error.message : String(error));
+      // The persistent missing-worktree composer panel owns that condition.
+      if (!isWorkspaceDirectoryMissingError(error)) {
+        showToast(error instanceof Error ? error.message : String(error));
+      }
     });
     return true;
   }, [
@@ -104,6 +111,7 @@ export function useWorkspaceCommandPaletteTabs() {
     configuredLaunch.launchCatalog.launchAgents,
     createEmptySessionWithResolvedConfig,
     currentLaunchIdentity,
+    runtimeBlockReason,
     selectedWorkspaceId,
     showToast,
   ]);
@@ -114,9 +122,7 @@ export function useWorkspaceCommandPaletteTabs() {
     configuredLaunch.selection,
   );
   const newSessionDisabledReason = selectedWorkspaceId
-    ? newSessionSelection
-      ? null
-      : configuredLaunch.disabledReason
+    ? runtimeBlockReason ?? (newSessionSelection ? null : configuredLaunch.disabledReason)
     : "Workspace is still opening.";
   const hasMultipleTabs = model.orderedTabs.length > 1;
 

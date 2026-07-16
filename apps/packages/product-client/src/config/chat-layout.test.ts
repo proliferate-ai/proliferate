@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CHAT_SCROLL_BASE_BOTTOM_PADDING_PX,
+  CHAT_SCROLL_STICKY_BOTTOM_GAP_PX,
   computeChatDockLowerBackdropTopPx,
   computeChatStableBottomInsetPx,
   computeChatSurfaceBottomInsetPx,
@@ -46,11 +47,22 @@ describe("chat layout", () => {
     })).toBeNull();
   });
 
-  it("keeps sticky transcript scrolling above the full composer dock reserve", () => {
+  it("rests the sticky gap on the measured dock height when available", () => {
+    // 240 = surface metrics (224) + the dock's physical bottom padding, which
+    // only the measured height captures; the gap must clear the real dock.
+    expect(computeChatStableBottomInsetPx({
+      dockHeightPx: 240,
+      composerSurfaceHeightPx: 120,
+      composerSurfaceOffsetTopPx: 80,
+      composerFooterHeightPx: 24,
+    })).toBe(240 + CHAT_SCROLL_STICKY_BOTTOM_GAP_PX);
+  });
+
+  it("falls back to surface metrics before the dock is measured", () => {
     expect(computeChatStableBottomInsetPx({
       composerSurfaceHeightPx: 120,
       composerSurfaceOffsetTopPx: 80,
       composerFooterHeightPx: 24,
-    })).toBe(264);
+    })).toBe(80 + 120 + 24 + CHAT_SCROLL_STICKY_BOTTOM_GAP_PX);
   });
 });

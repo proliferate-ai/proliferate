@@ -100,6 +100,7 @@ function workspace(input: {
   path: string;
 }): Workspace {
   return {
+    availability: "available",
     id: input.id,
     kind: "local",
     repoRootId: input.repoRootId,
