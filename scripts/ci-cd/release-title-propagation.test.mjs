@@ -57,6 +57,12 @@ test("runtime production builds stamp both version and deterministic source SHA"
 
   assert.match(resolveStep, /PROLIFERATE_BUILD_VERSION=/);
   assert.match(resolveStep, /PROLIFERATE_BUILD_SHA=\$\(git rev-parse HEAD\)/);
+
+  const crossConfig = await readFile(new URL("../../Cross.toml", import.meta.url), "utf8");
+  assert.match(
+    crossConfig,
+    /passthrough\s*=\s*\[[^\]]*"PROLIFERATE_BUILD_VERSION"[^\]]*"PROLIFERATE_BUILD_SHA"[^\]]*\]/,
+  );
 });
 
 test("desktop updater publication fails closed before overwriting a released version", async () => {
