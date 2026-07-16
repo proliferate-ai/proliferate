@@ -13,6 +13,12 @@ interface MobileWorkspaceCardProps {
   item: MobileWorkItem;
   compact?: boolean;
   claiming?: boolean;
+  /**
+   * PR 7 access-loss state: when Cloud repository access is lost, the existing
+   * record stays visible but is marked locked and explained; commanding it is
+   * disabled. No local materialization / clone action is offered on mobile.
+   */
+  accessLossReason?: string | null;
   onPress: () => void;
   onClaim?: () => void;
 }
@@ -21,13 +27,15 @@ export function MobileWorkspaceCard({
   item,
   compact = false,
   claiming = false,
+  accessLossReason = null,
   onPress,
   onClaim,
 }: MobileWorkspaceCardProps) {
   const detailText = workspaceDetailText(item);
   const statusColor = colors[mobileColorKeyForWorkStatusTone(item.view.statusIndicator.tone)];
   const unclaimed = item.view.unclaimed;
-  const canClaim = Boolean(onClaim) && unclaimed;
+  const locked = Boolean(accessLossReason);
+  const canClaim = Boolean(onClaim) && unclaimed && !locked;
 
   return (
     <Pressable
@@ -79,6 +87,14 @@ export function MobileWorkspaceCard({
         <View style={styles.promptBlock}>
           <Text style={styles.promptText} numberOfLines={2}>
             {detailText}
+          </Text>
+        </View>
+      ) : null}
+      {locked ? (
+        <View style={styles.lockedBlock}>
+          <MobileIcon name="lock" size={13} color={colors.warning} />
+          <Text style={styles.lockedText} numberOfLines={compact ? 1 : 3}>
+            {accessLossReason}
           </Text>
         </View>
       ) : null}
@@ -213,6 +229,22 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[2],
+  },
+  lockedBlock: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing[2],
+    borderRadius: 14,
+    backgroundColor: colors.warningSubtle,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+  },
+  lockedText: {
+    flex: 1,
+    minWidth: 0,
+    color: colors.warning,
+    fontSize: 12,
+    lineHeight: 16,
   },
   promptText: {
     color: colors.mutedForeground,

@@ -14,6 +14,7 @@ import { useMobileRepositoryPicker } from "../../../hooks/settings/workflows/use
 import { useMobileSettingsSheetSlide } from "../../../hooks/settings/ui/use-mobile-settings-sheet-slide";
 import { colors, radius, spacing } from "../../../styles/tokens";
 import { MobileIcon } from "../../primitives/MobileIcon";
+import { MobileRepoReadinessBlocker } from "./MobileRepoReadinessBlocker";
 
 interface MobileAddRepositoryModalProps {
   visible: boolean;
@@ -43,7 +44,7 @@ export function MobileAddRepositoryModal({
         <Animated.View style={[styles.modalSheet, { transform: [{ translateY: slideUp }] }]}>
           <View style={styles.modalGrabber} />
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Add repository</Text>
+            <Text style={styles.modalTitle}>Set up in Cloud</Text>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Close"
@@ -53,6 +54,22 @@ export function MobileAddRepositoryModal({
               <MobileIcon name="close" size={16} color={colors.fg} />
             </Pressable>
           </View>
+          {repositoryPicker.readiness.blocker ? (
+            <MobileRepoReadinessBlocker
+              blocker={repositoryPicker.readiness.blocker}
+              onAction={() => {
+                void repositoryPicker.readiness.runAction(
+                  repositoryPicker.readiness.blocker!.actionKind,
+                );
+              }}
+            />
+          ) : repositoryPicker.readiness.checking ? (
+            <View style={styles.modalEmpty}>
+              <ActivityIndicator color={colors.faint} />
+              <Text style={styles.modalEmptyText}>Checking Cloud access…</Text>
+            </View>
+          ) : (
+          <>
           <View style={styles.searchWrap}>
             <MobileIcon name="search" size={15} color={colors.faint} />
             <TextInput
@@ -120,6 +137,8 @@ export function MobileAddRepositoryModal({
             )}
             {repositoryPicker.error ? <Text style={styles.modalErrorText}>{repositoryPicker.error}</Text> : null}
           </ScrollView>
+          </>
+          )}
         </Animated.View>
       </View>
     </Modal>
