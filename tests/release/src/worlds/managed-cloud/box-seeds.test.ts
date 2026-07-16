@@ -97,6 +97,7 @@ test("seedGithubAuthorizationOnBox refreshes, persists the rotated token FIRST, 
     refreshToken: "ghr_old",
     coveredRepoOwner: "proliferate-e2e",
     coveredRepoName: "e2e-fixture",
+    coveredRepoDefaultBranch: "main",
     persistRotatedRefreshToken: async (next) => {
       // Persistence must happen before the on-box upsert reads the auth file.
       assert.equal(box.putFiles.length, 0, "rotated token must be persisted before the box upsert stages the auth file");
@@ -130,6 +131,7 @@ test("seedGithubAuthorizationOnBox does not persist when GitHub returns no rotat
     refreshToken: "ghr_old",
     coveredRepoOwner: "proliferate-e2e",
     coveredRepoName: "e2e-fixture",
+    coveredRepoDefaultBranch: "main",
     persistRotatedRefreshToken: async () => {
       persistCalls += 1;
     },

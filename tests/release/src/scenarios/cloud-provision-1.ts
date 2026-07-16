@@ -98,6 +98,14 @@ export const EXPECTED_BOT_LOGIN = "proliferate-e2e-bot";
 export const COVERED_REPO_OWNER = "proliferate-e2e";
 export const COVERED_REPO_NAME = "e2e-fixture";
 /**
+ * The covered repo's real default branch, stored on the seeded cloud
+ * repo_environment exactly as the product's save_cloud_environment flow does
+ * (it validates against GitHub then persists). The home target picker's ONLY
+ * base-branch source for a cloud-only repository — without it the composer
+ * send stays disabled at "Choose a base branch".
+ */
+export const COVERED_REPO_DEFAULT_BRANCH = "main";
+/**
  * Where the product materializes cloud repo checkouts:
  * `SANDBOX_REPOS_ROOT = /home/user/workspace/repos`
  * (server materialization/paths.py). The covered repo lands at
@@ -943,6 +951,7 @@ export function createCloudProvision1Driver(
         refreshToken: botSeed.refreshToken,
         coveredRepoOwner: COVERED_REPO_OWNER,
         coveredRepoName: COVERED_REPO_NAME,
+        coveredRepoDefaultBranch: COVERED_REPO_DEFAULT_BRANCH,
         // MCW-004: persist the ROTATED token to whichever of {local file, SSM}
         // are durable for this lane — SSM unconditionally in Actions (the only
         // durable store on an ephemeral runner), the local file otherwise.
@@ -1472,7 +1481,27 @@ export function createCloudProvision1Driver(
       await editor.waitFor({ state: "visible", timeout: 15_000 });
       await editor.fill(prompt);
       const send = page.page.locator("[data-chat-send-button]:not([disabled])").first();
-      await send.waitFor({ state: "visible", timeout: 15_000 });
+      try {
+        await send.waitFor({ state: "visible", timeout: 15_000 });
+      } catch {
+        // The home composer prints WHY the send is disabled right under the
+        // editor (`submitDisabledReason` — e.g. "Choose a base branch",
+        // "Sign in to use cloud workspaces", "Loading cloud configuration").
+        // Fold that into the failure so a disabled send names its gate
+        // instead of a blind locator timeout.
+        const disabledReason = await page.page
+          .locator("[data-chat-send-button][disabled]")
+          .first()
+          .evaluate((button) => {
+            const container = button.closest("form") ?? document.body;
+            return (container.textContent ?? "").trim().slice(0, 400);
+          })
+          .catch(() => null);
+        throw new Error(
+          "runGatewayTurn: the composer send button never enabled within 15000ms. " +
+            `Composer surface text: ${JSON.stringify(disabledReason ?? "unavailable")}.`,
+        );
+      }
       await send.click();
 
       // Positive dispatch signal, surfaced for diagnosis (make log, NOT

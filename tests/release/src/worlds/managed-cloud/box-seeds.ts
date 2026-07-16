@@ -245,13 +245,20 @@ async def main():
         # so this is a real prerequisite, not a shortcut around product code.
         repo_owner = payload["repo_owner"]
         repo_name = payload["repo_name"]
+        # default_branch must be a REAL branch, matching the product's own
+        # save_cloud_environment flow (it validates the branch against GitHub
+        # before this same upsert). A None here leaves the home target picker
+        # with no base-branch candidate for a cloud-only repository (the local
+        # branch query is disabled for cloud-only entries), which pins the
+        # composer at "Choose a base branch" and keeps the send button
+        # disabled forever.
         await repositories_store.upsert_cloud_repo_environment(
             db,
             user_id=user_id,
             git_provider="github",
             git_owner=repo_owner,
             git_repo_name=repo_name,
-            default_branch=None,
+            default_branch=payload["repo_default_branch"],
             setup_script="",
             run_command="",
         )
@@ -290,6 +297,14 @@ export interface SeedGithubAuthorizationOptions {
   /** The covered repo to configure as a cloud repo_environment so the sandbox preclones it (spec step 7). */
   coveredRepoOwner: string;
   coveredRepoName: string;
+  /**
+   * The covered repo's real default branch, stored on the cloud
+   * repo_environment exactly as the product's save_cloud_environment flow
+   * does — the home target picker's ONLY base-branch source for a cloud-only
+   * repository (its local branch query is disabled), without which the
+   * composer send stays disabled at "Choose a base branch".
+   */
+  coveredRepoDefaultBranch: string;
   /**
    * Persists the ROTATED refresh token (+ resolved identity) back to the seed
    * source. Called with the new token BEFORE the box upsert, so a crash after
@@ -339,6 +354,7 @@ export async function seedGithubAuthorizationOnBox(
     github_user_id: authorization.githubUserId,
     repo_owner: options.coveredRepoOwner,
     repo_name: options.coveredRepoName,
+    repo_default_branch: options.coveredRepoDefaultBranch,
   });
   const authFilePath = await options.box.putSecretFile("github-user-auth.json", authFileContents);
   try {
