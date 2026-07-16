@@ -34,8 +34,13 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 API_DIR = REPO_ROOT / "anyharness/crates/anyharness-lib/src/api"
 HTTP_DIR = API_DIR / "http"
+LIB_SRC_DIR = REPO_ROOT / "anyharness/crates/anyharness-lib/src"
 SESSIONS_DIR = REPO_ROOT / "anyharness/crates/anyharness-lib/src/domains/sessions"
 CLASSIFICATION_PATH = REPO_ROOT / "scripts/session_mutation_admission.txt"
+# PR1227-RETENTION-RATCHET-01: non-HTTP destructive owners reached outside the
+# router (startup / post-create automatic passes). The HTTP ratchet above only
+# sees router handlers, so these are enumerated + fenced separately here.
+NON_HTTP_OWNERS_PATH = REPO_ROOT / "scripts/session_mutation_admission_non_http.txt"
 
 ROUTER_FILES = [API_DIR / "router.rs", API_DIR / "router" / "pending_prompt_routes.rs"]
 MUTATING = ("post", "put", "patch", "delete")
@@ -149,6 +154,100 @@ def handler_source(module: str, fn: str) -> str | None:
     return None
 
 
+NON_HTTP_LINE_RE = re.compile(r"^(\S+)::([A-Za-z_0-9]+)\s+([A-Za-z_0-9]+)\s+(\S+)$")
+
+
+def load_non_http_owners() -> list[tuple[str, str, str, list[str]]]:
+    """Parse the non-HTTP destructive owner inventory.
+
+    Each entry is `path::fn admit_call effect_token[,effect_token...]`.
+    """
+    owners: list[tuple[str, str, str, list[str]]] = []
+    for lineno, line in enumerate(NON_HTTP_OWNERS_PATH.read_text().splitlines(), 1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        match = NON_HTTP_LINE_RE.match(line)
+        if not match:
+            raise SystemExit(
+                f"{NON_HTTP_OWNERS_PATH.name}:{lineno}: expected "
+                f"'path::fn admit_call effect_token[,effect_token...]'"
+            )
+        rel_path, fn, admit_call, effects = match.groups()
+        owners.append((rel_path, fn, admit_call, [e for e in effects.split(",") if e]))
+    return owners
+
+
+def owner_body(rel_path: str, fn: str) -> str | None:
+    """Extract the brace-balanced body of `fn` in `rel_path` (relative to the
+    anyharness-lib src dir). Returns None if the file or function is absent —
+    the caller turns that into a stale-entry failure."""
+    file_path = LIB_SRC_DIR / rel_path
+    if not file_path.exists():
+        return None
+    text = file_path.read_text()
+    idx = -1
+    for decl in (f"fn {fn}(", f"fn {fn}<"):
+        idx = text.find(decl)
+        if idx >= 0:
+            break
+    if idx < 0:
+        return None
+    brace = text.find("{", idx)
+    if brace < 0:
+        return None
+    depth = 0
+    for pos in range(brace, len(text)):
+        ch = text[pos]
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return text[idx : pos + 1]
+    return text[idx:]
+
+
+def check_non_http_owners() -> list[str]:
+    """PR1227-RETENTION-RATCHET-01: statically enforce that each listed non-HTTP
+    destructive owner calls its admission helper BEFORE any of its destructive
+    effect surfaces. Absent admission call or an effect ordered ahead of it =
+    failure; a listed owner whose function no longer exists = stale-entry
+    failure (mirrors the HTTP checker's stale-entry teeth)."""
+    failures: list[str] = []
+    for rel_path, fn, admit_call, effects in load_non_http_owners():
+        body = owner_body(rel_path, fn)
+        if body is None:
+            failures.append(
+                f"STALE non-HTTP owner entry {rel_path}::{fn}: function not found "
+                f"(remove it or fix the entry)"
+            )
+            continue
+        # Whitespace-collapsed view so rustfmt line splits don't affect ordering.
+        flat = re.sub(r"\s+", "", body)
+        # Word-boundary match so a rename/removal (e.g. `admit_x` -> `no_admit_x`)
+        # is caught rather than matching as a substring.
+        admit_match = re.search(rf"(?<![A-Za-z0-9_]){re.escape(admit_call)}(?![A-Za-z0-9_])", flat)
+        admit_idx = admit_match.start() if admit_match else -1
+        if admit_idx < 0:
+            failures.append(
+                f"{rel_path}::{fn}: non-HTTP destructive owner is missing its "
+                f"admission call '{admit_call}' — permit-first admission must not "
+                f"be removed"
+            )
+            continue
+        flat_effects = [re.sub(r"\s+", "", e) for e in effects]
+        for effect in flat_effects:
+            effect_idx = flat.find(effect)
+            if 0 <= effect_idx < admit_idx:
+                failures.append(
+                    f"{rel_path}::{fn}: effect surface '{effect}' appears BEFORE "
+                    f"the admission call '{admit_call}' — admission must come first"
+                )
+                break
+    return failures
+
+
 def main() -> int:
     handlers = collect_mutating_handlers()
     classification = load_classification()
@@ -201,6 +300,11 @@ def main() -> int:
                 f"{path.relative_to(REPO_ROOT)}: session core must not import the Workflows domain"
             )
 
+    # PR1227-RETENTION-RATCHET-01: non-HTTP destructive owners (startup /
+    # post-create automatic passes) are fenced statically here too.
+    non_http_owners = load_non_http_owners()
+    failures.extend(check_non_http_owners())
+
     if failures:
         print("Session mutation admission ratchet failures:")
         for failure in failures:
@@ -208,7 +312,8 @@ def main() -> int:
         return 1
     print(
         f"Session mutation admission ratchet passed "
-        f"({len(handlers)} mutating handlers classified)."
+        f"({len(handlers)} mutating handlers classified, "
+        f"{len(non_http_owners)} non-HTTP owners fenced)."
     )
     return 0
 
