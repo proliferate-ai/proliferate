@@ -8,6 +8,7 @@ ORM stack.
 
 from __future__ import annotations
 
+import logging
 from typing import Protocol
 from uuid import UUID
 
@@ -18,11 +19,15 @@ from proliferate.db.store import billing_subjects
 from proliferate.db.store import cloud_sandboxes as sandbox_store
 from proliferate.db.store import runtime_workers as runtime_workers_store
 from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
+from proliferate.integrations.sandbox import get_sandbox_provider
 from proliferate.server.billing.authorization import (
     assert_cloud_sandbox_resume_allowed_for_owner,
 )
+from proliferate.server.cloud.cloud_sandboxes.transactions import run_after_commit
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.utils.crypto import decrypt_text
+
+logger = logging.getLogger("proliferate.cloud.cloud_sandboxes")
 
 
 class _UserWithId(Protocol):
@@ -107,7 +112,39 @@ async def destroy_cloud_sandbox(
     # Retire the sandbox's worker + gateway token so a destroyed sandbox can
     # never keep authenticating back to Cloud.
     await runtime_workers_store.revoke_active_workers_for_identity(db, cloud_sandbox_id=sandbox.id)
-    return await sandbox_store.mark_cloud_sandbox_destroyed(db, sandbox.id)
+    destroyed = await sandbox_store.mark_cloud_sandbox_destroyed(db, sandbox.id)
+    # Kill the provider VM so a destroyed row does not leave an E2B sandbox
+    # running forever (it is created with on_timeout=pause + auto_resume, so it
+    # never dies on its own). This MUST happen only after the DB destroy durably
+    # commits: if we killed inline and the caller's transaction then rolled back,
+    # the row would stay alive pointing at a dead provider id and the next
+    # connect would resume the dead id instead of recreating — a wedged sandbox.
+    # run_after_commit defers to the root-commit event and discards on rollback.
+    # The captured ids are plain locals (no ORM access inside the callback, which
+    # runs after the session may be closed). Loss on process restart before the
+    # callback fires is accepted at-most-once behavior; a periodic reaper backstop
+    # for that loss (and for pre-existing orphans) is tracked as a follow-up in
+    # #1280 — there is no shipped reaper yet.
+    if sandbox.e2b_sandbox_id:
+        provider_sandbox_id = sandbox.e2b_sandbox_id
+        template_ref = sandbox.e2b_template_ref
+        sandbox_id_for_log = str(sandbox.id)
+
+        async def _destroy_provider_sandbox() -> None:
+            try:
+                provider = get_sandbox_provider(template_ref)
+                await provider.destroy_sandbox(provider_sandbox_id)
+            except Exception:
+                logger.exception(
+                    "failed to destroy provider sandbox on cloud sandbox destroy",
+                    extra={
+                        "cloud_sandbox_id": sandbox_id_for_log,
+                        "e2b_sandbox_id": provider_sandbox_id,
+                    },
+                )
+
+        await run_after_commit(db, _destroy_provider_sandbox)
+    return destroyed
 
 
 async def load_cloud_sandbox_runtime_access(

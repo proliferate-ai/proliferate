@@ -32,6 +32,9 @@ from proliferate.utils.time import utcnow
 logger = logging.getLogger("proliferate.cloud.e2b")
 
 _E2B_API_BASE_URL = "https://api.e2b.app"
+# Bound the list pagination so a paging bug cannot loop forever; large enough to
+# cover any realistic account (100/page x 50 = 5000 sandboxes).
+_LIST_SANDBOXES_MAX_PAGES = 50
 
 
 class E2BRuntimeError(RuntimeError):
@@ -113,7 +116,14 @@ def _normalize_state(value: object) -> str:
 
 
 def _state_from_payload(payload: dict[str, Any]) -> ProviderSandboxState | None:
-    sandbox_id = payload.get("sandboxId") or payload.get("sandbox_id") or payload.get("id")
+    # v2 /sandboxes returns `sandboxID` (capital ID); older payloads used
+    # `sandboxId`/`sandbox_id`/`id`. Accept all so this parser is endpoint-agnostic.
+    sandbox_id = (
+        payload.get("sandboxID")
+        or payload.get("sandboxId")
+        or payload.get("sandbox_id")
+        or payload.get("id")
+    )
     if not sandbox_id:
         return None
     return ProviderSandboxState(
@@ -182,25 +192,47 @@ class E2BSandboxProvider:
         return await asyncio.to_thread(self._get_sandbox_state, sandbox_id)
 
     async def list_sandbox_states(self) -> list[ProviderSandboxState]:
-        async with httpx.AsyncClient(base_url=_E2B_API_BASE_URL, timeout=30.0) as client:
-            response = await client.get(
-                "/sandboxes",
-                headers={"X-API-Key": self._require_api_key()},
-            )
-            response.raise_for_status()
-        payload = response.json()
-        if isinstance(payload, dict):
-            raw_items = payload.get("sandboxes") or payload.get("data") or []
-        else:
-            raw_items = payload
-        if not isinstance(raw_items, list):
-            return []
+        # Mirror the E2B SDK's list: GET /v2/sandboxes with an explicit
+        # `state` filter (comma-joined values, as the SDK serializes it) and
+        # header-based pagination via `x-next-token`. RUNNING alone would miss
+        # PAUSED sandboxes — the PRIMARY orphan shape, since E2B pauses on
+        # timeout — so both states are requested. Pagination is bounded to avoid
+        # an unbounded loop against a paging bug; the bound is logged, never
+        # silently truncated.
         states: list[ProviderSandboxState] = []
-        for item in raw_items:
-            if isinstance(item, dict):
-                state = _state_from_payload(item)
-                if state is not None:
-                    states.append(state)
+        next_token: str | None = None
+        async with httpx.AsyncClient(base_url=_E2B_API_BASE_URL, timeout=30.0) as client:
+            for _page in range(_LIST_SANDBOXES_MAX_PAGES):
+                params: list[tuple[str, str]] = [
+                    ("state", "running,paused"),
+                    ("limit", "100"),
+                ]
+                if next_token:
+                    params.append(("nextToken", next_token))
+                response = await client.get(
+                    "/v2/sandboxes",
+                    params=params,
+                    headers={"X-API-KEY": self._require_api_key()},
+                )
+                response.raise_for_status()
+                payload = response.json()
+                if isinstance(payload, dict):
+                    raw_items = payload.get("sandboxes") or payload.get("data") or []
+                else:
+                    raw_items = payload
+                if isinstance(raw_items, list):
+                    for item in raw_items:
+                        if isinstance(item, dict):
+                            state = _state_from_payload(item)
+                            if state is not None:
+                                states.append(state)
+                next_token = response.headers.get("x-next-token")
+                if not next_token:
+                    return states
+            logger.warning(
+                "e2b list_sandbox_states hit the %s-page bound; results may be truncated",
+                _LIST_SANDBOXES_MAX_PAGES,
+            )
         return states
 
     async def resolve_runtime_endpoint(self, sandbox: Any) -> RuntimeEndpoint:
