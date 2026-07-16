@@ -431,6 +431,7 @@ impl AppState {
             retire_preflight_checker.clone(),
             workspace_operation_gate.clone(),
             checkout_deletion_gate.clone(),
+            session_admission.clone(),
             runtime_home.clone(),
         ));
         let workspace_worktree_runtime = Arc::new(WorkspaceWorktreeRuntime::new(

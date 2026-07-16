@@ -18,6 +18,7 @@ anyharness/crates/anyharness-lib/src/api/workflow_runs_tests.rs 2790 workflow-ru
 anyharness/crates/anyharness-lib/src/api/http/agent_gateway_catalog.rs 632 gateway model enrichment (own vs foreign match) + catalog version endpoint
 anyharness/crates/anyharness-lib/src/api/http/workspaces_lifecycle.rs 645 workspace retire lifecycle handlers (+PR1227-WORKSPACE-FENCE-01/02 under-exclusive-lease workflow-control re-check with admitted-set fail-closed membership + test-only proof seam module)
 anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.rs 665 workspace purge handlers (+2b fail-closed all-session admission, PR1227-WORKSPACE-FENCE-01/02 admitted-set carry + under-exclusive-lease re-check, test-only purge proof seam module)
+anyharness/crates/anyharness-lib/src/domains/workspaces/retention.rs 809 worktree retention sweep (+PR1227-RETENTION-FENCE-01 per-candidate permit-first admission + under-exclusive-lease FENCE-01/02 re-check + test-only retention proof seam module)
 anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_resolver.rs 704 provider filtering + family normalizer (bedrock/date/version forms) with tests
 anyharness/crates/anyharness-lib/src/domains/agents/catalog/validation.rs 605 defaultAgentKind must name a declared agent (was already at 598)
 anyharness/crates/anyharness-lib/src/domains/agents/auth/context_tests.rs 645 classifier tests incl. gateway route activation + bedrock flag-only detection
@@ -61,7 +62,7 @@ apps/packages/product-client/src/lib/domain/workspaces/sidebar/sidebar.test.ts 6
 apps/packages/product-client/src/lib/domain/workspaces/sidebar/sidebar-indicators.test.ts 648 existing desktop oversized test file
 apps/packages/product-client/src/lib/infra/measurement/measurement-port.ts 734 product-owned measurement port barrel (R1 ruling) mirroring the retained measurement surface through a swappable no-op sink; split deferred
 anyharness/crates/anyharness-lib/src/api/router.rs 621 AnyHarness router (+goals/loops/activity/feed routes, +gateway catalog version route, +workflow-runs route, +workflow-run cancel route, +local materialization operations routes)
-anyharness/crates/anyharness-lib/src/app/mod.rs 640 AnyHarness app wiring (+session mutation admission construction/injection incl. PR1227-WORKSPACE-FENCE-01 purge-service admission wiring, +goal/loop/activity/feed services, +two-phase workflow-run wiring calls into app/workflows.rs, +local materialization service wiring)
+anyharness/crates/anyharness-lib/src/app/mod.rs 641 AnyHarness app wiring (+session mutation admission construction/injection incl. PR1227-WORKSPACE-FENCE-01 purge-service and PR1227-RETENTION-FENCE-01 retention-service admission wiring, +goal/loop/activity/feed services, +two-phase workflow-run wiring calls into app/workflows.rs, +local materialization service wiring)
 anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs 867 loops runtime — native write path + emulated Codex scheduler (+2b derived-safe classification comment at the fire seam)
 anyharness/crates/anyharness-lib/src/live/sessions/actor/startup.rs 686 session startup (+goal/loop capability parsing, roster reconcile-on-attach)
 server/tests/integration/test_organizations_api.py 624 added admin-only coverage for GET .../invitations
