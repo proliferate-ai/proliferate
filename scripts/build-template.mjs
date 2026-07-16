@@ -351,12 +351,25 @@ function prepareTemplateContext(bundlePaths) {
   return contextDir;
 }
 
+// The AnyHarness runtime home the serving runtime resolves at launch time:
+// the launch script exports HOME=/home/user (SandboxRuntimeContext.base_env,
+// integrations/sandbox/e2b.py) and `serve` receives no --runtime-home, so it
+// resolves default_runtime_home() = $HOME/.proliferate/anyharness. The bake
+// must install agents into this exact home — a Docker/E2B build-stage
+// `USER user` does NOT update $HOME, so an unpinned bake-time install-agents
+// can resolve a different default home, leaving agents where the serving
+// runtime never looks (readiness reports InstallRequired and
+// GET /v1/agents/launch-options returns zero launchable agents → empty
+// composer picker in fresh cloud sandboxes).
+const ANYHARNESS_RUNTIME_HOME = "/home/user/.proliferate/anyharness";
+
 function buildAgentInstallCommand(agentKinds) {
   const agentArgs = agentKinds.map((agentKind) => `--agent ${agentKind}`).join(" ");
   return [
     "set -eu",
     `echo "Preinstalling agents: ${agentKinds.join(", ")}"`,
-    `/home/user/anyharness install-agents ${agentArgs}`,
+    "export HOME=/home/user",
+    `/home/user/anyharness install-agents --runtime-home ${ANYHARNESS_RUNTIME_HOME} ${agentArgs}`,
   ].join(" && ");
 }
 
