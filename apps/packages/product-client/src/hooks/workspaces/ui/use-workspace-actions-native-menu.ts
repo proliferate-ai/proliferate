@@ -55,15 +55,14 @@ export function buildWorkspaceActionsNativeMenuItems(
   if (availabilityCommands.length > 0) {
     items.push({ kind: "separator" });
     for (const command of availabilityCommands) {
-      // An unsupported-git-state blocker is present but not actionable, mirroring
-      // the disabled DOM item.
-      const isBlocker = command.kind === "unsupported-git-state";
+      // PR 6: every availability command (incl. reconcile-git-state) is
+      // actionable; the note is appended as context.
       items.push({
         id: `availability-${command.kind}`,
         label: command.blocker ? `${command.label} — ${command.blocker}` : command.label,
-        enabled: !isBlocker,
+        enabled: true,
         onSelect: () => {
-          if (!isBlocker) input.onAvailabilityCommand?.(command.kind);
+          input.onAvailabilityCommand?.(command.kind);
         },
       });
     }

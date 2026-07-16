@@ -59,8 +59,17 @@ export function workspaceAvailabilityIntentForCommand(
           materializationId: target.linkedMaterializationId,
         }
         : null;
-    case "unsupported-git-state":
-      // A truthful, non-actionable blocker (expansion is PR 6).
+    case "reconcile-git-state":
+      // PR 6: open the one reconciliation dialog. At least one side must exist;
+      // it diagnoses the cross-target relation and offers the one safe action.
+      if (target.localWorkspaceId || target.cloudWorkspaceId) {
+        return {
+          kind: "reconcile",
+          localWorkspaceId: target.localWorkspaceId,
+          cloudWorkspaceId: target.cloudWorkspaceId,
+          materializationId: target.linkedMaterializationId,
+        };
+      }
       return null;
   }
 }

@@ -19,7 +19,11 @@ import {
   collectLinkCandidates,
   type LinkCandidate,
 } from "#product/lib/domain/workspaces/cloud/link-copies-candidates";
-import { useWorkspaceAvailabilityIntentStore } from "#product/stores/cloud/workspace-availability-intent-store";
+import { WorkspaceReconciliationDialog } from "#product/components/workspace/repo-setup/WorkspaceReconciliationDialog";
+import {
+  useWorkspaceAvailabilityIntentStore,
+  type WorkspaceAvailabilityIntent,
+} from "#product/stores/cloud/workspace-availability-intent-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
 
 const UNLINK_COPY =
@@ -36,6 +40,7 @@ const UNLINK_COPY =
 export function WorkspaceAvailabilityActionHost() {
   const intent = useWorkspaceAvailabilityIntentStore((state) => state.activeIntent);
   const clearIntent = useWorkspaceAvailabilityIntentStore((state) => state.clear);
+  const beginIntent = useWorkspaceAvailabilityIntentStore((state) => state.begin);
   const host = useProductHost();
   const files = host.desktop?.files ?? null;
   const showToast = useToastStore((state) => state.show);
@@ -162,6 +167,35 @@ export function WorkspaceAvailabilityActionHost() {
 
   if (!intent) {
     return null;
+  }
+
+  if (intent.kind === "reconcile") {
+    // PR 6: the one reconciliation dialog. Its recovery verbs hand off to the
+    // EXISTING availability intents (relink/recreate/unlink/link) so there is one
+    // command model, not a parallel one.
+    const beginReconcileHandoff = (next: WorkspaceAvailabilityIntent) => {
+      closeIntent();
+      beginIntent(next);
+    };
+    return (
+      <WorkspaceReconciliationDialog
+        target={{
+          localWorkspaceId: intent.localWorkspaceId,
+          cloudWorkspaceId: intent.cloudWorkspaceId,
+          materializationId: intent.materializationId,
+        }}
+        logicalWorkspaces={logicalWorkspaces}
+        onRelink={(cloudWorkspaceId) =>
+          beginReconcileHandoff({ kind: "relink", cloudWorkspaceId, mode: "relink" })}
+        onRecreate={(cloudWorkspaceId) =>
+          beginReconcileHandoff({ kind: "relink", cloudWorkspaceId, mode: "recreate" })}
+        onUnlink={(cloudWorkspaceId, materializationId) =>
+          beginReconcileHandoff({ kind: "unlink", cloudWorkspaceId, materializationId })}
+        onLink={(cloudWorkspaceId) =>
+          beginReconcileHandoff({ kind: "link_copies", cloudWorkspaceId })}
+        onClose={closeIntent}
+      />
+    );
   }
 
   if (intent.kind === "unlink") {
