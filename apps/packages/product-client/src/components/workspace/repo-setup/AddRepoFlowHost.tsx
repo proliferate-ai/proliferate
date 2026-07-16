@@ -1,7 +1,12 @@
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import type { CloudRepoPickerProps } from "@proliferate/product-ui/repos/CloudRepoPicker";
+import { parseGitRepoId } from "@proliferate/product-domain/repos/repo-id";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { resolveRepositoryReadiness } from "@proliferate/product-domain/repos/repo-readiness";
+import {
+  resolveRepositoryReadiness,
+  type RepositoryCapabilityRequirement,
+} from "@proliferate/product-domain/repos/repo-readiness";
 import type { CloudRepoPickerBlockerView } from "@proliferate/product-ui/repos/CloudRepoPicker";
 import {
   AddRepoFlow,
@@ -53,42 +58,51 @@ export function AddRepoFlowHost() {
   // precede repo selection; once past them the per-repo picker (its authority
   // query) owns gates 3+, so we resolve with the later gates satisfied and
   // surface a blocker only when the resolver stops at gate 1 or 2.
-  const preflightBlocker = useMemo<CloudRepoPickerBlockerView | null>(() => {
-    const readiness = resolveRepositoryReadiness({
-      requirement: "managed_cloud",
-      githubRepositoryAccess: capabilities.githubRepositoryAccessStatus,
-      managedCloud: capabilities.managedCloudStatus,
-      signedIn: authStatus === "authenticated",
-      hasSupportedRepoIdentity: true,
-      authorityLoading: false,
-      authorityError: false,
-      authority: { authorized: true, status: "ready" },
-      canManageInstallation: false,
-      cloudEnvironmentConfigured: true,
-    });
-    if (readiness.gate !== 1 && readiness.gate !== 2) {
-      return null;
-    }
-    return describeReadinessBlocker({
-      readiness,
-      repo: null,
-      githubAccessDisplayName: capabilities.githubRepositoryAccessDisplayName,
-      orgName: activeOrganization?.name ?? null,
-      installUrl: "https://github.com/settings/installations",
-      userAuthorization: { authorize: () => {}, authorizing: false, error: null },
-      installation: {
-        install: () => {},
-        openInstallationSettings: () => {},
-        installing: false,
-        error: null,
-      },
-      onCopyAdminRequest: () => {},
-      onRetryAuthority: () => {},
-      onSignIn: () => {
-        closeFlow();
-        navigate("/login");
-      },
-    });
+  const preflightBlockers = useMemo<Record<"cloud" | "clone", CloudRepoPickerBlockerView | null>>(() => {
+    const resolve = (
+      requirement: RepositoryCapabilityRequirement,
+    ): CloudRepoPickerBlockerView | null => {
+      const readiness = resolveRepositoryReadiness({
+        requirement,
+        githubRepositoryAccess: capabilities.githubRepositoryAccessStatus,
+        managedCloud: capabilities.managedCloudStatus,
+        signedIn: authStatus === "authenticated",
+        hasSupportedRepoIdentity: true,
+        authorityLoading: false,
+        authorityError: false,
+        authority: { authorized: true, status: "ready" },
+        canManageInstallation: false,
+        cloudEnvironmentConfigured: true,
+      });
+      if (readiness.gate !== 1 && readiness.gate !== 2) {
+        return null;
+      }
+      return describeReadinessBlocker({
+        readiness,
+        requirement,
+        repo: null,
+        githubAccessDisplayName: capabilities.githubRepositoryAccessDisplayName,
+        orgName: activeOrganization?.name ?? null,
+        installUrl: "https://github.com/settings/installations",
+        userAuthorization: { authorize: () => {}, authorizing: false, error: null },
+        installation: {
+          install: () => {},
+          openInstallationSettings: () => {},
+          installing: false,
+          error: null,
+        },
+        onCopyAdminRequest: () => {},
+        onRetryAuthority: () => {},
+        onSignIn: () => {
+          closeFlow();
+          navigate("/login");
+        },
+      });
+    };
+    return {
+      cloud: resolve("managed_cloud"),
+      clone: resolve("github_repository_access"),
+    };
   }, [
     activeOrganization?.name,
     authStatus,
@@ -99,9 +113,10 @@ export function AddRepoFlowHost() {
     navigate,
   ]);
 
-  // Host-truthful options: only Desktop can register an existing local folder.
+  // Host-truthful options: only Desktop can register an existing local folder
+  // or clone locally; Web offers only the managed-Cloud setup.
   const options = useMemo<AddRepoFlowOption[]>(
-    () => (files ? ["add-existing-folder", "cloud"] : ["cloud"]),
+    () => (files ? ["add-existing-folder", "clone-from-github", "cloud"] : ["cloud"]),
     [files],
   );
 
@@ -144,10 +159,71 @@ export function AddRepoFlowHost() {
     },
   });
 
+  // Clone reuses the accessible-repos catalog + GitHub-App gating from the cloud
+  // picker, but on select it clones locally (PR 3) instead of saving a
+  // managed-Cloud environment. Clone needs only GitHub repository access, so it
+  // is available whenever the picker's own GitHub-App prerequisites are met.
+  const clonePickerBase = useAddCloudEnvironment({
+    enabled: open && step.kind === "clone",
+    organizationId: activeOrganizationId,
+    canManageGitHubAppInstallation: isSettingsAdminRole(
+      activeOrganization?.membership?.role,
+    ),
+    userAuthorizationReturnTo: host.links.buildReturnUrl({
+      kind: "settings",
+      section: "environments",
+      source: "github_app_callback",
+    }),
+    // Host-truthful installation return (PR2-WEB-03): derive from the host via
+    // buildReturnUrl instead of a hard-coded `proliferate://` deep link, matching
+    // the cloud picker above.
+    installationReturnTo: host.links.buildReturnUrl({
+      kind: "settings",
+      section: "environments",
+      query: [["source", "github_app_installation_callback"]],
+    }),
+    onOpenExternalUrl: host.links.openExternal,
+    // The clone path never adds a Cloud environment; select is overridden below.
+    onEnvironmentAdded: () => {},
+  });
+
+  const beginCloneForRepoId = useCallback((repoId: string) => {
+    const identity = parseGitRepoId(repoId);
+    if (!identity) {
+      setFlowError("That repository id is not a supported GitHub owner/name.");
+      return;
+    }
+    setFlowError(null);
+    handoffToCloud();
+    beginCloudIntent({
+      kind: "clone_from_github",
+      repo: {
+        gitProvider: "github",
+        gitOwner: identity.gitOwner,
+        gitRepoName: identity.gitRepoName,
+      },
+    });
+  }, [beginCloudIntent, handoffToCloud]);
+
+  const clonePicker = useMemo<CloudRepoPickerProps>(() => ({
+    ...clonePickerBase,
+    onAddRepository: (repo) => beginCloneForRepoId(repo.id),
+    // Manual owner/repo entry is the same clone intent as catalog selection;
+    // never inherit useAddCloudEnvironment's managed-Cloud save callback.
+    onAddManual: () => beginCloneForRepoId(clonePickerBase.manualValue),
+  }), [
+    beginCloneForRepoId,
+    clonePickerBase,
+  ]);
+
   const handlePickOption = useCallback((option: AddRepoFlowOption) => {
     setFlowError(null);
     if (option === "cloud") {
       setStep({ kind: "cloud" });
+      return;
+    }
+    if (option === "clone-from-github") {
+      setStep({ kind: "clone" });
       return;
     }
     // "add-existing-folder": the native folder picker IS the intent signal, so
@@ -183,8 +259,7 @@ export function AddRepoFlowHost() {
   }, [setStep]);
 
   const handleClose = useCallback(() => {
-    // Ignore Escape/overlay-click while a local add is committing so the
-    // dialog cannot vanish mid-add.
+    // Ignore Escape/overlay-click while a local add is committing.
     if (isAddingRepo) {
       return;
     }
@@ -197,7 +272,14 @@ export function AddRepoFlowHost() {
   // user never sees a user-auth CTA when the operator must configure the
   // deployment (PR2-GATING-01).
   const resolvedCloudPicker = step.kind === "cloud"
-    ? (preflightBlocker ? { ...cloudPicker, blocker: preflightBlocker } : cloudPicker)
+    ? (preflightBlockers.cloud
+      ? { ...cloudPicker, blocker: preflightBlockers.cloud }
+      : cloudPicker)
+    : null;
+  const resolvedClonePicker = step.kind === "clone"
+    ? (preflightBlockers.clone
+      ? { ...clonePicker, blocker: preflightBlockers.clone }
+      : clonePicker)
     : null;
 
   return (
@@ -208,6 +290,7 @@ export function AddRepoFlowHost() {
       adding={isAddingRepo}
       error={step.kind === "cloud" ? null : flowError}
       cloudPicker={resolvedCloudPicker}
+      clonePicker={resolvedClonePicker}
       onPickOption={handlePickOption}
       onBack={handleBack}
       onClose={handleClose}

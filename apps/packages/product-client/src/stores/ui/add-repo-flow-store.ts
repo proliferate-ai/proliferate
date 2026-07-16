@@ -2,7 +2,8 @@ import { create } from "zustand";
 
 export type AddRepoFlowStoreStep =
   | { kind: "entry" }
-  | { kind: "cloud" };
+  | { kind: "cloud" }
+  | { kind: "clone" };
 
 /** What the unified flow produced, for callers that select the new repo. */
 export type AddRepoFlowCompletion =
@@ -17,7 +18,7 @@ interface AddRepoFlowState {
     onCompleted?: (completion: AddRepoFlowCompletion) => void;
   }) => void;
   setStep: (step: AddRepoFlowStoreStep) => void;
-  /** Hide the picker while the connected Cloud readiness dialog owns it. */
+  /** Hide the picker while the connected repository-readiness host owns it. */
   handoffToCloud: () => void;
   close: () => void;
 }

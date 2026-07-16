@@ -31,6 +31,7 @@ import { useCloudRepositoryIntentStore } from "#product/stores/cloud/cloud-repos
 import {
   continueCloudRepositoryIntent,
   repoForCloudRepositoryIntent,
+  requirementForCloudRepositoryIntent,
   type CloudRepoIdentity,
   type CloudRepositoryIntent,
   type CreateCloudWorkspaceContinuation,
@@ -45,9 +46,13 @@ import { useGitHubAppUserAuthorization } from "#product/hooks/settings/workflows
 import { useGitHubAppInstallation } from "#product/hooks/settings/workflows/use-github-app-installation";
 import { useCreateCloudWorkspace } from "#product/hooks/cloud/workflows/use-create-cloud-workspace";
 import { buildCloudAdminRequestMessage } from "#product/lib/domain/settings/github-app-copy";
-import { formatGitRepoId } from "@proliferate/product-domain/repos/repo-id";
+import {
+  useCloneRepo,
+  type CloneRepoAttempt,
+} from "#product/hooks/workspaces/workflows/use-clone-repo";
 import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
+import { formatGitRepoId } from "@proliferate/product-domain/repos/repo-id";
 
 const USER_AUTHORIZATION_RETURN_TO_SOURCE = "github_app_callback";
 
@@ -66,7 +71,12 @@ export function CloudRepoActionDialogHost() {
   const clearIntent = useCloudRepositoryIntentStore((state) => state.clear);
   const closeAddRepoFlow = useAddRepoFlowStore((state) => state.close);
   const showToast = useToastStore((state) => state.show);
+  const { cloneRepo } = useCloneRepo();
   const repo = intent ? repoForCloudRepositoryIntent(intent) : null;
+  // Clone depends only on GitHub repository access; managed-Cloud intents depend
+  // on managed Cloud. Gating by the intent's own requirement lets an
+  // App-ready/E2B-disabled deployment clone without a managed-Cloud gate.
+  const requirement = intent ? requirementForCloudRepositoryIntent(intent) : "managed_cloud";
 
   const client = useCloudClient();
   const queryClient = useQueryClient();
@@ -82,12 +92,15 @@ export function CloudRepoActionDialogHost() {
 
   // Live readiness inputs.
   const repoConfigs = useRepositories(open && signedIn);
-  const managedCloudOperatorReady =
-    capabilities.githubRepositoryAccessStatus === "ready"
-    && capabilities.managedCloudStatus === "ready";
+  const requiredOperatorReady = requirement === "github_repository_access"
+    ? capabilities.githubRepositoryAccessStatus === "ready"
+    : capabilities.githubRepositoryAccessStatus === "ready"
+      && capabilities.managedCloudStatus === "ready";
   const authority = useGitHubRepoAuthority(
     { gitOwner: repo?.gitOwner, gitRepoName: repo?.gitRepoName },
-    open && signedIn && managedCloudOperatorReady && repo !== null,
+    // Never issue a user/authority query while the required operator-owned
+    // capability is disabled or only partially configured.
+    open && signedIn && repo !== null && requiredOperatorReady,
   );
 
   const configuredCloudKeys = useMemo(
@@ -131,11 +144,15 @@ export function CloudRepoActionDialogHost() {
   const saveEnvironment = useSaveRepoEnvironment();
   const validateBranches = useValidateCloudRepoBranches();
   const { createCloudWorkspaceAndEnter } = useCreateCloudWorkspace();
+  const cloneAttemptRef = useRef<{
+    intent: CloudRepositoryIntent;
+    attempt: CloneRepoAttempt;
+  } | null>(null);
 
   const readiness: RepositoryReadiness | null = useMemo(() => {
     if (!intent) return null;
     return resolveRepositoryReadiness({
-      requirement: "managed_cloud",
+      requirement,
       githubRepositoryAccess: capabilities.githubRepositoryAccessStatus,
       managedCloud: capabilities.managedCloudStatus,
       signedIn,
@@ -195,6 +212,34 @@ export function CloudRepoActionDialogHost() {
     onCompleted?.({ kind: "cloud", repoId });
   }, [closeAddRepoFlow, showToast]);
 
+  const cloneFromGitHub = useCallback(async (target: CloudRepoIdentity) => {
+    if (!intent || intent.kind !== "clone_from_github") {
+      throw new Error("The clone request is no longer active.");
+    }
+    const retryAttempt = cloneAttemptRef.current?.intent === intent
+      ? cloneAttemptRef.current.attempt
+      : undefined;
+    const result = await cloneRepo(target, retryAttempt);
+    if (!result.succeeded) {
+      if (result.cancelled) {
+        // The native picker was cancelled. This is a terminal user cancellation,
+        // not an error state requiring a Retry blocker.
+        closeAddRepoFlow();
+        return;
+      }
+      if (result.attempt) {
+        cloneAttemptRef.current = { intent, attempt: result.attempt };
+      }
+      throw new Error(result.error);
+    }
+
+    cloneAttemptRef.current = null;
+    const onCompleted = useAddRepoFlowStore.getState().onCompleted;
+    closeAddRepoFlow();
+    showToast(`Cloned ${formatGitRepoId(target)}`, "info");
+    onCompleted?.({ kind: "local", sourceRoot: result.sourceRoot });
+  }, [cloneRepo, closeAddRepoFlow, intent, showToast]);
+
   // Once every access gate is green, continue the held intent (save env →
   // create). Gate 9 (`set_up_cloud`) is the normal continue point: the resolver
   // has cleared authority and only the Cloud environment save remains, which is
@@ -214,12 +259,14 @@ export function CloudRepoActionDialogHost() {
     saveCloudEnvironment,
     createCloudWorkspace,
     completeRepositoryRegistration,
+    cloneFromGitHub,
   });
   continuationInputsRef.current = {
     cloudEnvironmentConfigured,
     saveCloudEnvironment,
     createCloudWorkspace,
     completeRepositoryRegistration,
+    cloneFromGitHub,
   };
 
   // The intent instance the continuation has already been started for. Because
@@ -239,6 +286,7 @@ export function CloudRepoActionDialogHost() {
     if (!intent) {
       startedForRef.current = null;
       environmentSavedForRef.current = null;
+      cloneAttemptRef.current = null;
       setContinuationError(null);
     }
   }, [intent]);
@@ -258,8 +306,8 @@ export function CloudRepoActionDialogHost() {
       saveCloudEnvironment,
       createCloudWorkspace,
       completeRepositoryRegistration,
-    } =
-      continuationInputsRef.current;
+      cloneFromGitHub,
+    } = continuationInputsRef.current;
     void continueCloudRepositoryIntent({
       intent,
       cloudEnvironmentConfigured:
@@ -270,6 +318,7 @@ export function CloudRepoActionDialogHost() {
       },
       createCloudWorkspace,
       onRepositoryRegistered: completeRepositoryRegistration,
+      cloneFromGitHub,
     })
       .then(() => {
         // Terminal success: clear the intent unconditionally. Nothing should
@@ -297,6 +346,7 @@ export function CloudRepoActionDialogHost() {
 
   const readinessBlocker = describeReadinessBlocker({
     readiness,
+    requirement,
     repo,
     githubAccessDisplayName: capabilities.githubRepositoryAccessDisplayName,
     orgName: activeOrganization?.name ?? null,
@@ -319,7 +369,7 @@ export function CloudRepoActionDialogHost() {
       // A held intent cannot survive a route away, so clear it and send the
       // user to the product sign-in flow (PR2-SIGNIN-04). The settings surfaces
       // are the recovery path after sign-in.
-      if (intent.kind === "add_cloud_repository") {
+      if (intent.kind === "add_cloud_repository" || intent.kind === "clone_from_github") {
         closeAddRepoFlow();
       }
       clearIntent();
@@ -332,7 +382,9 @@ export function CloudRepoActionDialogHost() {
   // null. Earlier completed steps are preserved (spec §Failure).
   const continuationBlocker: CloudRepoPickerBlockerView | null = continuationError
     ? {
-        title: "Couldn't finish Cloud setup",
+        title: intent.kind === "clone_from_github"
+          ? "Couldn't clone repository"
+          : "Couldn't finish Cloud setup",
         description: continuationError,
         actionLabel: "Retry",
         onAction: () => setRetryNonce((nonce) => nonce + 1),
@@ -342,11 +394,12 @@ export function CloudRepoActionDialogHost() {
   const blocker = readinessBlocker ?? continuationBlocker;
 
   const closeDialog = () => {
-    if (intent.kind === "add_cloud_repository") {
+    if (intent.kind === "add_cloud_repository" || intent.kind === "clone_from_github") {
       closeAddRepoFlow();
     }
     clearIntent();
   };
+  const cloning = intent.kind === "clone_from_github";
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) closeDialog(); }}>
@@ -357,7 +410,7 @@ export function CloudRepoActionDialogHost() {
       >
         <DialogHeader>
           <DialogTitle className="text-[15px] font-semibold leading-5">
-            Set up in Cloud
+            {cloning ? "Clone from GitHub" : "Set up in Cloud"}
           </DialogTitle>
         </DialogHeader>
         <div className="mt-3">
@@ -365,7 +418,9 @@ export function CloudRepoActionDialogHost() {
             <CloudRepoPickerBlocker blocker={blocker} />
           ) : (
             <p className="text-ui-sm leading-[1.45] text-muted-foreground" role="status">
-              Preparing this repository for Proliferate Cloud…
+              {cloning
+                ? "Preparing this repository on this Mac…"
+                : "Preparing this repository for Proliferate Cloud…"}
             </p>
           )}
         </div>

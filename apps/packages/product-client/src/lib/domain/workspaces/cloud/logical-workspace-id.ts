@@ -18,7 +18,8 @@ export type LogicalWorkspaceIdKind =
   | "repo-root"
   | "path"
   | "local-slot"
-  | "cloud-workspace";
+  | "cloud-workspace"
+  | "cloud";
 
 export interface ParsedLogicalWorkspaceId {
   kind: LogicalWorkspaceIdKind;
@@ -80,6 +81,20 @@ export function buildCloudWorkspaceLogicalWorkspaceId(cloudWorkspaceId: string):
   ].join(":");
 }
 
+/**
+ * Identity-keyed id for a Cloud workspace that carries an explicit
+ * materialization ledger but no local link on this install (PR 5). Keyed by
+ * `CloudWorkspace.id` so it is stable and never heuristically merged onto a
+ * local slot by repository/branch. Distinct from the `remote:` branch-heuristic
+ * key so legacy Cloud rows and explicit rows never collide.
+ */
+export function buildCloudIdentityLogicalWorkspaceId(cloudWorkspaceId: string): string {
+  return [
+    "cloud",
+    encodeLogicalSegment(cloudWorkspaceId),
+  ].join(":");
+}
+
 export function parseLogicalWorkspaceId(
   logicalWorkspaceId: string | null | undefined,
 ): ParsedLogicalWorkspaceId | null {
@@ -94,6 +109,7 @@ export function parseLogicalWorkspaceId(
     && kind !== "path"
     && kind !== "local-slot"
     && kind !== "cloud-workspace"
+    && kind !== "cloud"
   ) {
     return null;
   }
@@ -108,6 +124,7 @@ export function parseLogicalWorkspaceId(
   if (
     (kind === "remote" && segments.length !== 4)
     || ((kind === "repo-root" || kind === "path") && segments.length !== 2)
+    || (kind === "cloud" && segments.length !== 1)
   ) {
     return null;
   }
@@ -145,7 +162,11 @@ export function replaceLogicalWorkspaceBranch(
   }
 
   const nextBranchKey = normalizeLogicalWorkspaceBranchKey(branchKey);
-  if (parsed.kind === "local-slot" || parsed.kind === "cloud-workspace") {
+  if (
+    parsed.kind === "local-slot"
+    || parsed.kind === "cloud-workspace"
+    || parsed.kind === "cloud"
+  ) {
     // These IDs are keyed by workspace id; branch identity is read from the
     // materialized workspace row, so the logical id has no branch to replace.
     return logicalWorkspaceId ?? null;

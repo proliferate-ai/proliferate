@@ -24,6 +24,8 @@ const capabilities = vi.hoisted(() => ({
 const auth = vi.hoisted(() => ({ status: "authenticated" as string }));
 const cloudHook = vi.hoisted(() => ({
   onRepositorySelected: null as null | ((repo: { gitOwner: string; gitRepoName: string }) => void),
+  legacyManual: vi.fn(),
+  clonePicker: null as CloudRepoPickerProps | null,
 }));
 
 // The OLD prerequisite-model blocker useAddCloudEnvironment produces: a
@@ -48,16 +50,18 @@ vi.mock("@proliferate/product-surfaces/settings/cloud-environments/use-add-cloud
   useAddCloudEnvironment: (input: {
     onRepositorySelected?: (repo: { gitOwner: string; gitRepoName: string }) => void;
   }): CloudRepoPickerProps => {
-    cloudHook.onRepositorySelected = input.onRepositorySelected ?? null;
+    if (input.onRepositorySelected) {
+      cloudHook.onRepositorySelected = input.onRepositorySelected;
+    }
     return {
       query: "",
-      manualValue: "",
+      manualValue: "acme/manual-clone",
       repositories: [],
       blocker: OLD_PREREQ_BLOCKER,
       onQueryChange: vi.fn(),
       onManualValueChange: vi.fn(),
       onAddRepository: vi.fn(),
-      onAddManual: vi.fn(),
+      onAddManual: cloudHook.legacyManual,
       onLoadMore: vi.fn(),
     };
   },
@@ -65,6 +69,15 @@ vi.mock("@proliferate/product-surfaces/settings/cloud-environments/use-add-cloud
 
 vi.mock("#product/hooks/workspaces/workflows/use-add-repo", () => ({
   useAddRepo: () => ({ addRepoFromPath: vi.fn(), isAddingRepo: false }),
+}));
+
+// Stub the clone hook (which otherwise pulls in the AnyHarnessRuntime provider);
+// these gating tests only exercise the cloud path, not the clone path.
+vi.mock("#product/hooks/workspaces/workflows/use-clone-repo", () => ({
+  useCloneRepo: () => ({
+    cloneRepo: vi.fn(() => Promise.resolve({ succeeded: true, sourceRoot: "/tmp/clone" })),
+    isCloning: false,
+  }),
 }));
 
 vi.mock("#product/hooks/organizations/facade/use-active-organization", () => ({
@@ -85,9 +98,11 @@ vi.mock("react-router-dom", () => ({ useNavigate: () => vi.fn() }));
 
 // Expose the resolved cloudPicker.blocker title the host hands the flow.
 vi.mock("@proliferate/product-ui/repos/AddRepoFlow", () => ({
-  AddRepoFlow: ({ cloudPicker }: AddRepoFlowProps) => (
-    <div>{cloudPicker?.blocker ? `blocker:${cloudPicker.blocker.title}` : "no-blocker"}</div>
-  ),
+  AddRepoFlow: ({ step, cloudPicker, clonePicker }: AddRepoFlowProps) => {
+    const picker = step.kind === "clone" ? clonePicker : cloudPicker;
+    cloudHook.clonePicker = clonePicker ?? null;
+    return <div>{picker?.blocker ? `blocker:${picker.blocker.title}` : "no-blocker"}</div>;
+  },
 }));
 
 afterEach(() => {
@@ -99,6 +114,8 @@ afterEach(() => {
   };
   auth.status = "authenticated";
   cloudHook.onRepositorySelected = null;
+  cloudHook.clonePicker = null;
+  cloudHook.legacyManual.mockClear();
   useAddRepoFlowStore.setState({ open: false, step: { kind: "entry" }, onCompleted: null });
   useCloudRepositoryIntentStore.setState({ activeIntent: null });
 });
@@ -106,6 +123,12 @@ afterEach(() => {
 function openCloudStep() {
   act(() => {
     useAddRepoFlowStore.setState({ open: true, step: { kind: "cloud" }, onCompleted: null });
+  });
+}
+
+function openCloneStep() {
+  act(() => {
+    useAddRepoFlowStore.setState({ open: true, step: { kind: "clone" }, onCompleted: null });
   });
 }
 
@@ -175,6 +198,49 @@ describe("AddRepoFlowHost cloud gating (PR2-GATING-01)", () => {
         gitProvider: "github",
         gitOwner: "Acme",
         gitRepoName: "Rocket",
+      },
+    });
+  });
+
+  it("gates Clone on GitHub repository access, not managed Cloud", () => {
+    capabilities.value = {
+      githubRepositoryAccessStatus: "ready",
+      managedCloudStatus: "disabled",
+      githubRepositoryAccessDisplayName: "proliferate-app",
+    };
+    render(<AddRepoFlowHost />);
+    openCloneStep();
+
+    // The GitHub-only preflight is ready, so the picker owns the next gate.
+    expect(screen.getByText(/^blocker:Authorize GitHub App$/)).toBeTruthy();
+  });
+
+  it("shows the operator blocker before Clone when GitHub access is disabled", () => {
+    capabilities.value = {
+      githubRepositoryAccessStatus: "disabled",
+      managedCloudStatus: "ready",
+      githubRepositoryAccessDisplayName: null,
+    };
+    render(<AddRepoFlowHost />);
+    openCloneStep();
+
+    expect(screen.getByText(/^blocker:GitHub repository access is not configured$/)).toBeTruthy();
+    expect(screen.queryByText(/blocker:Authorize GitHub App/)).toBeNull();
+  });
+
+  it("routes manual owner/repo entry to the clone intent, never Cloud setup", () => {
+    render(<AddRepoFlowHost />);
+    openCloneStep();
+
+    act(() => cloudHook.clonePicker?.onAddManual());
+
+    expect(cloudHook.legacyManual).not.toHaveBeenCalled();
+    expect(useCloudRepositoryIntentStore.getState().activeIntent).toEqual({
+      kind: "clone_from_github",
+      repo: {
+        gitProvider: "github",
+        gitOwner: "acme",
+        gitRepoName: "manual-clone",
       },
     });
   });

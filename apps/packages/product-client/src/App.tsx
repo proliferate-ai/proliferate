@@ -13,6 +13,7 @@ import { RepoSetupModalHost } from "#product/components/workspace/repo-setup/Rep
 import { SupportModalHost } from "#product/components/support/SupportModalHost"
 import { AddRepoFlowHost } from "#product/components/workspace/repo-setup/AddRepoFlowHost"
 import { CloudRepoActionDialogHost } from "#product/components/workspace/repo-setup/CloudRepoActionDialogHost"
+import { WorkspaceAvailabilityActionHost } from "#product/components/workspace/repo-setup/WorkspaceAvailabilityActionHost"
 import { LoginPage } from "#product/pages/LoginPage"
 import { SettingsCloudRedirect } from "#product/pages/SettingsCloudRedirect"
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store"
@@ -199,6 +200,7 @@ export function App({ RoutesComponent }: AppProps) {
         <RepoSetupModalHost />
         <AddRepoFlowHost />
         <CloudRepoActionDialogHost />
+        <WorkspaceAvailabilityActionHost />
         <SupportModalHost />
         {/* Kit Sonner toaster: all toasts (update lifecycle + legacy
             toast-store call sites, which now delegate to Sonner). */}

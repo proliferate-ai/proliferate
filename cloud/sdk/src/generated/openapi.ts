@@ -4332,6 +4332,33 @@ export interface components {
             generatedName?: boolean | null;
             /** Source */
             source?: ("desktop" | "web" | "mobile") | null;
+            /** Expectedheadsha */
+            expectedHeadSha?: string | null;
+            sourceMaterialization?: components["schemas"]["CreateCloudWorkspaceSourceMaterialization"] | null;
+        };
+        /**
+         * CreateCloudWorkspaceSourceMaterialization
+         * @description The local source descriptor for an exact-ref managed-Cloud creation.
+         *
+         *     Supplied by Desktop's "Add Cloud copy" flow: it names the local AnyHarness
+         *     workspace the exact ref came from so the resulting managed-Cloud row can be
+         *     associated with it. The server never trusts these fields for the actual ref
+         *     — it independently re-verifies the authorized GitHub branch head.
+         */
+        CreateCloudWorkspaceSourceMaterialization: {
+            /**
+             * Targetkind
+             * @constant
+             */
+            targetKind: "local_desktop";
+            /** Desktopinstallid */
+            desktopInstallId: string;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId: string;
+            /** Worktreepath */
+            worktreePath: string;
+            /** Observedheadsha */
+            observedHeadSha: string;
         };
         /** CreateMaterializationIntentRequest */
         CreateMaterializationIntentRequest: {

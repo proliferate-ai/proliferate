@@ -17,7 +17,19 @@ create cloud workspace
   -> synchronously materialize the repository environment
   -> insert cloud_workspace
   -> call AnyHarness directly to create a worktree
-  -> store anyharness_workspace_id
+  -> atomically store the legacy anyharness_workspace_id and managed materialization
+
+open an existing Cloud workspace on Desktop
+  -> create/replay one local materialization intent for the Desktop install
+  -> AnyHarness clones/adopts the repository and materializes the exact ref
+  -> report the same generation with local runtime id, path, branch, and HEAD
+
+add a Cloud copy from Desktop
+  -> validate the owned Desktop install and local source descriptor
+  -> independently verify the authorized GitHub branch HEAD
+  -> reserve the local association before remote work
+  -> materialize the managed checkout at the exact ref
+  -> return one Cloud workspace with managed and local materializations
 ```
 
 There is no durable delivery queue between Cloud and AnyHarness in this
@@ -54,9 +66,15 @@ defines `cloud_workspace`. It owns:
 - the optional `anyharness_workspace_id`; and
 - archive timestamps.
 
-It does not own a sandbox id, runtime session state, runtime path, or runtime
-events. An AnyHarness workspace id is a reference to runtime truth, not a copy
-of that truth in Cloud.
+`cloud_workspace_materialization` records each target-scoped checkout. A
+managed row identifies the sandbox and runtime workspace; a local row identifies
+the Desktop installation and its local runtime workspace/path. Active unique
+indexes prevent one install/runtime pair from being linked to two Cloud
+workspaces. `unlinked_at` makes unlink non-destructive while generation checks
+prevent stale reports from resurrecting an old association.
+
+The Cloud workspace still does not own runtime session state or events. Every
+AnyHarness workspace id is a reference to runtime truth, not a copy of it.
 
 ### Placement-neutral identity
 
@@ -115,6 +133,9 @@ PATCH  /v1/cloud/workspaces/{id}/display-name
 POST   /v1/cloud/workspaces/{id}/archive
 POST   /v1/cloud/workspaces/{id}/restore
 DELETE /v1/cloud/workspaces/{id}
+POST   /v1/cloud/workspaces/{id}/materializations
+PUT    /v1/cloud/workspaces/{id}/materializations/{materialization_id}
+DELETE /v1/cloud/workspaces/{id}/materializations/{materialization_id}
 ```
 
 There is no mounted workspace `connection` endpoint. Clients reach AnyHarness
@@ -164,8 +185,18 @@ performs the current synchronous flow:
 7. load ready runtime access from `cloud_sandbox`;
 8. resolve the repository root through AnyHarness;
 9. call AnyHarness directly to create the worktree; and
-10. store the returned `anyharness_workspace_id`; and
-11. commit the request transaction after the handler returns successfully.
+10. write the returned `anyharness_workspace_id` and managed materialization;
+11. when this is an exact-ref Desktop source flow, require the local descriptor
+    to match the independently verified HEAD and record the owned local
+    association (a conflict fails the request rather than reporting success);
+12. commit the request transaction after the handler returns successfully.
+
+Desktop clone and open-on-Mac use caller-supplied idempotency ledgers in
+AnyHarness. Clone operation ids are scoped to the chosen destination and reused
+only for that retry. A Cloud local intent returns `{rowId}:{generation}`; an
+in-flight retry returns the same generation and exact source ref, so a crash
+after local success but before the Cloud report replays rather than creating a
+second worktree.
 
 The Cloud transaction and AnyHarness worktree creation are not atomic. A
 propagated failure rolls back the Cloud insert and id update. The inverse
@@ -187,6 +218,14 @@ bounded number of branch-uniqueness races.
 ## Read And Lifecycle Semantics
 
 - `ready` means `anyharness_workspace_id` is present on an active Cloud row.
+- Workspace list/detail responses include every active materialization. Desktop
+  supplies its install id so the server can prefer that install's healthy local
+  row; paths and runtime ids for other installs are redacted.
+- Explicit materialization identity wins over repository/branch heuristics.
+  Unlinked same-repository/branch copies remain separate until the user chooses
+  **Link copies** and the client proves clean, normal, exact-HEAD equality.
+- **Unlink this Mac** soft-deletes only the association. It does not delete a
+  checkout, repository, Cloud workspace, or session history.
 - `materializing` means the id is absent and the row is younger than the
   900-second stale threshold.
 - `error` means that missing-id row exceeded the threshold.
@@ -209,6 +248,8 @@ portions as current creation behavior.
 | Repository configuration routes | [`server/.../cloud/repositories/`](../../../../server/proliferate/server/cloud/repositories/) |
 | Materialization orchestration | [`server/.../cloud/materialization/`](../../../../server/proliferate/server/cloud/materialization/) |
 | Workspace routes and product-row orchestration | [`server/.../cloud/workspaces/`](../../../../server/proliferate/server/cloud/workspaces/) |
+| Durable target association ledger | [`server/.../cloud/workspaces/materializations/`](../../../../server/proliferate/server/cloud/workspaces/materializations/) and [`db/store/cloud_workspace_materializations.py`](../../../../server/proliferate/db/store/cloud_workspace_materializations.py) |
+| Desktop clone/link/open orchestration | [`apps/packages/product-client/src/hooks/workspaces/workflows/`](../../../../apps/packages/product-client/src/hooks/workspaces/workflows/) and [`components/workspace/repo-setup/`](../../../../apps/packages/product-client/src/components/workspace/repo-setup/) |
 | Direct AnyHarness adapter | [`server/proliferate/integrations/anyharness/`](../../../../server/proliferate/integrations/anyharness/) |
 | Sandbox lifecycle and runtime access | [Cloud sandbox provisioning](sandbox-provisioning.md) |
 | GitHub sandbox credentials | [Sandbox GitHub auth](sandbox-github-auth.md) |
@@ -226,6 +267,9 @@ portions as current creation behavior.
 | Existing workspace remains `materializing` | `cloud_workspace.anyharness_workspace_id` and row age |
 | Create failed after runtime worktree creation | Correlate the request, user, repository, and branch with the AnyHarness target path; its suffix carries only the attempted Cloud id's eight-character prefix. Include the AnyHarness workspace id when present and escalate suspected orphan cleanup. |
 | Cloud row is ready but runtime is unavailable | AnyHarness health through the sandbox gateway; do not infer health from the Cloud id |
+| Local report is stale after unlink/relink | Compare the reported generation with `cloud_workspace_materialization.generation`; never retry with a new operation id for the same in-flight intent |
+| Link copies is unavailable | Inspect all active local materializations for the current install, then compare the candidate's canonical repo, case-sensitive branch, clean Git state, and exact HEAD |
+| Add Cloud copy reports an association conflict | The local install/runtime pair already belongs to another active Cloud workspace; do not keep a second logical association |
 
 ## Verification
 
@@ -237,6 +281,10 @@ Use these focused tests as the code-level proof:
 - `server/tests/integration/test_cloud_workspace_backing_kind.py`
 - `server/tests/integration/test_cloud_workspace_backing_kind_migration.py`
 - `server/tests/integration/test_cloud_workspace_identity_payload.py`
+- `server/tests/integration/test_cloud_workspace_materialization_service.py`
+- `apps/packages/product-client/src/lib/domain/workspaces/cloud/open-on-mac-orchestration.test.ts`
+- `apps/packages/product-client/src/lib/domain/workspaces/cloud/link-copies-verification.test.ts`
+- `apps/packages/product-client/src/lib/domain/workspaces/sidebar/sidebar-link-candidates.test.ts`
 
 For incident diagnosis, use
 [`cloud-provisioning-failure.md`](../../../developing/operating/cloud-provisioning-failure.md).

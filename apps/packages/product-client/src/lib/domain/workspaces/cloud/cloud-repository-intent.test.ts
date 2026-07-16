@@ -9,17 +9,25 @@ import {
 const REPO = { gitProvider: "github", gitOwner: "acme", gitRepoName: "rocket" } as const;
 
 describe("cloud repository intent", () => {
-  it("maps every cloud intent to the managed_cloud requirement", () => {
+  it("maps Clone to GitHub access without requiring managed Cloud", () => {
     expect(requirementForCloudRepositoryIntent({ kind: "set_up_cloud", repo: REPO }))
       .toBe("managed_cloud");
     expect(requirementForCloudRepositoryIntent({ kind: "add_cloud_repository", repo: REPO }))
       .toBe("managed_cloud");
+    expect(requirementForCloudRepositoryIntent({
+      kind: "create_cloud_workspace",
+      repo: REPO,
+      continuation: { repoGroupKeyToExpand: null, baseBranch: null },
+    })).toBe("managed_cloud");
+    expect(requirementForCloudRepositoryIntent({ kind: "clone_from_github", repo: REPO }))
+      .toBe("github_repository_access");
   });
 
   it("resolves the target repo for every intent", () => {
     expect(repoForCloudRepositoryIntent({ kind: "set_up_cloud", repo: REPO })).toEqual(REPO);
     expect(repoForCloudRepositoryIntent({ kind: "add_cloud_repository", repo: REPO }))
       .toEqual(REPO);
+    expect(repoForCloudRepositoryIntent({ kind: "clone_from_github", repo: REPO })).toEqual(REPO);
   });
 
   it("saves the repo environment BEFORE creating the workspace (setup-and-continue)", async () => {
@@ -37,6 +45,7 @@ describe("cloud repository intent", () => {
       cloudEnvironmentConfigured: false,
       saveCloudEnvironment,
       createCloudWorkspace,
+      cloneFromGitHub: vi.fn(),
     });
 
     expect(order).toEqual(["save", "create"]);
@@ -57,6 +66,7 @@ describe("cloud repository intent", () => {
       cloudEnvironmentConfigured: true,
       saveCloudEnvironment,
       createCloudWorkspace,
+      cloneFromGitHub: vi.fn(),
     });
 
     expect(saveCloudEnvironment).not.toHaveBeenCalled();
@@ -72,6 +82,7 @@ describe("cloud repository intent", () => {
       cloudEnvironmentConfigured: false,
       saveCloudEnvironment,
       createCloudWorkspace,
+      cloneFromGitHub: vi.fn(),
     });
 
     expect(saveCloudEnvironment).toHaveBeenCalledTimes(1);
@@ -89,10 +100,29 @@ describe("cloud repository intent", () => {
       saveCloudEnvironment,
       createCloudWorkspace,
       onRepositoryRegistered,
+      cloneFromGitHub: vi.fn(),
     });
 
     expect(saveCloudEnvironment).toHaveBeenCalledWith(REPO);
     expect(createCloudWorkspace).not.toHaveBeenCalled();
     expect(onRepositoryRegistered).toHaveBeenCalledWith(REPO);
+  });
+
+  it("clones locally without saving a Cloud environment", async () => {
+    const saveCloudEnvironment = vi.fn(async () => {});
+    const createCloudWorkspace = vi.fn(async () => {});
+    const cloneFromGitHub = vi.fn(async () => {});
+
+    await continueCloudRepositoryIntent({
+      intent: { kind: "clone_from_github", repo: REPO },
+      cloudEnvironmentConfigured: false,
+      saveCloudEnvironment,
+      createCloudWorkspace,
+      cloneFromGitHub,
+    });
+
+    expect(cloneFromGitHub).toHaveBeenCalledWith(REPO);
+    expect(saveCloudEnvironment).not.toHaveBeenCalled();
+    expect(createCloudWorkspace).not.toHaveBeenCalled();
   });
 });
