@@ -415,6 +415,10 @@ def test_resolve_runtime_context_uses_static_e2b_paths() -> None:
             e2b_runtime.E2BTargetUnavailableError,
         ),
         (
+            e2b_exceptions.SandboxException("secret provider detail"),
+            e2b_runtime.E2BUnavailableError,
+        ),
+        (
             httpx.ConnectError("secret network detail"),
             e2b_runtime.E2BUnavailableError,
         ),

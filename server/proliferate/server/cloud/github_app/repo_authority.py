@@ -109,6 +109,8 @@ async def _refresh_github_app_authorization(
     *,
     user_id: UUID,
 ) -> github_app_store.GitHubAppAuthorizationValue:
+    # The caller's expiry read must not retain a PostgreSQL transaction while
+    # waiting for the cross-process refresh lease.
     await github_app_transactions.release_github_app_transaction(db)
     try:
         async with _authorization_refresh_lock(user_id):
@@ -159,6 +161,7 @@ async def _refresh_github_app_authorization(
                     status_code=503,
                 )
 
+            # End the version read before the remote rotating-token exchange.
             await github_app_transactions.release_github_app_transaction(db)
             try:
                 refreshed = await refresh_github_app_user_authorization(

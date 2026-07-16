@@ -18,6 +18,7 @@ from proliferate.db.store import github_app as github_app_store
 from proliferate.server.cloud.github_app import repo_authority
 from proliferate.server.cloud.materialization import operation
 from proliferate.server.cloud.materialization.materialize import agent_auth
+from proliferate.server.cloud.materialization.materialize import github_credentials
 from proliferate.server.cloud.materialization.materialize import (
     repo_environment as repo_materializer,
 )
@@ -237,6 +238,29 @@ async def test_agent_auth_releases_transaction_before_sandbox_io(
     )
 
     assert external_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_missing_github_access_token_is_typed_permanent_configuration(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def authorization(*_args, **_kwargs):  # type: ignore[no-untyped-def]
+        return SimpleNamespace(access_token=None)
+
+    monkeypatch.setattr(
+        github_credentials,
+        "ensure_fresh_github_app_authorization",
+        authorization,
+    )
+
+    with pytest.raises(operation.CloudMaterializationConfigurationError):
+        await github_credentials.materialize_github_credentials(
+            db_session,
+            target=SimpleNamespace(),
+            operation_id=uuid4(),
+            user_id=uuid4(),
+        )
 
 
 @pytest.mark.asyncio
