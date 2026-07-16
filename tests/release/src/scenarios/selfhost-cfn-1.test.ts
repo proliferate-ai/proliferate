@@ -145,6 +145,7 @@ function fakeWorld(options: FakeWorldOptions = {}): { world: ReadySelfHostCfnWor
     templateValidated: options.templateValidated ?? true,
     bundleDigestBound: options.bundleDigestBound ?? true,
     pushedImageDigest: PUSHED_DIGEST,
+    releaseVersionTag: "local-run-1-local-0",
     outputs: {
       baseUrl: `https://${options.outputsSiteAddress ?? SITE}`,
       siteAddress: options.outputsSiteAddress ?? SITE,
@@ -221,10 +222,25 @@ test("runCfnWrapperCell: green when every shallow check passes", async () => {
   assert.equal(result.evidence?.image_digest_bound, true);
 });
 
-test("runCfnWrapperCell: SSM-unusable fallback stays green via the /meta version + immutable tag", async () => {
+test("runCfnWrapperCell: an unreadable SSM image digest FAILS CLOSED (no version-only fallback, PR7-CONTROL-006)", async () => {
+  // Previously the SSM-unusable path stayed green on /meta version equality
+  // alone; CONTROL-006 requires the image-to-pushed-candidate binding be proven,
+  // so an unreadable digest is now a red, not a pass.
   const { world } = fakeWorld({ ssmThrows: true });
   const result = await runCfnWrapperCell(world);
+  assert.equal(result.status, "failed");
+  assert.equal(result.evidence, undefined);
+  assert.match(result.reason?.message ?? "", /digest could not be read|failing closed/);
+});
+
+test("runCfnWrapperCell: green records the pushed digest, release tag, and template sha (PR7-CONTROL-006)", async () => {
+  const { world } = fakeWorld();
+  const result = await runCfnWrapperCell(world);
   assert.equal(result.status, "green", JSON.stringify(result));
+  const ev = result.evidence as { image_repo_digest: string; release_version_tag: string; template_sha256: string };
+  assert.equal(ev.image_repo_digest, PUSHED_DIGEST);
+  assert.equal(ev.release_version_tag, "local-run-1-local-0");
+  assert.equal(ev.template_sha256, "t".repeat(64));
 });
 
 test("runCfnWrapperCell: a /meta version mismatch fails closed with no evidence", async () => {
@@ -343,6 +359,9 @@ test("cleanupIsClean + attachCfnCleanup: clean requires all deletions; block is 
     server_version: "1.2.3",
     api_origin: SITE,
     stack_name_hash: "a".repeat(64),
+    image_repo_digest: "sha256:" + "e".repeat(64),
+    release_version_tag: "run-1-shard-1",
+    template_sha256: "f".repeat(64),
     template_validated: true,
     bundle_digest_bound: true,
     image_digest_bound: true,

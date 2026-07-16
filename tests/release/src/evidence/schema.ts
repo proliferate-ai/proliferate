@@ -396,6 +396,12 @@ export interface SelfHostCfnWrapperEvidenceV1 {
   server_version: string;
   api_origin: string;
   stack_name_hash: string;
+  /** The observed running-api image RepoDigest (`sha256:<hex>`) the binding rests on. */
+  image_repo_digest: string;
+  /** The run-scoped tag the candidate was pushed under + passed as ReleaseVersion (safe token). */
+  release_version_tag: string;
+  /** SHA-256 of the validated CloudFormation template (safe token). */
+  template_sha256: string;
   template_validated: true;
   bundle_digest_bound: true;
   image_digest_bound: true;
@@ -2002,6 +2008,9 @@ const SELFHOST_CFN_WRAPPER_EVIDENCE_KEYS = [
   "server_version",
   "api_origin",
   "stack_name_hash",
+  "image_repo_digest",
+  "release_version_tag",
+  "template_sha256",
   "template_validated",
   "bundle_digest_bound",
   "image_digest_bound",
@@ -2277,6 +2286,9 @@ function validateSelfHostCfnWrapperEvidence(
   requireSafeEvidenceToken(`${where}.server_version`, evidence.server_version);
   requireSafeEvidenceToken(`${where}.api_origin`, evidence.api_origin);
   requireEvidenceHash(`${where}.stack_name_hash`, evidence.stack_name_hash);
+  requireSafeEvidenceToken(`${where}.image_repo_digest`, evidence.image_repo_digest);
+  requireSafeEvidenceToken(`${where}.release_version_tag`, evidence.release_version_tag);
+  requireSafeEvidenceToken(`${where}.template_sha256`, evidence.template_sha256);
   requireTrue(`${where}.template_validated`, evidence.template_validated);
   requireTrue(`${where}.bundle_digest_bound`, evidence.bundle_digest_bound);
   requireTrue(`${where}.image_digest_bound`, evidence.image_digest_bound);
@@ -2734,6 +2746,9 @@ function sanitizeSelfHostCellEvidence(
       server_version: clean(e.server_version),
       api_origin: clean(e.api_origin),
       stack_name_hash: clean(e.stack_name_hash),
+      image_repo_digest: clean(e.image_repo_digest),
+      release_version_tag: clean(e.release_version_tag),
+      template_sha256: clean(e.template_sha256),
       cleanup: { ...e.cleanup, ledger_id_hash: clean(e.cleanup.ledger_id_hash) },
     } as SelfHostCfnWrapperEvidenceV1;
   }

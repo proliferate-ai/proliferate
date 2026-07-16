@@ -14,21 +14,29 @@ Parameters:
   RuntimeBinaryUrl:
     Type: String
     Default: ""
+    # NoEcho: these override URLs may be presigned S3 URLs carrying a bearer
+    # signature (X-Amz-*); NoEcho keeps CloudFormation from echoing them in the
+    # console, stack events, or describe-stacks output (PR7-CONTROL-003). It
+    # masks display only — Ref/!Equals in Conditions still evaluate normally.
+    NoEcho: true
     Description: Optional override for the runtime binary tarball URL. Leave blank to use the server release asset.
 
   RuntimeBinaryChecksumUrl:
     Type: String
     Default: ""
+    NoEcho: true
     Description: Optional override for a SHA256SUMS file used to verify the runtime tarball. Leave blank to use the matching server release asset checksum file when RuntimeBinaryUrl is also blank.
 
   DeployBundleUrl:
     Type: String
     Default: ""
+    NoEcho: true
     Description: Optional override for the proliferate-deploy.tar.gz bundle URL. Leave blank to use the server release asset for ReleaseVersion.
 
   DeployBundleChecksumUrl:
     Type: String
     Default: ""
+    NoEcho: true
     Description: Optional override for a SHA256SUMS file used to verify the deploy bundle. Leave blank to use the matching server release asset checksum file when DeployBundleUrl is also blank.
 
   SiteAddress:

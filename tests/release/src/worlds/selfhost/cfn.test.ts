@@ -22,6 +22,7 @@ import {
   pushCandidateServerImage,
   runScopedImageTag,
   s3KeyPrefix,
+  scrubCfnParameterUrls,
   ssmInspectRunningImageDigest,
   templateFileSha256,
   uploadBundleAndPresign,
@@ -112,7 +113,7 @@ test("parseGhcrRepo: splits org + package name; rejects a bare repo", () => {
   assert.throws(() => parseGhcrRepo("ghcr.io/onlyorg"), /ghcr\.io/);
 });
 
-test("buildCfnParameters: emits all 7 candidate parameters incl. CreateRoute53Record=true", () => {
+test("buildCfnParameters: emits all 7 candidate parameters as JSON (file:// form, not argv)", () => {
   const params = buildCfnParameters({
     releaseVersion: "1.2.3",
     serverImageRepository: "ghcr.io/proliferate-ai/proliferate-server-qualification",
@@ -121,11 +122,21 @@ test("buildCfnParameters: emits all 7 candidate parameters incl. CreateRoute53Re
     siteAddress: "sh-x.qualification.proliferate.com",
     hostedZoneId: "Z123",
   });
-  assert.ok(params.includes("ParameterKey=ReleaseVersion,ParameterValue=1.2.3"));
-  assert.ok(params.includes("ParameterKey=CreateRoute53Record,ParameterValue=true"));
-  assert.ok(params.includes("ParameterKey=HostedZoneId,ParameterValue=Z123"));
-  assert.ok(params.includes("ParameterKey=DeployBundleChecksumUrl,ParameterValue=https://s3/presigned-sums"));
+  const byKey = new Map(params.map((p) => [p.ParameterKey, p.ParameterValue]));
+  assert.equal(byKey.get("ReleaseVersion"), "1.2.3");
+  assert.equal(byKey.get("CreateRoute53Record"), "true");
+  assert.equal(byKey.get("HostedZoneId"), "Z123");
+  assert.equal(byKey.get("DeployBundleChecksumUrl"), "https://s3/presigned-sums");
   assert.equal(params.length, 7);
+});
+
+test("scrubCfnParameterUrls: redacts presigned S3 URLs from a diagnostic (PR7-CONTROL-003)", () => {
+  const dirty =
+    "create-stack failed: Parameter DeployBundleUrl=https://bucket.s3.amazonaws.com/x?X-Amz-Signature=deadbeef&X-Amz-Expires=3600 rejected";
+  const scrubbed = scrubCfnParameterUrls(dirty);
+  assert.ok(!scrubbed.includes("X-Amz-Signature"), "presign signature must be redacted");
+  assert.ok(!scrubbed.includes("deadbeef"), "signature value must be redacted");
+  assert.ok(scrubbed.includes("[REDACTED_PRESIGNED_URL]"));
 });
 
 test("parseStackOutputs: reads BaseUrl/SiteAddress/InstanceId; throws when missing", () => {
@@ -328,11 +339,12 @@ test("validateTemplate + templateFileSha256: validate + a stable byte hash", asy
 test("createCfnStackAndWait: registers stack BEFORE create, passes params, returns parsed outputs", async () => {
   const site = "sh-x.qualification.proliferate.com";
   const log: string[] = [];
+  let createArgs: readonly string[] = [];
   const exec = new FakeExec((args) => {
     if (args[1] === "create-stack") {
       log.push("create");
+      createArgs = args;
       assert.ok(args.includes("CAPABILITY_IAM"));
-      assert.ok(args.includes("ParameterKey=CreateRoute53Record,ParameterValue=true"));
       return "";
     }
     if (args[1] === "wait") {
@@ -353,6 +365,8 @@ test("createCfnStackAndWait: registers stack BEFORE create, passes params, retur
     }
     return "";
   });
+  let writtenJson = "";
+  let removed = false;
   const outputs = await createCfnStackAndWait({
     exec,
     stackName: "proliferate-sh-cfn-x",
@@ -360,18 +374,29 @@ test("createCfnStackAndWait: registers stack BEFORE create, passes params, retur
     parameters: buildCfnParameters({
       releaseVersion: "1.2.3",
       serverImageRepository: "ghcr.io/x/y",
-      deployBundleUrl: "https://s3/b",
-      deployBundleChecksumUrl: "https://s3/s",
+      deployBundleUrl: "https://s3/b?X-Amz-Signature=SECRET",
+      deployBundleChecksumUrl: "https://s3/s?X-Amz-Signature=SECRET",
       siteAddress: site,
       hostedZoneId: "Z1",
     }),
     region: "us-east-1",
+    writeParameterFile: async (json) => {
+      writtenJson = json;
+      return { path: "/tmp/params.json", remove: async () => { removed = true; } };
+    },
     registerCleanup: async (kind) => {
       log.push(`register:${kind}`);
     },
   });
   assert.ok(log.indexOf("register:cloudformation_stack") < log.indexOf("create"));
   assert.equal(outputs.instanceId, "i-0abc");
+  // PR7-CONTROL-003: params go through a file, NOT argv — and the presigned
+  // bearer signature never appears in the create-stack argv.
+  assert.ok(createArgs.includes("file:///tmp/params.json"), "parameters must be passed as file://");
+  assert.ok(!createArgs.some((a) => a.includes("X-Amz-Signature")), "no presigned signature in argv");
+  assert.ok(!createArgs.some((a) => a.startsWith("ParameterKey=")), "no ParameterKey=... argv pairs");
+  assert.ok(writtenJson.includes("DeployBundleUrl"), "the parameter JSON carries the bundle params");
+  assert.ok(removed, "the 0600 parameter file is removed after create");
 });
 
 test("createCfnStackAndWait: a create-complete wait failure tails describe-stack-events (bounded)", async () => {
@@ -399,6 +424,7 @@ test("createCfnStackAndWait: a create-complete wait failure tails describe-stack
       templatePath: "/t.yaml",
       parameters: [],
       region: "us-east-1",
+      writeParameterFile: async () => ({ path: "/tmp/p.json", remove: async () => undefined }),
       registerCleanup: async () => undefined,
     }),
     /ProliferateInstance CREATE_FAILED/,

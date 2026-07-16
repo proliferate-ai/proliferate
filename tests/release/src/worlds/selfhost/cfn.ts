@@ -1,6 +1,8 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { promisify } from "node:util";
 
 import {
@@ -134,10 +136,21 @@ export function parseGhcrRepo(repo: string): { org: string; packageName: string 
   return { org, packageName };
 }
 
+/** One CloudFormation parameter in the `--parameters file://` JSON form. */
+export interface CfnParameter {
+  ParameterKey: string;
+  ParameterValue: string;
+}
+
 /**
- * Builds the `create-stack --parameters` argv list. Pure so param construction
- * is asserted offline. NoEcho template params (Postgres/JWT/CloudSecret) are
- * left to the template's auto-generate default and never supplied here.
+ * Builds the CloudFormation parameter list in the JSON form
+ * (`[{ParameterKey, ParameterValue}, ...]`) that is written to a permission-
+ * restricted file and passed as `--parameters file://<path>` — NOT as argv
+ * (PR7-CONTROL-003). The two DeployBundle values are presigned S3 URLs carrying
+ * a bearer signature (`X-Amz-*`); keeping them out of argv keeps them out of the
+ * process table, shell history, and any argv-echoing error. NoEcho template
+ * params (Postgres/JWT/CloudSecret) are left to the template's auto-generate
+ * default and never supplied here. Pure so param construction is asserted offline.
  */
 export function buildCfnParameters(input: {
   releaseVersion: string;
@@ -146,17 +159,44 @@ export function buildCfnParameters(input: {
   deployBundleChecksumUrl: string;
   siteAddress: string;
   hostedZoneId: string;
-}): string[] {
-  const pairs: Array<[string, string]> = [
-    ["ReleaseVersion", input.releaseVersion],
-    ["ServerImageRepository", input.serverImageRepository],
-    ["DeployBundleUrl", input.deployBundleUrl],
-    ["DeployBundleChecksumUrl", input.deployBundleChecksumUrl],
-    ["SiteAddress", input.siteAddress],
-    ["CreateRoute53Record", "true"],
-    ["HostedZoneId", input.hostedZoneId],
+}): CfnParameter[] {
+  return [
+    { ParameterKey: "ReleaseVersion", ParameterValue: input.releaseVersion },
+    { ParameterKey: "ServerImageRepository", ParameterValue: input.serverImageRepository },
+    { ParameterKey: "DeployBundleUrl", ParameterValue: input.deployBundleUrl },
+    { ParameterKey: "DeployBundleChecksumUrl", ParameterValue: input.deployBundleChecksumUrl },
+    { ParameterKey: "SiteAddress", ParameterValue: input.siteAddress },
+    { ParameterKey: "CreateRoute53Record", ParameterValue: "true" },
+    { ParameterKey: "HostedZoneId", ParameterValue: input.hostedZoneId },
   ];
-  return pairs.map(([key, value]) => `ParameterKey=${key},ParameterValue=${value}`);
+}
+
+/**
+ * Redacts any presigned S3 URL (one bearing an AWS `X-Amz-*` signature query
+ * parameter) from a diagnostic string, so a propagated aws-cli failure can never
+ * carry the bearer signature into cell text / logs / evidence (PR7-CONTROL-003).
+ */
+export function scrubCfnParameterUrls(text: string): string {
+  return text.replace(/https?:\/\/[^\s"']*[?&]X-Amz-[^\s"']*/gi, "[REDACTED_PRESIGNED_URL]");
+}
+
+function errText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * The production parameter-file IO: a 0600 file under a fresh mkdtemp dir, so
+ * the presigned-URL parameters land only in a permission-restricted file and are
+ * removed after create-stack (PR7-CONTROL-003). Injected into
+ * `createCfnStackAndWait` so unit tests never touch disk.
+ */
+export function tmpParameterFileIo(): (json: string) => Promise<{ path: string; remove: () => Promise<void> }> {
+  return async (json: string) => {
+    const dir = await mkdtemp(path.join(tmpdir(), "selfhost-cfn-"));
+    const filePath = path.join(dir, "parameters.json");
+    await writeFile(filePath, json, { mode: 0o600 });
+    return { path: filePath, remove: () => rm(dir, { recursive: true, force: true }) };
+  };
 }
 
 /** The stack Outputs the shallow wrapper proof reads. */
@@ -487,9 +527,15 @@ export async function createCfnStackAndWait(input: {
   exec: CfnAwsExec;
   stackName: string;
   templatePath: string;
-  parameters: readonly string[];
+  parameters: readonly CfnParameter[];
   region: string;
   registerCleanup: RegisterCfnCleanup;
+  /**
+   * Writes the parameter JSON to a permission-restricted (0600) local file and
+   * returns its path + a cleanup handle. Injected so unit tests never touch
+   * disk; the production impl (`tmpParameterFileIo`) uses mkdtemp + 0600.
+   */
+  writeParameterFile: (json: string) => Promise<{ path: string; remove: () => Promise<void> }>;
   waitTimeoutMs?: number;
   log?: (message: string) => void;
 }): Promise<CfnStackOutputs> {
@@ -502,20 +548,31 @@ export async function createCfnStackAndWait(input: {
   );
 
   log(`create-stack ${stackName}`);
-  await exec.run([
-    "cloudformation",
-    "create-stack",
-    "--stack-name",
-    stackName,
-    "--template-body",
-    `file://${input.templatePath}`,
-    "--parameters",
-    ...input.parameters,
-    "--capabilities",
-    "CAPABILITY_IAM",
-    "--region",
-    region,
-  ]);
+  // Presigned DeployBundle URLs carry a bearer signature; write the parameters
+  // to a 0600 file and pass `--parameters file://<path>` so they never enter
+  // argv / the process table / an argv-echoing error (PR7-CONTROL-003).
+  const paramFile = await input.writeParameterFile(JSON.stringify(input.parameters));
+  try {
+    await exec.run([
+      "cloudformation",
+      "create-stack",
+      "--stack-name",
+      stackName,
+      "--template-body",
+      `file://${input.templatePath}`,
+      "--parameters",
+      `file://${paramFile.path}`,
+      "--capabilities",
+      "CAPABILITY_IAM",
+      "--region",
+      region,
+    ]);
+  } catch (error) {
+    // Scrub in case the aws-cli echoed the file contents or a resolved URL.
+    throw new Error(scrubCfnParameterUrls(`CFN: create-stack ${stackName} failed: ${errText(error)}`));
+  } finally {
+    await paramFile.remove().catch(() => undefined);
+  }
 
   try {
     await exec.run(["cloudformation", "wait", "stack-create-complete", "--stack-name", stackName, "--region", region], {
@@ -524,8 +581,9 @@ export async function createCfnStackAndWait(input: {
   } catch (error) {
     const tail = await describeStackEventsTail(exec, stackName, region).catch(() => "(stack events unavailable)");
     throw new Error(
-      `CFN: stack ${stackName} did not reach CREATE_COMPLETE (${error instanceof Error ? error.message : String(error)}). ` +
-        `Recent failures: ${tail}`,
+      scrubCfnParameterUrls(
+        `CFN: stack ${stackName} did not reach CREATE_COMPLETE (${errText(error)}). Recent failures: ${tail}`,
+      ),
     );
   }
 

@@ -39,6 +39,7 @@ import {
   s3KeyPrefix,
   ssmInspectRunningImageDigest,
   templateFileSha256,
+  tmpParameterFileIo,
   uploadBundleAndPresign,
   validateTemplate,
   type CfnStackOutputs,
@@ -173,6 +174,8 @@ export interface ReadySelfHostCfnWorld {
   bundleDigestBound: boolean;
   /** `sha256:<hex>` digest of the pushed candidate image. */
   pushedImageDigest: string;
+  /** The run-scoped tag the candidate image was pushed under + passed as ReleaseVersion. */
+  releaseVersionTag: string;
   outputs: CfnStackOutputs;
   /** SSM docker-inspect of the running api image RepoDigest (`sha256:<hex>`); throws if SSM is unusable. */
   inspectRunningImageDigest(): Promise<string>;
@@ -353,23 +356,25 @@ export async function runCfnWrapperCell(world: ReadySelfHostCfnWorld): Promise<S
   // must equal the pushed candidate digest. If SSM is unusable, fall back to the
   // /meta version match + the immutable unique run tag (a per-run tag cannot
   // have drifted), which the version-match above already established.
-  let imageBound = false;
+  // Image-digest binding is FAIL-CLOSED (PR7-CONTROL-006): the running api
+  // image RepoDigest (SSM docker-inspect) MUST be readable AND equal the pushed
+  // candidate digest. A /meta version-only match is NOT accepted as a substitute
+  // — two builds can share a version, so version equality cannot prove the stack
+  // pulled the exact pushed bytes. An unreadable digest is a red, not a pass.
+  let observedImageDigest: string;
   try {
-    const observed = await world.inspectRunningImageDigest();
-    imageBound = imageDigestBound(world.pushedImageDigest, observed);
-    if (!imageBound) {
-      return fail(
-        "SH-CFN-WRAPPER: the running api image digest does not match the pushed candidate digest; " +
-          "the stack pulled a different image than the one pushed.",
-      );
-    }
-  } catch {
-    // SSM unusable → documented fallback: the version match plus the immutable,
-    // unique, run-scoped tag binds the running image to the pushed candidate.
-    imageBound = meta.serverVersion === world.serverVersion;
-    if (!imageBound) {
-      return fail("SH-CFN-WRAPPER: SSM digest read was unusable and the /meta fallback did not bind the image.");
-    }
+    observedImageDigest = await world.inspectRunningImageDigest();
+  } catch (error) {
+    return fail(
+      "SH-CFN-WRAPPER: the running api image digest could not be read over SSM; the image-to-pushed-candidate " +
+        `binding cannot be proven (failing closed, no version-only fallback): ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  if (!imageDigestBound(world.pushedImageDigest, observedImageDigest)) {
+    return fail(
+      "SH-CFN-WRAPPER: the running api image digest does not match the pushed candidate digest; " +
+        "the stack pulled a different image than the one pushed.",
+    );
   }
 
   const evidence: SelfHostCfnWrapperEvidenceNoCleanup = {
@@ -378,6 +383,12 @@ export async function runCfnWrapperCell(world: ReadySelfHostCfnWorld): Promise<S
     server_version: world.serverVersion,
     api_origin: world.apiOrigin,
     stack_name_hash: sha256Hex(world.stackName),
+    // Record the actual inputs the binding rests on, so evidence is candidate-
+    // specific (PR7-CONTROL-006): the pushed image digest, the run-scoped tag it
+    // was pushed under, and the validated template's SHA-256.
+    image_repo_digest: observedImageDigest,
+    release_version_tag: world.releaseVersionTag,
+    template_sha256: world.templateSha256,
     template_validated: true,
     bundle_digest_bound: true,
     image_digest_bound: true,
@@ -463,8 +474,13 @@ export async function constructSelfHostCfnWorld(inputs: CfnWorldInputs): Promise
     const subdomain = runSubdomainLabel(inputs.run.run_id, inputs.run.shard_id);
     const siteAddress = cfnSiteAddress(subdomain, QUALIFICATION_ZONE);
     const stackName = cfnStackName(inputs.run.run_id, inputs.run.shard_id);
+    // The template pulls `${ServerImageRepository}:${ReleaseVersion}`, so
+    // ReleaseVersion MUST be the run-scoped tag the candidate was JUST pushed
+    // under (`tag`) — NOT candidateSet.serverImage.version, which is a build
+    // version string, not the pushed tag, and would make the stack pull a
+    // different (or nonexistent) image (PR7-CONTROL-006).
     const parameters = buildCfnParameters({
-      releaseVersion: candidateSet.serverImage.version,
+      releaseVersion: tag,
       serverImageRepository: inputs.imageRepo,
       deployBundleUrl: presigned.deployBundleUrl,
       deployBundleChecksumUrl: presigned.deployBundleChecksumUrl,
@@ -478,6 +494,7 @@ export async function constructSelfHostCfnWorld(inputs: CfnWorldInputs): Promise
       parameters,
       region: inputs.region,
       registerCleanup: (kind, providerId, release) => stack.registerAcquire(kind, providerId, release),
+      writeParameterFile: tmpParameterFileIo(),
       log,
     });
 
@@ -498,6 +515,7 @@ export async function constructSelfHostCfnWorld(inputs: CfnWorldInputs): Promise
       templateValidated,
       bundleDigestBound: digestBound,
       pushedImageDigest: pushed.pushedDigest,
+      releaseVersionTag: tag,
       outputs,
       inspectRunningImageDigest: () =>
         ssmInspectRunningImageDigest({ exec: aws, instanceId: outputs.instanceId, region: inputs.region, log }),
