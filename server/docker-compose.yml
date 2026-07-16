@@ -5,8 +5,12 @@ services:
       POSTGRES_USER: proliferate
       POSTGRES_PASSWORD: localdev
       POSTGRES_DB: proliferate
+    # Host ports are overridable so a second worktree can run an isolated stack
+    # without colliding on the default port. Container-to-container traffic uses
+    # the compose service names and is unaffected. Combine with a per-worktree
+    # COMPOSE_PROJECT_NAME to isolate container names and named volumes too.
     ports:
-      - "5432:5432"
+      - "${PROLIFERATE_DB_HOST_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -18,8 +22,8 @@ services:
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "${PROLIFERATE_RABBITMQ_HOST_PORT:-5672}:5672"
+      - "${PROLIFERATE_RABBITMQ_MGMT_HOST_PORT:-15672}:15672"
     volumes:
       - rabbitmqdata:/var/lib/rabbitmq
     healthcheck:
@@ -31,7 +35,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "${PROLIFERATE_REDIS_HOST_PORT:-6379}:6379"
     volumes:
       - redisdata:/data
     healthcheck:
@@ -103,14 +107,92 @@ services:
       context: ..
       dockerfile: server/Dockerfile
     ports:
-      - "8000:8000"
+      - "${PROLIFERATE_API_HOST_PORT:-8000}:8000"
     environment:
       DATABASE_URL: postgresql+asyncpg://proliferate:localdev@db:5432/proliferate
       JWT_SECRET: local-dev-secret-change-in-production
       DEBUG: "true"
+      CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
+      REDBEAT_REDIS_URL: redis://redis:6379/0
     depends_on:
       migrate:
         condition: service_completed_successfully
+
+  # Celery worker: consumes broker-delivered background tasks. Uses the exact
+  # same image as the API (built from server/Dockerfile) so the task registry is
+  # identical to the enqueuing process. Opt-in via the "background" profile so a
+  # plain `docker compose up` still boots only the API stack.
+  worker:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    profiles: ["background"]
+    # host.docker.internal lets `make run BACKGROUND=1` point the worker at the
+    # SAME host Postgres/profile DB the host-run API uses (Docker Desktop maps it
+    # automatically; host-gateway makes it resolve on Linux too).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      # Self-contained smoke (`make server-background-up`) defaults to the compose
+      # Postgres. `make run PROFILE=<name> BACKGROUND=1` overrides this to the
+      # ACTUAL selected profile database on the host (host.docker.internal + the
+      # profile's real port + the profile DB name), so worker/beat and the
+      # host-run API observe one and the same outbox — not a different compose DB.
+      DATABASE_URL: ${BACKGROUND_DATABASE_URL:-postgresql+asyncpg://proliferate:localdev@db:5432/proliferate}
+      JWT_SECRET: local-dev-secret-change-in-production
+      DEBUG: "true"
+      CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
+      REDBEAT_REDIS_URL: redis://redis:6379/0
+    command:
+      - celery
+      - -A
+      - proliferate.background.celery_app:celery_app
+      - worker
+      - --loglevel=info
+      - -Q
+      - periodic.default,default,notifications
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Celery Beat: the single scheduler process that fires background.relay. Uses
+  # the same image/SHA as the API and worker. Exactly one Beat replica per stack;
+  # RedBeat keeps schedule state in Redis and prevents duplicate ownership.
+  beat:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    profiles: ["background"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      # Self-contained smoke (`make server-background-up`) defaults to the compose
+      # Postgres. `make run PROFILE=<name> BACKGROUND=1` overrides this to the
+      # ACTUAL selected profile database on the host (host.docker.internal + the
+      # profile's real port + the profile DB name), so worker/beat and the
+      # host-run API observe one and the same outbox — not a different compose DB.
+      DATABASE_URL: ${BACKGROUND_DATABASE_URL:-postgresql+asyncpg://proliferate:localdev@db:5432/proliferate}
+      JWT_SECRET: local-dev-secret-change-in-production
+      DEBUG: "true"
+      CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
+      REDBEAT_REDIS_URL: redis://redis:6379/0
+    command:
+      - celery
+      - -A
+      - proliferate.background.celery_app:celery_app
+      - beat
+      - --loglevel=info
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
 volumes:
   pgdata:

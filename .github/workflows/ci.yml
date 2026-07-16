@@ -53,6 +53,39 @@ jobs:
           python3 -m unittest scripts/test_check_docs.py
           python3 scripts/check_docs.py
 
+  terraform-validate:
+    name: Terraform validate (server/infra)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      # background.tf and the rest of server/infra are loaded by Terraform even
+      # at zero resource counts, so a malformed provider/schema definition would
+      # otherwise only surface at a deploy gate. Parse and validate them here
+      # (no backend, no AWS credentials, no plan/apply) so the checked-in
+      # definitions are proven well-formed on every push/PR.
+      - name: Terraform fmt
+        run: terraform -chdir=server/infra fmt -check -recursive
+
+      - name: Terraform init (no backend)
+        run: terraform -chdir=server/infra init -backend=false -input=false
+
+      - name: Terraform validate
+        run: terraform -chdir=server/infra validate
+
+      # Plan-time proof of the background-plane fail-closed contract: the
+      # worker/Beat services can only be enabled with a managed broker/store OR
+      # both external endpoint secret references. Runs use `command = plan`
+      # against a mocked AWS provider (no credentials, no backend, no apply), so
+      # the invalid partial combos are proven to fail at plan time on the
+      # variable validation, and the valid managed/rebound combos plan cleanly.
+      - name: Terraform test (background plane fail-closed)
+        run: terraform -chdir=server/infra test
+
   ci-cd-config:
     name: CI/CD config checks
     runs-on: ubuntu-latest
@@ -80,6 +113,15 @@ jobs:
 
       - name: Test CI/CD scripts
         run: node --test scripts/ci-cd/*.test.mjs
+
+      # Launcher-level proof (BG4-LOCAL-01): `make run BACKGROUND=1` must start
+      # the Celery worker/Beat against the SELECTED profile database on
+      # profile-scoped broker/store ports. Renders `docker compose config` (no
+      # daemon needed; the compose CLI ships on the runner) and asserts the
+      # worker/Beat DATABASE_URL DB-name matches the profile DB and ports are
+      # profile-scoped.
+      - name: Test background launcher config
+        run: node --test scripts/dev-background-launch.test.mjs
 
       - name: Validate agent catalog generation discipline
         env:

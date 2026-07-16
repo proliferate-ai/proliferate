@@ -40,6 +40,15 @@ jobs:
       ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
       ECS_SERVER_SERVICE: ${{ vars.ECS_SERVER_SERVICE }}
       ECS_SERVER_CONTAINER_NAME: ${{ vars.ECS_SERVER_CONTAINER_NAME || 'server' }}
+      # Background plane (optional): worker + Beat run the SAME image/SHA as the
+      # API. When these service names are unset the background steps are skipped,
+      # so environments without the plane still deploy the API unchanged.
+      ECS_WORKER_SERVICE: ${{ vars.ECS_WORKER_SERVICE }}
+      ECS_BEAT_SERVICE: ${{ vars.ECS_BEAT_SERVICE }}
+      ECS_WORKER_CONTAINER_NAME: ${{ vars.ECS_WORKER_CONTAINER_NAME || 'worker' }}
+      ECS_BEAT_CONTAINER_NAME: ${{ vars.ECS_BEAT_CONTAINER_NAME || 'beat' }}
+      BACKGROUND_MQ_BROKER_ID: ${{ vars.BACKGROUND_MQ_BROKER_ID }}
+      BACKGROUND_STORE_NAME: ${{ vars.BACKGROUND_STORE_NAME }}
       API_URL: ${{ vars.API_URL }}
       API_BASE_URL: ${{ vars.API_BASE_URL }}
       WEB_URL: ${{ vars.WEB_URL }}
@@ -99,6 +108,23 @@ jobs:
             : "${SUPPORT_GITHUB_APP_INSTALLATION_ID:?Set SUPPORT_GITHUB_APP_INSTALLATION_ID when support tracker is enabled.}"
             : "${SUPPORT_GITHUB_OWNER:?Set SUPPORT_GITHUB_OWNER when support tracker is enabled.}"
             : "${SUPPORT_GITHUB_REPO:?Set SUPPORT_GITHUB_REPO when support tracker is enabled.}"
+          fi
+          # Background plane fails CLOSED: it is either fully configured or fully
+          # absent. Worker service, Beat service, and both container names must be
+          # set together, otherwise a partial configuration would silently skip
+          # the worker/Beat rollout while still rolling an API that can enqueue a
+          # task no running worker imports. A missing container name defaults to a
+          # non-empty literal above, so only the service names are the switch;
+          # both must agree.
+          background_config="${ECS_WORKER_SERVICE:+w}${ECS_BEAT_SERVICE:+b}"
+          if [ -n "$background_config" ] && [ "$background_config" != "wb" ]; then
+            echo "Partial background-plane configuration: ECS_WORKER_SERVICE='${ECS_WORKER_SERVICE}' ECS_BEAT_SERVICE='${ECS_BEAT_SERVICE}'." >&2
+            echo "Set BOTH worker and Beat services (with their container names) to deploy the background plane, or NEITHER to skip it. Refusing to roll the API with a half-configured background plane." >&2
+            exit 1
+          fi
+          if [ -n "$background_config" ]; then
+            : "${ECS_WORKER_CONTAINER_NAME:?Set ECS_WORKER_CONTAINER_NAME for the background plane.}"
+            : "${ECS_BEAT_CONTAINER_NAME:?Set ECS_BEAT_CONTAINER_NAME for the background plane.}"
           fi
 
       - name: Configure AWS credentials
@@ -167,6 +193,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Build and push server image
+        id: build
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -181,6 +208,29 @@ jobs:
             RUNTIME_VERSION=${{ steps.pins.outputs.runtime_version }}
             WORKER_VERSION=${{ steps.pins.outputs.worker_version }}
             MIN_DESKTOP_VERSION=${{ steps.pins.outputs.min_desktop_version }}
+
+      # Resolve the IMMUTABLE digest reference for the image just pushed. The
+      # mutable `repo:shortsha` tag can be re-pointed at a different image after
+      # this deploy resolves it; pinning every task definition (API, worker, Beat)
+      # to `repo@sha256:...` guarantees all three planes run the byte-identical
+      # image this run built and that a later tag move cannot silently change what
+      # a rolled service runs. The digest comes from the build/push output.
+      - name: Resolve immutable image digest
+        id: digest
+        run: |
+          set -euo pipefail
+          digest="${{ steps.build.outputs.digest }}"
+          case "$digest" in
+            sha256:*) ;;
+            *)
+              echo "Build did not produce a sha256 image digest (got '${digest}'); refusing to pin a mutable tag." >&2
+              exit 1
+              ;;
+          esac
+          registry="${{ steps.ecr.outputs.registry }}"
+          image_ref="${registry}/${ECR_SERVER_REPOSITORY}@${digest}"
+          echo "image_ref=$image_ref" >> "$GITHUB_OUTPUT"
+          echo "Pinning task definitions to immutable ${image_ref}"
 
       - name: Render ECS task definition
         id: task
@@ -418,7 +468,7 @@ jobs:
 
           jq \
             --arg container "$ECS_SERVER_CONTAINER_NAME" \
-            --arg image "${{ steps.image.outputs.image_uri }}" \
+            --arg image "${{ steps.digest.outputs.image_ref }}" \
             --slurpfile updates env-updates.json \
             --slurpfile secret_updates secret-updates.json \
             -f merge-task.jq \
@@ -430,6 +480,23 @@ jobs:
             --arg container "$ECS_SERVER_CONTAINER_NAME" \
             -f assert-task.jq \
             task-definition.json > /dev/null
+
+          # Fail closed unless the server container is pinned to an IMMUTABLE
+          # digest (`repo@sha256:...`), never a mutable tag. A mutable tag could be
+          # re-pointed after this deploy resolves it, so a rolled service would run
+          # a different image than this run built.
+          server_image="$(
+            jq -r --arg container "$ECS_SERVER_CONTAINER_NAME" \
+              'first(.containerDefinitions[] | select(.name == $container) | .image)' \
+              task-definition.json
+          )"
+          case "$server_image" in
+            *@sha256:*) ;;
+            *)
+              echo "Server container image '${server_image}' is not an immutable @sha256: digest reference; refusing to register a mutable tag." >&2
+              exit 1
+              ;;
+          esac
 
           new_task_definition_arn="$(
             aws ecs register-task-definition \
@@ -489,6 +556,369 @@ jobs:
             exit 1
           fi
 
+      # ── Background plane deploy order ──
+      # Contract: migrations (above) -> verify broker/store -> deploy worker+Beat
+      # from the candidate image -> verify worker/Beat health -> deploy API from
+      # the same image (below). This prevents rolling an API that enqueues a task
+      # name no running worker can import.
+
+      - name: Verify broker and scheduler store
+        if: ${{ env.ECS_WORKER_SERVICE != '' && env.ECS_BEAT_SERVICE != '' }}
+        run: |
+          set -euo pipefail
+          if [ -n "$BACKGROUND_MQ_BROKER_ID" ]; then
+            broker_state="$(
+              aws mq describe-broker --broker-id "$BACKGROUND_MQ_BROKER_ID" \
+                --query 'BrokerState' --output text
+            )"
+            if [ "$broker_state" != "RUNNING" ]; then
+              echo "Amazon MQ broker ${BACKGROUND_MQ_BROKER_ID} is ${broker_state}, expected RUNNING." >&2
+              exit 1
+            fi
+            echo "Broker ${BACKGROUND_MQ_BROKER_ID} is RUNNING."
+          else
+            echo "BACKGROUND_MQ_BROKER_ID unset; skipping broker state check."
+          fi
+          if [ -n "$BACKGROUND_STORE_NAME" ]; then
+            store_status="$(
+              aws elasticache describe-serverless-caches \
+                --serverless-cache-name "$BACKGROUND_STORE_NAME" \
+                --query 'ServerlessCaches[0].Status' --output text
+            )"
+            if [ "$store_status" != "available" ]; then
+              echo "Scheduler store ${BACKGROUND_STORE_NAME} is ${store_status}, expected available." >&2
+              exit 1
+            fi
+            echo "Scheduler store ${BACKGROUND_STORE_NAME} is available."
+          else
+            echo "BACKGROUND_STORE_NAME unset; skipping store status check."
+          fi
+
+      - name: Deploy worker and Beat from candidate image
+        id: background
+        if: ${{ env.ECS_WORKER_SERVICE != '' && env.ECS_BEAT_SERVICE != '' }}
+        run: |
+          set -euo pipefail
+          # Re-image a celery service in place: take its current task definition,
+          # swap only the container image to the candidate, register, and roll.
+          # Environment/secrets are Terraform-owned and left intact. The candidate
+          # is the IMMUTABLE digest reference (same `repo@sha256:...` the API roll
+          # pins), so worker/Beat run the byte-identical image as the API and a
+          # later tag move cannot change what they run.
+          candidate_image="${{ steps.digest.outputs.image_ref }}"
+          case "$candidate_image" in
+            *@sha256:*) ;;
+            *)
+              echo "Candidate image '${candidate_image}' is not an immutable @sha256: digest reference; refusing to roll a mutable tag." >&2
+              exit 1
+              ;;
+          esac
+          roll_service() {
+            service="$1"; container="$2"
+            current_arn="$(
+              aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$service" \
+                --query 'services[0].taskDefinition' --output text
+            )"
+            test "$current_arn" != "None"
+            aws ecs describe-task-definition --task-definition "$current_arn" \
+              --query taskDefinition > "td-${container}.raw.json"
+            # Fail closed if the named container does not match exactly one
+            # definition: a wrong ECS_*_CONTAINER_NAME would otherwise rewrite
+            # nothing, register the OLD image, and still report success.
+            match_count="$(
+              jq --arg container "$container" \
+                '[.containerDefinitions[] | select(.name == $container)] | length' \
+                "td-${container}.raw.json"
+            )"
+            if [ "$match_count" != "1" ]; then
+              echo "Expected exactly one '${container}' container in ${service}'s task definition, found ${match_count}." >&2
+              exit 1
+            fi
+            jq \
+              --arg container "$container" \
+              --arg image "$candidate_image" '
+              del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
+                  .compatibilities, .registeredAt, .registeredBy)
+              | .containerDefinitions |= map(
+                  if .name == $container then .image = $image else . end
+                )
+            ' "td-${container}.raw.json" > "td-${container}.json"
+            # Assert the rewritten definition carries the candidate image on the
+            # named container before registration.
+            rewritten_image="$(
+              jq -r --arg container "$container" \
+                'first(.containerDefinitions[] | select(.name == $container) | .image)' \
+                "td-${container}.json"
+            )"
+            if [ "$rewritten_image" != "$candidate_image" ]; then
+              echo "Container '${container}' image is '${rewritten_image}', expected candidate '${candidate_image}'." >&2
+              exit 1
+            fi
+            new_arn="$(
+              aws ecs register-task-definition --cli-input-json "file://td-${container}.json" \
+                --query 'taskDefinition.taskDefinitionArn' --output text
+            )"
+            # Confirm the REGISTERED revision (not just the local file) carries the
+            # candidate image on exactly the named container.
+            registered_image="$(
+              aws ecs describe-task-definition --task-definition "$new_arn" \
+                --query "taskDefinition.containerDefinitions[?name=='${container}'].image | [0]" \
+                --output text
+            )"
+            if [ "$registered_image" != "$candidate_image" ]; then
+              echo "Registered ${service} task def ${new_arn} carries image '${registered_image}', expected '${candidate_image}'." >&2
+              exit 1
+            fi
+            aws ecs update-service --cluster "$ECS_CLUSTER" --service "$service" \
+              --task-definition "$new_arn" --force-new-deployment > /dev/null
+            echo "$new_arn"
+          }
+          worker_arn="$(roll_service "$ECS_WORKER_SERVICE" "$ECS_WORKER_CONTAINER_NAME")"
+          beat_arn="$(roll_service "$ECS_BEAT_SERVICE" "$ECS_BEAT_CONTAINER_NAME")"
+          {
+            echo "worker_task_definition_arn=$worker_arn"
+            echo "beat_task_definition_arn=$beat_arn"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Verify worker and Beat health
+        if: ${{ env.ECS_WORKER_SERVICE != '' && env.ECS_BEAT_SERVICE != '' }}
+        run: |
+          set -euo pipefail
+          # The live service must run the SAME immutable digest the roll pinned.
+          candidate_image="${{ steps.digest.outputs.image_ref }}"
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_WORKER_SERVICE" "$ECS_BEAT_SERVICE"
+          # (service, container) pairs so each running task def is checked against
+          # its own container name.
+          set -- \
+            "$ECS_WORKER_SERVICE:$ECS_WORKER_CONTAINER_NAME" \
+            "$ECS_BEAT_SERVICE:$ECS_BEAT_CONTAINER_NAME"
+          for pair in "$@"; do
+            service="${pair%%:*}"; container="${pair#*:}"
+            running="$(
+              aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$service" \
+                --query 'services[0].runningCount' --output text
+            )"
+            if [ "$running" -lt 1 ]; then
+              echo "Service $service has runningCount=$running after stabilizing." >&2
+              exit 1
+            fi
+            # The API must not roll until the worker/Beat the service ACTUALLY
+            # runs carry the candidate image. Read the service's live task
+            # definition and assert the named container's image before proceeding.
+            live_arn="$(
+              aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$service" \
+                --query 'services[0].taskDefinition' --output text
+            )"
+            live_image="$(
+              aws ecs describe-task-definition --task-definition "$live_arn" \
+                --query "taskDefinition.containerDefinitions[?name=='${container}'].image | [0]" \
+                --output text
+            )"
+            if [ "$live_image" != "$candidate_image" ]; then
+              echo "Service $service is running task def ${live_arn} with image '${live_image}', expected candidate '${candidate_image}' before the API roll." >&2
+              exit 1
+            fi
+            echo "Service $service healthy (runningCount=$running) on candidate image."
+          done
+
+      # ── Candidate-plane execution proof (fails closed) ──
+      # ECS resource health only proves containers are RUNNING. It does NOT prove
+      # the candidate worker/Beat can actually EXECUTE newly enqueued work: broker
+      # credentials, task routing, worker task-registry import, RedBeat scheduler
+      # state, and relay publish/consume could all be broken while runningCount is
+      # green. This step proves execution end-to-end before the API rolls:
+      #   1. enqueue ONE deterministic committed health no-op via a one-off task
+      #      on the candidate worker task definition; then
+      #   2. observe, via the plane's own CloudWatch metrics, BOTH a fresh relay
+      #      heartbeat advance (Beat dispatched background.relay -> a worker ran it
+      #      -> RedBeat/store and broker are reachable) AND a fresh health-no-op
+      #      task SUCCESS (the newly enqueued row was relayed, published, routed,
+      #      consumed, and executed by the candidate worker).
+      # Both signals are custom metrics lifted from the server log group
+      # (namespace Proliferate/Background/<env>), so this gate references NO broker
+      # or scheduler-store RESOURCE ID. The identical proof therefore covers both
+      # the managed-AWS-IDs path and the external-endpoint / no-resource-ID rebind
+      # path — it measures the app reaching whatever endpoints are configured, not
+      # the presence of a managed resource. On timeout it FAILS CLOSED so the API
+      # never rolls against a plane that cannot execute the tasks it will enqueue.
+      # CANDIDATE_PROOF_TIMEOUT_SECONDS / CANDIDATE_PROOF_POLL_SECONDS are
+      # overridable (the deploy-definition tests shrink them to drive the loop).
+      - name: Prove candidate plane executes enqueued work
+        if: ${{ env.ECS_WORKER_SERVICE != '' && env.ECS_BEAT_SERVICE != '' }}
+        run: |
+          set -euo pipefail
+          namespace="Proliferate/Background/${DEPLOY_ENVIRONMENT}"
+          # Server log group carries both the enqueue receipt line and the
+          # worker's exact-ID execution receipt. Derived from the environment
+          # name (no broker/store resource ID), overridable for tests.
+          log_group="${CANDIDATE_PROOF_LOG_GROUP:-/ecs/proliferate-server-${DEPLOY_ENVIRONMENT}}"
+          # GITHUB_RUN_ATTEMPT is part of the key so a workflow RERUN enqueues a
+          # FRESH outbox row instead of colliding (by idempotency key) with the
+          # previous attempt's already-published row and false-passing on a stale
+          # receipt. Each attempt must prove ITS OWN newly enqueued row executed.
+          proof_key="deploy-${GIT_SHA}-${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1}"
+          timeout_seconds="${CANDIDATE_PROOF_TIMEOUT_SECONDS:-300}"
+          poll_seconds="${CANDIDATE_PROOF_POLL_SECONDS:-15}"
+
+          iso_from_epoch() {
+            # GNU (ubuntu CI) then BSD (local test) form.
+            date -u -d "@$1" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null \
+              || date -u -r "$1" +%Y-%m-%dT%H:%M:%SZ
+          }
+          # Latest per-period Sum for a metric since the proof boundary, printed
+          # as a plain number (0 when CloudWatch has no datapoint yet / "None").
+          metric_latest_sum() {
+            metric_name="$1"; shift
+            start_iso="$(iso_from_epoch "$proof_start_epoch")"
+            end_iso="$(iso_from_epoch "$(date -u +%s)")"
+            raw="$(
+              aws cloudwatch get-metric-statistics \
+                --namespace "$namespace" \
+                --metric-name "$metric_name" \
+                --start-time "$start_iso" \
+                --end-time "$end_iso" \
+                --period 60 \
+                --statistics Sum \
+                "$@" \
+                --query 'sort_by(Datapoints, &Timestamp)[-1].Sum' \
+                --output text 2>/dev/null || echo None
+            )"
+            if [ -z "$raw" ] || [ "$raw" = "None" ]; then
+              echo 0
+            else
+              echo "$raw"
+            fi
+          }
+          ge_one() { awk -v v="$1" 'BEGIN { exit !(v + 0 >= 1) }'; }
+
+          # Recover THIS deploy's exact outbox id from the enqueue receipt line
+          # (`enqueued_health_noop outbox_id=<uuid> idempotency_key=<proof_key>`).
+          # The one-off enqueue task runs on ECS, so its stdout lands in the
+          # server log group; filtering on the deterministic proof_key isolates
+          # this deploy's row even if a concurrent deploy enqueued its own.
+          recover_outbox_id() {
+            start_ms="$(( proof_start_epoch * 1000 ))"
+            aws logs filter-log-events \
+              --log-group-name "$log_group" \
+              --start-time "$start_ms" \
+              --filter-pattern "\"enqueued_health_noop\" \"idempotency_key=${proof_key}\"" \
+              --query 'events[].message' \
+              --output text 2>/dev/null \
+              | grep -oE 'outbox_id=[0-9a-fA-F-]+' \
+              | head -n1 \
+              | cut -d= -f2
+          }
+          # Count fresh EXACT-ID execution receipts for a given task id. The relay
+          # sets the celery task_id equal to the outbox id, so the worker's
+          # `background_health_receipt` line carries that same UUID. Matching on it
+          # correlates success to THIS row, not to any concurrent health no-op that
+          # would satisfy an aggregate success metric. The UUID is not a secret.
+          receipt_count_for_id() {
+            task_id="$1"
+            start_ms="$(( proof_start_epoch * 1000 ))"
+            raw="$(
+              aws logs filter-log-events \
+                --log-group-name "$log_group" \
+                --start-time "$start_ms" \
+                --filter-pattern "{ \$.background_health_receipt.task_id = \"${task_id}\" && \$.background_health_receipt.status = \"ok\" }" \
+                --query 'length(events)' \
+                --output text 2>/dev/null || echo 0
+            )"
+            if [ -z "$raw" ] || [ "$raw" = "None" ]; then
+              echo 0
+            else
+              echo "$raw"
+            fi
+          }
+
+          # Network config for the one-off enqueue task (mirror the migration run).
+          aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_WORKER_SERVICE" \
+            > proof-service.json
+          network_configuration="$(
+            jq -c '{
+              awsvpcConfiguration: {
+                subnets: .services[0].networkConfiguration.awsvpcConfiguration.subnets,
+                securityGroups: (.services[0].networkConfiguration.awsvpcConfiguration.securityGroups // []),
+                assignPublicIp: (.services[0].networkConfiguration.awsvpcConfiguration.assignPublicIp // "DISABLED")
+              }
+            }' proof-service.json
+          )"
+          worker_td="$(
+            jq -r '.services[0].taskDefinition' proof-service.json
+          )"
+
+          # Boundary BEFORE enqueue so only fresh datapoints count.
+          proof_start_epoch="$(date -u +%s)"
+
+          overrides="$(
+            jq -n --arg c "$ECS_WORKER_CONTAINER_NAME" --arg key "$proof_key" '{
+              containerOverrides: [
+                {
+                  name: $c,
+                  command: ["python", "-m", "proliferate.background.enqueue_health", "--idempotency-key", $key]
+                }
+              ]
+            }'
+          )"
+          enqueue_task="$(
+            aws ecs run-task \
+              --cluster "$ECS_CLUSTER" \
+              --launch-type FARGATE \
+              --task-definition "$worker_td" \
+              --network-configuration "$network_configuration" \
+              --overrides "$overrides" \
+              --query 'tasks[0].taskArn' \
+              --output text
+          )"
+          test "$enqueue_task" != "None"
+          aws ecs wait tasks-stopped --cluster "$ECS_CLUSTER" --tasks "$enqueue_task"
+          enqueue_exit="$(
+            aws ecs describe-tasks \
+              --cluster "$ECS_CLUSTER" \
+              --tasks "$enqueue_task" \
+              --query "tasks[0].containers[?name=='${ECS_WORKER_CONTAINER_NAME}'].exitCode | [0]" \
+              --output text
+          )"
+          if [ "$enqueue_exit" != "0" ]; then
+            echo "Candidate-plane proof: health no-op enqueue task exited ${enqueue_exit}, expected 0." >&2
+            exit 1
+          fi
+          echo "Enqueued deterministic health no-op (key=${proof_key}); observing candidate execution..."
+
+          # Poll two signals until BOTH hold, or fail closed:
+          #   (a) a fresh RelayHeartbeat advance  -> Beat+RedBeat+broker+worker
+          #       liveness (an aggregate signal, correctly aggregate here); and
+          #   (b) an EXACT-ID execution receipt   -> the candidate worker consumed
+          #       and ran THIS deploy's exact enqueued row, not any concurrent or
+          #       replayed health no-op. Recovering the outbox id is itself part of
+          #       the gate: no receivable id => nothing to match => fail closed.
+          outbox_id=""
+          deadline="$(( $(date -u +%s) + timeout_seconds ))"
+          while :; do
+            if [ -z "$outbox_id" ]; then
+              outbox_id="$(recover_outbox_id || true)"
+            fi
+            heartbeat="$(metric_latest_sum RelayHeartbeat)"
+            if [ -n "$outbox_id" ]; then
+              receipt_count="$(receipt_count_for_id "$outbox_id")"
+            else
+              receipt_count=0
+            fi
+            if ge_one "$heartbeat" && ge_one "$receipt_count"; then
+              echo "Candidate plane proven: relay heartbeat advanced (Sum=${heartbeat}) and the EXACT enqueued health no-op executed (outbox_id=${outbox_id}, receipts=${receipt_count})."
+              break
+            fi
+            if [ "$(date -u +%s)" -ge "$deadline" ]; then
+              echo "Candidate-plane proof FAILED CLOSED after ${timeout_seconds}s: relay_heartbeat=${heartbeat}, outbox_id='${outbox_id}', exact_id_receipts=${receipt_count}. The candidate worker/Beat plane did not execute THIS deploy's newly enqueued row; refusing to roll the API." >&2
+              exit 1
+            fi
+            sleep "$poll_seconds"
+          done
+
       - name: Roll ECS service
         run: |
           set -euo pipefail
@@ -528,6 +958,14 @@ jobs:
             echo "### Server"
             echo "- Environment: $DEPLOY_ENVIRONMENT"
             echo "- Image: \`${{ steps.image.outputs.image_uri }}\`"
-            echo "- Task definition: \`${{ steps.task.outputs.task_definition_arn }}\`"
-            echo "- Service: \`$ECS_CLUSTER/$ECS_SERVER_SERVICE\`"
+            echo "- Image digest: \`${{ steps.build.outputs.digest }}\`"
+            echo "- API task definition: \`${{ steps.task.outputs.task_definition_arn }}\`"
+            echo "- API service: \`$ECS_CLUSTER/$ECS_SERVER_SERVICE\`"
+            if [ -n "$ECS_WORKER_SERVICE" ]; then
+              echo "### Background plane (same image digest as API)"
+              echo "- Worker task definition: \`${{ steps.background.outputs.worker_task_definition_arn }}\`"
+              echo "- Worker service: \`$ECS_CLUSTER/$ECS_WORKER_SERVICE\`"
+              echo "- Beat task definition: \`${{ steps.background.outputs.beat_task_definition_arn }}\`"
+              echo "- Beat service: \`$ECS_CLUSTER/$ECS_BEAT_SERVICE\`"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"

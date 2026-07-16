@@ -18,11 +18,22 @@ KNOWN_QUEUE_NAMES = (
 )
 
 HEALTH_NOOP_TASK = "background.health.noop"
+BACKGROUND_RELAY_TASK = "background.relay"
+
+# Celery message header the relay stamps with the broker-publish wall-clock time
+# (epoch seconds). The worker reads it on task_prerun to emit a broker-residence
+# LATENCY (consume time minus publish time): a lagging per-task signal observed
+# only when a task is consumed, so it goes silent when consumption stalls and is
+# NOT a current "oldest queued task age". Amazon MQ exposes no native
+# oldest-message-age metric, so current backlog is covered by the broker
+# MessageCount depth alarm instead. It is a plain timestamp, never a secret.
+BACKGROUND_PUBLISH_TS_HEADER = "x_background_publish_ts"
 NOTIFICATIONS_SEND_SLACK_TASK = "notifications.send_slack"
 CUSTOMERIO_ENGAGEMENT_SYNC_TASK = "customerio.engagement_sync"
 
 TASK_ROUTES: dict[str, dict[str, str]] = {
     HEALTH_NOOP_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
+    BACKGROUND_RELAY_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
     NOTIFICATIONS_SEND_SLACK_TASK: {"queue": NOTIFICATIONS_QUEUE},
     CUSTOMERIO_ENGAGEMENT_SYNC_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
 }
@@ -64,8 +75,22 @@ def build_task_queues(queue_names: Sequence[str]) -> tuple[Queue, ...]:
 def build_celery_config(config: Settings = settings) -> dict[str, object]:
     validate_celery_urls(config)
     queue_names = enabled_worker_queues(config)
+    confirm_timeout = float(config.celery_broker_confirm_timeout_seconds)
+    if confirm_timeout <= 0:
+        raise ValueError("celery_broker_confirm_timeout_seconds must be positive")
     return {
         "broker_url": config.celery_broker_url,
+        # Enable AMQP publisher confirms on the broker connection. py-amqp then
+        # publishes via ``basic_publish_confirm``, which waits for a broker ack
+        # and raises on a nack; the relay additionally passes ``confirm_timeout``
+        # per publish so ack ambiguity raises instead of hanging. Without this a
+        # bare socket write would look like durable acceptance and the outbox row
+        # would be marked published even if RabbitMQ never accepted the message.
+        # TLS/stack-agnostic: no environment-specific value is hardcoded here.
+        "broker_transport_options": {
+            "confirm_publish": True,
+            "confirm_timeout": confirm_timeout,
+        },
         "result_backend": None,
         "task_default_queue": DEFAULT_QUEUE,
         "task_queues": build_task_queues(queue_names),

@@ -17,6 +17,7 @@ USE_EXISTING_REDIS ?= 0
 STRIPE_FORWARD_TO ?= http://127.0.0.1:8000/v1/billing/webhooks/stripe
 STRIPE_SNAPSHOT_EVENTS ?= checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.paid,invoice.payment_failed
 AGENT_GATEWAY ?= 0
+BACKGROUND ?= 0
 LOCAL_LITELLM_BASE_URL ?= http://127.0.0.1:14000
 LOCAL_LITELLM_MASTER_KEY ?= sk-proliferate-local-dev
 CLOUD_WORKER_TUNNEL ?= 0
@@ -108,6 +109,7 @@ endif
 
 .PHONY: catalog-view catalog-pin catalog-update setup run dev dev-init dev-list dev-local dev-desktop dev-runtime dev-server dev-mobile-auth dev-mobile-tunnel dev-web-auth seed-sso server-db-up server-db-wait \
         server-db-down server-db-ready server-redis-up server-redis-wait server-redis-down server-redis-ready \
+        server-background-up server-background-logs server-background-down \
         server-litellm-up server-litellm-wait server-litellm-down db db-local db-ah server-migrate serve install \
         check check-max-lines check-server-boundaries test test-server fmt clippy \
         dev-automation-worker \
@@ -272,6 +274,28 @@ run: dev-artifacts-ready
 		exit 1; \
 	fi; \
 	(cd server && DATABASE_URL="$$DATABASE_URL" .venv/bin/alembic upgrade head); \
+	background_mode="$(BACKGROUND)"; \
+	if [ "$$background_mode" = "1" ] || [ "$$background_mode" = "celery" ]; then \
+		if [ "$$use_profile_db" != "1" ]; then \
+			echo "ERROR: BACKGROUND=$$background_mode requires the profile database (do not set DATABASE_URL). The compose worker/beat reach the SAME host Postgres/profile DB the API uses." >&2; \
+			exit 1; \
+		fi; \
+		: "$${PROLIFERATE_RABBITMQ_HOST_PORT:?background port not allocated; run make setup PROFILE=$(PROFILE)}"; \
+		: "$${PROLIFERATE_RABBITMQ_MGMT_HOST_PORT:?background port not allocated; run make setup PROFILE=$(PROFILE)}"; \
+		: "$${PROLIFERATE_REDIS_HOST_PORT:?background port not allocated; run make setup PROFILE=$(PROFILE)}"; \
+		export PROLIFERATE_RABBITMQ_HOST_PORT PROLIFERATE_RABBITMQ_MGMT_HOST_PORT PROLIFERATE_REDIS_HOST_PORT; \
+		export PROLIFERATE_DB_HOST_PORT="$${PROLIFERATE_DB_HOST_PORT:-$(LOCAL_PGPORT)}"; \
+		: "$${DATABASE_URL:?}"; \
+		background_db_url="$$(node scripts/dev.mjs background-db-url --database-url "$$DATABASE_URL")"; \
+		if printf '%s' "$$background_db_url" | grep -Eq '@(127\.0\.0\.1|localhost|\[?::1\]?):'; then \
+			echo "ERROR: could not rewrite DATABASE_URL host to host.docker.internal for the background plane (got $$background_db_url)." >&2; \
+			exit 1; \
+		fi; \
+		export COMPOSE_PROJECT_NAME="proliferate_bg_$$(printf '%s' "$$PROLIFERATE_DEV_PROFILE" | tr '-' '_')"; \
+		export BACKGROUND_DATABASE_URL="$$background_db_url"; \
+		echo "Starting background plane (worker + beat) via compose project $$COMPOSE_PROJECT_NAME against $$background_db_url (broker :$$PROLIFERATE_RABBITMQ_HOST_PORT, store :$$PROLIFERATE_REDIS_HOST_PORT)"; \
+		docker compose -f server/docker-compose.yml --profile background up -d --no-deps --build rabbitmq redis worker beat; \
+	fi; \
 	stripe_listener_ready=0; \
 	if [ "$(STRIPE)" = "1" ]; then \
 		if command -v stripe >/dev/null 2>&1; then \
@@ -464,6 +488,30 @@ server-redis-wait:
 
 server-redis-down:
 	@docker compose -f server/docker-compose.yml stop redis
+
+# Self-contained local background plane: Postgres, RabbitMQ, Redis, migrations,
+# Celery worker, and Celery Beat, all on the same compose image. This is the
+# merge-gated same-image outbox->worker smoke vehicle. Set a per-worktree
+# COMPOSE_PROJECT_NAME plus PROLIFERATE_*_HOST_PORT overrides to run isolated
+# stacks side by side without default-port collisions.
+server-background-up:
+	@command -v docker >/dev/null 2>&1 || { \
+		echo "Docker is required for the local background plane. Install or start Docker and retry."; \
+		exit 1; \
+	}
+	@docker info >/dev/null 2>&1 || { \
+		echo "Docker is not running. Start Docker Desktop and retry."; \
+		exit 1; \
+	}
+	@docker compose -f server/docker-compose.yml --profile background up -d --build \
+		db rabbitmq redis migrate worker beat
+	@echo "Background plane up (worker + beat). Logs: make server-background-logs"
+
+server-background-logs:
+	@docker compose -f server/docker-compose.yml --profile background logs -f worker beat
+
+server-background-down:
+	@docker compose -f server/docker-compose.yml --profile background down
 
 server-litellm-up:
 	@command -v docker >/dev/null 2>&1 || { \

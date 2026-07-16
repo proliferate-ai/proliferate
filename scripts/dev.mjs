@@ -31,6 +31,9 @@ const persistedKeys = [
   "PROLIFERATE_MOBILE_WEB_PORT",
   "PROLIFERATE_GOOGLE_WORKSPACE_MCP_PORT_BASE",
   "ANYHARNESS_PORT",
+  "PROLIFERATE_RABBITMQ_HOST_PORT",
+  "PROLIFERATE_RABBITMQ_MGMT_HOST_PORT",
+  "PROLIFERATE_REDIS_HOST_PORT",
   "ANYHARNESS_RUNTIME_HOME",
   "ANYHARNESS_WORKTREES_ROOT",
   "PROLIFERATE_DEV_HOME",
@@ -45,6 +48,13 @@ const portKeys = [
   ["PROLIFERATE_MOBILE_WEB_PORT", 5175],
   ["PROLIFERATE_GOOGLE_WORKSPACE_MCP_PORT_BASE", 49321],
   ["ANYHARNESS_PORT", 8457],
+  // Background plane (BACKGROUND=1) broker/store host ports. Allocated,
+  // persisted, and collision-checked per profile exactly like the app ports, so
+  // two worktrees never fight over the default 5672/15672/6379 when running the
+  // Celery worker + Beat compose services side by side.
+  ["PROLIFERATE_RABBITMQ_HOST_PORT", 5672],
+  ["PROLIFERATE_RABBITMQ_MGMT_HOST_PORT", 15672],
+  ["PROLIFERATE_REDIS_HOST_PORT", 6379],
 ];
 const googleWorkspaceMcpPortPoolSize = 64;
 const portPoolSizes = new Map([
@@ -56,6 +66,7 @@ function usage() {
   node scripts/dev.mjs ensure --profile <name> [--lock]
   node scripts/dev.mjs list
   node scripts/dev.mjs database-url --db-name <name>
+  node scripts/dev.mjs background-db-url [--database-url <url>]
   node scripts/dev.mjs ensure-db --db-name <name>`);
 }
 
@@ -70,6 +81,8 @@ function parseArgs(argv) {
       options.profile = rest[++i];
     } else if (arg === "--db-name") {
       options.dbName = rest[++i];
+    } else if (arg === "--database-url") {
+      options.databaseUrl = rest[++i];
     } else {
       throw new Error(`Unknown argument: ${arg}`);
     }
@@ -669,6 +682,26 @@ async function ensureProfile(options) {
   console.log(paths.launchEnv);
 }
 
+// Rewrite a host-run DATABASE_URL so a container in the background compose
+// project reaches the SAME host Postgres/profile DB. Only the host is swapped to
+// `host.docker.internal`; the port and the profile database NAME are preserved
+// exactly, so worker/beat observe the identical outbox the host-run API uses.
+// This is the single source of truth for the Makefile BACKGROUND=1 rewrite and
+// the launcher-config proof, so both agree. Loopback forms (127.0.0.1,
+// localhost, ::1 with or without brackets) all map to host.docker.internal.
+export function backgroundDatabaseUrl(databaseUrl) {
+  const rewritten = databaseUrl.replace(
+    /@\[?[^/@]*?\]?:(\d+)\//,
+    "@host.docker.internal:$1/",
+  );
+  if (/@(127\.0\.0\.1|localhost|\[?::1\]?):/.test(rewritten)) {
+    throw new Error(
+      `Could not rewrite DATABASE_URL host to host.docker.internal (got ${rewritten}).`,
+    );
+  }
+  return rewritten;
+}
+
 function dbUrlFor(dbName) {
   validateDbName(dbName);
   const host = hostForUrl(process.env.LOCAL_PGHOST || "127.0.0.1");
@@ -852,6 +885,15 @@ async function main() {
     await listProfiles();
   } else if (options.command === "database-url") {
     console.log(dbUrlFor(options.dbName));
+  } else if (options.command === "background-db-url") {
+    // Single source of truth for the Makefile BACKGROUND=1 host rewrite: the
+    // Makefile calls THIS instead of an inline sed so the launcher test and the
+    // real `make run` seam share one implementation.
+    const input = options.databaseUrl ?? process.env.DATABASE_URL;
+    if (!input) {
+      throw new Error("background-db-url requires --database-url or DATABASE_URL in the environment.");
+    }
+    console.log(backgroundDatabaseUrl(input));
   } else if (options.command === "ensure-db") {
     ensureDatabase(options.dbName);
   } else {
@@ -860,7 +902,12 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error.message);
-  process.exitCode = 1;
-});
+// Only run the CLI when invoked directly (`node scripts/dev.mjs ...`); importing
+// this module for its exported helpers (e.g. the launcher-config proof) must not
+// trigger a CLI run.
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error.message);
+    process.exitCode = 1;
+  });
+}
