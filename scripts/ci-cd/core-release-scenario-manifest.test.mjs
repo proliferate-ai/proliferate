@@ -30,7 +30,7 @@ function contractScenarioIds() {
 }
 
 test("the machine scenario inventory exactly matches the authoritative contract", () => {
-  assert.equal(manifest.schemaVersion, 5);
+  assert.equal(manifest.schemaVersion, 6);
   assert.equal(manifest.authoritativeContract, "core-release-validation.md");
   assert.deepEqual(
     manifest.requiredScenarios.map(({ id, tier }) => ({ id, tier })),
@@ -156,6 +156,22 @@ test("Tier 3 standing and deferred qualification sets are exhaustive and derived
   assert.ok(standing.size > 0, "foundation needs a non-empty standing Tier 3 set");
   assert.ok(deferred.length > 0, "foundation must expose the not-yet-composed Tier 3 set");
 
+  // The per-row implementation status must agree with the derived policy
+  // split: every unreferenced Tier 3 row is explicitly marked deferred and
+  // every standing Tier 3 row is not — the deferred disposition is recorded
+  // on the row itself, never inferred silently at read time.
+  const tier3Statuses = new Map(
+    manifest.requiredScenarios
+      .filter(({ tier }) => tier === 3)
+      .map(({ id, implementation }) => [id, implementation.status]),
+  );
+  for (const id of deferred) {
+    assert.equal(tier3Statuses.get(id), "deferred", `${id}: unreferenced Tier 3 rows must be marked deferred`);
+  }
+  for (const id of standing) {
+    assert.notEqual(tier3Statuses.get(id), "deferred", `${id}: standing Tier 3 rows cannot be deferred`);
+  }
+
   for (const prefix of ["T3-BILL-", "T3-SH-"]) {
     const requiredCoreDomainIds = tier3Ids.filter((id) => id.startsWith(prefix));
     assert.ok(requiredCoreDomainIds.length > 0);
@@ -189,7 +205,7 @@ test("the required target has 69 Tier 2, 90 Tier 3, and 27 Tier 4 unique scenari
 });
 
 test("target presence is never treated as executable coverage", () => {
-  const validStatuses = new Set(["planned", "collected", "enforced"]);
+  const validStatuses = new Set(["planned", "deferred", "collected", "enforced"]);
   const validGates = new Set(["merge", "staging", "release", "nightly"]);
   const validEvidence = new Set(["diagnostic", "partial", "qualification"]);
 
@@ -204,6 +220,20 @@ test("target presence is never treated as executable coverage", () => {
         ["status"],
         `${scenario.id}: planned rows cannot carry unaudited execution claims`,
       );
+      continue;
+    }
+
+    if (implementation.status === "deferred") {
+      // A deferred row is a first-class, truthful manifest fact: it names why
+      // it cannot be collected yet (unmerged owning feature, or standing-set
+      // policy) and carries no execution claims. It is never a silent pass.
+      assert.deepEqual(
+        Object.keys(implementation).sort(),
+        ["reason", "status"],
+        `${scenario.id}: deferred rows carry exactly a bounded reason, never execution claims`,
+      );
+      assert.equal(typeof implementation.reason, "string");
+      assert.ok(implementation.reason.length > 0, `${scenario.id}: a deferred row must state its reason`);
       continue;
     }
 
@@ -228,11 +258,15 @@ test("target presence is never treated as executable coverage", () => {
   }
 });
 
-test("foundation recovery leaves target rows planned until execution mapping is audited", () => {
-  assert.equal(
-    manifest.requiredScenarios.filter(({ implementation }) => implementation.status === "planned").length,
-    manifest.requiredScenarios.length,
-  );
+test("PR 8 leaves out-of-scope Tier 4 rows planned", () => {
+  // Tier 4 rows are PR 9/PR 10 territory and never deferred or claimed by
+  // this pass. Collected/enforced states remain legal elsewhere when the
+  // bidirectional registry audit proves them.
+  for (const scenario of manifest.requiredScenarios) {
+    if (scenario.tier === 4) {
+      assert.equal(scenario.implementation.status, "planned", `${scenario.id}: Tier 4 stays planned`);
+    }
+  }
 });
 
 test("runtime activation authority is Worker mailbox to Supervisor, never Worker direct activation", () => {

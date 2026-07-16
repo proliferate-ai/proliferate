@@ -919,10 +919,12 @@ qualification-local-workspace:
 		--run-id "$$run_id" --shard-id "$$shard_id" \
 		--output-dir "$$run_dir/evidence"
 
-# Tier-2 strict billing/auth qualification (PR 4). Boots the shared BootedStack
+# Tier-2 strict billing qualification (PR 4). Boots the shared BootedStack
 # (real Server + Postgres + Redis + real Stripe test mode; AnyHarness runtime
-# skipped) ONCE and runs the authoritative T2-BILL-1..15 + representative
-# T2-AUTH-ORG cells through the SAME tests/release aggregate command as tier 3.
+# skipped) and runs the authoritative T2-BILL-1..15 cells through the SAME
+# tests/release aggregate command as tier 3. PR-8 non-billing rows remain
+# manifest-deferred until one collector proves each complete guarantee with
+# truthful domain evidence.
 # No candidate build (Tier-2 boots from source) — `--source-candidate`
 # synthesizes the Server identity for the strict report. Selected financial
 # cells require a Stripe `sk_test_` key (env or `stripe config`); a missing key
@@ -944,7 +946,7 @@ qualification-tier2:
 		--lane local \
 		--desktop web \
 		--agents claude \
-		--scenarios T2-BILL,T2-AUTH-ORG \
+		--scenarios T2-BILL \
 		--source-candidate \
 		--run-id "$$run_id" --shard-id "$$shard_id" \
 		--output-dir "$$run_dir/evidence"

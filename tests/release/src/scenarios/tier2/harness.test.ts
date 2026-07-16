@@ -61,7 +61,7 @@ function fakeStripe(): StripeBillingEnv {
   };
 }
 
-function fakeStack(log: HarnessLog): BootedStack {
+function fakeStack(log: HarnessLog, teardownError?: Error): BootedStack {
   return {
     profile: "t2billing",
     apiBaseUrl: "http://api.test",
@@ -72,11 +72,14 @@ function fakeStack(log: HarnessLog): BootedStack {
     teardown: async () => {
       log.teardownCalls += 1;
       log.events.push("teardown");
+      if (teardownError) {
+        throw teardownError;
+      }
     },
   };
 }
 
-function fakeLitellmFake(log: HarnessLog): LitellmManagementFake {
+function fakeLitellmFake(log: HarnessLog, closeError?: Error): LitellmManagementFake {
   return {
     baseUrl: "http://fake-litellm.test",
     masterKey: "sk-fake-master",
@@ -86,6 +89,9 @@ function fakeLitellmFake(log: HarnessLog): LitellmManagementFake {
     close: async () => {
       log.fakeCloseCalls += 1;
       log.events.push("fakeClose");
+      if (closeError) {
+        throw closeError;
+      }
     },
   };
 }
@@ -95,6 +101,10 @@ function makeDeps(
     boot?: (stack: BootedStack) => BillingBootResult;
     fakeBoot?: (stack: BootedStack) => BootWithFakeResult;
     ledgerProbeError?: Error;
+    buildEvidenceError?: Error;
+    teardownError?: Error;
+    fakeCloseError?: Error;
+    clearEnvError?: Error;
   } = {},
 ): { deps: Tier2HarnessDeps; log: HarnessLog } {
   const log: HarnessLog = {
@@ -108,11 +118,11 @@ function makeDeps(
     ledgerDeltaCalls: 0,
     events: [],
   };
-  const stack = fakeStack(log);
+  const stack = fakeStack(log, opts.teardownError);
   const boot: BillingBootResult = opts.boot ? opts.boot(stack) : { skipped: false, stack, stripe: fakeStripe() };
   const fakeBoot: BootWithFakeResult = opts.fakeBoot
     ? opts.fakeBoot(stack)
-    : { skipped: false, stack, stripe: fakeStripe(), fake: fakeLitellmFake(log) };
+    : { skipped: false, stack, stripe: fakeStripe(), fake: fakeLitellmFake(log, opts.fakeCloseError) };
   const deps: Tier2HarnessDeps = {
     bootBillingStack: async () => {
       log.bootCalls += 1;
@@ -127,6 +137,9 @@ function makeDeps(
     clearPublishedGatewayEnv: () => {
       log.clearEnvCalls += 1;
       log.events.push("clearEnv");
+      if (opts.clearEnvError) {
+        throw opts.clearEnvError;
+      }
     },
     resetBillingState: async () => {
       log.resetCalls += 1;
@@ -149,7 +162,12 @@ function makeDeps(
       };
     },
     // Real (pure) assembler so the test exercises actual evidence construction.
-    buildEvidence: buildTier2BillingEvidence,
+    buildEvidence: (args) => {
+      if (opts.buildEvidenceError) {
+        throw opts.buildEvidenceError;
+      }
+      return buildTier2BillingEvidence(args);
+    },
     resolveServerVersion: () => "9.9.9-test",
     resolveBillingMode: () => "enforce",
   };
@@ -198,6 +216,13 @@ test("scenario definition is a matrix on lane local only (no new lane) and carri
   assert.equal(scenario.kind, "matrix");
   assert.deepEqual([...scenario.lanes], ["local"]);
   assert.deepEqual([...scenario.requiredEnv], ["TIER2_BILLING_STRIPE_SECRET_KEY"]);
+});
+
+test("non-billing cases are rejected instead of receiving fabricated tier2_billing evidence", () => {
+  assert.throws(
+    () => makeTier2MatrixScenario(fakeConfig({ "T2-AUTH-1": greenHandler }), makeDeps().deps),
+    /cannot qualify non-billing case.*T2-AUTH-1.*domain-specific evidence collector/s,
+  );
 });
 
 test("expandCells emits exactly one spec per case, carrying the case dimension", async () => {
@@ -355,11 +380,61 @@ test("multiple assigned cells produce exactly one outcome each, order preserved,
   assert.equal(log.resetCalls, 3);
 });
 
-test("an unexpected error inside the run loop still tears the stack down (finally) and propagates", async () => {
+test("an unexpected collector error becomes a failed cell and still tears the stack down", async () => {
   const { deps, log } = makeDeps({ ledgerProbeError: new Error("probe init failed") });
   const scenario = makeTier2MatrixScenario(fakeConfig({ "T2-BILL-1": greenHandler }), deps);
-  await assert.rejects(() => scenario.runCells(RUN_CTX, [fakeCell("T2-BILL-1")]), /probe init failed/);
+  const [outcome] = await scenario.runCells(RUN_CTX, [fakeCell("T2-BILL-1")]);
+  assert.equal(outcome.status, "failed");
+  assert.match(outcome.reason?.message ?? "", /probe init failed/);
+  assert.equal(outcome.evidence, undefined);
   assert.equal(log.teardownCalls, 1);
+});
+
+test("required evidence construction failure makes the cell non-green", async () => {
+  const { deps, log } = makeDeps({ buildEvidenceError: new Error("evidence incomplete") });
+  const scenario = makeTier2MatrixScenario(fakeConfig({ "T2-BILL-1": greenHandler }), deps);
+  const [outcome] = await scenario.runCells(RUN_CTX, [fakeCell("T2-BILL-1")]);
+  assert.equal(outcome.status, "failed");
+  assert.match(outcome.reason?.message ?? "", /evidence incomplete/);
+  assert.equal(outcome.evidence, undefined);
+  assert.equal(log.teardownCalls, 1);
+});
+
+test("plain-stack teardown failure turns every affected cell non-green", async () => {
+  const { deps, log } = makeDeps({ teardownError: new Error("postgres cleanup failed") });
+  const scenario = makeTier2MatrixScenario(
+    fakeConfig({ "T2-BILL-1": greenHandler, "T2-BILL-2": greenHandler }),
+    deps,
+  );
+  const outcomes = await scenario.runCells(RUN_CTX, [fakeCell("T2-BILL-1"), fakeCell("T2-BILL-2")]);
+  assert.deepEqual(outcomes.map((outcome) => outcome.status), ["failed", "failed"]);
+  for (const outcome of outcomes) {
+    assert.match(outcome.reason?.message ?? "", /cleanup: postgres cleanup failed/);
+    assert.equal(outcome.evidence, undefined);
+  }
+  assert.equal(log.teardownCalls, 1);
+});
+
+test("gateway teardown attempts stack, fake, and env cleanup before failing cells", async () => {
+  const { deps, log } = makeDeps({
+    teardownError: new Error("stack cleanup failed"),
+    fakeCloseError: new Error("fake cleanup failed"),
+    clearEnvError: new Error("env cleanup failed"),
+  });
+  const scenario = makeTier2MatrixScenario(gatewayFakeConfig({ "T2-BILL-1": greenHandler }), deps);
+  const [outcome] = await scenario.runCells(RUN_CTX, [fakeCell("T2-BILL-1")]);
+  assert.equal(outcome.status, "failed");
+  assert.match(outcome.reason?.message ?? "", /cleanup: Tier-2 stack\/fake teardown failed/);
+  assert.equal(outcome.evidence, undefined);
+  assert.deepEqual(log.events, [
+    "fakeBoot",
+    "reset",
+    "ledger.begin",
+    "ledger.delta",
+    "teardown",
+    "fakeClose",
+    "clearEnv",
+  ]);
 });
 
 test("runTier2Case builds evidence from the recorded policy, deltas, and safe ids on green", async () => {
