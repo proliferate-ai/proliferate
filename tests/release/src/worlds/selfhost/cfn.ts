@@ -185,6 +185,48 @@ function errText(error: unknown): string {
 }
 
 /**
+ * Observes whether the stack-owned Route53 A record for `recordName` is ABSENT
+ * from `hostedZoneId` after stack deletion (PR7-CONTROL-008). Queries
+ * `list-resource-record-sets` filtered to the name; returns true only when no A
+ * record for that exact name survives. Any A record with the name (a survivor)
+ * → false. Used as the cleanup stack's `observeRoute53RecordAbsent`.
+ */
+export async function route53RecordAbsent(
+  exec: CfnAwsExec,
+  hostedZoneId: string,
+  recordName: string,
+  region: string,
+): Promise<boolean> {
+  const fqdn = recordName.endsWith(".") ? recordName : `${recordName}.`;
+  const raw = await exec.run([
+    "route53",
+    "list-resource-record-sets",
+    "--hosted-zone-id",
+    hostedZoneId,
+    "--start-record-name",
+    fqdn,
+    "--start-record-type",
+    "A",
+    "--max-items",
+    "1",
+    "--region",
+    region,
+  ]);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    // An unparseable response cannot prove absence → treat as a survivor.
+    return false;
+  }
+  const sets = (parsed as { ResourceRecordSets?: Array<{ Name?: string; Type?: string }> }).ResourceRecordSets ?? [];
+  const survivor = sets.some(
+    (record) => record.Type === "A" && (record.Name === fqdn || record.Name === recordName),
+  );
+  return !survivor;
+}
+
+/**
  * The production parameter-file IO: a 0600 file under a fresh mkdtemp dir, so
  * the presigned-URL parameters land only in a permission-restricted file and are
  * removed after create-stack (PR7-CONTROL-003). Injected into
@@ -431,7 +473,12 @@ export async function pushCandidateServerImage(input: {
  * `DELETE /orgs/{org}/packages/container/{name}/versions/{id}`. Idempotent — a
  * tag no longer present is a clean, already-deleted outcome.
  */
-export async function deleteGhcrPackageVersion(gh: GhExec, targetRepo: string, tag: string): Promise<void> {
+export async function deleteGhcrPackageVersion(
+  gh: GhExec,
+  targetRepo: string,
+  tag: string,
+  log: (message: string) => void = () => undefined,
+): Promise<void> {
   const { org, packageName } = parseGhcrRepo(targetRepo);
   const encodedName = encodeURIComponent(packageName);
   const listPath = `/orgs/${org}/packages/container/${encodedName}/versions`;
@@ -445,11 +492,27 @@ export async function deleteGhcrPackageVersion(gh: GhExec, targetRepo: string, t
     throw error;
   }
   const versions = parseGhcrVersions(raw);
-  const versionId = ghcrVersionIdForTag(versions, tag);
-  if (versionId === null) {
+  const match = versions.find((version) => version.tags.includes(tag));
+  if (match === undefined) {
     return; // No version carries this tag — nothing to delete (idempotent).
   }
-  await gh.run(["api", "--method", "DELETE", `/orgs/${org}/packages/container/${encodedName}/versions/${versionId}`]);
+  // Deleting a package VERSION removes ALL of its tags. Our tag is run-scoped and
+  // immutable, so the expected case is a version carrying ONLY our tag. If the
+  // version also carries SIBLING tags (someone else's, or a shared digest), do
+  // NOT delete it — that would reap tags this run never owned (PR7-CONTROL-008).
+  // Untag-only is not available on the GHCR versions API, so refuse and record a
+  // reconcile note; the run-owned resource (our tag) points at a shared version
+  // we must not destroy. This surfaces as a cleanup failure, not a silent pass.
+  const siblingTags = match.tags.filter((t) => t !== tag);
+  if (siblingTags.length > 0) {
+    throw new Error(
+      `CFN cleanup: GHCR version ${match.id} for tag "${tag}" also carries sibling tag(s) ` +
+        `[${siblingTags.join(", ")}]; refusing to delete the shared version (would reap tags this run does not own). ` +
+        "The run-scoped tag should be the version's only tag; investigate the shared digest.",
+    );
+  }
+  log(`deleting GHCR package version ${match.id} (sole tag "${tag}")`);
+  await gh.run(["api", "--method", "DELETE", `/orgs/${org}/packages/container/${encodedName}/versions/${match.id}`]);
 }
 
 /** Parses a (possibly `--paginate`-concatenated) GHCR versions JSON payload. */
@@ -773,10 +836,23 @@ export class SelfHostCfnCleanupStack {
   private readonly ledger: CleanupLedger;
   private readonly log: (message: string) => void;
   private readonly registrations: CfnCleanupRegistration[] = [];
+  /**
+   * Optional post-delete observation that the stack-owned Route53 A record is
+   * actually gone (PR7-CONTROL-008): `route53RecordDeleted` no longer merely
+   * equates to `stackDeleted` — when this is supplied, the record must be
+   * OBSERVED absent for the flag to be true. Absent (unit tests) → the flag
+   * falls back to `stackDeleted`, the prior behavior.
+   */
+  private readonly observeRoute53RecordAbsent?: () => Promise<boolean>;
 
-  constructor(options: { ledger: CleanupLedger; log?: (message: string) => void }) {
+  constructor(options: {
+    ledger: CleanupLedger;
+    log?: (message: string) => void;
+    observeRoute53RecordAbsent?: () => Promise<boolean>;
+  }) {
     this.ledger = options.ledger;
     this.log = options.log ?? (() => undefined);
+    this.observeRoute53RecordAbsent = options.observeRoute53RecordAbsent;
   }
 
   /** Writes an `intent` record and returns the entry id to acquire. */
@@ -833,6 +909,28 @@ export class SelfHostCfnCleanupStack {
       }
     }
     const stackDeleted = this.categoryClean("stackDeleted", succeeded);
+    // The Route53 A record is stack-owned (CreateRoute53Record=true), so its
+    // deletion RIDES delete-stack — but "the stack deleted" is not proof the
+    // record is gone (a partial rollback / retained resource could leave it).
+    // When an observer is supplied, require the record be OBSERVED absent; a
+    // survivor (or a failed observation) makes route53RecordDeleted false
+    // (PR7-CONTROL-008). Without an observer (unit tests) fall back to
+    // stackDeleted.
+    let route53RecordDeleted = stackDeleted;
+    if (stackDeleted && this.observeRoute53RecordAbsent) {
+      try {
+        route53RecordDeleted = await this.observeRoute53RecordAbsent();
+        if (!route53RecordDeleted) {
+          this.log("route53 A record survived stack deletion — marking route53RecordDeleted=false");
+        }
+      } catch (error) {
+        route53RecordDeleted = false;
+        this.log(
+          `route53 survivor check failed (${error instanceof Error ? error.message : String(error)}); ` +
+            "marking route53RecordDeleted=false",
+        );
+      }
+    }
     return {
       ledgerIdHash: hashLedgerId(this.ledger.ledgerId),
       registered: this.registrations.length,
@@ -841,9 +939,7 @@ export class SelfHostCfnCleanupStack {
       stackDeleted,
       s3ObjectsDeleted: this.categoryClean("s3ObjectsDeleted", succeeded),
       ghcrVersionDeleted: this.categoryClean("ghcrVersionDeleted", succeeded),
-      // The Route53 A record is stack-owned (CreateRoute53Record=true); its
-      // deletion rides delete-stack, so this flag equals stackDeleted.
-      route53RecordDeleted: stackDeleted,
+      route53RecordDeleted,
       localPathsRemoved: this.categoryClean("localPathsRemoved", succeeded),
     };
   }

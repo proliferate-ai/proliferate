@@ -20,6 +20,7 @@ import {
   parseGhcrVersions,
   parseStackOutputs,
   pushCandidateServerImage,
+  route53RecordAbsent,
   runScopedImageTag,
   s3KeyPrefix,
   scrubCfnParameterUrls,
@@ -323,6 +324,54 @@ test("deleteGhcrPackageVersion: idempotent when the tag is already gone (no DELE
   const gh = new FakeExec(() => JSON.stringify([{ id: 1, metadata: { container: { tags: ["stable"] } } }]));
   await deleteGhcrPackageVersion(gh, "ghcr.io/x/y", "run-1-shard-0");
   assert.ok(!gh.calls.some((call) => call.includes("DELETE")));
+});
+
+test("deleteGhcrPackageVersion: REFUSES to delete a version carrying sibling tags (PR7-CONTROL-008)", async () => {
+  // The version our run tag points at also carries someone else's tag; deleting
+  // the version-id would reap that sibling tag too. Must refuse (a cleanup
+  // failure), never blindly delete the shared version.
+  const gh = new FakeExec((args) => {
+    if (args.includes("--paginate")) {
+      return JSON.stringify([{ id: 99, metadata: { container: { tags: ["run-1-shard-0", "stable"] } } }]);
+    }
+    return "";
+  });
+  await assert.rejects(
+    () => deleteGhcrPackageVersion(gh, "ghcr.io/x/y", "run-1-shard-0"),
+    /also carries sibling tag\(s\) \[stable\]; refusing/,
+  );
+  assert.ok(!gh.calls.some((call) => call.includes("DELETE")), "no DELETE when the version is shared");
+});
+
+test("deleteGhcrPackageVersion: deletes when the run tag is the version's SOLE tag", async () => {
+  const gh = new FakeExec((args) =>
+    args.includes("--paginate") ? JSON.stringify([{ id: 42, metadata: { container: { tags: ["run-1-shard-0"] } } }]) : "",
+  );
+  await deleteGhcrPackageVersion(gh, "ghcr.io/x/y", "run-1-shard-0");
+  assert.ok(gh.calls.some((call) => call.includes("DELETE") && call.join(" ").includes("/versions/42")));
+});
+
+test("route53RecordAbsent: true when no A record survives, false on a survivor (PR7-CONTROL-008)", async () => {
+  const gone = new FakeExec(() => JSON.stringify({ ResourceRecordSets: [] }));
+  assert.equal(await route53RecordAbsent(gone, "Z1", "sh-x.qualification.proliferate.com", "us-east-1"), true);
+
+  const survivor = new FakeExec(() =>
+    JSON.stringify({ ResourceRecordSets: [{ Name: "sh-x.qualification.proliferate.com.", Type: "A" }] }),
+  );
+  assert.equal(await route53RecordAbsent(survivor, "Z1", "sh-x.qualification.proliferate.com", "us-east-1"), false);
+});
+
+test("SelfHostCfnCleanupStack: route53RecordDeleted requires the record be OBSERVED absent (PR7-CONTROL-008)", async () => {
+  // Stack deletion succeeds, but the observer reports the A record survived →
+  // route53RecordDeleted must be false even though stackDeleted is true.
+  const stack = new SelfHostCfnCleanupStack({
+    ledger: fakeLedger(),
+    observeRoute53RecordAbsent: async () => false,
+  });
+  await stack.registerAcquire("cloudformation_stack", "stk", async () => undefined);
+  const summary = await stack.runAll();
+  assert.equal(summary.stackDeleted, true);
+  assert.equal(summary.route53RecordDeleted, false);
 });
 
 // ── CloudFormation stack ──────────────────────────────────────────────────────

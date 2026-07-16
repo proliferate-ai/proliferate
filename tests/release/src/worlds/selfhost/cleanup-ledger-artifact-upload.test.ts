@@ -42,9 +42,24 @@ function ledgerPathForRun(runId: string, shardId: string): string {
   return `tests/release/.output/selfhost-world/${runId}/${shardId}/${CLEANUP_LEDGER_FILENAME}`;
 }
 
-/** A minimal single-level (`*` never crosses `/`) glob-to-regex match, matching `@actions/glob`'s own `*` semantics. */
+/**
+ * A glob-to-regex match matching `@actions/glob`'s semantics: `**` crosses `/`
+ * boundaries (any depth, including zero segments), a single `*` never does.
+ */
 function matchesGlob(glob: string, candidate: string): boolean {
-  const escaped = glob.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*");
+  // `@actions/glob` semantics: `**/` matches zero or more full path segments and
+  // bare `**` matches anything (crossing `/`); a single `*` never crosses `/`.
+  // Sentinel the `**` forms before escaping so the single-`*` rule leaves them
+  // alone, then expand the sentinels to their crossing-`/` regex.
+  const escaped = glob
+    .replace(/\*\*\//g, " DSS ")
+    .replace(/\*\*/g, " DS ")
+    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+    .replace(/\*/g, "[^/]*")
+    .split(" DSS ")
+    .join("(?:[^/]*/)*")
+    .split(" DS ")
+    .join(".*");
   return new RegExp(`^${escaped}$`).test(candidate);
 }
 
@@ -105,6 +120,22 @@ test("the selfhost job's upload-artifact step path globs cover the cleanup ledge
     globs.some((glob) => glob.includes("logs/")),
     `the logs/ glob was lost from the upload step (globs: ${JSON.stringify(globs)}).`,
   );
+
+  // PR7-CONTROL-008: the NESTED ledgers must also be covered — SELFHOST-CFN-1
+  // writes its ledger under `.../cfn/`, and SELFHOST-ISOLATION-1's two boxes
+  // under `.../server-a/` and `.../server-b/`. The two-level glob missed all
+  // three; the `**` glob must match every one.
+  const nestedLedgerPaths = [
+    `tests/release/.output/selfhost-world/qs-ci-12345-1/1/cfn/${CLEANUP_LEDGER_FILENAME}`,
+    `tests/release/.output/selfhost-world/qs-ci-12345-1/1/server-a/${CLEANUP_LEDGER_FILENAME}`,
+    `tests/release/.output/selfhost-world/qs-ci-12345-1/1/server-b/${CLEANUP_LEDGER_FILENAME}`,
+  ];
+  for (const nested of nestedLedgerPaths) {
+    assert.ok(
+      globs.some((glob) => matchesGlob(glob, nested)),
+      `no upload glob (${JSON.stringify(globs)}) matches the nested ledger "${nested}".`,
+    );
+  }
 });
 
 test("matchesGlob: single-level `*` never crosses a `/` boundary", () => {

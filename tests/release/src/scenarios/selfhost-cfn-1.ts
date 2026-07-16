@@ -36,6 +36,7 @@ import {
   outputsWellFormed,
   pushCandidateServerImage,
   runScopedImageTag,
+  route53RecordAbsent,
   s3KeyPrefix,
   ssmInspectRunningImageDigest,
   templateFileSha256,
@@ -422,11 +423,22 @@ export async function constructSelfHostCfnWorld(inputs: CfnWorldInputs): Promise
     runId: inputs.run.run_id,
     shardId: inputs.run.shard_id,
   });
-  const stack = new SelfHostCfnCleanupStack({ ledger, log });
 
   const aws = defaultCfnAwsExec;
   const docker = defaultDockerExec;
   const gh = defaultGhExec;
+
+  // The run subdomain FQDN is deterministic, so we can wire the Route53 survivor
+  // observation into the cleanup stack up front (PR7-CONTROL-008):
+  // route53RecordDeleted is set only when the A record is OBSERVED absent after
+  // delete-stack, not merely because the stack deleted.
+  const subdomain = runSubdomainLabel(inputs.run.run_id, inputs.run.shard_id);
+  const siteAddress = cfnSiteAddress(subdomain, QUALIFICATION_ZONE);
+  const stack = new SelfHostCfnCleanupStack({
+    ledger,
+    log,
+    observeRoute53RecordAbsent: () => route53RecordAbsent(aws, inputs.hostedZoneId, siteAddress, inputs.region),
+  });
 
   try {
     // Local materialized paths tear down LAST (register first). run_directory
@@ -471,8 +483,7 @@ export async function constructSelfHostCfnWorld(inputs: CfnWorldInputs): Promise
     });
 
     // Create the stack (registers cloudformation_stack BEFORE create).
-    const subdomain = runSubdomainLabel(inputs.run.run_id, inputs.run.shard_id);
-    const siteAddress = cfnSiteAddress(subdomain, QUALIFICATION_ZONE);
+    // subdomain/siteAddress were computed up front (for the Route53 observer).
     const stackName = cfnStackName(inputs.run.run_id, inputs.run.shard_id);
     // The template pulls `${ServerImageRepository}:${ReleaseVersion}`, so
     // ReleaseVersion MUST be the run-scoped tag the candidate was JUST pushed

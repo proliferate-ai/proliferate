@@ -805,11 +805,17 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: selfhost-install-1-evidence
+          name: selfhost-evidence
+          # SHR-006 / PR7-CONTROL-008: upload EVERY run's cleanup ledger, not just
+          # the top-level install one. The nested worlds write their ledgers one
+          # level deeper — SELFHOST-CFN-1 under `.../cfn/`, and SELFHOST-ISOLATION-1's
+          # two boxes under `.../server-a/` and `.../server-b/` — so the two-level
+          # glob missed them. The `**` globs make every ledger (and its evidence +
+          # logs) Actions-durable on an interrupted/failed run.
           path: |
-            tests/release/.output/selfhost-world/*/*/evidence/
-            tests/release/.output/selfhost-world/*/*/logs/
-            tests/release/.output/selfhost-world/*/*/cleanup-ledger.json
+            tests/release/.output/selfhost-world/**/evidence/
+            tests/release/.output/selfhost-world/**/logs/
+            tests/release/.output/selfhost-world/**/cleanup-ledger.json
           retention-days: 7
           if-no-files-found: ignore
 
