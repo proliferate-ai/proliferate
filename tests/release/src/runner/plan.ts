@@ -1,4 +1,4 @@
-import type { DesktopMode } from "../config/types.js";
+import type { DesktopMode, TargetLane } from "../config/types.js";
 import { isMatrixScenario, type ScenarioCellSpec, type ScenarioDefinition } from "../scenarios/types.js";
 import type { PlannedCellV1 } from "./result.js";
 
@@ -28,6 +28,27 @@ export interface PlanInputs {
   desktop: DesktopMode;
   /** Resolved `--agents` selection (catalog harness kinds), or ["all"]. */
   agents: readonly string[];
+  /**
+   * The CLI `--lane` selection (where the target server lives). When it is
+   * `"local"`, only the `local` RUNTIME lane is planned — a `--lane local`
+   * invocation drives the ephemeral local world, and there is no
+   * publicly-reachable server for the `sandbox` runtime lane to call back into,
+   * so planning sandbox-runtime cells there is dead work (run-1 executed
+   * `T3-CHAT-1/sandbox` and `T3-WT-1/sandbox` under `--lane local`). `"staging"`
+   * plans every declared runtime lane, unchanged. Omitted → no lane filter, so
+   * callers/tests that only care about matrix expansion keep both lanes.
+   */
+  targetLane?: TargetLane;
+}
+
+/**
+ * The runtime lanes a scenario may plan under a given target lane. `--lane
+ * local` restricts to the `local` runtime lane only (the world-backed
+ * qualification path); every other target (or an unspecified one) keeps all of
+ * the scenario's declared lanes so legacy staging behavior is untouched.
+ */
+function laneAllowed(runtimeLane: string, targetLane: TargetLane | undefined): boolean {
+  return targetLane === "local" ? runtimeLane === "local" : true;
 }
 
 /**
@@ -52,6 +73,11 @@ export async function buildPlannedCells(
     seenScenarioIds.add(scenario.id);
 
     for (const runtimeLane of scenario.lanes) {
+      // `--lane local` plans ONLY local-runtime cells (decision #5); staging and
+      // the unfiltered case keep every declared lane.
+      if (!laneAllowed(runtimeLane, inputs.targetLane)) {
+        continue;
+      }
       if (!isMatrixScenario(scenario)) {
         addCell(cells, seenCellIds, {
           cell_id: `${scenario.id}/${runtimeLane}`,

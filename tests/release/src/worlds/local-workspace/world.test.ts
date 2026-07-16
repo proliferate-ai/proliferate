@@ -165,6 +165,12 @@ test("constructLocalWorld runs the ordered startup and returns a ready handle", 
     assert.equal(world.api.baseUrl, `http://127.0.0.1:${PORTS.server}`);
     assert.equal(world.runtime.baseUrl, `http://127.0.0.1:${PORTS.anyharness}`);
     assert.equal(world.renderer.baseUrl, `http://127.0.0.1:${PORTS.renderer}`);
+    // Host-facing DB URL points at THIS world's own published Postgres port, so
+    // a LOCAL-7 audit probe reads the database the world's Server wrote to.
+    assert.equal(
+      world.db.databaseUrl,
+      `postgresql+asyncpg://proliferate:localdev@127.0.0.1:${PORTS.postgres}/proliferate`,
+    );
     // Re-hashed materialized copies live under the run dir, marked executable.
     await access(world.artifacts.anyharness.path);
     // Durable ledger written.
@@ -201,6 +207,46 @@ test("constructLocalWorld runs the ordered startup and returns a ready handle", 
 });
 
 const LITELLM = { adminBaseUrl: "http://admin", publicBaseUrl: "http://public", masterKey: "sk-master" };
+
+test("worldRoot: materialization targets the world subdir and cleanup never deletes the shared artifacts source", async () => {
+  // Simulate the real run layout: the candidate artifacts the map's locators
+  // point at live under <runDir>/artifacts (shared, read-only); each world gets
+  // its own <runDir>/worlds/<slug> subdir. The run-1 dominant failure was the
+  // first world's teardown deleting <runDir>/artifacts, so every later world's
+  // materialize hit `copyfile server.tar ENOENT`.
+  const runDir = await mkdtemp(path.join(os.tmpdir(), "world-run-"));
+  const sharedArtifacts = path.join(runDir, "artifacts");
+  const worldRoot = path.join(runDir, "worlds", "t3-wt-1");
+  try {
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(sharedArtifacts, { recursive: true });
+    const map = await buildMap(sharedArtifacts);
+    const h = harness();
+    const world = await constructLocalWorld({ run: RUN, map, litellm: LITELLM, runDir, worldRoot, ports: PORTS, deps: h.deps });
+
+    // Materialized copies + ledger live under the world's own subdir, not the
+    // shared artifacts source.
+    assert.ok(world.artifacts.server.path.startsWith(worldRoot), world.artifacts.server.path);
+    assert.ok(world.artifacts.anyharness.path.startsWith(worldRoot), world.artifacts.anyharness.path);
+    await access(path.join(worldRoot, CLEANUP_LEDGER_FILENAME));
+    // The shared source bytes are present before teardown and are untouched by it.
+    for (const artifact of map.artifacts) {
+      await access(artifact.locator.path);
+    }
+
+    const evidence = await world.close();
+    assert.equal(evidence.failed, 0);
+
+    // The world subdir is gone; the shared artifacts source survives intact.
+    await assert.rejects(access(worldRoot), "world subdir must be deleted on teardown");
+    await access(sharedArtifacts);
+    for (const artifact of map.artifacts) {
+      await access(artifact.locator.path);
+    }
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+});
 
 test("a version mismatch fails startup and runs registered cleanup", async () => {
   const src = await mkdtemp(path.join(os.tmpdir(), "world-src-"));

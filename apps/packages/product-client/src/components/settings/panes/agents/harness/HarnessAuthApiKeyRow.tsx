@@ -62,7 +62,10 @@ export function HarnessAuthApiKeyRow({
   }
 
   return (
-    <div className="flex flex-col gap-2 border-t border-border py-3 first:border-t-0 sm:flex-row sm:items-start">
+    <div
+      className="flex flex-col gap-2 border-t border-border py-3 first:border-t-0 sm:flex-row sm:items-start"
+      data-api-key-saved={row.apiKeyId !== null ? row.providerHint ?? undefined : undefined}
+    >
       <div className="sm:w-56">
         {editing ? (
           <>

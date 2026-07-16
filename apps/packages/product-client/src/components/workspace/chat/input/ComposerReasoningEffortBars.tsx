@@ -118,6 +118,9 @@ export function ComposerReasoningEffortBars({
         disabled={!control.settable}
         title={tooltip}
         aria-label={ariaLabel}
+        data-reasoning-effort-trigger=""
+        data-reasoning-effort-selected={currentOption?.value ?? ""}
+        levelOptionAttribute="data-reasoning-effort-option"
       />
     </Tooltip>
   );

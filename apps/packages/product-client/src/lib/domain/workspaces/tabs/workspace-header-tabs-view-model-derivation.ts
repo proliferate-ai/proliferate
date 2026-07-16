@@ -3,6 +3,7 @@ import {
   getKnownSessionCanFork,
   getKnownSessionClosedAt,
   getKnownSessionId,
+  getKnownSessionIsEmptyChat,
   getKnownSessionTitle,
   getKnownSessionViewState,
   getLinkedChildViewState,
@@ -87,6 +88,7 @@ export function buildHeaderChatTabs(args: {
         manualGroupId: manualGroup?.id ?? null,
         isHierarchyResolved: args.resolvedSessionIds.has(grouped.sessionId),
         isResolvingSession: known?.kind === "placeholder",
+        isEmptyChat: known ? getKnownSessionIsEmptyChat(known) : false,
         delegatedAgent: hierarchyChild
           ? buildDelegatedWorkTabIdentity({
             id: hierarchyChild.sessionLinkId || hierarchyChild.sessionId,

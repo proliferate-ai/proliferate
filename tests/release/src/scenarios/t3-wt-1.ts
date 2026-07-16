@@ -5,6 +5,8 @@ import { randomUUID } from "node:crypto";
 
 import type { ScenarioDefinition } from "./types.js";
 import { ScenarioExpectedFailError } from "./types.js";
+import { isWorldBackedRun } from "./local/world-boot.js";
+import { runLocal1WorkspaceLeaf } from "./local/repo-workspace.js";
 import { DEFAULT_GITHUB_TEST_REPO, DEFAULT_LOCAL_RUNTIME_URL } from "../config/env-manifest.js";
 import { ensureLocalClone } from "../fixtures/git.js";
 import { LocalRuntimeClient } from "../fixtures/local-runtime.js";
@@ -54,6 +56,18 @@ export const t3Wt1: ScenarioDefinition = {
       return;
     }
     if (ctx.runtimeLane === "local") {
+      // World-backed local run (functional entrypoint, candidate map supplied) =
+      // the canonical LOCAL-1 repository-to-workspace journey (create through the
+      // product surface, correct repo + default branch, empty commandable chat,
+      // reload continuity). A diagnostic local run with no candidate world keeps
+      // the legacy runtime-only worktree behaviour.
+      if (isWorldBackedRun(ctx)) {
+        await runLocal1WorkspaceLeaf(ctx, {
+          scenarioId: "T3-WT-1",
+          registryFlowRef: "specs/developing/testing/tier-3-scenario-contract.md#local-1",
+        });
+        return;
+      }
       await runLocalLane();
       return;
     }

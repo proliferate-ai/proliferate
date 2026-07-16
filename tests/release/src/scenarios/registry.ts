@@ -9,6 +9,8 @@ import { t3Update1 } from "./t3-update-1.js";
 import { t3SecMat1 } from "./t3-sec-mat-1.js";
 import { t3Repo1 } from "./t3-repo-1.js";
 import { t3Int1 } from "./t3-int-1.js";
+import { t3Authroute1 } from "./t3-authroute-1.js";
+import { t3Session1 } from "./t3-session-1.js";
 import { t3Bill1 } from "./t3-bill-1.js";
 import { t3Bill2 } from "./t3-bill-2.js";
 import { t3Bill3 } from "./t3-bill-3.js";
@@ -56,6 +58,8 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
   t3SecMat1,
   t3Repo1,
   t3Int1,
+  t3Authroute1,
+  t3Session1,
   t3Bill1,
   t3Bill2,
   t3Bill3,

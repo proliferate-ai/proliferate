@@ -46,6 +46,7 @@ export function ChatTabWithMenu({
   onDismiss,
   shortcutLabel,
   shortcutRevealVisible,
+  stripIndex,
 }: {
   tab: HeaderChatTabEntry;
   width: number;
@@ -68,6 +69,8 @@ export function ChatTabWithMenu({
   onDismiss: () => void;
   shortcutLabel: string | null;
   shortcutRevealVisible: boolean;
+  /** Visual order among the strip's chat tabs; testid-only (data-chat-tab-index). */
+  stripIndex?: number;
 }) {
   const isReviewAgentChild = tab.isReviewAgentChild;
   const menuItems = buildChatTabContextMenuItems({
@@ -131,9 +134,13 @@ export function ChatTabWithMenu({
       badge={renderChatTabStatusBadge(tab)}
       shortcutLabel={shortcutLabel}
       shortcutRevealVisible={shortcutRevealVisible}
-      data-chat-tab
+      data-chat-tab={tab.id}
       data-chat-tab-id={tab.id}
       data-chat-tab-active={tab.isActive ? "true" : "false"}
+      data-chat-tab-session-id={tab.id}
+      data-chat-tab-harness={tab.agentKind}
+      data-chat-tab-index={stripIndex}
+      data-workspace-empty-chat={tab.isEmptyChat === true ? "true" : "false"}
     />
   );
   const renameTrigger = tab.delegatedAgent ? (

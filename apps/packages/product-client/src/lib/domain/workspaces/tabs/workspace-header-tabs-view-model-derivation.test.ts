@@ -238,6 +238,7 @@ function baseHeaderTab(sessionId: string) {
     manualGroupId: null,
     isHierarchyResolved: true,
     isResolvingSession: false,
+    isEmptyChat: false,
     delegatedAgent: null,
     delegatedIndicators: [],
   };

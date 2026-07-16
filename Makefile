@@ -854,6 +854,11 @@ qualification-candidate-handoff-smoke:
 # protected `staging` environment's secrets/vars — this target does not read
 # or expect the local file there.
 QUALIFICATION_INFRA_ENV ?= $(HOME)/.proliferate-local/dev/qualification-infra.env
+# Dev provisioning env (RELEASE_E2E_INTEGRATION_API_KEY, RELEASE_E2E_LOCAL_DATABASE_URL,
+# and the BYOK provider keys) written by the local provisioning scripts. Sourced
+# by qualification-local-functional AFTER qualification-infra.env when present —
+# local only; in Actions the protected Qualification environment supplies these.
+RELEASE_E2E_ENV ?= $(HOME)/.proliferate-local/dev/release-e2e.env
 QUALIFICATION_LOCAL_WORLD_BASE_DIR ?= $(CURDIR)/tests/release/.output/local-world
 qualification-local-workspace:
 	@test -n "$(PROFILE)" || { \
@@ -943,6 +948,129 @@ qualification-tier2:
 		--source-candidate \
 		--run-id "$$run_id" --shard-id "$$shard_id" \
 		--output-dir "$$run_dir/evidence"
+# "Complete Local Workspace Qualification (Functional)" — the same three
+# exact local-world candidates as `qualification-local-workspace`
+# (`build-local-qualification-candidates.mjs`, unmodified), handed to the same
+# qualification runner, but driving the full LOCAL-1..7 functional cell set
+# (specs/developing/testing/tier-3-scenario-contract.md §"Local cases")
+# instead of the single LOCAL-WORLD-SMOKE-1 infrastructure proof. This is the
+# ONE entrypoint; the release-e2e.yml manual job invokes this same target —
+# same build step, same runner invocation.
+#
+# PROFILE=<unique-name>   Names this run (becomes its run id). Never reuse a
+#                         PROFILE for two concurrent invocations.
+# BEHAVIOR=diagnostic|strict
+# AGENTS=all|<comma-list>   Harness kinds to fan out over (default: all).
+# SCENARIOS=all|<comma-list>   Default (all): the seven functional local cell
+#                         ids below (two of which — T3-WT-1 + T3-REPO-1 — are
+#                         the canonical LOCAL-1 pair). Override to run a subset
+#                         while iterating.
+# REUSE_CANDIDATES=<dir>   Optional fast path: point at a run directory that
+#                         already has candidate-build.json +
+#                         local-world-ports.json (e.g. from a previous
+#                         qualification-local-functional or
+#                         qualification-local-workspace run) to skip
+#                         rebuilding the Server/AnyHarness/Desktop-renderer
+#                         candidates and reuse them as-is. Evidence still
+#                         writes to a fresh run dir. No target in this
+#                         Makefile builds a "managed-cloud" candidate set
+#                         today, so there is nothing to mirror beyond this
+#                         local skip-the-build shape.
+#
+# Same local secret-profile / env resolution as qualification-local-workspace
+# (QUALIFICATION_INFRA_ENV): AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL and
+# AGENT_GATEWAY_LITELLM_MASTER_KEY are required there; the functional
+# scenarios additionally read RELEASE_E2E_BYOK_ANTHROPIC_A/_B,
+# RELEASE_E2E_BYOK_OPENAI, RELEASE_E2E_BYOK_XAI, RELEASE_E2E_INTEGRATION_*,
+# and RELEASE_E2E_LOCAL_DATABASE_URL (all optional — env-manifest.ts: an
+# absent credential reports just its dependent scenarios/cells blocked, it
+# never fails the whole run) straight off the same `set -a`-sourced profile
+# file, by name, with no extra mapping needed here. In GitHub Actions those
+# same names come from the protected `Qualification` environment's
+# vars/secrets, mapped explicitly in release-e2e.yml.
+# Canonical local inventory: LOCAL-1's workspace-from-repo journey is proven by
+# BOTH T3-WT-1 (worktree/creation) and T3-REPO-1 (repo settings take effect) —
+# both fold into the world-backed `runLocal1WorkspaceLeaf`, so `SCENARIOS=all`
+# must plan and report both. Omitting T3-REPO-1 would silently drop a canonical
+# LOCAL-1 cell from the strict contract.
+QUALIFICATION_LOCAL_FUNCTIONAL_SCENARIOS := T3-WT-1,T3-REPO-1,T3-CHAT-1,T3-AUTHROUTE-1,T3-CFG-1,T3-SESSION-1,T3-INT-1
+qualification-local-functional:
+	@test -n "$(PROFILE)" || { \
+		echo "PROFILE=<unique-name> is required, e.g. make qualification-local-functional PROFILE=$$(whoami)-1 BEHAVIOR=diagnostic"; \
+		exit 1; \
+	}
+	@test -n "$(BEHAVIOR)" || { \
+		echo "BEHAVIOR=<diagnostic|strict> is required."; \
+		exit 1; \
+	}
+	@if [ "$$GITHUB_ACTIONS" != "true" ]; then \
+		test -f "$(QUALIFICATION_INFRA_ENV)" || { \
+			echo "Missing qualification secret profile at $(QUALIFICATION_INFRA_ENV)."; \
+			echo "It must define AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL and AGENT_GATEWAY_LITELLM_MASTER_KEY (mode 0600, never committed); optionally the RELEASE_E2E_BYOK_*/RELEASE_E2E_INTEGRATION_*/RELEASE_E2E_LOCAL_DATABASE_URL names too."; \
+			exit 1; \
+		}; \
+		perm=$$(stat -f '%Lp' "$(QUALIFICATION_INFRA_ENV)" 2>/dev/null || stat -c '%a' "$(QUALIFICATION_INFRA_ENV)"); \
+		test "$$perm" = "600" || { \
+			echo "$(QUALIFICATION_INFRA_ENV) must be mode 0600 (got $$perm). Run: chmod 600 $(QUALIFICATION_INFRA_ENV)"; \
+			exit 1; \
+		}; \
+	fi
+	pnpm install --silent
+	pnpm exec playwright install --with-deps chromium
+	@if [ "$$GITHUB_ACTIONS" = "true" ]; then \
+		: "$${AGENT_GATEWAY_LITELLM_BASE_URL:=$$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL}"; \
+		export AGENT_GATEWAY_LITELLM_BASE_URL; \
+	else \
+		set -a; \
+		. "$(QUALIFICATION_INFRA_ENV)"; \
+		[ ! -f "$(RELEASE_E2E_ENV)" ] || . "$(RELEASE_E2E_ENV)"; \
+		: "$${AGENT_GATEWAY_LITELLM_BASE_URL:=$$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL}"; \
+		set +a; \
+		export AGENT_GATEWAY_LITELLM_BASE_URL; \
+	fi; \
+	test -n "$$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL" || { \
+		echo "AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL is required (local: $(QUALIFICATION_INFRA_ENV); Actions: Qualification environment vars)."; \
+		exit 1; \
+	}; \
+	test -n "$$AGENT_GATEWAY_LITELLM_MASTER_KEY" || { \
+		echo "AGENT_GATEWAY_LITELLM_MASTER_KEY is required (local: $(QUALIFICATION_INFRA_ENV); Actions: Qualification environment secrets)."; \
+		exit 1; \
+	}; \
+	run_id="qlf-$(PROFILE)"; \
+	shard_id="1"; \
+	build_dir="$(QUALIFICATION_LOCAL_WORLD_BASE_DIR)/$$run_id/$$shard_id"; \
+	evidence_dir="$$build_dir/evidence"; \
+	if [ -n "$(REUSE_CANDIDATES)" ]; then \
+		build_dir="$(REUSE_CANDIDATES)"; \
+		test -f "$$build_dir/candidate-build.json" || { \
+			echo "REUSE_CANDIDATES=$$build_dir has no candidate-build.json — build it first (e.g. a prior qualification-local-functional or qualification-local-workspace run), or omit REUSE_CANDIDATES."; \
+			exit 1; \
+		}; \
+		test -f "$$build_dir/local-world-ports.json" || { \
+			echo "REUSE_CANDIDATES=$$build_dir has no local-world-ports.json sidecar next to its candidate-build.json."; \
+			exit 1; \
+		}; \
+		echo "Reusing already-built local-world candidates from $$build_dir (skipping build-local-qualification-candidates.mjs)."; \
+		evidence_dir="$(QUALIFICATION_LOCAL_WORLD_BASE_DIR)/$$run_id/$$shard_id/evidence"; \
+		candidate_map="$$build_dir/candidate-build.json"; \
+	else \
+		mkdir -p "$$build_dir"; \
+		build_summary=$$(node scripts/ci-cd/build-local-qualification-candidates.mjs \
+			--run-id "$$run_id" --shard-id "$$shard_id" --run-dir "$$build_dir") || exit $$?; \
+		echo "$$build_summary"; \
+		candidate_map=$$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).candidate_build_map)' "$$build_summary"); \
+	fi; \
+	mkdir -p "$$evidence_dir"; \
+	scenarios="$(if $(filter-out all,$(SCENARIOS)),$(SCENARIOS),$(QUALIFICATION_LOCAL_FUNCTIONAL_SCENARIOS))"; \
+	cd tests/release && pnpm exec tsx src/cli/run.ts \
+		--behavior $(BEHAVIOR) \
+		--lane local \
+		--desktop web \
+		--agents $(AGENTS) \
+		--scenarios "$$scenarios" \
+		--candidate-build-map "$$candidate_map" \
+		--run-id "$$run_id" --shard-id "$$shard_id" \
+		--output-dir "$$evidence_dir"
 
 # "Prove One Real Self-Hosted Installation": build the exact self-host
 # candidate (Server image archive for the box arch + release-shaped

@@ -96,3 +96,6 @@ __pycache__/
 # Build-time copy of the agent catalog for @proliferate/product-client
 # (emitted by scripts/copy-product-client-assets.mjs from catalogs/agents/catalog.json)
 apps/packages/product-client/src/generated/
+
+# Local dev symlink into the root workspace node_modules (never committed)
+tests/release/node_modules

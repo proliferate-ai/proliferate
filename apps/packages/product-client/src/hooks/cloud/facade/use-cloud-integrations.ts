@@ -25,8 +25,12 @@ export function useCloudIntegrations(
   organizationId: string | null = null,
   options?: { enabled?: boolean },
 ) {
-  const { cloudActive } = useCloudAvailabilityState();
-  const enabled = cloudActive && (options?.enabled ?? true);
+  // Integrations are an auth-plane surface: connecting a third-party tool needs
+  // only a signed-in control plane, not cloud compute (E2B). Gate on
+  // authentication so a local-only / self-hosted user can connect integrations.
+  // (The underlying catalog/health hooks already gate on the same signal.)
+  const { authStatus } = useCloudAvailabilityState();
+  const enabled = authStatus === "authenticated" && (options?.enabled ?? true);
 
   const catalogQuery = useIntegrationCatalog(organizationId, { enabled });
   const healthQuery = useIntegrationHealth(organizationId, { enabled });

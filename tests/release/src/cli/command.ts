@@ -163,6 +163,10 @@ export async function runReleaseCommand(argv: readonly string[], deps: CommandDe
     cells = await buildPlannedCells(scenarios, {
       desktop: args.desktop,
       agents: args.agents === "all" ? ["all"] : args.agents,
+      // `--lane local` plans only the local runtime lane (decision #5): the
+      // world-backed qualification path has no publicly-reachable server for
+      // sandbox-runtime cells to call back into.
+      targetLane: args.lane,
     });
   } catch (error) {
     deps.error(error instanceof Error ? error.message : String(error));

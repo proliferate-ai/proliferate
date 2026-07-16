@@ -132,6 +132,7 @@ function fakeWorld(): ReadyLocalWorld {
     renderer: undefined as never,
     gateway: undefined as never,
     paths: undefined as never,
+    db: { databaseUrl: "postgresql+asyncpg://proliferate:localdev@127.0.0.1:5599/proliferate" },
     close: async () => cleanupEvidence({}),
   };
 }
@@ -337,7 +338,8 @@ test("model choice: prefers haiku over sonnet and excludes the fable tier", asyn
   const outcome = await runLocalWorldSmokeCell(fakeCell(), fakeCtx(), driver);
   assert.equal(outcome.status, "green");
   assert.equal(outcome.evidence!.kind, "local_workspace_turn");
-  assert.equal((outcome.evidence as { model_id: string }).model_id, "claude-haiku-4-5");
+  // Narrow the audit-ruling-#3 widened evidence union to read the turn's model.
+  assert.equal((outcome.evidence as { model_id?: string }).model_id, "claude-haiku-4-5");
 });
 
 test("model choice: a fable-only intersection is blocked, never selected", async () => {

@@ -30,6 +30,7 @@ function fakeWorld(): ReadyLocalWorld {
       runtimeHome: "/tmp/run-1/runtime-home",
       repositoriesDir: "/tmp/run-1/repositories",
     },
+    db: { databaseUrl: "postgresql+asyncpg://proliferate:localdev@127.0.0.1:5599/proliferate" },
     close: async () => {
       throw new Error("not used in this test");
     },

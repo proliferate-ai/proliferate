@@ -46,6 +46,41 @@ test("leaf scenarios retain one unchanged scenario/lane cell", async () => {
   assert.deepEqual(cells[0].required_env, ["SCENARIO_VAR"]);
 });
 
+test("--lane local plans only local-runtime cells for a both-lane scenario (decision #5)", async () => {
+  // Run-1 executed T3-CHAT-1/sandbox and T3-WT-1/sandbox under --lane local
+  // because the planner expanded every declared lane regardless of target lane.
+  const cells = await buildPlannedCells([leaf("T3-WT-1", ["local", "sandbox"])], {
+    ...INPUTS,
+    targetLane: "local",
+  });
+  assert.deepEqual(
+    cells.map((cell) => cell.cell_id),
+    ["T3-WT-1/local"],
+  );
+});
+
+test("--lane local filters sandbox cells out of matrix scenarios too", async () => {
+  const cells = await buildPlannedCells(
+    [matrix("T3-CHAT-1", [{ dimensions: { harness: "claude" } }], ["local", "sandbox"])],
+    { ...INPUTS, targetLane: "local" },
+  );
+  assert.deepEqual(
+    cells.map((cell) => cell.cell_id),
+    ["T3-CHAT-1/local/harness=claude"],
+  );
+});
+
+test("--lane staging keeps every declared runtime lane (legacy behavior untouched)", async () => {
+  const cells = await buildPlannedCells([leaf("T3-WT-1", ["local", "sandbox"])], {
+    ...INPUTS,
+    targetLane: "staging",
+  });
+  assert.deepEqual(
+    cells.map((cell) => cell.cell_id),
+    ["T3-WT-1/local", "T3-WT-1/sandbox"],
+  );
+});
+
 test("matrix cell ids are deterministic regardless of declaration order", async () => {
   const declared = [{ dimensions: { harness: "codex" } }, { dimensions: { harness: "claude" } }];
   const reversed = [...declared].reverse();

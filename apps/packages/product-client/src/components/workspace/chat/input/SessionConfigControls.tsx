@@ -85,6 +85,8 @@ function ToggleControl({ control }: { control: LiveSessionControlDescriptor }) {
           trailing={<PendingConfigIndicator pendingState={control.pendingState} />}
           aria-label={tooltip}
           className="max-w-[12rem]"
+          data-session-config-control={control.key}
+          data-session-config-selected={selectedOption?.value ?? ""}
           onClick={() => {
             if (nextValue) {
               control.onSelect(nextValue);
@@ -103,6 +105,8 @@ function ToggleControl({ control }: { control: LiveSessionControlDescriptor }) {
       detail={control.detail}
       trailing={<PendingConfigIndicator pendingState={control.pendingState} />}
       className="max-w-[12rem]"
+      data-session-config-control={control.key}
+      data-session-config-selected={selectedOption?.value ?? ""}
       onClick={() => {
         if (nextValue) {
           control.onSelect(nextValue);
@@ -113,12 +117,16 @@ function ToggleControl({ control }: { control: LiveSessionControlDescriptor }) {
 }
 
 function SelectControl({ control }: { control: LiveSessionControlDescriptor }) {
+  const selectedOption = control.options.find((option) => option.selected) ?? null;
+
   if (!control.settable) {
     return (
       <ComposerControlButton
         disabled
         label={control.label}
         detail={control.detail}
+        data-session-config-control={control.key}
+        data-session-config-selected={selectedOption?.value ?? ""}
       />
     );
   }
@@ -131,6 +139,8 @@ function SelectControl({ control }: { control: LiveSessionControlDescriptor }) {
           detail={control.detail}
           trailing={<PendingConfigIndicator pendingState={control.pendingState} />}
           className="max-w-[14rem]"
+          data-session-config-control={control.key}
+          data-session-config-selected={selectedOption?.value ?? ""}
         />
       }
       side="top"
@@ -141,6 +151,7 @@ function SelectControl({ control }: { control: LiveSessionControlDescriptor }) {
           {control.options.map((option) => (
             <PopoverMenuItem
               key={option.value}
+              data-session-config-option={`${control.key}:${option.value}`}
               label={option.label}
               trailing={option.selected ? <Check className="size-3.5 shrink-0 text-foreground/60" /> : null}
               onClick={() => {

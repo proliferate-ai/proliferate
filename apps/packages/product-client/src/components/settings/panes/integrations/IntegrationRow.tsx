@@ -34,7 +34,14 @@ export function IntegrationRow({
   const toolCountLabel = integrationToolCountLabel(integration.toolCount);
 
   return (
-    <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)_minmax(0,0.6fr)_minmax(0,14rem)] items-center gap-3 border-b border-border py-3 last:border-b-0">
+    <div
+      className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)_minmax(0,0.6fr)_minmax(0,14rem)] items-center gap-3 border-b border-border py-3 last:border-b-0"
+      data-integration-connected={
+        integration.accountId !== null && integration.health === "ready"
+          ? integration.namespace
+          : undefined
+      }
+    >
       <div className="flex min-w-0 items-center gap-3">
         <IntegrationIcon namespace={integration.namespace} className="size-8" />
         <div className="min-w-0">
@@ -90,6 +97,7 @@ export function IntegrationRow({
                 size="sm"
                 className="min-w-24"
                 disabled={connecting}
+                data-integration-connect-trigger={integration.namespace}
                 onClick={() => onConnect(integration)}
               >
                 {connecting
