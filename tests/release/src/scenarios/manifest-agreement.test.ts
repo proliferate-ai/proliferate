@@ -1,27 +1,16 @@
 /**
- * Manifest ↔ executable-registry agreement (PR 8 "Close the Remaining Core
- * Scenario Inventory", deliverable 1).
+ * Bidirectional manifest ↔ executable-registry agreement for PR 8.
  *
- * The authoritative manifest
- * (`specs/developing/testing/core-release-scenario-manifest.json`) and this
- * runner's registries must agree — no orphan, duplicate, unknown, or
- * prose-only required cell:
+ * The frozen slice owns non-world/non-financial Tier-2 guarantees. Each such
+ * row must be one of exactly two truthful states:
  *
- * - a `deferred` manifest row (unmerged owning feature, or Tier 3 standing-set
- *   policy) must NOT have an executable Tier-2 case handler — the hard
- *   fabrication guard: coverage for an unmerged feature cannot be claimed
- *   ahead of its feature stack;
- * - every Tier-2 case id registered on the aggregate runner must resolve to a
- *   known manifest row (no unknown/invented ids);
- * - no Tier-2 case id is registered by two scenarios (no duplicate final-cell
- *   claim);
- * - every top-level `ScenarioDefinition` id is unique.
+ * - deferred with a bounded reason and no executable collector; or
+ * - collected/enforced with exactly one registered case collector and audited
+ *   execution metadata.
  *
- * Scenario-group ids (`T2-BILL`, world journeys like `CLOUD-PROVISION-1`) are
- * containers, not manifest guarantees; the manifest-facing unit for Tier 2 is
- * the case id. Non-manifest legacy ids remain allowed ONLY via the explicit
- * allowlist below, which must shrink — never grow — as PR 8's workstreams port
- * them onto real manifest rows.
+ * The pre-existing BILL family, self-host family, and updater row retain their
+ * owning slices. Registered Tier-2 cases are still checked globally for
+ * unknown ids, duplicates, and fabricated collection of a deferred row.
  */
 
 import assert from "node:assert/strict";
@@ -40,33 +29,44 @@ const MANIFEST_PATH = path.join(
   "specs/developing/testing/core-release-scenario-manifest.json",
 );
 
+type ImplementationStatus = "planned" | "deferred" | "collected" | "enforced";
+
+interface ManifestImplementation {
+  status: ImplementationStatus;
+  reason?: string;
+  collector?: string;
+  testId?: string;
+  lanes?: string[];
+  gate?: string;
+  evidenceStatus?: string;
+}
+
 interface ManifestRow {
   id: string;
   tier: number;
-  implementation: { status: string; reason?: string };
+  implementation: ManifestImplementation;
 }
 
 interface Manifest {
   requiredScenarios: ManifestRow[];
 }
 
+interface CollectorClaim {
+  caseId: string;
+  scenarioId: string;
+}
+
 const manifest = JSON.parse(readFileSync(MANIFEST_PATH, "utf8")) as Manifest;
-const manifestById = new Map(manifest.requiredScenarios.map((row) => [row.id, row]));
 
-/**
- * Registered Tier-2 case ids that predate the authoritative manifest. Each
- * was a PR-4 representative cell pending its PR-8 port onto real manifest
- * rows. Append-only registries may not grow this list; ports remove entries.
- * Empty as of PR 8 workstream 1 (T2-AUTH-REP/T2-ORG-ROLES-REP/T2-INVITE-REP
- * ported onto T2-AUTH-1/T2-INV-1/T2-INV-2/T2-ORG-1/T2-ORG-2 in
- * `tier2/t2-identity-org.ts`) — the mechanism stays in place for any future
- * legacy port.
- */
-const LEGACY_TIER2_CASE_IDS = new Set<string>([]);
+function isPr8Tier2Row(row: ManifestRow): boolean {
+  return row.tier === 2
+    && !row.id.startsWith("T2-BILL-")
+    && !row.id.startsWith("T2-SH-")
+    && row.id !== "T2-UPDATER-1";
+}
 
-/** Every Tier-2 matrix case id, with its owning scenario id. */
-async function collectTier2CaseIds(): Promise<Map<string, string>> {
-  const byCaseId = new Map<string, string>();
+async function collectTier2Claims(): Promise<CollectorClaim[]> {
+  const claims: CollectorClaim[] = [];
   for (const scenario of SCENARIOS) {
     if (!isMatrixScenario(scenario)) {
       continue;
@@ -74,19 +74,65 @@ async function collectTier2CaseIds(): Promise<Map<string, string>> {
     const cells = await scenario.expandCells({ runtimeLane: "local", desktop: "web", agents: ["claude"] });
     for (const cell of cells) {
       const caseId = cell.dimensions[TIER2_CASE_DIMENSION];
-      if (!caseId) {
-        continue;
+      if (caseId) {
+        claims.push({ caseId, scenarioId: scenario.id });
       }
-      const existing = byCaseId.get(caseId);
-      assert.equal(
-        existing,
-        undefined,
-        `case id "${caseId}" is claimed by both "${existing}" and "${scenario.id}" — duplicate collectors for one required cell`,
-      );
-      byCaseId.set(caseId, scenario.id);
     }
   }
-  return byCaseId;
+  return claims;
+}
+
+function agreementProblems(rows: readonly ManifestRow[], claims: readonly CollectorClaim[]): string[] {
+  const problems: string[] = [];
+  const rowsById = new Map(rows.map((row) => [row.id, row]));
+  const claimsById = new Map<string, CollectorClaim[]>();
+  for (const claim of claims) {
+    const owners = claimsById.get(claim.caseId) ?? [];
+    owners.push(claim);
+    claimsById.set(claim.caseId, owners);
+  }
+
+  for (const [caseId, owners] of claimsById) {
+    if (!rowsById.has(caseId)) {
+      problems.push(`${caseId}: executable collector is not a required manifest row`);
+    }
+    if (owners.length !== 1) {
+      problems.push(`${caseId}: expected exactly one collector, found ${owners.length} (${owners.map((owner) => owner.scenarioId).join(", ")})`);
+    }
+  }
+
+  for (const row of rows) {
+    const owners = claimsById.get(row.id) ?? [];
+    if (row.implementation.status === "deferred" && owners.length > 0) {
+      problems.push(`${row.id}: deferred row has fabricated executable coverage from ${owners.map((owner) => owner.scenarioId).join(", ")}`);
+    }
+    if (
+      row.tier === 2
+      && (row.implementation.status === "collected" || row.implementation.status === "enforced")
+      && owners.length !== 1
+    ) {
+      problems.push(`${row.id}: ${row.implementation.status} row must map to exactly one collector, found ${owners.length}`);
+    }
+    if (!isPr8Tier2Row(row)) {
+      continue;
+    }
+    if (row.implementation.status === "planned") {
+      problems.push(`${row.id}: in-scope incomplete row must be deferred, not planned`);
+    }
+    if (row.implementation.status === "collected" || row.implementation.status === "enforced") {
+      const implementation = row.implementation;
+      if (
+        !implementation.collector
+        || !implementation.testId
+        || !implementation.lanes?.length
+        || !implementation.gate
+        || !implementation.evidenceStatus
+      ) {
+        problems.push(`${row.id}: executable row is missing audited collector metadata`);
+      }
+    }
+  }
+  return problems;
 }
 
 test("scenario ids in the executable registry are unique", () => {
@@ -94,33 +140,8 @@ test("scenario ids in the executable registry are unique", () => {
   assert.equal(new Set(ids).size, ids.length, "duplicate ScenarioDefinition id registered");
 });
 
-test("every registered Tier-2 case id resolves to a known manifest row or the shrinking legacy allowlist", async () => {
-  const byCaseId = await collectTier2CaseIds();
-  for (const [caseId, scenarioId] of byCaseId) {
-    if (LEGACY_TIER2_CASE_IDS.has(caseId)) {
-      continue;
-    }
-    assert.ok(
-      manifestById.has(caseId),
-      `"${scenarioId}" registers case id "${caseId}", which is not a required manifest scenario`,
-    );
-  }
-});
-
-test("no executable Tier-2 case handler exists for a deferred manifest row (fabrication guard)", async () => {
-  const byCaseId = await collectTier2CaseIds();
-  for (const [caseId, scenarioId] of byCaseId) {
-    const row = manifestById.get(caseId);
-    if (!row) {
-      continue;
-    }
-    assert.notEqual(
-      row.implementation.status,
-      "deferred",
-      `"${scenarioId}" registers an executable cell for "${caseId}", but the manifest defers that row ` +
-        `(${row.implementation.reason ?? "no reason"}) — cells must not be fabricated ahead of their feature stack`,
-    );
-  }
+test("PR-8 Tier-2 manifest rows and registry collectors agree bidirectionally", async () => {
+  assert.deepEqual(agreementProblems(manifest.requiredScenarios, await collectTier2Claims()), []);
 });
 
 test("every deferred manifest row names a bounded reason", () => {
@@ -132,5 +153,31 @@ test("every deferred manifest row names a bounded reason", () => {
       typeof row.implementation.reason === "string" && row.implementation.reason.length > 0,
       `${row.id}: deferred without a reason`,
     );
+    assert.ok(row.implementation.reason.length <= 500, `${row.id}: deferred reason is not bounded`);
   }
+});
+
+test("agreement audit rejects duplicate collectors", () => {
+  const rows: ManifestRow[] = [{ id: "T2-TEST-1", tier: 2, implementation: { status: "collected" } }];
+  const problems = agreementProblems(rows, [
+    { caseId: "T2-TEST-1", scenarioId: "group-a" },
+    { caseId: "T2-TEST-1", scenarioId: "group-b" },
+  ]);
+  assert.ok(problems.some((problem) => problem.includes("expected exactly one collector")));
+});
+
+test("agreement audit rejects a missing collector", () => {
+  const rows: ManifestRow[] = [{ id: "T2-TEST-1", tier: 2, implementation: { status: "collected" } }];
+  const problems = agreementProblems(rows, []);
+  assert.ok(problems.some((problem) => problem.includes("must map to exactly one collector")));
+});
+
+test("agreement audit rejects fabricated executable coverage for a deferred row", () => {
+  const rows: ManifestRow[] = [{
+    id: "T2-TEST-1",
+    tier: 2,
+    implementation: { status: "deferred", reason: "not implemented" },
+  }];
+  const problems = agreementProblems(rows, [{ caseId: "T2-TEST-1", scenarioId: "fabricated" }]);
+  assert.ok(problems.some((problem) => problem.includes("fabricated executable coverage")));
 });

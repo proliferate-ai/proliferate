@@ -24,119 +24,136 @@
       "id": "T2-AUTH-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "the removed HTTP probe lacked truthful auth-domain evidence for the complete claim/login/logout guarantee"
       }
     },
     {
       "id": "T2-AUTH-2",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "no complete collector and truthful domain evidence are registered for this guarantee"
       }
     },
     {
       "id": "T2-AUTH-3",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "no complete collector and truthful domain evidence are registered for this guarantee"
       }
     },
     {
       "id": "T2-AUTH-4",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "no complete collector and truthful domain evidence are registered for this guarantee"
       }
     },
     {
       "id": "T2-AUTH-5",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "no complete collector and truthful domain evidence are registered for this guarantee"
       }
     },
     {
       "id": "T2-AUTH-6",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "no complete collector and truthful domain evidence are registered for this guarantee"
       }
     },
     {
       "id": "T2-INV-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "the removed invitation probe had no truthful invitation-domain evidence mapping"
       }
     },
     {
       "id": "T2-INV-2",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "the removed invitation atomicity probe had no truthful invitation-domain evidence mapping"
       }
     },
     {
       "id": "T2-ORG-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "the removed partial probe did not cover every organization-creation path and lacked truthful org-domain evidence"
       }
     },
     {
       "id": "T2-ORG-2",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "the removed partial probe could not construct the required outsider actor or prove UI boundaries"
       }
     },
     {
       "id": "T2-SURF-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "no complete collector and truthful domain evidence are registered for this guarantee"
       }
     },
     {
       "id": "T2-SURF-2",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "no complete collector and truthful domain evidence are registered for this guarantee"
       }
     },
     {
       "id": "T2-COMPOSER-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "no complete collector and truthful domain evidence are registered for this guarantee"
       }
     },
     {
       "id": "T2-TRANSCRIPT-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "no complete collector and truthful domain evidence are registered for this guarantee"
       }
     },
     {
       "id": "T2-SETTINGS-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "the removed partial API probe could not observe required routing, layout, vocabulary, or telemetry clauses"
       }
     },
     {
       "id": "T2-MOBILE-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "no complete collector and truthful domain evidence are registered for this guarantee"
       }
     },
     {
       "id": "T2-DISPATCH-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "no complete collector and truthful domain evidence are registered for this guarantee"
       }
     },
     {
@@ -151,49 +168,56 @@
       "id": "T2-DELEGATE-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "no complete collector and truthful domain evidence are registered for this guarantee"
       }
     },
     {
       "id": "T2-SUPPORT-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "the removed storage-unavailable probe could not reach support report creation, completion, or sanitization guarantees"
       }
     },
     {
       "id": "T2-WS-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "the removed partial probe could not reach the happy path, projected UI, billing block, or lost-response guarantees"
       }
     },
     {
       "id": "T2-WS-2",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "the removed partial probe could not observe native/web capability truth or the cloud happy path"
       }
     },
     {
       "id": "T2-WS-3",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "the removed partial probe could not reach cloud authorization or the complete launch-seam round trip"
       }
     },
     {
       "id": "T2-WS-4",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "the removed partial probe lacked a live runtime for durable handoff, passive no-wake, and late-result rejection"
       }
     },
     {
       "id": "T2-WS-5",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "no complete collector and truthful domain evidence are registered for this guarantee"
       }
     },
     {
@@ -208,91 +232,104 @@
       "id": "T2-GHAPP-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "no complete collector and truthful domain evidence are registered for this guarantee"
       }
     },
     {
       "id": "T2-SEC-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "the removed partial probe could not prove workspace materialization and the complete secret-scope matrix"
       }
     },
     {
       "id": "T2-INT-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "the removed partial probe could not reach OAuth connect or the complete integration lifecycle"
       }
     },
     {
       "id": "T2-MCP-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "no complete collector and truthful domain evidence are registered for this guarantee"
       }
     },
     {
       "id": "T2-AGENTAUTH-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "the removed partial probe could not prove organization credentials, restart revisioning, or protected cleanup paths"
       }
     },
     {
       "id": "T2-RUNTIMECFG-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "no complete collector and truthful domain evidence are registered for this guarantee"
       }
     },
     {
       "id": "T2-MODELREG-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "the removed partial probe could not reach seeded ACP projection or prove full composition and last-visible behavior"
       }
     },
     {
       "id": "T2-POL-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "the removed partial probe could not construct personal-scope isolation or prove the complete policy UI/API matrix"
       }
     },
     {
       "id": "T2-PERM-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "no complete collector and truthful domain evidence are registered for this guarantee"
       }
     },
     {
       "id": "T2-SESSION-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "the removed auth-rejection probe could not reach required runtime mutations or idempotency behavior"
       }
     },
     {
       "id": "T2-AUTHZ-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "the removed partial probe could not exercise the complete AnyHarness route and token-forgery matrix"
       }
     },
     {
       "id": "T2-CMD-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "no Tier-2 HTTP surface exposes the required cloud-command wake, lease, replay, and convergence behavior"
       }
     },
     {
       "id": "T2-WF-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "the removed partial probe could not launch workflows because the run engine is not merged"
       }
     },
     {
@@ -504,7 +541,8 @@
       "id": "T2-OBS-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "the removed partial probe could not observe hosted vendor capture, self-managed routing, or complete masking behavior"
       }
     },
     {

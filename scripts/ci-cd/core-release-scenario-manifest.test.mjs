@@ -258,18 +258,10 @@ test("target presence is never treated as executable coverage", () => {
   }
 });
 
-test("foundation recovery leaves target rows planned or truthfully deferred until execution mapping is audited", () => {
-  // No row may claim `collected`/`enforced` until the bidirectional
-  // manifest/collector audit lands; a row is either `planned` (owning feature
-  // merged, collection pending) or `deferred` (bounded reason recorded on the
-  // row: unmerged owning feature or standing-set policy).
-  assert.equal(
-    manifest.requiredScenarios.filter(
-      ({ implementation }) => implementation.status === "planned" || implementation.status === "deferred",
-    ).length,
-    manifest.requiredScenarios.length,
-  );
-  // Tier 4 rows are PR 9/PR 10 territory and never deferred by this pass.
+test("PR 8 leaves out-of-scope Tier 4 rows planned", () => {
+  // Tier 4 rows are PR 9/PR 10 territory and never deferred or claimed by
+  // this pass. Collected/enforced states remain legal elsewhere when the
+  // bidirectional registry audit proves them.
   for (const scenario of manifest.requiredScenarios) {
     if (scenario.tier === 4) {
       assert.equal(scenario.implementation.status, "planned", `${scenario.id}: Tier 4 stays planned`);
