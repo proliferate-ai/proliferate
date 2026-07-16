@@ -136,9 +136,38 @@ impl WorkspaceRuntime {
         })
     }
 
+    /// Register (idempotently) a repo root for an acquired local checkout with
+    /// an explicit `kind` (`managed` for freshly cloned roots, `external` for
+    /// adopted existing checkouts). Rejects a linked worktree as unsupported:
+    /// repo roots must be a main checkout. Returns the resolved context and the
+    /// registered record.
+    pub fn register_acquired_repo_root(
+        &self,
+        path: &str,
+        kind: &str,
+    ) -> Result<(ResolvedGitContext, RepoRootRecord), ResolveRepoRootError> {
+        let ctx =
+            resolver::resolve_git_context(path).map_err(|_| ResolveRepoRootError::NotGitRepo)?;
+        if ctx.is_worktree {
+            return Err(ResolveRepoRootError::WorktreeNotAllowed);
+        }
+        let record = self
+            .ensure_repo_root_from_context_with_kind(&ctx, kind)
+            .map_err(ResolveRepoRootError::Unexpected)?;
+        Ok((ctx, record))
+    }
+
     fn ensure_repo_root_from_context(
         &self,
         ctx: &ResolvedGitContext,
+    ) -> anyhow::Result<RepoRootRecord> {
+        self.ensure_repo_root_from_context_with_kind(ctx, "external")
+    }
+
+    fn ensure_repo_root_from_context_with_kind(
+        &self,
+        ctx: &ResolvedGitContext,
+        kind: &str,
     ) -> anyhow::Result<RepoRootRecord> {
         let repo_root_path = ctx
             .main_worktree_path
@@ -152,7 +181,7 @@ impl WorkspaceRuntime {
         let repo_root = self
             .repo_root_service
             .ensure_repo_root(CreateRepoRootInput {
-                kind: "external".into(),
+                kind: kind.to_string(),
                 path: repo_root_path,
                 display_name: None,
                 default_branch: detected_default_branch,

@@ -1,4 +1,5 @@
 pub mod branches;
+pub mod clone;
 pub mod commit;
 pub mod commit_all;
 pub mod diff;

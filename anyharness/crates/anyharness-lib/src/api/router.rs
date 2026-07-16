@@ -132,7 +132,15 @@ pub fn build_router(state: AppState) -> Router {
             get(repo_roots::list_repo_roots).post(repo_roots::resolve_repo_root),
         )
         .route("/repo-roots/resolve", post(repo_roots::resolve_repo_root))
+        .route(
+            "/repo-roots/materializations",
+            post(repo_roots::materialize_repo_root),
+        )
         .route("/repo-roots/{repo_root_id}", get(repo_roots::get_repo_root))
+        .route(
+            "/repo-roots/{repo_root_id}/workspace-materializations",
+            post(repo_roots::materialize_workspace_at_ref),
+        )
         .route(
             "/repo-roots/{repo_root_id}/git/branches",
             get(repo_roots::list_repo_root_git_branches),

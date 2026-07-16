@@ -205,9 +205,8 @@ fn create_mobility_destination_rejects_dirty_existing_destination_path() {
         )
         .expect_err("dirty destination must not be adopted");
 
-    assert!(error
-        .to_string()
-        .contains("destination path already exists with uncommitted changes"));
+    assert!(error.to_string().contains("mobility destination conflict"));
+    assert!(error.to_string().contains("uncommitted changes"));
 }
 
 #[test]
