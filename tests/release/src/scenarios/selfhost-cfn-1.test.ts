@@ -1,0 +1,439 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+
+import {
+  SELFHOST_CFN_1_ID,
+  SH_CFN_WRAPPER,
+  attachCfnCleanup,
+  cleanupIsClean,
+  resolveCfnWorldInputs,
+  runCfnWrapperCell,
+  runSelfHostCfnCells,
+  type ReadySelfHostCfnWorld,
+  type SelfHostCfnDriver,
+  type SelfHostCfnWrapperEvidenceNoCleanup,
+} from "./selfhost-cfn-1.js";
+import type { ScenarioRunContext } from "./types.js";
+import type { CandidateBuildMapV1 } from "../artifacts/build-map.js";
+import type { EnvResolution } from "../config/env-resolution.js";
+import { ALL_FINAL_STATUSES, type FinalTestStatus, type PlannedCellV1 } from "../runner/result.js";
+import {
+  expectedVerdict,
+  validateReportV4,
+  type TestRunReportV3,
+  type TestRunReportV4,
+} from "../evidence/schema.js";
+import type { SelfHostCfnWorldCleanupEvidence } from "../worlds/selfhost/cfn.js";
+
+// ── Fakes ────────────────────────────────────────────────────────────────────
+
+function fakeCandidateMap(): CandidateBuildMapV1 {
+  return {
+    schema_version: 1,
+    kind: "proliferate.candidate-build",
+    source_sha: "a".repeat(40),
+    artifacts: [
+      { artifact_id: "server/linux-amd64", version: "1", sha256: "s".repeat(64), locator: { kind: "local_file", path: "/tmp/server.tar" } },
+      { artifact_id: "selfhost-bundle/linux-amd64", version: "1", sha256: "b".repeat(64), locator: { kind: "local_file", path: "/tmp/bundle.tar.gz" } },
+      { artifact_id: "anyharness/x86_64-unknown-linux-gnu", version: "1", sha256: "a".repeat(64), locator: { kind: "local_file", path: "/tmp/anyharness" } },
+      { artifact_id: "desktop-renderer/browser", version: "1", sha256: "d".repeat(64), locator: { kind: "local_file", path: "/tmp/renderer.tar" } },
+    ],
+  };
+}
+
+function fakeEnv(vars: Record<string, string | undefined> = {}): EnvResolution {
+  const defaults: Record<string, string | undefined> = {
+    RELEASE_E2E_SELFHOST_REGION: "us-east-1",
+    RELEASE_E2E_SELFHOST_HOSTED_ZONE_ID: "Z123",
+    RELEASE_E2E_SELFHOST_CFN_BUCKET: "qual-bundle-bucket",
+    RELEASE_E2E_SELFHOST_CFN_IMAGE_REPO: "ghcr.io/proliferate-ai/proliferate-server-qualification",
+    ...vars,
+  };
+  return {
+    all: [],
+    missing: [],
+    present: (name) => defaults[name] !== undefined,
+    get: (name) => defaults[name],
+    require: (name) => {
+      const value = defaults[name];
+      if (!value) {
+        throw new Error(`missing required env var "${name}"`);
+      }
+      return value;
+    },
+  };
+}
+
+function fakeCtx(overrides: Partial<ScenarioRunContext> = {}): ScenarioRunContext {
+  return {
+    targetLane: "local",
+    runtimeLane: "selfhost",
+    desktop: "web",
+    agents: ["claude"],
+    dryRun: false,
+    env: fakeEnv(),
+    candidateBuildMap: fakeCandidateMap(),
+    runIdentity: {
+      run_id: "local-run-1",
+      shard_id: "local-0",
+      attempt: 1,
+      source_sha: "a".repeat(40),
+      origin: { kind: "local", github_run_id: null, github_job: null },
+    },
+    runDir: "/tmp/run-1",
+    ports: { server: 1, postgres: 2, redis: 3, anyharness: 4, renderer: 5 },
+    ...overrides,
+  };
+}
+
+const WRAPPER_CELL_ID = `${SELFHOST_CFN_1_ID}/selfhost/cell=${SH_CFN_WRAPPER},harness=claude`;
+const SITE = "sh-x.qualification.proliferate.com";
+const PUSHED_DIGEST = `sha256:${"c".repeat(64)}`;
+
+function wrapperCell(): PlannedCellV1 {
+  return {
+    cell_id: WRAPPER_CELL_ID,
+    scenario_id: SELFHOST_CFN_1_ID,
+    registry_flow_ref: "specs/developing/testing/tier-3-scenario-contract.md#sh-cfn-wrapper",
+    runtime_lane: "selfhost",
+    dimensions: { cell: SH_CFN_WRAPPER, harness: "claude" },
+    required_env: [],
+  };
+}
+
+function cleanCleanup(): SelfHostCfnWorldCleanupEvidence {
+  return {
+    ledgerIdHash: "a".repeat(64),
+    registered: 5,
+    reconciled: 5,
+    failed: 0,
+    stackDeleted: true,
+    s3ObjectsDeleted: true,
+    ghcrVersionDeleted: true,
+    route53RecordDeleted: true,
+    localPathsRemoved: true,
+  };
+}
+
+function dirtyCleanup(): SelfHostCfnWorldCleanupEvidence {
+  return { ...cleanCleanup(), failed: 1, stackDeleted: false, route53RecordDeleted: false };
+}
+
+interface FakeWorldOptions {
+  metaVersion?: string;
+  cloudWorkspaces?: boolean;
+  agentGateway?: boolean;
+  healthy?: boolean;
+  observedDigest?: string;
+  ssmThrows?: boolean;
+  bundleDigestBound?: boolean;
+  templateValidated?: boolean;
+  outputsSiteAddress?: string;
+  cleanup?: SelfHostCfnWorldCleanupEvidence;
+}
+
+function fakeWorld(options: FakeWorldOptions = {}): { world: ReadySelfHostCfnWorld; closeCalls: () => number } {
+  let closeCalls = 0;
+  const world: ReadySelfHostCfnWorld = {
+    run: { run_id: "local-run-1", shard_id: "local-0", attempt: 1, source_sha: "a".repeat(40), origin: { kind: "local", github_run_id: null, github_job: null } },
+    artifactIds: ["server/linux-amd64", "selfhost-bundle/linux-amd64", "anyharness/x86_64-unknown-linux-gnu", "desktop-renderer/browser"],
+    serverVersion: "1.2.3",
+    siteAddress: SITE,
+    apiOrigin: SITE,
+    stackName: "proliferate-sh-cfn-local-run-1-local-0-abcd1234",
+    templateSha256: "t".repeat(64),
+    templateValidated: options.templateValidated ?? true,
+    bundleDigestBound: options.bundleDigestBound ?? true,
+    pushedImageDigest: PUSHED_DIGEST,
+    releaseVersionTag: "local-run-1-local-0",
+    outputs: {
+      baseUrl: `https://${options.outputsSiteAddress ?? SITE}`,
+      siteAddress: options.outputsSiteAddress ?? SITE,
+      instanceId: "i-0abc123",
+    },
+    inspectRunningImageDigest: async () => {
+      if (options.ssmThrows) {
+        throw new Error("SSM unusable");
+      }
+      return options.observedDigest ?? PUSHED_DIGEST;
+    },
+    waitHealthy: async () => {
+      if (options.healthy === false) {
+        throw new Error("HTTPS /health not green");
+      }
+    },
+    fetchMeta: async () => ({
+      serverVersion: options.metaVersion ?? "1.2.3",
+      cloudWorkspaces: options.cloudWorkspaces ?? false,
+      agentGateway: options.agentGateway ?? false,
+    }),
+    close: async () => {
+      closeCalls += 1;
+      return options.cleanup ?? cleanCleanup();
+    },
+  };
+  return { world, closeCalls: () => closeCalls };
+}
+
+function greenDriver(overrides: Partial<SelfHostCfnDriver> = {}): { driver: SelfHostCfnDriver; buildCalls: () => number } {
+  let buildCalls = 0;
+  const built = fakeWorld();
+  const driver: SelfHostCfnDriver = {
+    buildWorld: async () => {
+      buildCalls += 1;
+      return built.world;
+    },
+    runCfnWrapper: (world) => runCfnWrapperCell(world),
+    closeWorld: (world) => world.close(),
+    ...overrides,
+  };
+  return { driver, buildCalls: () => buildCalls };
+}
+
+// ── Orchestration: green path ─────────────────────────────────────────────────
+
+test("runSelfHostCfnCells: green cell folds the CFN cleanup block into the wrapper evidence", async () => {
+  const { driver } = greenDriver();
+  const outcomes = await runSelfHostCfnCells(fakeCtx(), [wrapperCell()], driver);
+  assert.equal(outcomes.length, 1);
+  const [outcome] = outcomes;
+  assert.equal(outcome.status, "green", JSON.stringify(outcome));
+  const evidence = outcome.evidence as { kind: string; cleanup: { registered: number; route53_record_deleted: boolean } };
+  assert.equal(evidence.kind, "selfhost_cfn_wrapper");
+  assert.equal(evidence.cleanup.registered, 5);
+  assert.equal(evidence.cleanup.route53_record_deleted, true);
+});
+
+test("runSelfHostCfnCells: the emitted green evidence passes the real report validator", async () => {
+  const { driver } = greenDriver();
+  const outcomes = await runSelfHostCfnCells(fakeCtx(), [wrapperCell()], driver);
+  const evidence = outcomes[0].evidence;
+  assert.ok(evidence);
+  validateReportV4(reportWithEvidence(evidence, "green"));
+});
+
+// ── runCfnWrapperCell: assertion coverage ─────────────────────────────────────
+
+test("runCfnWrapperCell: green when every shallow check passes", async () => {
+  const { world } = fakeWorld();
+  const result = await runCfnWrapperCell(world);
+  assert.equal(result.status, "green");
+  assert.ok(result.evidence);
+  assert.equal(result.evidence?.image_digest_bound, true);
+});
+
+test("runCfnWrapperCell: an unreadable SSM image digest FAILS CLOSED (no version-only fallback, PR7-CONTROL-006)", async () => {
+  // Previously the SSM-unusable path stayed green on /meta version equality
+  // alone; CONTROL-006 requires the image-to-pushed-candidate binding be proven,
+  // so an unreadable digest is now a red, not a pass.
+  const { world } = fakeWorld({ ssmThrows: true });
+  const result = await runCfnWrapperCell(world);
+  assert.equal(result.status, "failed");
+  assert.equal(result.evidence, undefined);
+  assert.match(result.reason?.message ?? "", /digest could not be read|failing closed/);
+});
+
+test("runCfnWrapperCell: green records the pushed digest, release tag, and template sha (PR7-CONTROL-006)", async () => {
+  const { world } = fakeWorld();
+  const result = await runCfnWrapperCell(world);
+  assert.equal(result.status, "green", JSON.stringify(result));
+  const ev = result.evidence as { image_repo_digest: string; release_version_tag: string; template_sha256: string };
+  assert.equal(ev.image_repo_digest, PUSHED_DIGEST);
+  assert.equal(ev.release_version_tag, "local-run-1-local-0");
+  assert.equal(ev.template_sha256, "t".repeat(64));
+});
+
+test("runCfnWrapperCell: a /meta version mismatch fails closed with no evidence", async () => {
+  const { world } = fakeWorld({ metaVersion: "9.9.9" });
+  const result = await runCfnWrapperCell(world);
+  assert.equal(result.status, "failed");
+  assert.equal(result.evidence, undefined);
+  assert.match(result.reason?.message ?? "", /serverVersion/);
+});
+
+test("runCfnWrapperCell: a digest mismatch (SSM available) fails closed", async () => {
+  const { world } = fakeWorld({ observedDigest: `sha256:${"e".repeat(64)}` });
+  const result = await runCfnWrapperCell(world);
+  assert.equal(result.status, "failed");
+  assert.match(result.reason?.message ?? "", /image digest/);
+});
+
+test("runCfnWrapperCell: unhealthy TLS, bad outputs, unbound bundle, and hosted-web each fail closed", async () => {
+  assert.equal((await runCfnWrapperCell(fakeWorld({ healthy: false }).world)).status, "failed");
+  assert.equal((await runCfnWrapperCell(fakeWorld({ outputsSiteAddress: "other.example.com" }).world)).status, "failed");
+  assert.equal((await runCfnWrapperCell(fakeWorld({ bundleDigestBound: false }).world)).status, "failed");
+  assert.equal((await runCfnWrapperCell(fakeWorld({ templateValidated: false }).world)).status, "failed");
+  assert.equal((await runCfnWrapperCell(fakeWorld({ cloudWorkspaces: true }).world)).status, "failed");
+  assert.equal((await runCfnWrapperCell(fakeWorld({ agentGateway: true }).world)).status, "failed");
+});
+
+// ── Preflight fail-closed ─────────────────────────────────────────────────────
+
+test("runSelfHostCfnCells: a missing CFN bucket fails the cell CLOSED without building a world", async () => {
+  const { driver, buildCalls } = greenDriver();
+  const ctx = fakeCtx({ env: fakeEnv({ RELEASE_E2E_SELFHOST_CFN_BUCKET: undefined }) });
+  const outcomes = await runSelfHostCfnCells(ctx, [wrapperCell()], driver);
+  assert.equal(outcomes[0].status, "failed");
+  assert.match(outcomes[0].reason?.message ?? "", /RELEASE_E2E_SELFHOST_CFN_BUCKET/);
+  assert.equal(buildCalls(), 0);
+});
+
+test("runSelfHostCfnCells: a missing GHCR image repo fails the cell CLOSED", async () => {
+  const { driver } = greenDriver();
+  const ctx = fakeCtx({ env: fakeEnv({ RELEASE_E2E_SELFHOST_CFN_IMAGE_REPO: undefined }) });
+  const outcomes = await runSelfHostCfnCells(ctx, [wrapperCell()], driver);
+  assert.equal(outcomes[0].status, "failed");
+  assert.match(outcomes[0].reason?.message ?? "", /RELEASE_E2E_SELFHOST_CFN_IMAGE_REPO/);
+});
+
+test("resolveCfnWorldInputs: green resolution + typed failures for absent inputs", () => {
+  const ok = resolveCfnWorldInputs(fakeCtx());
+  assert.equal(ok.ok, true);
+  assert.equal(resolveCfnWorldInputs(fakeCtx({ candidateBuildMap: null })).ok, false);
+  const missingRegion = resolveCfnWorldInputs(fakeCtx({ env: fakeEnv({ RELEASE_E2E_SELFHOST_REGION: undefined }) }));
+  assert.equal(missingRegion.ok, false);
+});
+
+// ── Build / close failure semantics ───────────────────────────────────────────
+
+test("runSelfHostCfnCells: a world-build failure fails the cell without a close", async () => {
+  const { driver } = greenDriver({
+    buildWorld: async () => {
+      throw new Error("create-stack ROLLBACK");
+    },
+  });
+  const outcomes = await runSelfHostCfnCells(fakeCtx(), [wrapperCell()], driver);
+  assert.equal(outcomes[0].status, "failed");
+  assert.match(outcomes[0].reason?.message ?? "", /world construction failed/);
+});
+
+test("runSelfHostCfnCells: a close throw fails the evidence-bearing cell (no false green)", async () => {
+  const { driver } = greenDriver({
+    closeWorld: async () => {
+      throw new Error("delete-stack timed out");
+    },
+  });
+  const outcomes = await runSelfHostCfnCells(fakeCtx(), [wrapperCell()], driver);
+  assert.equal(outcomes[0].status, "failed");
+  assert.equal(outcomes[0].evidence, undefined);
+  assert.match(outcomes[0].reason?.message ?? "", /cleanup threw/i);
+});
+
+test("runSelfHostCfnCells: a non-clean teardown downgrades the green cell but keeps the evidence", async () => {
+  const built = fakeWorld({ cleanup: dirtyCleanup() });
+  const driver: SelfHostCfnDriver = {
+    buildWorld: async () => built.world,
+    runCfnWrapper: (world) => runCfnWrapperCell(world),
+    closeWorld: (world) => world.close(),
+  };
+  const outcomes = await runSelfHostCfnCells(fakeCtx(), [wrapperCell()], driver);
+  assert.equal(outcomes[0].status, "failed");
+  assert.match(outcomes[0].reason?.message ?? "", /did not fully reconcile/);
+  const evidence = outcomes[0].evidence as { cleanup: { failed: number; stack_deleted: boolean } };
+  assert.ok(evidence);
+  assert.equal(evidence.cleanup.stack_deleted, false);
+});
+
+test("runSelfHostCfnCells: an unexpected extra assigned cell fails cleanly", async () => {
+  const { driver } = greenDriver();
+  const extra: PlannedCellV1 = {
+    ...wrapperCell(),
+    cell_id: `${SELFHOST_CFN_1_ID}/selfhost/cell=SH-BOGUS,harness=claude`,
+    dimensions: { cell: "SH-BOGUS", harness: "claude" },
+  };
+  const outcomes = await runSelfHostCfnCells(fakeCtx(), [wrapperCell(), extra], driver);
+  const byId = new Map(outcomes.map((outcome) => [outcome.cellId, outcome]));
+  assert.equal(byId.get(WRAPPER_CELL_ID)?.status, "green");
+  assert.equal(byId.get(extra.cell_id)?.status, "failed");
+  assert.match(byId.get(extra.cell_id)?.reason?.message ?? "", /not expected/);
+});
+
+// ── Pure helpers ──────────────────────────────────────────────────────────────
+
+test("cleanupIsClean + attachCfnCleanup: clean requires all deletions; block is snake_case", () => {
+  assert.equal(cleanupIsClean(cleanCleanup()), true);
+  assert.equal(cleanupIsClean(dirtyCleanup()), false);
+  const evidence: SelfHostCfnWrapperEvidenceNoCleanup = {
+    kind: "selfhost_cfn_wrapper",
+    artifact_ids: ["server/linux-amd64"],
+    server_version: "1.2.3",
+    api_origin: SITE,
+    stack_name_hash: "a".repeat(64),
+    image_repo_digest: "sha256:" + "e".repeat(64),
+    release_version_tag: "run-1-shard-1",
+    template_sha256: "f".repeat(64),
+    template_validated: true,
+    bundle_digest_bound: true,
+    image_digest_bound: true,
+    outputs_valid: true,
+    dns_tls_verified: true,
+    meta_version_matches: true,
+  };
+  const attached = attachCfnCleanup(evidence, cleanCleanup());
+  assert.equal(attached.cleanup.s3_objects_deleted, true);
+  assert.equal(attached.cleanup.ghcr_version_deleted, true);
+  assert.equal(attached.cleanup.route53_record_deleted, true);
+});
+
+// ── Report envelope for schema validation ─────────────────────────────────────
+
+function reportWithEvidence(
+  evidence: NonNullable<import("./types.js").ScenarioCellOutcome["evidence"]>,
+  status: FinalTestStatus,
+): TestRunReportV4 {
+  const byStatus = Object.fromEntries(ALL_FINAL_STATUSES.map((s) => [s, 0])) as Record<FinalTestStatus, number>;
+  byStatus[status] = 1;
+  const base: TestRunReportV3 = {
+    schema_version: 3,
+    kind: "proliferate.test-run",
+    candidate_build: null,
+    run: {
+      run_id: "run-1",
+      shard_id: "shard-1",
+      attempt: 1,
+      source_sha: "d".repeat(40),
+      origin: { kind: "local", github_run_id: null, github_job: null },
+      behavior: "diagnostic",
+      execution: "real",
+      started_at: "2026-07-15T00:00:00Z",
+      finished_at: "2026-07-15T00:01:00Z",
+    },
+    inputs: { target_lane: "local", desktop: "web", agents: "all", scenarios: "all" },
+    selected_cells: [
+      {
+        cell_id: WRAPPER_CELL_ID,
+        scenario_id: SELFHOST_CFN_1_ID,
+        registry_flow_ref: "specs#sh-cfn-wrapper",
+        runtime_lane: "selfhost",
+        dimensions: { cell: SH_CFN_WRAPPER, harness: "claude" },
+        required_env: [],
+      },
+    ],
+    results: [
+      {
+        cell_id: WRAPPER_CELL_ID,
+        scenario_id: SELFHOST_CFN_1_ID,
+        registry_flow_ref: "specs#sh-cfn-wrapper",
+        runtime_lane: "selfhost",
+        dimensions: { cell: SH_CFN_WRAPPER, harness: "claude" },
+        status,
+        started_at: "2026-07-15T00:00:01Z",
+        finished_at: "2026-07-15T00:00:59Z",
+        duration_ms: 58_000,
+        reason: null,
+        plan_steps: [],
+      },
+    ],
+    summary: {
+      selected: 1,
+      finalized: 1,
+      by_status: byStatus,
+      integrity_errors: [],
+      runner_errors: [],
+      intended_exit_code: 0,
+    },
+    verdict: { status: "non_qualifying", scope: "selected_cells", completeness: "partial", reasons: [] },
+  };
+  base.verdict.reasons = expectedVerdict(base).reasons;
+  return { ...base, schema_version: 4, results: base.results.map((r) => ({ ...r, evidence })) };
+}

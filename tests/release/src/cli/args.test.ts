@@ -80,6 +80,19 @@ test("--only remains an alias for --scenarios", () => {
   assert.deepEqual(args.scenarios, ["T3-WT-1"]);
 });
 
+test("--cells parses a matrix-cell filter and defaults to all", () => {
+  assert.equal(parseArgs(["--behavior", "diagnostic"]).cells, "all");
+  assert.deepEqual(
+    parseArgs(["--behavior", "diagnostic", "--cells", "SH-GATEWAY"]).cells,
+    ["SH-GATEWAY"],
+  );
+  assert.deepEqual(
+    parseArgs(["--behavior", "diagnostic", "--cells", "SH-GATEWAY,SH-GITHUB-AUTH"]).cells,
+    ["SH-GATEWAY", "SH-GITHUB-AUTH"],
+  );
+  assert.throws(() => parseArgs(["--behavior", "diagnostic", "--cells", ","]), CliUsageError);
+});
+
 test("rejects empty lists", () => {
   assert.throws(() => parseArgs(["--behavior", "diagnostic", "--scenarios", ","]), CliUsageError);
   assert.throws(() => parseArgs(["--behavior", "diagnostic", "--agents", " , "]), CliUsageError);
@@ -106,6 +119,11 @@ test("rejects unknown flags and invalid lane/desktop values as usage errors", ()
   assert.throws(() => parseArgs(["--nope"]), CliUsageError);
   assert.throws(() => parseArgs(["--behavior", "diagnostic", "--lane", "prod"]), CliUsageError);
   assert.throws(() => parseArgs(["--behavior", "diagnostic", "--desktop", "mobile"]), CliUsageError);
+});
+
+test("parses --lane selfhost (the shipped qualification-selfhost target's lane, PR7-CONTROL-001)", () => {
+  const args = parseArgs(["--behavior", "diagnostic", "--lane", "selfhost"]);
+  assert.equal(args.lane, "selfhost");
 });
 
 test("parses --candidate-build-map", () => {

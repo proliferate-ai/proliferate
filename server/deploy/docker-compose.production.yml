@@ -95,6 +95,14 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+      # LiteLLM's cold start (Prisma client generation + first-boot schema
+      # migration against litellm-db, model-registry load) can exceed
+      # retries*interval on a small instance. Without a start_period, those
+      # early boot-time failures count toward `retries` and the container flips
+      # `unhealthy` before it is ready — which makes bootstrap.sh's
+      # `up -d --wait litellm` fail on the gateway add-on. start_period keeps
+      # failing checks from counting until the service has had time to boot.
+      start_period: 180s
 
   migrate:
     image: ${PROLIFERATE_SERVER_IMAGE:-ghcr.io/proliferate-ai/proliferate-server}:${PROLIFERATE_SERVER_IMAGE_TAG:-stable}

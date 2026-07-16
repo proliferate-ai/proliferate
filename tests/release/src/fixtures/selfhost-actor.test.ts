@@ -5,8 +5,10 @@ import {
   claimSelfHostOwner,
   assertSecondClaimRejected,
   defaultSelfHostActorTransport,
-  inviteAndRegisterMember,
+  inviteAndRegisterMemberViaApi,
+  inviteeEmail,
   isNotFoundError,
+  registerInvitee,
   type SelfHostActorTransport,
 } from "./selfhost-actor.js";
 import { ApiClient, ApiRequestError } from "./http.js";
@@ -144,7 +146,7 @@ test("assertSecondClaimRejected passes on a 404 /setup and fails on any other st
   await assert.rejects(() => assertSecondClaimRejected(world, open), /permanently closed \(404\)/);
 });
 
-test("inviteAndRegisterMember invites, registers with the invitation id as token, logs in, and returns the member", async () => {
+test("inviteAndRegisterMemberViaApi invites, registers with the invitation id as token, logs in, and returns the member", async () => {
   const world = fakeWorld();
   const { transport, calls } = fakeTransport({
     // The invitee's org lookup must resolve to the owner org.
@@ -165,7 +167,7 @@ test("inviteAndRegisterMember invites, registers with the invitation id as token
     },
   };
 
-  const invitee = await inviteAndRegisterMember(world, owner, {}, transport);
+  const invitee = await inviteAndRegisterMemberViaApi(world, owner, {}, transport);
 
   assert.equal(invitee.role, "member");
   assert.equal(invitee.organizationId, "org-1");
@@ -175,7 +177,7 @@ test("inviteAndRegisterMember invites, registers with the invitation id as token
   assert.ok(calls.includes("register:qual-invitee-sh-run-1-sh-0@example.com:invitation-1"));
 });
 
-test("inviteAndRegisterMember rejects a non-pending invitation and a wrong-org join", async () => {
+test("inviteAndRegisterMemberViaApi rejects a non-pending invitation and a wrong-org join", async () => {
   const world = fakeWorld();
   const owner = {
     role: "owner" as const,
@@ -193,12 +195,91 @@ test("inviteAndRegisterMember rejects a non-pending invitation and a wrong-org j
   };
 
   const { transport: notPending } = fakeTransport({ invite: async () => ({ id: "i-1", status: "revoked" }) });
-  await assert.rejects(() => inviteAndRegisterMember(world, owner, {}, notPending), /should be pending/);
+  await assert.rejects(() => inviteAndRegisterMemberViaApi(world, owner, {}, notPending), /should be pending/);
 
   const { transport: wrongOrg } = fakeTransport({
     listOrganizations: async () => ({ organizations: [{ id: "org-99" }] }),
   });
-  await assert.rejects(() => inviteAndRegisterMember(world, owner, {}, wrongOrg), /wrong organization/);
+  await assert.rejects(() => inviteAndRegisterMemberViaApi(world, owner, {}, wrongOrg), /wrong organization/);
+});
+
+/**
+ * SHR-001: `SH-INVITEE` now creates the invitation through the product UI and
+ * only READS it back over the API, then hands the already-created invitation
+ * straight to `registerInvitee` (never `inviteAndRegisterMemberViaApi`, which
+ * both creates AND registers over the API). This exercises that exact shape:
+ * a pre-built `{ id, email, status }` — as `readCreatedInvitation` in
+ * `scenarios/selfhost-install-1.ts` would produce from a `GET
+ * /v1/organizations/{id}/invitations` list read — with no `transport.invite`
+ * call at all.
+ */
+test("registerInvitee registers an already-created (UI-sourced) invitation, logs in, and returns the member", async () => {
+  const world = fakeWorld();
+  const { transport, calls } = fakeTransport({
+    listOrganizations: async () => ({ organizations: [{ id: "org-1", membership: { status: "active", role: "member" } }] }),
+  });
+  const owner = {
+    role: "owner" as const,
+    userId: "user-owner",
+    organizationId: "org-1",
+    api: new ApiClient({ baseUrl: world.api.baseUrl }),
+    session: {
+      access_token: "owner-access",
+      refresh_token: "r",
+      expires_at: new Date().toISOString(),
+      user_id: "user-owner",
+      email: "owner@example.com",
+      display_name: null,
+    },
+  };
+  const uiCreatedInvitation = { id: "ui-invitation-1", email: "ui-invitee@example.com", status: "pending" };
+
+  const invitee = await registerInvitee(world, owner, uiCreatedInvitation, transport);
+
+  assert.equal(invitee.role, "member");
+  assert.equal(invitee.organizationId, "org-1");
+  assert.equal(invitee.invitationId, "ui-invitation-1");
+  assert.equal(invitee.email, "ui-invitee@example.com");
+  // No transport.invite call — the invitation already existed (created via UI).
+  assert.ok(!calls.some((call) => call.startsWith("invite:")));
+  assert.ok(calls.includes("register:ui-invitee@example.com:ui-invitation-1"));
+});
+
+test("registerInvitee rejects a non-pending invitation and a wrong-org join", async () => {
+  const world = fakeWorld();
+  const owner = {
+    role: "owner" as const,
+    userId: "user-owner",
+    organizationId: "org-1",
+    api: new ApiClient({ baseUrl: world.api.baseUrl }),
+    session: {
+      access_token: "owner-access",
+      refresh_token: "r",
+      expires_at: new Date().toISOString(),
+      user_id: "user-owner",
+      email: "owner@example.com",
+      display_name: null,
+    },
+  };
+
+  const { transport: normal } = fakeTransport();
+  await assert.rejects(
+    () => registerInvitee(world, owner, { id: "i-1", email: "e@example.com", status: "revoked" }, normal),
+    /should be pending/,
+  );
+
+  const { transport: wrongOrg } = fakeTransport({
+    listOrganizations: async () => ({ organizations: [{ id: "org-99" }] }),
+  });
+  await assert.rejects(
+    () => registerInvitee(world, owner, { id: "i-2", email: "e2@example.com", status: "pending" }, wrongOrg),
+    /wrong organization/,
+  );
+});
+
+test("inviteeEmail is deterministic per run/shard (the SH-INVITEE UI-invite default)", () => {
+  const world = fakeWorld();
+  assert.equal(inviteeEmail(world), "qual-invitee-sh-run-1-sh-0@example.com");
 });
 
 test("isNotFoundError distinguishes a 404 ApiRequestError", () => {

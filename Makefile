@@ -1085,6 +1085,21 @@ qualification-local-functional:
 #                         PROFILE for two concurrent invocations (each run owns
 #                         its EC2 instance, SG, key pair, and DNS record).
 # BEHAVIOR=diagnostic|strict
+# SELFHOST_SCENARIOS=<comma-separated scenario ids>   Defaults to
+#                         SELFHOST-INSTALL-1 (current behavior). Passed
+#                         verbatim to `run.ts --scenarios`.
+# SELFHOST_API_BASE_URL=<https://...>   Optional. When set, replaces the
+#                         computed `print-selfhost-run-api-base-url.ts` value
+#                         baked into the candidate renderer — for postures
+#                         that need a fixed baked origin (e.g. the fixed-origin
+#                         serial lane at https://selfhost-fixed.qualification.
+#                         proliferate.com) instead of this run's own computed
+#                         subdomain. Run-scoped scenarios leave this unset and
+#                         get the computed value, unchanged. Example:
+#                           make qualification-selfhost PROFILE=$$(whoami)-1 \
+#                             BEHAVIOR=diagnostic \
+#                             SELFHOST_SCENARIOS=SELFHOST-INSTALL-1 \
+#                             SELFHOST_API_BASE_URL=https://selfhost-fixed.qualification.proliferate.com
 #
 # Locally, AWS/SSH/BYOK inputs come from the ignored, mode-0600 qualification
 # env file (never committed, never printed): RELEASE_E2E_SELFHOST_REGION,
@@ -1095,6 +1110,24 @@ qualification-local-functional:
 # environment and configured AWS credentials; this target does not read the
 # local file there.
 QUALIFICATION_SELFHOST_BASE_DIR ?= $(CURDIR)/tests/release/.output/selfhost-world
+SELFHOST_SCENARIOS ?= SELFHOST-INSTALL-1
+SELFHOST_API_BASE_URL ?=
+# Exported so the recipe reads it as a SHELL env var (`$$SELFHOST_API_BASE_URL`)
+# rather than a Make expansion (`$(...)`). A Make expansion would textually inline
+# the value into the recipe before the shell runs, so a value containing a quote
+# plus shell syntax would be reparsed in this secret-bearing/AWS-authorized job
+# (PR7-CONTROL-002). Reading it from the environment keeps the value inert data.
+export SELFHOST_API_BASE_URL
+# The candidate box platform. Defaults to linux/amd64 (t3.small-based scenarios:
+# INSTALL-1/QUAL-1/ISOLATION-1). SELFHOST-CFN-1's CloudFormation template
+# defaults to a Graviton (arm64) t4g instance, so run it with
+# SELFHOST_CANDIDATE_PLATFORM=linux/arm64 so the docker-load candidate image
+# matches the box arch.
+SELFHOST_CANDIDATE_PLATFORM ?= linux/amd64
+# Optional matrix-cell filter passed verbatim to run.ts --cells (e.g. SH-GATEWAY
+# to run SELFHOST-QUAL-1's gateway cell alone on a run-scoped origin). Empty =
+# every planned cell.
+SELFHOST_CELLS ?=
 qualification-selfhost:
 	@test -n "$(PROFILE)" || { \
 		echo "PROFILE=<unique-name> is required, e.g. make qualification-selfhost PROFILE=$$(whoami)-1 BEHAVIOR=diagnostic"; \
@@ -1139,18 +1172,25 @@ qualification-selfhost:
 	shard_id="1"; \
 	run_dir="$(QUALIFICATION_SELFHOST_BASE_DIR)/$$run_id/$$shard_id"; \
 	mkdir -p "$$run_dir"; \
-	api_base_url=$$(cd tests/release && pnpm exec tsx src/cli/print-selfhost-run-api-base-url.ts "$$run_id" "$$shard_id") || exit $$?; \
+	api_base_url="$${SELFHOST_API_BASE_URL:-}"; \
+	if [ -z "$$api_base_url" ]; then \
+		api_base_url=$$(cd tests/release && pnpm exec tsx src/cli/print-selfhost-run-api-base-url.ts "$$run_id" "$$shard_id") || exit $$?; \
+	fi; \
 	build_summary=$$(node scripts/ci-cd/build-selfhost-qualification-candidates.mjs \
 		--run-id "$$run_id" --shard-id "$$shard_id" --run-dir "$$run_dir" \
+		--platform "$(SELFHOST_CANDIDATE_PLATFORM)" \
 		--api-base-url "$$api_base_url") || exit $$?; \
 	echo "$$build_summary"; \
 	candidate_map=$$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).candidate_build_map)' "$$build_summary"); \
+	cells_flag=""; \
+	if [ -n "$(SELFHOST_CELLS)" ]; then cells_flag="--cells $(SELFHOST_CELLS)"; fi; \
 	cd tests/release && pnpm exec tsx src/cli/run.ts \
 		--behavior $(BEHAVIOR) \
-		--lane local \
+		--lane selfhost \
 		--desktop web \
 		--agents claude \
-		--scenarios SELFHOST-INSTALL-1 \
+		--scenarios $(SELFHOST_SCENARIOS) \
+		$$cells_flag \
 		--candidate-build-map "$$candidate_map" \
 		--run-id "$$run_id" --shard-id "$$shard_id" \
 		--output-dir "$$run_dir/evidence"

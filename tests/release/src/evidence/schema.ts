@@ -113,7 +113,12 @@ export type CellEvidenceV1 =
   | SelfHostDesktopOwnerEvidenceV1
   | SelfHostBaseTurnEvidenceV1
   | SelfHostInviteeEvidenceV1
-  | CloudProvisionTurnEvidenceV1;
+  | CloudProvisionTurnEvidenceV1
+  | SelfHostGithubAuthEvidenceV1
+  | SelfHostSwitchIsolationEvidenceV1
+  | SelfHostGatewayEvidenceV1
+  | SelfHostCloudAddonEvidenceV1
+  | SelfHostCfnWrapperEvidenceV1;
 
 /**
  * ── Tier-2 billing evidence (PR 4) ─────────────────────────────────────────
@@ -272,9 +277,31 @@ export interface SelfHostBaseTurnEvidenceV1 extends SelfHostEvidenceBaseV1 {
   /** BYOK is a direct-provider call — never a gateway/LiteLLM correlation. */
   byok_route: "api_key";
   byok_key_id_hash: string;
-  no_litellm_spend: true;
-  no_e2b: true;
+  /**
+   * The frozen contract's `no_litellm_spend`/`no_e2b` are run-window provider
+   * SPEND/TRAFFIC observations. PR 7 does not perform those observations for a
+   * gateway-OFF base install (there is no LiteLLM admin API to query, and E2B
+   * traffic proof needs the managed-cloud controller PR 7 does not own), so the
+   * claims are recorded HONESTLY as `"unproven"` rather than asserted `true`
+   * (PR7-CONTROL-010: a false `true` from an unavailable/insufficient
+   * observation is worse than an explicit unproven). The cell's green rests on
+   * its REAL BYOK-direct observations — capabilities gateway/cloud both false,
+   * the pushed auth route is `api_key` not `gateway`, and the scrubbed candidate
+   * env carries no LiteLLM/E2B input — which prove the TURN was BYOK-direct, not
+   * that zero provider spend/traffic occurred anywhere. `"observed_absent"` is
+   * reserved for when a real run-window observation is later wired.
+   */
+  no_litellm_spend: SelfHostProviderClaim;
+  no_e2b: SelfHostProviderClaim;
 }
+
+/**
+ * A run-window provider-absence claim (PR7-CONTROL-010). `"unproven"` = the
+ * observation was not performed (recorded honestly, never a false absence);
+ * `"observed_absent"` = a real run-window spend/traffic observation confirmed
+ * absence. Never a bare `true` derived from configuration.
+ */
+export type SelfHostProviderClaim = "unproven" | "observed_absent";
 
 export interface SelfHostInviteeEvidenceV1 extends SelfHostEvidenceBaseV1 {
   kind: "selfhost_invitee";
@@ -283,6 +310,127 @@ export interface SelfHostInviteeEvidenceV1 extends SelfHostEvidenceBaseV1 {
   member_role: "member";
   second_page_isolated: true;
   authenticated_member_action: true;
+}
+
+/**
+ * ── PR 7 self-host evidence types (append-only) ───────────────────────────
+ *
+ * Five further `SELFHOST-INSTALL-1`-family journey cells (GitHub auth,
+ * dual-server switch isolation, gateway capability, cloud add-on, and the
+ * CloudFormation-wrapper posture) attach one of these. Same rules as the
+ * PR 3 kinds above: bounded artifact ids/versions, safe hashes only (never a
+ * raw secret), green requires complete evidence AND a clean cleanup block.
+ * Each kind is validated/sanitized by its own kind-scoped function — a kind
+ * never touches another kind's rules (extension-contract).
+ */
+export interface SelfHostGithubAuthEvidenceV1 extends SelfHostEvidenceBaseV1 {
+  kind: "selfhost_github_auth";
+  owner_user_id_hash: string;
+  org_id_hash: string;
+  /** The two distinct GitHub identities exercised (owner-link vs invited/uninvited member). */
+  github_identity_a_hash: string;
+  github_identity_b_hash: string;
+  setup_password_only: true;
+  owner_link_no_duplicate: true;
+  uninvited_denied: true;
+  invited_admitted: true;
+  member_role: string;
+  methods_advertise_github: true;
+}
+
+/**
+ * `api_origin` (inherited from `SelfHostEvidenceBaseV1`) doubles as server
+ * A's origin, so this kind still gets the shared base
+ * api_origin/controller_runtime_origin distinctness check for free;
+ * `server_a_origin` is carried explicitly too so evidence never needs a
+ * reader to know that convention to find server A, and the validator below
+ * requires the two to agree.
+ */
+export interface SelfHostSwitchIsolationEvidenceV1 extends SelfHostEvidenceBaseV1 {
+  kind: "selfhost_switch_isolation";
+  server_a_origin: string;
+  server_b_origin: string;
+  no_cross_origin_token: true;
+  no_cross_origin_pending_auth: true;
+  no_cross_origin_credential: true;
+  no_cross_origin_runtime_identity: true;
+  no_cross_origin_workspace_session: true;
+  b_started_anonymous: true;
+  b_authenticated_independently: true;
+  a_state_restored_origin_scoped: true;
+}
+
+export interface SelfHostGatewayEvidenceV1 extends SelfHostEvidenceBaseV1 {
+  kind: "selfhost_gateway";
+  actor_user_id_hash: string;
+  virtual_key_id_hash: string;
+  litellm_image_digest: string;
+  model_id: string;
+  capability_gateway_before: false;
+  capability_gateway_after: true;
+  gateway_spend_correlated: true;
+  master_key_not_used: true;
+  restart_persisted: true;
+}
+
+export interface SelfHostCloudAddonEvidenceV1 extends SelfHostEvidenceBaseV1 {
+  kind: "selfhost_cloud_addon";
+  github_app_installation_id_hash: string;
+  e2b_template_id: string;
+  sandbox_id_hash: string;
+  workspace_id_hash: string;
+  session_id_hash: string;
+  turn_completed: true;
+  pause_wake_state_intact: true;
+  disable_truthful: true;
+  base_healthy_after_disable: true;
+}
+
+/**
+ * The CloudFormation-wrapper posture cleanup block. Deliberately NOT
+ * `SelfHostCleanupEvidenceBlock`: no EC2/security-group/key-pair exist in
+ * this posture (the wrapper provisions exactly one stack), and it adds
+ * S3/GHCR deletion evidence the EC2 posture never carries.
+ */
+export interface SelfHostCfnCleanupEvidenceBlock {
+  ledger_id_hash: string;
+  registered: number;
+  reconciled: number;
+  failed: number;
+  stack_deleted: boolean;
+  s3_objects_deleted: boolean;
+  ghcr_version_deleted: boolean;
+  route53_record_deleted: boolean;
+  local_paths_removed: boolean;
+}
+
+/**
+ * Does NOT extend `SelfHostEvidenceBaseV1`: a CFN-wrapper install has no
+ * controller-local AnyHarness runtime to record separately (there is no
+ * `controller_runtime_origin` in this posture), and it asserts stack
+ * template/digest/output bindings the EC2-posture base never carries.
+ * `api_origin` is still the self-host public API origin, recorded the same
+ * safe way as every other self-host kind.
+ */
+export interface SelfHostCfnWrapperEvidenceV1 {
+  kind: "selfhost_cfn_wrapper";
+  artifact_ids: string[];
+  server_version: string;
+  api_origin: string;
+  stack_name_hash: string;
+  /** The observed running-api image RepoDigest (`sha256:<hex>`) the binding rests on. */
+  image_repo_digest: string;
+  /** The run-scoped tag the candidate was pushed under + passed as ReleaseVersion (safe token). */
+  release_version_tag: string;
+  /** SHA-256 of the validated CloudFormation template (safe token). */
+  template_sha256: string;
+  template_validated: true;
+  bundle_digest_bound: true;
+  image_digest_bound: true;
+  outputs_valid: true;
+  dns_tls_verified: true;
+  meta_version_matches: true;
+  cleanup: SelfHostCfnCleanupEvidenceBlock;
 }
 
 /** The scenario id whose green cells require complete self-host evidence. */
@@ -743,6 +891,27 @@ const SCENARIO_REQUIRED_EVIDENCE_KIND: Readonly<Record<string, CellEvidenceV1["k
   "T3-CFG-1": "local_config_matrix",
   "T3-SESSION-1": "local_session_tabs",
   "T3-INT-1": "local_mcp_integration",
+  // Single-kind PR 7 scenarios (PR7-CONTROL-007): bind the scenario to its one
+  // legal evidence kind so a green cell cannot carry null or another scenario's
+  // structurally-valid evidence.
+  "SELFHOST-ISOLATION-1": "selfhost_switch_isolation",
+  "SELFHOST-CFN-1": "selfhost_cfn_wrapper",
+};
+
+/**
+ * PR 7's multi-kind scenarios attach a DIFFERENT evidence kind per staged cell,
+ * so their binding is keyed on `(scenario_id, cell-dimension)` rather than
+ * scenario id alone (PR7-CONTROL-007). A green cell whose evidence kind does not
+ * match its cell dimension fails closed.
+ */
+const CELL_REQUIRED_EVIDENCE_KIND: Readonly<Record<string, CellEvidenceV1["kind"]>> = {
+  "SELFHOST-INSTALL-1/SH-INSTALL-CLAIM": "selfhost_install_claim",
+  "SELFHOST-INSTALL-1/SH-DESKTOP-OWNER": "selfhost_desktop_owner",
+  "SELFHOST-INSTALL-1/SH-BASE-TURN": "selfhost_base_turn",
+  "SELFHOST-INSTALL-1/SH-INVITEE": "selfhost_invitee",
+  "SELFHOST-QUAL-1/SH-GITHUB-AUTH": "selfhost_github_auth",
+  "SELFHOST-QUAL-1/SH-GATEWAY": "selfhost_gateway",
+  "SELFHOST-QUAL-1/SH-CLOUD-ADDON": "selfhost_cloud_addon",
 };
 
 /**
@@ -763,6 +932,19 @@ function validateEvidenceCellBinding(
     throw new ReportValidationError(
       `${where}.kind is "${evidence.kind}" but ${result.scenario_id} requires "${requiredKind}".`,
     );
+  }
+
+  // (a2) (scenario_id, cell-dimension) → required kind, for PR 7's multi-kind
+  // scenarios where each staged cell attaches a different evidence kind
+  // (PR7-CONTROL-007).
+  const cellDimension = result.dimensions.cell;
+  if (typeof cellDimension === "string") {
+    const requiredCellKind = CELL_REQUIRED_EVIDENCE_KIND[`${result.scenario_id}/${cellDimension}`];
+    if (requiredCellKind !== undefined && evidence.kind !== requiredCellKind) {
+      throw new ReportValidationError(
+        `${where}.kind is "${evidence.kind}" but ${result.scenario_id} cell "${cellDimension}" requires "${requiredCellKind}".`,
+      );
+    }
   }
 
   // (b) AUTHROUTE dimensions → journey (route=change ⇒ LOCAL-6, else LOCAL-3).
@@ -1820,6 +2002,100 @@ const SELFHOST_INVITEE_EVIDENCE_KEYS = [
   "authenticated_member_action",
 ] as const;
 
+// ── PR 7 self-host evidence key sets (append-only) ─────────────────────────
+
+const SELFHOST_GITHUB_AUTH_EVIDENCE_KEYS = [
+  ...SELFHOST_BASE_EVIDENCE_KEYS,
+  "owner_user_id_hash",
+  "org_id_hash",
+  "github_identity_a_hash",
+  "github_identity_b_hash",
+  "setup_password_only",
+  "owner_link_no_duplicate",
+  "uninvited_denied",
+  "invited_admitted",
+  "member_role",
+  "methods_advertise_github",
+] as const;
+
+const SELFHOST_SWITCH_ISOLATION_EVIDENCE_KEYS = [
+  ...SELFHOST_BASE_EVIDENCE_KEYS,
+  "server_a_origin",
+  "server_b_origin",
+  "no_cross_origin_token",
+  "no_cross_origin_pending_auth",
+  "no_cross_origin_credential",
+  "no_cross_origin_runtime_identity",
+  "no_cross_origin_workspace_session",
+  "b_started_anonymous",
+  "b_authenticated_independently",
+  "a_state_restored_origin_scoped",
+] as const;
+
+const SELFHOST_GATEWAY_EVIDENCE_KEYS = [
+  ...SELFHOST_BASE_EVIDENCE_KEYS,
+  "actor_user_id_hash",
+  "virtual_key_id_hash",
+  "litellm_image_digest",
+  "model_id",
+  "capability_gateway_before",
+  "capability_gateway_after",
+  "gateway_spend_correlated",
+  "master_key_not_used",
+  "restart_persisted",
+] as const;
+
+const SELFHOST_CLOUD_ADDON_EVIDENCE_KEYS = [
+  ...SELFHOST_BASE_EVIDENCE_KEYS,
+  "github_app_installation_id_hash",
+  "e2b_template_id",
+  "sandbox_id_hash",
+  "workspace_id_hash",
+  "session_id_hash",
+  "turn_completed",
+  "pause_wake_state_intact",
+  "disable_truthful",
+  "base_healthy_after_disable",
+] as const;
+
+const SELFHOST_CFN_WRAPPER_EVIDENCE_KEYS = [
+  "kind",
+  "artifact_ids",
+  "server_version",
+  "api_origin",
+  "stack_name_hash",
+  "image_repo_digest",
+  "release_version_tag",
+  "template_sha256",
+  "template_validated",
+  "bundle_digest_bound",
+  "image_digest_bound",
+  "outputs_valid",
+  "dns_tls_verified",
+  "meta_version_matches",
+  "cleanup",
+] as const;
+
+const SELFHOST_CFN_CLEANUP_EVIDENCE_KEYS = [
+  "ledger_id_hash",
+  "registered",
+  "reconciled",
+  "failed",
+  "stack_deleted",
+  "s3_objects_deleted",
+  "ghcr_version_deleted",
+  "route53_record_deleted",
+  "local_paths_removed",
+] as const;
+
+const SELFHOST_CFN_CLEANUP_DELETION_FIELDS = [
+  "stack_deleted",
+  "s3_objects_deleted",
+  "ghcr_version_deleted",
+  "route53_record_deleted",
+  "local_paths_removed",
+] as const;
+
 const SELFHOST_CLEANUP_EVIDENCE_KEYS = [
   "ledger_id_hash",
   "registered",
@@ -1851,6 +2127,24 @@ function requireTrue(where: string, value: unknown): void {
 }
 
 /**
+ * A run-window provider-absence claim (PR7-CONTROL-010): exactly `"unproven"`
+ * (observation not performed) or `"observed_absent"` (a real run-window
+ * spend/traffic observation confirmed absence). A bare `true` — an absence
+ * asserted from configuration/an unavailable observation — is rejected.
+ */
+function requireProviderClaim(where: string, value: unknown): void {
+  if (value !== "unproven" && value !== "observed_absent") {
+    throw new ReportValidationError(`${where} must be "unproven" or "observed_absent".`);
+  }
+}
+
+function requireFalse(where: string, value: unknown): void {
+  if (value !== false) {
+    throw new ReportValidationError(`${where} must be false.`);
+  }
+}
+
+/**
  * Validates one self-host journey cell's evidence (BRIEF §"Evidence
  * workstream"): exact keys per kind; every string field passes the same
  * `requireSafeEvidenceToken`/`requireEvidenceHash` checks the local_workspace_turn
@@ -1866,11 +2160,25 @@ function validateSelfHostCellEvidence(
   status: FinalTestStatus,
 ): void {
   const kind = (evidence as { kind?: unknown }).kind;
+
+  // The CFN-wrapper posture's evidence shape has no controller_runtime_origin/
+  // anyharness_version (see `SelfHostCfnWrapperEvidenceV1`'s doc comment: it
+  // does not extend `SelfHostEvidenceBaseV1`), so it is validated end to end
+  // by its own function rather than through the shared base-field walk below.
+  if (kind === "selfhost_cfn_wrapper") {
+    validateSelfHostCfnWrapperEvidence(where, evidence as SelfHostCfnWrapperEvidenceV1, status);
+    return;
+  }
+
   const keysByKind: Record<string, readonly string[]> = {
     selfhost_install_claim: SELFHOST_INSTALL_CLAIM_EVIDENCE_KEYS,
     selfhost_desktop_owner: SELFHOST_DESKTOP_OWNER_EVIDENCE_KEYS,
     selfhost_base_turn: SELFHOST_BASE_TURN_EVIDENCE_KEYS,
     selfhost_invitee: SELFHOST_INVITEE_EVIDENCE_KEYS,
+    selfhost_github_auth: SELFHOST_GITHUB_AUTH_EVIDENCE_KEYS,
+    selfhost_switch_isolation: SELFHOST_SWITCH_ISOLATION_EVIDENCE_KEYS,
+    selfhost_gateway: SELFHOST_GATEWAY_EVIDENCE_KEYS,
+    selfhost_cloud_addon: SELFHOST_CLOUD_ADDON_EVIDENCE_KEYS,
   };
   const expectedKeys = typeof kind === "string" ? keysByKind[kind] : undefined;
   if (!expectedKeys) {
@@ -1935,8 +2243,25 @@ function validateSelfHostCellEvidence(
         throw new ReportValidationError(`${where}.byok_route must be "api_key".`);
       }
       requireEvidenceHash(`${where}.byok_key_id_hash`, e.byok_key_id_hash);
-      requireTrue(`${where}.no_litellm_spend`, e.no_litellm_spend);
-      requireTrue(`${where}.no_e2b`, e.no_e2b);
+      requireProviderClaim(`${where}.no_litellm_spend`, e.no_litellm_spend);
+      requireProviderClaim(`${where}.no_e2b`, e.no_e2b);
+      // Defense-in-depth for PR7-CONTROL-010: the frozen contract folds the
+      // provider-absence guarantees into SH-BASE-TURN, so an UNPROVEN required
+      // subclaim cannot contribute a GREEN result. A green base-turn must have
+      // BOTH claims `observed_absent`; `unproven` on green is rejected here even
+      // if the cell logic ever regressed to returning green with unproven claims.
+      if (status === "green") {
+        if (e.no_litellm_spend !== "observed_absent") {
+          throw new ReportValidationError(
+            `${where}.no_litellm_spend is "${e.no_litellm_spend}" on a GREEN result; a green SH-BASE-TURN requires "observed_absent".`,
+          );
+        }
+        if (e.no_e2b !== "observed_absent") {
+          throw new ReportValidationError(
+            `${where}.no_e2b is "${e.no_e2b}" on a GREEN result; a green SH-BASE-TURN requires "observed_absent".`,
+          );
+        }
+      }
       return;
     }
     case "selfhost_invitee": {
@@ -1950,8 +2275,131 @@ function validateSelfHostCellEvidence(
       requireTrue(`${where}.authenticated_member_action`, e.authenticated_member_action);
       return;
     }
+    case "selfhost_github_auth": {
+      const e = evidence as SelfHostGithubAuthEvidenceV1;
+      requireEvidenceHash(`${where}.owner_user_id_hash`, e.owner_user_id_hash);
+      requireEvidenceHash(`${where}.org_id_hash`, e.org_id_hash);
+      requireEvidenceHash(`${where}.github_identity_a_hash`, e.github_identity_a_hash);
+      requireEvidenceHash(`${where}.github_identity_b_hash`, e.github_identity_b_hash);
+      requireTrue(`${where}.setup_password_only`, e.setup_password_only);
+      requireTrue(`${where}.owner_link_no_duplicate`, e.owner_link_no_duplicate);
+      requireTrue(`${where}.uninvited_denied`, e.uninvited_denied);
+      requireTrue(`${where}.invited_admitted`, e.invited_admitted);
+      requireSafeEvidenceToken(`${where}.member_role`, e.member_role);
+      requireTrue(`${where}.methods_advertise_github`, e.methods_advertise_github);
+      return;
+    }
+    case "selfhost_switch_isolation": {
+      const e = evidence as SelfHostSwitchIsolationEvidenceV1;
+      requireSafeEvidenceToken(`${where}.server_a_origin`, e.server_a_origin);
+      requireSafeEvidenceToken(`${where}.server_b_origin`, e.server_b_origin);
+      // `api_origin` doubles as server A's origin (base compatibility, see the
+      // type's doc comment); the two must agree so evidence cannot claim a
+      // different server A than the shared base-field check above verified.
+      if (e.api_origin !== e.server_a_origin) {
+        throw new ReportValidationError(`${where}.api_origin must equal server_a_origin.`);
+      }
+      if (e.server_a_origin === e.server_b_origin) {
+        throw new ReportValidationError(`${where}.server_a_origin and server_b_origin must be distinct.`);
+      }
+      requireTrue(`${where}.no_cross_origin_token`, e.no_cross_origin_token);
+      requireTrue(`${where}.no_cross_origin_pending_auth`, e.no_cross_origin_pending_auth);
+      requireTrue(`${where}.no_cross_origin_credential`, e.no_cross_origin_credential);
+      requireTrue(`${where}.no_cross_origin_runtime_identity`, e.no_cross_origin_runtime_identity);
+      requireTrue(`${where}.no_cross_origin_workspace_session`, e.no_cross_origin_workspace_session);
+      requireTrue(`${where}.b_started_anonymous`, e.b_started_anonymous);
+      requireTrue(`${where}.b_authenticated_independently`, e.b_authenticated_independently);
+      requireTrue(`${where}.a_state_restored_origin_scoped`, e.a_state_restored_origin_scoped);
+      return;
+    }
+    case "selfhost_gateway": {
+      const e = evidence as SelfHostGatewayEvidenceV1;
+      requireEvidenceHash(`${where}.actor_user_id_hash`, e.actor_user_id_hash);
+      requireEvidenceHash(`${where}.virtual_key_id_hash`, e.virtual_key_id_hash);
+      requireSafeEvidenceToken(`${where}.litellm_image_digest`, e.litellm_image_digest);
+      requireSafeEvidenceToken(`${where}.model_id`, e.model_id);
+      requireFalse(`${where}.capability_gateway_before`, e.capability_gateway_before);
+      requireTrue(`${where}.capability_gateway_after`, e.capability_gateway_after);
+      requireTrue(`${where}.gateway_spend_correlated`, e.gateway_spend_correlated);
+      requireTrue(`${where}.master_key_not_used`, e.master_key_not_used);
+      requireTrue(`${where}.restart_persisted`, e.restart_persisted);
+      return;
+    }
+    case "selfhost_cloud_addon": {
+      const e = evidence as SelfHostCloudAddonEvidenceV1;
+      requireEvidenceHash(`${where}.github_app_installation_id_hash`, e.github_app_installation_id_hash);
+      requireSafeEvidenceToken(`${where}.e2b_template_id`, e.e2b_template_id);
+      requireEvidenceHash(`${where}.sandbox_id_hash`, e.sandbox_id_hash);
+      requireEvidenceHash(`${where}.workspace_id_hash`, e.workspace_id_hash);
+      requireEvidenceHash(`${where}.session_id_hash`, e.session_id_hash);
+      requireTrue(`${where}.turn_completed`, e.turn_completed);
+      requireTrue(`${where}.pause_wake_state_intact`, e.pause_wake_state_intact);
+      requireTrue(`${where}.disable_truthful`, e.disable_truthful);
+      requireTrue(`${where}.base_healthy_after_disable`, e.base_healthy_after_disable);
+      return;
+    }
     default:
       throw new ReportValidationError(`${where}.kind is unknown.`);
+  }
+}
+
+/**
+ * Kind-scoped validator for `SelfHostCfnWrapperEvidenceV1` (PR 7): this kind
+ * does not extend `SelfHostEvidenceBaseV1` (no controller-local AnyHarness
+ * runtime exists in a CFN-wrapper posture — there is only the one deployed
+ * stack), so it validates its own field set end to end rather than sharing
+ * `validateSelfHostCellEvidence`'s base-field walk. The cleanup block mirrors
+ * `validateSelfHostCleanupEvidence`'s green-requires-clean rule (`failed === 0`
+ * and every deletion boolean `true` on a GREEN cell only; a non-green cell may
+ * still record its own cleanup failure).
+ */
+function validateSelfHostCfnWrapperEvidence(
+  where: string,
+  evidence: SelfHostCfnWrapperEvidenceV1,
+  status: FinalTestStatus,
+): void {
+  requireExactKeys(evidence, SELFHOST_CFN_WRAPPER_EVIDENCE_KEYS, where);
+  if (evidence.kind !== "selfhost_cfn_wrapper") {
+    throw new ReportValidationError(`${where}.kind is unknown.`);
+  }
+  if (!Array.isArray(evidence.artifact_ids) || evidence.artifact_ids.length === 0) {
+    throw new ReportValidationError(`${where}.artifact_ids must be a non-empty array.`);
+  }
+  for (const [index, id] of evidence.artifact_ids.entries()) {
+    requireSafeEvidenceToken(`${where}.artifact_ids[${index}]`, id);
+  }
+  requireSafeEvidenceToken(`${where}.server_version`, evidence.server_version);
+  requireSafeEvidenceToken(`${where}.api_origin`, evidence.api_origin);
+  requireEvidenceHash(`${where}.stack_name_hash`, evidence.stack_name_hash);
+  requireSafeEvidenceToken(`${where}.image_repo_digest`, evidence.image_repo_digest);
+  requireSafeEvidenceToken(`${where}.release_version_tag`, evidence.release_version_tag);
+  requireSafeEvidenceToken(`${where}.template_sha256`, evidence.template_sha256);
+  requireTrue(`${where}.template_validated`, evidence.template_validated);
+  requireTrue(`${where}.bundle_digest_bound`, evidence.bundle_digest_bound);
+  requireTrue(`${where}.image_digest_bound`, evidence.image_digest_bound);
+  requireTrue(`${where}.outputs_valid`, evidence.outputs_valid);
+  requireTrue(`${where}.dns_tls_verified`, evidence.dns_tls_verified);
+  requireTrue(`${where}.meta_version_matches`, evidence.meta_version_matches);
+
+  const cleanup = evidence.cleanup;
+  if (typeof cleanup !== "object" || cleanup === null || Array.isArray(cleanup)) {
+    throw new ReportValidationError(`${where}.cleanup must be an object.`);
+  }
+  requireExactKeys(cleanup, SELFHOST_CFN_CLEANUP_EVIDENCE_KEYS, `${where}.cleanup`);
+  requireEvidenceHash(`${where}.cleanup.ledger_id_hash`, cleanup.ledger_id_hash);
+  requireNonNegativeInteger(`${where}.cleanup.registered`, cleanup.registered);
+  requireNonNegativeInteger(`${where}.cleanup.reconciled`, cleanup.reconciled);
+  requireNonNegativeInteger(`${where}.cleanup.failed`, cleanup.failed);
+  for (const field of SELFHOST_CFN_CLEANUP_DELETION_FIELDS) {
+    requireBoolean(`${where}.cleanup.${field}`, cleanup[field]);
+  }
+  if (status === "green") {
+    if (cleanup.failed > 0) {
+      throw new ReportValidationError(`${where}.cleanup.failed must be 0 for a green result.`);
+    }
+    if (SELFHOST_CFN_CLEANUP_DELETION_FIELDS.some((field) => cleanup[field] !== true)) {
+      throw new ReportValidationError(`${where}.cleanup is incomplete on a green result.`);
+    }
   }
 }
 
@@ -2091,6 +2539,18 @@ const GREEN_EVIDENCE_REQUIRED_SCENARIOS: ReadonlySet<string> = new Set([
   "T2-AUTH-ORG",
   SELFHOST_INSTALL_1_SCENARIO_ID,
   "CLOUD-PROVISION-1",
+  // Every SELFHOST-QUAL-1 cell (SH-GITHUB-AUTH / SH-GATEWAY / SH-CLOUD-ADDON)
+  // emits its kind-scoped evidence on green (a bare string here, not a scenario
+  // import, to keep schema.ts free of a scenario→schema cycle — matching
+  // CLOUD-PROVISION-1). Enforces the frozen Acceptance rule "Green requires
+  // complete evidence" for the optional-capability lane.
+  "SELFHOST-QUAL-1",
+  // PR7-CONTROL-007: CFN and isolation were missing here, so either could
+  // validate GREEN with null evidence. Both now require their kind-scoped
+  // evidence on green. (SELFHOST-ISOLATION-1 is fail-closed today, so this only
+  // ever bites if it later greens without evidence — which is exactly the guard.)
+  "SELFHOST-CFN-1",
+  "SELFHOST-ISOLATION-1",
 ]);
 
 function scenarioRequiresGreenEvidence(scenarioId: string): boolean {
@@ -2230,7 +2690,12 @@ export function sanitizeCellEvidence(
     evidence.kind === "selfhost_install_claim" ||
     evidence.kind === "selfhost_desktop_owner" ||
     evidence.kind === "selfhost_base_turn" ||
-    evidence.kind === "selfhost_invitee"
+    evidence.kind === "selfhost_invitee" ||
+    evidence.kind === "selfhost_github_auth" ||
+    evidence.kind === "selfhost_switch_isolation" ||
+    evidence.kind === "selfhost_gateway" ||
+    evidence.kind === "selfhost_cloud_addon" ||
+    evidence.kind === "selfhost_cfn_wrapper"
   ) {
     return sanitizeSelfHostCellEvidence(evidence, secretValues);
   }
@@ -2358,6 +2823,27 @@ function sanitizeSelfHostCellEvidence(
   secretValues: readonly string[],
 ): CellEvidenceV1 {
   const clean = (value: string): string => boundMessage(redactUrlCredentials(redactSecrets(value, secretValues)));
+
+  // The CFN-wrapper posture's evidence shape has no controller_runtime_origin/
+  // anyharness_version (`SelfHostCfnWrapperEvidenceV1` does not extend
+  // `SelfHostEvidenceBaseV1`), so it is sanitized end to end here instead of
+  // through the shared base-field cleaning below.
+  if ((evidence as { kind?: unknown }).kind === "selfhost_cfn_wrapper") {
+    const e = evidence as SelfHostCfnWrapperEvidenceV1;
+    return {
+      ...e,
+      kind: "selfhost_cfn_wrapper",
+      artifact_ids: e.artifact_ids.map(clean),
+      server_version: clean(e.server_version),
+      api_origin: clean(e.api_origin),
+      stack_name_hash: clean(e.stack_name_hash),
+      image_repo_digest: clean(e.image_repo_digest),
+      release_version_tag: clean(e.release_version_tag),
+      template_sha256: clean(e.template_sha256),
+      cleanup: { ...e.cleanup, ledger_id_hash: clean(e.cleanup.ledger_id_hash) },
+    } as SelfHostCfnWrapperEvidenceV1;
+  }
+
   const base = evidence as unknown as SelfHostEvidenceBaseV1 & { kind: string };
   const cleanedBase = {
     ...base,
@@ -2411,6 +2897,50 @@ function sanitizeSelfHostCellEvidence(
         invitee_user_id_hash: clean(e.invitee_user_id_hash),
         invitation_id_hash: clean(e.invitation_id_hash),
       } as SelfHostInviteeEvidenceV1;
+    }
+    case "selfhost_github_auth": {
+      const e = evidence as SelfHostGithubAuthEvidenceV1;
+      return {
+        ...cleanedBase,
+        kind: "selfhost_github_auth",
+        owner_user_id_hash: clean(e.owner_user_id_hash),
+        org_id_hash: clean(e.org_id_hash),
+        github_identity_a_hash: clean(e.github_identity_a_hash),
+        github_identity_b_hash: clean(e.github_identity_b_hash),
+        member_role: clean(e.member_role),
+      } as SelfHostGithubAuthEvidenceV1;
+    }
+    case "selfhost_switch_isolation": {
+      const e = evidence as SelfHostSwitchIsolationEvidenceV1;
+      return {
+        ...cleanedBase,
+        kind: "selfhost_switch_isolation",
+        server_a_origin: clean(e.server_a_origin),
+        server_b_origin: clean(e.server_b_origin),
+      } as SelfHostSwitchIsolationEvidenceV1;
+    }
+    case "selfhost_gateway": {
+      const e = evidence as SelfHostGatewayEvidenceV1;
+      return {
+        ...cleanedBase,
+        kind: "selfhost_gateway",
+        actor_user_id_hash: clean(e.actor_user_id_hash),
+        virtual_key_id_hash: clean(e.virtual_key_id_hash),
+        litellm_image_digest: clean(e.litellm_image_digest),
+        model_id: clean(e.model_id),
+      } as SelfHostGatewayEvidenceV1;
+    }
+    case "selfhost_cloud_addon": {
+      const e = evidence as SelfHostCloudAddonEvidenceV1;
+      return {
+        ...cleanedBase,
+        kind: "selfhost_cloud_addon",
+        github_app_installation_id_hash: clean(e.github_app_installation_id_hash),
+        e2b_template_id: clean(e.e2b_template_id),
+        sandbox_id_hash: clean(e.sandbox_id_hash),
+        workspace_id_hash: clean(e.workspace_id_hash),
+        session_id_hash: clean(e.session_id_hash),
+      } as SelfHostCloudAddonEvidenceV1;
     }
     default:
       // Unreachable given the CellEvidenceV1 union; fall back to the base
