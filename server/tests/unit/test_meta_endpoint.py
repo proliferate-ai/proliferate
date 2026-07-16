@@ -176,9 +176,11 @@ def _cfg(**overrides):  # type: ignore[no-untyped-def]
 
 
 # Complete GitHub App runtime config: one entry per requirement group the
-# Settings.github_app_configured predicate checks.
+# Settings.github_app_configured predicate checks (the slug is required
+# because installation URL construction needs it at runtime).
 _APP_COMPLETE = {
     "github_app_id": "12345",
+    "github_app_slug": "acme-cloud",
     "github_app_client_id": "Iv1.app-client",
     "github_app_client_secret": "app-secret",
     "github_app_webhook_secret": "hook-secret",
@@ -350,11 +352,18 @@ def test_capabilities_app_partial_is_operator_configuration_required() -> None:
 
 
 def test_capabilities_e2b_partial_is_operator_configuration_required() -> None:
-    caps = build_server_capabilities(_cfg(e2b_api_key="e2b-key", **_APP_COMPLETE))
+    # Either half of the E2B pair alone is an operator error, not "disabled":
+    # key-without-template used to crash-loop the API at startup, and
+    # template-without-key silently looks intentional while provisioning fails.
+    key_only = build_server_capabilities(_cfg(e2b_api_key="e2b-key", **_APP_COMPLETE))
+    template_only = build_server_capabilities(
+        _cfg(e2b_template_name="company-runtime", **_APP_COMPLETE)
+    )
 
-    assert caps.githubRepositoryAccess.status == "ready"
-    assert caps.managedCloud.status == "operator_configuration_required"
-    assert caps.cloudWorkspaces is False
+    for caps in (key_only, template_only):
+        assert caps.githubRepositoryAccess.status == "ready"
+        assert caps.managedCloud.status == "operator_configuration_required"
+        assert caps.cloudWorkspaces is False
 
 
 def test_capabilities_e2b_ready_app_incomplete_is_operator_state_not_ready() -> None:
@@ -404,13 +413,20 @@ def test_capabilities_agent_gateway_independent_of_github_app() -> None:
 
 
 def test_capabilities_display_name_prefers_app_slug_then_instance() -> None:
-    slugged = build_server_capabilities(_cfg(github_app_slug="acme-cloud", **_APP_COMPLETE))
-    assert slugged.githubRepositoryAccess.displayName == "acme-cloud"
+    # A ready App always has a slug (it is a readiness requirement), so the
+    # instance-name and None fallbacks only apply to partial configs, which
+    # still surface a display name alongside operator_configuration_required.
+    ready = build_server_capabilities(_cfg(**_APP_COMPLETE))
+    assert ready.githubRepositoryAccess.displayName == "acme-cloud"
 
-    named = build_server_capabilities(_cfg(instance_name="Acme Internal", **_APP_COMPLETE))
+    slugless = dict(_APP_COMPLETE)
+    slugless.pop("github_app_slug")
+    named = build_server_capabilities(_cfg(instance_name="Acme Internal", **slugless))
+    assert named.githubRepositoryAccess.status == "operator_configuration_required"
     assert named.githubRepositoryAccess.displayName == "Acme Internal"
 
-    bare = build_server_capabilities(_cfg(**_APP_COMPLETE))
+    bare = build_server_capabilities(_cfg(**slugless))
+    assert bare.githubRepositoryAccess.status == "operator_configuration_required"
     assert bare.githubRepositoryAccess.displayName is None
 
 

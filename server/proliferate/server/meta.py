@@ -22,6 +22,8 @@ booleans and safe, user-facing destinations (support email, pricing/web URL).
 
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
@@ -102,6 +104,14 @@ class PricingCapability(BaseModel):
     url: str | None
 
 
+CapabilityStatus = Literal["disabled", "operator_configuration_required", "ready"]
+RepositoryAuthorityProvider = Literal["github_app"]
+
+CAPABILITY_DISABLED: CapabilityStatus = "disabled"
+CAPABILITY_OPERATOR_CONFIGURATION_REQUIRED: CapabilityStatus = "operator_configuration_required"
+CAPABILITY_READY: CapabilityStatus = "ready"
+
+
 class GitHubRepositoryAccessCapability(BaseModel):
     """Operator readiness of GitHub repository discovery/authority.
 
@@ -113,8 +123,8 @@ class GitHubRepositoryAccessCapability(BaseModel):
     and clone repositories without advertising Cloud workspaces.
     """
 
-    status: str
-    provider: str | None
+    status: CapabilityStatus
+    provider: RepositoryAuthorityProvider | None
     displayName: str | None
 
 
@@ -127,8 +137,8 @@ class ManagedCloudCapability(BaseModel):
     involved in the managed-Cloud path.
     """
 
-    status: str
-    repositoryAuthority: str | None
+    status: CapabilityStatus
+    repositoryAuthority: RepositoryAuthorityProvider | None
 
 
 class ServerCapabilities(BaseModel):
@@ -151,11 +161,6 @@ class ServerCapabilities(BaseModel):
     pricing: PricingCapability
     githubRepositoryAccess: GitHubRepositoryAccessCapability
     managedCloud: ManagedCloudCapability
-
-
-CAPABILITY_DISABLED = "disabled"
-CAPABILITY_OPERATOR_CONFIGURATION_REQUIRED = "operator_configuration_required"
-CAPABILITY_READY = "ready"
 
 
 def _github_repository_access(config: Settings) -> GitHubRepositoryAccessCapability:
