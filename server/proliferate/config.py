@@ -1,13 +1,10 @@
 from pydantic import AliasChoices, Field, model_validator
-from pydantic_settings import SettingsConfigDict
-
-# Keep feature-scoped fields in their owning settings mixin.
-from proliferate.workflow_config import WorkflowSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ENV_FILES = (".env", ".env.local")
 
 
-class Settings(WorkflowSettings):
+class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=ENV_FILES,
         env_file_encoding="utf-8",
@@ -101,6 +98,8 @@ class Settings(WorkflowSettings):
     celery_task_always_eager: bool = False
     celery_task_time_limit_seconds: int = 3600
     celery_task_soft_time_limit_seconds: int = 3300
+    workflow_managed_runs_enabled: bool = False
+    workflow_managed_freshness_stale_seconds: float = 60.0
     # Publisher-confirm timeout (seconds) for broker publishes. With confirm mode
     # enabled the relay waits up to this long for RabbitMQ to durably ack a
     # publish; a nack, a confirm timeout, or connection ambiguity raises so the
