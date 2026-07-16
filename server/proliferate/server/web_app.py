@@ -59,6 +59,12 @@ _RESERVED_API_SEGMENTS = (
 # as real static files (immutable), never as an SPA fallback target.
 _ASSETS_URL_PREFIX = "/assets"
 
+# ProductClient owns these exact callback/error routes even though the broader
+# /auth namespace belongs to the server. Real server routes always match before
+# the exception handler; these entries only make an otherwise-unmatched request
+# eligible for the SPA shell.
+_SPA_AUTH_PATHS = frozenset({"/auth/callback", "/auth/error"})
+
 
 class _ImmutableStaticFiles(StaticFiles):
     """StaticFiles that stamps hashed assets with a long-lived immutable cache.
@@ -151,17 +157,25 @@ def mount_web_app(app: FastAPI, dist_dir_setting: str, api_prefix: str) -> None:
         if request.method not in ("GET", "HEAD"):
             return await http_exception_handler(request, exc)
         path = request.url.path
-        # Reserved server/API namespaces never serve the shell.
-        if _is_reserved(path, reserved):
+        # Reserved server/API namespaces never serve the shell. ProductClient's
+        # two exact callback/error routes are the deliberate exception; unknown
+        # siblings under /auth still fail closed.
+        if path not in _SPA_AUTH_PATHS and _is_reserved(path, reserved):
             return await http_exception_handler(request, exc)
-        # A real root-level static file (favicon, etc.) is served as itself. A
-        # missing file under a non-reserved path resolves to the SPA shell so a
-        # client route can be refreshed directly. A direct GET /index.html is
-        # the shell too and must carry the same no-cache policy, or a CDN could
-        # pin a stale shell at that URL.
+        # A real root-level static file (favicon, etc.) is served as itself.
+        # Extensionless non-reserved paths resolve to the SPA shell so client
+        # routes can be refreshed directly; missing dotted files stay 404. A
+        # direct GET /index.html is the shell too and must carry the same
+        # no-cache policy, or a CDN could pin a stale shell at that URL.
         real_file = _resolve_within(dist_dir, path)
         if real_file is not None and real_file != index_file:
             return FileResponse(real_file)
+        # Root-level files emitted by Vite (favicon, manifests, robots.txt,
+        # source maps, etc.) are asset requests, not client navigation. Once a
+        # dotted final path segment fails to resolve to a real file, preserve
+        # the 404 instead of returning index.html with a misleading 200.
+        if path != "/index.html" and "." in path.rsplit("/", maxsplit=1)[-1]:
+            return await http_exception_handler(request, exc)
         return FileResponse(index_file, headers={"cache-control": INDEX_CACHE_CONTROL})
 
     app.add_exception_handler(StarletteHTTPException, spa_fallback)

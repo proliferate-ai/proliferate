@@ -127,7 +127,7 @@ services:
     # but /llm/* to this service. An operator can disable Web serving by
     # overriding WEB_DIST_DIR to empty in .env.local.
     environment:
-      WEB_DIST_DIR: ${WEB_DIST_DIR:-/app/web-dist}
+      WEB_DIST_DIR: ${WEB_DIST_DIR-/app/web-dist}
     ports:
       - "127.0.0.1:8000:8000"
     volumes:

@@ -38,9 +38,9 @@ EC2 alike, with no new Compose profile and no new public port. The server-side
   root are never served).
 
 All API/auth/setup routes are registered before a fail-closed SPA fallback:
-`/`, `/login`, `/settings`, and other client routes serve the ProductClient
+`/`, `/login`, `/settings`, `/auth/callback`, `/auth/error`, and other client routes serve the ProductClient
 `index.html`; `/assets/<hashed file>` serves the real immutable static asset (a
-missing asset is a 404, never the shell); `/v1/*`, `/auth/*`, `/health`,
+missing asset is a 404, never the shell); `/v1/*`, unknown `/auth/*`, `/health`,
 `/meta`, `/setup`, and `/register` remain server-owned and an unknown route in
 those namespaces stays a non-200 API failure. The fallback answers only GET and
 HEAD navigation; POST/PUT/PATCH/DELETE and WebSocket requests never receive the
@@ -62,10 +62,11 @@ Vercel and keeps its explicitly configured managed API URL.
 `SITE_ADDRESS` is the single public hostname Caddy serves. `bootstrap.sh`
 derives BOTH `API_BASE_URL` and `FRONTEND_BASE_URL` from it (for example
 `SITE_ADDRESS=proliferate.company.com` yields
-`https://proliferate.company.com` for each). An explicit `API_BASE_URL` or
-`FRONTEND_BASE_URL` wins; an explicit `http://localhost` stays HTTP. These
-trusted origins are operator-configured and are never derived from an incoming
-`Host` or forwarded header. Existing Desktop CORS origins are unchanged.
+`https://proliferate.company.com` for each). Explicit values may repeat that
+origin, including `http://localhost` for local evaluation, but preflight rejects
+a different `API_BASE_URL` or `FRONTEND_BASE_URL`. These trusted origins are
+operator-configured and are never derived from an incoming `Host` or forwarded
+header. Existing Desktop CORS origins are unchanged.
 
 ## Desktop Runtime Override
 

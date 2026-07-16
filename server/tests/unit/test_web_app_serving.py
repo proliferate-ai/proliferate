@@ -91,7 +91,14 @@ async def _client(app):  # type: ignore[no-untyped-def]
 @pytest.mark.asyncio
 async def test_root_and_client_routes_serve_index(web_app) -> None:  # type: ignore[no-untyped-def]
     async with await _client(web_app) as client:
-        for path in ("/", "/login", "/settings", "/some/deep/client/route"):
+        for path in (
+            "/",
+            "/login",
+            "/settings",
+            "/some/deep/client/route",
+            "/auth/callback",
+            "/auth/error",
+        ):
             resp = await client.get(path)
             assert resp.status_code == 200, path
             assert '<div id="root"></div>' in resp.text, path
@@ -115,9 +122,15 @@ async def test_real_hashed_asset_served_with_immutable_cache(web_app) -> None:  
 @pytest.mark.asyncio
 async def test_missing_asset_is_404_not_index(web_app) -> None:  # type: ignore[no-untyped-def]
     async with await _client(web_app) as client:
-        resp = await client.get("/assets/does-not-exist.js")
-        assert resp.status_code == 404
-        assert '<div id="root"></div>' not in resp.text
+        for path in (
+            "/assets/does-not-exist.js",
+            "/does-not-exist.ico",
+            "/manifest.webmanifest",
+            "/does-not-exist.js",
+        ):
+            resp = await client.get(path)
+            assert resp.status_code == 404, path
+            assert '<div id="root"></div>' not in resp.text, path
 
 
 @pytest.mark.asyncio

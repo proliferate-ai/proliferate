@@ -195,19 +195,20 @@ if [[ -z "$PUBLIC_HEALTHCHECK_URL" ]]; then
 fi
 
 # The server embeds API_BASE_URL in configuration it pushes to workspaces.
-# Operators can set it explicitly; otherwise derive it from SITE_ADDRESS so
-# the sslip fallback (where SITE_ADDRESS is resolved at runtime) works too.
+# Operators can repeat the same origin explicitly; otherwise derive it from
+# SITE_ADDRESS so the sslip fallback (where SITE_ADDRESS is resolved at
+# runtime) works too. preflight.sh rejects a different origin.
 API_BASE_URL="$(read_config_env_value API_BASE_URL)"
 if [[ -z "$API_BASE_URL" ]]; then
   API_BASE_URL="$(site_url_from_address "$SITE_ADDRESS" "")"
 fi
 
 # Self-hosted Web is served same-origin from the server image, so the frontend
-# base URL is the same public origin as the API. An explicit FRONTEND_BASE_URL
-# wins; otherwise derive it from SITE_ADDRESS exactly like API_BASE_URL (this
-# preserves the explicit http://localhost posture that site_url_from_address
-# already honors). This is a trusted, operator-configured origin: it is never
-# derived from an incoming Host or forwarded header.
+# base URL is the same public origin as the API. An explicit value may repeat
+# that origin; preflight.sh rejects a different one. Otherwise derive it from
+# SITE_ADDRESS exactly like API_BASE_URL (this preserves the explicit
+# http://localhost posture that site_url_from_address already honors). This is
+# trusted operator configuration, never an incoming Host/forwarded header.
 FRONTEND_BASE_URL="$(read_config_env_value FRONTEND_BASE_URL)"
 if [[ -z "$FRONTEND_BASE_URL" ]]; then
   FRONTEND_BASE_URL="$(site_url_from_address "$SITE_ADDRESS" "")"

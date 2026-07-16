@@ -527,8 +527,20 @@ phase_web() {
   if [[ "$LAST_RESPONSE_BODY" == *'id="root"'* ]]; then
     fail "a missing asset fell back to the Web shell; it must stay a 404"
   fi
+  http_call GET "$base_url/definitely-missing.ico"
+  assert_status "GET missing root asset" 404
+  if [[ "$LAST_RESPONSE_BODY" == *'id="root"'* ]]; then
+    fail "a missing root asset fell back to the Web shell; it must stay a 404"
+  fi
 
-  # (6) Unknown /v1 and /auth paths remain non-200 API failures, never the shell.
+  # (6) ProductClient's exact auth callback/error routes receive the shell,
+  # while unknown /v1 and /auth siblings remain API failures.
+  for client_auth_path in /auth/callback /auth/error; do
+    assert_http_200 "GET $client_auth_path (Web shell)" "$base_url$client_auth_path"
+    if [[ "$LAST_RESPONSE_BODY" != *'id="root"'* ]]; then
+      fail "GET $client_auth_path did not return the Web application shell"
+    fi
+  done
   http_call GET "$base_url/v1/definitely-not-a-route"
   if [[ "$LAST_RESPONSE_STATUS" == "200" || "$LAST_RESPONSE_BODY" == *'id="root"'* ]]; then
     fail "unknown /v1 path returned the Web shell / 200 (status=$LAST_RESPONSE_STATUS)"
