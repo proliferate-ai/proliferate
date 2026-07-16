@@ -139,6 +139,15 @@ vi.mock("#product/hooks/cloud/workflows/use-create-cloud-workspace", () => ({
   }),
 }));
 
+// The clone path is exercised elsewhere; here we only need the host to mount, so
+// stub the clone hook (which otherwise pulls in the AnyHarnessRuntime provider).
+vi.mock("#product/hooks/workspaces/workflows/use-clone-repo", () => ({
+  useCloneRepo: () => ({
+    cloneRepo: vi.fn(() => Promise.resolve({ succeeded: true, sourceRoot: "/tmp/clone" })),
+    isCloning: false,
+  }),
+}));
+
 vi.mock("#product/lib/domain/settings/github-app-copy", () => ({
   buildCloudAdminRequestMessage: () => "request",
 }));

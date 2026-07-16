@@ -31,10 +31,13 @@ import { useCloudRepositoryIntentStore } from "#product/stores/cloud/cloud-repos
 import {
   continueCloudRepositoryIntent,
   repoForCloudRepositoryIntent,
+  requirementForCloudRepositoryIntent,
+  type CloneFromGitHubContinuation,
   type CloudRepoIdentity,
   type CloudRepositoryIntent,
   type CreateCloudWorkspaceContinuation,
 } from "#product/lib/domain/workspaces/cloud/cloud-repository-intent";
+import { useCloneRepo } from "#product/hooks/workspaces/workflows/use-clone-repo";
 import { buildConfiguredCloudRepoKeys } from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import { cloudRepositoryKey } from "#product/lib/domain/settings/repositories";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
@@ -62,6 +65,10 @@ export function CloudRepoActionDialogHost() {
   const intent = useCloudRepositoryIntentStore((state) => state.activeIntent);
   const clearIntent = useCloudRepositoryIntentStore((state) => state.clear);
   const repo = intent ? repoForCloudRepositoryIntent(intent) : null;
+  // Clone depends only on GitHub repository access; managed-Cloud intents depend
+  // on managed Cloud. Gating by the intent's own requirement lets an
+  // App-ready/E2B-disabled deployment clone without a managed-Cloud gate.
+  const requirement = intent ? requirementForCloudRepositoryIntent(intent) : "managed_cloud";
 
   const client = useCloudClient();
   const queryClient = useQueryClient();
@@ -79,7 +86,14 @@ export function CloudRepoActionDialogHost() {
   const repoConfigs = useRepositories(open && signedIn);
   const authority = useGitHubRepoAuthority(
     { gitOwner: repo?.gitOwner, gitRepoName: repo?.gitRepoName },
-    open && signedIn && capabilities.managedCloudStatus !== "disabled" && repo !== null,
+    // Clone needs per-repo authority even when managed Cloud is disabled, so it
+    // gates on GitHub repository access rather than managed Cloud.
+    open
+      && signedIn
+      && repo !== null
+      && (requirement === "github_repository_access"
+        ? capabilities.githubRepositoryAccessStatus !== "disabled"
+        : capabilities.managedCloudStatus !== "disabled"),
   );
 
   const configuredCloudKeys = useMemo(
@@ -123,11 +137,12 @@ export function CloudRepoActionDialogHost() {
   const saveEnvironment = useSaveRepoEnvironment();
   const validateBranches = useValidateCloudRepoBranches();
   const { createCloudWorkspaceAndEnter } = useCreateCloudWorkspace();
+  const { cloneRepo } = useCloneRepo();
 
   const readiness: RepositoryReadiness | null = useMemo(() => {
     if (!intent) return null;
     return resolveRepositoryReadiness({
-      requirement: "managed_cloud",
+      requirement,
       githubRepositoryAccess: capabilities.githubRepositoryAccessStatus,
       managedCloud: capabilities.managedCloudStatus,
       signedIn,
@@ -179,6 +194,28 @@ export function CloudRepoActionDialogHost() {
     );
   }, [createCloudWorkspaceAndEnter]);
 
+  const cloneFromGitHub = useCallback(async (
+    target: CloudRepoIdentity,
+    _continuation: CloneFromGitHubContinuation,
+  ) => {
+    // Reuse a stable operation id across retries so a crash mid-clone reuses the
+    // repo-root materialization instead of cloning twice. Keyed on the repo the
+    // held intent targets (one active clone intent per repo).
+    const operationId = `clone:${target.gitOwner}/${target.gitRepoName}`;
+    const result = await cloneRepo(
+      {
+        gitProvider: target.gitProvider,
+        gitOwner: target.gitOwner,
+        gitRepoName: target.gitRepoName,
+      },
+      operationId,
+    );
+    if (!result.succeeded && !result.cancelled) {
+      // Surface to the continuation guard so the dialog stays open for retry.
+      throw new Error(result.error);
+    }
+  }, [cloneRepo]);
+
   // Once every access gate is green, continue the held intent (save env →
   // create). Gate 9 (`set_up_cloud`) is the normal continue point: the resolver
   // has cleared authority and only the Cloud environment save remains, which is
@@ -197,11 +234,13 @@ export function CloudRepoActionDialogHost() {
     cloudEnvironmentConfigured,
     saveCloudEnvironment,
     createCloudWorkspace,
+    cloneFromGitHub,
   });
   continuationInputsRef.current = {
     cloudEnvironmentConfigured,
     saveCloudEnvironment,
     createCloudWorkspace,
+    cloneFromGitHub,
   };
 
   // The intent instance the continuation has already been started for. Because
@@ -230,13 +269,18 @@ export function CloudRepoActionDialogHost() {
     }
     startedForRef.current = intent;
     setContinuationError(null);
-    const { cloudEnvironmentConfigured, saveCloudEnvironment, createCloudWorkspace } =
-      continuationInputsRef.current;
+    const {
+      cloudEnvironmentConfigured,
+      saveCloudEnvironment,
+      createCloudWorkspace,
+      cloneFromGitHub,
+    } = continuationInputsRef.current;
     void continueCloudRepositoryIntent({
       intent,
       cloudEnvironmentConfigured,
       saveCloudEnvironment,
       createCloudWorkspace,
+      cloneFromGitHub,
     })
       .then(() => {
         // Terminal success: clear the intent unconditionally. Nothing should

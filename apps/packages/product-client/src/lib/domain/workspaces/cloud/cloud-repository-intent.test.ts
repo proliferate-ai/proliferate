@@ -9,11 +9,21 @@ import {
 const REPO = { gitProvider: "github", gitOwner: "acme", gitRepoName: "rocket" } as const;
 
 describe("cloud repository intent", () => {
-  it("maps every cloud intent to the managed_cloud requirement", () => {
+  it("maps managed-cloud intents to managed_cloud and clone to github_repository_access", () => {
     expect(requirementForCloudRepositoryIntent({ kind: "set_up_cloud", repo: REPO }))
       .toBe("managed_cloud");
     expect(requirementForCloudRepositoryIntent({ kind: "add_cloud_repository" }))
       .toBe("managed_cloud");
+    expect(requirementForCloudRepositoryIntent({
+      kind: "clone_from_github",
+      repo: REPO,
+      continuation: {
+        repoGroupKeyToExpand: null,
+        cloneUrl: "https://github.com/acme/rocket.git",
+        defaultBranch: "main",
+        destinationParentPath: null,
+      },
+    })).toBe("github_repository_access");
   });
 
   it("resolves the target repo, or null for the repo-agnostic add flow", () => {
@@ -90,5 +100,29 @@ describe("cloud repository intent", () => {
 
     expect(saveCloudEnvironment).not.toHaveBeenCalled();
     expect(createCloudWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("clones without creating a Cloud environment or workspace", async () => {
+    const saveCloudEnvironment = vi.fn(async () => {});
+    const createCloudWorkspace = vi.fn(async () => {});
+    const cloneFromGitHub = vi.fn(async () => {});
+    const continuation = {
+      repoGroupKeyToExpand: "github:acme:rocket",
+      cloneUrl: "https://github.com/acme/rocket.git",
+      defaultBranch: "main",
+      destinationParentPath: "/Users/dev/code",
+    };
+
+    await continueCloudRepositoryIntent({
+      intent: { kind: "clone_from_github", repo: REPO, continuation },
+      cloudEnvironmentConfigured: false,
+      saveCloudEnvironment,
+      createCloudWorkspace,
+      cloneFromGitHub,
+    });
+
+    expect(saveCloudEnvironment).not.toHaveBeenCalled();
+    expect(createCloudWorkspace).not.toHaveBeenCalled();
+    expect(cloneFromGitHub).toHaveBeenCalledWith(REPO, continuation);
   });
 });

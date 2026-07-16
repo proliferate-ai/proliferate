@@ -11,6 +11,7 @@ import {
   logicalWorkspaceRelatedIds,
 } from "#product/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import {
+  buildCloudIdentityLogicalWorkspaceId,
   buildLocalSlotLogicalWorkspaceId,
   buildRemoteLogicalWorkspaceId,
   parseLogicalWorkspaceId,
@@ -671,6 +672,155 @@ describe("logical workspaces", () => {
         "hi",
       ),
     ).toBe("path:%2FUsers%2Fpablo%2Fproliferate:hi");
+  });
+
+  it("attaches a Cloud workspace to a local slot by explicit materialization, not branch", () => {
+    // Two different-path local worktrees on the same branch; the Cloud record's
+    // explicit local materialization names ws-b. It must merge with ws-b only.
+    const wsA = makeWorkspace({ id: "ws-a", repoName: "rocket", branch: "feat/x", path: "/a" });
+    const wsB = makeWorkspace({ id: "ws-b", repoName: "rocket", branch: "feat/x", path: "/b" });
+    const repoRoot = makeRepoRoot({ repoName: "rocket" });
+    const cloud = {
+      ...makeCloudWorkspace({ id: "cloud-1", repoName: "rocket", branch: "feat/x" }),
+      materializations: [
+        {
+          id: "m-managed",
+          targetKind: "managed_cloud" as const,
+          desktopInstallId: null,
+          anyharnessWorkspaceId: "ah-managed",
+          worktreePath: null,
+          state: "hydrated" as const,
+          generation: 1,
+          expectedHeadSha: null,
+          observedHeadSha: null,
+          observedBranch: null,
+          failureCode: null,
+          lastReportedAt: null,
+        },
+        {
+          id: "m-local",
+          targetKind: "local_desktop" as const,
+          desktopInstallId: "mac-a",
+          anyharnessWorkspaceId: "ws-b",
+          worktreePath: "/b",
+          state: "hydrated" as const,
+          generation: 2,
+          expectedHeadSha: null,
+          observedHeadSha: null,
+          observedBranch: null,
+          failureCode: null,
+          lastReportedAt: null,
+        },
+      ],
+    };
+
+    const result = buildLogicalWorkspaces({
+      localWorkspaces: [wsA, wsB],
+      repoRoots: [repoRoot],
+      cloudWorkspaces: [cloud],
+      desktopInstallId: "mac-a",
+    });
+
+    const withCloud = result.filter((w) => w.cloudWorkspace?.id === "cloud-1");
+    expect(withCloud).toHaveLength(1);
+    expect(withCloud[0]!.localWorkspace?.id).toBe("ws-b");
+    // ws-a stays its own distinct slot with no Cloud record attached.
+    const slotA = result.find((w) => w.localWorkspace?.id === "ws-a");
+    expect(slotA?.cloudWorkspace).toBeNull();
+  });
+
+  it("keeps a materialized Cloud workspace distinct when no local link exists for this install", () => {
+    const wsA = makeWorkspace({ id: "ws-a", repoName: "rocket", branch: "feat/x", path: "/a" });
+    const cloud = {
+      ...makeCloudWorkspace({ id: "cloud-1", repoName: "rocket", branch: "feat/x" }),
+      materializations: [
+        {
+          id: "m-managed",
+          targetKind: "managed_cloud" as const,
+          desktopInstallId: null,
+          anyharnessWorkspaceId: "ah-managed",
+          worktreePath: null,
+          state: "hydrated" as const,
+          generation: 1,
+          expectedHeadSha: null,
+          observedHeadSha: null,
+          observedBranch: null,
+          failureCode: null,
+          lastReportedAt: null,
+        },
+      ],
+    };
+
+    const result = buildLogicalWorkspaces({
+      localWorkspaces: [wsA],
+      repoRoots: [makeRepoRoot({ repoName: "rocket" })],
+      cloudWorkspaces: [cloud],
+      desktopInstallId: "mac-a",
+    });
+
+    // No heuristic merge: the same-branch local slot stays local-only and the
+    // Cloud record is its own identity-keyed logical workspace.
+    const slotA = result.find((w) => w.localWorkspace?.id === "ws-a");
+    expect(slotA?.cloudWorkspace).toBeNull();
+    const cloudOnly = result.find((w) => w.cloudWorkspace?.id === "cloud-1" && !w.localWorkspace);
+    expect(cloudOnly).toBeDefined();
+  });
+
+  it("does not merge another install's redacted local materialization", () => {
+    const wsA = makeWorkspace({ id: "ws-a", repoName: "rocket", branch: "feat/x", path: "/a" });
+    const cloud = {
+      ...makeCloudWorkspace({ id: "cloud-1", repoName: "rocket", branch: "feat/x" }),
+      materializations: [
+        {
+          id: "m-local-other",
+          targetKind: "local_desktop" as const,
+          // Redacted row from a different install: null path/id.
+          desktopInstallId: "mac-other",
+          anyharnessWorkspaceId: null,
+          worktreePath: null,
+          state: "hydrated" as const,
+          generation: 1,
+          expectedHeadSha: null,
+          observedHeadSha: null,
+          observedBranch: null,
+          failureCode: null,
+          lastReportedAt: null,
+        },
+      ],
+    };
+
+    const result = buildLogicalWorkspaces({
+      localWorkspaces: [wsA],
+      repoRoots: [makeRepoRoot({ repoName: "rocket" })],
+      cloudWorkspaces: [cloud],
+      desktopInstallId: "mac-a",
+    });
+
+    const slotA = result.find((w) => w.localWorkspace?.id === "ws-a");
+    expect(slotA?.cloudWorkspace).toBeNull();
+  });
+
+  it("falls back to the branch heuristic for a legacy Cloud row without materializations", () => {
+    const wsA = makeWorkspace({ id: "ws-a", repoName: "rocket", branch: "main", path: "/a" });
+    const cloud = makeCloudWorkspace({ id: "cloud-1", repoName: "rocket", branch: "main" });
+
+    const result = buildLogicalWorkspaces({
+      localWorkspaces: [wsA],
+      repoRoots: [makeRepoRoot({ repoName: "rocket" })],
+      cloudWorkspaces: [cloud],
+      desktopInstallId: "mac-a",
+    });
+
+    // Legacy behavior preserved: same repo/branch folds local + Cloud together.
+    const merged = result.find((w) => w.localWorkspace?.id === "ws-a");
+    expect(merged?.cloudWorkspace?.id).toBe("cloud-1");
+  });
+
+  it("parses cloud identity ids and leaves branch replacement unchanged", () => {
+    const cloudId = buildCloudIdentityLogicalWorkspaceId("cloud-1");
+    expect(cloudId).toBe("cloud:cloud-1");
+    expect(parseLogicalWorkspaceId(cloudId)).toEqual({ kind: "cloud", segments: ["cloud-1"] });
+    expect(replaceLogicalWorkspaceBranch(cloudId, "feature/new")).toBe(cloudId);
   });
 
   it("parses local-slot ids strictly and leaves branch replacement unchanged", () => {

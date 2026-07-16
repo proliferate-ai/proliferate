@@ -151,6 +151,10 @@ export interface CloudWorkspaceSummary {
   executionTarget?: CloudWorkspaceExecutionTargetSummary;
   selectedMaterializationId?: string | null;
   primaryMaterialization?: CloudWorkspaceMaterializationSummary | null;
+  // The full active materialization ledger for this Cloud workspace (PR 4).
+  // Present on server responses; optional so legacy/synthetic fixtures without
+  // it still type-check. The explicit-association projection reads this array.
+  materializations?: CloudWorkspaceMaterializationSummary[];
   cloudAccess?: CloudWorkspaceCloudAccessSummary;
   statusDetail: string | null;
   lastError: string | null;

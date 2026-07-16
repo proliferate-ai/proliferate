@@ -22,6 +22,20 @@ export interface CreateCloudWorkspaceContinuation {
 }
 
 /**
+ * Everything the clone-from-github continuation needs, kept as a minimal
+ * serializable object rather than a captured closure so it survives a browser
+ * authorization callback while the app stays open. `destinationParentPath` is
+ * the user-chosen parent directory the clone lands under; null means the host
+ * still needs to prompt for it.
+ */
+export interface CloneFromGitHubContinuation {
+  repoGroupKeyToExpand: string | null;
+  cloneUrl: string;
+  defaultBranch: string | null;
+  destinationParentPath: string | null;
+}
+
+/**
  * The one intent the connected Cloud action host owns. Serializable by
  * construction: on cold restart the store is empty and nothing resumes; the
  * settings surfaces are the recovery path.
@@ -33,13 +47,24 @@ export type CloudRepositoryIntent =
     repo: CloudRepoIdentity;
     continuation: CreateCloudWorkspaceContinuation;
   }
+  | {
+    kind: "clone_from_github";
+    repo: CloudRepoIdentity;
+    continuation: CloneFromGitHubContinuation;
+  }
   | { kind: "add_cloud_repository" };
 
-/** Every Cloud repository intent depends on managed-Cloud readiness. */
+/**
+ * The capability an intent depends on. Every managed-Cloud intent
+ * (set_up_cloud / create_cloud_workspace / add_cloud_repository) requires
+ * managed-Cloud execution readiness, but `clone_from_github` only needs GitHub
+ * repository access: a GitHub-App-ready deployment with managed Cloud disabled
+ * can still clone locally, so it must not be gated behind managed Cloud.
+ */
 export function requirementForCloudRepositoryIntent(
-  _intent: CloudRepositoryIntent,
+  intent: CloudRepositoryIntent,
 ): RepositoryCapabilityRequirement {
-  return "managed_cloud";
+  return intent.kind === "clone_from_github" ? "github_repository_access" : "managed_cloud";
 }
 
 /** The repository an intent targets, or null for the repo-agnostic add flow. */
@@ -67,11 +92,24 @@ export async function continueCloudRepositoryIntent(args: {
     repo: CloudRepoIdentity,
     continuation: CreateCloudWorkspaceContinuation,
   ) => Promise<void>;
+  /** Clone the target GitHub repository to this machine. */
+  cloneFromGitHub?: (
+    repo: CloudRepoIdentity,
+    continuation: CloneFromGitHubContinuation,
+  ) => Promise<void>;
 }): Promise<void> {
   const { intent } = args;
 
   if (intent.kind === "add_cloud_repository") {
     // The repo picker owns its own save; nothing to continue here.
+    return;
+  }
+
+  // Clone never touches the Cloud repo environment: it uses only GitHub
+  // repository access + the local Git credential chain, so it must not create a
+  // managed-Cloud environment as a side effect.
+  if (intent.kind === "clone_from_github") {
+    await args.cloneFromGitHub?.(intent.repo, intent.continuation);
     return;
   }
 

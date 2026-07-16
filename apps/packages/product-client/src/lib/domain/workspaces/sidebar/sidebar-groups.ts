@@ -95,6 +95,7 @@ export function buildSidebarGroupStates(args: {
   sessionLastViewedAt?: Record<string, string>;
   targetAppearanceById?: Record<string, ComputeTargetAppearance>;
   suppressActiveNeedsReview?: boolean;
+  desktopInstallId?: string | null;
 }): SidebarGroupState[] {
   const visibleWorkspaceTypes = new Set(resolveSidebarWorkspaceTypes(args.workspaceTypes));
   const repoRootsByKey = new Map(
@@ -176,6 +177,7 @@ export function buildSidebarGroupStates(args: {
         sessionLastViewedAt: args.sessionLastViewedAt,
         targetAppearanceById: args.targetAppearanceById,
         suppressActiveNeedsReview: args.suppressActiveNeedsReview,
+        desktopInstallId: args.desktopInstallId,
       });
       const items = pendingItem
         ? [pendingItem, ...workspaceItems]

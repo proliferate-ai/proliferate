@@ -92,6 +92,12 @@ export function buildPendingSidebarProjection(args: {
       workspaceLocationCopyToastLabel: null,
       branchName: null,
       gitStatus: null,
+      // A pending (not-yet-created) entry has no materialized copies to act on.
+      availabilityCommands: [],
+      cloudWorkspaceIdForActions: null,
+      linkedMaterializationId: null,
+      repoOwner: null,
+      repoName: null,
     },
     sortRecency: {
       activityAt: createdAt,

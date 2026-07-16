@@ -246,6 +246,51 @@ async def insert_managed_cloud_materialization(
     return cloud_workspace_materialization_value(row)
 
 
+async def insert_hydrated_local_desktop_materialization(
+    db: AsyncSession,
+    *,
+    cloud_workspace_id: UUID,
+    desktop_install_id: str,
+    anyharness_workspace_id: str,
+    worktree_path: str,
+    expected_head_sha: str,
+    observed_head_sha: str,
+    observed_branch: str,
+) -> CloudWorkspaceMaterializationValue | None:
+    """Insert one active, already-hydrated local-desktop row.
+
+    Used by exact-ref Cloud creation from a local workspace: the local source
+    already exists and matches the exact ref, so the association is recorded as
+    hydrated in a single write rather than through the intent → report cycle.
+    Returns None on an active-uniqueness race (install already linked).
+    """
+    now = utcnow()
+    row = CloudWorkspaceMaterialization(
+        cloud_workspace_id=cloud_workspace_id,
+        target_kind="local_desktop",
+        cloud_sandbox_id=None,
+        desktop_install_id=desktop_install_id,
+        anyharness_workspace_id=anyharness_workspace_id,
+        worktree_path=worktree_path,
+        state="hydrated",
+        generation=1,
+        expected_head_sha=expected_head_sha,
+        observed_head_sha=observed_head_sha,
+        observed_branch=observed_branch,
+        last_reported_at=now,
+        unlinked_at=None,
+        created_at=now,
+        updated_at=now,
+    )
+    try:
+        async with db.begin_nested():
+            db.add(row)
+            await db.flush()
+    except IntegrityError:
+        return None
+    return cloud_workspace_materialization_value(row)
+
+
 async def create_local_desktop_intent(
     db: AsyncSession,
     *,
