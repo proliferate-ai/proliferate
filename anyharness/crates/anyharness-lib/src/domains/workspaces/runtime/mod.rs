@@ -9,6 +9,7 @@ use crate::domains::workspaces::model::WorkspaceRecord;
 
 mod access;
 mod env;
+mod exact_ref;
 mod identity;
 mod lifecycle;
 mod materialization;
@@ -17,6 +18,10 @@ mod records;
 mod repo_metadata;
 mod worktrees;
 
+pub use exact_ref::{ExactRefOutcome, ExactRefWorkspace};
+
+#[cfg(test)]
+mod exact_ref_tests;
 #[cfg(test)]
 mod test_support;
 #[cfg(test)]

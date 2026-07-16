@@ -1038,6 +1038,56 @@
         }
       }
     },
+    "/v1/repo-roots/materializations": {
+      "post": {
+        "tags": [
+          "repo-roots"
+        ],
+        "operationId": "materialize_repo_root",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaterializeRepoRootRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Acquired repo root",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterializeRepoRootResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or acquisition failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Destination/operation conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/repo-roots/resolve": {
       "post": {
         "tags": [
@@ -1384,6 +1434,77 @@
           },
           "409": {
             "description": "Destination conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/repo-roots/{repo_root_id}/workspace-materializations": {
+      "post": {
+        "tags": [
+          "repo-roots"
+        ],
+        "operationId": "materialize_workspace_at_ref",
+        "parameters": [
+          {
+            "name": "repo_root_id",
+            "in": "path",
+            "description": "Repo root ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaterializeWorkspaceAtRefRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Materialized workspace at exact ref",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterializeWorkspaceAtRefResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or ref failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Repo root not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Branch/head/dirty/busy/operation conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -11161,6 +11282,131 @@
           }
         }
       },
+      "MaterializeRepoRootRequest": {
+        "type": "object",
+        "required": [
+          "operationId",
+          "repository",
+          "destinationPath",
+          "mode"
+        ],
+        "properties": {
+          "destinationPath": {
+            "type": "string",
+            "description": "Absolute destination path selected by the user-facing host."
+          },
+          "mode": {
+            "$ref": "#/components/schemas/RepoRootMaterializationMode"
+          },
+          "operationId": {
+            "type": "string",
+            "description": "Stable caller idempotency key."
+          },
+          "repository": {
+            "$ref": "#/components/schemas/MaterializeRepositoryTarget"
+          }
+        }
+      },
+      "MaterializeRepoRootResponse": {
+        "type": "object",
+        "required": [
+          "operationId",
+          "repoRoot",
+          "outcome"
+        ],
+        "properties": {
+          "operationId": {
+            "type": "string"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/RepoRootMaterializationOutcome"
+          },
+          "repoRoot": {
+            "$ref": "#/components/schemas/RepoRoot"
+          }
+        }
+      },
+      "MaterializeRepositoryTarget": {
+        "type": "object",
+        "description": "The expected identity + fetch source for a repository the runtime should\nacquire. `clone_url` may be HTTPS or SSH; the runtime relies solely on the\nlocal Git credential chain to authenticate.",
+        "required": [
+          "provider",
+          "owner",
+          "name",
+          "cloneUrl"
+        ],
+        "properties": {
+          "cloneUrl": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/RepositoryProvider"
+          }
+        }
+      },
+      "MaterializeWorkspaceAtRefRequest": {
+        "type": "object",
+        "required": [
+          "operationId",
+          "branchName",
+          "headSha"
+        ],
+        "properties": {
+          "branchName": {
+            "type": "string"
+          },
+          "destinationId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 96,
+            "pattern": "^[A-Za-z0-9._-]{1,96}$"
+          },
+          "headSha": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string",
+            "description": "Stable caller idempotency key."
+          },
+          "preferredWorkspaceName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "MaterializeWorkspaceAtRefResponse": {
+        "type": "object",
+        "required": [
+          "operationId",
+          "workspace",
+          "observedHeadSha",
+          "outcome"
+        ],
+        "properties": {
+          "observedHeadSha": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/WorkspaceMaterializationOutcome"
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/Workspace"
+          }
+        }
+      },
       "McpElicitationBooleanField": {
         "allOf": [
           {
@@ -14178,6 +14424,28 @@
         "enum": [
           "external",
           "managed"
+        ]
+      },
+      "RepoRootMaterializationMode": {
+        "type": "string",
+        "description": "Acquisition mode. Only `clone_or_adopt` is supported: clone into a\nnon-existent/empty destination, or adopt an existing matching main checkout.",
+        "enum": [
+          "clone_or_adopt"
+        ]
+      },
+      "RepoRootMaterializationOutcome": {
+        "type": "string",
+        "enum": [
+          "cloned",
+          "adopted",
+          "reused"
+        ]
+      },
+      "RepositoryProvider": {
+        "type": "string",
+        "description": "The single supported provider for repository acquisition today. Kept as a\nclosed enum so callers cannot request an unsupported host and the wire stays\nforward-compatible.",
+        "enum": [
+          "github"
         ]
       },
       "ResizeTerminalRequest": {
@@ -18991,6 +19259,14 @@
         "enum": [
           "active",
           "retired"
+        ]
+      },
+      "WorkspaceMaterializationOutcome": {
+        "type": "string",
+        "enum": [
+          "created",
+          "adopted",
+          "reused"
         ]
       },
       "WorkspaceMobilityArchive": {

@@ -356,6 +356,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/repo-roots/materializations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["materialize_repo_root"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/repo-roots/resolve": {
         parameters: {
             query?: never;
@@ -462,6 +478,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["prepare_repo_root_mobility_destination"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/repo-roots/{repo_root_id}/workspace-materializations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["materialize_workspace_at_ref"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3019,6 +3051,44 @@ export interface components {
         MarkReviewRevisionReadyRequest: {
             revisedPlanId?: string | null;
         };
+        MaterializeRepoRootRequest: {
+            /** @description Absolute destination path selected by the user-facing host. */
+            destinationPath: string;
+            mode: components["schemas"]["RepoRootMaterializationMode"];
+            /** @description Stable caller idempotency key. */
+            operationId: string;
+            repository: components["schemas"]["MaterializeRepositoryTarget"];
+        };
+        MaterializeRepoRootResponse: {
+            operationId: string;
+            outcome: components["schemas"]["RepoRootMaterializationOutcome"];
+            repoRoot: components["schemas"]["RepoRoot"];
+        };
+        /**
+         * @description The expected identity + fetch source for a repository the runtime should
+         *     acquire. `clone_url` may be HTTPS or SSH; the runtime relies solely on the
+         *     local Git credential chain to authenticate.
+         */
+        MaterializeRepositoryTarget: {
+            cloneUrl: string;
+            name: string;
+            owner: string;
+            provider: components["schemas"]["RepositoryProvider"];
+        };
+        MaterializeWorkspaceAtRefRequest: {
+            branchName: string;
+            destinationId?: string | null;
+            headSha: string;
+            /** @description Stable caller idempotency key. */
+            operationId: string;
+            preferredWorkspaceName?: string | null;
+        };
+        MaterializeWorkspaceAtRefResponse: {
+            observedHeadSha: string;
+            operationId: string;
+            outcome: components["schemas"]["WorkspaceMaterializationOutcome"];
+            workspace: components["schemas"]["Workspace"];
+        };
         McpElicitationBooleanField: components["schemas"]["McpElicitationFieldBase"];
         McpElicitationField: (components["schemas"]["McpElicitationTextField"] & {
             /** @enum {string} */
@@ -3781,6 +3851,21 @@ export interface components {
         };
         /** @enum {string} */
         RepoRootKind: "external" | "managed";
+        /**
+         * @description Acquisition mode. Only `clone_or_adopt` is supported: clone into a
+         *     non-existent/empty destination, or adopt an existing matching main checkout.
+         * @enum {string}
+         */
+        RepoRootMaterializationMode: "clone_or_adopt";
+        /** @enum {string} */
+        RepoRootMaterializationOutcome: "cloned" | "adopted" | "reused";
+        /**
+         * @description The single supported provider for repository acquisition today. Kept as a
+         *     closed enum so callers cannot request an unsupported host and the wire stays
+         *     forward-compatible.
+         * @enum {string}
+         */
+        RepositoryProvider: "github";
         ResizeTerminalRequest: {
             /** Format: int32 */
             cols: number;
@@ -4909,6 +4994,8 @@ export interface components {
         WorkspaceKind: "worktree" | "local";
         /** @enum {string} */
         WorkspaceLifecycleState: "active" | "retired";
+        /** @enum {string} */
+        WorkspaceMaterializationOutcome: "created" | "adopted" | "reused";
         WorkspaceMobilityArchive: {
             baseCommitSha: string;
             branchName?: string | null;
@@ -6000,6 +6087,48 @@ export interface operations {
             };
         };
     };
+    materialize_repo_root: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaterializeRepoRootRequest"];
+            };
+        };
+        responses: {
+            /** @description Acquired repo root */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterializeRepoRootResponse"];
+                };
+            };
+            /** @description Invalid request or acquisition failure */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Destination/operation conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     resolve_repo_root: {
         parameters: {
             query?: never;
@@ -6261,6 +6390,60 @@ export interface operations {
                 };
             };
             /** @description Destination conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    materialize_workspace_at_ref: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repo root ID */
+                repo_root_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaterializeWorkspaceAtRefRequest"];
+            };
+        };
+        responses: {
+            /** @description Materialized workspace at exact ref */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterializeWorkspaceAtRefResponse"];
+                };
+            };
+            /** @description Invalid request or ref failure */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Repo root not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Branch/head/dirty/busy/operation conflict */
             409: {
                 headers: {
                     [name: string]: unknown;
