@@ -37,6 +37,12 @@ COPY apps/web/package.json apps/web/
 COPY tests/intent/package.json tests/intent/
 COPY tests/release/package.json tests/release/
 
+# product-client runs a `prepare` lifecycle script during install; copy just
+# that script so the install's prepare step resolves. It gracefully skips the
+# catalog sync when /catalogs is absent (the full catalog is copied and synced
+# again at build time), so this stays in the cached dependency layer.
+COPY apps/packages/product-client/scripts apps/packages/product-client/scripts
+
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile
 
