@@ -41,9 +41,8 @@ async def get_managed_workflow_telemetry_snapshot(
         WorkflowManagedExecution.execution_status.not_in(_TERMINAL_EXECUTION)
     )
     accepted_nonterminal = (
-        (WorkflowManagedExecution.delivery_status == "accepted")
-        & execution_nonterminal
-    )
+        WorkflowManagedExecution.delivery_status == "accepted"
+    ) & execution_nonterminal
     pending_cancellation = (
         (WorkflowManagedExecution.desired_state == "cancelled")
         & WorkflowManagedExecution.delivery_checkpoint.in_(("run_put_started", "accepted"))
@@ -55,17 +54,11 @@ async def get_managed_workflow_telemetry_snapshot(
                 func.count().filter(active_delivery),
                 func.min(WorkflowManagedExecution.created_at).filter(active_delivery),
                 func.count().filter(accepted_nonterminal),
-                func.min(WorkflowManagedExecution.latest_observed_at).filter(
-                    accepted_nonterminal
-                ),
+                func.min(WorkflowManagedExecution.latest_observed_at).filter(accepted_nonterminal),
                 func.count().filter(pending_cancellation),
                 func.min(WorkflowManagedExecution.updated_at).filter(pending_cancellation),
-                func.count().filter(
-                    WorkflowManagedExecution.freshness_basis == "unreachable"
-                ),
-                func.count().filter(
-                    WorkflowManagedExecution.freshness_basis == "target_lost"
-                ),
+                func.count().filter(WorkflowManagedExecution.freshness_basis == "unreachable"),
+                func.count().filter(WorkflowManagedExecution.freshness_basis == "target_lost"),
                 func.count().filter(
                     WorkflowManagedExecution.last_observation_error_code
                     == "equal_version_projection_conflict"

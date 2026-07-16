@@ -231,9 +231,7 @@ def workflow_history_item_response(
         latest_observed_at=value.managed.latest_observed_at,
         cloud_workspace_id=value.managed.cloud_workspace_id,
         session_id=(
-            projection.get("sessionId")
-            if isinstance(projection.get("sessionId"), str)
-            else None
+            projection.get("sessionId") if isinstance(projection.get("sessionId"), str) else None
         ),
         created_at=value.created_at,
         updated_at=value.managed.updated_at,

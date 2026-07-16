@@ -59,9 +59,7 @@ def snapshot_managed_execution(
         execution_status=row.execution_status,
         latest_state_version=row.latest_state_version,
         latest_projection_json=(
-            None
-            if row.latest_projection_json is None
-            else deepcopy(row.latest_projection_json)
+            None if row.latest_projection_json is None else deepcopy(row.latest_projection_json)
         ),
         latest_observed_at=row.latest_observed_at,
         freshness_basis=row.freshness_basis,

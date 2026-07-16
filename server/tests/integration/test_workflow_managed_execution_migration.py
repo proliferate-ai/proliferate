@@ -64,16 +64,21 @@ async def test_prior_invocation_schema_upgrades_and_backfills_exact_defaults() -
 
             async with engine.begin() as conn:
                 row = (
-                    await conn.execute(
-                        text(
-                            "SELECT delivery_status, delivery_checkpoint, desired_state, "
-                            "freshness_basis, execution_status, delivery_generation, "
-                            "observation_generation, cancel_generation, created_at, updated_at "
-                            "FROM workflow_managed_execution WHERE invocation_id = :id"
-                        ),
-                        {"id": invocation_id},
+                    (
+                        await conn.execute(
+                            text(
+                                "SELECT delivery_status, delivery_checkpoint, desired_state, "
+                                "freshness_basis, execution_status, delivery_generation, "
+                                "observation_generation, cancel_generation, "
+                                "created_at, updated_at "
+                                "FROM workflow_managed_execution WHERE invocation_id = :id"
+                            ),
+                            {"id": invocation_id},
+                        )
                     )
-                ).mappings().one()
+                    .mappings()
+                    .one()
+                )
                 assert {
                     key: row[key]
                     for key in (

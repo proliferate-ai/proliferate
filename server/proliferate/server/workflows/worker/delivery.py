@@ -72,9 +72,7 @@ async def run_delivery_task(
             return
         if checkpoint in {"target_bound", "workspace_ready"}:
             next_checkpoint = (
-                "workspace_put_started"
-                if checkpoint == "target_bound"
-                else "run_put_started"
+                "workspace_put_started" if checkpoint == "target_bound" else "run_put_started"
             )
             advanced = await delivery_store.advance_delivery(
                 db,
@@ -194,9 +192,7 @@ async def _workspace_ready(
             db,
             user_id=invocation.user_id,
             invocation_id=invocation_id,
-            placement_kind=(
-                "scratch" if repo_environment is None else "repositoryWorktree"
-            ),
+            placement_kind=("scratch" if repo_environment is None else "repositoryWorktree"),
             repo_environment=repo_environment,
             base_ref=None if repo_environment is None else str(plan["baseRef"]),
             cloud_sandbox_id=sandbox_id,
@@ -297,9 +293,7 @@ async def _handle_error(
             checkpoint=current.delivery_checkpoint,
             code=code,
             retryable=retryable(error),
-            authentication=(
-                isinstance(error, WorkflowRuntimeError) and error.authentication
-            ),
+            authentication=(isinstance(error, WorkflowRuntimeError) and error.authentication),
             previous_code=current.last_delivery_error_code,
         )
         if (
@@ -322,8 +316,7 @@ async def _handle_error(
                 invocation_id=invocation_id,
                 expected_generation=generation,
                 error_code=code,
-                definitive_after_run_put=current.delivery_checkpoint
-                == "run_put_started",
+                definitive_after_run_put=current.delivery_checkpoint == "run_put_started",
             )
         elif action == "retry":
             retried = await delivery_store.schedule_delivery_retry(

@@ -57,12 +57,10 @@ async def bind_managed_workflow_workspace(
                 anyharness_workspace_id=anyharness_workspace_id,
             )
             if workspace is None:
-                workspace = (
-                    await cloud_workspace_store.get_cloud_workspace_for_runtime_identity(
-                        db,
-                        user_id=user_id,
-                        anyharness_workspace_id=anyharness_workspace_id,
-                    )
+                workspace = await cloud_workspace_store.get_cloud_workspace_for_runtime_identity(
+                    db,
+                    user_id=user_id,
+                    anyharness_workspace_id=anyharness_workspace_id,
                 )
         else:
             if repo_environment is None or not base_ref:
@@ -88,9 +86,7 @@ async def bind_managed_workflow_workspace(
                     git_branch=branch,
                 )
 
-    expected_repo_environment_id = (
-        repo_environment.id if repo_environment is not None else None
-    )
+    expected_repo_environment_id = repo_environment.id if repo_environment is not None else None
     exact_workspace = (
         workspace is not None
         and workspace.owner_user_id == user_id
@@ -134,12 +130,10 @@ async def bind_managed_workflow_workspace(
             state="hydrated",
         )
         if materialization is None:
-            materialization = (
-                await materialization_store.get_active_managed_cloud_materialization(
-                    db,
-                    cloud_workspace_id=workspace.id,
-                    lock_row=True,
-                )
+            materialization = await materialization_store.get_active_managed_cloud_materialization(
+                db,
+                cloud_workspace_id=workspace.id,
+                lock_row=True,
             )
     if (
         materialization is None

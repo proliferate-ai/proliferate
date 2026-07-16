@@ -34,7 +34,9 @@ def upgrade() -> None:
         sa.Column("cloud_workspace_id", sa.Uuid(), nullable=True),
         sa.Column("execution_status", sa.String(length=32), nullable=True),
         sa.Column("latest_state_version", sa.BigInteger(), nullable=True),
-        sa.Column("latest_projection_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column(
+            "latest_projection_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True
+        ),
         sa.Column("latest_observed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("freshness_basis", sa.String(length=32), nullable=False),
         sa.Column("delivery_generation", sa.BigInteger(), nullable=False),
@@ -45,10 +47,16 @@ def upgrade() -> None:
         sa.Column("last_delivery_error_code", sa.String(length=128), nullable=True),
         sa.Column("last_observation_error_code", sa.String(length=128), nullable=True),
         sa.Column(
-            "created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
         ),
         sa.Column(
-            "updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
         ),
         sa.Column("accepted_at", sa.DateTime(timezone=True), nullable=True),
         sa.CheckConstraint(
@@ -80,9 +88,7 @@ def upgrade() -> None:
             "AND consecutive_unchanged_count >= 0",
             name="ck_workflow_managed_execution_counters",
         ),
-        sa.ForeignKeyConstraint(
-            ["invocation_id"], ["workflow_invocation.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["invocation_id"], ["workflow_invocation.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("invocation_id"),
     )
     op.create_index(

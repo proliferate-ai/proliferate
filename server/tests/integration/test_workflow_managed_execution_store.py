@@ -84,14 +84,17 @@ async def _advance_to_run_put_started(
         (5, "workspace_ready", "run_put_started", {}),
     )
     for generation, current, successor, values in transitions:
-        assert await delivery_store.advance_delivery(
-            db,
-            invocation_id=invocation_id,
-            expected_generation=generation,
-            expected_checkpoint=current,
-            next_checkpoint=successor,
-            **values,
-        ) is not None
+        assert (
+            await delivery_store.advance_delivery(
+                db,
+                invocation_id=invocation_id,
+                expected_generation=generation,
+                expected_checkpoint=current,
+                next_checkpoint=successor,
+                **values,
+            )
+            is not None
+        )
     await db.commit()
     return invocation_id, sandbox_id
 
@@ -265,9 +268,7 @@ async def test_managed_telemetry_snapshot_reports_pending_and_invariant_truth(
     )
     assert conflict is not None
 
-    snapshot = await observability_store.get_managed_workflow_telemetry_snapshot(
-        db_session
-    )
+    snapshot = await observability_store.get_managed_workflow_telemetry_snapshot(db_session)
     assert snapshot.accepted_nonterminal_count == 1
     assert snapshot.pending_cancellation_count == 1
     assert snapshot.unreachable_count == 0
@@ -304,10 +305,7 @@ async def test_cancel_run_boundary_is_idempotent_and_target_loss_is_truthful(
     count = await db_session.scalar(
         select(func.count())
         .select_from(BackgroundOutboxTask)
-        .where(
-            BackgroundOutboxTask.idempotency_key
-            == f"workflow:cancel:{invocation_id}:1"
-        )
+        .where(BackgroundOutboxTask.idempotency_key == f"workflow:cancel:{invocation_id}:1")
     )
     assert count == 1
 

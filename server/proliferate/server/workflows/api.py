@@ -191,8 +191,7 @@ async def list_workflow_invocation_history_endpoint(
     )
     return ManagedWorkflowHistoryResponse(
         items=[
-            workflow_history_item_response(item, freshness=freshness)
-            for item, freshness in values
+            workflow_history_item_response(item, freshness=freshness) for item, freshness in values
         ],
         next_cursor=next_cursor,
     )

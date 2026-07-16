@@ -50,9 +50,7 @@ async def apply_projection(
         row.last_observation_error_code = None
     elif decision == "heartbeat":
         row.consecutive_unchanged_count = (
-            1
-            if row.freshness_basis == "unreachable"
-            else row.consecutive_unchanged_count + 1
+            1 if row.freshness_basis == "unreachable" else row.consecutive_unchanged_count + 1
         )
         row.last_observation_error_code = None
     elif decision == "conflict":

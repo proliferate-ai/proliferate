@@ -114,16 +114,12 @@ async def test_concurrent_deliver_commits_one_logical_outbox_task(
     )
     assert [result.status_code for result in results] == [200, 200]
     assert all(
-        result.json()["managedExecution"]["deliveryStatus"] == "queued"
-        for result in results
+        result.json()["managedExecution"]["deliveryStatus"] == "queued" for result in results
     )
     count = await db_session.scalar(
         select(func.count())
         .select_from(BackgroundOutboxTask)
-        .where(
-            BackgroundOutboxTask.idempotency_key
-            == f"workflow:deliver:{invocation_id}:1"
-        )
+        .where(BackgroundOutboxTask.idempotency_key == f"workflow:deliver:{invocation_id}:1")
     )
     assert count == 1
     history = await client.get(
@@ -238,14 +234,17 @@ async def test_stale_observer_cannot_mark_recovered_target_lost(
         (5, "workspace_ready", "run_put_started", {}),
     ]
     for generation, current, successor, values in transitions:
-        assert await delivery_store.advance_delivery(
-            db_session,
-            invocation_id=invocation_id,
-            expected_generation=generation,
-            expected_checkpoint=current,
-            next_checkpoint=successor,
-            **values,
-        ) is not None
+        assert (
+            await delivery_store.advance_delivery(
+                db_session,
+                invocation_id=invocation_id,
+                expected_generation=generation,
+                expected_checkpoint=current,
+                next_checkpoint=successor,
+                **values,
+            )
+            is not None
+        )
     accepted = await delivery_store.mark_delivery_accepted(
         db_session,
         invocation_id=invocation_id,

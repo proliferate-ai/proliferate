@@ -156,15 +156,19 @@ async def get_cloud_workspace_for_runtime_identity(
     """Load the durable product alias even after archive."""
 
     row = (
-        await db.execute(
-            select(CloudWorkspace)
-            .where(
-                CloudWorkspace.owner_user_id == user_id,
-                CloudWorkspace.anyharness_workspace_id == anyharness_workspace_id,
+        (
+            await db.execute(
+                select(CloudWorkspace)
+                .where(
+                    CloudWorkspace.owner_user_id == user_id,
+                    CloudWorkspace.anyharness_workspace_id == anyharness_workspace_id,
+                )
+                .order_by(CloudWorkspace.created_at.asc())
             )
-            .order_by(CloudWorkspace.created_at.asc())
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     return cloud_workspace_value(row) if row is not None else None
 
 
@@ -176,16 +180,20 @@ async def get_repository_workspace_for_branch(
     git_branch: str,
 ) -> CloudWorkspaceValue | None:
     row = (
-        await db.execute(
-            select(CloudWorkspace)
-            .where(
-                CloudWorkspace.owner_user_id == user_id,
-                CloudWorkspace.repo_environment_id == repo_environment_id,
-                CloudWorkspace.git_branch == git_branch,
+        (
+            await db.execute(
+                select(CloudWorkspace)
+                .where(
+                    CloudWorkspace.owner_user_id == user_id,
+                    CloudWorkspace.repo_environment_id == repo_environment_id,
+                    CloudWorkspace.git_branch == git_branch,
+                )
+                .order_by(CloudWorkspace.created_at.asc())
             )
-            .order_by(CloudWorkspace.created_at.asc())
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     return cloud_workspace_value(row) if row is not None else None
 
 

@@ -39,9 +39,7 @@ class FreshnessBasis(StrEnum):
     TARGET_LOST = "target_lost"
 
 
-TERMINAL_EXECUTION_STATUSES = frozenset(
-    {"completed", "failed", "cancelled", "interrupted"}
-)
+TERMINAL_EXECUTION_STATUSES = frozenset({"completed", "failed", "cancelled", "interrupted"})
 
 _CHECKPOINT_ORDER = {
     checkpoint: index

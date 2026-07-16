@@ -184,9 +184,7 @@ def _safe_projection(
                     step.get("failureCode"),
                     allowed=_FAILURE_CODES,
                 ),
-                "interruptionCode": (
-                    interruption_code if step_status == "interrupted" else None
-                ),
+                "interruptionCode": (interruption_code if step_status == "interrupted" else None),
                 "startedAt": _optional_timestamp(step.get("startedAt")),
                 "finishedAt": _optional_timestamp(step.get("finishedAt")),
             }

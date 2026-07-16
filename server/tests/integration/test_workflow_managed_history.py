@@ -108,10 +108,7 @@ async def test_history_keyset_is_stable_scoped_and_gap_free(
     assert second.status_code == 200
     assert len(second.json()["items"]) == 1
     assert second.json()["nextCursor"] is None
-    observed = [
-        UUID(item["id"])
-        for item in [*first.json()["items"], *second.json()["items"]]
-    ]
+    observed = [UUID(item["id"]) for item in [*first.json()["items"], *second.json()["items"]]]
     assert observed == sorted(invocation_ids, reverse=True)
     assert len(set(observed)) == 51
     assert other_invocation_id not in observed

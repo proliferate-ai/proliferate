@@ -260,11 +260,7 @@ async def ensure_cancel_generation(
     invocation_id: UUID,
 ) -> WorkflowManagedExecutionSnapshot | None:
     row = await lock_managed_execution_row(db, invocation_id)
-    if (
-        row is None
-        or row.desired_state != "cancelled"
-        or row.freshness_basis == "target_lost"
-    ):
+    if row is None or row.desired_state != "cancelled" or row.freshness_basis == "target_lost":
         return None
     if row.cancel_generation == 0:
         row.cancel_generation = 1

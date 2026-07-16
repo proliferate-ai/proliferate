@@ -149,9 +149,7 @@ async def list_managed_workflow_history(
         cursor=cursor,
         limit=limit,
     )
-    values = tuple(
-        (item, _freshness(item.managed, config=config)) for item in page.items
-    )
+    values = tuple((item, _freshness(item.managed, config=config)) for item in page.items)
     return values, page.next_cursor
 
 

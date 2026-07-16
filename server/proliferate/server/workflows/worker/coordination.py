@@ -82,9 +82,11 @@ async def runtime_access(
         sandbox = await sandbox_store.load_cloud_sandbox_by_id(db, sandbox_id)
         if sandbox is None:
             raise WorkflowRuntimeError("workflow_target_destroyed", not_found=True)
-        runtime_url, access_token, _data_key = (
-            await sandbox_service.load_cloud_sandbox_runtime_access(sandbox)
-        )
+        (
+            runtime_url,
+            access_token,
+            _data_key,
+        ) = await sandbox_service.load_cloud_sandbox_runtime_access(sandbox)
         await db.commit()
         identity = await get_execution_store_identity(runtime_url, access_token)
     if expected_store_id is not None and identity.execution_store_id != expected_store_id:

@@ -294,9 +294,7 @@ class OutboxBacklogSnapshot:
     # by the caller's supported-task allowlist: only recognized families appear,
     # so this never widens to an unbounded set of arbitrary task names.
     supported_pending_by_family: dict[str, int] = field(default_factory=dict)
-    supported_oldest_pending_age_by_family: dict[str, float] = field(
-        default_factory=dict
-    )
+    supported_oldest_pending_age_by_family: dict[str, float] = field(default_factory=dict)
 
 
 async def get_outbox_backlog_snapshot(

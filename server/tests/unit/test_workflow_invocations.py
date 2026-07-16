@@ -303,12 +303,12 @@ def test_invocation_openapi_pins_exact_request_and_response_shapes() -> None:
     assert operation["put"]["requestBody"]["content"]["application/json"]["schema"] == {
         "$ref": "#/components/schemas/WorkflowInvocationCreateRequest"
     }
-    assert operation["put"]["responses"]["200"]["content"]["application/json"][
-        "schema"
-    ] == {"$ref": "#/components/schemas/WorkflowInvocationResponse"}
-    assert operation["get"]["responses"]["200"]["content"]["application/json"][
-        "schema"
-    ] == {"$ref": "#/components/schemas/ManagedWorkflowInvocationResponse"}
+    assert operation["put"]["responses"]["200"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/WorkflowInvocationResponse"
+    }
+    assert operation["get"]["responses"]["200"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/ManagedWorkflowInvocationResponse"
+    }
     assert operation["put"]["responses"]["201"]["content"]["application/json"]["schema"] == {
         "$ref": "#/components/schemas/WorkflowInvocationResponse"
     }

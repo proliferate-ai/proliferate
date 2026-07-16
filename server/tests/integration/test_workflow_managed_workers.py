@@ -63,9 +63,7 @@ def _projection(
                     "interruptionCode": None,
                     "startedAt": "2026-07-16T00:00:00Z",
                     "finishedAt": (
-                        "2026-07-16T00:01:00Z"
-                        if status in {"completed", "cancelled"}
-                        else None
+                        "2026-07-16T00:01:00Z" if status in {"completed", "cancelled"} else None
                     ),
                 }
             ],
@@ -87,18 +85,21 @@ async def _seed_target_plan(
         )
     ).status_code == 200
     sandbox_id = uuid4()
-    assert await delivery_store.advance_delivery(
-        db,
-        invocation_id=invocation_id,
-        expected_generation=1,
-        expected_checkpoint="none",
-        next_checkpoint="target_plan_frozen",
-        target_plan_json={
-            "kind": "scratch",
-            "cloudSandboxId": str(sandbox_id),
-        },
-        target_cloud_sandbox_id=sandbox_id,
-    ) is not None
+    assert (
+        await delivery_store.advance_delivery(
+            db,
+            invocation_id=invocation_id,
+            expected_generation=1,
+            expected_checkpoint="none",
+            next_checkpoint="target_plan_frozen",
+            target_plan_json={
+                "kind": "scratch",
+                "cloudSandboxId": str(sandbox_id),
+            },
+            target_cloud_sandbox_id=sandbox_id,
+        )
+        is not None
+    )
     await db.commit()
     return invocation_id, sandbox_id
 
@@ -229,8 +230,7 @@ async def test_delivery_replays_lost_responses_and_observation_stops_terminal(
         assert after_workspace_loss.delivery_generation == 5
         retry = await db.scalar(
             select(BackgroundOutboxTask).where(
-                BackgroundOutboxTask.idempotency_key
-                == f"workflow:deliver:{invocation_id}:5"
+                BackgroundOutboxTask.idempotency_key == f"workflow:deliver:{invocation_id}:5"
             )
         )
         assert retry is not None
