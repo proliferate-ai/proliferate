@@ -425,9 +425,49 @@ fn repo_root_to_contract(record: RepoRootRecord) -> RepoRoot {
         remote_provider: record.remote_provider,
         remote_owner: record.remote_owner,
         remote_repo_name: record.remote_repo_name,
-        remote_url: record.remote_url,
+        // All list/get/materialize responses share this mapper. An adopted
+        // checkout may already have a credential-bearing origin; omit it at
+        // the public boundary rather than echoing embedded userinfo.
+        remote_url: record.remote_url.and_then(|url| {
+            crate::domains::materialization::identity::response_safe_clone_url(&url)
+        }),
         created_at: record.created_at,
         updated_at: record.updated_at,
+    }
+}
+
+#[cfg(test)]
+mod response_tests {
+    use super::*;
+
+    fn record(remote_url: &str) -> RepoRootRecord {
+        RepoRootRecord {
+            id: "root-1".into(),
+            kind: "managed".into(),
+            path: "/tmp/root-1".into(),
+            display_name: None,
+            default_branch: Some("main".into()),
+            remote_provider: Some("github".into()),
+            remote_owner: Some("acme".into()),
+            remote_repo_name: Some("rocket".into()),
+            remote_url: Some(remote_url.into()),
+            created_at: "now".into(),
+            updated_at: "now".into(),
+        }
+    }
+
+    #[test]
+    fn shared_repo_root_mapper_omits_adopted_remote_credentials() {
+        let mapped = repo_root_to_contract(record(
+            "https://alice:secret-token@github.com/acme/rocket.git",
+        ));
+        assert_eq!(mapped.remote_url, None);
+
+        let safe = "https://github.com/acme/rocket.git";
+        assert_eq!(
+            repo_root_to_contract(record(safe)).remote_url.as_deref(),
+            Some(safe)
+        );
     }
 }
 

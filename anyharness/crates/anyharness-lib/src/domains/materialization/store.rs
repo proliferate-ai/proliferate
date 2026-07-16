@@ -82,6 +82,25 @@ impl MaterializationOperationStore {
         })
     }
 
+    /// Persist the deterministic workspace destination before Git mutates it.
+    /// A crashed retry must adopt this exact path, never allocate a sibling.
+    pub fn set_destination_path(
+        &self,
+        operation_id: &str,
+        destination_path: &str,
+    ) -> anyhow::Result<()> {
+        let now = chrono::Utc::now().to_rfc3339();
+        self.db.with_conn(|conn| {
+            conn.execute(
+                "UPDATE local_materialization_operation
+                 SET destination_path = ?2, updated_at = ?3
+                 WHERE operation_id = ?1",
+                params![operation_id, destination_path, now],
+            )?;
+            Ok(())
+        })
+    }
+
     pub fn mark_completed_repo_root(
         &self,
         operation_id: &str,

@@ -99,9 +99,21 @@ pub fn validate_clone_url_matches_identity(
     Ok(())
 }
 
-/// Validate a branch name against git `check-ref-format` semantics (the subset
-/// relevant to a single branch component). Rejects the empty string, a leading
-/// `-` (option injection), path/ref-format violations, and control characters.
+/// Validate a branch name against git `check-ref-format --branch` semantics so
+/// that no value the custom validator accepts can still be rejected by git
+/// later (after prune/fetch side effects have already run). Rejects the empty
+/// string, a leading `-` (option injection), the pseudo-ref `HEAD`, and every
+/// documented ref-format violation, checked per slash-separated component so
+/// leading-dot / trailing-`.lock` components anywhere in the path fail
+/// (PR3-GIT-INPUT-06).
+///
+/// git's rules (from `git-check-ref-format(1)`): a ref may not
+///   1. have a component that begins with `.` or ends with `.lock`;
+///   2. contain `..`, `@{`, control chars/space/DEL, or any of `~ ^ : ? * [ \`;
+///   3. begin or end with `/`, or contain `//` (empty components);
+///   4. end with `.`;
+///   5. be the single character `@`;
+/// and, for a *branch* name, may not be exactly `HEAD` or begin with `-`.
 pub fn validate_branch_name(branch_name: &str) -> Result<(), String> {
     let name = branch_name;
     if name.is_empty() {
@@ -110,20 +122,35 @@ pub fn validate_branch_name(branch_name: &str) -> Result<(), String> {
     if name.starts_with('-') {
         return Err("branch name must not begin with '-'".into());
     }
+    // `git check-ref-format --branch HEAD` is rejected (HEAD is a pseudo-ref).
+    if name == "HEAD" {
+        return Err("branch name must not be 'HEAD'".into());
+    }
     if name.starts_with('/') || name.ends_with('/') || name.contains("//") {
         return Err("branch name has an invalid '/' component".into());
     }
     if name.ends_with('.') || name.contains("..") {
         return Err("branch name must not contain '..' or end with '.'".into());
     }
-    if name.ends_with(".lock") {
-        return Err("branch name must not end with '.lock'".into());
-    }
     if name.contains("@{") {
         return Err("branch name must not contain '@{'".into());
     }
+    if name == "@" {
+        return Err("branch name must not be '@'".into());
+    }
+    // Per-component rules: no component may begin with '.' or end with '.lock'
+    // (git applies these to EVERY slash-separated component, so `.foo`,
+    // `foo/.bar`, `foo.lock/bar`, and `foo/bar.lock` are all invalid).
+    for component in name.split('/') {
+        if component.starts_with('.') {
+            return Err("branch name component must not begin with '.'".into());
+        }
+        if component.ends_with(".lock") {
+            return Err("branch name component must not end with '.lock'".into());
+        }
+    }
     // git check-ref-format forbids: space, ~ ^ : ? * [ \ and ASCII control
-    // (incl. DEL), plus a literal '@' alone.
+    // (incl. DEL).
     for ch in name.chars() {
         if ch.is_ascii_control()
             || matches!(
@@ -133,9 +160,6 @@ pub fn validate_branch_name(branch_name: &str) -> Result<(), String> {
         {
             return Err("branch name contains a forbidden character".into());
         }
-    }
-    if name == "@" {
-        return Err("branch name must not be '@'".into());
     }
     Ok(())
 }
@@ -294,6 +318,11 @@ mod tests {
         assert!(validate_branch_name("a\u{0}b").is_err());
         assert!(validate_branch_name("a.lock").is_err());
         assert!(validate_branch_name("a@{b").is_err());
+        assert!(validate_branch_name(".hidden").is_err());
+        assert!(validate_branch_name("feature/.hidden").is_err());
+        assert!(validate_branch_name("feature.lock/child").is_err());
+        assert!(validate_branch_name("feature/child.lock").is_err());
+        assert!(validate_branch_name("HEAD").is_err());
     }
 
     #[test]

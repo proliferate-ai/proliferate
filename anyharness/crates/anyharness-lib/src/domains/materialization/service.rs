@@ -25,6 +25,7 @@ use super::model::{
 };
 use super::operation_lock::MaterializationOperationLocks;
 use super::store::MaterializationOperationStore;
+use super::workspace_plan::{map_exact_ref_error, prepare_workspace_destination};
 use crate::domains::repo_roots::service::RepoRootService;
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::workspaces::runtime::{ExactRefOutcome, WorkspaceRuntime};
@@ -63,7 +64,6 @@ impl MaterializationService {
         }
     }
 
-    // -----------------------------------------------------------------------
     // Repo-root acquisition
     // -----------------------------------------------------------------------
 
@@ -261,12 +261,23 @@ impl MaterializationService {
             AdmissionPlan::Proceed { guard, .. } => guard,
         };
 
+        // Persist the destination before Git runs for crash adoption (PR3-CRASH-06).
+        let effective_destination_id = prepare_workspace_destination(
+            &self.workspace_runtime,
+            &self.store,
+            &operation_id,
+            &repo_root_id,
+            destination_id.as_deref(),
+            preferred_workspace_name.as_deref().unwrap_or(&branch_name),
+            &head_sha,
+        )?;
+
         let outcome = self
             .run_materialize_workspace(
                 &repo_root_id,
                 &branch_name,
                 &head_sha,
-                destination_id.as_deref(),
+                Some(&effective_destination_id),
                 preferred_workspace_name.as_deref(),
             )
             .await;
@@ -356,6 +367,11 @@ impl MaterializationService {
         let observed = record.observed_head_sha.clone().ok_or_else(|| {
             MaterializationError::Failed(
                 "completed workspace op is missing its observed head sha".into(),
+            )
+        })?;
+        validate_head_sha(&observed).map_err(|_| {
+            MaterializationError::Failed(
+                "completed workspace op has an invalid observed head sha".into(),
             )
         })?;
         Ok(MaterializeWorkspaceResult {
@@ -595,34 +611,6 @@ pub(crate) fn map_resolve_repo_root_error(error: ResolveRepoRootError) -> Materi
             )
         }
         ResolveRepoRootError::Unexpected(inner) => MaterializationError::Failed(inner.to_string()),
-    }
-}
-
-/// Map an exact-ref creation error (anyhow, message-classified) to a typed
-/// materialization error.
-pub(crate) fn map_exact_ref_error(error: anyhow::Error) -> MaterializationError {
-    let message = error.to_string();
-    let lower = message.to_ascii_lowercase();
-    if lower.contains("not requested branch") || lower.contains("not on requested branch") {
-        MaterializationError::WorkspaceBranchMismatch(message)
-    } else if lower.contains("uncommitted changes") {
-        MaterializationError::WorkspaceDirty(message)
-    } else if lower.contains("not requested commit")
-        || lower.contains("not requested")
-        || lower.contains("is at ")
-    {
-        MaterializationError::WorkspaceHeadMismatch(message)
-    } else if lower.contains("does not exist")
-        || lower.contains("not found")
-        || lower.contains("rev-parse")
-        || lower.contains("unknown revision")
-        || lower.contains("bad revision")
-    {
-        MaterializationError::RequestedRefNotFound(message)
-    } else if lower.contains("pending cleanup") || lower.contains("already exists") {
-        MaterializationError::DestinationConflict(message)
-    } else {
-        MaterializationError::Failed(message)
     }
 }
 

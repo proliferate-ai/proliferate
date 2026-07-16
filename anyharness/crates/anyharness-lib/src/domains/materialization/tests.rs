@@ -7,10 +7,11 @@ use super::model::{
 };
 use super::operation_lock::MaterializationOperationLocks;
 use super::service::{
-    admit_existing, begin_operation, hash_request, hashed_destination_form, map_exact_ref_error,
-    Admission, AdmissionPlan,
+    admit_existing, begin_operation, hash_request, hashed_destination_form, Admission,
+    AdmissionPlan,
 };
 use super::store::MaterializationOperationStore;
+use super::workspace_plan::{generated_workspace_destination_id, map_exact_ref_error};
 use crate::persistence::Db;
 
 fn record(
@@ -163,6 +164,29 @@ fn hashed_destination_form_falls_back_when_uncanonicalizable() {
 }
 
 #[test]
+fn omitted_workspace_destination_is_stable_and_filesystem_safe() {
+    let first = generated_workspace_destination_id(
+        "operation/with unsafe bytes",
+        "Feature / Founder demo",
+        &"a".repeat(40),
+    );
+    let second = generated_workspace_destination_id(
+        "operation/with unsafe bytes",
+        "Feature / Founder demo",
+        &"a".repeat(40),
+    );
+    assert_eq!(first, second);
+    assert!(first.starts_with("Feature---Founder-demo-aaaaaaaa-"));
+    assert!(first.len() <= 96);
+    assert!(
+        first
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric()
+                || matches!(character, '.' | '_' | '-'))
+    );
+}
+
+#[test]
 fn exact_ref_branch_mismatch_classified() {
     let error = map_exact_ref_error(anyhow::anyhow!(
         "destination is on branch x, not requested branch y"
@@ -242,8 +266,14 @@ async fn concurrent_identical_operations_converge_to_one_execution() {
         hash: String,
         executions: Arc<AtomicUsize>,
     ) -> Result<&'static str, String> {
-        match begin_operation(&store, &locks, "op-conv", MaterializationKind::RepoRoot, &hash)
-            .await
+        match begin_operation(
+            &store,
+            &locks,
+            "op-conv",
+            MaterializationKind::RepoRoot,
+            &hash,
+        )
+        .await
         {
             Ok(AdmissionPlan::Proceed { guard, .. }) => {
                 // Slow-clone stub: real work happens here, holding the guard so a
@@ -284,8 +314,14 @@ async fn concurrent_identical_operations_converge_to_one_execution() {
         1,
         "exactly one clone executes: {results:?}"
     );
-    let executed = results.iter().filter(|r| matches!(r, Ok("executed"))).count();
-    let replayed = results.iter().filter(|r| matches!(r, Ok("replayed"))).count();
+    let executed = results
+        .iter()
+        .filter(|r| matches!(r, Ok("executed")))
+        .count();
+    let replayed = results
+        .iter()
+        .filter(|r| matches!(r, Ok("replayed")))
+        .count();
     assert_eq!(executed, 1, "one caller executes: {results:?}");
     assert_eq!(
         replayed, 1,

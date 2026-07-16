@@ -70,6 +70,20 @@ pub(crate) fn worktree_is_clean(repo_root: &Path) -> anyhow::Result<bool> {
 }
 
 impl WorkspaceRuntime {
+    /// Resolve a validated ordinary managed-worktree destination without
+    /// mutating it. The materialization ledger persists this path before Git
+    /// creation so a crash retry can inspect and adopt the same checkout.
+    pub(crate) fn standard_worktree_destination_path(
+        &self,
+        repo_root_id: &str,
+        destination_id: &str,
+    ) -> anyhow::Result<PathBuf> {
+        validate_destination_id(destination_id)?;
+        Ok(self
+            .managed_destinations_base_dir(repo_root_id)?
+            .join(destination_id))
+    }
+
     /// Create, reuse, or adopt a standard managed worktree checked out on
     /// `branch_name` at exactly `head_sha`. Destinations live under the normal
     /// managed-worktree root (never `mobility/destinations`).
@@ -103,8 +117,8 @@ impl WorkspaceRuntime {
         fs::create_dir_all(&base_dir)?;
 
         if let Some(destination_id) = destination_id {
-            validate_destination_id(destination_id)?;
-            let candidate = base_dir.join(destination_id);
+            let candidate =
+                self.standard_worktree_destination_path(repo_root_id, destination_id)?;
             return self.materialize_at_candidate(&repo_root, &candidate, branch_name, head_sha);
         }
 
