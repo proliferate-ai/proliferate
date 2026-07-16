@@ -918,8 +918,11 @@ qualification-local-workspace:
 # BootedStack (real Server + Postgres + Redis + real Stripe test mode;
 # AnyHarness runtime skipped) per scenario and runs the authoritative
 # T2-BILL-1..15 + T2-IDENTITY-ORG (T2-AUTH-1/T2-INV-1/T2-INV-2/T2-ORG-1/
-# T2-ORG-2) + T2-REPO-POLICY (T2-WS-3/T2-SEC-1/T2-INT-1/T2-POL-1) cells
-# through the SAME tests/release aggregate command as tier 3.
+# T2-ORG-2) + T2-REPO-POLICY (T2-WS-3/T2-SEC-1/T2-INT-1/T2-POL-1) +
+# T2-SURFACE-SESSION (T2-WS-1/2/4, T2-SESSION-1, T2-SETTINGS-1, T2-WF-1) +
+# T2-COLLAB-OBS (T2-SUPPORT-1/T2-MODELREG-1/T2-AGENTAUTH-1/T2-AUTHZ-1/
+# T2-OBS-1/T2-CMD-1; T2-CMD-1 reports blocked-honest — no HTTP declaration
+# surface) cells through the SAME tests/release aggregate command as tier 3.
 # No candidate build (Tier-2 boots from source) — `--source-candidate`
 # synthesizes the Server identity for the strict report. Selected financial
 # cells require a Stripe `sk_test_` key (env or `stripe config`); a missing key
@@ -941,7 +944,7 @@ qualification-tier2:
 		--lane local \
 		--desktop web \
 		--agents claude \
-		--scenarios T2-BILL,T2-IDENTITY-ORG,T2-REPO-POLICY \
+		--scenarios T2-BILL,T2-IDENTITY-ORG,T2-REPO-POLICY,T2-SURFACE-SESSION,T2-COLLAB-OBS \
 		--source-candidate \
 		--run-id "$$run_id" --shard-id "$$shard_id" \
 		--output-dir "$$run_dir/evidence"

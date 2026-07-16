@@ -490,7 +490,7 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/stripe.list
           sudo apt-get update && sudo apt-get install -y stripe
 
-      - name: Run T2-BILL + T2-IDENTITY-ORG + T2-REPO-POLICY (strict)
+      - name: Run T2-BILL + T2-IDENTITY-ORG + T2-REPO-POLICY + T2-SURFACE-SESSION + T2-COLLAB-OBS (strict)
         env:
           # The boot fixture allocates the t2billing profile itself; on the
           # runner the Docker services above stand in for the local stack
