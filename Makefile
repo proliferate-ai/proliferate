@@ -1180,7 +1180,7 @@ qualification-selfhost:
 	if [ -n "$(SELFHOST_CELLS)" ]; then cells_flag="--cells $(SELFHOST_CELLS)"; fi; \
 	cd tests/release && pnpm exec tsx src/cli/run.ts \
 		--behavior $(BEHAVIOR) \
-		--lane local \
+		--lane selfhost \
 		--desktop web \
 		--agents claude \
 		--scenarios $(SELFHOST_SCENARIOS) \

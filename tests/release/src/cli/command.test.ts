@@ -296,6 +296,19 @@ function twoCellMatrix(): ScenarioDefinition {
   } as unknown as ScenarioDefinition;
 }
 
+/** A leaf (non-matrix) scenario with a single dimensionless cell, like SELFHOST-INSTALL-1's install cells. */
+function leafScenario(id: string): ScenarioDefinition {
+  return {
+    id,
+    title: `leaf ${id}`,
+    registryFlowRef: `specs#${id}`,
+    lanes: ["local"],
+    requiredEnv: [],
+    kind: "single",
+    run: async () => ({ status: "green" }),
+  } as unknown as ScenarioDefinition;
+}
+
 test("--cells keeps only the selected matrix cell and threads it to execute", async () => {
   let executedCells: Array<Record<string, string>> = [];
   const { deps } = makeDeps();
@@ -310,6 +323,25 @@ test("--cells keeps only the selected matrix cell and threads it to execute", as
   );
   assert.equal(exit, 0);
   assert.deepEqual(executedCells, [{ cell: "CELL-B" }]);
+});
+
+test("--cells narrows matrix cells but PRESERVES every leaf cell of a selected scenario (PR7-CONTROL-005)", async () => {
+  // Mirrors `--scenarios SELFHOST-INSTALL-1,SELFHOST-QUAL-1 --cells SH-GATEWAY`:
+  // the leaf install scenario's cell must survive alongside the one matched matrix cell.
+  let executed: Array<Record<string, string>> = [];
+  const { deps } = makeDeps();
+  deps.selectScenarios = () => [leafScenario("LEAF-INSTALL"), twoCellMatrix()];
+  deps.execute = async (options) => {
+    executed = options.cells.map((c) => c.dimensions);
+    return fakeReport(options.candidateBuild ?? null);
+  };
+  const exit = await runReleaseCommand(["--behavior", "diagnostic", "--cells", "CELL-B"], deps);
+  assert.equal(exit, 0);
+  // The leaf cell ({}) is kept; only CELL-B of the matrix survives; CELL-A is dropped.
+  assert.equal(executed.length, 2);
+  assert.ok(executed.some((d) => Object.keys(d).length === 0), "leaf cell ({}) must be preserved");
+  assert.ok(executed.some((d) => d.cell === "CELL-B"), "matched matrix cell CELL-B must be kept");
+  assert.ok(!executed.some((d) => d.cell === "CELL-A"), "unmatched matrix cell CELL-A must be dropped");
 });
 
 test("--cells matching no planned cell exits 2 before setup", async () => {

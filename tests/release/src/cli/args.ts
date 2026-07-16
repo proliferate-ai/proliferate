@@ -217,13 +217,15 @@ Usage: pnpm exec tsx src/cli/run.ts --behavior <diagnostic|strict> [flags]
 
 Flags:
   --behavior <diagnostic|strict>  Required. Diagnostic tolerates blocked/expected-fail; strict is a fail-closed gate.
-  --lane <local|staging|cloud>  Which target server the runtime lanes talk to (default: local); "cloud" is the
-                             run-scoped managed-cloud candidate API (CLOUD-PROVISION-1)
+  --lane <local|staging|cloud|selfhost>  Which target the runtime lanes talk to (default: local); "cloud" is the
+                             run-scoped managed-cloud candidate API (CLOUD-PROVISION-1); "selfhost" is the
+                             world-backed self-host lane (PR 7, provisions its own EC2 control plane)
   --desktop <web|native>     Desktop lane to drive (default: web)
   --agents <list|all>        Comma-separated harness kinds, or "all" (default: all)
   --scenarios <list|all>     Comma-separated scenario ids, or "all" (default: all)
   --only <id>                Alias for --scenarios with a single id (e.g. --only T3-WT-1)
-  --cells <list|all>         Keep only planned cells whose 'cell' dimension is listed (e.g. SH-GATEWAY); "all" = every cell (default: all)
+  --cells <list|all>         Narrow MATRIX cells to those whose 'cell' dimension is listed (e.g. SH-GATEWAY);
+                             leaf (non-matrix) cells of a selected scenario are always kept; "all" = no filter (default: all)
   --dry-run                  Plan every selected test (calls plan(), never run()); diagnostic only
   --file-issues              File one GitHub issue per distinct failure via \`gh\` (default: off)
   --output-dir <path>        Where the combined report is written, relative to tests/release/ (default: .output)

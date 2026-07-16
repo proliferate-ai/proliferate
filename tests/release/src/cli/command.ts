@@ -173,26 +173,31 @@ export async function runReleaseCommand(argv: readonly string[], deps: CommandDe
     return 2;
   }
 
-  // Optional matrix-cell filter (--cells): keep only cells whose `cell`
-  // dimension is selected. Leaf (non-matrix) cells have no `cell` dimension and
-  // are kept only when they match by scenario-level selection already applied
-  // above; the filter never resurrects an unselected scenario. Used to run a
-  // single staged cell of a multi-cell scenario in isolation (e.g.
-  // SELFHOST-QUAL-1's SH-GATEWAY without the fixed-lane SH-GITHUB-AUTH cell).
+  // Optional matrix-cell filter (--cells): NARROWS the matrix cells of the
+  // already-selected scenarios to those whose `cell` dimension is listed. Leaf
+  // (non-matrix) cells have no `cell` dimension — they are NOT the target of
+  // this filter and are ALWAYS kept for a selected scenario, so
+  // `--scenarios SELFHOST-INSTALL-1,SELFHOST-QUAL-1 --cells SH-GATEWAY` runs
+  // SELFHOST-INSTALL-1's four leaf install cells AND only SELFHOST-QUAL-1's
+  // SH-GATEWAY matrix cell (PR7-CONTROL-005: the old filter silently dropped
+  // every leaf cell). The filter never resurrects an unselected scenario. At
+  // least one MATRIX cell must match, else the flag selected nothing and we fail
+  // closed rather than silently running only the leaf cells.
   if (args.cells !== "all") {
     const wanted = new Set(args.cells);
-    const filtered = cells.filter((cell) => {
-      const cellDim = cell.dimensions.cell;
-      return cellDim !== undefined && wanted.has(cellDim);
-    });
-    if (filtered.length === 0) {
+    const matrixCells = cells.filter((cell) => cell.dimensions.cell !== undefined);
+    const matchedMatrix = matrixCells.filter((cell) => wanted.has(cell.dimensions.cell as string));
+    if (matrixCells.length > 0 && matchedMatrix.length === 0) {
       deps.error(
-        `--cells ${formatSelector(args.cells)} matched no planned cells ` +
+        `--cells ${formatSelector(args.cells)} matched no planned matrix cells ` +
           `(selected scenarios: ${scenarios.map((s) => s.id).join(", ")}).`,
       );
       return 2;
     }
-    cells = filtered;
+    // Keep every leaf cell of a selected scenario; narrow matrix cells to the wanted set.
+    cells = cells.filter(
+      (cell) => cell.dimensions.cell === undefined || wanted.has(cell.dimensions.cell),
+    );
   }
 
   // Local lane self-seeds its durable user per run (Part 2 of #1069): the CI

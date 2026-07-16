@@ -121,6 +121,11 @@ test("rejects unknown flags and invalid lane/desktop values as usage errors", ()
   assert.throws(() => parseArgs(["--behavior", "diagnostic", "--desktop", "mobile"]), CliUsageError);
 });
 
+test("parses --lane selfhost (the shipped qualification-selfhost target's lane, PR7-CONTROL-001)", () => {
+  const args = parseArgs(["--behavior", "diagnostic", "--lane", "selfhost"]);
+  assert.equal(args.lane, "selfhost");
+});
+
 test("parses --candidate-build-map", () => {
   const args = parseArgs(["--behavior", "diagnostic", "--candidate-build-map", "out/map.json"]);
   assert.equal(args.candidateBuildMap, "out/map.json");
