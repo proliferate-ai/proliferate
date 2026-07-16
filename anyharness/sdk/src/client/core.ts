@@ -158,12 +158,19 @@ export function withTimingCategory(
 }
 
 export class AnyHarnessError extends Error {
+  public readonly problem: ProblemDetails;
+
   constructor(
-    public readonly problem: ProblemDetails,
+    problem: ProblemDetails,
     cause?: unknown,
   ) {
-    super(problem.detail ?? problem.title);
+    const normalizedProblem = normalizeProblemDetails(problem, {
+      title: "Request failed",
+      status: 500,
+    });
+    super(normalizedProblem.detail ?? normalizedProblem.title);
     this.name = "AnyHarnessError";
+    this.problem = normalizedProblem;
     if (cause !== undefined) {
       (this as Error & { cause?: unknown }).cause = cause;
     }
@@ -414,13 +421,61 @@ export class AnyHarnessClient {
 }
 
 async function toProblemDetails(res: Response): Promise<ProblemDetails> {
+  let body: unknown;
   try {
-    return (await res.json()) as ProblemDetails;
+    body = await res.json();
   } catch {
-    return {
-      type: "about:blank",
-      title: res.statusText || "Request failed",
-      status: res.status,
-    };
+    body = undefined;
   }
+
+  return normalizeProblemDetails(body, {
+    title: res.statusText || "Request failed",
+    status: res.status,
+  });
+}
+
+interface ProblemDetailsFallback {
+  title: string;
+  status: number;
+}
+
+function normalizeProblemDetails(
+  value: unknown,
+  fallback: ProblemDetailsFallback,
+): ProblemDetails {
+  const source = isJsonObject(value) ? value : {};
+  const problem: ProblemDetails = {
+    type: typeof source.type === "string" ? source.type : "about:blank",
+    title: typeof source.title === "string" ? source.title : fallback.title,
+    status: isHttpStatus(source.status) ? source.status : fallback.status,
+  };
+
+  if (typeof source.code === "string" || source.code === null) {
+    problem.code = source.code;
+  }
+  if (typeof source.detail === "string" || source.detail === null) {
+    problem.detail = source.detail;
+  }
+  if (typeof source.instance === "string" || source.instance === null) {
+    problem.instance = source.instance;
+  }
+  if (
+    source.requiredContexts === null
+    || (
+      Array.isArray(source.requiredContexts)
+      && source.requiredContexts.every((context) => typeof context === "string")
+    )
+  ) {
+    problem.requiredContexts = source.requiredContexts;
+  }
+
+  return problem;
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isHttpStatus(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 100 && value <= 599;
 }
