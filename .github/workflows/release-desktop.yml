@@ -137,7 +137,7 @@ jobs:
 
       - name: Checkout
         if: steps.filter.outputs.skip != 'true'
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.git_sha || github.ref }}
 
@@ -166,7 +166,7 @@ jobs:
 
       - name: Setup Node 22
         if: steps.filter.outputs.skip != 'true'
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
 
@@ -565,7 +565,7 @@ jobs:
     if: github.event_name == 'push' || (github.event_name != 'push' && !inputs.dry_run)
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.git_sha || github.ref }}
 
@@ -634,12 +634,12 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.git_sha || github.ref }}
 
       - name: Setup Node 22
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
 

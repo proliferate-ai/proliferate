@@ -33,7 +33,7 @@ jobs:
       VERCEL_SCOPE: ${{ vars.VERCEL_SCOPE }}
       VERCEL_GIT_COMMIT_SHA: ${{ inputs.git_sha }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.git_sha }}
 
@@ -41,7 +41,7 @@ jobs:
         with:
           version: 10.11.0
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: "pnpm"
