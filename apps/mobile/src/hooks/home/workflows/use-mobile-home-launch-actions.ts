@@ -27,6 +27,12 @@ export function useMobileHomeLaunchActions(input: {
   selection: CloudLaunchComposerSelection;
   onOpenChat: (chat: MobileCloudChat) => void;
   onSubmitted?: () => void;
+  /**
+   * Readiness gate (PR 7): when the managed-Cloud / GitHub App prerequisites
+   * for the selected repo are not met, submit is blocked with this reason.
+   * Passed as a plain string so this workflow stays free of access hooks.
+   */
+  readinessBlockedReason?: string | null;
 }) {
   const submitInFlightRef = useRef(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -40,6 +46,10 @@ export function useMobileHomeLaunchActions(input: {
     }
     if (!input.ownerUserId) {
       setError("Account is still loading. Try again in a moment.");
+      return;
+    }
+    if (input.readinessBlockedReason) {
+      setError(input.readinessBlockedReason);
       return;
     }
 

@@ -5,14 +5,79 @@ import {
   completeAppleMobileAuth,
   exchangeMobileAuthCode,
   startAuthProvider,
+  startGitHubAppInstallation,
+  startGitHubAppUserAuthorization,
   type AuthProviderName,
   type AuthPurpose,
   type AuthSessionResponse,
+  type ProliferateCloudClient,
 } from "@proliferate/cloud-sdk";
 
 import { mobileEnv } from "../../../../config/env";
 import { createOAuthState, createPkcePair } from "../../../infra/auth/pkce";
+import { openNativeUrl } from "../../native/open-url";
 import { createMobileCloudClient } from "../client";
+
+/**
+ * Deep-link path GitHub returns the App authorization / installation flow to.
+ * Distinct from the OAuth `redirectUri` so the App-auth callback owner does not
+ * collide with the sign-in callback. Mobile combines this deep-link recovery
+ * with a refetch-on-foreground (the query client's focus manager), so the
+ * resolver re-runs whether the user is deep-linked back or reopens the app.
+ */
+export const MOBILE_GITHUB_APP_RETURN_URL = `${mobileEnv.redirectUri.replace(
+  "/auth/callback",
+  "",
+)}/settings/environments?source=github_app_callback`;
+
+/**
+ * Start the GitHub App user-authorization flow and open GitHub in the system
+ * browser. The user returns via the App-auth deep link or by reopening the
+ * app; the caller invalidates and re-runs the resolver on return. No token or
+ * private key is ever exposed to the UI — only the server-issued browser URL.
+ */
+export async function openMobileGitHubAppUserAuthorization(
+  client: ProliferateCloudClient,
+): Promise<void> {
+  const start = await startGitHubAppUserAuthorization(
+    { returnTo: MOBILE_GITHUB_APP_RETURN_URL },
+    client,
+  );
+  if (!start.authorizationUrl) {
+    throw new Error("GitHub did not return an authorization URL.");
+  }
+  await openNativeUrl(start.authorizationUrl);
+}
+
+/**
+ * Start the GitHub App organization installation flow and open GitHub.
+ */
+export async function openMobileGitHubAppInstallation(
+  client: ProliferateCloudClient,
+  organizationId: string,
+): Promise<void> {
+  const start = await startGitHubAppInstallation(
+    organizationId,
+    { returnTo: MOBILE_GITHUB_APP_RETURN_URL },
+    client,
+  );
+  if (!start.installationUrl) {
+    throw new Error("GitHub did not return an installation URL.");
+  }
+  await openNativeUrl(start.installationUrl);
+}
+
+/**
+ * GitHub's per-user installation settings page — where repository access for an
+ * existing installation is granted. Same target Desktop/Web open for
+ * "Grant repository access".
+ */
+export const MOBILE_GITHUB_INSTALLATION_SETTINGS_URL =
+  "https://github.com/settings/installations";
+
+export async function openMobileGitHubInstallationSettings(): Promise<void> {
+  await openNativeUrl(MOBILE_GITHUB_INSTALLATION_SETTINGS_URL);
+}
 
 const MOBILE_AUTH_TIMEOUT_MS = 5 * 60 * 1000;
 const MOBILE_WEB_AUTH_CALLBACK_PATH = "/auth/callback";
