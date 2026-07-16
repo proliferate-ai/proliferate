@@ -618,6 +618,8 @@ export type CloudWorktreeRetentionPolicyRequest =
   Schema<"CloudWorktreeRetentionPolicyRequest">;
 export type CloudWorktreeRetentionPolicyResponse =
   Schema<"CloudWorktreeRetentionPolicyResponse">;
+export type CreateCloudWorkspaceSourceMaterialization =
+  Schema<"CreateCloudWorkspaceSourceMaterialization">;
 export interface CreateCloudWorkspaceRequest {
   gitProvider: "github";
   gitOwner: string;
@@ -627,6 +629,12 @@ export interface CreateCloudWorkspaceRequest {
   displayName?: string | null;
   generatedName?: boolean | null;
   source?: "desktop" | "web" | "mobile" | null;
+  // Exact-ref creation from a clean, published local workspace (PR 5). When
+  // set, the server materializes the Cloud copy at this exact commit of the
+  // already-published branch after independently re-verifying the authorized
+  // GitHub head. Old requests (both absent) keep the branch-name fork path.
+  expectedHeadSha?: string | null;
+  sourceMaterialization?: CreateCloudWorkspaceSourceMaterialization | null;
 }
 export type GenerateSessionTitleRequest = Schema<"GenerateSessionTitleRequest">;
 export type GenerateSessionTitleResponse = Schema<"GenerateSessionTitleResponse">;

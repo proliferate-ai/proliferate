@@ -7,6 +7,7 @@ import httpx
 from proliferate.integrations.anyharness.client import auth_headers
 from proliferate.integrations.anyharness.errors import CloudRuntimeReconnectError
 from proliferate.integrations.anyharness.models import (
+    MaterializedRemoteWorkspaceAtRef,
     RemoteGitStatusSnapshot,
     RemoteWorkspaceSummary,
     ResolvedRemoteWorkspace,
@@ -14,6 +15,7 @@ from proliferate.integrations.anyharness.models import (
 
 _CREATE_WORKTREE_TIMEOUT_SECONDS = 180.0
 _GIT_STATUS_TIMEOUT_SECONDS = 15.0
+_MATERIALIZE_AT_REF_TIMEOUT_SECONDS = 600.0
 
 
 def _runtime_status_error_message(
@@ -178,6 +180,81 @@ async def create_remote_worktree_workspace(
         invalid_message="Cloud runtime did not return a valid worktree workspace.",
         workspace_id_message="Cloud runtime did not return a valid worktree workspace id.",
         repo_root_message="Cloud runtime did not return a valid worktree repo root id.",
+    )
+
+
+async def materialize_workspace_at_ref(
+    runtime_url: str,
+    access_token: str,
+    *,
+    repo_root_id: str,
+    operation_id: str,
+    branch_name: str,
+    head_sha: str,
+    preferred_workspace_name: str | None = None,
+    destination_id: str | None = None,
+) -> MaterializedRemoteWorkspaceAtRef:
+    """Create or reuse a workspace at an exact branch + commit (PR 3 endpoint).
+
+    The runtime ledger keys idempotency off ``operation_id``: retrying with the
+    same id reuses the earlier result rather than creating a second worktree.
+    """
+    body: dict[str, object] = {
+        "operationId": operation_id,
+        "branchName": branch_name,
+        "headSha": head_sha,
+    }
+    if preferred_workspace_name:
+        body["preferredWorkspaceName"] = preferred_workspace_name
+    if destination_id:
+        body["destinationId"] = destination_id
+
+    try:
+        async with httpx.AsyncClient(timeout=_MATERIALIZE_AT_REF_TIMEOUT_SECONDS) as client:
+            response = await client.post(
+                f"{runtime_url}/v1/repo-roots/{repo_root_id}/workspace-materializations",
+                headers=auth_headers(access_token),
+                json=body,
+            )
+            response.raise_for_status()
+            try:
+                payload = response.json()
+            except ValueError as exc:
+                raise CloudRuntimeReconnectError(
+                    "Cloud runtime returned invalid JSON when materializing a workspace at ref."
+                ) from exc
+    except httpx.HTTPStatusError as exc:
+        raise CloudRuntimeReconnectError(
+            _runtime_status_error_message(
+                exc.response,
+                "Failed to materialize AnyHarness workspace at ref.",
+            )
+        ) from exc
+    except httpx.HTTPError as exc:
+        raise CloudRuntimeReconnectError(
+            "Failed to materialize AnyHarness workspace at ref."
+        ) from exc
+
+    if not isinstance(payload, dict):
+        raise CloudRuntimeReconnectError(
+            "Cloud runtime did not return a valid workspace materialization."
+        )
+    workspace = payload.get("workspace")
+    workspace_id = workspace.get("id") if isinstance(workspace, dict) else None
+    observed_head_sha = payload.get("observedHeadSha")
+    outcome = payload.get("outcome")
+    if not isinstance(workspace_id, str) or not workspace_id:
+        raise CloudRuntimeReconnectError(
+            "Cloud runtime did not return a valid materialized workspace id."
+        )
+    if not isinstance(observed_head_sha, str) or not observed_head_sha:
+        raise CloudRuntimeReconnectError(
+            "Cloud runtime did not return a valid observed HEAD for the materialization."
+        )
+    return MaterializedRemoteWorkspaceAtRef(
+        workspace_id=workspace_id,
+        observed_head_sha=observed_head_sha,
+        outcome=outcome if isinstance(outcome, str) else "created",
     )
 
 

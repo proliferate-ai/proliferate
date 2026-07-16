@@ -58,6 +58,15 @@ vi.mock("#product/hooks/workspaces/workflows/use-add-repo", () => ({
   useAddRepo: () => ({ addRepoFromPath: vi.fn(), isAddingRepo: false }),
 }));
 
+// Stub the clone hook (which otherwise pulls in the AnyHarnessRuntime provider);
+// these gating tests only exercise the cloud path, not the clone path.
+vi.mock("#product/hooks/workspaces/workflows/use-clone-repo", () => ({
+  useCloneRepo: () => ({
+    cloneRepo: vi.fn(() => Promise.resolve({ succeeded: true, sourceRoot: "/tmp/clone" })),
+    isCloning: false,
+  }),
+}));
+
 vi.mock("#product/hooks/organizations/facade/use-active-organization", () => ({
   useActiveOrganization: () => ({
     activeOrganization: { name: "Acme", membership: { role: "member" } },

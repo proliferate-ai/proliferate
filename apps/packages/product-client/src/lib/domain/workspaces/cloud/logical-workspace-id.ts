@@ -13,7 +13,12 @@ export function normalizeLogicalWorkspaceBranchKey(
   return trimmed && trimmed.length > 0 ? trimmed : "HEAD";
 }
 
-export type LogicalWorkspaceIdKind = "remote" | "repo-root" | "path" | "local-slot";
+export type LogicalWorkspaceIdKind =
+  | "remote"
+  | "repo-root"
+  | "path"
+  | "local-slot"
+  | "cloud";
 
 export interface ParsedLogicalWorkspaceId {
   kind: LogicalWorkspaceIdKind;
@@ -64,6 +69,20 @@ export function buildLocalSlotLogicalWorkspaceId(workspaceId: string): string {
   ].join(":");
 }
 
+/**
+ * Identity-keyed id for a Cloud workspace that carries an explicit
+ * materialization ledger but no local link on this install (PR 5). Keyed by
+ * `CloudWorkspace.id` so it is stable and never heuristically merged onto a
+ * local slot by repository/branch. Distinct from the `remote:` branch-heuristic
+ * key so legacy Cloud rows and explicit rows never collide.
+ */
+export function buildCloudIdentityLogicalWorkspaceId(cloudWorkspaceId: string): string {
+  return [
+    "cloud",
+    encodeLogicalSegment(cloudWorkspaceId),
+  ].join(":");
+}
+
 export function parseLogicalWorkspaceId(
   logicalWorkspaceId: string | null | undefined,
 ): ParsedLogicalWorkspaceId | null {
@@ -72,7 +91,13 @@ export function parseLogicalWorkspaceId(
   }
 
   const [kind, ...encodedSegments] = logicalWorkspaceId.split(":");
-  if (kind !== "remote" && kind !== "repo-root" && kind !== "path" && kind !== "local-slot") {
+  if (
+    kind !== "remote"
+    && kind !== "repo-root"
+    && kind !== "path"
+    && kind !== "local-slot"
+    && kind !== "cloud"
+  ) {
     return null;
   }
 
@@ -86,6 +111,7 @@ export function parseLogicalWorkspaceId(
   if (
     (kind === "remote" && segments.length !== 4)
     || ((kind === "repo-root" || kind === "path") && segments.length !== 2)
+    || (kind === "cloud" && segments.length !== 1)
   ) {
     return null;
   }
@@ -123,9 +149,9 @@ export function replaceLogicalWorkspaceBranch(
   }
 
   const nextBranchKey = normalizeLogicalWorkspaceBranchKey(branchKey);
-  if (parsed.kind === "local-slot") {
-    // A local-slot ID is keyed by workspace id; branch identity is read from
-    // the materialized workspace row.
+  if (parsed.kind === "local-slot" || parsed.kind === "cloud") {
+    // A local-slot / cloud-identity ID is keyed by workspace id; branch
+    // identity is read from the underlying workspace row, not the id.
     return logicalWorkspaceId ?? null;
   }
 

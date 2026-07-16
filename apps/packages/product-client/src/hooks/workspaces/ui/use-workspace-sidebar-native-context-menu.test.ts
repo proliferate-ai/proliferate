@@ -115,4 +115,47 @@ describe("buildWorkspaceSidebarNativeContextMenuItems", () => {
       { id: "copy-branch-name", label: "Copy branch name" },
     ]);
   });
+
+  it("appends workspace-copy availability commands and dispatches by kind (right-click parity)", () => {
+    let dispatched: string | null = null;
+    const items = buildWorkspaceSidebarNativeContextMenuItems({
+      canRename: false,
+      canCopyWorkspaceLocation: false,
+      copyWorkspaceLocationLabel: "Copy workspace path",
+      canCopyBranchName: false,
+      branchName: null,
+      canOpenPullRequest: false,
+      pullRequestNumber: null,
+      archived: false,
+      canArchive: false,
+      canUnarchive: false,
+      canMarkDone: false,
+      onRename: () => {},
+      onCopyWorkspaceLocation: () => {},
+      onCopyBranchName: () => {},
+      onOpenPullRequest: () => {},
+      onArchive: () => {},
+      onUnarchive: () => {},
+      onMarkDone: () => {},
+      availabilityCommands: [
+        { kind: "unlink-this-mac", label: "Unlink this Mac…" },
+        {
+          kind: "unsupported-git-state",
+          label: "Unsupported Git state",
+          blocker: "This workspace has uncommitted changes.",
+        },
+      ],
+      onAvailabilityCommand: (kind) => { dispatched = kind; },
+    });
+
+    const unlink = items.find((i) => "id" in i && i.id === "availability-unlink-this-mac");
+    const blocker = items.find((i) => "id" in i && i.id === "availability-unsupported-git-state");
+    expect(unlink).toBeDefined();
+    expect(blocker).toBeDefined();
+    if (blocker && "enabled" in blocker) expect(blocker.enabled).toBe(false);
+    if (unlink && "onSelect" in unlink) unlink.onSelect?.();
+    expect(dispatched).toBe("unlink-this-mac");
+    if (blocker && "onSelect" in blocker) blocker.onSelect?.();
+    expect(dispatched).toBe("unlink-this-mac");
+  });
 });

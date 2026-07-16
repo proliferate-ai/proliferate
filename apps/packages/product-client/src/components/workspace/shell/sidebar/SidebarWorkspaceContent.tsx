@@ -12,6 +12,8 @@ import {
 import { buildSidebarNewWorkspaceCommandScope } from "#product/lib/domain/workspaces/creation/new-workspace-command";
 import { visibleSidebarGroupItems } from "#product/lib/domain/workspaces/sidebar/sidebar-visible-items";
 import type { SidebarIndicatorAction } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
+import type { WorkspaceAvailabilityCommandKind } from "#product/lib/domain/workspaces/cloud/workspace-availability-commands";
+import type { SidebarWorkspaceItemState } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 import { SkeletonBlock } from "#product/components/feedback/Skeleton";
 import { useWorkspaceCopyActions } from "#product/hooks/workspaces/workflows/use-workspace-copy-actions";
 import { RepoGroup, type RepoGroupEnvironmentKind } from "#product/components/workspace/shell/sidebar/RepoGroup";
@@ -43,6 +45,11 @@ interface SidebarWorkspaceContentProps {
   onIndicatorAction: (action: SidebarIndicatorAction) => void;
   onOpenPullRequest: (url: string) => void;
   onMarkWorkspaceDone: (workspaceId: string, logicalWorkspaceId: string) => void;
+  /** Begin a workspace-copy availability action (PR 5) for the given item. */
+  onWorkspaceAvailabilityCommand: (
+    item: SidebarWorkspaceItemState,
+    kind: WorkspaceAvailabilityCommandKind,
+  ) => void;
   onWorkspaceHover?: () => void;
   shortcutRevealVisible: boolean;
   shortcutLabelByWorkspaceId: ReadonlyMap<string, string>;
@@ -98,6 +105,7 @@ export function SidebarWorkspaceContent({
   onIndicatorAction,
   onOpenPullRequest,
   onMarkWorkspaceDone,
+  onWorkspaceAvailabilityCommand,
   onWorkspaceHover,
   shortcutRevealVisible,
   shortcutLabelByWorkspaceId,
@@ -269,6 +277,8 @@ export function SidebarWorkspaceContent({
                     ? () => onMarkWorkspaceDone(item.localWorkspaceId!, item.id)
                     : undefined
                 }
+                availabilityCommands={item.availabilityCommands}
+                onAvailabilityCommand={(kind) => onWorkspaceAvailabilityCommand(item, kind)}
                 onHover={onWorkspaceHover}
                 onArchive={item.archived ? undefined : () => onArchiveWorkspace(item.id)}
                 onUnarchive={item.archived ? () => onUnarchiveWorkspace(item.id) : undefined}

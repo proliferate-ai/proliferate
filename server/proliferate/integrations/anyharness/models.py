@@ -41,6 +41,15 @@ class ResolvedRemoteWorkspace:
 
 
 @dataclass(frozen=True)
+class MaterializedRemoteWorkspaceAtRef:
+    """The result of an exact-ref workspace materialization (PR 3 endpoint)."""
+
+    workspace_id: str
+    observed_head_sha: str
+    outcome: str
+
+
+@dataclass(frozen=True)
 class RemoteSession:
     session_id: str
 

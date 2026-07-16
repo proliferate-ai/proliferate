@@ -65,6 +65,22 @@ class ReportMaterializationRequest(BaseModel):
     failure_detail: str | None = Field(default=None, alias="failureDetail")
 
 
+class CreateCloudWorkspaceSourceMaterialization(BaseModel):
+    """The local source descriptor for an exact-ref managed-Cloud creation.
+
+    Supplied by Desktop's "Add Cloud copy" flow: it names the local AnyHarness
+    workspace the exact ref came from so the resulting managed-Cloud row can be
+    associated with it. The server never trusts these fields for the actual ref
+    — it independently re-verifies the authorized GitHub branch head.
+    """
+
+    target_kind: Literal["local_desktop"] = Field(alias="targetKind")
+    desktop_install_id: str = Field(alias="desktopInstallId")
+    anyharness_workspace_id: str = Field(alias="anyharnessWorkspaceId")
+    worktree_path: str = Field(alias="worktreePath")
+    observed_head_sha: str = Field(alias="observedHeadSha")
+
+
 class CreateCloudWorkspaceRequest(BaseModel):
     git_provider: Literal["github"] = Field(default="github", alias="gitProvider")
     git_owner: str = Field(alias="gitOwner")
@@ -74,6 +90,16 @@ class CreateCloudWorkspaceRequest(BaseModel):
     display_name: str | None = Field(default=None, alias="displayName")
     generated_name: bool | None = Field(default=None, alias="generatedName")
     source: Literal["desktop", "web", "mobile"] | None = None
+    # Exact-ref creation from a clean, published local workspace (PR 5). When
+    # supplied, the server creates the managed-Cloud copy at this exact commit
+    # of the already-published branch — after independently verifying the
+    # authorized GitHub branch head equals it — instead of forking a new branch
+    # from base. Old requests (both None) retain the branch-name creation path.
+    expected_head_sha: str | None = Field(default=None, alias="expectedHeadSha")
+    source_materialization: CreateCloudWorkspaceSourceMaterialization | None = Field(
+        default=None,
+        alias="sourceMaterialization",
+    )
 
 
 class UpdateCloudWorkspaceDisplayNameRequest(BaseModel):
