@@ -4,6 +4,7 @@ pub mod artifacts;
 pub mod cowork;
 pub mod goals;
 pub mod loops;
+pub mod materialization;
 pub mod mobility;
 pub mod plans;
 pub mod repo_roots;

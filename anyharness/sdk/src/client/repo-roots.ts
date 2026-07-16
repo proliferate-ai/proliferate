@@ -1,6 +1,10 @@
 import type {
   DetectProjectSetupResponse,
   GitBranchRef,
+  MaterializeRepoRootRequest,
+  MaterializeRepoRootResponse,
+  MaterializeWorkspaceAtRefRequest,
+  MaterializeWorkspaceAtRefResponse,
   PrepareRepoRootMobilityDestinationRequest,
   PrepareRepoRootMobilityDestinationResponse,
   RepoRoot,
@@ -66,6 +70,31 @@ export class RepoRootsClient {
   ): Promise<PrepareRepoRootMobilityDestinationResponse> {
     return this.transport.post<PrepareRepoRootMobilityDestinationResponse>(
       `/v1/repo-roots/${encodeURIComponent(repoRootId)}/mobility/prepare-destination`,
+      input,
+      options,
+    );
+  }
+
+  // Acquire (clone-or-adopt) a repository and register its main repo root.
+  async materialize(
+    input: MaterializeRepoRootRequest,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<MaterializeRepoRootResponse> {
+    return this.transport.post<MaterializeRepoRootResponse>(
+      "/v1/repo-roots/materializations",
+      input,
+      options,
+    );
+  }
+
+  // Create or reuse a standard workspace at an exact branch and commit.
+  async materializeWorkspaceAtRef(
+    repoRootId: string,
+    input: MaterializeWorkspaceAtRefRequest,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<MaterializeWorkspaceAtRefResponse> {
+    return this.transport.post<MaterializeWorkspaceAtRefResponse>(
+      `/v1/repo-roots/${encodeURIComponent(repoRootId)}/workspace-materializations`,
       input,
       options,
     );

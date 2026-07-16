@@ -2,6 +2,7 @@ use std::fs;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
+use super::exact_ref::{assert_standard_worktree_on_ref, worktree_head_matches, worktree_is_clean};
 use super::records::build_workspace_record;
 use super::WorkspaceRuntime;
 use crate::adapters::git::GitService;
@@ -176,35 +177,8 @@ impl WorkspaceRuntime {
         }
 
         let ctx = resolver::resolve_git_context(&workspace.path)?;
-        if !ctx.is_worktree || ctx.current_branch.as_deref() != Some(requested_branch) {
-            anyhow::bail!(
-                "mobility destination conflict: destination workspace is not on requested branch {requested_branch}"
-            );
-        }
-        let workspace_path = Path::new(&ctx.repo_root);
-        let actual_head = GitService::stdout_result(workspace_path, &["rev-parse", "HEAD"])?;
-        let requested_head = GitService::stdout_result(
-            workspace_path,
-            &[
-                "rev-parse",
-                "--verify",
-                &format!("{requested_base_sha}^{{commit}}"),
-            ],
-        )?;
-        if actual_head != requested_head {
-            anyhow::bail!(
-                "mobility destination conflict: destination workspace is at {actual_head}, not requested commit {requested_head}"
-            );
-        }
-        let status = GitService::stdout_result(
-            workspace_path,
-            &["status", "--porcelain", "--untracked-files=all"],
-        )?;
-        if !status.trim().is_empty() {
-            anyhow::bail!(
-                "mobility destination conflict: destination workspace has uncommitted changes"
-            );
-        }
+        assert_standard_worktree_on_ref(&ctx, requested_branch, requested_base_sha)
+            .map_err(|error| anyhow::anyhow!("mobility destination conflict: {error}"))?;
         Ok(())
     }
 
@@ -214,7 +188,6 @@ impl WorkspaceRuntime {
         requested_branch: &str,
         requested_base_sha: &str,
     ) -> anyhow::Result<Option<WorkspaceRecord>> {
-        let requested_head = format!("{requested_base_sha}^{{commit}}");
         let base_dir = self
             .runtime_home
             .join("mobility")
@@ -240,20 +213,10 @@ impl WorkspaceRuntime {
             }
 
             let workspace_path = Path::new(&ctx.repo_root);
-            let actual_head = GitService::stdout_result(workspace_path, &["rev-parse", "HEAD"])?;
-            let requested_head = GitService::stdout_result(
-                workspace_path,
-                &["rev-parse", "--verify", &requested_head],
-            )?;
-            if actual_head != requested_head {
+            if !worktree_head_matches(workspace_path, requested_base_sha)? {
                 continue;
             }
-
-            let status = GitService::stdout_result(
-                workspace_path,
-                &["status", "--porcelain", "--untracked-files=all"],
-            )?;
-            if !status.trim().is_empty() {
+            if !worktree_is_clean(workspace_path)? {
                 anyhow::bail!(
                     "mobility destination conflict: existing branch {requested_branch} has uncommitted changes in {}",
                     workspace.path
@@ -293,43 +256,8 @@ impl WorkspaceRuntime {
                 "mobility destination conflict: destination path already exists but is not a usable git worktree: {error}"
             )
         })?;
-        if !ctx.is_worktree {
-            anyhow::bail!(
-                "mobility destination conflict: destination path already exists but is not a git worktree"
-            );
-        }
-        if ctx.current_branch.as_deref() != Some(requested_branch) {
-            anyhow::bail!(
-                "mobility destination conflict: destination path already exists for branch {}",
-                ctx.current_branch.as_deref().unwrap_or("<unknown>")
-            );
-        }
-
-        let actual_head =
-            GitService::stdout_result(Path::new(&ctx.repo_root), &["rev-parse", "HEAD"])?;
-        let requested_head = GitService::stdout_result(
-            Path::new(&ctx.repo_root),
-            &[
-                "rev-parse",
-                "--verify",
-                &format!("{requested_base_sha}^{{commit}}"),
-            ],
-        )?;
-        if actual_head != requested_head {
-            anyhow::bail!(
-                "mobility destination conflict: destination path is at {actual_head}, not requested commit {requested_head}"
-            );
-        }
-
-        let status = GitService::stdout_result(
-            Path::new(&ctx.repo_root),
-            &["status", "--porcelain", "--untracked-files=all"],
-        )?;
-        if !status.trim().is_empty() {
-            anyhow::bail!(
-                "mobility destination conflict: destination path already exists with uncommitted changes"
-            );
-        }
+        assert_standard_worktree_on_ref(&ctx, requested_branch, requested_base_sha)
+            .map_err(|error| anyhow::anyhow!("mobility destination conflict: {error}"))?;
 
         let record = build_workspace_record(
             repo_root,
