@@ -664,6 +664,53 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     secret: false,
     lanes: ["sandbox"],
   },
+  // ── Appended for PR 6 (shared fixture layer). Sandbox lane; all secret. Only
+  // consumed when a PR-6 fixture / candidate Stripe deploy option is used —
+  // absent, the candidate Server keeps today's no-Stripe 503 checkout posture
+  // (the CLOUD-PROVISION-1 regression is untouched). Declared here so their
+  // values are redacted from the persisted report. ──────────────────────────
+  {
+    name: "STRIPE_TEST_SECRET_KEY",
+    description:
+      "Stripe TEST secret key (sk_test_…) the managed-cloud billing journeys use for real Stripe test-mode " +
+      "work: the candidate Server's own STRIPE_SECRET_KEY (so real Core-via-Stripe cloud checkout works — " +
+      "closing the fundCore 503 debt), and the stripeTestClock fixture's test-clock/customer/subscription " +
+      "setup for CLOUD-COMPUTE-RENEW-1. Resolved by the stripeTestClock fixture from this env, falling back " +
+      "to TIER2_BILLING_STRIPE_SECRET_KEY; a LIVE-mode key throws (assertCheckoutUrlTestMode discipline) and " +
+      "an unresolved key blocks the dependent cells rather than fabricating them. NOT a scenario requiredEnv " +
+      "(the Tier-2 fallback must keep working). Never live mode.",
+    whereItLives:
+      "Local: `~/.proliferate-local/dev/qualification-infra.env` (mode 0600), or the shared Stripe test-mode " +
+      "config. CI: the `Qualification` environment's Stripe test secret.",
+    secret: true,
+    lanes: ["sandbox"],
+  },
+  {
+    name: "RELEASE_E2E_CLOUD_STRIPE_WEBHOOK_SECRET",
+    description:
+      "The Stripe webhook signing secret (whsec_…) the candidate Server verifies its /v1/billing/webhooks/stripe " +
+      "deliveries against (its STRIPE_WEBHOOK_SECRET). The signed callback relay preserves the exact signed " +
+      "bytes end-to-end and never re-signs, so this is the SERVER's verification secret, declared here only for " +
+      "redaction — the relay itself never reads it. Absent → the candidate Server keeps today's no-Stripe posture.",
+    whereItLives:
+      "The Stripe test-mode webhook endpoint config for the qualification account. Local: " +
+      "`~/.proliferate-local/dev/qualification-infra.env` (mode 0600). CI: the `Qualification` environment secret.",
+    secret: true,
+    lanes: ["sandbox"],
+  },
+  {
+    name: "RELEASE_E2E_CLOUD_E2B_WEBHOOK_SECRET",
+    description:
+      "The E2B webhook signature secret the candidate Server verifies its /v1/cloud/webhooks/e2b deliveries " +
+      "against (its E2B_WEBHOOK_SIGNATURE_SECRET). As with the Stripe webhook secret, the signed callback relay " +
+      "forwards the exact signed bytes and never re-signs, so this is the SERVER's verification secret, declared " +
+      "here only for redaction. Absent → the candidate Server keeps today's posture (no E2B webhook validation).",
+    whereItLives:
+      "The E2B team's webhook configuration for the qualification account. Local: " +
+      "`~/.proliferate-local/dev/qualification-infra.env` (mode 0600). CI: the `Qualification` environment secret.",
+    secret: true,
+    lanes: ["sandbox"],
+  },
 ] as const;
 
 export const DEFAULT_LOCAL_RUNTIME_URL = "http://127.0.0.1:8542";

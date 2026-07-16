@@ -4,6 +4,13 @@ import path from "node:path";
 
 import type { MaterializedArtifact } from "../../artifacts/local-candidate-set.js";
 import type { QualificationLiteLlmConfig } from "../../services/qualification-litellm.js";
+import {
+  CALLBACK_RELAY_SCRIPT,
+  DEFAULT_RELAY_LISTEN_PORT,
+  RELAY_CHANNEL_PATHS,
+  RELAY_DIRNAME,
+  RELAY_SCRIPT_FILENAME,
+} from "./callback-relay-agent.js";
 import type { Ec2IngressBox, Route53Record } from "./ec2.js";
 
 /**
@@ -38,6 +45,14 @@ export const REMOTE_WORKDIR = "/home/ubuntu/candidate";
 const REMOTE_SETUP_TOKEN_PATH = `${REMOTE_WORKDIR}/setup-token`;
 /** The App private-key PEM on the box (mounted into the Server container via REMOTE_WORKDIR). */
 const REMOTE_GITHUB_KEY_PATH = `${REMOTE_WORKDIR}/github-app-private-key.pem`;
+/** Run-scoped 0600 env files carrying the candidate Server's Stripe/webhook secrets (PR 6, staged only when stripe present). */
+const REMOTE_STRIPE_ENV_PATH = `${REMOTE_WORKDIR}/stripe.env`;
+const REMOTE_STRIPE_WEBHOOK_ENV_PATH = `${REMOTE_WORKDIR}/stripe-webhook.env`;
+/** On-box signed-callback relay dir + script (PR 6, staged only when callbackRelay present). */
+const REMOTE_RELAY_DIR = `${REMOTE_WORKDIR}/${RELAY_DIRNAME}`;
+const REMOTE_RELAY_SCRIPT_PATH = `${REMOTE_RELAY_DIR}/${RELAY_SCRIPT_FILENAME}`;
+/** Pidfile the relay-start writes (`echo $!`) so cleanup can kill the exact process. */
+const REMOTE_RELAY_PIDFILE = `${REMOTE_RELAY_DIR}/relay.pid`;
 /** Server container port Caddy reverse-proxies to. */
 // The server image's uvicorn CMD listens on 8000 (Dockerfile: `--port 8000`,
 // EXPOSE 8000). The host port mapping and the Caddy reverse_proxy must target
@@ -98,6 +113,46 @@ export interface CandidateE2bConfig {
   templateName: string;
 }
 
+/**
+ * Stripe TEST-mode config for the candidate Server (PR 6, append-only). When
+ * present, `buildServerEnv` adds the Server's own Stripe env from these 0600
+ * files so real Core-via-Stripe cloud checkout works (closing the fundCore 503
+ * debt), plus the non-secret checkout redirect URLs. When ABSENT, no Stripe env
+ * is emitted and the candidate Server keeps today's no-Stripe 503 posture — the
+ * CLOUD-PROVISION-1 regression is untouched. Secret VALUES travel only via the
+ * single-line 0600 env files (PEM-style multi-line staging is not needed for
+ * these keys), never argv, never a field.
+ */
+export interface CandidateStripeConfig {
+  /** Path to the mode-0600 env file holding STRIPE_SECRET_KEY (single line). */
+  secretsEnvFilePath: string;
+  /**
+   * Path to the mode-0600 env file holding the two webhook signing secrets
+   * (STRIPE_WEBHOOK_SECRET and E2B_WEBHOOK_SIGNATURE_SECRET) the Server verifies
+   * signed deliveries against. The relay forwards signed bytes untouched; the
+   * Server is the sole verifier, so these live in the SERVER env only.
+   */
+  webhookSecretEnvFilePath: string;
+  /** Non-secret post-checkout redirect (STRIPE_CHECKOUT_SUCCESS_URL); typically the publicOrigin. */
+  checkoutSuccessUrl: string;
+  /** Non-secret cancelled-checkout redirect (STRIPE_CHECKOUT_CANCEL_URL). */
+  checkoutCancelUrl: string;
+}
+
+/**
+ * Signed-callback relay config for the candidate box (PR 6, append-only). When
+ * present, `deployCandidateApi` stages the single-file relay process under the
+ * remote workdir, starts it (pass-through by default), and wires the two signed
+ * webhook paths through it in the Caddyfile. When ABSENT, no relay is staged and
+ * the Caddyfile is byte-identical to today's (a single `reverse_proxy` to the
+ * Server) — behaviour with the option unused is unchanged. The relay never reads
+ * a signing secret; it forwards signed bytes byte-identically.
+ */
+export interface CandidateCallbackRelayConfig {
+  /** Loopback port the relay http process binds on the box (default 8899). */
+  listenPort?: number;
+}
+
 export interface DeployCandidateApiOptions {
   box: Ec2IngressBox;
   record: Route53Record;
@@ -106,6 +161,17 @@ export interface DeployCandidateApiOptions {
   litellm: QualificationLiteLlmConfig;
   github: CandidateGithubAppConfig;
   e2b: CandidateE2bConfig;
+  /**
+   * PR 6 (append-only): Stripe TEST-mode config for the candidate Server. Absent
+   * (the default) preserves today's no-Stripe 503 checkout posture exactly.
+   */
+  stripe?: CandidateStripeConfig;
+  /**
+   * PR 6 (append-only): on-box signed-callback relay in front of the two signed
+   * webhook paths. Absent (the default) produces the byte-identical single-proxy
+   * Caddyfile and stages no relay.
+   */
+  callbackRelay?: CandidateCallbackRelayConfig;
   /** Public origin the receipt records (`https://<record.recordName>`). */
   publicOrigin: string;
   /** The local renderer origin the browser loads (added to the Server CORS allowlist). */
@@ -118,6 +184,20 @@ export interface DeployCandidateApiOptions {
   ssh: SshExec;
   /** Injectable readiness probe over public TLS (fake in unit tests). */
   probeHealth: (origin: string) => Promise<{ ok: boolean; version: string }>;
+  /**
+   * PR 6 (append-only): registered-before-create cleanup seam, threaded from the
+   * world's cleanup stack (same shape `world.ts` uses for every other resource).
+   * When `callbackRelay` is present it is used to register `callback_relay_process`
+   * (kill by pidfile) and `callback_relay_spool` (rm -rf the spool dir) BEFORE the
+   * relay is started, so a dead/half-started relay is still torn down and
+   * `relayStopped` reports the truth. Absent → no relay resources are registered
+   * (today's behaviour; the relay is only staged when callbackRelay is present).
+   */
+  registerCleanup?: (
+    kind: "callback_relay_process" | "callback_relay_spool",
+    providerId: string,
+    release: () => Promise<void>,
+  ) => Promise<void>;
   timeoutMs?: number;
   log?: (message: string) => void;
 }
@@ -148,8 +228,13 @@ export async function deployCandidateApi(options: DeployCandidateApiOptions): Pr
   await mkdir(options.secretsDir, { recursive: true, mode: 0o700 });
   const serverEnvLocalPath = path.join(options.secretsDir, "candidate-server.env");
   await writeFile(serverEnvLocalPath, buildServerEnv(options), { mode: 0o600 });
+  const relayPort = options.callbackRelay?.listenPort ?? DEFAULT_RELAY_LISTEN_PORT;
   const caddyLocalPath = path.join(options.secretsDir, "Caddyfile");
-  await writeFile(caddyLocalPath, buildCaddyfile(options.record.recordName), { mode: 0o600 });
+  await writeFile(
+    caddyLocalPath,
+    buildCaddyfile(options.record.recordName, options.callbackRelay ? relayPort : undefined),
+    { mode: 0o600 },
+  );
 
   // Stage all inputs on the box.
   await ssh.run(dest, key, `mkdir -p ${REMOTE_WORKDIR}`);
@@ -168,13 +253,29 @@ export async function deployCandidateApi(options: DeployCandidateApiOptions): Pr
   await ssh.copyFile(dest, key, options.e2b.secretsEnvFilePath, remoteE2bEnvPath);
   await ssh.copyFile(dest, key, serverArtifact.path, remoteImagePath);
 
+  // PR 6 (append-only): the Stripe secret + webhook-secret 0600 env files ride
+  // as their own `docker --env-file`s (single-line, no PEM staging needed), so
+  // the secret VALUES never enter argv or the receipt. Only when stripe config
+  // is present — absent, no Stripe env file is copied or referenced.
+  const stripeEnvFiles: string[] = [];
+  if (options.stripe) {
+    await ssh.copyFile(dest, key, options.stripe.secretsEnvFilePath, REMOTE_STRIPE_ENV_PATH);
+    await ssh.copyFile(dest, key, options.stripe.webhookSecretEnvFilePath, REMOTE_STRIPE_WEBHOOK_ENV_PATH);
+    stripeEnvFiles.push(`--env-file ${REMOTE_STRIPE_ENV_PATH}`, `--env-file ${REMOTE_STRIPE_WEBHOOK_ENV_PATH}`);
+  }
+
   // Install Caddy and load the EXACT Server image.
   log("installing caddy and loading the candidate Server image");
   await ssh.run(dest, key, "sudo apt-get update -y && sudo apt-get install -y debian-keyring debian-archive-keyring caddy");
   const loaded = await ssh.run(dest, key, `sudo docker load -i ${remoteImagePath}`);
   const imageRef = parseLoadedImage(loaded.stdout);
 
-  const envFiles = `--env-file ${remoteEnvPath} --env-file ${remoteGithubEnvPath} --env-file ${remoteE2bEnvPath}`;
+  const envFiles = [
+    `--env-file ${remoteEnvPath}`,
+    `--env-file ${remoteGithubEnvPath}`,
+    `--env-file ${remoteE2bEnvPath}`,
+    ...stripeEnvFiles,
+  ].join(" ");
 
   // Run-scoped docker network + Postgres + Redis.
   await ssh.run(dest, key, "sudo docker network create candidate-net || true");
@@ -196,6 +297,73 @@ export async function deployCandidateApi(options: DeployCandidateApiOptions): Pr
     `sudo docker run -d --name candidate-server --network candidate-net ${envFiles} ` +
       `-v ${REMOTE_WORKDIR}:${REMOTE_WORKDIR} -p 127.0.0.1:${SERVER_CONTAINER_PORT}:${SERVER_CONTAINER_PORT} ${imageRef}`,
   );
+
+  // PR 6 (append-only): stage + start the signed-callback relay BEFORE Caddy
+  // reloads, so the routes Caddy points at the relay have a live listener. The
+  // relay is a stdlib-only single-file Python http process (no third-party deps
+  // on the box); it starts in pass-through mode — behaviourally invisible until
+  // the controller flips a channel to hold. Only when callbackRelay is present;
+  // absent, none of this runs and the Caddyfile has no relay routes.
+  if (options.callbackRelay) {
+    const relayScriptLocalPath = path.join(options.secretsDir, RELAY_SCRIPT_FILENAME);
+    await writeFile(relayScriptLocalPath, CALLBACK_RELAY_SCRIPT, { mode: 0o600 });
+    // Owner-only spool dir: it holds spooled signed payloads/headers (replay-
+    // capable credential material), so create it 0700 (install -d -m 700, then a
+    // belt-and-suspenders chmod for install variants that ignore -m).
+    await ssh.run(dest, key, `install -d -m 700 ${REMOTE_RELAY_DIR} || mkdir -p ${REMOTE_RELAY_DIR}; chmod 700 ${REMOTE_RELAY_DIR}`);
+    await ssh.copyFile(dest, key, relayScriptLocalPath, REMOTE_RELAY_SCRIPT_PATH);
+
+    // Register cleanup BEFORE starting the process (registered-before-create):
+    // the spool dir (holds spooled signed payloads/headers) and the process
+    // (killed by pidfile). Registered even if the start/readiness below fails,
+    // so a dead/half-started relay is still torn down and `relayStopped` is
+    // truthful. Durable identity: the process entry's providerId is
+    // `<box-ip>:<pidfile>` so a RECOVERED runner can act from the ledger alone.
+    await options.registerCleanup?.("callback_relay_spool", REMOTE_RELAY_DIR, async () => {
+      await ssh.run(dest, key, `rm -rf ${REMOTE_RELAY_DIR}`);
+    });
+    await options.registerCleanup?.(
+      "callback_relay_process",
+      `${box.publicIp}:${REMOTE_RELAY_PIDFILE}`,
+      async () => {
+        await stopRelayProcess(ssh, dest, key);
+      },
+    );
+
+    // The relay forwards to the Server container's host-mapped loopback port.
+    // Detached via nohup so it survives the SSH session; stdlib only, so the
+    // box's system python3 runs it with no venv/deps. The upstream + spool dir +
+    // port ride as its env (no secrets — the relay never reads a signing secret).
+    //
+    // The pidfile records an OWNERSHIP DISCRIMINATOR, not a bare PID: the PID,
+    // its `/proc/<pid>/stat` starttime (field 22 — unique per boot+pid so a PID
+    // reused after this process dies has a DIFFERENT starttime), and the exact
+    // run-scoped relay script path. `stopRelayProcess` re-checks both before
+    // signalling, so recovery never kills an innocent process that reused the PID.
+    // Written 0600 as a JSON object (tmp+mv keeps it atomic-ish for a reader).
+    await ssh.run(
+      dest,
+      key,
+      `RELAY_SPOOL_DIR=${REMOTE_RELAY_DIR} RELAY_UPSTREAM=http://127.0.0.1:${SERVER_CONTAINER_PORT} ` +
+        `RELAY_PORT=${relayPort} nohup python3 ${REMOTE_RELAY_SCRIPT_PATH} serve ` +
+        `>${REMOTE_RELAY_DIR}/relay.log 2>&1 & ` +
+        `RELAY_PID=$!; ` +
+        // /proc/<pid>/stat: `pid (comm) state ppid ...`; starttime is field 22.
+        // Take the substring after the LAST ") " so a comm containing spaces or
+        // parens never shifts the field count, then starttime is field 20 of the
+        // remainder (fields 1-2 are pid + (comm)).
+        `RELAY_START=$(sed 's/.*) //' /proc/$RELAY_PID/stat 2>/dev/null | awk '{print $20}'); ` +
+        `umask 077; ` +
+        `printf '{"pid":%s,"starttime":"%s","script":"%s"}' "$RELAY_PID" "$RELAY_START" ${REMOTE_RELAY_SCRIPT_PATH} ` +
+        `> ${REMOTE_RELAY_PIDFILE}.tmp && mv ${REMOTE_RELAY_PIDFILE}.tmp ${REMOTE_RELAY_PIDFILE}`,
+    );
+
+    // Bounded readiness: poll the relay's own loopback health endpoint until it
+    // answers 200, BEFORE Caddy routes signed callbacks through it. A relay that
+    // never comes up fails the deploy loudly rather than letting world
+    // construction "succeed" with a dead relay (public /health bypasses it).
+    await waitForRelayHealth(ssh, dest, key, relayPort, timeoutMs, log);
+  }
 
   // Configure Caddy to terminate TLS for the run subdomain.
   await ssh.copyFile(dest, key, caddyLocalPath, `${REMOTE_WORKDIR}/Caddyfile`);
@@ -284,12 +452,43 @@ function buildServerEnv(options: DeployCandidateApiOptions): string {
     // product provisions from exactly the immutable template this world builds.
     `E2B_TEMPLATE_NAME=${options.e2b.templateName}`,
   ];
+  // PR 6 (append-only): only when Stripe test-mode config is present. The secret
+  // Stripe keys (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, E2B_WEBHOOK_SIGNATURE_
+  // SECRET) ride their OWN 0600 --env-files (see deployCandidateApi), never this
+  // file; only the NON-secret checkout redirect URLs go here. Absent stripe →
+  // none of these are emitted and the Server keeps today's no-Stripe 503 posture.
+  if (options.stripe) {
+    lines.push(
+      `STRIPE_CHECKOUT_SUCCESS_URL=${options.stripe.checkoutSuccessUrl}`,
+      `STRIPE_CHECKOUT_CANCEL_URL=${options.stripe.checkoutCancelUrl}`,
+    );
+  }
   return `${lines.join("\n")}\n`;
 }
 
-/** Caddyfile that reverse-proxies the run subdomain to the Server container. */
-function buildCaddyfile(subdomain: string): string {
-  return `${subdomain} {\n  reverse_proxy 127.0.0.1:${SERVER_CONTAINER_PORT}\n}\n`;
+/**
+ * Caddyfile that reverse-proxies the run subdomain to the Server container. When
+ * a relay port is given (PR 6, callbackRelay present), the two signed webhook
+ * paths are routed through the on-box relay instead, with everything else still
+ * proxied straight to the Server. When it is undefined the output is
+ * byte-identical to today's single-proxy Caddyfile.
+ */
+function buildCaddyfile(subdomain: string, relayPort?: number): string {
+  if (relayPort === undefined) {
+    return `${subdomain} {\n  reverse_proxy 127.0.0.1:${SERVER_CONTAINER_PORT}\n}\n`;
+  }
+  // `handle` blocks are matched in order; the two signed webhook paths go to the
+  // relay, and the trailing catch-all `handle` proxies everything else to the
+  // Server exactly as before. Caddy matches the most specific path handler first.
+  const relayRoutes = [RELAY_CHANNEL_PATHS.stripe, RELAY_CHANNEL_PATHS.e2b]
+    .map((webhookPath) => `  handle ${webhookPath} {\n    reverse_proxy 127.0.0.1:${relayPort}\n  }`)
+    .join("\n");
+  return (
+    `${subdomain} {\n` +
+    `${relayRoutes}\n` +
+    `  handle {\n    reverse_proxy 127.0.0.1:${SERVER_CONTAINER_PORT}\n  }\n` +
+    `}\n`
+  );
 }
 
 /** Parses `Loaded image: <ref>` (or `Loaded image ID: <sha>`) from `docker load`. */
@@ -356,6 +555,93 @@ async function waitForRemoteFile(
     },
     timeoutMs,
     `remote file ${remotePath} never appeared`,
+    log,
+  );
+}
+
+/**
+ * Stops the on-box signed-callback relay SAFELY against PID reuse. The pidfile
+ * records {pid, starttime, script}; before signalling, this re-reads
+ * `/proc/<pid>/stat` starttime AND `/proc/<pid>/cmdline` and requires BOTH to
+ * match the recorded discriminator:
+ *
+ *   - pidfile missing / pid not running   → already gone (RELAY_STOP_ABSENT).
+ *   - pid running but starttime OR cmdline mismatch → the original relay is dead
+ *     and this PID was REUSED by an unrelated process → do NOT kill it; remove
+ *     the stale pidfile and report RELAY_STOP_STALE_PID (a clean, non-killing
+ *     success).
+ *   - full match → kill, verify absence via `kill -0`, remove the pidfile;
+ *     failed-to-stop is RELAY_STOP_FAILED (a non-green cleanup error). No `||
+ *     true` masks the outcome.
+ */
+async function stopRelayProcess(ssh: SshExec, dest: string, key: string): Promise<void> {
+  const pidfile = REMOTE_RELAY_PIDFILE;
+  // POSIX sh: parse the JSON pidfile with sed (no jq dependency on the box),
+  // recompute the live starttime the same way the start command did, and compare
+  // both discriminators before signalling. Prints exactly one sentinel.
+  const script =
+    `if [ ! -f ${pidfile} ]; then echo RELAY_STOP_ABSENT; exit 0; fi; ` +
+    `PF="$(cat ${pidfile})"; ` +
+    `PID=$(printf '%s' "$PF" | sed 's/.*"pid":\\([0-9]*\\).*/\\1/'); ` +
+    `WANT_START=$(printf '%s' "$PF" | sed 's/.*"starttime":"\\([^"]*\\)".*/\\1/'); ` +
+    `WANT_SCRIPT=$(printf '%s' "$PF" | sed 's/.*"script":"\\([^"]*\\)".*/\\1/'); ` +
+    `if [ -z "$PID" ]; then rm -f ${pidfile}; echo RELAY_STOP_ABSENT; exit 0; fi; ` +
+    // Not running at all → clean stop.
+    `if ! kill -0 "$PID" 2>/dev/null; then rm -f ${pidfile}; echo RELAY_STOP_ABSENT; exit 0; fi; ` +
+    // Recompute live starttime + read cmdline; a reused PID differs on either.
+    `LIVE_START=$(sed 's/.*) //' /proc/$PID/stat 2>/dev/null | awk '{print $20}'); ` +
+    `LIVE_CMD=$(tr '\\0' ' ' < /proc/$PID/cmdline 2>/dev/null); ` +
+    `if [ "$LIVE_START" != "$WANT_START" ] || ! printf '%s' "$LIVE_CMD" | grep -q "$WANT_SCRIPT"; then ` +
+    `rm -f ${pidfile}; echo RELAY_STOP_STALE_PID; exit 0; fi; ` +
+    // Ownership confirmed → kill and verify absence.
+    `kill "$PID" 2>/dev/null; sleep 1; ` +
+    `if kill -0 "$PID" 2>/dev/null; then kill -9 "$PID" 2>/dev/null; sleep 1; fi; ` +
+    `if kill -0 "$PID" 2>/dev/null; then echo "RELAY_STOP_FAILED:$PID"; else rm -f ${pidfile}; echo RELAY_STOP_OK; fi`;
+  const result = await ssh.run(dest, key, script);
+  const out = result.stdout.trim();
+  if (out.includes("RELAY_STOP_FAILED")) {
+    throw new Error(
+      `callback-relay cleanup: failed to stop the relay process (${out}); the signed-callback relay is still ` +
+        "running. Cleanup failure is non-green.",
+    );
+  }
+  if (
+    !out.includes("RELAY_STOP_OK") &&
+    !out.includes("RELAY_STOP_ABSENT") &&
+    !out.includes("RELAY_STOP_STALE_PID")
+  ) {
+    throw new Error(`callback-relay cleanup: unexpected relay-stop result "${out.slice(0, 120)}".`);
+  }
+}
+
+/**
+ * Bounded readiness for the on-box signed-callback relay: polls its own loopback
+ * health endpoint (`GET /__relay/health`) over SSH+curl until it returns 200,
+ * BEFORE Caddy routes signed callbacks through it. Fails the deploy loudly on
+ * timeout — a relay that never listens must not be papered over by the public
+ * `/health` (which bypasses the relay). Uses a shorter, bounded window than the
+ * full deploy timeout since the relay is a local process that comes up in
+ * seconds.
+ */
+async function waitForRelayHealth(
+  ssh: SshExec,
+  dest: string,
+  key: string,
+  relayPort: number,
+  timeoutMs: number,
+  log: (m: string) => void,
+): Promise<void> {
+  await pollUntil(
+    async () => {
+      const result = await ssh.run(
+        dest,
+        key,
+        `curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:${relayPort}/__relay/health || true`,
+      );
+      return result.stdout.trim() === "200";
+    },
+    Math.min(timeoutMs, 60_000),
+    `signed-callback relay never became ready on 127.0.0.1:${relayPort}`,
     log,
   );
 }
