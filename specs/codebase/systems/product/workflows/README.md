@@ -4,6 +4,9 @@
   definition-authoring contract.
 - [Workflow Runs](runs.md) — durable one-prompt execution in an existing
   AnyHarness workspace.
+- [Workspace Placement](workspace-placement.md) — deterministic, idempotent
+  placement/materialization of one isolated visible workspace for a run UUID
+  (placement only; no execution or cleanup).
 - [Portable Invocations](invocations.md) — immutable Cloud invocation and
   AnyHarness target-resolution contract.
 - [Run Control and Session Admission](run-control.md) — truthful cancellation,

@@ -153,6 +153,8 @@ pub struct AppState {
     pub goal_service: Arc<GoalService>,
     pub goal_runtime: Arc<GoalRuntime>,
     pub workflow_run_runtime: Arc<WorkflowRunRuntime>,
+    pub workflow_workspace_runtime:
+        Arc<crate::domains::workflows::workspace_materialization::WorkflowWorkspaceRuntime>,
     pub session_admission: Arc<crate::domains::sessions::admission::SessionMutationAdmission>,
     pub loop_service: Arc<LoopService>,
     pub loop_runtime: Arc<LoopRuntime>,
@@ -394,13 +396,16 @@ impl AppState {
             loop_service.clone(),
             activity_service.clone(),
         ));
-        // Workflow runs — phase 2 (after SessionRuntime): the async facade.
-        let workflow_run_runtime = workflows::wire_workflow_runtime(
+        // Workflow runs — phase 2 (after SessionRuntime): the async facades.
+        let workflow_phase_two = workflows::wire_workflow_runtime(
             workflow_wiring,
             session_runtime.clone(),
             workspace_operation_gate.clone(),
             workspace_access_gate.clone(),
+            workspace_runtime.clone(),
         );
+        let workflow_run_runtime = workflow_phase_two.run_runtime;
+        let workflow_workspace_runtime = workflow_phase_two.workspace_runtime;
         let retire_preflight_checker = Arc::new(RetirePreflightChecker::new(
             workspace_runtime.clone(),
             workspace_access_gate.clone(),
@@ -553,6 +558,7 @@ impl AppState {
             goal_service,
             goal_runtime,
             workflow_run_runtime,
+            workflow_workspace_runtime,
             session_admission,
             loop_service,
             loop_runtime,

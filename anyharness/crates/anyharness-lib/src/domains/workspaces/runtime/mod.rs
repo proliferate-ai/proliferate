@@ -16,6 +16,7 @@ mod materialization;
 mod mobility;
 mod records;
 mod repo_metadata;
+mod workflow_placement;
 mod worktrees;
 
 pub use exact_ref::{ExactRefOutcome, ExactRefWorkspace};

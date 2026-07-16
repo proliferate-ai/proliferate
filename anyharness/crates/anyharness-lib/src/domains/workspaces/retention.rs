@@ -13,6 +13,7 @@ use crate::domains::sessions::admission::{
 use crate::domains::sessions::store::SessionStore;
 use crate::domains::terminals::store::TerminalStore;
 use crate::domains::workspaces::checkout_gate::{CheckoutDeletionGate, CheckoutPathLockKey};
+use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
 use crate::domains::workspaces::managed_root::canonical_managed_worktrees_root;
 use crate::domains::workspaces::model::{
     WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceLifecycleState, WorkspaceRecord,
@@ -176,6 +177,19 @@ impl WorkspaceRetentionService {
         let mut by_repo: BTreeMap<String, Vec<WorkspaceRecord>> = BTreeMap::new();
         for workspace in self.list_retention_worktrees_by_activity()? {
             if excluded_workspace_id.as_deref() == Some(workspace.id.as_str()) {
+                continue;
+            }
+            // Workflow-created workspaces are excluded from generic worktree
+            // retention by their explicit creator context, at every pass
+            // (startup and post-create both flow through here), until a
+            // Workflow cleanup policy is approved (spec
+            // `workflow-workspace-placement`). Inventory may still report them;
+            // this pass must never silently prune them.
+            if workspace
+                .creator_context
+                .as_ref()
+                .is_some_and(WorkspaceCreatorContext::is_workflow)
+            {
                 continue;
             }
             if !Path::new(&workspace.path).exists() {

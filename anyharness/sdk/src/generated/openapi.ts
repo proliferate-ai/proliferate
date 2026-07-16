@@ -1060,6 +1060,22 @@ export interface paths {
         patch: operations["update_terminal_title"];
         trace?: never;
     };
+    "/v1/workflow-run-workspaces/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_workflow_run_workspace"];
+        put: operations["put_workflow_run_workspace"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workflow-runs/{run_id}": {
         parameters: {
             query?: never;
@@ -3727,6 +3743,19 @@ export interface components {
             workspaceId: string;
         };
         /**
+         * @description `PUT /v1/workflow-run-workspaces/{runId}` body. The path `runId` is the
+         *     canonical UUID later reused by the AnyHarness run and Cloud invocation; it is
+         *     never carried in the body.
+         */
+        PutWorkflowRunWorkspaceRequest: {
+            placement: components["schemas"]["WorkflowWorkspacePlacementRequest"];
+            /**
+             * Format: int32
+             * @description Exactly `1`.
+             */
+            schemaVersion: number;
+        };
+        /**
          * @description A raw ACP session configuration option as exposed by the active session.
          *
          *     This is the transport-fidelity layer. It should match the live ACP state as
@@ -4910,6 +4939,55 @@ export interface components {
             updatedAt: string;
             workspaceId: string;
         };
+        /** @description `PUT`/`GET` response for a Workflow run workspace materialization. */
+        WorkflowRunWorkspaceResponse: {
+            createdAt: string;
+            /**
+             * @description A bounded, secret-free failure code, present only when `status` is
+             *     `failed`.
+             */
+            failureCode?: string | null;
+            finishedAt?: string | null;
+            placement: components["schemas"]["WorkflowWorkspaceResolvedPlacement"];
+            runId: string;
+            /** Format: int32 */
+            schemaVersion: number;
+            status: components["schemas"]["WorkflowWorkspaceStatus"];
+            updatedAt: string;
+            /** @description The durable ordinary workspace id, present once the artifact exists. */
+            workspaceId?: string | null;
+        };
+        /** @description Strict workflow workspace placement discriminated by `kind`. */
+        WorkflowWorkspacePlacementRequest: {
+            /** @enum {string} */
+            kind: "scratch";
+        } | {
+            baseRef: string;
+            /** @enum {string} */
+            kind: "repositoryWorktree";
+            repoRootId: string;
+        };
+        /**
+         * @description The resolved placement echoed on the response. For a repository worktree it
+         *     exposes the resolved base OID as non-secret correlation; it never exposes
+         *     credentials or arbitrary runtime paths.
+         */
+        WorkflowWorkspaceResolvedPlacement: {
+            /** @enum {string} */
+            kind: "scratch";
+        } | {
+            /** @description Present once the immutable base OID has been resolved and persisted. */
+            baseOid?: string | null;
+            baseRef: string;
+            /** @enum {string} */
+            kind: "repositoryWorktree";
+            repoRootId: string;
+        };
+        /**
+         * @description The durable materialization status.
+         * @enum {string}
+         */
+        WorkflowWorkspaceStatus: "accepted" | "materializing" | "ready" | "failed";
         Workspace: {
             availability: components["schemas"]["WorkspaceAvailability"];
             cleanupAttemptedAt?: string | null;
@@ -4961,6 +5039,10 @@ export interface components {
             sourceSessionId: string;
             sourceSessionWorkspaceId?: string | null;
             sourceWorkspaceId?: string | null;
+        } | {
+            /** @enum {string} */
+            kind: "workflow";
+            runId: string;
         };
         /** @enum {string} */
         WorkspaceExecutionPhase: "running" | "awaiting_interaction" | "idle" | "errored";
@@ -8194,6 +8276,110 @@ export interface operations {
             };
         };
     };
+    get_workflow_run_workspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Canonical UUID for the workflow run */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Durable materialization record */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunWorkspaceResponse"];
+                };
+            };
+            /** @description Non-canonical run ID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unknown workflow run workspace */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    put_workflow_run_workspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Canonical UUID for the workflow run */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutWorkflowRunWorkspaceRequest"];
+            };
+        };
+        responses: {
+            /** @description Exact replay of an identical placement request */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunWorkspaceResponse"];
+                };
+            };
+            /** @description New durable materialization (status ready or failed) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunWorkspaceResponse"];
+                };
+            };
+            /** @description Invalid ID or placement request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Same ID with a different placement request, or the workflow run already claimed this ID before placement acceptance */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Materialization storage failure */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     get_workflow_run: {
         parameters: {
             query?: never;
@@ -8305,7 +8491,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
-            /** @description Same ID with different invocation, or workspace mutation blocked */
+            /** @description Same ID with different invocation, workspace mutation blocked, or a schema-v2 workflow-workspace binding conflict (workflow_workspace_not_ready when this run's materialization is not ready; workflow_workspace_mismatch when the ready materialization's workspace differs from the request) */
             409: {
                 headers: {
                     [name: string]: unknown;

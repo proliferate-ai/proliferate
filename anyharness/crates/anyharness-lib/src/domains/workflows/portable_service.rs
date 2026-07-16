@@ -51,6 +51,8 @@ pub enum AcceptV2Outcome {
     },
     ExactReplay(WorkflowRunViewV2),
     Conflict,
+    WorkspaceNotReady,
+    WorkspaceMismatch,
 }
 
 impl WorkflowRunService {
@@ -142,8 +144,8 @@ impl WorkflowRunService {
             finished_at: None,
         };
 
-        match self.store.accept(&run, &step)? {
-            crate::domains::workflows::store::StoreAcceptOutcome::Created => {
+        match self.store.accept_v2(&run, &step)? {
+            crate::domains::workflows::store::StoreAcceptV2Outcome::Created => {
                 Ok(AcceptV2Outcome::Created {
                     plan: plan.clone(),
                     view: WorkflowRunViewV2 {
@@ -154,11 +156,17 @@ impl WorkflowRunService {
                     },
                 })
             }
-            crate::domains::workflows::store::StoreAcceptOutcome::ExactReplay { run, steps } => {
+            crate::domains::workflows::store::StoreAcceptV2Outcome::ExactReplay { run, steps } => {
                 Ok(AcceptV2Outcome::ExactReplay(parse_v2_view(run, steps)?))
             }
-            crate::domains::workflows::store::StoreAcceptOutcome::Conflict => {
+            crate::domains::workflows::store::StoreAcceptV2Outcome::Conflict => {
                 Ok(AcceptV2Outcome::Conflict)
+            }
+            crate::domains::workflows::store::StoreAcceptV2Outcome::WorkspaceNotReady => {
+                Ok(AcceptV2Outcome::WorkspaceNotReady)
+            }
+            crate::domains::workflows::store::StoreAcceptV2Outcome::WorkspaceMismatch => {
+                Ok(AcceptV2Outcome::WorkspaceMismatch)
             }
         }
     }

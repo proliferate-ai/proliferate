@@ -635,6 +635,22 @@ CREATE TABLE workflow_runs (
             CHECK ((status = 'interrupted') = (interruption_code IS NOT NULL))
         );
 
+-- table: workflow_workspace_materializations
+CREATE TABLE workflow_workspace_materializations (
+    run_id                  TEXT PRIMARY KEY,
+    schema_version          INTEGER NOT NULL CHECK (schema_version = 1),
+    request_json            TEXT NOT NULL,
+    resolved_placement_json TEXT,
+    status                  TEXT NOT NULL
+                            CHECK (status IN ('accepted', 'materializing', 'ready', 'failed')),
+    workspace_id            TEXT,
+    failure_code            TEXT,
+    failure_message         TEXT,
+    created_at              TEXT NOT NULL,
+    updated_at              TEXT NOT NULL,
+    finished_at             TEXT
+);
+
 -- table: workspace_access_modes
 CREATE TABLE workspace_access_modes (
     workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
@@ -888,6 +904,10 @@ CREATE UNIQUE INDEX idx_workflow_runs_active_session_controller
          ON workflow_runs(session_id)
          WHERE session_id IS NOT NULL
            AND status NOT IN ('completed', 'failed', 'cancelled', 'interrupted');
+
+-- index: idx_workflow_workspace_materializations_workspace_id
+CREATE INDEX idx_workflow_workspace_materializations_workspace_id
+    ON workflow_workspace_materializations(workspace_id);
 
 -- index: idx_workspaces_path
 CREATE INDEX idx_workspaces_path ON workspaces(path);

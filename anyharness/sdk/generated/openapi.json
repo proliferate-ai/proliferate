@@ -3884,6 +3884,136 @@
         }
       }
     },
+    "/v1/workflow-run-workspaces/{run_id}": {
+      "get": {
+        "tags": [
+          "workflow-run-workspaces"
+        ],
+        "operationId": "get_workflow_run_workspace",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "description": "Canonical UUID for the workflow run",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Durable materialization record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunWorkspaceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Non-canonical run ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown workflow run workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "workflow-run-workspaces"
+        ],
+        "operationId": "put_workflow_run_workspace",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "description": "Canonical UUID for the workflow run",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutWorkflowRunWorkspaceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Exact replay of an identical placement request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunWorkspaceResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "New durable materialization (status ready or failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunWorkspaceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid ID or placement request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Same ID with a different placement request, or the workflow run already claimed this ID before placement acceptance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Materialization storage failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workflow-runs/{run_id}": {
       "get": {
         "tags": [
@@ -4022,7 +4152,7 @@
             }
           },
           "409": {
-            "description": "Same ID with different invocation, or workspace mutation blocked",
+            "description": "Same ID with different invocation, workspace mutation blocked, or a schema-v2 workflow-workspace binding conflict (workflow_workspace_not_ready when this run's materialization is not ready; workflow_workspace_mismatch when the ready materialization's workspace differs from the request)",
             "content": {
               "application/json": {
                 "schema": {
@@ -14216,6 +14346,26 @@
         },
         "additionalProperties": false
       },
+      "PutWorkflowRunWorkspaceRequest": {
+        "type": "object",
+        "description": "`PUT /v1/workflow-run-workspaces/{runId}` body. The path `runId` is the\ncanonical UUID later reused by the AnyHarness run and Cloud invocation; it is\nnever carried in the body.",
+        "required": [
+          "schemaVersion",
+          "placement"
+        ],
+        "properties": {
+          "placement": {
+            "$ref": "#/components/schemas/WorkflowWorkspacePlacementRequest"
+          },
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Exactly `1`.",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
       "RawSessionConfigOption": {
         "type": "object",
         "description": "A raw ACP session configuration option as exposed by the active session.\n\nThis is the transport-fidelity layer. It should match the live ACP state as\nclosely as possible without applying product-specific interpretation.",
@@ -19098,6 +19248,163 @@
           }
         }
       },
+      "WorkflowRunWorkspaceResponse": {
+        "type": "object",
+        "description": "`PUT`/`GET` response for a Workflow run workspace materialization.",
+        "required": [
+          "runId",
+          "schemaVersion",
+          "status",
+          "placement",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string"
+          },
+          "failureCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A bounded, secret-free failure code, present only when `status` is\n`failed`."
+          },
+          "finishedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "placement": {
+            "$ref": "#/components/schemas/WorkflowWorkspaceResolvedPlacement"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkflowWorkspaceStatus"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The durable ordinary workspace id, present once the artifact exists."
+          }
+        }
+      },
+      "WorkflowWorkspacePlacementRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "No user repository: an internal blank Git repository. No repository fields are permitted.",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "scratch"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "A new deterministic branch/worktree from one immutable source commit.",
+            "required": [
+              "kind",
+              "repoRootId",
+              "baseRef"
+            ],
+            "properties": {
+              "baseRef": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "repositoryWorktree"
+                ]
+              },
+              "repoRootId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "Strict workflow workspace placement discriminated by `kind`."
+      },
+      "WorkflowWorkspaceResolvedPlacement": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "scratch"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "repoRootId",
+              "baseRef",
+              "kind"
+            ],
+            "properties": {
+              "baseOid": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Present once the immutable base OID has been resolved and persisted."
+              },
+              "baseRef": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "repositoryWorktree"
+                ]
+              },
+              "repoRootId": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "description": "The resolved placement echoed on the response. For a repository worktree it\nexposes the resolved base OID as non-secret correlation; it never exposes\ncredentials or arbitrary runtime paths."
+      },
+      "WorkflowWorkspaceStatus": {
+        "type": "string",
+        "description": "The durable materialization status.",
+        "enum": [
+          "accepted",
+          "materializing",
+          "ready",
+          "failed"
+        ]
+      },
       "Workspace": {
         "type": "object",
         "required": [
@@ -19338,6 +19645,25 @@
                   "string",
                   "null"
                 ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An isolated workspace materialized for one Workflow run (spec\n`workflow-workspace-placement`). Machine provenance that both names the\nowning run and excludes the workspace from generic worktree retention.",
+            "required": [
+              "runId",
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "workflow"
+                ]
+              },
+              "runId": {
+                "type": "string"
               }
             }
           }
