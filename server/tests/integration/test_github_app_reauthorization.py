@@ -14,7 +14,10 @@ from proliferate.integrations.github.app_user_tokens import GitHubAppUserAuthori
 from proliferate.server.cloud.github_app import repo_authority
 from proliferate.server.cloud.materialization import runner as materialization_runner
 from proliferate.server.cloud.materialization.materialize import github_credentials
-from tests.integration.cloud_api_helpers import register_and_login
+from tests.integration.cloud_api_helpers import (
+    configure_github_app_runtime,
+    register_and_login,
+)
 
 
 async def _seed_expired_authorization(
@@ -108,6 +111,7 @@ async def test_authority_endpoint_returns_actionable_response_and_persists_reaut
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    configure_github_app_runtime(monkeypatch)
     session = await register_and_login(
         client,
         f"github-authority-reauth-{uuid4().hex[:8]}@example.com",
