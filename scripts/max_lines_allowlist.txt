@@ -9,8 +9,9 @@
 
 anyharness/crates/anyharness-contract/src/v1/events.rs 1092 existing AnyHarness contract oversized file
 anyharness/crates/anyharness-contract/src/v1/sessions.rs 767 existing AnyHarness contract oversized file
-anyharness/crates/anyharness-lib/src/api/openapi.rs 656 existing AnyHarness oversized file (+hosting schema registration, +agent-auth state response, +gateway catalog endpoints) + enriched gateway-models schema fields (model-table §1) + workflow-runs paths/schemas
+anyharness/crates/anyharness-lib/src/api/openapi.rs 670 existing AnyHarness oversized file (+hosting schema registration, +agent-auth state response, +gateway catalog endpoints) + enriched gateway-models schema fields (model-table §1) + workflow-runs paths/schemas + local materialization operations paths/schemas
 anyharness/crates/anyharness-lib/src/api/router_tests.rs 1364 existing AnyHarness oversized test file (+hosting PR-status route tests, +catalog version + enrichment tests)
+anyharness/crates/anyharness-lib/src/domains/materialization/service.rs 625 local materialization domain service (exact-ref workspace materialization + repo-root acquisition orchestration, in-process keyed operation-lock admission, idempotent replay/failure recording; blocking git mechanics split into acquire.rs) — split into service/ on next growth per guides/domains.md
 anyharness/crates/anyharness-lib/src/domains/workflows/service.rs 664 workflow durable rules (+run-control cancel-intent use case and helpers); split into service/ on next growth per guides/domains.md
 anyharness/crates/anyharness-lib/src/domains/workflows/service_tests.rs 1307 workflow-runs merge-gated domain suite (+run-control stateVersion progression, four-outcome cancel intent at every boundary, first-terminal-wins, interrupted fencing)
 anyharness/crates/anyharness-lib/src/api/workflow_runs_tests.rs 1819 workflow-runs HTTP + runtime/extension crossing suite (+run-control cancel matrix, wire pinning, dropped-cancel handoff, cancel/execution race, interrupted fencing, PROOF-01 battery: effort-window cancel, deterministic dispatch-vs-cancel orders, missing-actor recovery, post-commit read-failure intent)
@@ -54,8 +55,8 @@ apps/packages/product-client/src/lib/domain/workspaces/cloud/logical-workspaces.
 apps/packages/product-client/src/lib/domain/workspaces/sidebar/sidebar.test.ts 691 workspace git-status threading extends existing oversized test file
 apps/packages/product-client/src/lib/domain/workspaces/sidebar/sidebar-indicators.test.ts 648 existing desktop oversized test file
 apps/packages/product-client/src/lib/infra/measurement/measurement-port.ts 734 product-owned measurement port barrel (R1 ruling) mirroring the retained measurement surface through a swappable no-op sink; split deferred
-anyharness/crates/anyharness-lib/src/api/router.rs 613 AnyHarness router (+goals/loops/activity/feed routes, +gateway catalog version route, +workflow-runs route, +workflow-run cancel route)
-anyharness/crates/anyharness-lib/src/app/mod.rs 625 AnyHarness app wiring (+goal/loop/activity/feed services, +two-phase workflow-run wiring calls into app/workflows.rs)
+anyharness/crates/anyharness-lib/src/api/router.rs 621 AnyHarness router (+goals/loops/activity/feed routes, +gateway catalog version route, +workflow-runs route, +workflow-run cancel route, +local materialization operations routes)
+anyharness/crates/anyharness-lib/src/app/mod.rs 636 AnyHarness app wiring (+goal/loop/activity/feed services, +two-phase workflow-run wiring calls into app/workflows.rs, +local materialization service wiring)
 anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs 861 loops runtime — native write path + emulated Codex scheduler
 anyharness/crates/anyharness-lib/src/live/sessions/actor/startup.rs 686 session startup (+goal/loop capability parsing, roster reconcile-on-attach)
 server/tests/integration/test_organizations_api.py 624 added admin-only coverage for GET .../invitations

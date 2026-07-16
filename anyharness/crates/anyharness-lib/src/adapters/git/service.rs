@@ -3,8 +3,9 @@ use std::time::Duration;
 
 use super::default_branch;
 use super::executor::resolve_git_repo_root;
+pub use super::operations::clone::CloneError;
 use super::operations::{
-    branches, commit, commit_all, diff, diff_files, push, revert_patches, staging, status,
+    branches, clone, commit, commit_all, diff, diff_files, push, revert_patches, staging, status,
     status_summary, worktrees,
 };
 use super::types::{
@@ -94,6 +95,12 @@ impl GitService {
         base_branch: Option<&str>,
     ) -> anyhow::Result<()> {
         worktrees::create_detached_worktree(source_repo_root, target_path, base_branch)
+    }
+
+    /// Clone `clone_url` into `target_path` using the ambient local Git
+    /// credential chain. Auth failures are classified as `CloneError::AuthRequired`.
+    pub fn clone_repository(clone_url: &str, target_path: &str) -> Result<(), CloneError> {
+        clone::clone_repository(clone_url, target_path)
     }
 
     pub fn create_worktree_at_ref(

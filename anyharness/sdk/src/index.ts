@@ -87,6 +87,15 @@ export type {
   PrepareRepoRootMobilityDestinationResponse,
   GitBranchRef as RepoRootGitBranchRef,
   DetectProjectSetupResponse as RepoRootDetectProjectSetupResponse,
+  RepositoryProvider,
+  MaterializeRepositoryTarget,
+  RepoRootMaterializationMode,
+  RepoRootMaterializationOutcome,
+  MaterializeRepoRootRequest,
+  MaterializeRepoRootResponse,
+  WorkspaceMaterializationOutcome,
+  MaterializeWorkspaceAtRefRequest,
+  MaterializeWorkspaceAtRefResponse,
 } from "./types/repo-roots.js";
 
 export type {
