@@ -207,6 +207,26 @@ async def get_active_local_materialization(
     return cloud_workspace_materialization_value(row) if row is not None else None
 
 
+async def get_active_local_materialization_by_runtime(
+    db: AsyncSession,
+    *,
+    desktop_install_id: str,
+    anyharness_workspace_id: str,
+    lock_row: bool = False,
+) -> CloudWorkspaceMaterializationValue | None:
+    """Find the active Cloud association owning one installation/runtime pair."""
+    stmt = select(CloudWorkspaceMaterialization).where(
+        CloudWorkspaceMaterialization.target_kind == "local_desktop",
+        CloudWorkspaceMaterialization.desktop_install_id == desktop_install_id,
+        CloudWorkspaceMaterialization.anyharness_workspace_id == anyharness_workspace_id,
+        CloudWorkspaceMaterialization.unlinked_at.is_(None),
+    )
+    if lock_row:
+        stmt = stmt.with_for_update()
+    row = (await db.execute(stmt)).scalar_one_or_none()
+    return cloud_workspace_materialization_value(row) if row is not None else None
+
+
 async def insert_managed_cloud_materialization(
     db: AsyncSession,
     *,

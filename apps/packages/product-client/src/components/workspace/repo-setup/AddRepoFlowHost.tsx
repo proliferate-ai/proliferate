@@ -187,29 +187,33 @@ export function AddRepoFlowHost() {
     onEnvironmentAdded: () => {},
   });
 
+  const beginCloneForRepoId = useCallback((repoId: string) => {
+    const identity = parseGitRepoId(repoId);
+    if (!identity) {
+      setFlowError("That repository id is not a supported GitHub owner/name.");
+      return;
+    }
+    setFlowError(null);
+    handoffToCloud();
+    beginCloudIntent({
+      kind: "clone_from_github",
+      repo: {
+        gitProvider: "github",
+        gitOwner: identity.gitOwner,
+        gitRepoName: identity.gitRepoName,
+      },
+    });
+  }, [beginCloudIntent, handoffToCloud]);
+
   const clonePicker = useMemo<CloudRepoPickerProps>(() => ({
     ...clonePickerBase,
-    onAddRepository: (repo) => {
-      const identity = parseGitRepoId(repo.id);
-      if (!identity) {
-        setFlowError("That repository id is not a supported GitHub owner/name.");
-        return;
-      }
-      setFlowError(null);
-      handoffToCloud();
-      beginCloudIntent({
-        kind: "clone_from_github",
-        repo: {
-          gitProvider: "github",
-          gitOwner: identity.gitOwner,
-          gitRepoName: identity.gitRepoName,
-        },
-      });
-    },
+    onAddRepository: (repo) => beginCloneForRepoId(repo.id),
+    // Manual owner/repo entry is the same clone intent as catalog selection;
+    // never inherit useAddCloudEnvironment's managed-Cloud save callback.
+    onAddManual: () => beginCloneForRepoId(clonePickerBase.manualValue),
   }), [
-    beginCloudIntent,
+    beginCloneForRepoId,
     clonePickerBase,
-    handoffToCloud,
   ]);
 
   const handlePickOption = useCallback((option: AddRepoFlowOption) => {

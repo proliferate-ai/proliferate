@@ -170,12 +170,6 @@ export function resolveWorkspaceAvailabilityCommands(
   const linkedLocal = localMaterializationForInstall(input.cloudWorkspace, input.desktopInstallId);
   const isExplicitlyLinked = linkedLocal !== null;
 
-  // Cloud-only: no local copy on this install and no explicit link → offer to
-  // open a copy on this Mac.
-  if (input.cloudWorkspace && !input.hasLocalWorkspace && !isExplicitlyLinked) {
-    return [{ kind: "open-on-this-mac", label: "Open on this Mac…" }];
-  }
-
   // Explicitly linked: the linked local copy may be healthy or need repair.
   if (isExplicitlyLinked) {
     if (input.localMaterializationNeedsRepair || !input.hasLocalWorkspace) {
@@ -188,9 +182,17 @@ export function resolveWorkspaceAvailabilityCommands(
     return [{ kind: "unlink-this-mac", label: "Unlink this Mac…" }];
   }
 
-  // Local + unlinked Cloud that match the same exact ref → offer to link.
-  if (input.hasLocalWorkspace && input.cloudWorkspace && input.linkCandidate) {
+  // An unlinked Cloud slot with an independently enumerated same-repo/branch
+  // local candidate offers association-only linking. Explicit ledger-backed
+  // projection keeps those copies in separate logical slots until confirmed,
+  // so this does not require `hasLocalWorkspace` on the Cloud slot itself.
+  if (input.cloudWorkspace && input.linkCandidate) {
     return [{ kind: "link-copies", label: "Link copies…" }];
+  }
+
+  // Cloud-only: no local candidate and no explicit link → offer to materialize.
+  if (input.cloudWorkspace && !input.hasLocalWorkspace && !isExplicitlyLinked) {
+    return [{ kind: "open-on-this-mac", label: "Open on this Mac…" }];
   }
 
   // Local only (no Cloud copy) → offer to add a managed-Cloud copy.

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
-import { collectLinkCandidates } from "#product/lib/domain/workspaces/cloud/link-copies-candidates";
+import {
+  collectLinkCandidates,
+  linkedCloudWorkspaceByAnyharnessId,
+} from "#product/lib/domain/workspaces/cloud/link-copies-candidates";
+import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
 
 function root(overrides: Partial<RepoRoot> = {}): RepoRoot {
   return {
@@ -101,5 +105,35 @@ describe("collectLinkCandidates", () => {
         cloudBranch: "feat/x",
       }),
     ).toHaveLength(0);
+  });
+});
+
+describe("linkedCloudWorkspaceByAnyharnessId", () => {
+  it("indexes every active association across Cloud workspaces, including missing rows", () => {
+    const cloudWorkspaces = [
+      {
+        id: "cloud-a",
+        materializations: [{
+          targetKind: "local_desktop",
+          anyharnessWorkspaceId: "ws-linked-elsewhere",
+          state: "hydrated",
+        }],
+      },
+      {
+        id: "cloud-b",
+        materializations: [{
+          targetKind: "local_desktop",
+          anyharnessWorkspaceId: "ws-missing",
+          state: "missing",
+        }],
+      },
+    ] as unknown as CloudWorkspaceSummary[];
+
+    expect(linkedCloudWorkspaceByAnyharnessId(cloudWorkspaces)).toEqual(
+      new Map([
+        ["ws-linked-elsewhere", "cloud-a"],
+        ["ws-missing", "cloud-b"],
+      ]),
+    );
   });
 });

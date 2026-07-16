@@ -48,6 +48,7 @@ from proliferate.server.cloud.workspaces.materializations.summaries import (
     operation_id_for,
 )
 from proliferate.server.cloud.workspaces.models import (
+    CreateCloudWorkspaceSourceMaterialization,
     CreateMaterializationIntentRequest,
     MaterializationIntentResponse,
     MaterializationIntentSource,
@@ -55,6 +56,52 @@ from proliferate.server.cloud.workspaces.models import (
     ReportMaterializationRequest,
     WorkspaceMaterializationSummary,
 )
+
+
+async def validate_cloud_copy_local_source(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    source: CreateCloudWorkspaceSourceMaterialization,
+    expected_head_sha: str,
+) -> tuple[str, str, str]:
+    """Validate and reserve-safe-check the local source before Cloud effects.
+
+    The descriptor never establishes the GitHub ref (the authorized branch read
+    does that), but its own observed SHA must agree, the install must be owned
+    and online, and the runtime may not already belong to another active Cloud
+    workspace. The insert still enforces the unique index for concurrent races.
+    """
+    install_id = source.desktop_install_id.strip()
+    workspace_id = source.anyharness_workspace_id.strip()
+    worktree_path = source.worktree_path.strip()
+    observed_head_sha = source.observed_head_sha.strip()
+    if not install_id or not workspace_id or not worktree_path:
+        raise CloudApiError(
+            "invalid_source_materialization",
+            "The local source workspace identity is incomplete.",
+            status_code=400,
+        )
+    if observed_head_sha != expected_head_sha:
+        raise CloudApiError(
+            "materialization_source_blocked",
+            "The local workspace is not at the requested published commit.",
+            status_code=409,
+        )
+    await _require_owned_install(db, user_id=user_id, desktop_install_id=install_id)
+    existing = await materialization_store.get_active_local_materialization_by_runtime(
+        db,
+        desktop_install_id=install_id,
+        anyharness_workspace_id=workspace_id,
+        lock_row=True,
+    )
+    if existing is not None:
+        raise CloudApiError(
+            "local_materialization_already_linked",
+            "This local workspace is already linked to another Cloud workspace.",
+            status_code=409,
+        )
+    return install_id, workspace_id, worktree_path
 
 
 async def _load_user_workspace(

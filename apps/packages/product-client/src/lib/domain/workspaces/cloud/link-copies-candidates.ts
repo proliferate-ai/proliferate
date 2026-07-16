@@ -6,6 +6,7 @@ import {
 import {
   workspaceBranchKey,
 } from "#product/lib/domain/workspaces/cloud/logical-workspace-source";
+import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
 
 /** A plausible local workspace the user might link to the Cloud copy. Exact
  * linkability (clean state, exact HEAD) is proven per-candidate at action time
@@ -19,6 +20,26 @@ export interface LinkCandidate {
   provider: string;
   owner: string;
   repoName: string;
+}
+
+/** Index every active visible local association on this installation. The
+ * server redacts other-install runtime ids, so every id present here is safe to
+ * compare and proves that a candidate is already owned by a Cloud workspace. */
+export function linkedCloudWorkspaceByAnyharnessId(
+  cloudWorkspaces: readonly CloudWorkspaceSummary[],
+): Map<string, string> {
+  const result = new Map<string, string>();
+  for (const cloudWorkspace of cloudWorkspaces) {
+    for (const row of cloudWorkspace.materializations ?? []) {
+      if (
+        row.targetKind === "local_desktop"
+        && row.anyharnessWorkspaceId
+      ) {
+        result.set(row.anyharnessWorkspaceId, cloudWorkspace.id);
+      }
+    }
+  }
+  return result;
 }
 
 /**

@@ -17,6 +17,7 @@ import { useStandardRepoProjection } from "#product/hooks/workspaces/derived/use
 import { useWorkspaceAvailabilityActions } from "#product/hooks/workspaces/workflows/use-workspace-availability-actions";
 import {
   collectLinkCandidates,
+  linkedCloudWorkspaceByAnyharnessId,
   type LinkCandidate,
 } from "#product/lib/domain/workspaces/cloud/link-copies-candidates";
 import { useWorkspaceAvailabilityIntentStore } from "#product/stores/cloud/workspace-availability-intent-store";
@@ -46,6 +47,14 @@ export function WorkspaceAvailabilityActionHost() {
   // The chosen link candidate, once the user has picked one (or when there is
   // exactly one plausible candidate). Null means "not yet chosen".
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
+  const linkedCloudWorkspaceByLocalId = useMemo(
+    () => linkedCloudWorkspaceByAnyharnessId(
+      logicalWorkspaces.flatMap((workspace) => (
+        workspace.cloudWorkspace ? [workspace.cloudWorkspace] : []
+      )),
+    ),
+    [logicalWorkspaces],
+  );
 
   // Resolve an existing local repo root that already hosts the Cloud repo, so
   // Open-on-Mac reuses a clone instead of prompting for a fresh one.
@@ -66,19 +75,14 @@ export function WorkspaceAvailabilityActionHost() {
     if (!intent || intent.kind !== "link_copies" || !cloudWorkspace?.repo) {
       return [];
     }
-    const alreadyLinked = new Set(
-      (cloudWorkspace.materializations ?? [])
-        .filter((m) => m.targetKind === "local_desktop" && m.anyharnessWorkspaceId)
-        .map((m) => m.anyharnessWorkspaceId!),
-    );
     return collectLinkCandidates({
       localWorkspaces,
       repoRoots,
       cloudRepo: cloudWorkspace.repo,
       cloudBranch: cloudWorkspace.repo.branch,
-      alreadyLinkedAnyharnessIds: alreadyLinked,
+      alreadyLinkedAnyharnessIds: new Set(linkedCloudWorkspaceByLocalId.keys()),
     });
-  }, [cloudWorkspace, intent, localWorkspaces, repoRoots]);
+  }, [cloudWorkspace, intent, linkedCloudWorkspaceByLocalId, localWorkspaces, repoRoots]);
 
   const existingRepoRootId = useMemo(() => {
     const repo = cloudWorkspace?.repo;
@@ -135,10 +139,6 @@ export function WorkspaceAvailabilityActionHost() {
     const managed = (cloudWorkspace.materializations ?? []).find(
       (m) => m.targetKind === "managed_cloud",
     );
-    const alreadyLinkedRow = (cloudWorkspace.materializations ?? []).find(
-      (m) => m.targetKind === "local_desktop"
-        && m.anyharnessWorkspaceId === candidate.anyharnessWorkspaceId,
-    );
     setBusy(true);
     const ok = await linkCopies({
       candidate,
@@ -152,13 +152,14 @@ export function WorkspaceAvailabilityActionHost() {
         // (observed head), which the server also independently re-verifies.
         headSha: managed?.observedHeadSha ?? managed?.expectedHeadSha ?? null,
       },
-      alreadyLinkedCloudWorkspaceId: alreadyLinkedRow ? cloudWorkspace.id : null,
+      alreadyLinkedCloudWorkspaceId:
+        linkedCloudWorkspaceByLocalId.get(candidate.anyharnessWorkspaceId) ?? null,
     });
     setBusy(false);
     if (ok) {
       closeIntent();
     }
-  }, [closeIntent, cloudWorkspace, linkCopies]);
+  }, [closeIntent, cloudWorkspace, linkCopies, linkedCloudWorkspaceByLocalId]);
 
   if (!intent) {
     return null;

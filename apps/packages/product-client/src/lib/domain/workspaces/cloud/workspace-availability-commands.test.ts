@@ -40,6 +40,19 @@ function kinds(input: WorkspaceAvailabilityInput): string[] {
 }
 
 describe("resolveWorkspaceAvailabilityCommands", () => {
+  it("offers Link copies from the separate ledger-backed Cloud slot", () => {
+    expect(resolveWorkspaceAvailabilityCommands({
+      hasLocalWorkspace: false,
+      cloudWorkspace: { materializations: [{
+        id: "managed",
+        targetKind: "managed_cloud",
+      }] as never },
+      desktopInstallId: "install-1",
+      linkCandidate: true,
+      localMaterializationNeedsRepair: false,
+      unsupportedGitBlocker: null,
+    }).map((command) => command.kind)).toEqual(["link-copies"]);
+  });
   it("offers Add Cloud copy for a local-only workspace", () => {
     expect(
       kinds({ hasLocalWorkspace: true, cloudWorkspace: null, desktopInstallId: "mac-a" }),

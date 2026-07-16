@@ -48,6 +48,9 @@ from proliferate.server.cloud.materialization.materialize.repo_environment impor
 from proliferate.server.cloud.repos.domain.github_credentials import CloudRepoGitHubCredentials
 from proliferate.server.cloud.repos.service import get_repo_branches_for_credentials
 from proliferate.server.cloud.workspaces.domain.origin import resolve_workspace_origin_entrypoint
+from proliferate.server.cloud.workspaces.materializations.service import (
+    validate_cloud_copy_local_source,
+)
 from proliferate.server.cloud.workspaces.materializations.summaries import (
     materialization_summary,
     select_primary,
@@ -58,6 +61,7 @@ from proliferate.server.cloud.workspaces.models import (
     CloudWorkspaceRuntimeStatusResponse,
     CloudWorkspaceStatus,
     CreateCloudWorkspaceRequest,
+    CreateCloudWorkspaceSourceMaterialization,
     RepoRef,
     WorkspaceDetail,
     WorkspaceRuntimeSummary,
@@ -403,18 +407,9 @@ async def _create_cloud_workspace_at_exact_ref(
     repo_branches: object,
     display_name: str | None,
     source: str,
-    source_materialization: object,
+    source_materialization: CreateCloudWorkspaceSourceMaterialization | None,
 ) -> WorkspaceDetail:
-    """Create a managed-Cloud workspace at an exact published branch head.
-
-    The branch must be an existing GitHub branch whose authorized head equals
-    ``expected_head_sha`` (server-verified — the client descriptor is never
-    trusted for the ref). The managed Cloud AnyHarness workspace is materialized
-    at that exact commit through PR 3's exact-ref endpoint, then the durable
-    CloudWorkspace + managed materialization are written, and — when a local
-    source descriptor is supplied — the local materialization association is
-    recorded as already hydrated in the same transaction.
-    """
+    """Create managed Cloud and optional owned-local rows at one verified ref."""
     branches = getattr(repo_branches, "branches", [])
     branch_heads = getattr(repo_branches, "branch_heads_by_name", {}) or {}
     if branch_name not in branches:
@@ -436,6 +431,17 @@ async def _create_cloud_workspace_at_exact_ref(
             "The local workspace has commits that are not published on GitHub.",
             status_code=409,
         )
+
+    local_source = (
+        await validate_cloud_copy_local_source(
+            db,
+            user_id=user.id,
+            source=source_materialization,
+            expected_head_sha=expected_head_sha,
+        )
+        if source_materialization is not None
+        else None
+    )
 
     active_workspace_branches = (
         await cloud_workspace_store.list_active_workspace_branches_for_repo_environment(
@@ -504,6 +510,28 @@ async def _create_cloud_workspace_at_exact_ref(
             status_code=409,
         )
 
+    # Reserve the local association before remote materialization. This makes a
+    # uniqueness conflict fail closed instead of returning a misleading Cloud
+    # success after the managed checkout was created (PR5-CLOUD-16).
+    if local_source is not None:
+        install_id, local_workspace_id, worktree_path = local_source
+        local_row = await materialization_store.insert_hydrated_local_desktop_materialization(
+            db,
+            cloud_workspace_id=workspace.id,
+            desktop_install_id=install_id,
+            anyharness_workspace_id=local_workspace_id,
+            worktree_path=worktree_path,
+            expected_head_sha=expected_head_sha,
+            observed_head_sha=expected_head_sha,
+            observed_branch=branch_name,
+        )
+        if local_row is None:
+            raise CloudApiError(
+                "local_materialization_already_linked",
+                "This local workspace is already linked to another Cloud workspace.",
+                status_code=409,
+            )
+
     runtime_url, runtime_token, _data_key = await _load_ready_runtime_access(db, user_id=user.id)
     repo_path = materialization_paths.repo_path(repo_environment)
     repo_root = await _resolve_repo_root(runtime_url, runtime_token, repo_path=repo_path)
@@ -533,35 +561,6 @@ async def _create_cloud_workspace_at_exact_ref(
         observed_branch=branch_name,
     )
 
-    # Record the local source association (already hydrated) when the caller
-    # named its local workspace. Best-effort: a race with a concurrent link
-    # leaves the managed copy intact; the association can be retried via intent.
-    if source_materialization is not None:
-        install_id = getattr(source_materialization, "desktop_install_id", "").strip()
-        worker = (
-            await runtime_workers_store.get_active_desktop_worker_for_user(
-                db,
-                owner_user_id=user.id,
-                desktop_install_id=install_id,
-            )
-            if install_id
-            else None
-        )
-        if worker is not None:
-            await materialization_store.insert_hydrated_local_desktop_materialization(
-                db,
-                cloud_workspace_id=workspace.id,
-                desktop_install_id=install_id,
-                anyharness_workspace_id=getattr(
-                    source_materialization, "anyharness_workspace_id", ""
-                ),
-                worktree_path=getattr(source_materialization, "worktree_path", ""),
-                expected_head_sha=expected_head_sha,
-                observed_head_sha=getattr(
-                    source_materialization, "observed_head_sha", expected_head_sha
-                ),
-                observed_branch=branch_name,
-            )
     return await _workspace_payload(db, workspace, detail=True)
 
 

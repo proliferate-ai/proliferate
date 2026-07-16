@@ -24,6 +24,8 @@ const capabilities = vi.hoisted(() => ({
 const auth = vi.hoisted(() => ({ status: "authenticated" as string }));
 const cloudHook = vi.hoisted(() => ({
   onRepositorySelected: null as null | ((repo: { gitOwner: string; gitRepoName: string }) => void),
+  legacyManual: vi.fn(),
+  clonePicker: null as CloudRepoPickerProps | null,
 }));
 
 // The OLD prerequisite-model blocker useAddCloudEnvironment produces: a
@@ -48,16 +50,18 @@ vi.mock("@proliferate/product-surfaces/settings/cloud-environments/use-add-cloud
   useAddCloudEnvironment: (input: {
     onRepositorySelected?: (repo: { gitOwner: string; gitRepoName: string }) => void;
   }): CloudRepoPickerProps => {
-    cloudHook.onRepositorySelected = input.onRepositorySelected ?? null;
+    if (input.onRepositorySelected) {
+      cloudHook.onRepositorySelected = input.onRepositorySelected;
+    }
     return {
       query: "",
-      manualValue: "",
+      manualValue: "acme/manual-clone",
       repositories: [],
       blocker: OLD_PREREQ_BLOCKER,
       onQueryChange: vi.fn(),
       onManualValueChange: vi.fn(),
       onAddRepository: vi.fn(),
-      onAddManual: vi.fn(),
+      onAddManual: cloudHook.legacyManual,
       onLoadMore: vi.fn(),
     };
   },
@@ -96,6 +100,7 @@ vi.mock("react-router-dom", () => ({ useNavigate: () => vi.fn() }));
 vi.mock("@proliferate/product-ui/repos/AddRepoFlow", () => ({
   AddRepoFlow: ({ step, cloudPicker, clonePicker }: AddRepoFlowProps) => {
     const picker = step.kind === "clone" ? clonePicker : cloudPicker;
+    cloudHook.clonePicker = clonePicker ?? null;
     return <div>{picker?.blocker ? `blocker:${picker.blocker.title}` : "no-blocker"}</div>;
   },
 }));
@@ -109,6 +114,8 @@ afterEach(() => {
   };
   auth.status = "authenticated";
   cloudHook.onRepositorySelected = null;
+  cloudHook.clonePicker = null;
+  cloudHook.legacyManual.mockClear();
   useAddRepoFlowStore.setState({ open: false, step: { kind: "entry" }, onCompleted: null });
   useCloudRepositoryIntentStore.setState({ activeIntent: null });
 });
@@ -219,5 +226,22 @@ describe("AddRepoFlowHost cloud gating (PR2-GATING-01)", () => {
 
     expect(screen.getByText(/^blocker:GitHub repository access is not configured$/)).toBeTruthy();
     expect(screen.queryByText(/blocker:Authorize GitHub App/)).toBeNull();
+  });
+
+  it("routes manual owner/repo entry to the clone intent, never Cloud setup", () => {
+    render(<AddRepoFlowHost />);
+    openCloneStep();
+
+    act(() => cloudHook.clonePicker?.onAddManual());
+
+    expect(cloudHook.legacyManual).not.toHaveBeenCalled();
+    expect(useCloudRepositoryIntentStore.getState().activeIntent).toEqual({
+      kind: "clone_from_github",
+      repo: {
+        gitProvider: "github",
+        gitOwner: "acme",
+        gitRepoName: "manual-clone",
+      },
+    });
   });
 });

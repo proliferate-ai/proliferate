@@ -30,6 +30,7 @@ import {
   deriveWorkspaceAvailabilityInput,
   resolveWorkspaceAvailabilityCommands,
 } from "#product/lib/domain/workspaces/cloud/workspace-availability-commands";
+import { canonicalRepoKey } from "@proliferate/product-domain/repos/repo-id";
 
 export interface SidebarWorkspaceItemWithWorkspace {
   workspace: LogicalWorkspace;
@@ -59,8 +60,12 @@ export function buildSidebarWorkspaceItems(args: {
    * workspace-copy availability commands. Null on Web / no worker. */
   desktopInstallId?: string | null;
 }): SidebarWorkspaceItemState[] {
+  const linkCandidateCloudWorkspaceIds = collectCloudWorkspaceLinkCandidates(
+    args.workspaces,
+    args.desktopInstallId ?? null,
+  );
   const workspaceItemsWithWorkspace = args.workspaces.map((entry) =>
-    buildSidebarWorkspaceItem(entry, args)
+    buildSidebarWorkspaceItem(entry, { ...args, linkCandidateCloudWorkspaceIds })
   );
 
   return applyDuplicateLocalNameSuffixes(
@@ -71,6 +76,43 @@ export function buildSidebarWorkspaceItems(args: {
       )
       : workspaceItemsWithWorkspace,
   );
+}
+
+/** Cloud ledger rows intentionally keep an unlinked Cloud workspace in its own
+ * logical slot. Find same-repository, same-case-sensitive-branch local slots
+ * across the whole projection so that production-shaped managed rows can still
+ * offer the explicit Link copies action (PR5-LINK-10). */
+export function collectCloudWorkspaceLinkCandidates(
+  workspaces: LogicalWorkspace[],
+  desktopInstallId: string | null,
+): Set<string> {
+  const localSlots = workspaces.filter((workspace) => workspace.localWorkspace !== null);
+  const result = new Set<string>();
+  for (const cloudSlot of workspaces) {
+    const cloud = cloudSlot.cloudWorkspace;
+    if (!cloud || cloudSlot.localWorkspace) continue;
+    const alreadyLinked = desktopInstallId
+      ? (cloud.materializations ?? []).some(
+        (row) => row.targetKind === "local_desktop"
+          && row.desktopInstallId === desktopInstallId,
+      )
+      : false;
+    if (alreadyLinked || !cloudSlot.provider || !cloudSlot.owner || !cloudSlot.repoName) continue;
+    const cloudRepoKey = canonicalRepoKey(
+      cloudSlot.provider,
+      cloudSlot.owner,
+      cloudSlot.repoName,
+    );
+    const matches = localSlots.some((localSlot) => (
+      localSlot.provider
+      && localSlot.owner
+      && localSlot.repoName
+      && canonicalRepoKey(localSlot.provider, localSlot.owner, localSlot.repoName) === cloudRepoKey
+      && localSlot.branchKey === cloudSlot.branchKey
+    ));
+    if (matches) result.add(cloud.id);
+  }
+  return result;
 }
 
 export function pendingOwnsLogicalWorkspace(
@@ -102,6 +144,7 @@ function buildSidebarWorkspaceItem(
     targetAppearanceById?: Record<string, ComputeTargetAppearance>;
     suppressActiveNeedsReview?: boolean;
     desktopInstallId?: string | null;
+    linkCandidateCloudWorkspaceIds: ReadonlySet<string>;
   },
 ): SidebarWorkspaceItemWithWorkspace {
   const active = logicalWorkspaceMatchesId(entry, args.selectedLogicalWorkspaceId);
@@ -165,12 +208,10 @@ function buildSidebarWorkspaceItem(
   const gitStatus = args.gitStatusesByLogicalId?.[entry.id] ?? null;
   const desktopInstallId = args.desktopInstallId ?? null;
   const cloudSummary = entry.cloudWorkspace;
-  const hasExplicitMaterializations = (cloudSummary?.materializations?.length ?? 0) > 0;
   const linkCandidate = Boolean(
     variant !== "ssh"
-    && preferredLocalWorkspace
     && cloudSummary
-    && !hasExplicitMaterializations,
+    && args.linkCandidateCloudWorkspaceIds.has(cloudSummary.id),
   );
   const availabilityCommands = variant === "ssh"
     ? []
