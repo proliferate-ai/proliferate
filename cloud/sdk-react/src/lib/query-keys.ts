@@ -384,6 +384,7 @@ export function cloudWorkspacesKey(
   owner: CloudOwnerSelectionKey = personalCloudOwnerKey(),
   scope: string | null = null,
   lifecycle: string | null = null,
+  desktopInstallId: string | null = null,
 ) {
   return [
     ...cloudWorkspacesListRootKey(),
@@ -391,6 +392,7 @@ export function cloudWorkspacesKey(
     owner.organizationId,
     scope,
     lifecycle,
+    desktopInstallId,
   ] as const;
 }
 
@@ -546,6 +548,11 @@ export function cloudTargetKey(targetId: string | null) {
   return [...cloudTargetsKey(), targetId] as const;
 }
 
-export function cloudWorkspaceKey(workspaceId: string | null) {
-  return [...cloudRootKey(), "workspaces", workspaceId] as const;
+export function cloudWorkspaceKey(
+  workspaceId: string | null,
+  desktopInstallId: string | null = null,
+) {
+  // desktopInstallId is a trailing element so that the install-agnostic
+  // cloudWorkspaceKey(workspaceId) still prefix-matches for invalidation.
+  return [...cloudRootKey(), "workspaces", workspaceId, desktopInstallId] as const;
 }
