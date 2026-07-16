@@ -19,6 +19,7 @@ anyharness/crates/anyharness-lib/src/api/http/agent_gateway_catalog.rs 632 gatew
 anyharness/crates/anyharness-lib/src/api/http/workspaces_lifecycle.rs 645 workspace retire lifecycle handlers (+PR1227-WORKSPACE-FENCE-01/02 under-exclusive-lease workflow-control re-check with admitted-set fail-closed membership + test-only proof seam module)
 anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.rs 665 workspace purge handlers (+2b fail-closed all-session admission, PR1227-WORKSPACE-FENCE-01/02 admitted-set carry + under-exclusive-lease re-check, test-only purge proof seam module)
 anyharness/crates/anyharness-lib/src/domains/workspaces/retention.rs 809 worktree retention sweep (+PR1227-RETENTION-FENCE-01 per-candidate permit-first admission + under-exclusive-lease FENCE-01/02 re-check + test-only retention proof seam module)
+anyharness/crates/anyharness-lib/src/api/session_admission_tests.rs 667 2b admission conflict-matrix + fail-closed purge/retire/mobility-export/destroy-source proofs + LOCK-01 permit-before-lease deadlock/source-order guards
 anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_resolver.rs 704 provider filtering + family normalizer (bedrock/date/version forms) with tests
 anyharness/crates/anyharness-lib/src/domains/agents/catalog/validation.rs 605 defaultAgentKind must name a declared agent (was already at 598)
 anyharness/crates/anyharness-lib/src/domains/agents/auth/context_tests.rs 645 classifier tests incl. gateway route activation + bedrock flag-only detection

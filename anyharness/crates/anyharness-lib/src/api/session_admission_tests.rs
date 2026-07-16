@@ -312,6 +312,67 @@ async fn purge_and_mobility_fail_closed_while_controlled() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn destroy_source_fails_closed_while_controlled() {
+    // PR1227-MOBILITY-DESTROY-01: destroy-source deletes every source session +
+    // materialization. With a workflow controlling a workspace session it must
+    // fail closed with the stable 409 before ANY effect — the session row and
+    // materialization survive. (Remove the admit/re-check fence and destroy-source
+    // 200s with the controlled session deleted.)
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = test_support::set_bearer_token_env(None);
+    let state = test_state();
+    let (_run_id, sid) = controlled_fixture(&state);
+
+    // destroy-source requires RemoteOwned mode; set it directly so the mode
+    // assert would pass and only the session-admission fence stands in the way.
+    state
+        .workspace_access_gate
+        .set_runtime_state(
+            WS,
+            crate::domains::workspaces::access_model::WorkspaceAccessMode::RemoteOwned,
+            None,
+        )
+        .expect("set remote_owned mode");
+
+    let (status, payload) = call(
+        &state,
+        "POST",
+        format!("/v1/workspaces/{WS}/mobility/destroy-source"),
+        Some(json!({})),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::CONFLICT,
+        "destroy-source must fail closed while a workflow controls a session (got {status}: {payload})"
+    );
+    assert_eq!(payload["code"], "SESSION_CONTROLLED_BY_WORKFLOW");
+
+    // No effect: the controlled session row survives.
+    assert!(
+        state
+            .session_service
+            .store()
+            .find_by_id(&sid)
+            .expect("find session")
+            .is_some(),
+        "destroy-source must not delete the workflow-controlled session"
+    );
+    // No effect: the workspace still exists.
+    assert!(
+        state
+            .workspace_runtime
+            .get_workspace(WS)
+            .expect("get workspace")
+            .is_some(),
+        "destroy-source must not destroy the workspace holding a controlled session"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn ordinary_sessions_keep_existing_behavior() {
     let _lock = test_support::ENV_MUTEX
         .get_or_init(|| Mutex::new(()))
@@ -595,5 +656,12 @@ fn every_dual_lock_handler_takes_the_permit_before_the_operation_lease() {
         "export_workspace_mobility_archive",
         "admit_all_workspace_sessions(",
         ".acquire_shared(",
+    );
+    // mobility destroy-source: admit-all before the exclusive workspace lease.
+    assert_admit_before_lease(
+        &format!("{http}/mobility.rs"),
+        "destroy_workspace_mobility_source",
+        "admit_all_workspace_sessions(",
+        ".acquire_exclusive(",
     );
 }

@@ -43,6 +43,7 @@ reviews::mark_review_revision_ready fenced review mutation against the run's par
 workspaces_purge::purge_workspace fenced fail-closed: holds sorted permits for every workspace session
 mobility::export_workspace_mobility_archive fenced fail-closed removal/detach: holds sorted permits for every workspace session
 workspaces_lifecycle::retire_workspace fenced fail-closed (RETIRE-01 ruling B): retirement can dematerialize a controlled session's workspace; holds sorted permits for every workspace session
+mobility::destroy_workspace_mobility_source fenced fail-closed (MOBILITY-DESTROY-01): destroy-source deletes every source session + materialization; holds sorted permits for every workspace session, exclusive-lease under-lease re-check
 
 # ── cosmetic (ruling 2: store-only, cannot affect actor execution) ──
 sessions_config::update_session_title cosmetic store-only title column write via service/title.rs
@@ -97,7 +98,6 @@ worktrees::run_worktree_retention workspace-scoped worktree hygiene
 worktrees::update_worktree_retention_policy workspace-scoped worktree hygiene
 mobility::update_workspace_mobility_runtime_state workspace-scoped mobility state toggle, no session removal
 mobility::install_workspace_mobility_archive workspace-scoped installs NEW sessions from an archive
-mobility::destroy_workspace_mobility_source workspace-scoped post-install source cleanup
 repo_roots::prepare_repo_root_mobility_destination workspace-scoped mobility destination preparation
 cowork::enable_cowork workspace-scoped cowork enablement
 agents::install_agent workspace-scoped agent installer

@@ -260,9 +260,27 @@ pub async fn destroy_workspace_mobility_source(
     Path(workspace_id): Path<String>,
     Json(_req): Json<DestroyWorkspaceMobilitySourceRequest>,
 ) -> Result<Json<DestroyWorkspaceMobilitySourceResponse>, ApiError> {
+    // PR1227-MOBILITY-DESTROY-01: destroy-source closes terminals, deletes EVERY
+    // source session and its artifacts, and destroys materialization, so a
+    // workflow-controlled session must fail closed exactly like purge/retire.
+    // Admit every workspace session up front (sorted permits held across the
+    // whole operation) BEFORE the operation lease, preserving the canonical
+    // `permit -> operation lease` order.
+    let admission =
+        admit_all_workspace_sessions(&state, &workspace_id, SessionMutationKind::Mobility).await?;
+    // PR1227-WORKSPACE-FENCE-02: carry the admitted id set into the under-lease
+    // re-check; the permits are held until this handler returns.
+    let admitted_session_ids = admission.session_ids.clone();
+    let _admission_permits = admission.permits;
+    // Take the EXCLUSIVE workspace lease (not the old shared MobilityWrite): the
+    // shared lease does not exclude the shared SessionStart lease every workflow
+    // session creation holds, so a fresh workflow session could bind in the
+    // window between the up-front snapshot and destruction. The exclusive lease
+    // excludes SessionStart, closing that late-session window. Nothing else
+    // relies on destroy-source running concurrently with other mobility ops.
     let _operation = state
         .workspace_operation_gate
-        .acquire_shared(&workspace_id, WorkspaceOperationKind::MobilityWrite)
+        .acquire_exclusive(&workspace_id)
         .await;
     assert_workspace_mode(
         &state,
@@ -270,6 +288,12 @@ pub async fn destroy_workspace_mobility_source(
         WorkspaceAccessMode::RemoteOwned,
         None,
     )?;
+    // PR1227-WORKSPACE-FENCE-01/02: under the exclusive lease, re-enumerate the
+    // workspace session set and fail closed before ANY effect if (02) a session
+    // id appeared after the up-front admitted snapshot, or (01) a nonterminal
+    // workflow controls a session. Read-only lookup + pure in-memory set
+    // comparison: no permit, no further lease — no ABBA edge.
+    reject_destroy_if_workflow_controlled(&state, &workspace_id, &admitted_session_ids).await?;
     let mobility_service = state.mobility_service.clone();
     let workspace_id_for_destroy = workspace_id.clone();
     let summary = run_blocking("mobility_destroy_source", move || {
@@ -284,6 +308,70 @@ pub async fn destroy_workspace_mobility_source(
         closed_terminal_ids: summary.closed_terminal_ids,
         source_destroyed: summary.source_destroyed,
     }))
+}
+
+/// PR1227-MOBILITY-DESTROY-01 / WORKSPACE-FENCE-01/02: called under the
+/// already-held EXCLUSIVE workspace lease. Re-enumerate the workspace session
+/// set and return the stable 409 if either (02) an enumerated session id is
+/// absent from `admitted_session_ids` — the ids the up-front admission
+/// snapshotted and holds permits for — even if its controlling workflow already
+/// terminalized (the bind->terminalize race), OR (01) a NONTERMINAL workflow
+/// controls a session created+bound inside the admission -> exclusive-lease
+/// window. FENCE-02 is checked first (pure in-memory set comparison); neither
+/// acquires a permit or lease, so neither adds an ABBA edge.
+async fn reject_destroy_if_workflow_controlled(
+    state: &AppState,
+    workspace_id: &str,
+    admitted_session_ids: &std::collections::BTreeSet<String>,
+) -> Result<(), ApiError> {
+    let session_ids = state
+        .session_service
+        .store()
+        .list_with_dismissed_by_workspace(workspace_id)
+        .map_err(|error| {
+            tracing::error!(workspace_id = %workspace_id, error = %error, "destroy-source re-check session list failed");
+            ApiError::internal("session list failed")
+        })?
+        .into_iter()
+        .map(|session| session.id)
+        .collect::<Vec<_>>();
+    if let Some(unadmitted) = session_ids
+        .iter()
+        .find(|id| !admitted_session_ids.contains(*id))
+    {
+        tracing::info!(
+            workspace_id = %workspace_id,
+            session_id = %unadmitted,
+            "mobility destroy-source rejected under exclusive lease: a session appeared after the destruction admission snapshot"
+        );
+        return Err(ApiError::conflict(
+            format!("session {unadmitted} appeared after destruction admission"),
+            "SESSION_CONTROLLED_BY_WORKFLOW",
+        ));
+    }
+    match state
+        .session_admission
+        .find_workflow_controlled_session(session_ids)
+        .await
+    {
+        Ok(None) => Ok(()),
+        Ok(Some((session_id, run_id))) => {
+            tracing::info!(
+                workspace_id = %workspace_id,
+                session_id = %session_id,
+                controlling_run_id = %run_id,
+                "mobility destroy-source rejected under exclusive lease: a workflow controls a session created after admission"
+            );
+            Err(ApiError::conflict(
+                "session execution is controlled by an active workflow run",
+                "SESSION_CONTROLLED_BY_WORKFLOW",
+            ))
+        }
+        Err(error) => {
+            tracing::error!(workspace_id = %workspace_id, error = %error, "destroy-source controlled-session re-check failed");
+            Err(ApiError::internal("session admission unavailable"))
+        }
+    }
 }
 
 fn map_access_error(error: WorkspaceAccessError) -> ApiError {
