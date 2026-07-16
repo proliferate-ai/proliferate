@@ -34,33 +34,36 @@ import { resolveSelfHostWorldInputs, type SelfHostWorldConstructionInputs } from
  * otherwise-green cell non-green.
  *
  * ── HONEST MECHANISM (fail-closed) ─────────────────────────────────────────
- * The contract requires switching authenticated Desktop-renderer product state
- * from server A to server B "through the shared host adapter", then asserting no
- * A credential/token/runtime-identity/workspace/session is visible on B. The
- * PR-3 candidate renderer is a plain WEB build: its API origin is baked at build
- * time into `VITE_PROLIFERATE_API_BASE_URL` and the only runtime override
- * (`runtimeApiBaseUrl`) is fed EXCLUSIVELY by a Tauri command
- * (`get_app_config`/`set_app_config`) that does not exist in the browser. The
- * shared `ProductDeploymentHost` therefore exposes `switchDeployment`/
- * `resetDeployment` ONLY when the Tauri runtime is present
- * (`createDesktopDeployment`); a web renderer's deployment host has NO
- * origin-switch capability at all, and even the Tauri path is a native
- * config-file rewrite + full process relaunch, not an in-page repoint.
- * Moreover the auth session lives in `localStorage` keyed by the RENDERER
- * origin, not the API origin, so product state is not partitioned by server
- * origin (the documented gap "Desktop auth/runtime state is not yet safely
- * partitioned by server origin").
+ * The contract requires switching authenticated renderer product state from
+ * server A to server B "through the shared host adapter", then asserting no A
+ * credential/token/runtime-identity/workspace/session is visible on B.
  *
- * Because the switch motion the contract measures does not exist in the web
- * candidate renderer, the production driver STOPS at that boundary and fails the
- * cell CLOSED with a bounded, secret-free reason naming the product gap
- * (SHR-F01). This is exactly the frozen contract's expectation: "This case is
- * fail-closed and currently expected to expose a product bug; that does not make
- * it optional." When the product gains a real web/runtime origin switch, the
- * green path (create A state → switch → assert isolation → emit
- * {@link buildSwitchIsolationEvidence}) drops into `runSwitchIsolation` and the
- * orchestration below already folds cleanup + emits the evidence unchanged (that
- * path is exercised offline by the green fake driver in the unit tests).
+ * As of #1229 (`refactor(web): replace legacy Web with the shared
+ * ProductClient`) the shared ProductClient owns the full connect-to-server switch
+ * state machine (`useConnectServer`), and the DESKTOP (Tauri)
+ * `ProductDeploymentHost` implements a working `switchDeployment`/
+ * `resetDeployment` (a `set_app_config` config rewrite + full process relaunch).
+ * The web auth session is now an HttpOnly refresh cookie plus an in-memory access
+ * token — cookies are already origin-partitioned, so the old "localStorage keyed
+ * by renderer origin" leak framing no longer applies. Hosted web is deliberately
+ * single-deployment (`useWebProductHost` returns `{ apiBaseUrl }` with no switch).
+ *
+ * The remaining honest gap is narrow: the qualification harness serves the
+ * candidate as a Tauri-less Chromium WEB renderer
+ * (`worlds/selfhost/world.ts` `serveRenderer` + `launchChromium`), whose web
+ * `ProductDeploymentHost` has no `switchDeployment`. So the A→B runtime switch —
+ * which works on real Desktop — cannot be exercised or observed in THIS renderer.
+ * The production driver STOPS at that boundary and fails the cell CLOSED with a
+ * bounded, secret-free reason (SHR-F01). This is exactly the frozen contract's
+ * expectation: "This case is fail-closed and currently expected to expose a
+ * product bug; that does not make it optional." Whether hosted web should gain
+ * multi-origin switching (reversing #1229's single-deployment web design) is a
+ * founder scope call, escalated rather than reversed inline. If a drivable
+ * web/renderer origin switch lands, the green path (create A state → switch →
+ * assert isolation → emit {@link buildSwitchIsolationEvidence}) drops into
+ * `runSwitchIsolation` and the orchestration below already folds cleanup + emits
+ * the evidence unchanged (that path is exercised offline by the green fake driver
+ * in the unit tests).
  *
  * Unit tests are OFFLINE: they inject a fake `SelfHostSwitchIsolationDriver` so
  * no real AWS/SSH/docker/network/anthropic is touched.
@@ -73,20 +76,43 @@ export const REPRESENTATIVE_HARNESS = "claude";
 export const SH_SWITCH_ISOLATION = "SH-SWITCH-ISOLATION";
 
 /**
- * The bounded, secret-free product-gap reason the production switch step fails
- * closed with (frozen contract SHR-F01, origin-scoped launch-option facts). No
- * credential, path, or raw URL — only the two safe API-origin hosts.
+ * The bounded, secret-free reason the production switch step fails closed with
+ * (frozen contract SHR-F01). No credential, path, or raw URL — only the two safe
+ * API-origin hosts.
+ *
+ * ── Reason updated post-#1229 (2026-07-15) ─────────────────────────────────
+ * #1229 (`refactor(web): replace legacy Web with the shared ProductClient`)
+ * reshaped this surface: the shared `ProductClient` now owns the full connect-to-
+ * server switch state machine (`useConnectServer`: entry → `/meta` → trust-
+ * confirm → switch/relaunch), the DESKTOP (Tauri) `ProductDeploymentHost` exposes
+ * a WORKING `switchDeployment`/`resetDeployment` (`setDesktopAppConfig` +
+ * `relaunch`), and the web auth session is now an HttpOnly refresh cookie plus an
+ * in-memory access token — NOT the localStorage-per-renderer-origin store the
+ * pre-#1229 finding described. Hosted web is deliberately single-deployment by
+ * that PR's design (`useWebProductHost` returns `{ apiBaseUrl }` with no switch).
+ *
+ * So the honest, current gap is NARROW: the switch motion the contract measures
+ * exists on Desktop but the QUALIFICATION harness serves the candidate as a
+ * Tauri-less Chromium web renderer (`worlds/selfhost/world.ts` `serveRenderer` +
+ * `launchChromium`), whose `ProductDeploymentHost` has no `switchDeployment`
+ * (hosted web is single-deployment by #1229's design). The cell therefore cannot
+ * exercise or observe an A→B runtime switch in this renderer and fails CLOSED —
+ * exactly the frozen contract's expectation ("fail-closed and currently expected
+ * to expose a product bug; that does not make it optional"). Whether hosted web
+ * SHOULD gain multi-origin switching is a founder scope call (it would reverse a
+ * decision #1229 settled), escalated rather than reversed inline.
  */
 export function switchUnavailableReason(serverAOrigin: string, serverBOrigin: string): string {
   return (
     `SH-SWITCH-ISOLATION [SHR-F01]: servers A (${serverAOrigin}) and B (${serverBOrigin}) are provisioned, ` +
-    `but the web candidate renderer cannot switch API origins at runtime, so the isolation contract's switch ` +
-    `motion cannot be performed or observed. The web ProductDeploymentHost exposes no switchDeployment/` +
-    `resetDeployment (createDesktopDeployment gates them on the Tauri runtime), the API origin is baked into ` +
-    `VITE_PROLIFERATE_API_BASE_URL at build time with the only runtime override sourced from the Tauri-only ` +
-    `set_app_config command, and the auth session is localStorage-scoped to the renderer origin rather than ` +
-    `partitioned by server origin. Failing closed: this is the documented origin-partition product gap, not a ` +
-    `harness defect.`
+    `but the isolation contract's runtime A→B origin switch cannot be exercised in this renderer. As of #1229 ` +
+    `the shared ProductClient owns the connect-to-server flow and the DESKTOP (Tauri) ProductDeploymentHost ` +
+    `implements switchDeployment/resetDeployment (set_app_config + relaunch), but the qualification harness serves ` +
+    `the candidate as a Tauri-less Chromium web renderer, and hosted web is single-deployment by design ` +
+    `(useWebProductHost exposes apiBaseUrl with no switchDeployment/resetDeployment). No web runtime origin ` +
+    `switch exists to drive, so the switch motion cannot be performed or observed here. Failing closed: this is ` +
+    `the honest capability boundary, not a harness defect. (The web session is an HttpOnly cookie + in-memory ` +
+    `token post-#1229, so the earlier "localStorage keyed by renderer origin" framing no longer applies.)`
   );
 }
 
@@ -168,19 +194,24 @@ export const defaultSelfHostSwitchIsolationDriver: SelfHostSwitchIsolationDriver
     }),
 
   async runSwitchIsolation(pair) {
-    // The contract's switch motion does not exist in the web candidate renderer
-    // (see the module doc). Fail closed at the boundary with a bounded,
-    // secret-free reason naming the product gap. The two boxes were really
-    // provisioned (so the origins below are real + distinct) and are still torn
-    // down by the orchestration's closeWorld calls after this returns.
+    // The contract's A→B runtime origin switch works on real Desktop (Tauri) as
+    // of #1229 but cannot be exercised in the harness's Tauri-less Chromium web
+    // renderer (hosted web is single-deployment by design — see the module doc).
+    // Fail closed at the boundary with a bounded, secret-free reason. The two
+    // boxes were really provisioned (so the origins below are real + distinct)
+    // and are still torn down by the orchestration's closeWorld calls after this
+    // returns.
     //
-    // TODO(product origin-switch): when a real web/runtime origin switch exists,
-    // replace this fail-closed return with: install + claim owner on A → store a
-    // BYOK provider credential + create one workspace/session on A → authenticate
-    // the renderer to A → drive the shared host adapter's switch to B → assert no
-    // A token/refresh/pending-auth/credential/runtime-identity/workspace/session
-    // is visible on B, B starts anonymous + authenticates independently, and
-    // reconnecting A restores only origin-scoped A state → then
+    // TODO(harness/product origin-switch): a green path needs a DRIVABLE renderer
+    // origin switch — either run the candidate under a real Tauri runtime (so the
+    // desktop switchDeployment + relaunch can be driven) or a founder decision to
+    // give hosted web multi-origin switching. Then replace this fail-closed
+    // return with: install + claim owner on A → store a BYOK provider credential +
+    // create one workspace/session on A → authenticate the renderer to A → drive
+    // the shared host adapter's switch to B → assert no A token/refresh/
+    // pending-auth/credential/runtime-identity/workspace/session is visible on B,
+    // B starts anonymous + authenticates independently, and reconnecting A
+    // restores only origin-scoped A state → then
     // `return { status: "green", evidence: buildSwitchIsolationEvidence(pair) }`.
     return {
       status: "failed",
