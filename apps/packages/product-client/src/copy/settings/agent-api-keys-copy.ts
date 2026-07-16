@@ -8,6 +8,10 @@ export const AGENT_API_KEYS_COPY = {
   emptyTitle: "No API keys yet",
   emptyDescription: "Add a key below to wire it into a harness later.",
   signInRequired: "Sign in to Proliferate Cloud to manage your API key vault.",
+  // Signed in, but the operator has not configured cloud compute — never a
+  // sign-in prompt to someone already signed in (PR2-GATING-01 class).
+  cloudNotConfigured:
+    "Cloud is not configured on this deployment. An operator must finish configuring it before the API key vault is available.",
   addSection: "Add key",
   addSectionDescription:
     "The value is stored encrypted and never displayed again after saving.",

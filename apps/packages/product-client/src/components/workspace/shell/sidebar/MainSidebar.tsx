@@ -29,6 +29,7 @@ import { CAPABILITY_COPY } from "#product/copy/capabilities/capability-copy";
 import { APP_ROUTES } from "#product/config/app-routes";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+import { useSidebarRepoAvailabilityActions } from "#product/hooks/workspaces/workflows/use-sidebar-repo-availability-actions";
 import { useCloudBilling } from "#product/hooks/cloud/facade/use-cloud-billing";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 import { useSidebarShortcutTargets } from "#product/hooks/workspaces/derived/use-sidebar-shortcut-targets";
@@ -70,6 +71,8 @@ export const MainSidebar = memo(function MainSidebar() {
   const {
     cloudActive,
     cloudUnavailable,
+    authStatus: cloudAuthStatus,
+    cloudComputeEnabled,
   } = useCloudAvailabilityState();
   const { data: billingPlan } = useCloudBilling();
   const {
@@ -264,12 +267,26 @@ export const MainSidebar = memo(function MainSidebar() {
     navigate(buildCloudRepoSettingsHref(target.gitOwner, target.gitRepoName));
   }, [navigate]);
 
+  const {
+    isDesktopHost,
+    managedCloudAvailable,
+    handleSetUpCloud,
+    handleAddToThisMac,
+  } = useSidebarRepoAvailabilityActions();
+
   const cloudWorkspaceBlocked = billingPlan?.billingMode === "enforce" && billingPlan.startBlocked;
+  // Truthful cause for a blocked cloud-workspace action: a signed-in user on a
+  // compute-unconfigured deployment sees the operator explanation, not a "sign
+  // in" tooltip they can't act on (PR2-GATING-01 class).
+  const cloudComputeUnconfiguredForSignedInUser =
+    cloudAuthStatus === "authenticated" && !cloudComputeEnabled;
   const cloudWorkspaceTooltip = cloudUnavailable
     ? CAPABILITY_COPY.cloudDisabledTooltip
     : cloudWorkspaceBlocked
       ? `${titleForStartBlockReason(billingPlan?.startBlockReason)}.`
-      : CAPABILITY_COPY.cloudSignInTooltip;
+      : cloudComputeUnconfiguredForSignedInUser
+        ? CAPABILITY_COPY.cloudNotConfiguredTooltip
+        : CAPABILITY_COPY.cloudSignInTooltip;
   const filtersActive = !isDefaultSidebarWorkspaceTypes(workspaceTypes);
   const sidebarShortcutLabelById = useMemo(
     () => buildShortcutRangeLabelById(sidebarShortcutTargetIds, SHORTCUTS.workspaceByIndex),
@@ -357,6 +374,11 @@ export const MainSidebar = memo(function MainSidebar() {
               onRenameWorkspace={handleRenameWorkspace}
               onRemoveRepo={handleRemoveRepo}
               onOpenRepoSettings={handleOpenRepoSettings}
+              isDesktopHost={isDesktopHost}
+              managedCloudAvailable={managedCloudAvailable}
+              onOpenCloudRepoSettingsForGroup={handleOpenCloudRepoSettings}
+              onSetUpCloudForGroup={handleSetUpCloud}
+              onAddToThisMac={handleAddToThisMac}
             />
           </DebugProfiler>
           <CoworkThreadsSection />

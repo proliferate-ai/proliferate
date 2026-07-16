@@ -54,6 +54,16 @@ interface SidebarWorkspaceContentProps {
   ) => Promise<unknown>;
   onRemoveRepo: (sourceRoot: string) => Promise<void>;
   onOpenRepoSettings: (sourceRoot: string) => void;
+  /** Desktop host + non-disabled managed Cloud → the `…` menu can offer Cloud
+   * setup/add-to-mac. */
+  isDesktopHost: boolean;
+  managedCloudAvailable: boolean;
+  /** Opens the repo's Cloud settings surface (existing environment config). */
+  onOpenCloudRepoSettingsForGroup: (target: CloudWorkspaceRepoTarget) => void;
+  /** Begins the connected Cloud action intent (readiness → set up in Cloud). */
+  onSetUpCloudForGroup: (target: CloudWorkspaceRepoTarget) => void;
+  /** Desktop-only: register an existing local folder for a Cloud repo. */
+  onAddToThisMac: (target: CloudWorkspaceRepoTarget) => void;
 }
 
 function SidebarLoadingState() {
@@ -96,6 +106,11 @@ export function SidebarWorkspaceContent({
   onRenameWorkspace,
   onRemoveRepo,
   onOpenRepoSettings,
+  isDesktopHost,
+  managedCloudAvailable,
+  onOpenCloudRepoSettingsForGroup,
+  onSetUpCloudForGroup,
+  onAddToThisMac,
 }: SidebarWorkspaceContentProps) {
   const { copyWorkspaceLocation, copyBranchName } = useWorkspaceCopyActions();
 
@@ -190,6 +205,17 @@ export function SidebarWorkspaceContent({
           : undefined}
         onRemoveRepo={() => onRemoveRepo(group.sourceRoot)}
         onOpenSettings={() => onOpenRepoSettings(group.sourceRoot)}
+        isGitHubRepo={Boolean(cloudRepoTarget)}
+        canSetUpCloud={isDesktopHost && managedCloudAvailable}
+        onSetUpCloud={cloudRepoTarget
+          ? () => onSetUpCloudForGroup(cloudRepoTarget)
+          : undefined}
+        onAddToThisMac={isDesktopHost && cloudRepoTarget
+          ? () => onAddToThisMac(cloudRepoTarget)
+          : undefined}
+        onOpenCloudSettings={cloudRepoTarget
+          ? () => onOpenCloudRepoSettingsForGroup(cloudRepoTarget)
+          : undefined}
       >
         {group.items.length === 0 ? (
           <p className="px-3 py-2 text-xs text-sidebar-muted-foreground">

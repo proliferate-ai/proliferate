@@ -1,5 +1,6 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import type { RepoConfigResponse, RepoEnvironmentResponse } from "@proliferate/cloud-sdk";
+import { canonicalRepoKey } from "@proliferate/product-domain/repos/repo-id";
 
 export type RepositoryAvailability = "local" | "local_cloud" | "cloud";
 
@@ -135,8 +136,14 @@ export function isCloudRepository(
   return Boolean(repository?.gitOwner && repository.gitRepoName);
 }
 
+/**
+ * The canonical, case-folded logical key for a GitHub-backed repository, used
+ * to collapse case/`.git` variants to one repo group and to keep configured-repo
+ * lookups and folder validation in agreement. Display strings retain their
+ * original casing; only comparison keys pass through here.
+ */
 export function cloudRepositoryKey(gitOwner: string, gitRepoName: string): string {
-  return `${gitOwner}::${gitRepoName}`;
+  return canonicalRepoKey("github", gitOwner, gitRepoName);
 }
 
 function findCloudEnvironment(repo: RepoConfigResponse): RepoEnvironmentResponse | null {

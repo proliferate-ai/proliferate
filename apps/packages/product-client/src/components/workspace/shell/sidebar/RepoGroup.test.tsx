@@ -13,6 +13,7 @@ vi.mock("@proliferate/ui/icons", () => ({
   FolderClosedFilled: () => <span data-icon="folder-closed" />,
   FolderFilled: () => <span data-icon="folder-filled" />,
   FolderRemote: () => <span data-icon="folder-remote" />,
+  MoreHorizontal: () => <span data-icon="more" />,
   Plus: () => <span data-icon="plus" />,
   Settings: () => <span data-icon="settings" />,
   Trash: () => <span data-icon="trash" />,
@@ -86,7 +87,8 @@ vi.mock("#product/components/workspace/shell/sidebar/SidebarWorkspaceVariantIcon
   SidebarWorkspaceVariantIcon: () => <span data-icon="variant" />,
 }));
 
-vi.mock("#product/hooks/workspaces/ui/use-repo-group-native-context-menu", () => ({
+vi.mock("#product/hooks/workspaces/ui/use-repo-group-native-context-menu", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("#product/hooks/workspaces/ui/use-repo-group-native-context-menu")>()),
   useRepoGroupNativeContextMenu: () => ({ onContextMenuCapture: vi.fn() }),
 }));
 
@@ -178,6 +180,30 @@ describe("RepoGroup new workspace command scope", () => {
     expect(document.querySelector('[data-icon="folder-remote"]')).toBeTruthy();
   });
 
+  it("exposes a discoverable header options trigger that opens the availability menu", () => {
+    render(
+      <RepoGroup
+        name="Repo A"
+        count={1}
+        collapsed={false}
+        environmentKind="local"
+        isGitHubRepo
+        canSetUpCloud
+        onSetUpCloud={vi.fn()}
+        onOpenSettings={vi.fn()}
+        onRemoveRepo={vi.fn()}
+        onToggleCollapsed={vi.fn()}
+      >
+        <div>Workspace A</div>
+      </RepoGroup>,
+    );
+
+    // The `…` trigger is present alongside the `+` trigger (spec: owner/repo [+] […]).
+    expect(screen.getByRole("button", { name: "Repository options" })).toBeTruthy();
+    // It renders the same ordered availability menu the right-click menu builds.
+    expect(screen.getAllByRole("button", { name: "Set up Cloud" }).length).toBeGreaterThan(0);
+  });
+
   it("keeps removal pending until the Cloud mutation settles", async () => {
     let resolveRemoval!: () => void;
     const removal = new Promise<void>((resolve) => {
@@ -196,7 +222,7 @@ describe("RepoGroup new workspace command scope", () => {
       </RepoGroup>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Remove repository" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Remove repository" })[0]);
     fireEvent.click(screen.getByRole("button", { name: "Confirm removal" }));
     expect(
       screen.getByRole("button", { name: "Removing repository" }).hasAttribute("disabled"),
@@ -220,7 +246,7 @@ describe("RepoGroup new workspace command scope", () => {
       </RepoGroup>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Remove repository" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Remove repository" })[0]);
     fireEvent.click(screen.getByRole("button", { name: "Confirm removal" }));
 
     expect(await screen.findByText(/Repository is still in use\./)).toBeTruthy();

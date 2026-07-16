@@ -359,6 +359,10 @@
       "types": "./dist/repos/CloudRepoPicker.d.ts",
       "import": "./dist/repos/CloudRepoPicker.js"
     },
+    "./repos/CloudRepoPickerBlocker": {
+      "types": "./dist/repos/CloudRepoPickerBlocker.d.ts",
+      "import": "./dist/repos/CloudRepoPickerBlocker.js"
+    },
     "./environments/CloudEnvironmentList": {
       "types": "./dist/environments/CloudEnvironmentList.d.ts",
       "import": "./dist/environments/CloudEnvironmentList.js"
