@@ -490,6 +490,92 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     secret: false,
     lanes: ["selfhost"],
   },
+  {
+    name: "RELEASE_E2E_CLOUD_AWS_REGION",
+    description:
+      "AWS region hosting CLOUD-PROVISION-1's run-scoped EC2 ingress box (Ec2ProvisionConfig.region). " +
+      "AWS credentials themselves stay ambient (the `aws` CLI), matching the self-host box precedent " +
+      "(RELEASE_E2E_SELFHOST_PROVISION) — never a manifest var.",
+    whereItLives:
+      "The qualification AWS account's chosen region for `qualification.proliferate.com` ingress boxes. " +
+      "Local: `~/.proliferate-local/dev/qualification-infra.env` (0600). CI: the `Qualification` environment.",
+    secret: false,
+    lanes: ["sandbox"],
+  },
+  {
+    name: "RELEASE_E2E_CLOUD_ROUTE53_ZONE_ID",
+    description:
+      "Route53 hosted-zone id for `qualification.proliferate.com` (Ec2ProvisionConfig.hostedZoneId), the " +
+      "zone the run-scoped `<run>.qualification.proliferate.com` A record is created under.",
+    whereItLives:
+      "The qualification AWS account's Route53 console for the `qualification.proliferate.com` zone. " +
+      "Local: `~/.proliferate-local/dev/qualification-infra.env` (0600). CI: the `Qualification` environment.",
+    secret: false,
+    lanes: ["sandbox"],
+  },
+  {
+    name: "RELEASE_E2E_CLOUD_GITHUB_APP_ID",
+    description:
+      "App id of the staging qualification GitHub App (`proliferate-cloud-staging`, installed on " +
+      "`proliferate-e2e/e2e-fixture`) the candidate Server runs with (CandidateGithubAppConfig.appId).",
+    whereItLives:
+      "The `proliferate-cloud-staging` GitHub App's settings page. Local: " +
+      "`~/.proliferate-local/dev/qualification-infra.env` (0600). CI: the `Qualification` environment.",
+    secret: false,
+    lanes: ["sandbox"],
+  },
+  {
+    name: "RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_ID",
+    description: "OAuth client id of the staging qualification GitHub App (CandidateGithubAppConfig.clientId).",
+    whereItLives: "Same App settings page as RELEASE_E2E_CLOUD_GITHUB_APP_ID.",
+    secret: false,
+    lanes: ["sandbox"],
+  },
+  {
+    name: "RELEASE_E2E_CLOUD_GITHUB_APP_INSTALLATION_ID",
+    description:
+      "Installation id of the staging qualification GitHub App on `proliferate-e2e/e2e-fixture` " +
+      "(CandidateGithubAppConfig.installationId) — the covered-repository scenario materializes.",
+    whereItLives: "The App's installation settings for the `proliferate-e2e` org.",
+    secret: false,
+    lanes: ["sandbox"],
+  },
+  {
+    name: "RELEASE_E2E_CLOUD_GITHUB_APP_PRIVATE_KEY",
+    description:
+      "PEM private key of the staging qualification GitHub App. Written to a mode-0600 env file uploaded " +
+      "to the candidate Server box (CandidateGithubAppConfig.secretsEnvFilePath) — never argv, never a " +
+      "field value, never evidence.",
+    whereItLives:
+      "Downloaded once from the `proliferate-cloud-staging` App settings page. Local: " +
+      "`~/.proliferate-local/dev/qualification-infra.env` (0600). CI: the `Qualification` environment secret.",
+    secret: true,
+    lanes: ["sandbox"],
+  },
+  {
+    name: "RELEASE_E2E_CLOUD_GITHUB_APP_CLIENT_SECRET",
+    description: "OAuth client secret of the staging qualification GitHub App, same 0600-file discipline as above.",
+    whereItLives: "Same App settings page, alongside the private key.",
+    secret: true,
+    lanes: ["sandbox"],
+  },
+  {
+    name: "RELEASE_E2E_CLOUD_GITHUB_BOT_SEED_SSM_PARAMETER",
+    description:
+      "Optional override for the AWS SSM Parameter Store NAME (not the token) holding the durable D2 " +
+      "GitHub bot refresh-token seed (SecureString). Defaults to " +
+      "/proliferate/qualification/github-bot-refresh-token when unset (box-seeds.ts's " +
+      "DEFAULT_BOT_SEED_SSM_PARAMETER). MCW-004: SSM is the resolution-order fallback (env token → local " +
+      "seed file → SSM) resolveBotSeedForAutomation uses when neither the env token nor a local seed file " +
+      "is available, and the durable rotation-write target in Actions (an ephemeral runner cannot durably " +
+      "hold the token GitHub rotates on every use). AWS credentials themselves stay ambient (the `aws` " +
+      "CLI), matching the RELEASE_E2E_CLOUD_AWS_REGION precedent — never a manifest var.",
+    whereItLives:
+      "AWS SSM Parameter Store, the qualification AWS account. This var only overrides the parameter " +
+      "NAME; set it only if the default path is wrong for the target account, not to supply a value.",
+    secret: false,
+    lanes: ["sandbox"],
+  },
 ] as const;
 
 export const DEFAULT_LOCAL_RUNTIME_URL = "http://127.0.0.1:8542";

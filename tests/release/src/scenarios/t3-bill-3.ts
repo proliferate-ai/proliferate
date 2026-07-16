@@ -130,7 +130,7 @@ export const t3Bill3: ScenarioDefinition = {
     //     it is not, report blocked (funding needs the out-of-band test
     //     subscription — no self-serve checkout completion from a headless
     //     nightly run) rather than a confusing red. ---
-    if (!overview.isPaidCloud || overview.startBlocked || overview.remainingHours <= 0) {
+    if (!overview.isPaidCloud || overview.startBlocked || (overview.remainingHours ?? 0) <= 0) {
       throw new ScenarioBlockedError(
         `T3-BILL-3: the durable org (${orgId}) is not in the funded state this scenario asserts ` +
           `(isPaidCloud=${overview.isPaidCloud}, startBlocked=${overview.startBlocked}, ` +
@@ -141,7 +141,7 @@ export const t3Bill3: ScenarioDefinition = {
     assert.equal(overview.paymentHealthy, true, "T3-BILL-3: a funded org must report paymentHealthy");
     assert.equal(overview.holdReason, null, "T3-BILL-3: a funded org must carry no spend hold");
     assert.ok(
-      overview.remainingHours > 0,
+      (overview.remainingHours ?? 0) > 0,
       `T3-BILL-3: a funded org must have remaining cloud hours, got ${overview.remainingHours}`,
     );
 

@@ -19,11 +19,12 @@ import { readFile, readdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 /**
- * The resource kinds the local-world and self-host consumers register. This is
- * an append-only shared registry (see "Parallel Tracks - Extension Contract"):
- * new worlds add their kinds here; registered-before-create and
- * reverse-order-reconcile semantics are non-negotiable and unchanged. The
- * self-host block (PR 3) adds the four AWS resource kinds its world provisions.
+ * The resource kinds run-owned worlds register. This is an append-only shared
+ * registry (see "Parallel Tracks - Extension Contract"): new worlds add their
+ * kinds here; registered-before-create and reverse-order-reconcile semantics
+ * are non-negotiable and unchanged. The self-host block (PR 3) adds the four
+ * AWS resource kinds its world provisions; the managed-cloud block (PR 2)
+ * adds the E2B resource kinds its world provisions.
  */
 export type CleanupResourceKind =
   | "litellm_virtual_key"
@@ -49,7 +50,12 @@ export type CleanupResourceKind =
   | "ec2_instance"
   | "security_group"
   | "key_pair"
-  | "route53_record";
+  | "route53_record"
+  // ── Appended for PR 2 (managed-cloud world). Registered-before-create,
+  // reverse-order-reconcile; see worlds/managed-cloud/cleanup-kinds.ts for the
+  // cloud evidence-category mapping and cleanup stack. ──────────────────────
+  | "e2b_template"
+  | "e2b_sandbox";
 
 export type CleanupPhase = "intent" | "acquired" | "reconciled";
 

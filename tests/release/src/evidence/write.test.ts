@@ -16,6 +16,7 @@ import {
   validateReport,
   validateReportV4,
   type CellEvidenceV1,
+  type CloudProvisionTurnEvidenceV1,
   type LocalWorkspaceTurnEvidenceV1,
   type SelfHostInstallClaimEvidenceV1,
   type TestRunReportV3,
@@ -1079,6 +1080,237 @@ test("writeReportV4 writes a SELFHOST-INSTALL-1 artifact with self-host evidence
     assert.equal(parsed.schema_version, 4);
     assert.equal(parsed.results[0].evidence.kind, "selfhost_install_claim");
     assert.equal(parsed.results[0].evidence.api_origin, "sh-run-1.qualification.proliferate.com");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ── cloud_provision_turn evidence (PR 2, spec step 10) ──────────────────────
+// Append-only per the extension contract: these tests exercise only the
+// kind-scoped cloud validator/sanitizer added to schema.ts; none of the
+// LOCAL-WORLD-SMOKE-1/local_workspace_turn tests above are touched.
+
+function validCloudCellEvidence(overrides: Partial<CloudProvisionTurnEvidenceV1> = {}): CloudProvisionTurnEvidenceV1 {
+  return {
+    kind: "cloud_provision_turn",
+    artifact_ids: [
+      "server/linux/amd64",
+      "anyharness/x86_64-unknown-linux-musl",
+      "worker/x86_64-unknown-linux-musl",
+      "supervisor/x86_64-unknown-linux-musl",
+      "credential-helper/x86_64-unknown-linux-musl",
+      "desktop-renderer/browser",
+      "e2b-template/cloud-run-1",
+      "candidate-api/cloud-run-1.qualification.proliferate.com",
+    ],
+    server_version: "0.3.27",
+    anyharness_version: "0.3.27",
+    worker_version: "0.3.27",
+    supervisor_version: "0.3.27",
+    harness: "claude",
+    model_id: "claude-haiku-4-5",
+    template: {
+      template_id: "tmpl_123",
+      build_id: "build_456",
+      input_hash: "a".repeat(64),
+    },
+    sandbox_id_hash: "b".repeat(64),
+    worker: {
+      supervisor_is_parent: true,
+      heartbeat_recent: true,
+    },
+    covered_repo: {
+      name: "proliferate-e2e/e2e-fixture",
+      commit: "c".repeat(40),
+      no_credential_in_remote: true,
+    },
+    isolation: {
+      actor_b_denied: true,
+      runtime_rejects_missing: true,
+      runtime_rejects_actor_b: true,
+    },
+    litellm: {
+      token_id_hash: "d".repeat(64),
+      request_ids: ["req-1", "req-2"],
+      window_started_at: "2026-07-14T00:00:00Z",
+      window_finished_at: "2026-07-14T00:00:10Z",
+      prompt_tokens: 10,
+      completion_tokens: 3,
+      total_tokens: 13,
+      spend_usd: 0.0004,
+    },
+    cleanup: {
+      ledger_id_hash: "e".repeat(64),
+      registered: 12,
+      reconciled: 12,
+      failed: 0,
+      sandboxes_deleted: true,
+      template_deleted: true,
+      dns_record_deleted: true,
+      ec2_terminated: true,
+      security_group_deleted: true,
+      key_pair_deleted: true,
+      virtual_key_deleted: true,
+      litellm_subjects_deleted: true,
+      local_paths_removed: true,
+    },
+    ...overrides,
+  };
+}
+
+/** V4 report with one green CLOUD-PROVISION-1 cell carrying complete evidence. */
+function validCloudReportV4(evidenceOverrides: Partial<CloudProvisionTurnEvidenceV1> = {}): TestRunReportV4 {
+  const report = validReportV4();
+  report.selected_cells[0] = {
+    ...report.selected_cells[0],
+    cell_id: "CLOUD-PROVISION-1/sandbox/harness=claude",
+    scenario_id: "CLOUD-PROVISION-1",
+    registry_flow_ref: "specs#CLOUD-PROVISION-1",
+    runtime_lane: "sandbox",
+    dimensions: { harness: "claude" },
+  };
+  report.results[0] = {
+    ...report.results[0],
+    cell_id: "CLOUD-PROVISION-1/sandbox/harness=claude",
+    scenario_id: "CLOUD-PROVISION-1",
+    registry_flow_ref: "specs#CLOUD-PROVISION-1",
+    runtime_lane: "sandbox",
+    dimensions: { harness: "claude" },
+    evidence: validCloudCellEvidence(evidenceOverrides),
+  };
+  return report;
+}
+
+test("validateReportV4 accepts a green CLOUD-PROVISION-1 cell with complete cloud_provision_turn evidence", () => {
+  validateReportV4(validCloudReportV4());
+});
+
+test("validateReportV4 rejects a green CLOUD-PROVISION-1 cell with null evidence", () => {
+  const report = validCloudReportV4();
+  report.results[0].evidence = null;
+  assert.throws(() => validateReportV4(report), /requires complete evidence/);
+});
+
+test("validateReportV4 rejects an extra field on cloud evidence or a nested cloud object", () => {
+  const report = validCloudReportV4();
+  (report.results[0].evidence as unknown as Record<string, unknown>).extra_field = "x";
+  assert.throws(() => validateReportV4(report), /undeclared or missing field/);
+
+  const templateExtra = validCloudReportV4();
+  (templateExtra.results[0].evidence as CloudProvisionTurnEvidenceV1 as unknown as Record<string, unknown>);
+  ((templateExtra.results[0].evidence as CloudProvisionTurnEvidenceV1).template as unknown as Record<string, unknown>).extra = "x";
+  assert.throws(() => validateReportV4(templateExtra), /template has undeclared/);
+
+  const isolationExtra = validCloudReportV4();
+  ((isolationExtra.results[0].evidence as CloudProvisionTurnEvidenceV1).isolation as unknown as Record<string, unknown>).extra = "x";
+  assert.throws(() => validateReportV4(isolationExtra), /isolation has undeclared/);
+
+  const cleanupExtra = validCloudReportV4();
+  ((cleanupExtra.results[0].evidence as CloudProvisionTurnEvidenceV1).cleanup as unknown as Record<string, unknown>).extra = "x";
+  assert.throws(() => validateReportV4(cleanupExtra), /cleanup has undeclared/);
+});
+
+test("validateReportV4 rejects a cloud template.input_hash / sandbox_id_hash that is not 64-hex", () => {
+  const badTemplateHash = validCloudReportV4({
+    template: { template_id: "tmpl_123", build_id: "build_456", input_hash: "not-a-hash" },
+  });
+  assert.throws(() => validateReportV4(badTemplateHash), /input_hash must be a lowercase 64-hex digest/);
+
+  const badSandboxHash = validCloudReportV4({ sandbox_id_hash: "not-a-hash" });
+  assert.throws(() => validateReportV4(badSandboxHash), /sandbox_id_hash must be a lowercase 64-hex digest/);
+});
+
+test("validateReportV4 rejects a cloud covered_repo.commit that is not a full 40-hex sha", () => {
+  const report = validCloudReportV4({
+    covered_repo: { name: "proliferate-e2e/e2e-fixture", commit: "short-sha", no_credential_in_remote: true },
+  });
+  assert.throws(() => validateReportV4(report), /commit must be a full lowercase 40-hex sha/);
+});
+
+test("validateReportV4 accepts either supervisor_is_parent value (PR 9 owns parentage)", () => {
+  // Supervisor-parentage is deferred to PR 9; PR 2 records the honest current
+  // state as a boolean rather than gating on it. A non-boolean is still rejected.
+  assert.doesNotThrow(() =>
+    validateReportV4(validCloudReportV4({ worker: { supervisor_is_parent: false, heartbeat_recent: true } })),
+  );
+  const badType = validCloudReportV4({
+    worker: { supervisor_is_parent: "yes" as unknown as boolean, heartbeat_recent: true },
+  });
+  assert.throws(() => validateReportV4(badType), /supervisor_is_parent must be a boolean/);
+});
+
+test("validateReportV4 rejects false covered_repo/isolation proofs on cloud evidence", () => {
+  const repo = validCloudReportV4({
+    covered_repo: { name: "proliferate-e2e/e2e-fixture", commit: "c".repeat(40), no_credential_in_remote: false as unknown as true },
+  });
+  assert.throws(() => validateReportV4(repo), /no_credential_in_remote must be true/);
+
+  const isolation = validCloudReportV4({
+    isolation: { actor_b_denied: true, runtime_rejects_missing: false as unknown as true, runtime_rejects_actor_b: true },
+  });
+  assert.throws(() => validateReportV4(isolation), /runtime_rejects_missing must be true/);
+});
+
+test("validateReportV4 rejects a green cloud cell whose cleanup has a false deletion flag or a failure", () => {
+  const failed = validCloudReportV4({ cleanup: { ...validCloudCellEvidence().cleanup, failed: 1 } });
+  assert.throws(() => validateReportV4(failed), /cleanup\.failed must be 0/);
+
+  const incomplete = validCloudReportV4({
+    cleanup: { ...validCloudCellEvidence().cleanup, sandboxes_deleted: false },
+  });
+  assert.throws(() => validateReportV4(incomplete), /cleanup is incomplete/);
+});
+
+test("validateReportV4 reuses the shared litellm invariant checks for cloud evidence", () => {
+  const report = validCloudReportV4({
+    litellm: { ...validCloudCellEvidence().litellm, prompt_tokens: 10, completion_tokens: 3, total_tokens: 999 },
+  });
+  assert.throws(() => validateReportV4(report), /token counts are internally inconsistent/);
+});
+
+test("validateReportV4 accepts a failed CLOUD-PROVISION-1 cell whose cleanup evidence records its own failure", () => {
+  const report = validCloudReportV4({ cleanup: { ...validCloudCellEvidence().cleanup, failed: 1, sandboxes_deleted: false } });
+  report.run.behavior = "strict";
+  report.candidate_build = STRICT_CB;
+  report.results[0] = {
+    ...report.results[0],
+    status: "failed",
+    reason: { code: "scenario_failure", message: "cleanup did not fully reconcile (failed=1)" },
+  };
+  const byStatus = Object.fromEntries(ALL_FINAL_STATUSES.map((status) => [status, 0])) as Record<
+    FinalTestStatus,
+    number
+  >;
+  byStatus.failed = 1;
+  report.summary.by_status = byStatus;
+  report.summary.intended_exit_code = 1;
+  report.verdict.status = "selected_cells_failed";
+  withDerivedReasons(report as unknown as TestRunReportV3);
+  validateReportV4(report);
+});
+
+test("sanitizeCellEvidence redacts secrets in cloud evidence so validation then rejects the mangled value", () => {
+  const secret = "sk-live-cloud-leaked";
+  const evidence = validCloudCellEvidence({ model_id: `claude-haiku-4-5-${secret}` });
+  const sanitized = sanitizeCellEvidence(evidence, [secret]) as CloudProvisionTurnEvidenceV1;
+  assert.match(sanitized.model_id, /\[REDACTED\]/);
+  assert.throws(() => validateReportV4(validCloudReportV4({ model_id: sanitized.model_id })), /is missing or unsafe/);
+});
+
+test("sanitizeCellEvidence does not touch local_workspace_turn evidence when sanitizing a cloud kind", () => {
+  const localEvidence = validCellEvidence();
+  const sanitizedLocal = sanitizeCellEvidence(localEvidence, ["unrelated-secret"]);
+  assert.deepEqual(sanitizedLocal, localEvidence);
+});
+
+test("writeReportV4 persists a green CLOUD-PROVISION-1 cell with complete cloud_provision_turn evidence", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "q1-evidence-v4-cloud-"));
+  try {
+    const written = await writeReportV4(dir, validCloudReportV4());
+    const parsed = JSON.parse(await readFile(written, "utf8"));
+    assert.equal(parsed.schema_version, 4);
+    assert.equal(parsed.results[0].evidence.kind, "cloud_provision_turn");
+    assert.equal(parsed.results[0].evidence.cleanup.failed, 0);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

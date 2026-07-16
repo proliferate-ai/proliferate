@@ -8,6 +8,9 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test \"src/**/*.test.ts\""
   },
+  "dependencies": {
+    "e2b": "^2.30.0"
+  },
   "devDependencies": {
     "@types/node": "^24.13.2",
     "@types/pg": "^8.11.10",
