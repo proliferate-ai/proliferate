@@ -20,6 +20,16 @@ class Settings(BaseSettings):
     proliferate_dev: bool = Field(default=False, validation_alias="PROLIFERATE_DEV")
     api_base_url: str = ""
     api_path_prefix: str = ""
+    # Compiled ProductClient Web distribution served from this image. Empty (the
+    # default) keeps the API-only behavior: no static serving, no SPA fallback.
+    # When set to a directory containing index.html, the API serves that Web
+    # application at the same origin as the API (self-hosted Web). A configured
+    # directory missing index.html fails startup. See
+    # proliferate.server.web_app for the mount and fail-closed routing.
+    web_dist_dir: str = Field(
+        default="",
+        validation_alias=AliasChoices("WEB_DIST_DIR", "PROLIFERATE_WEB_DIST_DIR"),
+    )
     telemetry_mode: str = Field(
         default="local_dev",
         validation_alias=AliasChoices("PROLIFERATE_TELEMETRY_MODE", "TELEMETRY_MODE"),
