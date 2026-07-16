@@ -30,6 +30,7 @@ import {
 import { useToastStore } from "#product/stores/toast/toast-store";
 import type { WorkspaceFileBuffer } from "#product/stores/editor/workspace-file-buffers-store";
 import { useRightPanelViewerActions } from "#product/hooks/workspaces/workflows/right-panel/use-right-panel-viewer-actions";
+import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
 
 type RightPanelStateUpdater = (value: SetStateAction<RightPanelWorkspaceState>) => void;
 
@@ -75,6 +76,7 @@ export function useRightPanelEntryActions({
   const { createTab, closeTab, renameTab } = useTerminalActions();
   const navigate = useNavigate();
   const showToast = useToastStore((store) => store.show);
+  const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const [terminalFocusNonce, setTerminalFocusNonce] = useState(0);
   const { selectViewer, handleCloseViewer } = useRightPanelViewerActions({
     state,
@@ -106,6 +108,15 @@ export function useRightPanelEntryActions({
     if (!workspaceId || !shouldRenderContent) {
       return null;
     }
+    // Local workspaces only block when the checkout directory is missing; a
+    // shell cannot spawn there, so refuse before the runtime call fails.
+    const blockReason = !isCloudWorkspaceSelected
+      ? getWorkspaceRuntimeBlockReason(workspaceId)
+      : null;
+    if (blockReason) {
+      showToast(blockReason);
+      return null;
+    }
     const activate = options?.activate ?? true;
     try {
       const terminalId = await createTab(workspaceId);
@@ -126,7 +137,15 @@ export function useRightPanelEntryActions({
       showToast(`Failed to create terminal tab: ${message}`);
       return null;
     }
-  }, [createTab, shouldRenderContent, showToast, updateState, workspaceId]);
+  }, [
+    createTab,
+    getWorkspaceRuntimeBlockReason,
+    isCloudWorkspaceSelected,
+    shouldRenderContent,
+    showToast,
+    updateState,
+    workspaceId,
+  ]);
 
   const activateTerminalTool = useCallback(async () => {
     setTerminalFocusNonce((nonce) => nonce + 1);

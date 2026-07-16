@@ -1,7 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   reasoningLadderTopsOutAtUltra,
-  resolveReasoningEffortEmphasis,
   resolveReasoningEffortPresentation,
   resolveReasoningEffortTierTone,
   type ReasoningEffortTierTone,
@@ -9,14 +8,13 @@ import {
 import { resolveSessionControlTooltip } from "#product/lib/domain/chat/session-controls/session-toggle-control";
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
-import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { LevelBarsButton } from "@proliferate/ui/primitives/LevelBarsButton";
 
-// Tier-label tint ladder. Ultra keeps the codex-convention purple (same hue
-// as --color-pr-merged); max keeps the app special blue the bars already use.
-// Tinted tiers pin their color through hover (the control button's base
-// `hover:text-current` would otherwise wash the tint back to plain ink);
-// gray tiers keep the standard muted→full hover promotion.
+// Tier-label tint ladder for ultra-capable ladders. Ultra keeps the
+// codex-convention purple (same hue as --color-pr-merged); max keeps the app
+// special blue. Tinted tiers pin their color through hover (the control
+// button's base `hover:text-current` would otherwise wash the tint back to
+// plain ink); gray tiers keep the standard muted→full hover promotion.
 const TIER_TONE_CLASSES: Readonly<Record<ReasoningEffortTierTone, string>> = {
   muted: "text-[color:var(--color-composer-control-muted-foreground)]",
   secondary: "text-foreground-secondary hover:!text-foreground",
@@ -27,9 +25,13 @@ const TIER_TONE_CLASSES: Readonly<Record<ReasoningEffortTierTone, string>> = {
 
 interface ComposerReasoningEffortBarsProps {
   control: LiveSessionControlDescriptor;
+  agentKind?: string | null;
 }
 
-export function ComposerReasoningEffortBars({ control }: ComposerReasoningEffortBarsProps) {
+export function ComposerReasoningEffortBars({
+  control,
+  agentKind = null,
+}: ComposerReasoningEffortBarsProps) {
   const levels = useMemo(
     () => control.options.map((option) => ({
       value: option.value,
@@ -41,11 +43,10 @@ export function ComposerReasoningEffortBars({ control }: ComposerReasoningEffort
 
   const currentIndex = control.options.findIndex((option) => option.selected);
   const effectiveIndex = currentIndex >= 0 ? currentIndex : 0;
-  const emphasis = resolveReasoningEffortEmphasis(control.options);
-  // Ultra-capable ladders name their tier in the chip ("Ultra" / "Max" /
-  // "X High") INSTEAD of the bars — the word plus its tier tint is the whole
-  // signal; every other model keeps the compact icon-only bars.
-  const showsTierLabel = reasoningLadderTopsOutAtUltra(control.options);
+  // Every model shows bars + the level name. Tint is an ultra-ladder-only
+  // affordance (frontier models): their upper tiers color the whole control;
+  // plain ladders stay quiet even at max.
+  const isUltraLadder = reasoningLadderTopsOutAtUltra(control.options);
 
   const currentOption = control.options[effectiveIndex] ?? null;
   const currentPresentation = resolveReasoningEffortPresentation(
@@ -61,36 +62,59 @@ export function ComposerReasoningEffortBars({ control }: ComposerReasoningEffort
     currentOption?.description ?? null,
   ) + ". Click to step.";
 
-  const stepToNext = () => {
-    const nextIndex = (effectiveIndex + 1) % control.options.length;
-    const nextValue = control.options[nextIndex]?.value;
-    if (nextValue !== undefined) {
-      control.onSelect(nextValue);
-    }
-  };
-
   const tierTone = resolveReasoningEffortTierTone(currentOption?.value ?? null);
-  const bars = showsTierLabel
-    ? (
-      <ComposerControlButton
-        label={currentLevel}
-        onClick={stepToNext}
-        disabled={!control.settable}
-        title={tooltip}
-        aria-label={ariaLabel}
-        className={TIER_TONE_CLASSES[tierTone]}
-        labelClassName="text-current"
-        data-reasoning-effort-trigger=""
-        data-reasoning-effort-selected={currentOption?.value ?? ""}
-      />
-    )
+  // Codex frontier ladders (GPT Sol) trade the purple ultra tint for the
+  // cooler blue→purple sweep; Claude ultra keeps flat purple.
+  const isUltraTier = isUltraLadder && tierTone === "ultra";
+  const isSolUltra = isUltraTier && agentKind === "codex";
+  // Ultra "on" reads like the fast-mode zap when enabled: a filled purple
+  // chip, not just tinted text. Pinned through hover so it doesn't wash back.
+  const chipClass = isUltraTier ? "composer-reasoning-ultra-chip" : "";
+  const toneClass = isUltraLadder ? TIER_TONE_CLASSES[tierTone] : "";
+
+  // Label swap: when the level steps, the new label slides in from above
+  // while the outgoing one slides down and fades (render-phase derived state;
+  // the exit span unmounts on animationend). The initial render keeps a plain
+  // string so nothing animates on mount.
+  const swapKeyRef = useRef(0);
+  const lastLevelRef = useRef(currentLevel);
+  const [exitingLevel, setExitingLevel] = useState<string | null>(null);
+  if (lastLevelRef.current !== currentLevel) {
+    setExitingLevel(lastLevelRef.current);
+    lastLevelRef.current = currentLevel;
+    swapKeyRef.current += 1;
+  }
+  const levelText = isSolUltra
+    ? <span className="composer-reasoning-ultra-sol">{currentLevel}</span>
+    : currentLevel;
+  const labelNode = swapKeyRef.current === 0
+    ? levelText
     : (
+      <span className="composer-reasoning-level-swap">
+        <span key={swapKeyRef.current} className="composer-reasoning-level-enter">
+          {levelText}
+        </span>
+        {exitingLevel !== null && (
+          <span
+            aria-hidden="true"
+            className="composer-reasoning-level-exit"
+            onAnimationEnd={() => setExitingLevel(null)}
+          >
+            {exitingLevel}
+          </span>
+        )}
+      </span>
+    );
+
+  return (
+    <Tooltip content={tooltip}>
       <LevelBarsButton
         levels={levels}
         currentIndex={effectiveIndex}
         onStep={(nextValue: string) => control.onSelect(nextValue)}
-        iconOnly
-        emphasis={emphasis}
+        label={labelNode}
+        emphasis="none"
+        className={`!gap-1.5 ${toneClass} ${chipClass}`}
         disabled={!control.settable}
         title={tooltip}
         aria-label={ariaLabel}
@@ -98,7 +122,6 @@ export function ComposerReasoningEffortBars({ control }: ComposerReasoningEffort
         data-reasoning-effort-selected={currentOption?.value ?? ""}
         levelOptionAttribute="data-reasoning-effort-option"
       />
-    );
-
-  return <Tooltip content={tooltip}>{bars}</Tooltip>;
+    </Tooltip>
+  );
 }

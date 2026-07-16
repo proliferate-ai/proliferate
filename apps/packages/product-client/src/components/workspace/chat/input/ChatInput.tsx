@@ -94,7 +94,7 @@ export function ChatInput({
   // itself; this component only needs the isEmpty gate + a submit-time reader.
   const { workspaceUiKey, materializedWorkspaceId, getDraft, setDraft, isEmpty } =
     useChatDraftControls();
-  const { isDisabled, areRuntimeControlsDisabled } = useChatAvailabilityState({
+  const { isDisabled, sendBlockedReason, areRuntimeControlsDisabled } = useChatAvailabilityState({
     activeSessionId: activeSessionIdForUi,
   });
   const modelSelectorProps = useChatModelSelectorState({
@@ -138,7 +138,7 @@ export function ChatInput({
     ? editDraft.trim().length === 0
     : isEmpty && !hasSubmittableDraftAttachments;
   const canSubmit =
-    !effectiveIsEmpty && !isDisabled && !isSubmitting;
+    !effectiveIsEmpty && !isDisabled && !sendBlockedReason && !isSubmitting;
   const canAcceptPastedAttachments =
     !effectiveIsEditingQueuedPrompt
     && !isDisabled
@@ -376,6 +376,7 @@ export function ChatInput({
               sessionConfigControls={effectiveSessionConfigControls}
               isEditingQueuedPrompt={effectiveIsEditingQueuedPrompt}
               chatDisabled={isDisabled}
+              sendBlockedReason={sendBlockedReason}
               isSubmitting={isSubmitting}
               supportsAttachments={attachments.supportsAttachments}
               canAttachFiles={attachments.canAttachFiles}
@@ -387,7 +388,15 @@ export function ChatInput({
               onCancel={onCancel}
               statusControl={suppressActiveSessionState
                 ? undefined
-                : <ConnectedWorkspaceStatusComposerControl />}
+                : (
+                  <ConnectedWorkspaceStatusComposerControl
+                    advancedControls={
+                      buildComposerSessionControlGroups(effectiveSessionConfigControls)
+                        .overflowControls
+                    }
+                    agentKind={effectiveAgentKind}
+                  />
+                )}
             />
           </form>
         </ChatComposerSurface>

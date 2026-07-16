@@ -1,53 +1,11 @@
-import { useState } from "react";
-import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
-import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
-import {
-  type RuntimePressureTargetState,
-  type RuntimePressureTone,
-  useRuntimePressureControlState,
-} from "#product/hooks/workspaces/facade/use-runtime-pressure-control-state";
-import { RuntimePressureDetailsDialog } from "#product/components/workspace/chat/input/RuntimePressureDetailsDialog";
+import type { RuntimePressureTone } from "#product/hooks/workspaces/facade/use-runtime-pressure-control-state";
 
-export function RuntimePressureIndicator() {
-  const pressure = useRuntimePressureControlState();
-  const [open, setOpen] = useState(false);
-
-  if (!pressure.visible || !pressure.indicator) {
-    return null;
-  }
-
-  const indicator = pressure.indicator;
-  const tooltip = compactPressureTooltip(indicator);
-
-  return (
-    <>
-      <Tooltip content={tooltip}>
-        <ComposerControlButton
-          iconOnly
-          label="Workspace pressure"
-          aria-label="Open pruning details"
-          aria-haspopup="dialog"
-          aria-expanded={open}
-          icon={(
-            <RuntimePressureRing
-              tone={indicator.tone}
-              progressPercent={indicator.ringProgressPercent}
-              loading={pressure.isDiscovering || indicator.isLoading}
-            />
-          )}
-          onClick={() => setOpen(true)}
-        />
-      </Tooltip>
-      <RuntimePressureDetailsDialog
-        open={open}
-        targetState={indicator}
-        actions={pressure.actions}
-        onClose={() => setOpen(false)}
-      />
-    </>
-  );
-}
-
+/**
+ * The pressure ring glyph. No longer a composer control — runtime resources
+ * live in the workspace-status card's Resources section (see
+ * EnvironmentStatusCard) — but the settings worktree-storage pane still
+ * renders the ring beside each target.
+ */
 export function RuntimePressureRing({
   tone,
   progressPercent,
@@ -95,35 +53,4 @@ export function RuntimePressureRing({
       />
     </svg>
   );
-}
-
-function formatRuntimePercent(value: number | null | undefined): string {
-  return typeof value === "number" && Number.isFinite(value)
-    ? `${Math.round(value)}%`
-    : "Unavailable";
-}
-
-function formatRingProgress(value: number | null | undefined): string {
-  return typeof value === "number" && Number.isFinite(value)
-    ? `${Math.round(value)}%`
-    : "unknown";
-}
-
-function compactPressureTooltip(targetState: RuntimePressureTargetState): string {
-  const lines = [targetState.target.label];
-  if (targetState.target.location === "cloud") {
-    lines.push([
-      `CPU ${formatRuntimePercent(targetState.resourcePressure?.cpu?.normalizedPercent)}`,
-      `RAM ${formatRuntimePercent(targetState.resourcePressure?.memory?.percent)}`,
-    ].join(" · "));
-    if (targetState.pressurePercent !== null) {
-      lines.push(`${formatRuntimePercent(targetState.pressurePercent)} pressure`);
-    }
-  } else {
-    lines.push(
-      `${targetState.worktreeCount}/${targetState.idealWorktreeCount} worktrees · ${formatRingProgress(targetState.ringProgressPercent)} of ideal`,
-    );
-  }
-  lines.push("Click for details.");
-  return lines.join("\n");
 }

@@ -1155,6 +1155,93 @@ qualification-selfhost:
 		--run-id "$$run_id" --shard-id "$$shard_id" \
 		--output-dir "$$run_dir/evidence"
 
+# "Prove One Real Managed-Cloud Workspace": one exact candidate Server, one
+# exact set of Linux musl runtime binaries, and one exact candidate Desktop
+# renderer built for the public candidate-API origin, handed to the
+# qualification runner, provisioned as an isolated run-scoped EC2+E2B managed-
+# cloud world, and used through the real product UI for one cheap managed-
+# gateway turn inside a real E2B sandbox. One entrypoint, same as
+# `qualification-local-workspace`; GitHub Actions' manual `release-e2e.yml`
+# job invokes this same target. New builder file
+# (`scripts/ci-cd/build-cloud-qualification-candidates.mjs`) — the local-world
+# builder and target above stay untouched (extension contract: one builder per
+# world).
+#
+# PROFILE=<unique-name>   Names this run (becomes its run id). Never reuse a
+#                         PROFILE for two concurrent invocations.
+# BEHAVIOR=diagnostic|strict
+#
+# Locally, secret VALUES come from the same ignored, mode-0600 qualification
+# profile as the local-world target, extended with the cloud inputs (E2B,
+# GitHub App, AWS region/zone — see src/config/env-manifest.ts). In GitHub
+# Actions (GITHUB_ACTIONS=true) the `Qualification` environment supplies them
+# directly; this target does not read or expect the local file there. AWS
+# credentials themselves stay ambient (the `aws` CLI), never a manifest var.
+QUALIFICATION_MANAGED_CLOUD_BASE_DIR ?= $(CURDIR)/tests/release/.output/managed-cloud-world
+qualification-managed-cloud:
+	@test -n "$(PROFILE)" || { \
+		echo "PROFILE=<unique-name> is required, e.g. make qualification-managed-cloud PROFILE=$$(whoami)-1 BEHAVIOR=diagnostic"; \
+		exit 1; \
+	}
+	@test -n "$(BEHAVIOR)" || { \
+		echo "BEHAVIOR=<diagnostic|strict> is required."; \
+		exit 1; \
+	}
+	@if [ "$$GITHUB_ACTIONS" != "true" ]; then \
+		test -f "$(QUALIFICATION_INFRA_ENV)" || { \
+			echo "Missing qualification secret profile at $(QUALIFICATION_INFRA_ENV)."; \
+			echo "It must define the LiteLLM inputs plus the cloud inputs named in tests/release/src/config/env-manifest.ts (mode 0600, never committed)."; \
+			exit 1; \
+		}; \
+		perm=$$(stat -f '%Lp' "$(QUALIFICATION_INFRA_ENV)" 2>/dev/null || stat -c '%a' "$(QUALIFICATION_INFRA_ENV)"); \
+		test "$$perm" = "600" || { \
+			echo "$(QUALIFICATION_INFRA_ENV) must be mode 0600 (got $$perm). Run: chmod 600 $(QUALIFICATION_INFRA_ENV)"; \
+			exit 1; \
+		}; \
+	fi
+	pnpm install --silent
+	pnpm exec playwright install --with-deps chromium
+	@if [ "$$GITHUB_ACTIONS" = "true" ]; then \
+		: "$${AGENT_GATEWAY_LITELLM_BASE_URL:=$$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL}"; \
+		export AGENT_GATEWAY_LITELLM_BASE_URL; \
+	else \
+		set -a; \
+		. "$(QUALIFICATION_INFRA_ENV)"; \
+		: "$${AGENT_GATEWAY_LITELLM_BASE_URL:=$$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL}"; \
+		set +a; \
+		export AGENT_GATEWAY_LITELLM_BASE_URL; \
+	fi; \
+	test -n "$$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL" || { \
+		echo "AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL is required (local: $(QUALIFICATION_INFRA_ENV); Actions: Qualification environment vars)."; \
+		exit 1; \
+	}; \
+	test -n "$$AGENT_GATEWAY_LITELLM_MASTER_KEY" || { \
+		echo "AGENT_GATEWAY_LITELLM_MASTER_KEY is required (local: $(QUALIFICATION_INFRA_ENV); Actions: Qualification environment secrets)."; \
+		exit 1; \
+	}; \
+	run_id="qlc-$(PROFILE)"; \
+	shard_id="1"; \
+	run_dir="$(QUALIFICATION_MANAGED_CLOUD_BASE_DIR)/$$run_id/$$shard_id"; \
+	mkdir -p "$$run_dir"; \
+	candidate_map="$$run_dir/candidate-build.json"; \
+	if [ "$(REUSE_CANDIDATES)" = "1" ] && [ -f "$$candidate_map" ]; then \
+		echo "[reuse] REUSE_CANDIDATES=1 — skipping candidate build, using $$candidate_map"; \
+	else \
+		build_summary=$$(node scripts/ci-cd/build-cloud-qualification-candidates.mjs \
+			--run-id "$$run_id" --shard-id "$$shard_id" --run-dir "$$run_dir") || exit $$?; \
+		echo "$$build_summary"; \
+		candidate_map=$$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).candidate_build_map)' "$$build_summary"); \
+	fi; \
+	cd tests/release && pnpm exec tsx src/cli/run.ts \
+		--behavior $(BEHAVIOR) \
+		--lane cloud \
+		--desktop web \
+		--agents claude \
+		--scenarios CLOUD-PROVISION-1 \
+		--candidate-build-map "$$candidate_map" \
+		--run-id "$$run_id" --shard-id "$$shard_id" \
+		--output-dir "$$run_dir/evidence"
+
 test-cloud-ssh-worker:
 	@test -n "$(SSH_TARGET)" || { \
 		echo "SSH_TARGET is required, for example:"; \

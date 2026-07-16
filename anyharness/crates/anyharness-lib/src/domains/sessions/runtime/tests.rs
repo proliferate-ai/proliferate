@@ -643,6 +643,223 @@ fn fork_parent_validation_allows_api_origin_as_advisory_provenance() {
     validate_fork_parent(&record, &link_service).expect("api-origin session can fork");
 }
 
+#[tokio::test(flavor = "current_thread")]
+async fn create_and_start_session_rejects_missing_checkout_without_inserting_row() {
+    use std::sync::Mutex;
+
+    use crate::domains::agents::installer::seed::AgentSeedStore;
+    use crate::domains::sessions::runtime::CreateAndStartSessionError;
+
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("env mutex");
+    let _bearer_guard = test_support::set_bearer_token_env(None);
+    let _data_key_guard = test_support::set_data_key_env(None);
+
+    let runtime_home = std::env::temp_dir().join(format!(
+        "anyharness-create-missing-checkout-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let state = crate::app::AppState::new(
+        runtime_home,
+        "http://127.0.0.1:8457".to_string(),
+        Db::open_in_memory().expect("in-memory db"),
+        false,
+        AgentSeedStore::not_configured_dev(),
+    )
+    .expect("app state");
+
+    // Local checkout whose directory does not exist on disk.
+    let missing_path = std::env::temp_dir().join(format!(
+        "anyharness-missing-checkout-dir-{}",
+        uuid::Uuid::new_v4()
+    ));
+    test_support::seed_workspace_with_repo_root(
+        &state.db,
+        "workspace-missing",
+        "worktree",
+        &missing_path.to_string_lossy(),
+    );
+
+    let error = state
+        .session_runtime
+        .create_and_start_session(
+            "workspace-missing",
+            "claude",
+            None,
+            None,
+            None,
+            vec![],
+            None,
+            false,
+            OriginContext::api_local_runtime(),
+        )
+        .await
+        .expect_err("missing checkout should be refused");
+
+    match error {
+        CreateAndStartSessionError::WorkspaceDirectoryMissing { path } => {
+            assert_eq!(path, missing_path.to_string_lossy());
+        }
+        other => panic!("expected WorkspaceDirectoryMissing, got {other:?}"),
+    }
+
+    let sessions = state
+        .session_service
+        .store()
+        .list_by_workspace("workspace-missing")
+        .expect("list sessions");
+    assert!(
+        sessions.is_empty(),
+        "no durable session row should be inserted for a missing checkout"
+    );
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn create_persisted_internal_session_rejects_missing_checkout_without_inserting_row() {
+    // Workflow-run path: the internal creation seam must apply the same
+    // checkout admission as the interactive create, so a workflow run against
+    // a deleted checkout never inserts a durable session row and dispatch
+    // classifies it as WorkspaceUnavailable.
+    use std::sync::Mutex;
+
+    use crate::domains::agents::installer::seed::AgentSeedStore;
+    use crate::domains::sessions::runtime::{
+        CreateAndStartSessionError, InternalSessionCreateError, InternalSessionCreateInput,
+    };
+
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("env mutex");
+    let _bearer_guard = test_support::set_bearer_token_env(None);
+    let _data_key_guard = test_support::set_data_key_env(None);
+
+    let runtime_home = std::env::temp_dir().join(format!(
+        "anyharness-internal-missing-checkout-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let state = crate::app::AppState::new(
+        runtime_home,
+        "http://127.0.0.1:8457".to_string(),
+        Db::open_in_memory().expect("in-memory db"),
+        false,
+        AgentSeedStore::not_configured_dev(),
+    )
+    .expect("app state");
+
+    let missing_path = std::env::temp_dir().join(format!(
+        "anyharness-internal-missing-checkout-dir-{}",
+        uuid::Uuid::new_v4()
+    ));
+    test_support::seed_workspace_with_repo_root(
+        &state.db,
+        "workspace-missing",
+        "worktree",
+        &missing_path.to_string_lossy(),
+    );
+
+    let error = state
+        .session_runtime
+        .create_persisted_internal_session(InternalSessionCreateInput {
+            workspace_id: "workspace-missing".to_string(),
+            agent_kind: "claude".to_string(),
+            model_id: None,
+            mode_id: None,
+            origin: OriginContext::api_local_runtime(),
+        })
+        .expect_err("missing checkout should be refused");
+
+    // This exact error shape — Create(WorkspaceDirectoryMissing) — is what
+    // `workflows::dispatch::map_create_error` classifies as
+    // WorkspaceUnavailable (covered by
+    // `missing_workspace_directory_classifies_as_workspace_unavailable`).
+    match &error {
+        InternalSessionCreateError::Create(
+            CreateAndStartSessionError::WorkspaceDirectoryMissing { path },
+        ) => {
+            assert_eq!(path.as_str(), missing_path.to_string_lossy());
+        }
+        other => panic!("expected WorkspaceDirectoryMissing, got {other:?}"),
+    }
+
+    let sessions = state
+        .session_service
+        .store()
+        .list_by_workspace("workspace-missing")
+        .expect("list sessions");
+    assert!(
+        sessions.is_empty(),
+        "no durable session row should be inserted for a missing checkout"
+    );
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn ensure_live_session_rejects_missing_checkout_for_existing_session() {
+    // Resume path: an already-persisted dormant session whose workspace
+    // checkout was deleted must converge on the typed
+    // WorkspaceDirectoryMissing at the common live-start seam, not a generic
+    // ACP-start failure (which the HTTP layer would surface as a 500).
+    use std::sync::Mutex;
+
+    use crate::domains::agents::installer::seed::AgentSeedStore;
+    use crate::domains::sessions::runtime::EnsureLiveSessionError;
+
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("env mutex");
+    let _bearer_guard = test_support::set_bearer_token_env(None);
+    let _data_key_guard = test_support::set_data_key_env(None);
+
+    let runtime_home = std::env::temp_dir().join(format!(
+        "anyharness-resume-missing-checkout-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let state = crate::app::AppState::new(
+        runtime_home,
+        "http://127.0.0.1:8457".to_string(),
+        Db::open_in_memory().expect("in-memory db"),
+        false,
+        AgentSeedStore::not_configured_dev(),
+    )
+    .expect("app state");
+
+    let missing_path = std::env::temp_dir().join(format!(
+        "anyharness-resume-missing-checkout-dir-{}",
+        uuid::Uuid::new_v4()
+    ));
+    test_support::seed_workspace_with_repo_root(
+        &state.db,
+        "workspace-missing",
+        "worktree",
+        &missing_path.to_string_lossy(),
+    );
+
+    // Persist a dormant session row for that workspace directly in the store.
+    let mut record = session_record("claude");
+    record.workspace_id = "workspace-missing".to_string();
+    state
+        .session_service
+        .store()
+        .insert(&record)
+        .expect("insert session");
+
+    let error = state
+        .session_runtime
+        .ensure_live_session(&record.id, None)
+        .await
+        .expect_err("missing checkout should be refused on resume");
+
+    match error {
+        EnsureLiveSessionError::WorkspaceDirectoryMissing { path } => {
+            assert_eq!(path, missing_path.to_string_lossy());
+        }
+        other => panic!("expected WorkspaceDirectoryMissing, got {other:?}"),
+    }
+}
+
 #[test]
 fn fork_link_child_unique_index_rejects_multiple_fork_parents() {
     let db = Db::open_in_memory().expect("open db");

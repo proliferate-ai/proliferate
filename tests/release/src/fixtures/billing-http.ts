@@ -38,7 +38,14 @@ export interface BillingOverview {
   billingMode: string;
   /** Whether the deployment has Pro (subscription) billing enabled (PRO_BILLING_ENABLED). */
   proBillingEnabled?: boolean;
-  remainingHours: number;
+  /**
+   * `remaining_hours` is `null` when the account has unlimited cloud hours
+   * (subscription or manual entitlement), so the runner must not treat it as a
+   * number in that case — read `hasUnlimitedCloudHours` alongside it.
+   */
+  remainingHours: number | null;
+  /** True when a healthy subscription OR an active unlimited-cloud entitlement grants unlimited hours. */
+  hasUnlimitedCloudHours?: boolean;
   includedHours: number;
   usedHours: number;
   overQuota: boolean;

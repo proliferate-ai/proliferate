@@ -1,6 +1,11 @@
 interface ChatInputAvailabilityArgs {
   selectedWorkspaceId: string | null;
   isCloudWorkspaceSelected: boolean;
+  /**
+   * Non-null when the selected local workspace's checkout directory is gone
+   * from disk; carries the kind-worded copy (see workspace-availability-copy).
+   */
+  workspaceDirectoryMissingSendReason?: string | null;
   connectionState: string;
   selectedCloudWorkspaceStatus: string | null;
   selectedCloudWorkspaceActionBlockReason: string | null;
@@ -48,6 +53,12 @@ interface ChatInputActiveSlotLike {
 export interface ChatInputAvailability {
   isDisabled: boolean;
   disabledReason: string | null;
+  /**
+   * Send is blocked but the editor stays editable so drafts aren't lost —
+   * used for persistent workspace conditions (missing worktree) rather than
+   * transient not-ready states, which disable the whole input.
+   */
+  sendBlockedReason: string | null;
   areRuntimeControlsDisabled: boolean;
 }
 
@@ -65,6 +76,7 @@ export function resolveChatDraftWorkspaceId(
 export function resolveChatInputAvailability({
   selectedWorkspaceId,
   isCloudWorkspaceSelected,
+  workspaceDirectoryMissingSendReason = null,
   connectionState,
   selectedCloudWorkspaceStatus,
   selectedCloudWorkspaceActionBlockReason,
@@ -85,6 +97,7 @@ export function resolveChatInputAvailability({
       return {
         isDisabled: false,
         disabledReason: null,
+        sendBlockedReason: null,
         areRuntimeControlsDisabled: false,
         selectedWorkspaceKind: pendingWorkspaceEntry.source === "cloud-created" ? "cloud" : "local",
       };
@@ -93,6 +106,7 @@ export function resolveChatInputAvailability({
     return {
       isDisabled: true,
       disabledReason: "Resolve workspace setup before starting chat.",
+      sendBlockedReason: null,
       areRuntimeControlsDisabled: true,
       selectedWorkspaceKind: pendingWorkspaceEntry.source === "cloud-created" ? "cloud" : "local",
     };
@@ -102,6 +116,19 @@ export function resolveChatInputAvailability({
     return {
       isDisabled: true,
       disabledReason: "Select a workspace to start chatting.",
+      sendBlockedReason: null,
+      areRuntimeControlsDisabled: true,
+      selectedWorkspaceKind,
+    };
+  }
+
+  // A missing worktree is a persistent workspace condition: the draft stays
+  // editable (nothing is lost) while send is refused with an explicit reason.
+  if (!isCloudWorkspaceSelected && workspaceDirectoryMissingSendReason) {
+    return {
+      isDisabled: false,
+      disabledReason: null,
+      sendBlockedReason: workspaceDirectoryMissingSendReason,
       areRuntimeControlsDisabled: true,
       selectedWorkspaceKind,
     };
@@ -118,6 +145,7 @@ export function resolveChatInputAvailability({
               ? "Cloud workspace hit an error. Retry provisioning to continue."
             : "Cloud workspace is still preparing."
         ),
+      sendBlockedReason: null,
       areRuntimeControlsDisabled: true,
       selectedWorkspaceKind,
     };
@@ -127,6 +155,7 @@ export function resolveChatInputAvailability({
     return {
       isDisabled: true,
       disabledReason: selectedCloudRuntimeActionBlockReason,
+      sendBlockedReason: null,
       areRuntimeControlsDisabled: true,
       selectedWorkspaceKind,
     };
@@ -136,6 +165,7 @@ export function resolveChatInputAvailability({
     return {
       isDisabled: true,
       disabledReason: "AnyHarness runtime is still starting.",
+      sendBlockedReason: null,
       areRuntimeControlsDisabled: true,
       selectedWorkspaceKind,
     };
@@ -145,6 +175,7 @@ export function resolveChatInputAvailability({
     return {
       isDisabled: true,
       disabledReason: "Starting session…",
+      sendBlockedReason: null,
       areRuntimeControlsDisabled: false,
       selectedWorkspaceKind,
     };
@@ -154,6 +185,7 @@ export function resolveChatInputAvailability({
     return {
       isDisabled: true,
       disabledReason: configuredLaunchDisabledReason ?? "Your chosen default agent is not ready yet.",
+      sendBlockedReason: null,
       areRuntimeControlsDisabled: false,
       selectedWorkspaceKind,
     };
@@ -163,6 +195,7 @@ export function resolveChatInputAvailability({
     return {
       isDisabled: true,
       disabledReason: activeSessionLaunchDisabledReason,
+      sendBlockedReason: null,
       areRuntimeControlsDisabled: false,
       selectedWorkspaceKind,
     };
@@ -172,6 +205,7 @@ export function resolveChatInputAvailability({
     return {
       isDisabled: true,
       disabledReason: pendingInteractionDisabledReason(pendingInteractionKind),
+      sendBlockedReason: null,
       areRuntimeControlsDisabled: false,
       selectedWorkspaceKind,
     };
@@ -180,6 +214,7 @@ export function resolveChatInputAvailability({
   return {
     isDisabled: false,
     disabledReason: null,
+    sendBlockedReason: null,
     areRuntimeControlsDisabled: false,
     selectedWorkspaceKind,
   };

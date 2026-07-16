@@ -158,6 +158,21 @@ impl ApiError {
     }
 }
 
+impl ApiError {
+    /// HTTP status for this error. Test/introspection accessor.
+    #[cfg(test)]
+    pub(crate) fn status(&self) -> StatusCode {
+        self.0
+    }
+
+    /// Stable machine code (RFC 7807 extension), if any. Test/introspection
+    /// accessor so mapping tests can assert the wire code, not just the status.
+    #[cfg(test)]
+    pub(crate) fn code(&self) -> Option<&str> {
+        self.1.code.as_deref()
+    }
+}
+
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         (self.0, Json(self.1)).into_response()

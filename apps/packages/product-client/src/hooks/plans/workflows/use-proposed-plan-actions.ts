@@ -13,6 +13,7 @@ import {
 } from "@anyharness/sdk-react";
 import { useWorkspaceSetupStatusCache } from "#product/hooks/access/anyharness/workspaces/use-workspace-setup-status-cache";
 import { useChatAvailabilityState } from "#product/hooks/chat/derived/use-chat-availability-state";
+import { isWorkspaceDirectoryMissingError } from "#product/lib/domain/sessions/creation/create-session-error";
 import { useGitPromptSnapshotEffects } from "#product/hooks/workspaces/workflows/use-git-prompt-snapshot-effects";
 import { useProposedPlanCache } from "#product/hooks/plans/cache/use-proposed-plan-cache";
 import { useSessionConfigActions } from "#product/hooks/sessions/workflows/use-session-config-actions";
@@ -193,8 +194,11 @@ function usePlanImplementationActions() {
         promptActiveSession,
         startLatencyFlow: startPromptLatencyFlow,
         failLatencyFlow: failPromptLatencyFlow,
-        isChatDisabled: availability.isDisabled,
-        chatDisabledReason: availability.disabledReason,
+        // A send-blocked composer (missing worktree) blocks plan
+        // implementation the same as a fully disabled one — the editor stays
+        // editable in that state, but nothing may be sent.
+        isChatDisabled: availability.isDisabled || Boolean(availability.sendBlockedReason),
+        chatDisabledReason: availability.disabledReason ?? availability.sendBlockedReason,
         onPromptSubmitted: ({ workspaceId, agentKind, reuseSession }) => {
           const logicalWorkspaceId =
             useSessionSelectionStore.getState().selectedLogicalWorkspaceId;
@@ -220,6 +224,7 @@ function usePlanImplementationActions() {
     promptActiveSession,
     availability.disabledReason,
     availability.isDisabled,
+    availability.sendBlockedReason,
     getCachedWorkspaceSetupStatus,
     gitPromptEffects,
     setActiveSessionConfigOption,
@@ -367,7 +372,10 @@ export async function executePlanImplementation({
     });
   } catch (error) {
     failLatencyFlow(latencyFlowId, "plan_implementation_prompt_failed");
-    showPlanImplementationFailureToast(showToast, error);
+    // The persistent missing-worktree composer panel owns that condition.
+    if (!isWorkspaceDirectoryMissingError(error)) {
+      showPlanImplementationFailureToast(showToast, error);
+    }
   }
 }
 

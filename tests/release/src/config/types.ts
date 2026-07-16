@@ -9,8 +9,14 @@
  * - "local": a local full-stack profile (`make run PROFILE=...`) plus a tunnel,
  *   so E2B sandboxes can call back into it.
  * - "staging": the real staging deployment (publicly reachable already).
+ * - "cloud": a run-scoped candidate API published over public HTTPS on the
+ *   managed-cloud world's EC2 ingress box (`<run>.qualification.proliferate.com`)
+ *   — neither the local profile nor the shared staging deployment. Appended
+ *   append-only for PR 2 (Prove One Real Managed-Cloud Workspace); see
+ *   worlds/managed-cloud/world.ts. Distinct from the "sandbox" RuntimeLane
+ *   below, which is where the E2B workspace runs.
  */
-export type TargetLane = "local" | "staging";
+export type TargetLane = "local" | "staging" | "cloud";
 
 /**
  * Which runtime a scenario drives, per T3-FIXTURE in scenarios.md:
@@ -31,10 +37,10 @@ export const ALL_RUNTIME_LANES: readonly RuntimeLane[] = ["local", "sandbox", "s
 export type DesktopMode = "web" | "native";
 
 export function parseTargetLane(value: string): TargetLane {
-  if (value === "local" || value === "staging") {
+  if (value === "local" || value === "staging" || value === "cloud") {
     return value;
   }
-  throw new Error(`--lane must be "local" or "staging", got "${value}"`);
+  throw new Error(`--lane must be "local", "staging", or "cloud", got "${value}"`);
 }
 
 export function parseDesktopMode(value: string): DesktopMode {

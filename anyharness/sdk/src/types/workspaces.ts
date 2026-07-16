@@ -1,6 +1,7 @@
 import type { components } from "../generated/openapi.js";
 
 export type WorkspaceKind = components["schemas"]["WorkspaceKind"];
+export type WorkspaceAvailability = components["schemas"]["WorkspaceAvailability"];
 export type WorkspaceSurface = components["schemas"]["WorkspaceSurface"];
 export type WorkspaceExecutionPhase = components["schemas"]["WorkspaceExecutionPhase"];
 export type WorkspaceExecutionSummary = components["schemas"]["WorkspaceExecutionSummary"];

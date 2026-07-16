@@ -39,6 +39,8 @@ impl SessionRuntime {
 
         validate_fork_parent(&parent, &self.session_link_service)?;
 
+        self.assert_fork_workspace_checkout_present(&parent.workspace_id)?;
+
         let handle = self
             .ensure_live_session_handle(&parent, None)
             .await
@@ -225,6 +227,26 @@ impl SessionRuntime {
     }
 }
 
+impl SessionRuntime {
+    /// Pre-flight the parent workspace's local checkout before forking. Reuses
+    /// the shared `workspace_checkout_missing_path` admission (same predicate as
+    /// session creation and the live-start seam) so a deleted checkout is
+    /// refused before a fork child row is inserted. Remote/cloud-style
+    /// workspaces are never blocked.
+    fn assert_fork_workspace_checkout_present(
+        &self,
+        workspace_id: &str,
+    ) -> Result<(), ForkSessionError> {
+        if let Some(path) = self
+            .workspace_checkout_missing_path(workspace_id)
+            .map_err(ForkSessionError::Internal)?
+        {
+            return Err(ForkSessionError::WorkspaceDirectoryMissing { path });
+        }
+        Ok(())
+    }
+}
+
 pub(super) fn validate_fork_parent(
     parent: &SessionRecord,
     links: &SessionLinkService,
@@ -252,6 +274,9 @@ fn map_start_error_to_fork(error: StartSessionError) -> ForkSessionError {
     match error {
         StartSessionError::WorkspaceNotFound => {
             ForkSessionError::Internal(anyhow::anyhow!("workspace not found for session"))
+        }
+        StartSessionError::WorkspaceDirectoryMissing { path } => {
+            ForkSessionError::WorkspaceDirectoryMissing { path }
         }
         StartSessionError::AgentDescriptorNotFound(agent_kind) => {
             ForkSessionError::Internal(anyhow::anyhow!("agent descriptor not found: {agent_kind}"))

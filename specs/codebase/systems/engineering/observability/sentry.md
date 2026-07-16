@@ -155,3 +155,31 @@ following up with reporters. Observability does not own tracker state.
 Use the [Sentry operating procedure](../../../../developing/operating/analytics/sentry.md)
 to discover current provider state and verify delivery without exposing
 credentials.
+
+## Instrumenting a new feature
+
+Recommendation for surfacing "this should/shouldn't happen" signals so they land
+as tracked issues via [Issue Lifecycle](../issue-lifecycle/README.md). Choose by
+what actually happened, not by convenience — do not `raise` to flag a non-failure.
+
+| Situation | Use | Effect |
+| --- | --- | --- |
+| The operation genuinely failed | let the exception propagate | auto-captured as a `proliferate-server` issue |
+| An anomaly the user didn't feel — latency budget exceeded, invariant violated, unexpected-but-recovered branch | `capture_server_sentry_exception(..., level="warning", fingerprint=[...])` | tracked issue, request still succeeds |
+| A page-worthy "must never happen" invariant | `report_critical(...)` | fatal Sentry event **and** the `CRITICAL_FAILURE` log marker that drives the Grafana/CloudWatch alert path |
+
+Conventions that keep issues clean and countable:
+
+- **Set a stable `fingerprint`** for any recurring anomaly. It is the dedup key:
+  one issue accrues occurrences (with user/release/timing) instead of spawning
+  thousands. This — not a metric counter — is how you "count" an anomaly.
+- **Emit on threshold, not per call.** For latency, measure and emit only when a
+  budget is exceeded; the budget belongs in code, not in an alert rule.
+- **Tag consistently** so the tracker and rules can slice: `anomaly=<slug>`
+  (e.g. `latency_budget`, `invariant_violation`), `surface=<area>`. Put bounded
+  diagnostic scalars (elapsed_ms, budget_ms, ids) in `extras`.
+- Obey [Privacy and replay](#privacy-and-replay): tags/extras carry identifiers
+  and bounded scalars, never message/prompt/transcript content or secrets.
+
+Reserve `report_critical` for real paging conditions; a `warning` anomaly that
+fires constantly trains everyone to ignore the fatal ones.

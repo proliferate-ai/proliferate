@@ -3,11 +3,9 @@ import { ChatComposerActions } from "./ChatComposerActions";
 import { ComposerModelSelectorControl } from "./ComposerModelSelectorControl";
 import { ComposerReasoningEffortBars } from "./ComposerReasoningEffortBars";
 import { ComposerFastModeToggle } from "./ComposerFastModeToggle";
-import { ComposerOverflowControl } from "./ComposerOverflowControl";
 import type { ModelSelectorProps } from "#product/lib/domain/chat/models/model-selector-types";
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 import { ComposerIntegrationsControl } from "./ComposerIntegrationsControl";
-import { RuntimePressureIndicator } from "./RuntimePressureIndicator";
 import { SessionModeControl } from "./SessionModeControl";
 import {
   buildComposerSessionControlGroups,
@@ -26,6 +24,8 @@ export interface ChatInputControlRowProps {
   sessionConfigControls: LiveSessionControlDescriptor[];
   isEditingQueuedPrompt: boolean;
   chatDisabled: boolean;
+  /** Send is refused with this reason while the editor stays editable. */
+  sendBlockedReason?: string | null;
   isSubmitting: boolean;
   supportsAttachments: boolean;
   canAttachFiles: boolean;
@@ -48,8 +48,8 @@ export interface ComposerLeadingControlsProps {
 }
 
 /**
- * The leading control cluster (model selector, reasoning bars, fast mode, mode, goal,
- * integrations). Shared verbatim between the in-session chat composer
+ * The leading control cluster (model selector, reasoning bars, mode, fast mode,
+ * goal, integrations). Shared verbatim between the in-session chat composer
  * (ChatInputControlRow) and the home/new-chat composer (HomeNextScreen slot):
  * home feeds it launch-time control descriptors instead of live-session
  * ones, and session-only controls (goal) hide via their own gating.
@@ -91,22 +91,14 @@ export function ComposerLeadingControls({
             runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
           }`}
         >
-          <ComposerReasoningEffortBars control={controlGroups.reasoningEffortControl} />
+          <ComposerReasoningEffortBars
+            control={controlGroups.reasoningEffortControl}
+            agentKind={agentKind}
+          />
         </span>
       )}
 
-      {/* 3. Fast mode toggle */}
-      {controlGroups.fastModeControl && (
-        <span
-          className={`inline-flex shrink-0 ${
-            runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
-          }`}
-        >
-          <ComposerFastModeToggle control={controlGroups.fastModeControl} />
-        </span>
-      )}
-
-      {/* 4. Primary working mode control (bypass/plan/etc) */}
+      {/* 3. Primary working mode control (bypass/plan/etc) */}
       {controlGroups.modeControl && (
         <span
           className={`inline-flex min-w-0 ${
@@ -121,18 +113,30 @@ export function ComposerLeadingControls({
         </span>
       )}
 
+      {/* 4. Fast mode toggle */}
+      {controlGroups.fastModeControl && (
+        <span
+          className={`inline-flex shrink-0 ${
+            runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
+          }`}
+        >
+          <ComposerFastModeToggle control={controlGroups.fastModeControl} />
+        </span>
+      )}
+
       {/* 5. Goal button */}
       {canSetGoal && (
         <ComposerControlButton
+          iconOnly
           icon={<Target className="size-4" />}
           label="Set goal"
+          aria-label="Set goal"
           title="Give the agent an objective to keep pursuing."
           onClick={() => {
             if (activeSessionId) {
               beginComposingGoal(activeSessionId);
             }
           }}
-          className="max-w-[12rem]"
         />
       )}
 
@@ -144,8 +148,6 @@ export function ComposerLeadingControls({
 
 export interface ComposerTrailingControlsProps {
   runtimeControlsDisabled: boolean;
-  agentKind: string | null;
-  sessionConfigControls: LiveSessionControlDescriptor[];
   isEditingQueuedPrompt: boolean;
   chatDisabled: boolean;
   isSubmitting: boolean;
@@ -166,8 +168,6 @@ export interface ComposerTrailingControlsProps {
  */
 export function ComposerTrailingControls({
   runtimeControlsDisabled,
-  agentKind,
-  sessionConfigControls,
   isEditingQueuedPrompt,
   chatDisabled,
   isSubmitting,
@@ -179,7 +179,6 @@ export function ComposerTrailingControls({
 }: ComposerTrailingControlsProps) {
   const canUseUtilityActions =
     !isEditingQueuedPrompt && !chatDisabled && !runtimeControlsDisabled && !isSubmitting;
-  const controlGroups = buildComposerSessionControlGroups(sessionConfigControls);
   const canAttachFile = canUseUtilityActions && canAttachFiles;
   const attachFileDetail = canAttachFile
     ? "Upload image or text context."
@@ -204,23 +203,10 @@ export function ComposerTrailingControls({
         />
       )}
 
-      {/* 8. Runtime pressure */}
-      <RuntimePressureIndicator />
-
-      {/* 8b. Workspace status — ambient background work + environment */}
+      {/* 8. Workspace status — the single ambient-state surface: background
+          work, source control, runtime resources, and the advanced session
+          config that used to live in the "..." overflow menu. */}
       {statusControl}
-
-      {/* 9. Overflow three-dots */}
-      <span
-        className={`inline-flex shrink-0 ${
-          runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
-        }`}
-      >
-        <ComposerOverflowControl
-          agentKind={agentKind}
-          controls={controlGroups.overflowControls}
-        />
-      </span>
     </>
   );
 }
@@ -232,6 +218,7 @@ export function ChatInputControlRow({
   sessionConfigControls,
   isEditingQueuedPrompt,
   chatDisabled,
+  sendBlockedReason = null,
   isSubmitting,
   supportsAttachments,
   canAttachFiles,
@@ -257,8 +244,6 @@ export function ChatInputControlRow({
       trailing={(
         <ComposerTrailingControls
           runtimeControlsDisabled={runtimeControlsDisabled}
-          agentKind={agentKind}
-          sessionConfigControls={sessionConfigControls}
           isEditingQueuedPrompt={isEditingQueuedPrompt}
           chatDisabled={chatDisabled}
           isSubmitting={isSubmitting}
@@ -273,7 +258,8 @@ export function ChatInputControlRow({
         <ChatComposerActions
           isRunning={isRunning}
           isEmpty={isEmpty}
-          isDisabled={chatDisabled || isSubmitting}
+          isDisabled={chatDisabled || Boolean(sendBlockedReason) || isSubmitting}
+          disabledReason={sendBlockedReason}
           isEditingQueuedPrompt={isEditingQueuedPrompt}
           onSubmit={onSubmit}
           onCancel={onCancel}

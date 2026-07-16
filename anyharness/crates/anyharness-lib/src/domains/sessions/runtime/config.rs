@@ -47,6 +47,9 @@ impl SessionRuntime {
                 StartSessionError::WorkspaceNotFound => SetSessionConfigOptionError::Internal(
                     anyhow::anyhow!("workspace not found for session"),
                 ),
+                StartSessionError::WorkspaceDirectoryMissing { path } => {
+                    SetSessionConfigOptionError::WorkspaceDirectoryMissing { path }
+                }
                 StartSessionError::AgentDescriptorNotFound(agent_kind) => {
                     SetSessionConfigOptionError::Internal(anyhow::anyhow!(
                         "agent descriptor not found: {agent_kind}"

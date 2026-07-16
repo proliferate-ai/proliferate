@@ -49,6 +49,11 @@ pub enum CoworkDelegationError {
     Closed,
     #[error("workspace mutation blocked: {0}")]
     MutationBlocked(String),
+    /// The managed coding workspace's local checkout directory has been
+    /// deleted from disk. Typed (not flattened into `Internal`) so callers map
+    /// it to the shared `WORKSPACE_DIRECTORY_MISSING` 409 code.
+    #[error("workspace directory is missing: {0}")]
+    WorkspaceDirectoryMissing(String),
     #[error("invalid coding workspace request: {0}")]
     InvalidCodingWorkspaceRequest(String),
     #[error("cowork session already has the maximum number of managed coding workspaces")]

@@ -1,18 +1,44 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useWorkspaceShellActions } from "#product/components/workspace/shell/providers/WorkspaceShellActionsContext";
 import { useWorkspaceStatusModel } from "#product/hooks/workspaces/derived/use-workspace-status-model";
+import { useRuntimePressureControlState } from "#product/hooks/workspaces/facade/use-runtime-pressure-control-state";
+import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
+import { RuntimePressureDetailsDialog } from "#product/components/workspace/chat/input/RuntimePressureDetailsDialog";
 import {
   WorkspaceStatusComposerControl,
   type WorkspaceStatusActions,
+  type WorkspaceStatusModel,
 } from "./WorkspaceStatusComposerControl";
 
+/** The card renders with just Resources/Advanced while the status feeds are
+ * empty (git status still loading, runtime blocked, non-git workspace) — the
+ * old overflow menu was never gated on the status model, so the advanced
+ * config must not be either. */
+const EMPTY_STATUS_MODEL: WorkspaceStatusModel = {
+  environment: null,
+  subagents: { working: [], done: [] },
+  native: [],
+};
+
 /** The live workspace-status trigger + card: model from the session's git/PR,
- * delegated-work, and native-activity feeds; actions through the shell. */
-export function ConnectedWorkspaceStatusComposerControl() {
+ * delegated-work, and native-activity feeds; runtime resources from the
+ * pressure facade (Resources section + worktrees modal); advanced session
+ * config from the composer's overflow group; actions through the shell. */
+export function ConnectedWorkspaceStatusComposerControl({
+  advancedControls = [],
+  agentKind = null,
+}: {
+  advancedControls?: LiveSessionControlDescriptor[];
+  agentKind?: string | null;
+}) {
   const { model, openAgentSession, compareUrl } = useWorkspaceStatusModel();
   const shellActions = useWorkspaceShellActions();
   const { openExternal } = useProductHost().links;
+  const pressure = useRuntimePressureControlState();
+  const [worktreesOpen, setWorktreesOpen] = useState(false);
+
+  const environmentState = pressure.visible ? pressure.indicator : null;
 
   const compareOpensPr = model?.environment?.compareOpensPr ?? false;
   const actions = useMemo<WorkspaceStatusActions>(() => ({
@@ -40,9 +66,28 @@ export function ConnectedWorkspaceStatusComposerControl() {
     onOpenAgentSession: openAgentSession ?? undefined,
   }), [compareOpensPr, compareUrl, openAgentSession, openExternal, shellActions]);
 
-  if (!model) {
+  if (!model && !environmentState && advancedControls.length === 0) {
     return null;
   }
 
-  return <WorkspaceStatusComposerControl model={model} actions={actions} />;
+  return (
+    <>
+      <WorkspaceStatusComposerControl
+        model={model ?? EMPTY_STATUS_MODEL}
+        actions={actions}
+        environmentState={environmentState}
+        onOpenWorktrees={environmentState ? () => setWorktreesOpen(true) : undefined}
+        advancedControls={advancedControls}
+        agentKind={agentKind}
+      />
+      {environmentState && (
+        <RuntimePressureDetailsDialog
+          open={worktreesOpen}
+          targetState={environmentState}
+          actions={pressure.actions}
+          onClose={() => setWorktreesOpen(false)}
+        />
+      )}
+    </>
+  );
 }
