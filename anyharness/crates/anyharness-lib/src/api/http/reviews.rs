@@ -75,7 +75,8 @@ pub async fn start_plan_review(
         Ok(Some(plan)) => Some(
             admit_session_mutation(&state, &plan.session_id, SessionMutationKind::Review).await?,
         ),
-        _ => None,
+        Ok(None) => None,
+        Err(_) => return Err(ApiError::internal("Failed to load review plan")),
     };
     let _lease = state
         .workspace_operation_gate

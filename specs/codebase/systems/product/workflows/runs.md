@@ -10,8 +10,9 @@ product surface responsible for workflow execution.
 Superseded in part: [`run-control.md`](run-control.md)
 supersedes this spec's cancellation non-goals, the run/step status
 enumerations, the no-cancellation restart clause, and the definition-of-done
-no-cancellation line (see its §9 for the exact list). Everything else here
-remains authoritative.
+no-cancellation line (see its §9 for the exact list). Its session mutation
+admission contract also supersedes the workflow-mutation-locking non-goal in
+§2.2. Everything else here remains authoritative.
 
 Read with:
 
@@ -81,8 +82,7 @@ Acceptance requires one real prompt to complete while proving:
 - creating, initializing, registering, renaming, deleting, or claiming a
   workspace;
 - scratch workspaces, cloning, repository selection, or worktrees;
-- existing-session takeover, workflow mutation locking, or exclusive
-  workspace access;
+- existing-session takeover or exclusive workspace access;
 - more than one stage or prompt step;
 - goals, cancellation APIs, or cancellation recovery;
 - Cloud/Desktop delivery, custody, acknowledgements, or product run history;

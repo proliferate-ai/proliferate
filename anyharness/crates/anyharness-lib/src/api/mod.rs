@@ -17,3 +17,5 @@ mod workflow_runs_scripted_tests;
 mod workflow_runs_tests;
 #[cfg(test)]
 mod session_admission_tests;
+#[cfg(test)]
+mod review_admission_tests;
