@@ -4,10 +4,68 @@ This is the canonical self-hosted deployment story for Proliferate:
 
 - the official desktop app reads `~/.proliferate/config.json` at startup
 - the control plane runs from `server/deploy/docker-compose.production.yml`
+- the server image also serves the real ProductClient Web application
+  same-origin, so a browser can open the same public URL as the API
 - installs and updates run through the checked-in deployment scripts
 - the AWS one-click stack bootstraps this exact Docker deployment
 - self-hosted control planes use anonymous telemetry by default; vendor telemetry
   stays off unless the deployment is explicitly marked as `hosted_product`
+
+## Web served from the server image
+
+A normal self-hosted installation serves the ProductClient Web application from
+the same server image as the API:
+
+```text
+Browser -> Caddy -> Proliferate server image (FastAPI + compiled Vite Web app)
+```
+
+Caddy remains a separate Compose service. The server image does not contain
+Caddy or any Node server: the Web builder stage compiles `apps/web` into
+`apps/web/dist` at build time, and only that compiled output is copied into the
+Python runtime image at `/app/web-dist`. The final image still runs the same
+`uvicorn proliferate.main:app` command and no Node process.
+
+`docker-compose.production.yml` sets `WEB_DIST_DIR=/app/web-dist` on the `api`
+service, so Web is enabled by default for every ordinary install — local and
+EC2 alike, with no new Compose profile and no new public port. The server-side
+`WEB_DIST_DIR` setting gates the behavior:
+
+- empty -> Web serving disabled, API-only behavior (the pre-existing default);
+- a valid directory containing `index.html` -> the compiled Web app is served;
+- a configured directory missing `index.html` -> startup fails clearly (no
+  silent fallback to an unrelated directory, and files outside the distribution
+  root are never served).
+
+All API/auth/setup routes are registered before a fail-closed SPA fallback:
+`/`, `/login`, `/settings`, and other client routes serve the ProductClient
+`index.html`; `/assets/<hashed file>` serves the real immutable static asset (a
+missing asset is a 404, never the shell); `/v1/*`, `/auth/*`, `/health`,
+`/meta`, `/setup`, and `/register` remain server-owned and an unknown route in
+those namespaces stays a non-200 API failure. The fallback answers only GET and
+HEAD navigation; POST/PUT/PATCH/DELETE and WebSocket requests never receive the
+shell. `index.html` is served `no-cache`; hashed assets are served
+`public, max-age=31536000, immutable`. See
+[`server/proliferate/server/web_app.py`](../../../server/proliferate/server/web_app.py).
+
+The Web artifact bakes no managed API hostname: the self-host build leaves
+`VITE_PROLIFERATE_API_BASE_URL` unset, so the browser resolves its API from
+`window.location.origin` at runtime (see
+[`apps/web/src/config/env.ts`](../../../apps/web/src/config/env.ts)). Because Web
+and API share one origin, same-origin Web needs no extra CORS configuration.
+
+The managed Web deployment is unaffected: it remains independently hosted on
+Vercel and keeps its explicitly configured managed API URL.
+
+### Public origin configuration
+
+`SITE_ADDRESS` is the single public hostname Caddy serves. `bootstrap.sh`
+derives BOTH `API_BASE_URL` and `FRONTEND_BASE_URL` from it (for example
+`SITE_ADDRESS=proliferate.company.com` yields
+`https://proliferate.company.com` for each). An explicit `API_BASE_URL` or
+`FRONTEND_BASE_URL` wins; an explicit `http://localhost` stays HTTP. These
+trusted origins are operator-configured and are never derived from an incoming
+`Host` or forwarded header. Existing Desktop CORS origins are unchanged.
 
 ## Desktop Runtime Override
 
@@ -73,10 +131,12 @@ identities.
 
 Services:
 
-- `caddy`: public HTTPS endpoint
+- `caddy`: public HTTPS endpoint (a separate container; never inside the server
+  image)
 - `db`: bundled Postgres 16
 - `migrate`: one-shot Alembic job
-- `api`: Proliferate control plane
+- `api`: Proliferate control plane, which also serves the compiled Web
+  application at `/app/web-dist` (`WEB_DIST_DIR`)
 
 Server releases include Linux runtime archives containing `anyharness`,
 `proliferate-worker`, and `proliferate-supervisor`, but a host-installed archive
@@ -87,10 +147,13 @@ separate sidecar. Host runtime-staging and Supervisor launch helpers have no
 active call site, so Supervisor process ownership remains an implementation
 gap rather than an active install requirement.
 
-Public traffic goes only to the control plane:
+Public traffic goes only to the control plane. Both Desktop and a browser reach
+the same public address; Caddy proxies `/llm/*` to the optional LiteLLM gateway
+and everything else (API, auth, setup, and the Web application) to the server:
 
 ```text
-Desktop -> https://api.company.com -> Caddy -> API
+Desktop  -> https://api.company.com -> Caddy -> API
+Browser  -> https://api.company.com -> Caddy -> API + compiled Web app
 ```
 
 Cloud workspace runtimes are still provider-hosted. For those workspaces,
@@ -235,6 +298,11 @@ refreshes the configured runtime archive, pulls enabled images, migrates,
 reconciles the base and enabled optional-profile services, and waits for
 health. Do not replace it with a few bare Compose commands; those omit the
 configuration, runtime, registry, optional-service, and health behavior.
+
+The compiled Web application ships inside the server image, so Web and API
+advance and roll back together: updating or pinning `PROLIFERATE_SERVER_IMAGE_TAG`
+moves both, and rolling back to a prior server image restores the matching Web
+build. There is no separate Web deploy or rollback step for self-hosted Web.
 
 The script does not resolve a newer release, fetch newer deployment scripts,
 or change a pinned image tag. For a pinned manual upgrade, rerun
