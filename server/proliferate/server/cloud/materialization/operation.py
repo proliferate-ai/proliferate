@@ -32,6 +32,7 @@ async def run_cloud_sandbox_operation[T](
     operation_key: str,
     lock_ttl_seconds: int = 600,
     wait_timeout_seconds: int = 300,
+    refresh_sandbox: Callable[[], Awaitable[CloudSandboxValue]] | None = None,
     run: Callable[[MaterializationContext], Awaitable[T]],
 ) -> T:
     del operation_key
@@ -40,5 +41,6 @@ async def run_cloud_sandbox_operation[T](
         ttl_seconds=lock_ttl_seconds,
         wait_timeout_seconds=wait_timeout_seconds,
     ):
-        target = await sandbox_io.connect_ready_sandbox(db, sandbox=sandbox)
-        return await run(MaterializationContext(sandbox=sandbox, target=target))
+        locked_sandbox = await refresh_sandbox() if refresh_sandbox is not None else sandbox
+        target = await sandbox_io.connect_ready_sandbox(db, sandbox=locked_sandbox)
+        return await run(MaterializationContext(sandbox=locked_sandbox, target=target))

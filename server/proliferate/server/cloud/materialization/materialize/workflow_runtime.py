@@ -27,6 +27,21 @@ async def run_managed_workflow_runtime_operation[T](
         raise operation.CloudMaterializationTargetUnavailable()
     await db.commit()
 
+    async def _refresh_locked() -> cloud_sandboxes_store.CloudSandboxValue:
+        refreshed = await cloud_sandboxes_store.load_cloud_sandbox_by_id(
+            db,
+            sandbox_id,
+            refresh=True,
+        )
+        if (
+            refreshed is None
+            or refreshed.destroyed_at is not None
+            or refreshed.status == "destroyed"
+        ):
+            raise operation.CloudMaterializationTargetUnavailable()
+        await db.commit()
+        return refreshed
+
     async def _run_locked(ctx: operation.MaterializationContext) -> T:
         if user_id is not None:
             await agent_auth.materialize_agent_auth(
@@ -34,7 +49,11 @@ async def run_managed_workflow_runtime_operation[T](
                 ctx=ctx,
                 user_id=user_id,
             )
-        refreshed = await cloud_sandboxes_store.load_cloud_sandbox_by_id(db, sandbox_id)
+        refreshed = await cloud_sandboxes_store.load_cloud_sandbox_by_id(
+            db,
+            sandbox_id,
+            refresh=True,
+        )
         if (
             refreshed is None
             or refreshed.destroyed_at is not None
@@ -51,5 +70,6 @@ async def run_managed_workflow_runtime_operation[T](
         db,
         sandbox=sandbox,
         operation_key=f"managed-workflow:{sandbox_id}",
+        refresh_sandbox=_refresh_locked,
         run=_run_locked,
     )

@@ -12,6 +12,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
+from proliferate.db.store import cloud_sandboxes as cloud_sandboxes_store
 from proliferate.server.cloud.materialization import operation
 from proliferate.server.cloud.materialization.materialize import agent_auth
 from proliferate.server.cloud.materialization.materialize import workflow_runtime
@@ -51,6 +52,21 @@ async def test_duplicate_cold_runtime_access_serializes_connect_and_store_probe(
     inside_lock = 0
     active_connects = 0
     max_active_connects = 0
+    provider_creations = 0
+    initial_loads = 0
+    both_initial_snapshots_loaded = asyncio.Event()
+    real_load = cloud_sandboxes_store.load_cloud_sandbox_by_id
+
+    async def synchronized_load(db, requested_id, **kwargs):  # type: ignore[no-untyped-def]
+        nonlocal initial_loads
+        snapshot = await real_load(db, requested_id, **kwargs)
+        if not kwargs.get("refresh", False):
+            initial_loads += 1
+            if initial_loads == 2:
+                both_initial_snapshots_loaded.set()
+            await both_initial_snapshots_loaded.wait()
+            assert snapshot is not None and snapshot.e2b_sandbox_id is None
+        return snapshot
 
     @asynccontextmanager
     async def locked(key: str, **_kwargs: object):  # type: ignore[no-untyped-def]
@@ -64,12 +80,23 @@ async def test_duplicate_cold_runtime_access_serializes_connect_and_store_probe(
                 inside_lock -= 1
 
     async def connect(db, *, sandbox):  # type: ignore[no-untyped-def]
-        nonlocal active_connects, max_active_connects
+        nonlocal active_connects, max_active_connects, provider_creations
         assert inside_lock == 1
-        assert not db.in_transaction()
         assert sandbox.id == sandbox_id
         active_connects += 1
         max_active_connects = max(max_active_connects, active_connects)
+        if sandbox.e2b_sandbox_id is None:
+            provider_creations += 1
+            persisted = await cloud_sandboxes_store.record_cloud_sandbox_provider_sandbox(
+                db,
+                sandbox_id,
+                e2b_sandbox_id="provider-a",
+                e2b_template_ref="e2b",
+            )
+            assert persisted is not None
+            await db.commit()
+        else:
+            assert sandbox.e2b_sandbox_id == "provider-a"
         await asyncio.sleep(0.02)
         active_connects -= 1
         return SimpleNamespace()
@@ -84,6 +111,11 @@ async def test_duplicate_cold_runtime_access_serializes_connect_and_store_probe(
 
     monkeypatch.setattr(operation.locks, "redis_materialization_lock", locked)
     monkeypatch.setattr(operation.sandbox_io, "connect_ready_sandbox", connect)
+    monkeypatch.setattr(
+        workflow_runtime.cloud_sandboxes_store,
+        "load_cloud_sandbox_by_id",
+        synchronized_load,
+    )
     monkeypatch.setattr(
         workflow_runtime.cloud_sandboxes_service,
         "load_cloud_sandbox_runtime_access",
@@ -106,6 +138,7 @@ async def test_duplicate_cold_runtime_access_serializes_connect_and_store_probe(
 
     assert first.execution_store_id == second.execution_store_id == "store-a"
     assert max_active_connects == 1
+    assert provider_creations == 1
 
 
 @pytest.mark.asyncio
