@@ -130,7 +130,10 @@ pub async fn export_workspace_mobility_archive(
     Path(workspace_id): Path<String>,
     Json(req): Json<ExportWorkspaceMobilityArchiveRequest>,
 ) -> Result<Json<WorkspaceMobilityArchive>, ApiError> {
-    let _admission_permits =
+    // Holds the up-front admission permits for the whole export; the FENCE-02
+    // admitted-set re-check applies only to the exclusive-lease destruction
+    // paths (purge/retire), so the mobility export just retains the permits.
+    let _admission =
         admit_all_workspace_sessions(&state, &workspace_id, SessionMutationKind::Mobility).await?;
     let _operation = state
         .workspace_operation_gate

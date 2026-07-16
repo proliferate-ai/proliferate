@@ -14,18 +14,19 @@ anyharness/crates/anyharness-lib/src/api/router_tests.rs 1364 existing AnyHarnes
 anyharness/crates/anyharness-lib/src/domains/materialization/service.rs 625 local materialization domain service (exact-ref workspace materialization + repo-root acquisition orchestration, in-process keyed operation-lock admission, idempotent replay/failure recording; blocking git mechanics split into acquire.rs) — split into service/ on next growth per guides/domains.md
 anyharness/crates/anyharness-lib/src/domains/workflows/service.rs 664 workflow durable rules (+run-control cancel-intent use case and helpers); split into service/ on next growth per guides/domains.md
 anyharness/crates/anyharness-lib/src/domains/workflows/service_tests.rs 1320 workflow-runs merge-gated domain suite (+2b partial-uniqueness contract on nonterminal session binding)
-anyharness/crates/anyharness-lib/src/api/workflow_runs_tests.rs 2409 workflow-runs HTTP + runtime/extension crossing suite (run-control PROOF-01 battery + 2b admission races: reservation/create/bind window, terminal release, and PR1227-WORKSPACE-FENCE-01 purge/retire destruction-vs-late-bind proofs over the real executor)
+anyharness/crates/anyharness-lib/src/api/workflow_runs_tests.rs 2790 workflow-runs HTTP + runtime/extension crossing suite (run-control PROOF-01 battery + 2b admission races: reservation/create/bind window, terminal release, PR1227-WORKSPACE-FENCE-01 purge/retire destruction-vs-late-bind proofs, and FENCE-02 bind->terminalize->destruction race proofs over the real executor)
 anyharness/crates/anyharness-lib/src/api/http/agent_gateway_catalog.rs 632 gateway model enrichment (own vs foreign match) + catalog version endpoint
-anyharness/crates/anyharness-lib/src/api/http/workspaces_lifecycle.rs 614 workspace retire lifecycle handlers (+PR1227-WORKSPACE-FENCE-01 under-exclusive-lease workflow-control re-check + test-only proof seam module)
+anyharness/crates/anyharness-lib/src/api/http/workspaces_lifecycle.rs 645 workspace retire lifecycle handlers (+PR1227-WORKSPACE-FENCE-01/02 under-exclusive-lease workflow-control re-check with admitted-set fail-closed membership + test-only proof seam module)
+anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.rs 665 workspace purge handlers (+2b fail-closed all-session admission, PR1227-WORKSPACE-FENCE-01/02 admitted-set carry + under-exclusive-lease re-check, test-only purge proof seam module)
 anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_resolver.rs 704 provider filtering + family normalizer (bedrock/date/version forms) with tests
 anyharness/crates/anyharness-lib/src/domains/agents/catalog/validation.rs 605 defaultAgentKind must name a declared agent (was already at 598)
 anyharness/crates/anyharness-lib/src/domains/agents/auth/context_tests.rs 645 classifier tests incl. gateway route activation + bedrock flag-only detection
-anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs 1897 existing AnyHarness oversized file (+preselected-id passthrough at two creation call sites)
+anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs 1913 existing AnyHarness oversized file (+preselected-id passthrough at two creation call sites)
 anyharness/crates/anyharness-lib/src/domains/mobility/service.rs 1520 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/plans/service.rs 628 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/goals/service_tests.rs 682 goal service regression tests for pending_op idempotency
 anyharness/crates/anyharness-lib/src/domains/reviews/service/service_tests.rs 1510 existing AnyHarness oversized test file
-anyharness/crates/anyharness-lib/src/domains/sessions/runtime/tests.rs 897 existing AnyHarness oversized test file
+anyharness/crates/anyharness-lib/src/domains/sessions/runtime/tests.rs 898 existing AnyHarness oversized test file (+preselected_session_id integration at one create call site)
 anyharness/crates/anyharness-lib/src/domains/workspaces/inventory.rs 653 runtime pressure worktree inventory joins and tests
 anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight.rs 613 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/live/sessions/probe.rs 613 catalog probe with per-harness model-source fallbacks

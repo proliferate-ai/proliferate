@@ -43,6 +43,29 @@
 //! permit` order is not the reverse of canonical in any deadlock-relevant sense:
 //! the fresh preselected id is structurally uncontended, so no party ever holds
 //! a workspace lease while waiting on that permit.)
+//!
+//! Admitted-set fail-closed (PR1227-WORKSPACE-FENCE-02): the nonterminal-only
+//! re-check above ([`SessionMutationAdmission::find_workflow_controlled_session`]) is NOT sufficient on
+//! its own. Consider the bind->terminalize race: the workflow executor binds a
+//! FRESH session (absent from the up-front admission snapshot, so no permit is
+//! held for it) AFTER the snapshot, and its controlling run then TERMINALIZES
+//! before the destructive path takes the exclusive lease. At re-check time that
+//! session has no NONTERMINAL controller — `controlling_run_id` returns `None`
+//! for it because the run's status is now terminal (`find_active_controller_run`
+//! filters `status NOT IN (completed, failed, cancelled, interrupted)`) — so
+//! FENCE-01 lets it through, yet the destructive path never admitted it (never
+//! held its permit). To close this, each destructive admission path (purge,
+//! retire) ALSO carries the SET of session ids it originally admitted (the ids
+//! `admit_all_workspace_sessions` snapshotted and holds permits for) into the
+//! under-lease re-check and FAILS CLOSED (the same stable 409) if ANY session
+//! id re-enumerated under the exclusive lease is NOT in that admitted set —
+//! EVEN IF its workflow already terminalized. FENCE-01 is still kept in
+//! ADDITION: it catches control ACQUIRED post-snapshot on an EXISTING admitted
+//! session (the retire race), which the set-membership check alone would miss
+//! because that session IS in the admitted set. The set-membership check is a
+//! PURE in-memory comparison over ids enumerated under the ALREADY-HELD
+//! exclusive lease: it acquires no permit and no lease, so it adds no edge to
+//! the canonical `run gate -> permit -> operation lease` order.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex as StdMutex, Weak};

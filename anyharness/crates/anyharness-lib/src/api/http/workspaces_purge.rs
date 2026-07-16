@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use crate::api::http::access::admit_session_mutation;
 use crate::domains::sessions::admission::{SessionMutationKind, SessionMutationPermit};
 use anyharness_contract::v1::{
@@ -34,15 +36,30 @@ pub async fn purge_workspace_preflight(
     Ok(Json(build_purge_preflight(&state, &workspace_id).await?))
 }
 
+/// The result of the up-front workspace-destruction admission snapshot: the
+/// held permits (dropped at end of the destructive operation) PLUS the SET of
+/// session ids that snapshot covered (PR1227-WORKSPACE-FENCE-02). The
+/// destructive owner carries the id set into its under-lease re-check so a
+/// session bound AFTER the snapshot — whose controlling workflow may already
+/// have terminalized — fails closed even though no permit is held for it.
+pub(super) struct AdmittedWorkspaceSessions {
+    /// Held for the lifetime of the destructive operation; never inspected.
+    pub(super) permits: Vec<SessionMutationPermit>,
+    /// The exact session ids admitted (and permit-held) up front.
+    pub(super) session_ids: BTreeSet<String>,
+}
+
 /// Spec 2b fail-closed rule: purge (and mobility removal) never overrides an
 /// active workflow controller. Every session of the workspace is admitted —
 /// in sorted id order so concurrent multi-session holders cannot deadlock —
-/// and ALL permits are held across the destructive operation.
+/// and ALL permits are held across the destructive operation. The admitted id
+/// set is returned alongside the permits for the FENCE-02 under-lease
+/// set-membership re-check.
 pub(super) async fn admit_all_workspace_sessions(
     state: &AppState,
     workspace_id: &str,
     kind: SessionMutationKind,
-) -> Result<Vec<SessionMutationPermit>, ApiError> {
+) -> Result<AdmittedWorkspaceSessions, ApiError> {
     let mut sessions = state
         .session_service
         .store()
@@ -53,10 +70,15 @@ pub(super) async fn admit_all_workspace_sessions(
         })?;
     sessions.sort_by(|a, b| a.id.cmp(&b.id));
     let mut permits = Vec::with_capacity(sessions.len());
+    let mut session_ids = BTreeSet::new();
     for session in &sessions {
         permits.push(admit_session_mutation(state, &session.id, kind).await?);
+        session_ids.insert(session.id.clone());
     }
-    Ok(permits)
+    Ok(AdmittedWorkspaceSessions {
+        permits,
+        session_ids,
+    })
 }
 
 #[utoipa::path(
@@ -73,9 +95,15 @@ pub async fn purge_workspace(
     State(state): State<AppState>,
     Path(workspace_id): Path<String>,
 ) -> Result<Json<WorkspacePurgeResponse>, ApiError> {
-    let _admission_permits =
+    let admission =
         admit_all_workspace_sessions(&state, &workspace_id, SessionMutationKind::WorkspacePurge)
             .await?;
+    // PR1227-WORKSPACE-FENCE-02: carry the admitted id set into the destructive
+    // owner so a session bound after this snapshot fails the under-lease
+    // set-membership re-check even if its workflow already terminalized. The
+    // permits are held until this scope ends.
+    let admitted_session_ids = admission.session_ids.clone();
+    let _admission_permits = admission.permits;
 
     // PR1227-WORKSPACE-FENCE-01 proof seam (test-only, no-op in production):
     // park between the up-front admission snapshot (now fully complete) and the
@@ -90,7 +118,7 @@ pub async fn purge_workspace(
         None,
         state
             .workspace_purge_service
-            .purge(&workspace_id, false)
+            .purge_with_admitted_session_ids(&workspace_id, false, Some(admitted_session_ids))
             .await
             .map_err(|error| ApiError::internal(error.to_string()))?,
     )
@@ -257,6 +285,17 @@ async fn purge_response_from_service_outcome(
             "session execution is controlled by an active workflow run",
             "SESSION_CONTROLLED_BY_WORKFLOW",
         )),
+        // PR1227-WORKSPACE-FENCE-02: the under-lease re-enumeration observed a
+        // session id absent from the up-front admitted set (bound after the
+        // snapshot, possibly already terminalized). Fail closed with the same
+        // stable 409 code; the detail names the unadmitted session id only —
+        // no raw internal state, nothing persisted.
+        WorkspacePurgeServiceOutcome::SessionAppearedAfterAdmission { session_id } => {
+            Err(ApiError::conflict(
+                format!("session {session_id} appeared after destruction admission"),
+                "SESSION_CONTROLLED_BY_WORKFLOW",
+            ))
+        }
     }
 }
 

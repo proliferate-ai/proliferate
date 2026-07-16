@@ -54,9 +54,13 @@ pub async fn retire_workspace(
     // workspace a controlled session is running in, so it fails closed like
     // purge — sorted permits for every workspace session are held across the
     // whole retirement.
-    let _admission_permits =
+    let admission =
         admit_all_workspace_sessions(&state, &workspace_id, SessionMutationKind::WorkspaceRetire)
             .await?;
+    // PR1227-WORKSPACE-FENCE-02: carry the admitted id set into the under-lease
+    // re-check; the permits are held until this handler returns.
+    let admitted_session_ids = admission.session_ids.clone();
+    let _admission_permits = admission.permits;
     let current = state
         .workspace_runtime
         .get_workspace(&workspace_id)
@@ -114,13 +118,16 @@ pub async fn retire_workspace(
         .workspace_operation_gate
         .acquire_exclusive(&workspace_id)
         .await;
-    // PR1227-WORKSPACE-FENCE-01: the up-front admit_all_workspace_sessions
+    // PR1227-WORKSPACE-FENCE-01/02: the up-front admit_all_workspace_sessions
     // snapshot cannot see a session the workflow executor creates+binds inside
     // the window before this exclusive lease is held (it only holds the shared
     // SessionStart lease then). Now that the exclusive lease excludes further
-    // workflow session creation, re-enumerate and fail closed if a workflow
-    // controls one. Read-only controller lookup: no permit, no lease — no ABBA.
-    reject_retire_if_workflow_controlled(&state, &workspace_id).await?;
+    // workflow session creation, re-enumerate and fail closed if (01) a workflow
+    // controls a session, OR (02) any enumerated id is absent from the admitted
+    // set (bound after the snapshot, possibly already terminalized). Read-only
+    // controller lookup + pure in-memory set comparison: no permit, no lease —
+    // no ABBA edge.
+    reject_retire_if_workflow_controlled(&state, &workspace_id, &admitted_session_ids).await?;
     let workspace = state
         .workspace_runtime
         .get_workspace(&workspace_id)
@@ -420,14 +427,21 @@ pub async fn retry_retire_cleanup(
     }))
 }
 
-/// PR1227-WORKSPACE-FENCE-01: called under the already-held exclusive workspace
-/// lease. Re-enumerate the workspace session set and return the stable 409 if a
-/// nonterminal workflow controls a session the up-front admission could not have
-/// seen (created+bound inside the admission -> exclusive-lease window). Pure
-/// read-only controller lookup: no permit, no lease — introduces no ABBA edge.
+/// PR1227-WORKSPACE-FENCE-01/02: called under the already-held exclusive
+/// workspace lease. Re-enumerate the workspace session set and return the stable
+/// 409 if either (02) an enumerated session id is absent from `admitted_session_ids`
+/// — the ids the up-front admission snapshotted and holds permits for — even if
+/// its controlling workflow already terminalized (the bind->terminalize race), OR
+/// (01) a NONTERMINAL workflow controls a session the up-front admission could not
+/// have seen (created+bound inside the admission -> exclusive-lease window).
+/// FENCE-02 is checked first: it is a pure in-memory set comparison over ids
+/// enumerated under the held lease (no permit, no lease). FENCE-01 remains to
+/// catch control acquired post-snapshot on an EXISTING admitted session. Neither
+/// introduces an ABBA edge.
 async fn reject_retire_if_workflow_controlled(
     state: &AppState,
     workspace_id: &str,
+    admitted_session_ids: &std::collections::BTreeSet<String>,
 ) -> Result<(), ApiError> {
     let session_ids = state
         .session_service
@@ -440,6 +454,23 @@ async fn reject_retire_if_workflow_controlled(
         .into_iter()
         .map(|session| session.id)
         .collect::<Vec<_>>();
+    // PR1227-WORKSPACE-FENCE-02: any id enumerated under the exclusive lease that
+    // was NOT in the up-front admitted set was bound after the snapshot and never
+    // admitted; fail closed regardless of its controller's terminality.
+    if let Some(unadmitted) = session_ids
+        .iter()
+        .find(|id| !admitted_session_ids.contains(*id))
+    {
+        tracing::info!(
+            workspace_id = %workspace_id,
+            session_id = %unadmitted,
+            "workspace retire rejected under exclusive lease: a session appeared after the destruction admission snapshot"
+        );
+        return Err(ApiError::conflict(
+            format!("session {unadmitted} appeared after destruction admission"),
+            "SESSION_CONTROLLED_BY_WORKFLOW",
+        ));
+    }
     match state
         .session_admission
         .find_workflow_controlled_session(session_ids)
