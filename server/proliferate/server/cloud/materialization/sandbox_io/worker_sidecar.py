@@ -90,6 +90,16 @@ async def launch_worker_sidecar(
 
     cloud_base_url = worker_cloud_base_url()
     if not cloud_base_url:
+        # A deploy with neither CLOUD_WORKER_BASE_URL nor API_BASE_URL set boots
+        # a runtime with NO worker (no enrollment, no heartbeat, no integration
+        # gateway); make the misconfiguration visible instead of silently
+        # skipping the launch.
+        log_cloud_event(
+            "cloud worker sidecar skipped: no cloud base URL configured "
+            "(set CLOUD_WORKER_BASE_URL or API_BASE_URL)",
+            level=logging.WARNING,
+            cloud_sandbox_id=str(sandbox_record.id),
+        )
         return
 
     try:
