@@ -35,24 +35,37 @@ export interface RetainedRuntimeBaseline {
   anyharnessReportedVersion: string;
 }
 
-const TEMPLATE_ID_ENV = "RELEASE_E2E_RETAINED_TEMPLATE_ID";
-const MANIFEST_ENV = "RELEASE_E2E_RETAINED_MANIFEST";
-const REPORTED_VERSION_ENV = "RELEASE_E2E_RETAINED_ANYHARNESS_REPORTED_VERSION";
+export const RETAINED_TEMPLATE_ID_ENV = "RELEASE_E2E_RETAINED_TEMPLATE_ID";
+export const RETAINED_MANIFEST_ENV = "RELEASE_E2E_RETAINED_MANIFEST";
+export const RETAINED_ANYHARNESS_REPORTED_VERSION_ENV =
+  "RELEASE_E2E_RETAINED_ANYHARNESS_REPORTED_VERSION";
 
 /**
- * Resolve the retained N-1 baseline from the environment, or null when the
- * inputs are absent (the founder-ruled default until a real qualified release
- * is retained). Both the template id and the manifest must be present and
- * non-empty; a half-supplied baseline is treated as absent so a partial
- * environment blocks cleanly rather than running against an incoherent N-1.
+ * Resolve the retained N-1 baseline from the runner-resolved environment, or
+ * null when the inputs are absent (the founder-ruled default until a real
+ * qualified release is retained). Both the template id and the manifest must be
+ * present and non-empty; a half-supplied baseline is treated as absent so a
+ * partial environment blocks cleanly rather than running against an incoherent
+ * N-1.
+ *
+ * The two gating inputs come from `env` — the runner's single env-resolution
+ * authority (`ctx.env`), which the scenario feeds by declaring both names in
+ * its `requiredEnv` (T4R-CONTROL-001). The optional reported-version override
+ * is passed explicitly: it is not a gating requirement (the manifest supplies a
+ * default), so it must not sit in `requiredEnv` — the scenario reads it through
+ * the optional-var idiom and hands the raw value here, keeping this resolver
+ * free of any second, undeclared env read.
  */
-export function resolveRetainedRuntimeBaseline(env: EnvResolution): RetainedRuntimeBaseline | null {
-  const templateId = env.get(TEMPLATE_ID_ENV)?.trim() ?? "";
-  const manifest = env.get(MANIFEST_ENV)?.trim() ?? "";
+export function resolveRetainedRuntimeBaseline(
+  env: EnvResolution,
+  reportedVersionOverride?: string,
+): RetainedRuntimeBaseline | null {
+  const templateId = env.get(RETAINED_TEMPLATE_ID_ENV)?.trim() ?? "";
+  const manifest = env.get(RETAINED_MANIFEST_ENV)?.trim() ?? "";
   if (templateId.length === 0 || manifest.length === 0) {
     return null;
   }
-  const reportedOverride = env.get(REPORTED_VERSION_ENV)?.trim() ?? "";
+  const reportedOverride = reportedVersionOverride?.trim() ?? "";
   return {
     templateId,
     manifest,

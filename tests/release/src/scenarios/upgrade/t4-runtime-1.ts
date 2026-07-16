@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import type { ScenarioDefinition, ScenarioRunContext } from "../types.js";
 import { ScenarioBlockedError } from "../types.js";
 import {
+  RETAINED_ANYHARNESS_REPORTED_VERSION_ENV,
+  RETAINED_MANIFEST_ENV,
+  RETAINED_TEMPLATE_ID_ENV,
   resolveRetainedRuntimeBaseline,
   type RetainedRuntimeBaseline,
 } from "../../fixtures/retained-runtime-baseline.js";
@@ -65,7 +68,20 @@ export const t4Runtime1: ScenarioDefinition = {
   title: "heartbeat-driven managed runtime update (existing sandbox, N-1 -> N)",
   registryFlowRef: "specs/developing/testing/tier-4-scenario-contract.md#T4-RUNTIME-1",
   lanes: ["sandbox"],
-  requiredEnv: ["RELEASE_E2E_SERVER_URL"],
+  // Every input the gates below read must be declared here: the runner builds
+  // ctx.env from the union of the selected cells' requiredEnv (execute.ts), so a
+  // var the scenario reaches for via ctx.env but does not declare is invisible
+  // to the real runner (resolves undefined) even when the operator supplied it
+  // — the retained inputs would then always read absent (T4R-CONTROL-001). The
+  // reported-version override is deliberately NOT here: it is optional (the
+  // manifest supplies a default), and a required var would wrongly block when a
+  // stamped binary needs no override.
+  requiredEnv: [
+    "RELEASE_E2E_SERVER_URL",
+    RETAINED_TEMPLATE_ID_ENV,
+    RETAINED_MANIFEST_ENV,
+    SUPERVISOR_OWNED_RUNTIME_ENV,
+  ],
   plan: () => [
     { description: "resolve the immutable retained-production N-1 template + manifest (else block)" },
     { description: "confirm the candidate API runs with supervisor_owned_runtime (else block)" },
@@ -102,8 +118,18 @@ async function runReal(ctx: ScenarioRunContext): Promise<void> {
 
   // Founder-ruled gate (2026-07-16): a truthful N-1 -> N proof needs a REAL
   // retained-production N-1 template + manifest. Absent those inputs, block
-  // rather than fabricate an N-1.
-  const retained: RetainedRuntimeBaseline | null = resolveRetainedRuntimeBaseline(ctx.env);
+  // rather than fabricate an N-1. The gating inputs are read from ctx.env (the
+  // runner's single env-resolution authority) — the scenario declares both in
+  // requiredEnv so they actually reach here (T4R-CONTROL-001). The optional
+  // reported-version override is read through the optional-var idiom
+  // (process.env with a manifest-derived default — matching T3-INT-1/T3-WT-1),
+  // NOT ctx.env: it is intentionally absent from requiredEnv, so ctx.env would
+  // never surface it. It is handed to the resolver explicitly.
+  const reportedVersionOverride = process.env[RETAINED_ANYHARNESS_REPORTED_VERSION_ENV];
+  const retained: RetainedRuntimeBaseline | null = resolveRetainedRuntimeBaseline(
+    ctx.env,
+    reportedVersionOverride,
+  );
   if (!retained) {
     throw new ScenarioBlockedError(
       "T4-RUNTIME-1: no retained-production N-1 template/manifest available. A truthful N-1 -> N update " +
@@ -116,7 +142,10 @@ async function runReal(ctx: ScenarioRunContext): Promise<void> {
     );
   }
 
-  if (process.env[SUPERVISOR_OWNED_RUNTIME_ENV]?.trim() !== "1") {
+  // Read from ctx.env (the single runner authority), not process.env: the flag
+  // is declared in requiredEnv, so the runner surfaces it here and there is no
+  // second, divergent input path (T4R-CONTROL-001).
+  if (ctx.env.get(SUPERVISOR_OWNED_RUNTIME_ENV)?.trim() !== "1") {
     throw new ScenarioBlockedError(
       "T4-RUNTIME-1: the supervisor-owned runtime topology must be active on the candidate API for the " +
         "heartbeat to return desiredTopology=supervisor_owned and for the Worker to write the durable " +
