@@ -4,8 +4,10 @@ import { useSaveRepoEnvironment } from "@proliferate/cloud-sdk-react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useCallback, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { runAddRepoWorkflow } from "#product/lib/domain/workspaces/creation/add-repo-workflow";
-import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
+import {
+  runAddRepoWorkflow,
+  type ExpectedRepoIdentity,
+} from "#product/lib/domain/workspaces/creation/add-repo-workflow";
 import { useWorkspaceCollectionsInvalidationActions } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { useWorkspaceCollectionsMutationCacheActions } from "#product/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
@@ -40,8 +42,9 @@ function isRepoEntryBlockedPath(pathname: string): boolean {
 }
 
 export function useAddRepo() {
-  const localRuntime = useProductHost().desktop?.runtime ?? null;
-  const telemetry = useProductTelemetry();
+  const desktop = useProductHost().desktop ?? null;
+  const localRuntime = desktop?.runtime ?? null;
+  const worker = desktop?.worker ?? null;
   const location = useLocation();
   const { upsertRepoRootInWorkspaceCollections } = useWorkspaceCollectionsMutationCacheActions();
   const { invalidateWorkspaceCollectionsForRuntime } = useWorkspaceCollectionsInvalidationActions();
@@ -64,8 +67,17 @@ export function useAddRepo() {
       return;
     }
 
+    if (!worker) {
+      // No native desktop worker: do not fabricate a durable association with a
+      // browser-local telemetry fallback id (stack identity rule).
+      return;
+    }
+
     void (async () => {
-      const installId = await telemetry.getAnonymousInstallId();
+      // Use the native desktop install id so ownership of the saved local
+      // environment is legible and cannot split identity via a telemetry
+      // fallback.
+      const installId = await worker.getInstallId();
       await saveEnvironment.mutateAsync({
         gitOwner,
         gitRepoName,
@@ -82,23 +94,32 @@ export function useAddRepo() {
     })().catch(() => {
       // Local repo registration remains usable when Cloud is unavailable.
     });
-  }, [saveEnvironment, telemetry]);
+  }, [saveEnvironment, worker]);
 
   const addRepoFromPath = useCallback(async (
     path: string,
-    options?: { createCloudEnvironment?: boolean },
+    options?: {
+      createCloudEnvironment?: boolean;
+      /** "Add to this Mac": the folder must prove this GitHub identity before
+       * any mutation, and the local environment save is always attempted. */
+      expectedRepoIdentity?: ExpectedRepoIdentity | null;
+    },
   ): Promise<AddRepoFromPathResult> => {
     if (!canAddRepo) {
       return { succeeded: false, error: "Add repository is unavailable right now." };
     }
 
-    const createCloudEnvironment = options?.createCloudEnvironment ?? true;
+    // "Add to this Mac" always registers the local environment for the known
+    // Cloud repo; the plain add-folder path leaves that to the setup modal.
+    const createCloudEnvironment = options?.createCloudEnvironment
+      ?? Boolean(options?.expectedRepoIdentity);
     setIsAddingRepo(true);
     try {
       const repoRoot = await runAddRepoWorkflow({
         path,
         ensureRuntimeReady: () => ensureRuntimeReady(localRuntime),
         resolveRepoRootFromPath: (repoPath) => resolveRepoRootFromPath(repoPath),
+        expectedRepoIdentity: options?.expectedRepoIdentity ?? null,
         upsertRepoRootInWorkspaceCollections,
         invalidateWorkspaceCollections: invalidateWorkspaceCollectionsForRuntime,
         saveLocalRepoEnvironment: createCloudEnvironment

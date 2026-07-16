@@ -11,6 +11,33 @@ export function gitRepoKey(gitOwner: string, gitRepoName: string): string {
   return formatGitRepoId({ gitOwner, gitRepoName });
 }
 
+/** Lower-case for logical comparison. GitHub owners/repos are case-insensitive. */
+function caseFold(value: string): string {
+  return value.trim().toLocaleLowerCase("en-US");
+}
+
+/** Strip a single trailing `.git` suffix (case-insensitive) from a repo name. */
+function stripDotGit(value: string): string {
+  return value.trim().replace(/\.git$/iu, "");
+}
+
+/**
+ * One canonical, case-folded logical key for a GitHub-style repository.
+ *
+ * Collapses provider/owner/repo casing and a trailing `.git` so two spellings
+ * of the same repository (`Acme/Rocket`, `acme/rocket.git`) map to one group
+ * and folder validation agrees. Display strings must keep their original
+ * casing; only comparison keys pass through here. Branch names are never
+ * folded — Git branch comparison stays case-sensitive.
+ */
+export function canonicalRepoKey(
+  provider: string,
+  owner: string,
+  repo: string,
+): string {
+  return `${caseFold(provider)}:${caseFold(owner)}:${caseFold(stripDotGit(repo))}`;
+}
+
 export function normalizeGitRepoId(value: string | null | undefined): string | null {
   const parsed = parseGitRepoId(value);
   return parsed ? formatGitRepoId(parsed) : null;

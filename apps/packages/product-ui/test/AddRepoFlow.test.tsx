@@ -25,6 +25,7 @@ function renderFlow(overrides: Partial<AddRepoFlowProps> = {}) {
   const props: AddRepoFlowProps = {
     open: true,
     step: { kind: "entry" },
+    options: ["add-existing-folder", "cloud"],
     onPickOption: vi.fn(),
     onBack: vi.fn(),
     onClose: vi.fn(),
@@ -37,15 +38,22 @@ function renderFlow(overrides: Partial<AddRepoFlowProps> = {}) {
 describe("AddRepoFlow", () => {
   afterEach(cleanup);
 
-  it("offers the three entry options and reports the cloud pick", () => {
+  it("offers the Desktop host choices and reports the cloud pick", () => {
     const { onPickOption } = renderFlow();
 
     expect(screen.getByText("Add a repository")).toBeTruthy();
-    expect(screen.getByText("Link a local repo")).toBeTruthy();
-    expect(screen.getByText("Add a local repo")).toBeTruthy();
-    fireEvent.click(screen.getByText("Add a cloud repo"));
+    expect(screen.getByText("Add an existing folder")).toBeTruthy();
+    expect(screen.getByText("Set up in Cloud")).toBeTruthy();
+    fireEvent.click(screen.getByText("Set up in Cloud"));
 
     expect(onPickOption).toHaveBeenCalledWith("cloud");
+  });
+
+  it("offers only Set up in Cloud on Web (no local folder option)", () => {
+    renderFlow({ options: ["cloud"] });
+
+    expect(screen.getByText("Set up in Cloud")).toBeTruthy();
+    expect(screen.queryByText("Add an existing folder")).toBeNull();
   });
 
   it("runs the cloud step in the same dialog with the repo picker", () => {

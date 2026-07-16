@@ -51,14 +51,16 @@ export function AccountPane() {
   const user = useProductAuthUser();
   const { links } = useProductHost();
   const auth = useAuditedAuth();
+  // GitHub controls key off GitHub OAuth availability, not product-session flags (PR2-AUTH-02).
   const {
     signIn: signInWithGitHub,
     submitting: signingIn,
-    signInChecking,
+    signInAvailable: cloudSignInAvailable,
+    signInChecking: cloudSignInChecking,
     error: signInError,
   } = useGitHubSignIn();
   const { data: githubDesktopAuthAvailability } = useGitHubDesktopAuthAvailability();
-  const { cloudSignInAvailable, cloudSignInChecking, cloudUnavailable } = useCloudAvailabilityState();
+  const { cloudUnavailable } = useCloudAvailabilityState();
   const [signingOut, setSigningOut] = useState(false);
   const [linkingGoogle, setLinkingGoogle] = useState(false);
   const [providerLinkError, setProviderLinkError] = useState<string | null>(null);
@@ -307,11 +309,11 @@ export function AccountPane() {
             ? {
                 label: signingIn
                   ? AUTH_ACCOUNT_LABELS.signingIn
-                  : signInChecking
+                  : cloudSignInChecking
                     ? AUTH_ACCOUNT_LABELS.checkingSignIn
                     : AUTH_ACCOUNT_LABELS.signIn,
                 loading: signingIn,
-                disabled: signingIn || signInChecking,
+                disabled: signingIn || cloudSignInChecking,
                 onClick: () => { void signInWithGitHub(); },
               }
             : undefined,
@@ -322,7 +324,7 @@ export function AccountPane() {
                   : AUTH_ACCOUNT_LABELS.reconnect,
                 icon: <RefreshCw className="size-3" />,
                 loading: signingIn,
-                disabled: signingIn || signInChecking,
+                disabled: signingIn || cloudSignInChecking,
                 onClick: () => { void signInWithGitHub({ prompt: "select_account" }); },
               }
             : undefined,
@@ -333,7 +335,7 @@ export function AccountPane() {
                   : AUTH_ACCOUNT_LABELS.connectGitHub,
                 icon: <ProviderBrandIcon provider="github" className="size-[13px]" />,
                 loading: signingIn,
-                disabled: signingIn || signInChecking,
+                disabled: signingIn || cloudSignInChecking,
                 onClick: () => { void signInWithGitHub({ prompt: "select_account" }); },
               }
             : undefined,
