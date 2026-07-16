@@ -56,11 +56,11 @@ type MutableSentryEvent = {
 };
 
 function scrubSentryBreadcrumb(breadcrumb: Breadcrumb): Breadcrumb | null {
-  return {
-    ...breadcrumb,
-    message: breadcrumb.message ? scrubTelemetryText(breadcrumb.message) : breadcrumb.message,
-    data: scrubTelemetryData(breadcrumb.data),
-  };
+  const scrubbed = scrubTelemetryData(breadcrumb);
+  scrubbed.message = typeof scrubbed.message === "string"
+    ? scrubTelemetryText(scrubbed.message)
+    : scrubbed.message;
+  return scrubbed;
 }
 
 function scrubSentryFrame(frame: SentryStackFrame): void {

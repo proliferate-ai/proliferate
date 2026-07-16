@@ -83,6 +83,12 @@ session replay, and telemetry-related provider and hook ownership.
 ## Replay and Privacy
 
 - Session replay is opt-in and should default to disabled.
+- Shared client payload scrubbing bounds container traversal by depth, array
+  positions, and object properties. It replaces cyclic back-edges with
+  `[circular]` and structural overflow with `[truncated]`, reuses a completed
+  scrubbed value for repeated references, and redacts enumerable accessors
+  without evaluating them. These are structural bounds; strings retain their
+  existing redaction behavior and are not truncated by length.
 - When replay is enabled, workspace and settings surfaces should be blocked by
   default.
 - Continue using explicit masking for input areas that may contain sensitive
