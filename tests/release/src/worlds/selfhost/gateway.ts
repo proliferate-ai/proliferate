@@ -104,7 +104,26 @@ export function resolveGatewayConfig(
         "(preferred) or RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY so the operator LiteLLM profile has a real backend.",
     };
   }
-  const imageTag = env.get("RELEASE_E2E_SELFHOST_LITELLM_IMAGE_TAG")?.trim() || DEFAULT_LITELLM_IMAGE_TAG;
+  // The LiteLLM image MUST be pinned to an immutable tag (PR7-CONTROL-010):
+  // falling back to the mutable `stable` tag would let an unpinned run silently
+  // exercise a rolling image, so a green SH-GATEWAY could not attest which bytes
+  // ran. Absent (or a `stable`/`latest` rolling value) → fail closed, matching
+  // frozen decision 8 ("SH-GATEWAY pins via PROLIFERATE_LITELLM_IMAGE_TAG").
+  const imageTag = env.get("RELEASE_E2E_SELFHOST_LITELLM_IMAGE_TAG")?.trim();
+  if (!imageTag) {
+    return {
+      ok: false,
+      reason:
+        "SH-GATEWAY: RELEASE_E2E_SELFHOST_LITELLM_IMAGE_TAG is not set — the LiteLLM image must be pinned to an " +
+        "immutable tag (no mutable `stable` fallback, PR7-CONTROL-010); failing closed.",
+    };
+  }
+  if (imageTag.toLowerCase() === "stable" || imageTag.toLowerCase() === "latest") {
+    return {
+      ok: false,
+      reason: `SH-GATEWAY: RELEASE_E2E_SELFHOST_LITELLM_IMAGE_TAG="${imageTag}" is a mutable rolling tag; pin an immutable tag/digest.`,
+    };
+  }
   return {
     ok: true,
     value: {

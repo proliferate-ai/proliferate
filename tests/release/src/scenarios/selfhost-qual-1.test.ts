@@ -458,7 +458,12 @@ test("runGithubAuthCell: fails when identity A does not link to the existing own
 // ── SH-GATEWAY cell logic (fake ops) ─────────────────────────────────────────
 
 const GATEWAY_ENV: GatewayEnvSource = {
-  get: (name) => (name === "RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY" ? "sk-ant-b" : undefined),
+  get: (name) =>
+    name === "RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY"
+      ? "sk-ant-b"
+      : name === "RELEASE_E2E_SELFHOST_LITELLM_IMAGE_TAG"
+        ? "v1.2.3-abcdef" // pinned immutable tag (PR7-CONTROL-010)
+        : undefined,
 };
 
 function greenGatewayOps(): GatewayCellOps {
@@ -601,6 +606,29 @@ test("runCloudAddonCell: green through enable → provision+turn → pause/wake 
   assert.equal(result.status, "green", JSON.stringify(result));
   assert.equal(result.evidence?.kind, "selfhost_cloud_addon");
   assert.equal((result.evidence as { e2b_template_id: string }).e2b_template_id, "tmpl-selfhost-1");
+});
+
+test("runCloudAddonCell: fails when the provisioned template does not match the configured one (PR7-CONTROL-009)", async () => {
+  const ops = greenCloudAddonOps();
+  const reaped: string[] = [];
+  ops.registerSandboxReap = async (_w, id) => void reaped.push(id);
+  ops.provisionAndRunTurn = async (_world, _owner, _config, onSandboxCreated) => {
+    await onSandboxCreated("e2b-sbx-1");
+    return {
+      githubAppInstallationId: "inst-1",
+      e2bTemplateId: "tmpl-DEFAULT-alias", // a different template than configured (tmpl-selfhost-1)
+      sandboxId: "sbx-1",
+      workspaceId: "ws-1",
+      sessionId: "sess-1",
+      providerSandboxId: "e2b-sbx-1",
+      turn: { ended: true },
+    };
+  };
+  const result = await runCloudAddonCell(fakeWorld(), FAKE_OWNER, CLOUD_ADDON_ENV_SOURCE, ops);
+  assert.equal(result.status, "failed");
+  assert.match(result.reason?.message ?? "", /does not match the configured self-built template/);
+  // The wrong-template sandbox was still registered for reap (created before the check).
+  assert.deepEqual(reaped, ["e2b-sbx-1"]);
 });
 
 test("runCloudAddonCell: fails closed when the add-on env is absent", async () => {
@@ -759,9 +787,15 @@ test("correlateGatewaySpend: a zero-token row does not count as spend", () => {
   assert.deepEqual(correlateGatewaySpend(rows, "vk"), { correlated: false, masterKeyNotUsed: false });
 });
 
+/** A gateway env source with a pinned (immutable) LiteLLM tag + the given extras. */
+function gatewayEnvGet(extra: Record<string, string>): (name: string) => string | undefined {
+  const base: Record<string, string> = { RELEASE_E2E_SELFHOST_LITELLM_IMAGE_TAG: "v1.2.3-abcdef", ...extra };
+  return (name) => base[name];
+}
+
 test("resolveGatewayConfig: prefers the B upstream key, generates a fresh master key + public /llm url", () => {
   const result = resolveGatewayConfig(
-    { get: (name) => (name === "RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY" ? "sk-b" : name === "RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY" ? "sk-a" : undefined) },
+    { get: gatewayEnvGet({ RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY: "sk-b", RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY: "sk-a" }) },
     "https://box.qualification.proliferate.com",
   );
   assert.equal(result.ok, true);
@@ -770,12 +804,13 @@ test("resolveGatewayConfig: prefers the B upstream key, generates a fresh master
     assert.equal(result.value.block.upstreamAnthropicKey, "sk-b");
     assert.equal(result.value.block.litellmPublicBaseUrl, "https://box.qualification.proliferate.com/llm");
     assert.match(result.value.block.litellmMasterKey, /^sk-[0-9a-f]{64}$/);
+    assert.equal(result.value.imageTag, "v1.2.3-abcdef");
   }
 });
 
 test("resolveGatewayConfig: falls back to the A upstream key", () => {
   const result = resolveGatewayConfig(
-    { get: (name) => (name === "RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY" ? "sk-a" : undefined) },
+    { get: gatewayEnvGet({ RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY: "sk-a" }) },
     "https://box.example.com",
   );
   assert.equal(result.ok, true);
@@ -785,8 +820,29 @@ test("resolveGatewayConfig: falls back to the A upstream key", () => {
 });
 
 test("resolveGatewayConfig: fails closed with no upstream key", () => {
-  const result = resolveGatewayConfig({ get: () => undefined }, "https://box.example.com");
+  const result = resolveGatewayConfig({ get: gatewayEnvGet({}) }, "https://box.example.com");
   assert.equal(result.ok, false);
+});
+
+test("resolveGatewayConfig: fails closed when the LiteLLM image tag is absent (no mutable stable fallback, PR7-CONTROL-010)", () => {
+  const result = resolveGatewayConfig(
+    { get: (name) => (name === "RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY" ? "sk-a" : undefined) },
+    "https://box.example.com",
+  );
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.match(result.reason, /must be pinned|LITELLM_IMAGE_TAG is not set/);
+  }
+});
+
+test("resolveGatewayConfig: fails closed on a mutable rolling tag (stable/latest, PR7-CONTROL-010)", () => {
+  for (const rolling of ["stable", "latest", "STABLE"]) {
+    const result = resolveGatewayConfig(
+      { get: gatewayEnvGet({ RELEASE_E2E_BYOK_ANTHROPIC_A_API_KEY: "sk-a", RELEASE_E2E_SELFHOST_LITELLM_IMAGE_TAG: rolling }) },
+      "https://box.example.com",
+    );
+    assert.equal(result.ok, false, `tag "${rolling}" must fail closed`);
+  }
 });
 
 test("enrollmentIsSynced: true only for the literal synced status", () => {

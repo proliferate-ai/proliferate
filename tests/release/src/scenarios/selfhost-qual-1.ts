@@ -157,6 +157,13 @@ export const FIXED_SUBDOMAIN_LABEL = "selfhost-fixed";
 
 /** Bounded prompt for the SH-GATEWAY cell's one gateway-routed turn. */
 export const GATEWAY_TURN_PROMPT = "Reply with exactly the word: pong";
+
+/**
+ * The exact role SH-GITHUB-AUTH's invited identity B must be admitted with
+ * (PR7-CONTROL-010): the invite is a member invite, so the green predicate
+ * requires EXACTLY `member`, not any truthy role.
+ */
+export const EXPECTED_INVITED_ROLE = "member";
 const RESTART_HEALTH_TIMEOUT_MS = 180_000;
 
 /**
@@ -221,12 +228,13 @@ function planForCell(cell: PlannedCellV1): ScenarioPlanStep[] {
       ];
     case SH_CLOUD_ADDON:
       return [
+        { description: `${prefix} SCAFFOLDED (PR7-CONTROL-009): the enable/disable + capability-truth machinery and offline decision logic exist, but the production provisioning drive (instance-GitHub-App authorize → sandbox → turn → pause/wake) is NOT yet wired — the cell FAILS CLOSED until it is` },
         { description: `${prefix} preflight the cloud add-on env (E2B key/team/template + instance GitHub App); fail closed if absent` },
         { description: `${prefix} assert capabilities.cloudWorkspaces is FALSE before enabling the add-on` },
         { description: `${prefix} write the add-on env block (E2B pair + GitHub App) over SSH; bootstrap --wait; assert cloudWorkspaces TRUE` },
-        { description: `${prefix} authorize the instance GitHub App + provision one personal sandbox/workspace on the self-built template` },
-        { description: `${prefix} run one representative turn; register the provisioned E2B sandbox for durable reap` },
-        { description: `${prefix} pause then wake the sandbox; assert state (the turn's workspace/session) survives intact` },
+        { description: `${prefix} [not-yet-wired] authorize the instance GitHub App + provision one personal sandbox/workspace on the self-built template; compare the provisioned immutable template id to the configured one` },
+        { description: `${prefix} [not-yet-wired] run one representative turn; register the provisioned E2B sandbox for durable reap` },
+        { description: `${prefix} [not-yet-wired] pause then wake the sandbox; assert the TURN'S OWN workspace/session state (not an ad-hoc marker) survives intact` },
         { description: `${prefix} disable the add-on + reconverge; assert cloudWorkspaces drops to FALSE and the base product stays healthy` },
       ];
     default:
@@ -481,15 +489,21 @@ export async function runGithubAuthCell(
     };
   }
 
-  // Invite B through the product UI, then B's GitHub sign-in must be admitted.
+  // Invite B through the product UI, then B's GitHub sign-in must be admitted
+  // with EXACTLY the invited role (`member`) — not merely any truthy role
+  // (PR7-CONTROL-010). The invite is a member invite (decision 4 "correct
+  // role"), so admitting B as owner/admin, or with an empty/unknown role, is a
+  // failure, not a pass.
   await ops.inviteThroughUi(world, owner, config.identityB.email);
   const invited = await ops.signInWithGithub(world, config.identityB);
-  if (!invited.admitted || !invited.memberRole) {
+  if (!invited.admitted || invited.memberRole !== EXPECTED_INVITED_ROLE) {
     return {
       status: "failed",
       reason: {
         code: "scenario_failure",
-        message: `SH-GITHUB-AUTH: invited GitHub identity (B) was not admitted with a role (saw ${JSON.stringify(invited)}).`,
+        message:
+          `SH-GITHUB-AUTH: invited GitHub identity (B) was not admitted as exactly "${EXPECTED_INVITED_ROLE}" ` +
+          `(saw ${JSON.stringify({ admitted: invited.admitted, memberRole: invited.memberRole })}).`,
       },
     };
   }
@@ -923,6 +937,21 @@ export async function runCloudAddonCell(
       reason: { code: "scenario_failure", message: "SH-CLOUD-ADDON: the provisioned cloud-workspace turn did not end." },
     };
   }
+  // The sandbox MUST have been provisioned on the exact configured immutable
+  // self-built template (PR7-CONTROL-009): compare the OBSERVED template id to
+  // the configured one, so a sandbox that materialized on a different/default
+  // template (e.g. a background-materializer orphan) is a red, not a green.
+  if (provisioned.e2bTemplateId !== config.value.e2bTemplateName) {
+    return {
+      status: "failed",
+      reason: {
+        code: "scenario_failure",
+        message:
+          `SH-CLOUD-ADDON: the provisioned sandbox's template "${provisioned.e2bTemplateId}" does not match the ` +
+          `configured self-built template "${config.value.e2bTemplateName}"; refusing to green a wrong-template sandbox.`,
+      },
+    };
+  }
 
   const pauseWake = await ops.pauseWakeStateIntact(world, owner, provisioned.providerSandboxId, config.value);
   if (pauseWake.error) {
@@ -967,7 +996,9 @@ export async function runCloudAddonCell(
     api_origin: hostOf(world.api.baseUrl),
     controller_runtime_origin: hostOf(world.runtime.baseUrl),
     github_app_installation_id_hash: sha256Hex(provisioned.githubAppInstallationId),
-    e2b_template_id: config.value.e2bTemplateName,
+    // The OBSERVED template id (proven == the configured one just above), not the
+    // configured value, so evidence records what actually materialized.
+    e2b_template_id: provisioned.e2bTemplateId,
     sandbox_id_hash: sha256Hex(provisioned.sandboxId),
     workspace_id_hash: sha256Hex(provisioned.workspaceId),
     session_id_hash: sha256Hex(provisioned.sessionId),
@@ -980,16 +1011,19 @@ export async function runCloudAddonCell(
 }
 
 /**
- * Default production ops. `fetchCloudWorkspacesCapability`/`configureAndEnable`/
- * `disableAndReassert` are real and verifiable; `provisionAndRunTurn` drives the
- * real product cloud-sandbox lifecycle as far as the current product surface
- * allows and FAILS CLOSED (bounded, secret-free) at the one boundary with no
- * self-host product seam yet — the instance-GitHub-App authorization that binds a
- * covered repo to a personal sandbox on self-host (managed-cloud's
- * `seedGithubAuthorizationOnBox` is a managed-cloud-only box seed, and PR 7 does
- * not duplicate PR 2's controllers). This is the SH-GATEWAY "live proof is an
- * open risk" posture: the decision logic is proven offline by the fake ops, and
- * the live green lands once the self-host GitHub-App authorization drive + the
+ * Default production ops for the SCAFFOLDED SH-CLOUD-ADDON cell (PR7-CONTROL-009).
+ * `fetchCloudWorkspacesCapability`/`configureAndEnableCloudAddon`/
+ * `disableAndReassert` are REAL and verifiable (enable/disable the box profile,
+ * read `/meta` capability truth). `provisionAndRunTurn` is NOT yet wired: the
+ * self-host product path (instance-GitHub-App authorize → covered repo_environment
+ * → personal sandbox materialize on the self-built template → one turn) has no
+ * self-host driver seam (managed-cloud's `seedGithubAuthorizationOnBox` is a
+ * managed-cloud-only box seed, and PR 7 does not duplicate PR 2's controllers).
+ * So the production op FAILS CLOSED (bounded, secret-free) and the cell can NEVER
+ * reach green live today — it is scaffolded, not runnable. The green DECISION
+ * logic (enable → capability flip → real-GitHub provision + turn → observed
+ * template-id match → pause/wake of the TURN'S OWN session → truthful disable) is
+ * proven offline by the fake ops; the live green lands only once the drive + the
  * founder E2B/App inputs exist. It never returns a false green.
  */
 export const defaultCloudAddonCellOps: CloudAddonCellOps = {
@@ -1000,13 +1034,14 @@ export const defaultCloudAddonCellOps: CloudAddonCellOps = {
     await configureAndEnableCloudAddonProfile(world.control.ssh, config.block, tmpFileIo());
   },
   async provisionAndRunTurn(_world, _owner, _config, _onSandboxCreated) {
-    // Fail closed at the self-host GitHub-App authorization boundary. The product
-    // path (instance GitHub App authorize → covered repo_environment → personal
-    // sandbox materialize on the self-built template → one turn) has no self-host
-    // driver seam yet; returning a bounded turn error keeps this a clean red until
-    // that drive + founder inputs land, rather than fabricating a provisioned
-    // workspace. When wired, the live impl MUST call `onSandboxCreated(id)` at E2B
-    // create time (before it can throw) so the reap is registered even on a crash.
+    // SCAFFOLDED (PR7-CONTROL-009): fail closed at the self-host GitHub-App
+    // authorization boundary — no self-host driver seam exists yet. Returning a
+    // bounded turn error keeps this a clean red rather than fabricating a
+    // provisioned workspace. When wired, the live impl MUST: call
+    // `onSandboxCreated(id)` at E2B create time (before it can throw) so the reap
+    // is registered even on a crash; return the OBSERVED `e2bTemplateId` (the cell
+    // asserts it == the configured self-built template); and drive one real turn
+    // whose workspace/session ids are the ones the pause/wake step re-reads.
     return {
       githubAppInstallationId: "",
       e2bTemplateId: "",
@@ -1034,10 +1069,17 @@ export const defaultCloudAddonCellOps: CloudAddonCellOps = {
     });
   },
   async pauseWakeStateIntact(world, owner, providerSandboxId, config) {
-    // Pause via the E2B SDK backdoor (no product pause endpoint), wake through the
-    // product's own lever, and re-read a marker to prove the workspace/session
-    // state survived. Bounded fail-closed on any error. The E2B probe env injects
-    // the box's key under RELEASE_E2E_E2B_API_KEY (the var runProbe actually reads).
+    // SCAFFOLDED interim implementation (PR7-CONTROL-009): this proves the E2B
+    // pause/wake MECHANISM survives a filesystem marker, but the frozen contract
+    // wants the TURN'S OWN workspace/session state proven intact — i.e. after
+    // wake, re-open the session the turn created and confirm its transcript
+    // (the reply) is still there, mirroring SH-BASE-TURN's reopen. That needs the
+    // real provisioned session id (from the not-yet-wired provisionAndRunTurn), so
+    // it is deferred with the rest of the live drive; the marker keeps the
+    // mechanism covered until then. Pause via the E2B SDK backdoor (no product
+    // pause endpoint), wake through the product's own lever. Bounded fail-closed
+    // on any error. The E2B probe env injects the box's key under
+    // RELEASE_E2E_E2B_API_KEY (the var runProbe actually reads).
     try {
       const e2bEnv = boxE2bProbeEnv(config);
       const marker = `sh-cloud-addon-${world.run.run_id}`;

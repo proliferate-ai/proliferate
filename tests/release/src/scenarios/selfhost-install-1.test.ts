@@ -454,6 +454,7 @@ function greenBaseTurnOps(closed: { value: boolean }, overrides: Partial<BaseTur
     readAuthSourceKinds: () => ["api_key"],
     detectGatewayEnvVar: () => undefined,
     detectE2bEnvKey: () => undefined,
+    observeProviderContainersAbsent: async () => ({ litellmRunning: false, redisRunning: false, names: [] }),
     ...overrides,
   };
 }
@@ -494,6 +495,26 @@ test("runBaseTurnCell: no launchable model is blocked, not failed", async () => 
   assert.equal(result.status, "blocked");
   assert.match(result.reason?.message ?? "", /no launchable claude model/);
   assert.equal(closed.value, true);
+});
+
+test("runBaseTurnCell: a running LiteLLM container fails no_litellm_spend (run-window observation, PR7-CONTROL-010)", async () => {
+  const closed = { value: false };
+  const ops = greenBaseTurnOps(closed, {
+    observeProviderContainersAbsent: async () => ({ litellmRunning: true, redisRunning: false, names: ["proliferate-litellm-1"] }),
+  });
+  const result = await runBaseTurnCell(baseTurnWorld(), FAKE_OWNER, ops);
+  assert.equal(result.status, "failed");
+  assert.match(result.reason?.message ?? "", /LiteLLM container is running/);
+});
+
+test("runBaseTurnCell: a running Redis/materializer container fails no_e2b (run-window observation, PR7-CONTROL-010)", async () => {
+  const closed = { value: false };
+  const ops = greenBaseTurnOps(closed, {
+    observeProviderContainersAbsent: async () => ({ litellmRunning: false, redisRunning: true, names: ["proliferate-redis-1"] }),
+  });
+  const result = await runBaseTurnCell(baseTurnWorld(), FAKE_OWNER, ops);
+  assert.equal(result.status, "failed");
+  assert.match(result.reason?.message ?? "", /Redis\/materializer container is running/);
 });
 
 test("runBaseTurnCell: a UI create/turn failure fails the cell with a bounded reason", async () => {
