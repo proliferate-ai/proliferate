@@ -20,6 +20,25 @@ from proliferate.utils.time import utcnow
 
 _UNSET: Final = object()
 
+# Single global advisory lock for the orphan-sandbox reaper loop; distinct from
+# the billing reconciler's key so the two passes never contend for one lock.
+CLOUD_SANDBOX_REAPER_LOCK_KEY: Final = 4_203_902
+
+
+async def try_acquire_cloud_sandbox_reaper_lock(db: AsyncSession) -> bool:
+    result = await db.scalar(
+        text("SELECT pg_try_advisory_lock(:lock_key)"),
+        {"lock_key": CLOUD_SANDBOX_REAPER_LOCK_KEY},
+    )
+    return bool(result)
+
+
+async def release_cloud_sandbox_reaper_lock(db: AsyncSession) -> None:
+    await db.execute(
+        text("SELECT pg_advisory_unlock(:lock_key)"),
+        {"lock_key": CLOUD_SANDBOX_REAPER_LOCK_KEY},
+    )
+
 
 @dataclass(frozen=True)
 class CloudSandboxValue:

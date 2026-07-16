@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import secrets
 import shlex
 from uuid import UUID
@@ -50,6 +51,8 @@ from proliferate.server.cloud.runtime.sandbox_exec import (
 )
 from proliferate.server.cloud.runtime_workers.service import worker_cloud_base_url
 from proliferate.utils.crypto import decrypt_text, encrypt_text
+
+logger = logging.getLogger("proliferate.cloud.materialization.connect")
 
 
 def _runtime_token(sandbox: CloudSandboxValue) -> str | None:
@@ -116,8 +119,31 @@ async def connect_ready_sandbox(
             e2b_sandbox_id=provider_sandbox_id,
             e2b_template_ref=provider.template_version,
         )
-        if refreshed is not None:
-            sandbox = refreshed
+        if refreshed is None:
+            # The row was destroyed (or vanished) mid-create. record_* returns
+            # None from its row-gone/destroyed guard BEFORE writing anything, so
+            # the provider id we just minted was never persisted to any row —
+            # unlike destroy_cloud_sandbox (P2-001), there is no DB state that a
+            # rollback could leave disagreeing with a killed VM. We are about to
+            # raise and roll this transaction back, and the VM is unrecorded
+            # either way, so an immediate inline best-effort destroy is correct
+            # here (no after-commit hook needed; the reaper still backstops it).
+            # This runs in the materializer's own transaction, not a request-held
+            # FOR UPDATE critical path, so it does not wedge a locked row.
+            try:
+                await provider.destroy_sandbox(provider_sandbox_id)
+            except Exception:
+                logger.exception(
+                    "failed to destroy provider sandbox after lost record",
+                    extra={
+                        "cloud_sandbox_id": str(sandbox.id),
+                        "e2b_sandbox_id": provider_sandbox_id,
+                    },
+                )
+            raise CloudMaterializationCommandError(
+                "Cloud sandbox was destroyed while provisioning."
+            )
+        sandbox = refreshed
         await db.commit()
 
     provider_sandbox = await provider.resume_sandbox(provider_sandbox_id)

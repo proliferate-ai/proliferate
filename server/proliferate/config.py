@@ -406,6 +406,12 @@ class Settings(BaseSettings):
     agent_gateway_default_user_budget_usd: str = "5"
     agent_gateway_default_org_budget_usd: str = "0"
     agent_gateway_backfill_interval_seconds: float = 300.0
+    # Orphan-sandbox reaper grace window: never reap a provider VM younger than
+    # this, so a freshly created VM is not killed before its create/record
+    # transaction commits (avoids racing in-flight provisioning). The reap
+    # cadence itself is Beat-scheduled (see background/beat_schedule.py), not a
+    # settings interval.
+    cloud_sandbox_reaper_grace_seconds: float = 900.0
     # One-time lifetime managed-LLM grant for a GitHub-backed free identity.
     agent_gateway_free_credit_usd: str = "2"
     # Margin applied to imported managed-LLM spend: the ledger debits provider

@@ -20,11 +20,13 @@ KNOWN_QUEUE_NAMES = (
 HEALTH_NOOP_TASK = "background.health.noop"
 NOTIFICATIONS_SEND_SLACK_TASK = "notifications.send_slack"
 CUSTOMERIO_ENGAGEMENT_SYNC_TASK = "customerio.engagement_sync"
+CLOUD_SANDBOX_ORPHAN_REAP_TASK = "cloud_sandboxes.orphan_reap"
 
 TASK_ROUTES: dict[str, dict[str, str]] = {
     HEALTH_NOOP_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
     NOTIFICATIONS_SEND_SLACK_TASK: {"queue": NOTIFICATIONS_QUEUE},
     CUSTOMERIO_ENGAGEMENT_SYNC_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
+    CLOUD_SANDBOX_ORPHAN_REAP_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
 }
 
 
