@@ -111,4 +111,51 @@ describe("desktop sentry transport", () => {
     expect(scrubbed.environment).toBe("production");
     expect((scrubbed.tags as Record<string, unknown>).environment).toBe("[redacted]");
   });
+
+  it("bounds cyclic and deep payloads at the Sentry scrubber entrypoints", async () => {
+    const sentry = await loadSentryModule();
+
+    sentry.initializeDesktopSentry({
+      environment: "production",
+      release: "proliferate-desktop@test",
+      sentry: {
+        enabled: true,
+        dsn: "https://sentry.example/123",
+        tracesSampleRate: 1,
+        enableLogs: true,
+        replaysOnErrorSampleRate: 1,
+      },
+      apiBaseUrl: "https://app.proliferate.com/api",
+      telemetryMode: "hosted_product",
+    });
+
+    const initArgs = mocks.initMock.mock.calls[0][0] as {
+      beforeSend: (event: Record<string, unknown>) => Record<string, unknown>;
+      beforeBreadcrumb: (breadcrumb: Record<string, unknown>) => Record<string, unknown>;
+      beforeSendSpan: (span: Record<string, unknown>) => Record<string, unknown>;
+    };
+    const cyclicEvent: Record<string, unknown> = { environment: "production" };
+    cyclicEvent.self = cyclicEvent;
+    const cyclicSpan: Record<string, unknown> = { description: "safe" };
+    cyclicSpan.self = cyclicSpan;
+    const deepData: Record<string, unknown> = {};
+    let cursor = deepData;
+    for (let index = 0; index < 20_000; index += 1) {
+      const next: Record<string, unknown> = {};
+      cursor.next = next;
+      cursor = next;
+    }
+    const cyclicBreadcrumb: Record<string, unknown> = { data: deepData };
+    cyclicBreadcrumb.self = cyclicBreadcrumb;
+
+    const event = initArgs.beforeSend(cyclicEvent);
+    const breadcrumb = initArgs.beforeBreadcrumb(cyclicBreadcrumb);
+    const span = initArgs.beforeSendSpan(cyclicSpan);
+
+    expect(event).toEqual({ environment: "production", self: "[circular]" });
+    expect(breadcrumb.self).toBe("[circular]");
+    expect(span).toEqual({ description: "safe", self: "[circular]" });
+    expect(JSON.stringify(breadcrumb)).toContain("[truncated]");
+    expect(() => JSON.stringify([event, breadcrumb, span])).not.toThrow();
+  });
 });

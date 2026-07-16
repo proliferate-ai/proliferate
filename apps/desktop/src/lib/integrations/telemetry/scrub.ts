@@ -14,11 +14,11 @@ export function scrubTelemetryData<T>(value: T): T {
 export function scrubSentryBreadcrumb(
   breadcrumb: Breadcrumb,
 ): Breadcrumb | null {
-  return {
-    ...breadcrumb,
-    message: breadcrumb.message ? scrubTelemetryText(breadcrumb.message) : breadcrumb.message,
-    data: scrubTelemetryData(breadcrumb.data),
-  };
+  const scrubbed = scrubTelemetryData(breadcrumb);
+  scrubbed.message = typeof scrubbed.message === "string"
+    ? scrubTelemetryText(scrubbed.message)
+    : scrubbed.message;
+  return scrubbed;
 }
 
 type SentryStackFrame = {
@@ -156,11 +156,5 @@ export function scrubPostHogPayload(
   event: CaptureResult | null,
 ): CaptureResult | null {
   if (!event) return event;
-
-  return {
-    ...event,
-    properties: scrubPostHogProperties(event.properties),
-    $set: scrubPostHogProperties(event.$set),
-    $set_once: scrubPostHogProperties(event.$set_once),
-  };
+  return scrubPostHogProperties(event);
 }
