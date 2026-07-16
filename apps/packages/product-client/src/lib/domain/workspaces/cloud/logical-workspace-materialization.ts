@@ -1,7 +1,53 @@
 import { cloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import { targetWorkspaceSyntheticId } from "#product/lib/domain/compute/target-workspace-id";
 import { cloudWorkspaceUsesCloudRuntime } from "#product/lib/domain/workspaces/cloud/cloud-runtime-kind";
+import type {
+  CloudWorkspaceMaterializationSummary,
+  CloudWorkspaceSummary,
+} from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
 import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
+
+/** A local materialization is a durable copy this install can open (vs. a
+ * pending/failed attempt). Only these establish an explicit association. */
+const HEALTHY_LOCAL_MATERIALIZATION_STATES: ReadonlySet<string> = new Set([
+  "hydrated",
+]);
+
+/** True when the Cloud response carries an explicit materialization ledger.
+ * Legacy rows (pre-PR 4) omit the array and fall back to repository/branch
+ * heuristics; rows that carry it use explicit association instead. */
+export function cloudWorkspaceHasMaterializations(
+  workspace: Pick<CloudWorkspaceSummary, "materializations">,
+): boolean {
+  return (workspace.materializations?.length ?? 0) > 0;
+}
+
+/**
+ * The AnyHarness workspace id of this install's explicit, healthy local
+ * materialization for a Cloud workspace, or null. This is the authoritative
+ * `(desktopInstallId, anyharnessWorkspaceId)` link the server selected; a
+ * redacted row from another install (null path/id) never matches here.
+ */
+export function explicitLocalMaterializationAnyharnessId(
+  workspace: Pick<CloudWorkspaceSummary, "materializations">,
+  desktopInstallId: string | null | undefined,
+): string | null {
+  if (!desktopInstallId) {
+    return null;
+  }
+  const rows: CloudWorkspaceMaterializationSummary[] = workspace.materializations ?? [];
+  for (const row of rows) {
+    if (
+      row.targetKind === "local_desktop"
+      && row.desktopInstallId === desktopInstallId
+      && HEALTHY_LOCAL_MATERIALIZATION_STATES.has(row.state)
+      && row.anyharnessWorkspaceId
+    ) {
+      return row.anyharnessWorkspaceId;
+    }
+  }
+  return null;
+}
 
 export function logicalWorkspaceTargetMaterializationId(
   workspace: Pick<LogicalWorkspace, "cloudWorkspace">,

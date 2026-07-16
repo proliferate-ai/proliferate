@@ -14,6 +14,7 @@ import { RepoSetupModalHost } from "#product/components/workspace/repo-setup/Rep
 import { SupportModalHost } from "#product/components/support/SupportModalHost"
 import { AddRepoFlowHost } from "#product/components/workspace/repo-setup/AddRepoFlowHost"
 import { CloudRepoActionDialogHost } from "#product/components/workspace/repo-setup/CloudRepoActionDialogHost"
+import { WorkspaceAvailabilityActionHost } from "#product/components/workspace/repo-setup/WorkspaceAvailabilityActionHost"
 import { LoginPage } from "#product/pages/LoginPage"
 import { SettingsCloudRedirect } from "#product/pages/SettingsCloudRedirect"
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store"
@@ -200,6 +201,7 @@ export function App({ RoutesComponent }: AppProps) {
         <RepoSetupModalHost />
         <AddRepoFlowHost />
         <CloudRepoActionDialogHost />
+        <WorkspaceAvailabilityActionHost />
         <SupportModalHost />
         {/* Legacy toast store container (non-update toasts) — kept until all
             toast call sites migrate to Sonner. */}

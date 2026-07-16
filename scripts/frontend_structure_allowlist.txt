@@ -26,7 +26,8 @@ apps/packages/product-ui/src/chat/transcript/VirtualizedTranscriptRowList.tsx 41
 apps/packages/product-client/src/components/content/ui/diff/ChatDiffViewer.tsx 550 chat diff viewer pending row-renderer split
 apps/packages/product-client/src/components/content/ui/diff/SplitDiffViewer.tsx 465 split diff viewer pending row-renderer split
 apps/packages/product-client/src/components/content/ui/diff/UnifiedDiffViewer.tsx 414 unified diff viewer pending row-renderer split
-apps/packages/product-client/src/components/workspace/shell/sidebar/WorkspaceItem.tsx 414 workspace sidebar item pending indicator/menu split
+apps/packages/product-client/src/components/workspace/shell/sidebar/WorkspaceItem.tsx 445 workspace sidebar item + PR 5 workspace-copy availability commands in DOM/native/right-click menus; menu split pending
+apps/packages/product-client/src/components/workspace/shell/sidebar/MainSidebar.tsx 413 connected sidebar host; PR 5 availability-intent begin handler threaded alongside existing repo/cloud actions; extraction pending
 apps/packages/product-client/src/hooks/sessions/lifecycle/session-stream-flush-apply.ts 401 session stream flush/apply pending reducer split
 apps/packages/product-client/src/hooks/sessions/workflows/session-creation-materialization.ts 415 injected typed telemetry deps threaded from the calling hook; split deferred
 apps/packages/product-client/src/hooks/sessions/workflows/session-replacement-tombstones.ts 408 async ProductStorage hydration added to the in-memory tombstone model
