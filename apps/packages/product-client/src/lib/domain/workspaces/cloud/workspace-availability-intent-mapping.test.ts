@@ -71,7 +71,22 @@ describe("workspaceAvailabilityIntentForCommand", () => {
     ).toBeNull();
   });
 
-  it("returns null for the non-actionable blocker", () => {
-    expect(workspaceAvailabilityIntentForCommand("unsupported-git-state", FULL)).toBeNull();
+  it("maps reconcile-git-state to a reconcile intent carrying both ids", () => {
+    expect(workspaceAvailabilityIntentForCommand("reconcile-git-state", FULL)).toEqual({
+      kind: "reconcile",
+      localWorkspaceId: "ws-1",
+      cloudWorkspaceId: "cloud-1",
+      materializationId: "mat-1",
+    });
+  });
+
+  it("returns null for reconcile-git-state when neither side is present", () => {
+    expect(
+      workspaceAvailabilityIntentForCommand("reconcile-git-state", {
+        ...FULL,
+        localWorkspaceId: null,
+        cloudWorkspaceId: null,
+      }),
+    ).toBeNull();
   });
 });

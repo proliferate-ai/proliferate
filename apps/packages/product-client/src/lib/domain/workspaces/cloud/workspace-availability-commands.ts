@@ -22,13 +22,14 @@ export type WorkspaceAvailabilityCommandKind =
   | "relink-existing"
   | "recreate-on-this-mac"
   | "unlink-this-mac"
-  | "unsupported-git-state";
+  | "reconcile-git-state";
 
 export interface WorkspaceAvailabilityCommand {
   kind: WorkspaceAvailabilityCommandKind;
   label: string;
-  /** Blockers describe why a command is present but not actionable (unsupported
-   * Git state). An actionable command has no blocker. */
+  /** A truthful one-line note on why this command is offered (e.g. the
+   * unsupported Git state that needs reconciling). Actionable commands may still
+   * carry a note; PR 6's `reconcile-git-state` is actionable AND explains why. */
   blocker?: string;
 }
 
@@ -154,14 +155,15 @@ function localMaterializationForInstall(
 export function resolveWorkspaceAvailabilityCommands(
   input: WorkspaceAvailabilityInput,
 ): WorkspaceAvailabilityCommand[] {
-  // An unsupported Git state blocks every mutation; show the truthful, still
-  // selectable blocker only (expansion is PR 6). Never offer an action that
-  // would reset/merge/rebase to "fix" it.
+  // PR 6: an unsupported Git state is no longer a dead-end blocker. It is a
+  // truthful, ACTIONABLE entry into the one reconciliation dialog, which diagnoses
+  // the cross-target relation and offers the ONE safe next action (Push, Open Git
+  // panel, Recreate, Relink, Unlink, Retry). Never a reset/merge/rebase to "fix".
   if (input.unsupportedGitBlocker) {
     return [
       {
-        kind: "unsupported-git-state",
-        label: "Unsupported Git state",
+        kind: "reconcile-git-state",
+        label: "Reconcile Git state…",
         blocker: input.unsupportedGitBlocker,
       },
     ];

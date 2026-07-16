@@ -140,8 +140,8 @@ describe("buildWorkspaceSidebarNativeContextMenuItems", () => {
       availabilityCommands: [
         { kind: "unlink-this-mac", label: "Unlink this Mac…" },
         {
-          kind: "unsupported-git-state",
-          label: "Unsupported Git state",
+          kind: "reconcile-git-state",
+          label: "Reconcile Git state…",
           blocker: "This workspace has uncommitted changes.",
         },
       ],
@@ -149,13 +149,14 @@ describe("buildWorkspaceSidebarNativeContextMenuItems", () => {
     });
 
     const unlink = items.find((i) => "id" in i && i.id === "availability-unlink-this-mac");
-    const blocker = items.find((i) => "id" in i && i.id === "availability-unsupported-git-state");
+    const reconcile = items.find((i) => "id" in i && i.id === "availability-reconcile-git-state");
     expect(unlink).toBeDefined();
-    expect(blocker).toBeDefined();
-    if (blocker && "enabled" in blocker) expect(blocker.enabled).toBe(false);
+    expect(reconcile).toBeDefined();
+    // PR 6: reconcile-git-state is actionable and dispatches.
+    if (reconcile && "enabled" in reconcile) expect(reconcile.enabled).toBe(true);
     if (unlink && "onSelect" in unlink) unlink.onSelect?.();
     expect(dispatched).toBe("unlink-this-mac");
-    if (blocker && "onSelect" in blocker) blocker.onSelect?.();
-    expect(dispatched).toBe("unlink-this-mac");
+    if (reconcile && "onSelect" in reconcile) reconcile.onSelect?.();
+    expect(dispatched).toBe("reconcile-git-state");
   });
 });

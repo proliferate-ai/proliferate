@@ -58,7 +58,7 @@ const AVAILABILITY_COMMAND_ICON: Record<WorkspaceAvailabilityCommandKind, typeof
   "relink-existing": Link2,
   "recreate-on-this-mac": RotateCcw,
   "unlink-this-mac": Link2,
-  "unsupported-git-state": GitBranchIcon,
+  "reconcile-git-state": GitBranchIcon,
 };
 
 /**
@@ -150,13 +150,11 @@ export function WorkspaceItemMenu({
             <DropdownMenuSeparator />
             {availabilityCommands.map((command) => {
               const Icon = AVAILABILITY_COMMAND_ICON[command.kind];
-              const isBlocker = command.kind === "unsupported-git-state";
               return (
                 <DropdownMenuItem
                   key={command.kind}
-                  disabled={isBlocker}
                   onSelect={() => {
-                    if (!isBlocker) onAvailabilityCommand?.(command.kind);
+                    onAvailabilityCommand?.(command.kind);
                   }}
                 >
                   <Icon className="size-4 text-muted-foreground" />

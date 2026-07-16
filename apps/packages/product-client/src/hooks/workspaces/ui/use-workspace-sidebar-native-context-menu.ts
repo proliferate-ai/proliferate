@@ -202,13 +202,14 @@ export function buildWorkspaceSidebarNativeContextMenuItems({
       items.push({ kind: "separator" });
     }
     for (const command of availability) {
-      const isBlocker = command.kind === "unsupported-git-state";
+      // PR 6: reconcile-git-state (and every other) is actionable; the note is
+      // appended as context.
       items.push({
         id: `availability-${command.kind}`,
         label: command.blocker ? `${command.label} — ${command.blocker}` : command.label,
-        enabled: !isBlocker,
+        enabled: true,
         onSelect: () => {
-          if (!isBlocker) onAvailabilityCommand?.(command.kind);
+          onAvailabilityCommand?.(command.kind);
         },
       });
     }

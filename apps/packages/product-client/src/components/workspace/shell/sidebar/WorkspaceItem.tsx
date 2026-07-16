@@ -397,22 +397,18 @@ export function WorkspaceItem({
                   onClick={() => { close(); handleUnarchiveCommand(); }}
                 />
               )}
-              {availabilityCommands.map((command) => {
-                const isBlocker = command.kind === "unsupported-git-state";
-                return (
-                  <PopoverMenuItem
-                    key={command.kind}
-                    icon={<GitBranchIcon className="size-3.5 shrink-0 text-muted-foreground" />}
-                    label={command.blocker ? `${command.label} — ${command.blocker}` : command.label}
-                    variant="sidebar"
-                    disabled={isBlocker}
-                    onClick={() => {
-                      close();
-                      if (!isBlocker) onAvailabilityCommand?.(command.kind);
-                    }}
-                  />
-                );
-              })}
+              {availabilityCommands.map((command) => (
+                <PopoverMenuItem
+                  key={command.kind}
+                  icon={<GitBranchIcon className="size-3.5 shrink-0 text-muted-foreground" />}
+                  label={command.blocker ? `${command.label} — ${command.blocker}` : command.label}
+                  variant="sidebar"
+                  onClick={() => {
+                    close();
+                    onAvailabilityCommand?.(command.kind);
+                  }}
+                />
+              ))}
             </>
           )}
         </>
