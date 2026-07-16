@@ -315,6 +315,64 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     lanes: ["sandbox"],
   },
   {
+    name: "RELEASE_E2E_RETAINED_TEMPLATE_ID",
+    description:
+      "Immutable provider (E2B) template id of the retained-production N-1 sandbox image that " +
+      "T4-RUNTIME-1 provisions its baseline from before updating to candidate N. 'Retained' means the " +
+      "exact template of the last release ACTUALLY qualified through this platform — never a decremented " +
+      "version or a rebuilt-from-source approximation. Absent (with RELEASE_E2E_RETAINED_MANIFEST) -> " +
+      "T4-RUNTIME-1 reports blocked rather than fabricating an N-1 (founder ruling 2026-07-16). No " +
+      "release has been qualified through the platform yet, so this is expected to be unset until one is.",
+    whereItLives:
+      "Produced by the release-qualification pipeline when it retains the last green release's E2B " +
+      "template; supplied to an on-demand/nightly T4-RUNTIME-1 dispatch once such a template exists.",
+    secret: false,
+    lanes: ["sandbox"],
+  },
+  {
+    name: "RELEASE_E2E_RETAINED_MANIFEST",
+    description:
+      "The retained-production N-1 release component manifest (JSON) describing the versions and digests " +
+      "of the AnyHarness/Worker/Supervisor binaries and bundled catalog/registry baked into " +
+      "RELEASE_E2E_RETAINED_TEMPLATE_ID. T4-RUNTIME-1 parses it to assert baseline N-1 identities and to " +
+      "compute what a real N-1 -> N update must change. Absent (with RELEASE_E2E_RETAINED_TEMPLATE_ID) -> " +
+      "T4-RUNTIME-1 reports blocked. Not a credential (public release metadata).",
+    whereItLives:
+      "The retained release's published manifest, captured by the qualification pipeline alongside the " +
+      "retained template id; supplied verbatim to the T4-RUNTIME-1 dispatch.",
+    secret: false,
+    lanes: ["sandbox"],
+  },
+  {
+    name: "RELEASE_E2E_RETAINED_ANYHARNESS_REPORTED_VERSION",
+    description:
+      "Optional override for the version the retained N-1 AnyHarness binary ACTUALLY reports from " +
+      "`--version` / `/health` (not merely its release tag). The supervisor health-gate and worker " +
+      "`--version` probe assert an exact match to the requested version (R9R-001 / R9-008), so a binary " +
+      "that is not version-stamped (issue #1089) can never converge; the proof must compare against " +
+      "observable truth. When unset, T4-RUNTIME-1 derives the reported version from the retained " +
+      "manifest.",
+    whereItLives:
+      "Set by the operator only when the retained binary's reported version diverges from its manifest " +
+      "version (e.g. an unstamped release); otherwise leave unset.",
+    secret: false,
+    lanes: ["sandbox"],
+  },
+  {
+    name: "RELEASE_E2E_SUPERVISOR_OWNED_RUNTIME",
+    description:
+      "Confirmation switch (set to `1`) asserting that the candidate API under test runs with " +
+      "PROLIFERATE_SUPERVISOR_OWNED_RUNTIME=1, so a Worker heartbeat returns desiredTopology=" +
+      "supervisor_owned and the Worker writes the durable mailbox update request rather than swapping " +
+      "the binary itself (server default is OFF). T4-RUNTIME-1 requires the supervisor-owned topology to " +
+      "observe the contract's Worker-mailbox -> Supervisor-activation flow; absent -> blocked (the " +
+      "legacy direct-Worker path would contradict the contract).",
+    whereItLives:
+      "Set by the dispatch that deploys the candidate API with the supervisor-owned runtime flag enabled.",
+    secret: false,
+    lanes: ["sandbox"],
+  },
+  {
     name: "RELEASE_E2E_SELFHOST_PROVISION",
     description:
       "Opt-in switch (set to `1`) authorizing the self-hosting scenarios (SELFHOST-INSTALL-1 cold boot, " +
