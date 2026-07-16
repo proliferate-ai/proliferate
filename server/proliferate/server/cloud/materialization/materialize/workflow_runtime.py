@@ -60,9 +60,11 @@ async def run_managed_workflow_runtime_operation[T](
             or refreshed.status == "destroyed"
         ):
             raise operation.CloudMaterializationTargetUnavailable()
-        runtime_url, access_token, _data_key = (
-            await cloud_sandboxes_service.load_cloud_sandbox_runtime_access(refreshed)
-        )
+        (
+            runtime_url,
+            access_token,
+            _data_key,
+        ) = await cloud_sandboxes_service.load_cloud_sandbox_runtime_access(refreshed)
         await db.commit()
         return await run(runtime_url, access_token)
 

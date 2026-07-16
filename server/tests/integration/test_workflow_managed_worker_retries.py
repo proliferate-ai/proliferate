@@ -241,7 +241,7 @@ async def test_transient_target_failure_queues_one_successor(
         )
         successor = await db.scalar(
             select(BackgroundOutboxTask).where(
-                    BackgroundOutboxTask.idempotency_key == f"workflow:deliver:{invocation_id}:5"
+                BackgroundOutboxTask.idempotency_key == f"workflow:deliver:{invocation_id}:5"
             )
         )
     assert settled is not None
