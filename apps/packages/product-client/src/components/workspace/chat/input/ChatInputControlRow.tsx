@@ -24,6 +24,8 @@ export interface ChatInputControlRowProps {
   sessionConfigControls: LiveSessionControlDescriptor[];
   isEditingQueuedPrompt: boolean;
   chatDisabled: boolean;
+  /** Send is refused with this reason while the editor stays editable. */
+  sendBlockedReason?: string | null;
   isSubmitting: boolean;
   supportsAttachments: boolean;
   canAttachFiles: boolean;
@@ -216,6 +218,7 @@ export function ChatInputControlRow({
   sessionConfigControls,
   isEditingQueuedPrompt,
   chatDisabled,
+  sendBlockedReason = null,
   isSubmitting,
   supportsAttachments,
   canAttachFiles,
@@ -255,7 +258,8 @@ export function ChatInputControlRow({
         <ChatComposerActions
           isRunning={isRunning}
           isEmpty={isEmpty}
-          isDisabled={chatDisabled || isSubmitting}
+          isDisabled={chatDisabled || Boolean(sendBlockedReason) || isSubmitting}
+          disabledReason={sendBlockedReason}
           isEditingQueuedPrompt={isEditingQueuedPrompt}
           onSubmit={onSubmit}
           onCancel={onCancel}

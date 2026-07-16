@@ -203,6 +203,7 @@ function renderUseWorkspaces(queryClient = createQueryClient()) {
 
 function makeWorkspace(): Workspace {
   return {
+    availability: "available",
     id: "workspace-1",
     kind: "local",
     repoRootId: "repo-root-1",

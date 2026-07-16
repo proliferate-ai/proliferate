@@ -78,6 +78,9 @@ requires separately approved remediation scope and the applicable runbook.
 
 ## Focused Runbooks
 
+- [issue-triage.md](issue-triage.md): operate the production issue queue through
+  the tracker REST surface — list, poll, claim, follow source evidence, record a
+  conclusion, and release.
 - [support-reports.md](support-reports.md): retrieve, correlate, and close out a
   private support report.
 - [performance-profiling.md](performance-profiling.md): capture privacy-safe

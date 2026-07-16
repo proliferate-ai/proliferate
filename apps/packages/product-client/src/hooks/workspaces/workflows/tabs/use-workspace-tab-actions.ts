@@ -5,6 +5,7 @@ import { useCloseActiveWorkspaceTab } from "#product/hooks/workspaces/workflows/
 import { useChatTabVisibilityActions } from "#product/hooks/workspaces/workflows/tabs/use-chat-tab-visibility-actions";
 import { useWorkspaceShellActivation } from "#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
 import { useSessionCreationActions } from "#product/hooks/sessions/workflows/use-session-creation-actions";
+import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
 import {
   resolveWorkspaceShellTabFromKey,
   resolveRelativeWorkspaceShellTab,
@@ -52,6 +53,8 @@ export function useWorkspaceTabActions(headerTabs: WorkspaceTabActionsContext) {
   const { currentLaunchIdentity } = useActiveSessionLaunchState();
   const configuredLaunch = useConfiguredLaunchReadiness(currentLaunchIdentity);
   const { createEmptySessionWithResolvedConfig } = useSessionCreationActions();
+  const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
+  const runtimeBlockReason = getWorkspaceRuntimeBlockReason(headerTabs.selectedWorkspaceId);
 
   const orderedTabs = headerTabs.orderedTabs;
   const visibleShortcutTabs = useMemo(
@@ -127,6 +130,9 @@ export function useWorkspaceTabActions(headerTabs: WorkspaceTabActionsContext) {
   );
 
   const openNewSessionTab = useCallback(() => {
+    if (runtimeBlockReason) {
+      return false;
+    }
     const selection = resolveAvailableLaunchSelection(
       configuredLaunch.launchCatalog.launchAgents,
       currentLaunchIdentity,
@@ -158,10 +164,11 @@ export function useWorkspaceTabActions(headerTabs: WorkspaceTabActionsContext) {
     currentLaunchIdentity,
     createEmptySessionWithResolvedConfig,
     headerTabs.selectedWorkspaceId,
+    runtimeBlockReason,
     showToast,
   ]);
 
-  const canOpenNewSessionTab = Boolean(resolveAvailableLaunchSelection(
+  const canOpenNewSessionTab = !runtimeBlockReason && Boolean(resolveAvailableLaunchSelection(
     configuredLaunch.launchCatalog.launchAgents,
     currentLaunchIdentity,
     configuredLaunch.selection,
@@ -175,7 +182,9 @@ export function useWorkspaceTabActions(headerTabs: WorkspaceTabActionsContext) {
     activateTabByShortcutIndex,
     closeActiveWorkspaceTab,
     canOpenNewSessionTab,
-    newSessionDisabledReason: canOpenNewSessionTab ? null : configuredLaunch.disabledReason,
+    newSessionDisabledReason: canOpenNewSessionTab
+      ? null
+      : runtimeBlockReason ?? configuredLaunch.disabledReason,
     openNewSessionTab,
     restoreLastDismissedTab,
   };

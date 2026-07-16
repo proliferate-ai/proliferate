@@ -14,6 +14,7 @@ import {
 
 function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
   return {
+    availability: "available",
     id: overrides.id ?? "workspace-1",
     kind: overrides.kind ?? "worktree",
     repoRootId: overrides.repoRootId ?? "repo-root-1",

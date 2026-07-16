@@ -3,8 +3,11 @@ import { FileReferenceBadge } from "#product/components/workspace/file-reference
 interface ToolFileChipProps {
   basename: string;
   pathLabel: string;
-  /** Workspace-relative path. When null, the chip falls back to external-only actions. */
-  workspacePath: string | null;
+  /**
+   * Workspace-relative path. null = authoritatively external (external-only
+   * actions); undefined = unknown, infer from the workspace root.
+   */
+  workspacePath: string | null | undefined;
 }
 
 /**

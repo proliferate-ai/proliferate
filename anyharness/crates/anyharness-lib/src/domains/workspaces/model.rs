@@ -23,6 +23,48 @@ pub struct WorkspaceRecord {
     pub updated_at: String,
 }
 
+impl WorkspaceRecord {
+    /// Whether this workspace is backed by a local checkout directory on this
+    /// machine whose existence is meaningful. Both current kinds (`Local` and
+    /// `Worktree`) are local checkouts; a future remote/cloud-style kind would
+    /// return `false` here and always be treated as available.
+    pub fn has_local_checkout(&self) -> bool {
+        matches!(self.kind, WorkspaceKind::Local | WorkspaceKind::Worktree)
+    }
+
+    /// True only when this workspace is a local checkout whose directory has
+    /// been *proven* removed from disk. Shared existence predicate used by the
+    /// workspace availability signal and the session-start pre-flight gate.
+    ///
+    /// Classification (deliberately conservative — this predicate drives the
+    /// destructive "worktree no longer exists" UI and refuses session starts,
+    /// so it must not fire on ambiguous filesystem states):
+    /// - `Ok(md)` where `md.is_dir()` → present (`false`).
+    /// - `Ok(md)` where the path is a regular file (not a dir) → `false` for
+    ///   THIS predicate. A file-at-the-path is a broken checkout, but it is not
+    ///   the "directory was deleted" condition; spawn-time `validate_spawn_cwd`
+    ///   already reports the not-a-directory case at start.
+    /// - `Err(NotFound)` → missing (`true`); the only branch that returns true.
+    /// - Any other `Err` (PermissionDenied, transient I/O, unreadable mount,
+    ///   ...) → `false` (fail open to "available"). Collapsing these into
+    ///   "missing" would wrongly claim the checkout was removed and offer
+    ///   permanent deletion when the directory may still exist; spawn-time
+    ///   validation remains the backstop for genuinely unusable checkouts.
+    ///
+    /// Note: this intentionally diverges from the plain `Path::exists()` checks
+    /// still used by retire pre-flight and worktree inventory, which want a
+    /// materialization boolean rather than a proven-deleted signal.
+    pub fn checkout_directory_missing(&self) -> bool {
+        if !self.has_local_checkout() {
+            return false;
+        }
+        match std::fs::metadata(&self.path) {
+            Ok(_) => false,
+            Err(error) => error.kind() == std::io::ErrorKind::NotFound,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkspaceKind {
     Local,
@@ -210,4 +252,73 @@ pub struct ParsedRemote {
     pub provider: String,
     pub owner: String,
     pub repo: String,
+}
+
+/// Shared `WorkspaceRecord` builder for unit tests across the crate. Kept
+/// `pub(crate)` so the availability-contract tests (api/http) and this module's
+/// predicate tests use one fixture instead of duplicating the 20-line literal.
+#[cfg(test)]
+pub(crate) fn test_workspace_record(kind: WorkspaceKind, path: &str) -> WorkspaceRecord {
+    WorkspaceRecord {
+        id: "workspace-1".to_string(),
+        kind,
+        repo_root_id: "repo-root-1".to_string(),
+        path: path.to_string(),
+        surface: WorkspaceSurface::Standard,
+        original_branch: None,
+        current_branch: None,
+        display_name: None,
+        origin: None,
+        creator_context: None,
+        lifecycle_state: WorkspaceLifecycleState::Active,
+        cleanup_state: WorkspaceCleanupState::None,
+        cleanup_operation: None,
+        cleanup_error_message: None,
+        cleanup_failed_at: None,
+        cleanup_attempted_at: None,
+        created_at: "2026-03-25T00:00:00Z".to_string(),
+        updated_at: "2026-03-25T00:00:00Z".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn checkout_directory_missing_true_for_deleted_local_checkout() {
+        let path = std::env::temp_dir().join(format!(
+            "anyharness-workspace-model-missing-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let record = test_workspace_record(WorkspaceKind::Worktree, &path.to_string_lossy());
+        assert!(record.checkout_directory_missing());
+    }
+
+    #[test]
+    fn checkout_directory_missing_false_when_directory_exists() {
+        let dir = std::env::temp_dir().join(format!(
+            "anyharness-workspace-model-present-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let record = test_workspace_record(WorkspaceKind::Local, &dir.to_string_lossy());
+        assert!(!record.checkout_directory_missing());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn checkout_directory_missing_false_when_path_is_a_regular_file() {
+        // A regular file at the checkout path is a broken checkout, but not the
+        // "directory was deleted" condition this predicate signals. Spawn-time
+        // `validate_spawn_cwd` reports the not-a-directory case instead.
+        let file = std::env::temp_dir().join(format!(
+            "anyharness-workspace-model-file-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::write(&file, b"not a directory").expect("write temp file");
+        let record = test_workspace_record(WorkspaceKind::Local, &file.to_string_lossy());
+        assert!(!record.checkout_directory_missing());
+        let _ = std::fs::remove_file(&file);
+    }
 }

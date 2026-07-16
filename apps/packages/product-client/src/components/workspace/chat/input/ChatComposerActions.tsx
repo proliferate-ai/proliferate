@@ -9,6 +9,7 @@ export function ChatComposerActions({
   isRunning,
   isEmpty,
   isDisabled,
+  disabledReason = null,
   isEditingQueuedPrompt = false,
   onSubmit,
   onCancel,
@@ -16,6 +17,8 @@ export function ChatComposerActions({
   isRunning: boolean;
   isEmpty: boolean;
   isDisabled: boolean;
+  /** Shown as the send button's tooltip while sending is refused. */
+  disabledReason?: string | null;
   isEditingQueuedPrompt?: boolean;
   onSubmit: () => void;
   onCancel: () => void;
@@ -68,9 +71,11 @@ export function ChatComposerActions({
 
   const canSubmit = !isEmpty && !isDisabled;
   const submitShortcutLabel = getShortcutDisplayLabel(COMPOSER_SHORTCUTS.submitMessage);
-  const title = isEditingQueuedPrompt
-    ? `Save edit (${submitShortcutLabel})`
-    : `${CHAT_COMPOSER_LABELS.send} (${submitShortcutLabel})`;
+  const title = !canSubmit && disabledReason
+    ? disabledReason
+    : isEditingQueuedPrompt
+      ? `Save edit (${submitShortcutLabel})`
+      : `${CHAT_COMPOSER_LABELS.send} (${submitShortcutLabel})`;
 
   return (
     <ComposerActionButton
