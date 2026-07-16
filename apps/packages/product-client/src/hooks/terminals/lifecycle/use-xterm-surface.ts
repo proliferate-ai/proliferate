@@ -1,4 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+// The xterm terminal stylesheet is co-located with the terminal surface (not
+// the eager product CSS entry) so it rides the lazy authenticated terminal
+// chunk alongside the dynamically imported xterm runtime below. The phase-6
+// cutover contract forbids the login/callback shell from eagerly loading
+// xterm/terminal CSS; this hook is only reachable through the lazy
+// AuthenticatedProductClient boundary.
+import "@xterm/xterm/css/xterm.css";
 import { getTerminalTheme, onThemeChange } from "#product/config/theme";
 import { resolveReadableCodeFontScale } from "#product/lib/domain/preferences/appearance";
 import { TERMINAL_FONT_FAMILY } from "#product/lib/domain/terminals/terminal-grid";

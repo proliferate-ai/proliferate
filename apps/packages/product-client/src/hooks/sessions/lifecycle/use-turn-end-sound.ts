@@ -10,9 +10,6 @@ export function useTurnEndSound(): void {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    const audio = new Audio(dingSrc);
-    audio.preload = "auto";
-    audioRef.current = audio;
     return () => {
       audioRef.current = null;
     };
@@ -23,11 +20,18 @@ export function useTurnEndSound(): void {
       const { turnEndSoundEnabled } = useUserPreferencesStore.getState();
       if (!turnEndSoundEnabled) return;
 
-      const audio = audioRef.current;
-      if (audio) {
-        audio.currentTime = 0;
-        audio.play().catch(() => {});
+      // Construct (and thereby fetch) the clip lazily on the first turn-end that
+      // actually needs it. This hook mounts in the shared lifecycle root above
+      // the auth gate, so eager `new Audio(...)` with `preload="auto"` would
+      // fetch the audio on the public login shell before the user signs in.
+      let audio = audioRef.current;
+      if (!audio) {
+        audio = new Audio(dingSrc);
+        audio.preload = "auto";
+        audioRef.current = audio;
       }
+      audio.currentTime = 0;
+      audio.play().catch(() => {});
     };
 
     onUserFacingTurnEnd(handler);
