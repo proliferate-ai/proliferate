@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "authoritativeContract": "core-release-validation.md",
   "note": "Complete guarantee inventory plus composed world journeys. A planned row is not executable coverage; collected or enforced rows must declare concrete collectors, collected test ids, required cells, gates, and evidence status. During foundation construction, Tier 3 standing guarantees are selected from journey references plus the explicit standalone list; every other Tier 3 guarantee is visibly deferred and prevents a full-core claim. Tier 4 is one world whose target field distinguishes four independently evidenced install/update cells.",
   "qualificationPolicy": {
@@ -143,7 +143,8 @@
       "id": "T2-API-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "programmatic Cowork API keys have no product surface on main"
       }
     },
     {
@@ -199,7 +200,8 @@
       "id": "T2-MOBILITY-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "workspace mobility was removed from main; rebuild in flight (workspaces/migration.md)"
       }
     },
     {
@@ -297,63 +299,72 @@
       "id": "T2-WF-2",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "workflow poll feeds not merged (workflows Part II)"
       }
     },
     {
       "id": "T2-WF-3",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "workflow function invocations not merged (workflows Part II)"
       }
     },
     {
       "id": "T2-WF-4",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "chat/workflow default-access authoring not merged (workflows Part II)"
       }
     },
     {
       "id": "T2-WF-5",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "workflow session binding/takeover not merged (workflows Part II)"
       }
     },
     {
       "id": "T2-WF-6",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "workflow /init flows not merged (workflows Part II, reserved path)"
       }
     },
     {
       "id": "T2-WF-7",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "workflow schedules/poll CRUD not merged (workflows Part II)"
       }
     },
     {
       "id": "T2-AUTO-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "automations are parked on main (/v1/automations router disabled)"
       }
     },
     {
       "id": "T2-AUTO-2",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "automations are parked on main (/v1/automations router disabled)"
       }
     },
     {
       "id": "T2-SLACK-1",
       "tier": 2,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "Slack Bot feature not merged (scaffold migration only)"
       }
     },
     {
@@ -514,14 +525,16 @@
       "id": "T3-AUTH-2",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
       "id": "T3-AUTH-3",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
@@ -535,7 +548,8 @@
       "id": "T3-ONBOARD-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
@@ -577,63 +591,72 @@
       "id": "T3-MOBILITY-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition); workspace mobility was removed from main; rebuild in flight (workspaces/migration.md)"
       }
     },
     {
       "id": "T3-MOBILITY-2",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition); workspace mobility was removed from main; rebuild in flight (workspaces/migration.md)"
       }
     },
     {
       "id": "T3-LIFE-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
       "id": "T3-CLAIM-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
       "id": "T3-FILES-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
       "id": "T3-FILES-2",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
       "id": "T3-TERM-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
       "id": "T3-DISPATCH-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
       "id": "T3-API-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition); programmatic Cowork API keys have no product surface on main"
       }
     },
     {
@@ -647,14 +670,16 @@
       "id": "T3-MOBILE-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
       "id": "T3-MOBILE-2",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
@@ -696,28 +721,32 @@
       "id": "T3-TRANSCRIPT-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
       "id": "T3-PLAN-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
       "id": "T3-POL-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
       "id": "T3-PERM-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
@@ -731,7 +760,8 @@
       "id": "T3-CRASH-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
@@ -745,14 +775,16 @@
       "id": "T3-AGENTAUTH-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
       "id": "T3-RUNTIMECFG-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
@@ -766,42 +798,48 @@
       "id": "T3-SUBAGENT-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
       "id": "T3-COWORK-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
       "id": "T3-REVIEW-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
       "id": "T3-ARTIFACT-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
       "id": "T3-DELEGATE-UI-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
       "id": "T3-ARTIFACT-2",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
@@ -815,14 +853,16 @@
       "id": "T3-WORKER-2",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
       "id": "T3-WORKER-3",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
@@ -836,7 +876,8 @@
       "id": "T3-ISO-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
@@ -850,7 +891,8 @@
       "id": "T3-CMD-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
@@ -871,7 +913,8 @@
       "id": "T3-SDK-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
@@ -899,35 +942,40 @@
       "id": "T3-INT-2",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
       "id": "T3-INT-3",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
       "id": "T3-NOTIFY-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition); no user-facing notification delivery feature on main"
       }
     },
     {
       "id": "T3-SLACK-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition); Slack Bot feature not merged (scaffold migration only)"
       }
     },
     {
       "id": "T3-SUPPORT-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
@@ -1011,84 +1059,96 @@
       "id": "T3-WF-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition); workflow run launch/branching not merged (workflows Part II)"
       }
     },
     {
       "id": "T3-WF-2",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition); workflow function calls not merged (workflows Part II)"
       }
     },
     {
       "id": "T3-WF-3",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition); workflow integration grants not merged (workflows Part II)"
       }
     },
     {
       "id": "T3-WF-4",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition); workflow lanes/slots not merged (workflows Part II)"
       }
     },
     {
       "id": "T3-WF-5",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition); workflow poll feeds not merged (workflows Part II)"
       }
     },
     {
       "id": "T3-WF-6",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition); workflow cloud schedules not merged (workflows Part II)"
       }
     },
     {
       "id": "T3-WF-7",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition); workflow desktop schedule claim not merged (workflows Part II)"
       }
     },
     {
       "id": "T3-WF-8",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition); workflow agent listing/messaging not merged (workflows Part II)"
       }
     },
     {
       "id": "T3-WF-9",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition); workflow bound-session lockout/takeover not merged (workflows Part II)"
       }
     },
     {
       "id": "T3-WF-10",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition); workflow Slack notification not merged (workflows Part II)"
       }
     },
     {
       "id": "T3-AUTO-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition); automations are parked on main (/v1/automations router disabled)"
       }
     },
     {
       "id": "T3-AUTO-2",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition); automations are parked on main (/v1/automations router disabled)"
       }
     },
     {
@@ -1130,7 +1190,8 @@
       "id": "T3-OBS-1",
       "tier": 3,
       "implementation": {
-        "status": "planned"
+        "status": "deferred",
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition)"
       }
     },
     {
