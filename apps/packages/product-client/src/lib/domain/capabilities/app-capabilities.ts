@@ -98,6 +98,7 @@ export function resolveEffectiveContract(
     pricing: { available: true, url: opts.fallback.pricingUrl },
     githubRepositoryAccess: { status: "ready", provider: "github_app", displayName: null },
     managedCloud: { status: "ready", repositoryAuthority: "github_app", source: "legacy" },
+    workflowManagedRuns: false,
   };
 }
 

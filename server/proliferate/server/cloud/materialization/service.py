@@ -89,6 +89,23 @@ async def materialize_repo_environment(
     )
 
 
+async def materialize_repo_environment_at_frozen_base(
+    db: AsyncSession,
+    *,
+    repo_environment_id: UUID,
+    base_ref: str,
+    expected_cloud_sandbox_id: UUID,
+) -> None:
+    """Materialize one Cloud repo using the invocation's persisted base ref."""
+
+    await repo_environment_materializer.materialize_repo_environment(
+        db,
+        repo_environment_id=repo_environment_id,
+        frozen_base_ref=base_ref,
+        expected_cloud_sandbox_id=expected_cloud_sandbox_id,
+    )
+
+
 async def materialize_secret_set(db: AsyncSession, *, secret_set_id: UUID) -> None:
     await secret_set_materializer.materialize_secret_set(db, secret_set_id=secret_set_id)
 

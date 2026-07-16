@@ -2912,6 +2912,7 @@ export interface components {
             agentReconcile: components["schemas"]["AgentReconcileSummary"];
             agentSeed: components["schemas"]["AgentSeedHealth"];
             capabilities: components["schemas"]["RuntimeCapabilities"];
+            executionStoreId: string;
             resourcePressure?: null | components["schemas"]["RuntimeResourcePressure"];
             runtimeHome: string;
             status: string;

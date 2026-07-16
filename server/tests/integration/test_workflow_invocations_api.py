@@ -144,7 +144,29 @@ async def test_invocation_snapshot_replay_conflict_get_and_owner_isolation(
         headers=_headers(owner),
     )
     assert loaded.status_code == 200
-    assert loaded.json() == frozen
+    immutable_loaded = {
+        key: value for key, value in loaded.json().items() if key != "managedExecution"
+    }
+    assert immutable_loaded == frozen
+    assert loaded.json()["managedExecution"] == {
+        "deliveryStatus": "prepared",
+        "deliveryCheckpoint": "none",
+        "desiredState": "active",
+        "execution": None,
+        "freshness": {"status": "pending", "latestObservedAt": None},
+        "correlations": {
+            "cloudWorkspaceId": None,
+            "anyharnessWorkspaceId": None,
+            "sessionId": None,
+            "promptId": None,
+            "turnId": None,
+        },
+        "openTarget": None,
+        "deliveryErrorCode": None,
+        "observationErrorCode": None,
+        "acceptedAt": None,
+        "updatedAt": loaded.json()["managedExecution"]["updatedAt"],
+    }
 
     mismatch = deepcopy(request)
     mismatch["arguments"] = {"ticket": "OTHER"}

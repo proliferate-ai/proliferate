@@ -9,6 +9,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store import cloud_repo_environment_materializations as repo_mat_store
+from proliferate.db.store import cloud_sandboxes as cloud_sandboxes_store
 from proliferate.db.store import repositories as repositories_store
 from proliferate.db.store.repositories import RepoEnvironmentValue
 from proliferate.server.cloud.cloud_sandboxes import service as cloud_sandboxes_service
@@ -54,6 +55,8 @@ async def materialize_repo_environment(
     db: AsyncSession,
     *,
     repo_environment_id: UUID,
+    frozen_base_ref: str | None = None,
+    expected_cloud_sandbox_id: UUID | None = None,
 ) -> None:
     repo_environment = await repositories_store.get_repo_environment_by_id(
         db,
@@ -61,10 +64,20 @@ async def materialize_repo_environment(
     )
     if repo_environment is None or repo_environment.environment_kind != "cloud":
         return
-    sandbox = await cloud_sandboxes_service.ensure_personal_cloud_sandbox_exists(
-        db,
-        user_id=repo_environment.user_id,
-    )
+    if expected_cloud_sandbox_id is None:
+        sandbox = await cloud_sandboxes_service.ensure_personal_cloud_sandbox_exists(
+            db,
+            user_id=repo_environment.user_id,
+        )
+    else:
+        sandbox = await cloud_sandboxes_store.load_personal_cloud_sandbox(
+            db,
+            repo_environment.user_id,
+        )
+        if sandbox is None or sandbox.id != expected_cloud_sandbox_id:
+            raise CloudMaterializationCommandError(
+                "Managed Workflow target sandbox is no longer available."
+            )
     materialization = await repo_mat_store.begin_repo_environment_materialization(
         db,
         cloud_sandbox_id=sandbox.id,
@@ -83,6 +96,7 @@ async def materialize_repo_environment(
                 repo_environment_id=repo_environment_id,
                 materialization_id=materialization.id,
                 attempt_updated_at=attempt_updated_at,
+                frozen_base_ref=frozen_base_ref,
             ),
         )
     except Exception as exc:
@@ -103,6 +117,7 @@ async def materialize_repo_environment_in_context(
     repo_environment_id: UUID,
     materialization_id: UUID,
     attempt_updated_at: datetime,
+    frozen_base_ref: str | None = None,
 ) -> None:
     repo_environment = await repositories_store.get_repo_environment_by_id(
         db,
@@ -129,6 +144,7 @@ async def materialize_repo_environment_in_context(
             operation_id=materialization_id,
             repo_environment=repo_environment,
             repo_path=repo_path,
+            requested_branch=frozen_base_ref,
         )
         await secret_set.materialize_workspace_secrets_for_repo_environment(
             db,
@@ -179,12 +195,29 @@ def _build_repo_checkout_script(
     git_repo_name: str,
     repo_path: str,
     requested_branch: str,
+    require_requested_branch: bool = False,
 ) -> str:
     """Build the sandbox git-checkout script.
 
     Extracted as a pure builder so the generated-file exclusion and dirty-check
     guard can be verified without a live sandbox.
     """
+    branch_resolution = (
+        [
+            'if [ -z "$default_branch" ]; then',
+            '  echo "Frozen base ref is required" >&2',
+            "  exit 45",
+            "fi",
+        ]
+        if require_requested_branch
+        else [
+            'if [ -z "$default_branch" ]; then',
+            '  default_branch="$(git ls-remote --symref "$remote_url" HEAD '
+            '| awk \'/^ref:/ { sub("refs/heads/", "", $2); print $2; exit }\')"',
+            "fi",
+            'if [ -z "$default_branch" ]; then default_branch="main"; fi',
+        ]
+    )
     return "\n".join(
         [
             "set -eu",
@@ -199,11 +232,7 @@ def _build_repo_checkout_script(
             "  exit 42",
             "fi",
             "fresh_clone=0",
-            'if [ -z "$default_branch" ]; then',
-            '  default_branch="$(git ls-remote --symref "$remote_url" HEAD '
-            '| awk \'/^ref:/ { sub("refs/heads/", "", $2); print $2; exit }\')"',
-            "fi",
-            'if [ -z "$default_branch" ]; then default_branch="main"; fi',
+            *branch_resolution,
             'if [ ! -d "$repo_path/.git" ]; then',
             '  git clone "$remote_url" "$repo_path"',
             "  fresh_clone=1",
@@ -266,12 +295,15 @@ async def _materialize_git_checkout(
     operation_id: UUID,
     repo_environment: RepoEnvironmentValue,
     repo_path: str,
+    requested_branch: str | None = None,
 ) -> str:
+    frozen = requested_branch is not None
     script = _build_repo_checkout_script(
         git_owner=repo_environment.git_owner,
         git_repo_name=repo_environment.git_repo_name,
         repo_path=repo_path,
-        requested_branch=repo_environment.default_branch or "",
+        requested_branch=(requested_branch or repo_environment.default_branch or ""),
+        require_requested_branch=frozen,
     )
     try:
         output = await sandbox_io.run_materialization_script(

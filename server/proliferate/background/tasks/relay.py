@@ -66,7 +66,7 @@ async def _run_relay_batch() -> RelayTickResult:
     # ``proliferate.background.relay`` (which imports ``celery_app``) is still
     # initializing, without a circular import at module load. The task wrapper
     # touches no store: ``run_relay_tick`` is the single relay-owned surface that
-    # drains the batch and reads the backlog behind the server store law.
+    # drains the batch and reads bounded snapshots behind the server store law.
     from proliferate.background.relay import run_relay_tick
 
     # A fresh engine per firing keeps asyncpg connections bound to the loop
@@ -122,6 +122,27 @@ def relay() -> dict[str, object]:
         "supported_pending_by_family": {
             _safe_family_key(name): count
             for name, count in tick.supported_pending_by_family.items()
+        },
+        "supported_oldest_pending_age_by_family": {
+            _safe_family_key(name): round(age, 3)
+            for name, age in tick.supported_oldest_pending_age_by_family.items()
+        },
+        "managed_workflows": {
+            "queued_or_delivering": tick.managed_workflows.queued_or_delivering_count,
+            "oldest_queued_or_delivering_age_seconds": round(
+                tick.managed_workflows.oldest_queued_or_delivering_age_seconds, 3
+            ),
+            "accepted_nonterminal": tick.managed_workflows.accepted_nonterminal_count,
+            "oldest_accepted_observation_age_seconds": round(
+                tick.managed_workflows.oldest_accepted_observation_age_seconds, 3
+            ),
+            "pending_cancellation": tick.managed_workflows.pending_cancellation_count,
+            "oldest_pending_cancellation_age_seconds": round(
+                tick.managed_workflows.oldest_pending_cancellation_age_seconds, 3
+            ),
+            "unreachable": tick.managed_workflows.unreachable_count,
+            "target_lost": tick.managed_workflows.target_lost_count,
+            "invariant_conflicts": tick.managed_workflows.invariant_conflict_count,
         },
     }
     # Safe to log: only counts, latency, and backlog ages. No args/kwargs, broker

@@ -1,7 +1,7 @@
 """Relay-surface ownership and telemetry tests.
 
 These cover the single store-touching relay surface (``run_relay_tick``), the
-bounded per-family backlog gauge, and the server store law that the thin Beat
+bounded backlog/operational gauges, and the server store law that the thin Beat
 task wrapper never imports a store. Split from ``test_background_outbox.py``
 solely to satisfy the repo-shape 600-line source cap (``check_max_lines.py``).
 """
@@ -17,6 +17,9 @@ from proliferate.background.config import (
     DEFAULT_QUEUE,
     HEALTH_NOOP_TASK,
     PERIODIC_DEFAULT_QUEUE,
+    WORKFLOW_CANCEL_TASK,
+    WORKFLOW_DELIVER_TASK,
+    WORKFLOW_OBSERVE_TASK,
 )
 from proliferate.background.relay import (
     SUPPORTED_OUTBOX_TASKS,
@@ -66,7 +69,14 @@ async def test_backlog_snapshot_reports_supported_pending_by_family(
         db_session,
         supported_task_names=SUPPORTED_OUTBOX_TASKS,
     )
-    assert snapshot.supported_pending_by_family == {HEALTH_NOOP_TASK: 2}
+    assert snapshot.supported_pending_by_family == {
+        HEALTH_NOOP_TASK: 2,
+        WORKFLOW_DELIVER_TASK: 0,
+        WORKFLOW_OBSERVE_TASK: 0,
+        WORKFLOW_CANCEL_TASK: 0,
+    }
+    assert snapshot.supported_oldest_pending_age_by_family[HEALTH_NOOP_TASK] >= 0
+    assert snapshot.supported_oldest_pending_age_by_family[WORKFLOW_DELIVER_TASK] == 0
     assert "background.not.enabled" not in snapshot.supported_pending_by_family
 
 
@@ -77,8 +87,8 @@ async def test_run_relay_tick_publishes_and_snapshots(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # run_relay_tick is the single relay-owned surface the thin task calls: it
-    # drains a batch and reads the backlog, returning already-safe fields. The
-    # publisher is stubbed here (no broker) but the store path is real.
+    # drains a batch and reads bounded snapshots, returning already-safe fields.
+    # The publisher is stubbed here (no broker) but the store path is real.
     from proliferate.background import relay as relay_module
 
     published: list[str] = []
@@ -101,7 +111,19 @@ async def test_run_relay_tick_publishes_and_snapshots(
     assert tick.claimed == 1
     assert tick.published == 1
     assert tick.failed == 0
-    assert tick.supported_pending_by_family == {HEALTH_NOOP_TASK: 0}
+    assert tick.supported_pending_by_family == {
+        HEALTH_NOOP_TASK: 0,
+        WORKFLOW_DELIVER_TASK: 0,
+        WORKFLOW_OBSERVE_TASK: 0,
+        WORKFLOW_CANCEL_TASK: 0,
+    }
+    assert tick.supported_oldest_pending_age_by_family == {
+        HEALTH_NOOP_TASK: 0.0,
+        WORKFLOW_DELIVER_TASK: 0.0,
+        WORKFLOW_OBSERVE_TASK: 0.0,
+        WORKFLOW_CANCEL_TASK: 0.0,
+    }
+    assert tick.managed_workflows.queued_or_delivering_count == 0
 
 
 def test_task_wrapper_never_imports_store() -> None:

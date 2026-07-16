@@ -64,3 +64,25 @@ class WorkflowInvocationIneligible(ProliferateError):
     def __init__(self, blockers: list[dict[str, str]]) -> None:
         super().__init__("Workflow definition is not eligible for execution.")
         self.extra_detail = {"blockers": blockers}
+
+
+class WorkflowManagedRunsUnavailable(ProliferateError):
+    code = "workflow_managed_runs_unavailable"
+    status_code = 503
+
+    def __init__(self) -> None:
+        super().__init__("Managed Workflow delivery is currently unavailable.")
+
+
+class WorkflowTargetLost(Conflict):
+    code = "workflow_target_lost"
+
+    def __init__(self) -> None:
+        super().__init__("The managed Workflow target can no longer be reached safely.")
+
+
+class InvalidWorkflowHistoryCursor(InvalidRequest):
+    code = "invalid_workflow_history_cursor"
+
+    def __init__(self) -> None:
+        super().__init__("Workflow history cursor is invalid.")

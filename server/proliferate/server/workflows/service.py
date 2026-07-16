@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.db.store import repositories as repository_store
 from proliferate.db.store import workflow_definitions as workflow_store
 from proliferate.db.store import workflow_invocations as invocation_store
+from proliferate.db.store import workflow_managed_execution as managed_execution_store
 from proliferate.db.store.workflow_definitions import WorkflowDefinitionSnapshot
 from proliferate.db.store.workflow_invocations import WorkflowInvocationSnapshot
 from proliferate.server.catalogs.models import AgentCatalogResponse
@@ -325,6 +326,11 @@ async def put_workflow_invocation(
         description_snapshot=definition.description,
         creation_request_json=request_json,
         invocation_json=normalized_invocation_json,
+        created_at=created_at,
+    )
+    await managed_execution_store.create_managed_execution(
+        db,
+        invocation_id=invocation_id,
         created_at=created_at,
     )
     return WorkflowInvocationPutResult(value=created, created=True)

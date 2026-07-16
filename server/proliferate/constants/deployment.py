@@ -16,7 +16,7 @@ from __future__ import annotations
 # Bump when the ``capabilities`` wire shape on ``/meta`` changes. The desktop
 # treats an absent contract (older servers) conservatively and may branch on
 # this version to stay forward-compatible with newer contracts.
-SELF_HOST_CAPABILITY_CONTRACT_VERSION = 2
+SELF_HOST_CAPABILITY_CONTRACT_VERSION = 3
 
 # Deployment modes mirror the desktop telemetry runtime modes so the contract
 # and telemetry routing speak the same vocabulary.

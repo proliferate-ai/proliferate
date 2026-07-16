@@ -1,13 +1,13 @@
 from pydantic import AliasChoices, Field, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import SettingsConfigDict
 
-ENV_FILES = (
-    ".env",
-    ".env.local",
-)
+# Keep feature-scoped fields in their owning settings mixin.
+from proliferate.workflow_config import WorkflowSettings
+
+ENV_FILES = (".env", ".env.local")
 
 
-class Settings(BaseSettings):
+class Settings(WorkflowSettings):
     model_config = SettingsConfigDict(
         env_file=ENV_FILES,
         env_file_encoding="utf-8",

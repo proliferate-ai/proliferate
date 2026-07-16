@@ -5,7 +5,17 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -116,4 +126,102 @@ class WorkflowInvocation(Base):
         default=utcnow,
         server_default=text("now()"),
         onupdate=utcnow,
+    )
+
+
+class WorkflowManagedExecution(Base):
+    """Mutable managed-runtime custody and projection for one invocation."""
+
+    __tablename__ = "workflow_managed_execution"
+    __table_args__ = (
+        CheckConstraint(
+            "delivery_status IN ('prepared', 'queued', 'delivering', 'accepted', "
+            "'delivery_failed', 'delivery_cancelled')",
+            name="ck_workflow_managed_execution_delivery_status",
+        ),
+        CheckConstraint(
+            "delivery_checkpoint IN ('none', 'target_plan_frozen', 'target_bound', "
+            "'workspace_put_started', 'workspace_ready', 'run_put_started', 'accepted')",
+            name="ck_workflow_managed_execution_delivery_checkpoint",
+        ),
+        CheckConstraint(
+            "desired_state IN ('active', 'cancelled')",
+            name="ck_workflow_managed_execution_desired_state",
+        ),
+        CheckConstraint(
+            "execution_status IS NULL OR execution_status IN "
+            "('accepted', 'running', 'completed', 'failed', 'cancelled', 'interrupted')",
+            name="ck_workflow_managed_execution_execution_status",
+        ),
+        CheckConstraint(
+            "freshness_basis IN ('pending', 'live', 'unreachable', 'target_lost')",
+            name="ck_workflow_managed_execution_freshness_basis",
+        ),
+        CheckConstraint(
+            "delivery_generation >= 1 AND observation_generation >= 0 "
+            "AND cancel_generation >= 0 AND delivery_attempt_count >= 0 "
+            "AND consecutive_unchanged_count >= 0",
+            name="ck_workflow_managed_execution_counters",
+        ),
+        Index(
+            "ix_workflow_managed_execution_delivery",
+            "delivery_status",
+            "updated_at",
+        ),
+        Index(
+            "ix_workflow_managed_execution_observation",
+            "execution_status",
+            "latest_observed_at",
+        ),
+        Index(
+            "ix_workflow_managed_execution_cancellation",
+            "desired_state",
+            "updated_at",
+        ),
+    )
+
+    invocation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workflow_invocation.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    delivery_status: Mapped[str] = mapped_column(String(32), default="prepared")
+    delivery_checkpoint: Mapped[str] = mapped_column(String(32), default="none")
+    desired_state: Mapped[str] = mapped_column(String(32), default="active")
+    target_plan_json: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+    target_cloud_sandbox_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    target_execution_store_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    target_workspace_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    cloud_workspace_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    execution_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    latest_state_version: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    latest_projection_json: Mapped[dict[str, object] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
+    latest_observed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    freshness_basis: Mapped[str] = mapped_column(String(32), default="pending")
+    delivery_generation: Mapped[int] = mapped_column(BigInteger, default=1)
+    observation_generation: Mapped[int] = mapped_column(BigInteger, default=0)
+    cancel_generation: Mapped[int] = mapped_column(BigInteger, default=0)
+    delivery_attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    consecutive_unchanged_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_delivery_error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    last_observation_error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        server_default=text("now()"),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        server_default=text("now()"),
+        onupdate=utcnow,
+    )
+    accepted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
     )
