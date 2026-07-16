@@ -1,8 +1,10 @@
 import {
+  isCancelledError,
   MutationCache,
   QueryCache,
   QueryClient,
 } from "@tanstack/react-query";
+import { isExpectedQueryTelemetryError } from "#product/lib/domain/telemetry/failures";
 
 /**
  * The narrow exception-capture dependency the query cache reports through. The
@@ -92,13 +94,20 @@ export function hashAppQueryKey(queryKey: unknown): string {
   }
 }
 
+export function shouldCaptureAppQueryError(error: unknown): boolean {
+  return !isCancelledError(error) && !isExpectedQueryTelemetryError(error);
+}
+
 export function createAppQueryClient({
   captureException,
 }: AppQueryClientDeps): QueryClient {
   return new QueryClient({
     queryCache: new QueryCache({
       onError: (error, query) => {
-        if (query.meta?.telemetryHandled) {
+        if (
+          query.meta?.telemetryHandled
+          || !shouldCaptureAppQueryError(error)
+        ) {
           return;
         }
 
