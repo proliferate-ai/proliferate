@@ -14,29 +14,25 @@ NO synthetic materialization — the existing interrupted-creation shape stays
 age-based 900-second materializing/error semantics. The top-level column is left
 intact for backward compatibility.
 
-MERGE NOTE (Workflow slice 5a, PR #1245, merged to main as 78ac087d9):
-main added ``cloud_workspace.workspace_kind`` ('repository_worktree' | 'scratch')
-and made ``cloud_workspace.repo_environment_id`` NULLABLE via migration
-``c3a7b8d9e0f1`` whose down_revision is also ``6f545e279264`` (this migration's
-parent). At merge time this revision MUST be re-parented onto ``c3a7b8d9e0f1``
-(down_revision = "c3a7b8d9e0f1") to linearize the chain.
+Workflow slice 5a added ``cloud_workspace.workspace_kind``
+('repository_worktree' | 'scratch') and made
+``cloud_workspace.repo_environment_id`` nullable in revision
+``c3a7b8d9e0f1``. This revision follows that migration so the graph remains
+linear and the backfill can use repository identity as its scratch guard.
 
 Scratch workspaces have no repository backing and must never receive a
 repository materialization. The earlier claim that "scratch rows have no
 managed-Cloud runtime id, so no extra guard is needed" was WRONG:
-``create_scratch_cloud_workspace(..., anyharness_workspace_id=...)`` on main lets
-a scratch row carry an AnyHarness id, so an ``anyharness_workspace_id IS NOT
+``create_scratch_cloud_workspace(..., anyharness_workspace_id=...)`` lets a
+scratch row carry an AnyHarness id, so an ``anyharness_workspace_id IS NOT
 NULL`` filter alone WOULD backfill scratch rows. The backfill below therefore
 also requires ``repo_environment_id IS NOT NULL`` — the actual repo-identity
-column, which is nullable only for scratch rows post-#1245. On this stack base
-(41b4fa083, pre-#1245) ``repo_environment_id`` is still NOT NULL and
-``workspace_kind`` does not exist, so that extra predicate is a no-op here; it
-becomes the load-bearing scratch guard once #1245 merges. Gating on repo
-identity (not on ``workspace_kind``, which is absent here) keeps this revision
-correct whether it lands before or after #1245.
+column, which is nullable for scratch rows. Gating on repository identity rather
+than the descriptive ``workspace_kind`` keeps the predicate anchored to the
+backing data it protects.
 
 Revision ID: c705e3784eb4
-Revises: 6f545e279264
+Revises: c3a7b8d9e0f1
 Create Date: 2026-07-15 00:00:00.000000
 """
 
@@ -49,7 +45,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "c705e3784eb4"
-down_revision: str | Sequence[str] | None = "6f545e279264"
+down_revision: str | Sequence[str] | None = "c3a7b8d9e0f1"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

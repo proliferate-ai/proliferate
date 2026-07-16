@@ -31,7 +31,7 @@ from proliferate.server.cloud.workspaces.service import MATERIALIZATION_STALL_SE
 from tests.postgres import temporary_database
 
 _REVISION = "c705e3784eb4"
-_DOWN_REVISION = "6f545e279264"
+_DOWN_REVISION = "c3a7b8d9e0f1"
 
 
 async def _seed_pre_ledger_rows(database_url: str) -> dict[str, uuid.UUID]:
