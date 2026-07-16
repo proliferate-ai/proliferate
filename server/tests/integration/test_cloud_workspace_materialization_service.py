@@ -781,6 +781,177 @@ async def test_create_dual_writes_legacy_id_and_managed_materialization(
     assert managed.cloud_sandbox_id == seed.sandbox.id
 
 
+def _patch_exact_ref_create(
+    monkeypatch: pytest.MonkeyPatch,
+    seed,
+    *,
+    branch_heads: dict[str, str],
+    materialized_head: str,
+    calls: dict[str, Any] | None = None,
+) -> None:
+    from proliferate.integrations.anyharness.models import MaterializedRemoteWorkspaceAtRef
+
+    async def _get_repo_environment(*_a: Any, **_k: Any) -> Any:
+        return SimpleNamespace(
+            id=seed.env.id,
+            git_provider="github",
+            git_owner="acme",
+            git_repo_name="widgets",
+            default_branch="main",
+            setup_script="",
+            environment_kind="cloud",
+        )
+
+    async def _authority(*_a: Any, **_k: Any) -> Any:
+        return SimpleNamespace(access_token="gho_test")
+
+    async def _branches(*_a: Any, **_k: Any) -> GitHubRepoBranches:
+        return GitHubRepoBranches(
+            default_branch="main",
+            branches=["main", *branch_heads.keys()],
+            branch_heads_by_name=branch_heads,
+        )
+
+    async def _materialize(*_a: Any, **_k: Any) -> None:
+        return None
+
+    async def _runtime_access(*_a: Any, **_k: Any):
+        return ("https://runtime.invalid", "token", "data-key")
+
+    async def _resolve_root(*_a: Any, **_k: Any) -> ResolvedRemoteWorkspace:
+        return ResolvedRemoteWorkspace(workspace_id="ignored", repo_root_id="root-1")
+
+    async def _materialize_at_ref(*_a: Any, **kwargs: Any) -> MaterializedRemoteWorkspaceAtRef:
+        if calls is not None:
+            calls.update(kwargs)
+        return MaterializedRemoteWorkspaceAtRef(
+            workspace_id="ah-exact",
+            observed_head_sha=materialized_head,
+            outcome="created",
+        )
+
+    monkeypatch.setattr(
+        workspaces_service.repositories_store, "get_cloud_repo_environment", _get_repo_environment
+    )
+    monkeypatch.setattr(
+        workspaces_service.repositories_store, "get_repo_environment_by_id", _get_repo_environment
+    )
+    monkeypatch.setattr(workspaces_service, "require_github_cloud_repo_authority", _authority)
+    monkeypatch.setattr(workspaces_service, "get_repo_branches_for_credentials", _branches)
+    monkeypatch.setattr(
+        workspaces_service.materialization_service, "materialize_repo_environment", _materialize
+    )
+    monkeypatch.setattr(
+        workspaces_service.cloud_sandboxes_service,
+        "load_cloud_sandbox_runtime_access",
+        _runtime_access,
+    )
+    monkeypatch.setattr(
+        workspaces_service.cloud_sandboxes_service,
+        "require_cloud_provisioning_configured",
+        lambda: None,
+    )
+    monkeypatch.setattr(workspaces_service, "_resolve_repo_root", _resolve_root)
+    monkeypatch.setattr(workspaces_service, "materialize_workspace_at_ref", _materialize_at_ref)
+
+
+@pytest.mark.asyncio
+async def test_exact_ref_create_materializes_at_head_and_records_local_source(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from proliferate.db.store import cloud_workspace_materializations as store
+    from proliferate.server.cloud.workspaces.models import (
+        CreateCloudWorkspaceSourceMaterialization,
+    )
+
+    seed = await _seed(db_session)
+    ws = await db_session.get(CloudWorkspace, seed.workspace.id)
+    assert ws is not None
+    await db_session.delete(ws)
+    await db_session.flush()
+
+    calls: dict[str, Any] = {}
+    _patch_exact_ref_create(
+        monkeypatch,
+        seed,
+        branch_heads={_BRANCH: _HEAD},
+        materialized_head=_HEAD,
+        calls=calls,
+    )
+
+    detail = await workspaces_service.create_cloud_workspace_for_user(
+        db_session,
+        SimpleNamespace(id=seed.user.id),
+        CreateCloudWorkspaceRequest(
+            gitOwner="acme",
+            gitRepoName="widgets",
+            branchName=_BRANCH,
+            baseBranch="main",
+            expectedHeadSha=_HEAD,
+            sourceMaterialization=CreateCloudWorkspaceSourceMaterialization(
+                targetKind="local_desktop",
+                desktopInstallId=_INSTALL,
+                anyharnessWorkspaceId="ws-local",
+                worktreePath="/local/wt",
+                observedHeadSha=_HEAD,
+            ),
+        ),
+    )
+
+    # AnyHarness was asked to materialize at the exact branch + commit.
+    assert calls["branch_name"] == _BRANCH
+    assert calls["head_sha"] == _HEAD
+    assert detail.anyharness_workspace_id == "ah-exact"
+
+    active = await store.list_active_materializations_for_workspace(
+        db_session, cloud_workspace_id=uuid.UUID(detail.id)
+    )
+    managed = [m for m in active if m.target_kind == "managed_cloud"]
+    locals_ = [m for m in active if m.target_kind == "local_desktop"]
+    assert len(managed) == 1
+    assert managed[0].expected_head_sha == _HEAD
+    assert managed[0].observed_head_sha == _HEAD
+    # The local source association was recorded as already hydrated.
+    assert len(locals_) == 1
+    assert locals_[0].desktop_install_id == _INSTALL
+    assert locals_[0].state == "hydrated"
+    assert locals_[0].anyharness_workspace_id == "ws-local"
+
+
+@pytest.mark.asyncio
+async def test_exact_ref_create_rejects_head_not_published(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seed = await _seed(db_session)
+    ws = await db_session.get(CloudWorkspace, seed.workspace.id)
+    assert ws is not None
+    await db_session.delete(ws)
+    await db_session.flush()
+
+    # GitHub's head for the branch differs from the client's expected head:
+    # the local workspace has unpublished commits. Must fail-closed.
+    _patch_exact_ref_create(
+        monkeypatch,
+        seed,
+        branch_heads={_BRANCH: "different-sha"},
+        materialized_head=_HEAD,
+    )
+
+    with pytest.raises(CloudApiError) as excinfo:
+        await workspaces_service.create_cloud_workspace_for_user(
+            db_session,
+            SimpleNamespace(id=seed.user.id),
+            CreateCloudWorkspaceRequest(
+                gitOwner="acme",
+                gitRepoName="widgets",
+                branchName=_BRANCH,
+                baseBranch="main",
+                expectedHeadSha=_HEAD,
+            ),
+        )
+    assert excinfo.value.code == "materialization_source_blocked"
+
+
 @pytest.mark.asyncio
 async def test_reconciliation_uses_recorded_sandbox_not_current(
     db_session: AsyncSession,

@@ -31,6 +31,7 @@ import { useCloudRepositoryIntentStore } from "#product/stores/cloud/cloud-repos
 import {
   continueCloudRepositoryIntent,
   repoForCloudRepositoryIntent,
+  requirementForCloudRepositoryIntent,
   type CloudRepoIdentity,
   type CloudRepositoryIntent,
   type CreateCloudWorkspaceContinuation,
@@ -67,6 +68,10 @@ export function CloudRepoActionDialogHost() {
   const closeAddRepoFlow = useAddRepoFlowStore((state) => state.close);
   const showToast = useToastStore((state) => state.show);
   const repo = intent ? repoForCloudRepositoryIntent(intent) : null;
+  // Clone depends only on GitHub repository access; managed-Cloud intents depend
+  // on managed Cloud. Gating by the intent's own requirement lets an
+  // App-ready/E2B-disabled deployment clone without a managed-Cloud gate.
+  const requirement = intent ? requirementForCloudRepositoryIntent(intent) : "managed_cloud";
 
   const client = useCloudClient();
   const queryClient = useQueryClient();
@@ -135,7 +140,7 @@ export function CloudRepoActionDialogHost() {
   const readiness: RepositoryReadiness | null = useMemo(() => {
     if (!intent) return null;
     return resolveRepositoryReadiness({
-      requirement: "managed_cloud",
+      requirement,
       githubRepositoryAccess: capabilities.githubRepositoryAccessStatus,
       managedCloud: capabilities.managedCloudStatus,
       signedIn,

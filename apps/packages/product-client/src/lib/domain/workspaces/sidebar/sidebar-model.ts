@@ -10,6 +10,7 @@ import type {
   SidebarWorkspaceVariant,
 } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
 import type { WorkspaceGitStatus } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
+import type { WorkspaceAvailabilityCommand } from "#product/lib/domain/workspaces/cloud/workspace-availability-commands";
 
 export interface LocalSidebarWorkspaceEntry {
   source: "local";
@@ -92,6 +93,19 @@ export interface SidebarWorkspaceItemState {
    * (§2.7). Null when no status is known for the workspace.
    */
   gitStatus: WorkspaceGitStatus | null;
+  /**
+   * Workspace-copy availability commands (PR 5): Add Cloud copy / Open on this
+   * Mac / Link / Unlink / Relink / Recreate, or an unsupported-git-state
+   * blocker. Resolved from the shared availability command model so the DOM and
+   * native menus render identically.
+   */
+  availabilityCommands: WorkspaceAvailabilityCommand[];
+  /** Ids the availability actions target: the Cloud workspace, this install's
+   * linked local materialization, and the repo owner/name for Add Cloud copy. */
+  cloudWorkspaceIdForActions: string | null;
+  linkedMaterializationId: string | null;
+  repoOwner: string | null;
+  repoName: string | null;
 }
 
 export interface SidebarGroupState {

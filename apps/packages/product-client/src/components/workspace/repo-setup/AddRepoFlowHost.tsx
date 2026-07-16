@@ -1,5 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import type { CloudRepoPickerProps } from "@proliferate/product-ui/repos/CloudRepoPicker";
+import { parseGitRepoId } from "@proliferate/product-domain/repos/repo-id";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { resolveRepositoryReadiness } from "@proliferate/product-domain/repos/repo-readiness";
 import type { CloudRepoPickerBlockerView } from "@proliferate/product-ui/repos/CloudRepoPicker";
@@ -11,6 +13,7 @@ import {
   useAddCloudEnvironment,
 } from "@proliferate/product-surfaces/settings/cloud-environments/use-add-cloud-environment";
 import { useAddRepo } from "#product/hooks/workspaces/workflows/use-add-repo";
+import { useCloneRepo } from "#product/hooks/workspaces/workflows/use-clone-repo";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
 import { isSettingsAdminRole } from "#product/lib/domain/settings/admin-roles";
 import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
@@ -36,6 +39,7 @@ export function AddRepoFlowHost() {
   const beginCloudIntent = useCloudRepositoryIntentStore((state) => state.begin);
 
   const { addRepoFromPath, isAddingRepo } = useAddRepo();
+  const { cloneRepo, isCloning } = useCloneRepo();
   const { activeOrganization, activeOrganizationId } = useActiveOrganization();
   const host = useProductHost();
   const navigate = useNavigate();
@@ -44,6 +48,7 @@ export function AddRepoFlowHost() {
   const files = host.desktop?.files ?? null;
   const showToast = useToastStore((state) => state.show);
   const [flowError, setFlowError] = useState<string | null>(null);
+  const [cloningRepoId, setCloningRepoId] = useState<string | null>(null);
 
   // PR2-GATING-01: the cloud path routes through the SAME ordered readiness
   // resolver every other cloud-repo surface uses, so a deployment with operator
@@ -99,9 +104,10 @@ export function AddRepoFlowHost() {
     navigate,
   ]);
 
-  // Host-truthful options: only Desktop can register an existing local folder.
+  // Host-truthful options: only Desktop can register an existing local folder
+  // or clone locally; Web offers only the managed-Cloud setup.
   const options = useMemo<AddRepoFlowOption[]>(
-    () => (files ? ["add-existing-folder", "cloud"] : ["cloud"]),
+    () => (files ? ["add-existing-folder", "clone-from-github", "cloud"] : ["cloud"]),
     [files],
   );
 
@@ -144,10 +150,87 @@ export function AddRepoFlowHost() {
     },
   });
 
+  // Clone reuses the accessible-repos catalog + GitHub-App gating from the cloud
+  // picker, but on select it clones locally (PR 3) instead of saving a
+  // managed-Cloud environment. Clone needs only GitHub repository access, so it
+  // is available whenever the picker's own GitHub-App prerequisites are met.
+  const clonePickerBase = useAddCloudEnvironment({
+    enabled: open && step.kind === "clone",
+    organizationId: activeOrganizationId,
+    canManageGitHubAppInstallation: isSettingsAdminRole(
+      activeOrganization?.membership?.role,
+    ),
+    userAuthorizationReturnTo: host.links.buildReturnUrl({
+      kind: "settings",
+      section: "environments",
+      source: "github_app_callback",
+    }),
+    // Host-truthful installation return (PR2-WEB-03): derive from the host via
+    // buildReturnUrl instead of a hard-coded `proliferate://` deep link, matching
+    // the cloud picker above.
+    installationReturnTo: host.links.buildReturnUrl({
+      kind: "settings",
+      section: "environments",
+      query: [["source", "github_app_installation_callback"]],
+    }),
+    onOpenExternalUrl: host.links.openExternal,
+    // The clone path never adds a Cloud environment; select is overridden below.
+    onEnvironmentAdded: () => {},
+  });
+
+  const clonePicker = useMemo<CloudRepoPickerProps>(() => ({
+    ...clonePickerBase,
+    addingRepoId: cloningRepoId,
+    onAddRepository: (repo) => {
+      const identity = parseGitRepoId(repo.id);
+      if (!identity) {
+        setFlowError("That repository id is not a supported GitHub owner/name.");
+        return;
+      }
+      void (async () => {
+        setFlowError(null);
+        setCloningRepoId(repo.id);
+        // Stable operation id so a retry reuses the repo-root materialization.
+        const operationId = `clone:${identity.gitOwner}/${identity.gitRepoName}`;
+        const result = await cloneRepo(
+          {
+            gitProvider: "github",
+            gitOwner: identity.gitOwner,
+            gitRepoName: identity.gitRepoName,
+          },
+          operationId,
+        );
+        setCloningRepoId(null);
+        if (result.succeeded) {
+          const onCompleted = useAddRepoFlowStore.getState().onCompleted;
+          closeFlow();
+          showToast(`Cloned ${repo.fullName}`, "info");
+          onCompleted?.({ kind: "local", sourceRoot: result.sourceRoot });
+          return;
+        }
+        if (!result.cancelled) {
+          setFlowError(result.error);
+        }
+      })();
+    },
+  }), [
+    activeOrganizationId,
+    activeOrganization?.membership?.role,
+    clonePickerBase,
+    cloneRepo,
+    cloningRepoId,
+    closeFlow,
+    showToast,
+  ]);
+
   const handlePickOption = useCallback((option: AddRepoFlowOption) => {
     setFlowError(null);
     if (option === "cloud") {
       setStep({ kind: "cloud" });
+      return;
+    }
+    if (option === "clone-from-github") {
+      setStep({ kind: "clone" });
       return;
     }
     // "add-existing-folder": the native folder picker IS the intent signal, so
@@ -183,9 +266,9 @@ export function AddRepoFlowHost() {
   }, [setStep]);
 
   const handleClose = useCallback(() => {
-    // Ignore Escape/overlay-click while a local add is committing so the
-    // dialog cannot vanish mid-add.
-    if (isAddingRepo) {
+    // Ignore Escape/overlay-click while a local add or clone is committing so
+    // the dialog cannot vanish mid-operation.
+    if (isAddingRepo || isCloning) {
       return;
     }
     setFlowError(null);
@@ -205,9 +288,10 @@ export function AddRepoFlowHost() {
       open={open}
       step={step}
       options={options}
-      adding={isAddingRepo}
+      adding={isAddingRepo || isCloning}
       error={step.kind === "cloud" ? null : flowError}
       cloudPicker={resolvedCloudPicker}
+      clonePicker={step.kind === "clone" ? clonePicker : null}
       onPickOption={handlePickOption}
       onBack={handleBack}
       onClose={handleClose}

@@ -3,7 +3,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
-import { ArrowLeft, Cloud, FolderOpen } from "lucide-react";
+import { ArrowLeft, Cloud, FolderOpen, GitBranch } from "lucide-react";
 
 import {
   Dialog,
@@ -16,15 +16,17 @@ import { CloudRepoPicker, type CloudRepoPickerProps } from "./CloudRepoPicker";
 
 /**
  * The host-truthful entry choices. `add-existing-folder` registers an existing
- * checkout on this machine (Desktop only); `cloud` walks the readiness → repo
- * picker → authority → save sequence (both hosts). There is deliberately no
- * placeholder Clone choice; Clone ships in a later slice.
+ * checkout on this machine (Desktop only); `clone-from-github` clones an
+ * authorized GitHub repository to this machine (Desktop only, GitHub-App-ready);
+ * `cloud` walks the readiness → repo picker → authority → save sequence (both
+ * hosts).
  */
-export type AddRepoFlowOption = "add-existing-folder" | "cloud";
+export type AddRepoFlowOption = "add-existing-folder" | "clone-from-github" | "cloud";
 
 export type AddRepoFlowStep =
   | { kind: "entry" }
-  | { kind: "cloud" };
+  | { kind: "cloud" }
+  | { kind: "clone" };
 
 export interface AddRepoFlowProps {
   open: boolean;
@@ -37,6 +39,9 @@ export interface AddRepoFlowProps {
   error?: string | null;
   /** View model for the cloud step, wired by the host's controller layer. */
   cloudPicker?: CloudRepoPickerProps | null;
+  /** View model for the clone-from-github step, wired by the host. Reuses the
+   * repo picker; on select the host runs the local clone. */
+  clonePicker?: CloudRepoPickerProps | null;
   onPickOption: (option: AddRepoFlowOption) => void;
   onBack: () => void;
   onClose: () => void;
@@ -55,6 +60,12 @@ const ENTRY_OPTION_DEFS: Record<AddRepoFlowOption, EntryOption> = {
     icon: <FolderOpen size={16} aria-hidden />,
     label: "Add an existing folder",
     description: "Register a repository folder from this machine.",
+  },
+  "clone-from-github": {
+    option: "clone-from-github",
+    icon: <GitBranch size={16} aria-hidden />,
+    label: "Clone from GitHub",
+    description: "Clone an authorized GitHub repository to this machine.",
   },
   cloud: {
     option: "cloud",
@@ -77,6 +88,7 @@ export function AddRepoFlow({
   adding = false,
   error = null,
   cloudPicker = null,
+  clonePicker = null,
   onPickOption,
   onBack,
   onClose,
@@ -99,8 +111,18 @@ export function AddRepoFlow({
       >
         {step.kind === "entry" ? (
           <AddRepoEntryStep options={options} onPickOption={onPickOption} disabled={adding} />
+        ) : step.kind === "clone" ? (
+          <AddRepoPickerStep
+            title="Clone from GitHub"
+            picker={clonePicker}
+            onBack={onBack}
+          />
         ) : (
-          <AddRepoCloudStep cloudPicker={cloudPicker} onBack={onBack} />
+          <AddRepoPickerStep
+            title="Add a cloud repo"
+            picker={cloudPicker}
+            onBack={onBack}
+          />
         )}
         {error ? (
           <p className="mt-3 text-xs leading-[1.45] text-destructive" role="alert">
@@ -176,11 +198,13 @@ function AddRepoEntryStep({
   );
 }
 
-function AddRepoCloudStep({
-  cloudPicker,
+function AddRepoPickerStep({
+  title,
+  picker,
   onBack,
 }: {
-  cloudPicker: CloudRepoPickerProps | null;
+  title: string;
+  picker: CloudRepoPickerProps | null;
   onBack: () => void;
 }) {
   return (
@@ -198,13 +222,13 @@ function AddRepoCloudStep({
             <ArrowLeft size={14} aria-hidden />
           </Button>
           <DialogTitle className="text-[15px] font-semibold leading-5">
-            Add a cloud repo
+            {title}
           </DialogTitle>
         </div>
       </DialogHeader>
-      {cloudPicker ? (
+      {picker ? (
         <div className="mt-3">
-          <CloudRepoPicker {...cloudPicker} />
+          <CloudRepoPicker {...picker} />
         </div>
       ) : null}
     </div>

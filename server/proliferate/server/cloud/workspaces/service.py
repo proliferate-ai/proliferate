@@ -26,9 +26,13 @@ from proliferate.db.store.cloud_workspace_materializations import (
 from proliferate.db.store.cloud_workspaces import CloudWorkspaceValue
 from proliferate.db.store.repositories import RepoEnvironmentValue
 from proliferate.integrations.anyharness.errors import CloudRuntimeReconnectError
-from proliferate.integrations.anyharness.models import ResolvedRemoteWorkspace
+from proliferate.integrations.anyharness.models import (
+    MaterializedRemoteWorkspaceAtRef,
+    ResolvedRemoteWorkspace,
+)
 from proliferate.integrations.anyharness.workspaces import (
     create_remote_worktree_workspace,
+    materialize_workspace_at_ref,
     resolve_runtime_workspace,
 )
 from proliferate.lib.product.workspace_naming import resolve_generated_branch_name
@@ -233,6 +237,28 @@ async def create_cloud_workspace_for_user(
             status_code=400,
         )
 
+    # Exact-ref creation (PR 5, "Add Cloud copy from local"): the branch is an
+    # already-published GitHub branch and the Cloud copy is materialized at that
+    # exact commit, not forked from base. Server independently re-verifies the
+    # authorized GitHub head equals the expected SHA — the client descriptor is
+    # never trusted for the ref.
+    expected_head_sha = (body.expected_head_sha or "").strip()
+    if expected_head_sha:
+        return await _create_cloud_workspace_at_exact_ref(
+            db,
+            user=user,
+            repo_environment=repo_environment,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+            branch_name=branch_name,
+            base_branch=base_branch,
+            expected_head_sha=expected_head_sha,
+            repo_branches=repo_branches,
+            display_name=body.display_name,
+            source=body.source or "desktop",
+            source_materialization=body.source_materialization,
+        )
+
     active_workspace_branches = (
         await cloud_workspace_store.list_active_workspace_branches_for_repo_environment(
             db,
@@ -362,6 +388,210 @@ async def create_cloud_workspace_for_user(
         state="hydrated",
     )
     return await _workspace_payload(db, workspace, detail=True)
+
+
+async def _create_cloud_workspace_at_exact_ref(
+    db: AsyncSession,
+    *,
+    user: _UserWithId,
+    repo_environment: RepoEnvironmentValue,
+    git_owner: str,
+    git_repo_name: str,
+    branch_name: str,
+    base_branch: str,
+    expected_head_sha: str,
+    repo_branches: object,
+    display_name: str | None,
+    source: str,
+    source_materialization: object,
+) -> WorkspaceDetail:
+    """Create a managed-Cloud workspace at an exact published branch head.
+
+    The branch must be an existing GitHub branch whose authorized head equals
+    ``expected_head_sha`` (server-verified — the client descriptor is never
+    trusted for the ref). The managed Cloud AnyHarness workspace is materialized
+    at that exact commit through PR 3's exact-ref endpoint, then the durable
+    CloudWorkspace + managed materialization are written, and — when a local
+    source descriptor is supplied — the local materialization association is
+    recorded as already hydrated in the same transaction.
+    """
+    branches = getattr(repo_branches, "branches", [])
+    branch_heads = getattr(repo_branches, "branch_heads_by_name", {}) or {}
+    if branch_name not in branches:
+        raise CloudApiError(
+            "github_branch_not_found",
+            f"The branch '{branch_name}' was not found on GitHub.",
+            status_code=400,
+        )
+    github_head = branch_heads.get(branch_name)
+    if github_head is None:
+        raise CloudApiError(
+            "materialization_source_blocked",
+            f"The branch '{branch_name}' is not published on GitHub.",
+            status_code=409,
+        )
+    if github_head != expected_head_sha:
+        raise CloudApiError(
+            "materialization_source_blocked",
+            "The local workspace has commits that are not published on GitHub.",
+            status_code=409,
+        )
+
+    active_workspace_branches = (
+        await cloud_workspace_store.list_active_workspace_branches_for_repo_environment(
+            db,
+            repo_environment_id=repo_environment.id,
+        )
+    )
+    if branch_name in active_workspace_branches:
+        raise CloudApiError(
+            "cloud_branch_already_exists",
+            f"A cloud workspace already exists for branch '{branch_name}'.",
+            status_code=409,
+        )
+
+    display_name_value = (display_name or branch_name).strip() or branch_name
+    if len(display_name_value) > MAX_CLOUD_WORKSPACE_DISPLAY_NAME_CHARS:
+        raise CloudApiError(
+            "invalid_display_name",
+            (
+                "Workspace display name cannot exceed "
+                f"{MAX_CLOUD_WORKSPACE_DISPLAY_NAME_CHARS} characters."
+            ),
+            status_code=400,
+        )
+
+    try:
+        await materialization_service.materialize_repo_environment(
+            db,
+            repo_environment_id=repo_environment.id,
+        )
+    except CloudRuntimeReconnectError as exc:
+        raise CloudApiError(
+            "cloud_sandbox_reconnect_failed",
+            "The cloud sandbox runtime could not be reached. Please retry in a moment.",
+            status_code=502,
+        ) from exc
+    except CloudRepoCheckoutError as exc:
+        raise CloudApiError(
+            "cloud_repo_checkout_conflict",
+            _CHECKOUT_CONFLICT_MESSAGES.get(
+                exc.reason,
+                "The cloud checkout for this repository could not be prepared. "
+                "Resolve outstanding changes in the cloud sandbox and retry.",
+            ),
+            status_code=409,
+        ) from exc
+    except CloudMaterializationLockTimeout as exc:
+        raise CloudApiError(
+            "cloud_materialization_busy",
+            "The cloud sandbox is busy preparing another workspace. Please retry in a moment.",
+            status_code=503,
+        ) from exc
+
+    workspace = await cloud_workspace_store.create_cloud_workspace(
+        db,
+        user_id=user.id,
+        repo_environment_id=repo_environment.id,
+        display_name=display_name_value,
+        git_branch=branch_name,
+        git_base_branch=base_branch,
+    )
+    if workspace is None:
+        raise CloudApiError(
+            "cloud_branch_already_exists",
+            f"A cloud workspace already exists for branch '{branch_name}'.",
+            status_code=409,
+        )
+
+    runtime_url, runtime_token, _data_key = await _load_ready_runtime_access(db, user_id=user.id)
+    repo_path = materialization_paths.repo_path(repo_environment)
+    repo_root = await _resolve_repo_root(runtime_url, runtime_token, repo_path=repo_path)
+    materialized = await _materialize_managed_at_exact_ref(
+        runtime_url,
+        runtime_token,
+        repo_root_id=repo_root.repo_root_id,
+        workspace_id=workspace.id,
+        branch_name=branch_name,
+        head_sha=expected_head_sha,
+    )
+
+    sandbox = await cloud_sandbox_store.load_personal_cloud_sandbox(db, user.id)
+    workspace = await cloud_workspace_store.update_workspace_anyharness_workspace_id(
+        db,
+        anyharness_workspace_id=materialized.workspace_id,
+        workspace=workspace,
+    )
+    await materialization_store.insert_managed_cloud_materialization(
+        db,
+        cloud_workspace_id=workspace.id,
+        cloud_sandbox_id=sandbox.id if sandbox is not None else None,
+        anyharness_workspace_id=materialized.workspace_id,
+        state="hydrated",
+        expected_head_sha=expected_head_sha,
+        observed_head_sha=materialized.observed_head_sha,
+        observed_branch=branch_name,
+    )
+
+    # Record the local source association (already hydrated) when the caller
+    # named its local workspace. Best-effort: a race with a concurrent link
+    # leaves the managed copy intact; the association can be retried via intent.
+    if source_materialization is not None:
+        install_id = getattr(source_materialization, "desktop_install_id", "").strip()
+        worker = (
+            await runtime_workers_store.get_active_desktop_worker_for_user(
+                db,
+                owner_user_id=user.id,
+                desktop_install_id=install_id,
+            )
+            if install_id
+            else None
+        )
+        if worker is not None:
+            await materialization_store.insert_hydrated_local_desktop_materialization(
+                db,
+                cloud_workspace_id=workspace.id,
+                desktop_install_id=install_id,
+                anyharness_workspace_id=getattr(
+                    source_materialization, "anyharness_workspace_id", ""
+                ),
+                worktree_path=getattr(source_materialization, "worktree_path", ""),
+                expected_head_sha=expected_head_sha,
+                observed_head_sha=getattr(
+                    source_materialization, "observed_head_sha", expected_head_sha
+                ),
+                observed_branch=branch_name,
+            )
+    return await _workspace_payload(db, workspace, detail=True)
+
+
+async def _materialize_managed_at_exact_ref(
+    runtime_url: str,
+    runtime_token: str,
+    *,
+    repo_root_id: str,
+    workspace_id: UUID,
+    branch_name: str,
+    head_sha: str,
+) -> MaterializedRemoteWorkspaceAtRef:
+    # Reuse the workspace id as the runtime operation id so a retry of the same
+    # create (same workspace row) reuses the runtime ledger result instead of
+    # cutting a second worktree.
+    try:
+        return await materialize_workspace_at_ref(
+            runtime_url,
+            runtime_token,
+            repo_root_id=repo_root_id,
+            operation_id=str(workspace_id),
+            branch_name=branch_name,
+            head_sha=head_sha,
+        )
+    except CloudRuntimeReconnectError as exc:
+        raise CloudApiError(
+            "cloud_workspace_create_failed",
+            str(exc),
+            status_code=502,
+        ) from exc
 
 
 async def sync_cloud_workspace_display_name(

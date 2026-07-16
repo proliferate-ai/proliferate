@@ -25,6 +25,15 @@ export interface CreateCloudWorkspaceContinuation {
  * The one intent the connected Cloud action host owns. Serializable by
  * construction: on cold restart the store is empty and nothing resumes; the
  * settings surfaces are the recovery path.
+ *
+ * NOTE (PR5-DEAD-04): local clone-from-GitHub is NOT an intent here. It runs
+ * entirely inside AddRepoFlowHost's clone picker (`useAddRepoFlowStore` "clone"
+ * step → `useCloneRepo`), which owns its own repo picker + GitHub-App gating and
+ * does not need this readiness-gate/continuation host. A `clone_from_github`
+ * intent kind was previously declared here but never begun by any surface, so it
+ * was removed rather than left as dead code. If clone ever needs the browser
+ * authorization round-trip this host provides, reintroduce it with a real
+ * `begin({ kind: "clone_from_github" })` call site.
  */
 export type CloudRepositoryIntent =
   | { kind: "set_up_cloud"; repo: CloudRepoIdentity }
@@ -35,7 +44,11 @@ export type CloudRepositoryIntent =
   }
   | { kind: "add_cloud_repository"; repo: CloudRepoIdentity };
 
-/** Every Cloud repository intent depends on managed-Cloud readiness. */
+/**
+ * The capability an intent depends on. Every intent this host owns requires
+ * managed-Cloud execution readiness (the local clone path is not an intent; see
+ * the type note above).
+ */
 export function requirementForCloudRepositoryIntent(
   _intent: CloudRepositoryIntent,
 ): RepositoryCapabilityRequirement {

@@ -9,11 +9,16 @@ import {
 const REPO = { gitProvider: "github", gitOwner: "acme", gitRepoName: "rocket" } as const;
 
 describe("cloud repository intent", () => {
-  it("maps every cloud intent to the managed_cloud requirement", () => {
+  it("maps every host-owned intent to managed_cloud (local clone is not an intent; PR5-DEAD-04)", () => {
     expect(requirementForCloudRepositoryIntent({ kind: "set_up_cloud", repo: REPO }))
       .toBe("managed_cloud");
     expect(requirementForCloudRepositoryIntent({ kind: "add_cloud_repository", repo: REPO }))
       .toBe("managed_cloud");
+    expect(requirementForCloudRepositoryIntent({
+      kind: "create_cloud_workspace",
+      repo: REPO,
+      continuation: { repoGroupKeyToExpand: null, baseBranch: null },
+    })).toBe("managed_cloud");
   });
 
   it("resolves the target repo for every intent", () => {

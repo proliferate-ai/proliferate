@@ -30,6 +30,10 @@ import { APP_ROUTES } from "#product/config/app-routes";
 import { SHORTCUTS } from "#product/config/shortcuts/registry";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import { useSidebarRepoAvailabilityActions } from "#product/hooks/workspaces/workflows/use-sidebar-repo-availability-actions";
+import { useWorkspaceAvailabilityIntentStore } from "#product/stores/cloud/workspace-availability-intent-store";
+import type { WorkspaceAvailabilityCommandKind } from "#product/lib/domain/workspaces/cloud/workspace-availability-commands";
+import { workspaceAvailabilityIntentForCommand } from "#product/lib/domain/workspaces/cloud/workspace-availability-intent-mapping";
+import type { SidebarWorkspaceItemState } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 import { useCloudBilling } from "#product/hooks/cloud/facade/use-cloud-billing";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 import { useSidebarShortcutTargets } from "#product/hooks/workspaces/derived/use-sidebar-shortcut-targets";
@@ -274,6 +278,25 @@ export const MainSidebar = memo(function MainSidebar() {
     handleAddToThisMac,
   } = useSidebarRepoAvailabilityActions();
 
+  const beginWorkspaceAvailabilityIntent = useWorkspaceAvailabilityIntentStore(
+    (state) => state.begin,
+  );
+  const handleWorkspaceAvailabilityCommand = useCallback((
+    item: SidebarWorkspaceItemState,
+    kind: WorkspaceAvailabilityCommandKind,
+  ) => {
+    const intent = workspaceAvailabilityIntentForCommand(kind, {
+      localWorkspaceId: item.localWorkspaceId,
+      cloudWorkspaceId: item.cloudWorkspaceIdForActions,
+      linkedMaterializationId: item.linkedMaterializationId,
+      repoOwner: item.repoOwner,
+      repoName: item.repoName,
+    });
+    if (intent) {
+      beginWorkspaceAvailabilityIntent(intent);
+    }
+  }, [beginWorkspaceAvailabilityIntent]);
+
   const cloudWorkspaceBlocked = billingPlan?.billingMode === "enforce" && billingPlan.startBlocked;
   // Truthful cause for a blocked cloud-workspace action: a signed-in user on a
   // compute-unconfigured deployment sees the operator explanation, not a "sign
@@ -365,6 +388,7 @@ export const MainSidebar = memo(function MainSidebar() {
               onIndicatorAction={actions.handleSidebarIndicatorAction}
               onOpenPullRequest={actions.handleOpenPullRequest}
               onMarkWorkspaceDone={actions.handleMarkWorkspaceDone}
+              onWorkspaceAvailabilityCommand={handleWorkspaceAvailabilityCommand}
               onWorkspaceHover={handleWorkspaceHover}
               shortcutRevealVisible={shortcutRevealVisible}
               shortcutLabelByWorkspaceId={sidebarShortcutLabelById}

@@ -26,6 +26,10 @@ import { isWorkspaceNeedsReview } from "#product/lib/domain/workspaces/sidebar/s
 import { logicalWorkspaceHasUnreadSessionActivity } from "#product/lib/domain/workspaces/sidebar/workspace-activity-indicator";
 import { workspaceCopyMetadataForLogicalWorkspace } from "#product/lib/domain/workspaces/workspace-copy-metadata";
 import { resolveLogicalWorkspaceRecency } from "#product/lib/domain/workspaces/sidebar/recency";
+import {
+  deriveWorkspaceAvailabilityInput,
+  resolveWorkspaceAvailabilityCommands,
+} from "#product/lib/domain/workspaces/cloud/workspace-availability-commands";
 
 export interface SidebarWorkspaceItemWithWorkspace {
   workspace: LogicalWorkspace;
@@ -51,6 +55,9 @@ export function buildSidebarWorkspaceItems(args: {
   sessionLastViewedAt?: Record<string, string>;
   targetAppearanceById?: Record<string, ComputeTargetAppearance>;
   suppressActiveNeedsReview?: boolean;
+  /** This Mac's native desktop worker install id (PR 5), used to resolve the
+   * workspace-copy availability commands. Null on Web / no worker. */
+  desktopInstallId?: string | null;
 }): SidebarWorkspaceItemState[] {
   const workspaceItemsWithWorkspace = args.workspaces.map((entry) =>
     buildSidebarWorkspaceItem(entry, args)
@@ -94,6 +101,7 @@ function buildSidebarWorkspaceItem(
     sessionLastViewedAt?: Record<string, string>;
     targetAppearanceById?: Record<string, ComputeTargetAppearance>;
     suppressActiveNeedsReview?: boolean;
+    desktopInstallId?: string | null;
   },
 ): SidebarWorkspaceItemWithWorkspace {
   const active = logicalWorkspaceMatchesId(entry, args.selectedLogicalWorkspaceId);
@@ -150,6 +158,37 @@ function buildSidebarWorkspaceItem(
     ? args.targetAppearanceById?.[sshTargetId] ?? null
     : null;
 
+  // Workspace-copy availability commands (PR 5). A logical workspace that has
+  // both a local and a Cloud side without an explicit materialization for this
+  // install is a plausible Link candidate (same repo/branch heuristic already
+  // grouped them). SSH direct-target workspaces are out of PR 5 scope.
+  const gitStatus = args.gitStatusesByLogicalId?.[entry.id] ?? null;
+  const desktopInstallId = args.desktopInstallId ?? null;
+  const cloudSummary = entry.cloudWorkspace;
+  const hasExplicitMaterializations = (cloudSummary?.materializations?.length ?? 0) > 0;
+  const linkCandidate = Boolean(
+    variant !== "ssh"
+    && preferredLocalWorkspace
+    && cloudSummary
+    && !hasExplicitMaterializations,
+  );
+  const availabilityCommands = variant === "ssh"
+    ? []
+    : resolveWorkspaceAvailabilityCommands(
+      deriveWorkspaceAvailabilityInput({
+        localWorkspace: preferredLocalWorkspace ?? null,
+        cloudWorkspace: cloudSummary ?? null,
+        desktopInstallId,
+        localGitStatus: gitStatus,
+        linkCandidate,
+      }),
+    );
+  const linkedMaterialization = desktopInstallId
+    ? (cloudSummary?.materializations ?? []).find(
+      (m) => m.targetKind === "local_desktop" && m.desktopInstallId === desktopInstallId,
+    ) ?? null
+    : null;
+
   return {
     workspace: entry,
     item: {
@@ -188,7 +227,12 @@ function buildSidebarWorkspaceItem(
       workspaceLocationCopyValue: copyMetadata.workspaceLocation?.value ?? null,
       workspaceLocationCopyToastLabel: copyMetadata.workspaceLocation?.toastLabel ?? null,
       branchName: copyMetadata.branchName,
-      gitStatus: args.gitStatusesByLogicalId?.[entry.id] ?? null,
+      gitStatus,
+      availabilityCommands,
+      cloudWorkspaceIdForActions: cloudSummary?.id ?? null,
+      linkedMaterializationId: linkedMaterialization?.id ?? null,
+      repoOwner: entry.owner ?? cloudSummary?.repo?.owner ?? null,
+      repoName: entry.repoName ?? cloudSummary?.repo?.name ?? null,
     },
   };
 }
