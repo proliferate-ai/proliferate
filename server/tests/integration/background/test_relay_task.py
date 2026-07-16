@@ -57,7 +57,12 @@ async def test_relay_task_publishes_committed_health_noop(
     # Scheduler-store/relay liveness heartbeat and the bounded per-family
     # backlog gauge are emitted every tick for the hosted metric plane.
     assert metrics["relay_heartbeat"] == 1
-    assert metrics["supported_pending_by_family"] == {"background_health_noop": 0}
+    assert metrics["supported_pending_by_family"] == {
+        "background_health_noop": 0,
+        "workflows_deliver": 0,
+        "workflows_observe": 0,
+        "workflows_cancel": 0,
+    }
 
     db_session.expire_all()
     row = await load_outbox_task(db_session, task.id)
