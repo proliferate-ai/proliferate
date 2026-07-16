@@ -17,6 +17,8 @@ interface AddRepoFlowState {
     onCompleted?: (completion: AddRepoFlowCompletion) => void;
   }) => void;
   setStep: (step: AddRepoFlowStoreStep) => void;
+  /** Hide the picker while the connected Cloud readiness dialog owns it. */
+  handoffToCloud: () => void;
   close: () => void;
 }
 
@@ -32,5 +34,6 @@ export const useAddRepoFlowStore = create<AddRepoFlowState>((set) => ({
     onCompleted: options?.onCompleted ?? null,
   }),
   setStep: (step) => set({ step }),
+  handoffToCloud: () => set({ open: false }),
   close: () => set({ open: false, step: ENTRY_STEP, onCompleted: null }),
 }));

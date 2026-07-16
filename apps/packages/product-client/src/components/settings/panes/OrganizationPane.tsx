@@ -48,7 +48,7 @@ export function OrganizationPane() {
     organizations,
     organizationsQuery,
   } = useActiveOrganization();
-  const { openExternal } = useProductHost().links;
+  const { openExternal, buildReturnUrl } = useProductHost().links;
   const actions = useOrganizationActions(activeOrganizationId);
   const [settingsName, setSettingsName] = useState("");
   const [settingsLogoImage, setSettingsLogoImage] = useState<string | null>(null);
@@ -135,7 +135,15 @@ export function OrganizationPane() {
       const response = await githubAppInstallationStart.mutateAsync({
         organizationId: activeOrganizationId,
         options: {
-          returnTo: "proliferate://settings/organization?source=github_app_installation_callback",
+          // Host-truthful install return (Desktop → custom scheme, Web → the
+          // browser origin) via buildReturnUrl, landing back on this pane's own
+          // Organization settings section; a hard-coded `proliferate://` deep
+          // link stranded a Web-initiated installation (PR2-WEB-03).
+          returnTo: buildReturnUrl({
+            kind: "settings",
+            section: "organization",
+            query: [["source", "github_app_installation_callback"]],
+          }),
         },
       });
       await openExternal(response.installationUrl);

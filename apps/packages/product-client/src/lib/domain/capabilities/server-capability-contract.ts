@@ -39,6 +39,34 @@ export interface PricingCapability {
   url: string | null;
 }
 
+/**
+ * Operator readiness of a deployment capability. Mirrors the v2 wire enum
+ * (`OperatorCapabilityStatus`) so the resolver can consume it directly.
+ */
+export type OperatorCapabilityStatus =
+  | "disabled"
+  | "operator_configuration_required"
+  | "ready";
+
+/** Operator readiness of GitHub repository discovery/authority (v2). */
+export interface GitHubRepositoryAccessCapability {
+  status: OperatorCapabilityStatus;
+  provider: "github_app" | null;
+  displayName: string | null;
+}
+
+/**
+ * Operator readiness of managed-Cloud workspace execution.
+ *
+ * `source` records how the status was derived so downstream owners can tell an
+ * explicit v2 declaration apart from a v1/absent "legacy-ready" projection.
+ */
+export interface ManagedCloudCapability {
+  status: OperatorCapabilityStatus;
+  repositoryAuthority: "github_app" | null;
+  source: "v2" | "legacy";
+}
+
 export interface ServerCapabilityContract {
   contractVersion: number;
   deployment: DeploymentIdentity;
@@ -49,6 +77,8 @@ export interface ServerCapabilityContract {
   webApp: WebAppCapability;
   support: SupportCapability;
   pricing: PricingCapability;
+  githubRepositoryAccess: GitHubRepositoryAccessCapability;
+  managedCloud: ManagedCloudCapability;
 }
 
 const DEPLOYMENT_MODES: readonly DeploymentMode[] = [
@@ -58,6 +88,16 @@ const DEPLOYMENT_MODES: readonly DeploymentMode[] = [
 ];
 
 const SUPPORT_KINDS: readonly SupportKind[] = ["vendor", "operator", "none"];
+
+const OPERATOR_CAPABILITY_STATUSES: readonly OperatorCapabilityStatus[] = [
+  "disabled",
+  "operator_configuration_required",
+  "ready",
+];
+
+/** The contract version at which the split GitHub-access / managed-Cloud
+ * capability objects first appear on the wire. */
+const V2_CONTRACT_VERSION = 2;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -87,6 +127,85 @@ function safeEmail(value: unknown): string | null {
 function asBool(value: unknown): boolean {
   return value === true;
 }
+
+function operatorStatus(value: unknown): OperatorCapabilityStatus | null {
+  return typeof value === "string"
+    && OPERATOR_CAPABILITY_STATUSES.includes(value as OperatorCapabilityStatus)
+    ? (value as OperatorCapabilityStatus)
+    : null;
+}
+
+function repositoryAuthority(value: unknown): "github_app" | null {
+  return value === "github_app" ? "github_app" : null;
+}
+
+function safeDisplayName(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+/**
+ * Parse the explicit v2 `githubRepositoryAccess` object. Returns `null` when
+ * the object is absent or its status is malformed, so the caller can fail
+ * closed (a v2/future server that declares the field but garbles it must not be
+ * read as ready).
+ */
+function parseGitHubRepositoryAccess(
+  raw: unknown,
+): GitHubRepositoryAccessCapability | null {
+  if (!isRecord(raw)) return null;
+  const status = operatorStatus(raw.status);
+  if (!status) return null;
+  return {
+    status,
+    provider: repositoryAuthority(raw.provider),
+    displayName: safeDisplayName(raw.displayName),
+  };
+}
+
+/**
+ * Parse the explicit v2 `managedCloud` object. Returns `null` when the object
+ * is absent or its status is malformed so the caller can fail closed.
+ */
+function parseManagedCloud(raw: unknown): ManagedCloudCapability | null {
+  if (!isRecord(raw)) return null;
+  const status = operatorStatus(raw.status);
+  if (!status) return null;
+  return {
+    status,
+    repositoryAuthority: repositoryAuthority(raw.repositoryAuthority),
+    source: "v2",
+  };
+}
+
+/**
+ * Synthesize the split capabilities for a pre-v2 (or version-declared but
+ * fields-absent) contract from the legacy `cloudWorkspaces` boolean. A legacy
+ * server that advertised Cloud implicitly had GitHub repository access ready;
+ * one that did not is disabled on both. Marked `source: "legacy"` so owners can
+ * distinguish a real v2 declaration from this projection.
+ */
+function legacyCapabilities(cloudWorkspaces: boolean): {
+  githubRepositoryAccess: GitHubRepositoryAccessCapability;
+  managedCloud: ManagedCloudCapability;
+} {
+  const status: OperatorCapabilityStatus = cloudWorkspaces ? "ready" : "disabled";
+  return {
+    githubRepositoryAccess: {
+      status,
+      provider: cloudWorkspaces ? "github_app" : null,
+      displayName: null,
+    },
+    managedCloud: {
+      status,
+      repositoryAuthority: cloudWorkspaces ? "github_app" : null,
+      source: "legacy",
+    },
+  };
+}
+
+const DISABLED_CAPABILITIES = legacyCapabilities(false);
 
 /**
  * Normalize the raw `/meta` `capabilities` object into a validated contract.
@@ -127,6 +246,25 @@ export function parseServerCapabilities(
       ? (supportRaw.kind as SupportKind)
       : "none";
 
+  const cloudWorkspaces = asBool(raw.cloudWorkspaces);
+
+  // Version-aware capability interpretation. A v2+ contract carries the split
+  // GitHub-access / managed-Cloud objects; consume them exactly and ignore any
+  // unknown future fields. When a declared v2 object is malformed/absent, fail
+  // closed to `disabled` for that capability rather than trusting it. A pre-v2
+  // contract projects the two capabilities from the legacy `cloudWorkspaces`
+  // boolean (true -> legacy-ready, false -> disabled). The absent-contract
+  // official-origin fallback lives one layer up in `resolveEffectiveContract`.
+  const legacy = legacyCapabilities(cloudWorkspaces);
+  const isV2OrLater = contractVersion >= V2_CONTRACT_VERSION;
+  const githubRepositoryAccess = isV2OrLater
+    ? parseGitHubRepositoryAccess(raw.githubRepositoryAccess)
+      ?? DISABLED_CAPABILITIES.githubRepositoryAccess
+    : legacy.githubRepositoryAccess;
+  const managedCloud = isV2OrLater
+    ? parseManagedCloud(raw.managedCloud) ?? DISABLED_CAPABILITIES.managedCloud
+    : legacy.managedCloud;
+
   return {
     contractVersion,
     deployment: {
@@ -136,7 +274,7 @@ export function parseServerCapabilities(
     },
     billing: asBool(raw.billing),
     usageMetering: asBool(raw.usageMetering),
-    cloudWorkspaces: asBool(raw.cloudWorkspaces),
+    cloudWorkspaces,
     agentGateway: asBool(raw.agentGateway),
     webApp: {
       available: asBool(webAppRaw.available),
@@ -151,5 +289,7 @@ export function parseServerCapabilities(
       available: asBool(pricingRaw.available),
       url: safeUrl(pricingRaw.url),
     },
+    githubRepositoryAccess,
+    managedCloud,
   };
 }

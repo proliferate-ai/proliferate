@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useState } from "react";
-import { ChevronRight, CloudIcon, FolderClosedFilled, FolderFilled, FolderRemote, Plus, Settings, Trash } from "@proliferate/ui/icons";
+import { ChevronRight, CloudIcon, FolderClosedFilled, FolderFilled, FolderRemote, MoreHorizontal, Plus, Settings, Trash } from "@proliferate/ui/icons";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
@@ -14,7 +14,12 @@ import {
   repoRemovalConfirmationCopy,
   requestRepoRemovalConfirmation,
 } from "#product/lib/domain/workspaces/sidebar/repo-context-menu";
-import { useRepoGroupNativeContextMenu } from "#product/hooks/workspaces/ui/use-repo-group-native-context-menu";
+import {
+  buildRepoGroupMenuModel,
+  useRepoGroupNativeContextMenu,
+  type RepoGroupMenuAction,
+  type RepoGroupMenuHandlers,
+} from "#product/hooks/workspaces/ui/use-repo-group-native-context-menu";
 import { useNewWorkspaceCommandScopeStore } from "#product/stores/workspaces/new-workspace-command-scope-store";
 import { SidebarActionButton } from "@proliferate/ui/layout/SidebarActionButton";
 import { ProductSidebarRepoGroupHeader } from "@proliferate/product-ui/sidebar/ProductSidebarRepositories";
@@ -35,6 +40,16 @@ interface RepoGroupProps {
   cloudWorkspaceTooltip?: string;
   onRemoveRepo?: () => Promise<void> | void;
   onOpenSettings?: () => void;
+  /** True when the repo has a supported GitHub identity (Cloud-capable). */
+  isGitHubRepo?: boolean;
+  /** Desktop + non-disabled managed Cloud can offer "Set up Cloud". */
+  canSetUpCloud?: boolean;
+  /** Opens the Cloud action dialog / recovery surface for this repo. */
+  onSetUpCloud?: () => void;
+  /** Desktop-only: register an existing local folder for this Cloud repo. */
+  onAddToThisMac?: () => void;
+  /** Opens the repo's Cloud settings surface. */
+  onOpenCloudSettings?: () => void;
 }
 
 export type RepoGroupEnvironmentKind = "local" | "local_cloud" | "cloud";
@@ -57,6 +72,11 @@ export function RepoGroup({
   cloudWorkspaceTooltip,
   onRemoveRepo,
   onOpenSettings,
+  isGitHubRepo = false,
+  canSetUpCloud = false,
+  onSetUpCloud,
+  onAddToThisMac,
+  onOpenCloudSettings,
 }: RepoGroupProps) {
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
   const [removePending, setRemovePending] = useState(false);
@@ -81,12 +101,23 @@ export function RepoGroup({
     }
   };
   const removeConfirmationCopy = repoRemovalConfirmationCopy(name, environmentKind !== "local");
-  const { onContextMenuCapture } = useRepoGroupNativeContextMenu({
-    canOpenSettings: !!onOpenSettings,
+  const menuModel = buildRepoGroupMenuModel({
+    environmentKind,
+    isGitHubRepo,
+    canSetUpCloud: canSetUpCloud && !!onSetUpCloud,
+    canAddToThisMac: !!onAddToThisMac,
+    canOpenCloudSettings: !!onOpenCloudSettings,
+    canOpenRepositorySettings: !!onOpenSettings,
     canRemoveRepo: !!onRemoveRepo,
-    onOpenSettings: () => onOpenSettings?.(),
-    onRequestRemove: handleRequestRemove,
   });
+  const menuHandlers: RepoGroupMenuHandlers = {
+    "set-up-cloud": onSetUpCloud,
+    "add-to-this-mac": onAddToThisMac,
+    "cloud-settings": onOpenCloudSettings,
+    "repository-settings": onOpenSettings,
+    "remove-repository": handleRequestRemove,
+  };
+  const { onContextMenuCapture } = useRepoGroupNativeContextMenu(menuModel, menuHandlers);
   const handleCreatePopoverOpenChange = (open: boolean) => {
     if (!newWorkspaceCommandScope) {
       return;
@@ -122,12 +153,13 @@ export function RepoGroup({
       onToggleCollapsed={onToggleCollapsed}
       onContextMenuCapture={onContextMenuCapture}
       action={(
+        <>
         <PopoverButton
           trigger={
             <SidebarActionButton
               title="New workspace"
               alwaysVisible
-              className="absolute inset-0 rounded-md opacity-0 group-hover/folder-row:opacity-100 focus-visible:opacity-100"
+              className="rounded-md opacity-0 group-hover/folder-row:opacity-100 focus-visible:opacity-100"
             >
               <Plus className="size-3" />
             </SidebarActionButton>
@@ -202,6 +234,31 @@ export function RepoGroup({
             </>
           )}
         </PopoverButton>
+        {menuModel.length > 0 ? (
+          <PopoverButton
+            trigger={
+              <SidebarActionButton
+                title="Repository options"
+                alwaysVisible
+                className="opacity-0 group-hover/folder-row:opacity-100 focus-visible:opacity-100"
+              >
+                <MoreHorizontal className="size-3" />
+              </SidebarActionButton>
+            }
+            side="right"
+            stopPropagation
+            className={`w-52 ${POPOVER_SURFACE_CLASS}`}
+          >
+            {(close) => (
+              <RepoContextMenuContent
+                model={menuModel}
+                handlers={menuHandlers}
+                onClose={close}
+              />
+            )}
+          </PopoverButton>
+        ) : null}
+        </>
       )}
     />
   );
@@ -217,8 +274,8 @@ export function RepoGroup({
       >
         {(close) => (
           <RepoContextMenuContent
-            onOpenSettings={onOpenSettings}
-            onRequestRemove={handleRequestRemove}
+            model={menuModel}
+            handlers={menuHandlers}
             onClose={close}
           />
         )}
@@ -263,37 +320,44 @@ function RepoGroupEnvironmentIcon({
   return <FolderIcon className="size-4 shrink-0" />;
 }
 
+function repoMenuActionIcon(id: RepoGroupMenuAction["id"]) {
+  switch (id) {
+    case "set-up-cloud":
+    case "add-to-this-mac":
+    case "cloud-settings":
+      return <CloudIcon className="size-3.5 shrink-0 text-muted-foreground" />;
+    case "repository-settings":
+      return <Settings className="size-3.5 shrink-0 text-muted-foreground" />;
+    case "remove-repository":
+      return <Trash className="size-3.5 shrink-0" />;
+  }
+}
+
 function RepoContextMenuContent({
-  onOpenSettings,
-  onRequestRemove,
+  model,
+  handlers,
   onClose,
 }: {
-  onOpenSettings?: () => void;
-  onRequestRemove?: () => void;
+  model: RepoGroupMenuAction[];
+  handlers: RepoGroupMenuHandlers;
   onClose: () => void;
 }) {
   return (
     <>
-      {onOpenSettings && (
-        <PopoverMenuItem
-          icon={<Settings className="size-3.5 shrink-0 text-muted-foreground" />}
-          label="Settings"
-          variant="sidebar"
-          onClick={() => { onClose(); onOpenSettings(); }}
-        />
-      )}
-      {onOpenSettings && onRequestRemove && (
-        <div className="my-1 h-px bg-border" />
-      )}
-      {onRequestRemove && (
-        <PopoverMenuItem
-          icon={<Trash className="size-3.5 shrink-0" />}
-          label="Remove repository"
-          variant="sidebar"
-          className="text-destructive hover:text-destructive"
-          onClick={() => { onClose(); onRequestRemove(); }}
-        />
-      )}
+      {model.map((action, index) => (
+        <div key={action.id}>
+          {action.destructive && index > 0 ? (
+            <div className="my-1 h-px bg-border" />
+          ) : null}
+          <PopoverMenuItem
+            icon={repoMenuActionIcon(action.id)}
+            label={action.label}
+            variant="sidebar"
+            className={action.destructive ? "text-destructive hover:text-destructive" : undefined}
+            onClick={() => { onClose(); handlers[action.id]?.(); }}
+          />
+        </div>
+      ))}
     </>
   );
 }

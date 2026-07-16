@@ -220,13 +220,18 @@ describe("new workspace command targets", () => {
       disabledReason: "Cloud repository settings are loading.",
     });
 
+    // A "configure" state stays actionable (routes into the Cloud action
+    // surface) rather than collapsing to a disabled dead command.
     expect(resolveNewWorkspaceCommandTarget({
       commandKind: "cloud",
       scope,
       cloudRepoAction: { kind: "configure", label: "Install Proliferate GitHub App" },
     })).toEqual({
       commandKind: "cloud",
-      disabledReason: "Install Proliferate GitHub App",
+      cloudActionKind: "configure",
+      target: { gitOwner: "proliferate-ai", gitRepoName: "proliferate" },
+      repoGroupKeyToExpand: "/repos/proliferate",
+      disabledReason: null,
     });
 
     expect(resolveNewWorkspaceCommandTarget({

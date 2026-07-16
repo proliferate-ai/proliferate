@@ -38,7 +38,6 @@ interface SidebarWorkspaceContentProps {
     target: CloudWorkspaceRepoTarget,
     repoGroupKeyToExpand: string,
   ) => void;
-  onOpenCloudRepoSettings: (target: CloudWorkspaceRepoTarget) => void;
   onSelectWorkspace: (workspaceId: string) => void;
   onIndicatorAction: (action: SidebarIndicatorAction) => void;
   onOpenPullRequest: (url: string) => void;
@@ -54,6 +53,16 @@ interface SidebarWorkspaceContentProps {
   ) => Promise<unknown>;
   onRemoveRepo: (sourceRoot: string) => Promise<void>;
   onOpenRepoSettings: (sourceRoot: string) => void;
+  /** Desktop host + non-disabled managed Cloud → the `…` menu can offer Cloud
+   * setup/add-to-mac. */
+  isDesktopHost: boolean;
+  managedCloudAvailable: boolean;
+  /** Opens the repo's Cloud settings surface (existing environment config). */
+  onOpenCloudRepoSettingsForGroup: (target: CloudWorkspaceRepoTarget) => void;
+  /** Begins the connected Cloud action intent (readiness → set up in Cloud). */
+  onSetUpCloudForGroup: (target: CloudWorkspaceRepoTarget) => void;
+  /** Desktop-only: register an existing local folder for a Cloud repo. */
+  onAddToThisMac: (target: CloudWorkspaceRepoTarget) => void;
 }
 
 function SidebarLoadingState() {
@@ -83,7 +92,6 @@ export function SidebarWorkspaceContent({
   onCreateWorktreeWorkspace,
   onCreateLocalWorkspace,
   onCreateCloudWorkspace,
-  onOpenCloudRepoSettings,
   onSelectWorkspace,
   onIndicatorAction,
   onOpenPullRequest,
@@ -96,6 +104,11 @@ export function SidebarWorkspaceContent({
   onRenameWorkspace,
   onRemoveRepo,
   onOpenRepoSettings,
+  isDesktopHost,
+  managedCloudAvailable,
+  onOpenCloudRepoSettingsForGroup,
+  onSetUpCloudForGroup,
+  onAddToThisMac,
 }: SidebarWorkspaceContentProps) {
   const { copyWorkspaceLocation, copyBranchName } = useWorkspaceCopyActions();
 
@@ -184,12 +197,23 @@ export function SidebarWorkspaceContent({
               return;
             }
             if (cloudRepoAction.kind === "configure") {
-              onOpenCloudRepoSettings(cloudRepoTarget);
+              onSetUpCloudForGroup(cloudRepoTarget);
             }
           }
           : undefined}
         onRemoveRepo={() => onRemoveRepo(group.sourceRoot)}
         onOpenSettings={() => onOpenRepoSettings(group.sourceRoot)}
+        isGitHubRepo={Boolean(cloudRepoTarget)}
+        canSetUpCloud={isDesktopHost && managedCloudAvailable}
+        onSetUpCloud={cloudRepoTarget
+          ? () => onSetUpCloudForGroup(cloudRepoTarget)
+          : undefined}
+        onAddToThisMac={isDesktopHost && cloudRepoTarget
+          ? () => onAddToThisMac(cloudRepoTarget)
+          : undefined}
+        onOpenCloudSettings={cloudRepoTarget
+          ? () => onOpenCloudRepoSettingsForGroup(cloudRepoTarget)
+          : undefined}
       >
         {group.items.length === 0 ? (
           <p className="px-3 py-2 text-xs text-sidebar-muted-foreground">
