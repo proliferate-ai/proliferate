@@ -39,33 +39,49 @@ async def test_redis_lease_translates_connection_failure_without_detail(
 
 
 @pytest.mark.asyncio
-async def test_redis_lease_cancels_the_holder_when_renewal_loses_custody(
+async def test_redis_lease_fails_when_renewal_loss_precedes_normal_body_exit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    class LostRedis:
+    renewal_lost = asyncio.Event()
+
+    class RedisWithSuccessfulRelease:
         async def set(self, *_args: object, **_kwargs: object) -> bool:
             return True
 
         async def eval(self, *_args: object, **_kwargs: object) -> int:
-            return 0
+            return 1
 
         async def aclose(self) -> None:
             return None
 
+    async def lose_renewal(
+        _redis: object,
+        *,
+        key: str,
+        token: str,
+        ttl_seconds: int,
+        lost: asyncio.Event,
+    ) -> None:
+        del key, token, ttl_seconds
+        lost.set()
+        renewal_lost.set()
+
     monkeypatch.setattr(
         redis_lock.Redis,
         "from_url",
-        lambda *_args, **_kwargs: LostRedis(),
+        lambda *_args, **_kwargs: RedisWithSuccessfulRelease(),
     )
+    monkeypatch.setattr(redis_lock, "_renew_lease", lose_renewal)
+    monkeypatch.setattr(redis_lock, "_lease_holder_task", lambda: None)
 
     with pytest.raises(redis_lock.RedisLeaseLost):
         async with redis_lock.redis_lease(
             redis_url="redis://redacted.invalid",
             key="test-key",
-            ttl_seconds=1,
+            ttl_seconds=30,
             wait_timeout_seconds=1,
         ):
-            await asyncio.sleep(2)
+            await renewal_lost.wait()
 
 
 @pytest.mark.asyncio

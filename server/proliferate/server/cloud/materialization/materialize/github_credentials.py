@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.server.cloud.github_app.repo_authority import (
     ensure_fresh_github_app_authorization,
 )
-from proliferate.server.cloud.materialization import paths, sandbox_io
+from proliferate.server.cloud.materialization import operation, paths, sandbox_io
 from proliferate.utils.time import utcnow
 
 
@@ -35,9 +35,7 @@ async def materialize_github_credentials(
 ) -> GitHubCredentialMaterializationResult:
     authorization = await ensure_fresh_github_app_authorization(db, user_id=user_id)
     if authorization.access_token is None:
-        raise sandbox_io.CloudMaterializationCommandError(
-            "GitHub App authorization did not produce an access token."
-        )
+        raise operation.CloudMaterializationConfigurationError()
     # Authorization lookup/refresh is complete; remote sandbox writes must not
     # inherit its PostgreSQL transaction.
     await db.commit()

@@ -79,13 +79,26 @@ class GitHubAppInstallationRepositoryValue:
 
 
 class GitHubAppUserAuthorizationPayload(Protocol):
-    access_token: str
-    refresh_token: str | None
-    expires_at: datetime | None
-    refresh_token_expires_at: datetime | None
-    github_user_id: str
-    github_login: str
-    permissions: dict[str, object]
+    @property
+    def access_token(self) -> str: ...
+
+    @property
+    def refresh_token(self) -> str | None: ...
+
+    @property
+    def expires_at(self) -> datetime | None: ...
+
+    @property
+    def refresh_token_expires_at(self) -> datetime | None: ...
+
+    @property
+    def github_user_id(self) -> str: ...
+
+    @property
+    def github_login(self) -> str: ...
+
+    @property
+    def permissions(self) -> dict[str, object]: ...
 
 
 class GitHubAppInstallationPayload(Protocol):
@@ -226,18 +239,6 @@ async def upsert_github_app_authorization(
     return _authorization_value(row)
 
 
-async def mark_github_app_authorization_needs_reauth(
-    db: AsyncSession,
-    authorization_id: UUID,
-) -> None:
-    row = await db.get(GitHubAppAuthorization, authorization_id)
-    if row is None:
-        return
-    row.status = "needs_reauth"
-    row.updated_at = utcnow()
-    await db.flush()
-
-
 async def mark_github_app_authorization_needs_reauth_if_unchanged(
     db: AsyncSession,
     *,
@@ -246,7 +247,7 @@ async def mark_github_app_authorization_needs_reauth_if_unchanged(
 ) -> bool:
     """Stage reauthorization only if no concurrent refresh replaced the grant."""
 
-    result = await db.execute(
+    changed = await db.scalar(
         update(GitHubAppAuthorization)
         .where(
             GitHubAppAuthorization.id == authorization_id,
@@ -256,7 +257,7 @@ async def mark_github_app_authorization_needs_reauth_if_unchanged(
         .values(status="needs_reauth", updated_at=utcnow())
         .returning(GitHubAppAuthorization.id)
     )
-    return result.scalar_one_or_none() is not None
+    return changed is not None
 
 
 async def replace_github_app_authorization_if_unchanged(
@@ -268,6 +269,7 @@ async def replace_github_app_authorization_if_unchanged(
 ) -> GitHubAppAuthorizationValue | None:
     """Store a rotated authorization only if its source grant is still current."""
 
+    now = utcnow()
     row = (
         await db.execute(
             update(GitHubAppAuthorization)
@@ -287,12 +289,13 @@ async def replace_github_app_authorization_if_unchanged(
                 ),
                 token_expires_at=authorization.expires_at,
                 refresh_token_expires_at=authorization.refresh_token_expires_at,
+                status="ready",
                 permissions_json=json.dumps(
                     authorization.permissions,
                     separators=(",", ":"),
                 ),
                 revoked_at=None,
-                updated_at=utcnow(),
+                updated_at=now,
             )
             .returning(GitHubAppAuthorization)
         )

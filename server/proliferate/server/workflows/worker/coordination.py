@@ -67,6 +67,8 @@ def classify_delivery_error(error: BaseException) -> ManagedDeliveryError:
         return ManagedDeliveryError("workflow_repo_checkout_conflict", False)
     if isinstance(error, operation.CloudMaterializationTargetUnavailable):
         return ManagedDeliveryError("workflow_target_unavailable", False)
+    if isinstance(error, operation.CloudMaterializationConfigurationError):
+        return ManagedDeliveryError("workflow_provider_configuration_invalid", False)
     if isinstance(error, SandboxProviderTargetUnavailableError):
         return ManagedDeliveryError("workflow_target_unavailable", False)
     if isinstance(error, SandboxProviderConfigurationError):

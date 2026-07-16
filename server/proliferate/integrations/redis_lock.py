@@ -27,6 +27,10 @@ class RedisLeaseLost(RedisLeaseError):
     pass
 
 
+def _lease_holder_task() -> asyncio.Task[object] | None:
+    return asyncio.current_task()
+
+
 async def _renew_lease(
     redis: Redis,
     *,
@@ -67,14 +71,17 @@ async def redis_lease(
 ) -> AsyncIterator[None]:
     """Acquire and renew a token-owned Redis lease, failing if custody is lost."""
 
-    redis = Redis.from_url(redis_url, decode_responses=True)
+    try:
+        redis = Redis.from_url(redis_url, decode_responses=True)
+    except Exception as error:
+        raise RedisLeaseUnavailable("Redis lease client construction failed") from error
     token = uuid4().hex
     deadline = time.monotonic() + wait_timeout_seconds
     acquired = False
     renew_task: asyncio.Task[None] | None = None
     loss_watcher: asyncio.Task[None] | None = None
     lost = asyncio.Event()
-    holder = asyncio.current_task()
+    holder = _lease_holder_task()
     body_error: BaseException | None = None
     try:
         try:
@@ -124,6 +131,7 @@ async def redis_lease(
                     await task
         cleanup_error: Exception | None = None
         lease_lost_on_release = False
+        renewal_reported_lost = lost.is_set()
         if acquired:
             try:
                 released = await redis.eval(
@@ -144,5 +152,5 @@ async def redis_lease(
             cleanup_error = cleanup_error or error
         if cleanup_error is not None and body_error is None:
             raise RedisLeaseUnavailable("Redis lease release failed") from cleanup_error
-        if lease_lost_on_release and body_error is None:
+        if (renewal_reported_lost or lease_lost_on_release) and body_error is None:
             raise RedisLeaseLost("Redis lease was lost before release")

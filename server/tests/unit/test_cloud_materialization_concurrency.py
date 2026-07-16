@@ -11,6 +11,7 @@ import pytest
 
 from proliferate.constants.organizations import ORGANIZATION_ROLE_OWNER
 from proliferate.db.store.cloud_secrets import CloudSecretSetPayload
+from proliferate.integrations import redis_lock
 from proliferate.server.cloud.materialization import locks, operation
 from proliferate.server.cloud.materialization.materialize import secret_set as secret_materializer
 from proliferate.server.cloud.secrets import service as secrets_service
@@ -343,17 +344,18 @@ async def test_duplicate_secret_burst_strands_a_waiter_but_single_schedules_do_n
         await real_sleep(3600)
 
     monkeypatch.setattr(
-        locks,
+        redis_lock,
         "asyncio",
         SimpleNamespace(
             sleep=_lock_sleep,
             create_task=asyncio.create_task,
-            shield=asyncio.shield,
             CancelledError=asyncio.CancelledError,
+            Event=asyncio.Event,
+            current_task=asyncio.current_task,
         ),
     )
     redis = _SerialRedis()
-    monkeypatch.setattr(locks.Redis, "from_url", lambda *_args, **_kwargs: redis)
+    monkeypatch.setattr(redis_lock.Redis, "from_url", lambda *_args, **_kwargs: redis)
 
     async def _materialize() -> None:
         lock_kwargs: dict[str, object] = {"wait_timeout_seconds": 0.08}

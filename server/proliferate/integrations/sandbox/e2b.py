@@ -76,6 +76,18 @@ def _translate_e2b_exception(error: Exception, *, operation: str) -> Exception |
         (e2b_exceptions.RateLimitException, e2b_exceptions.TimeoutException),
     ):
         return E2BUnavailableError(f"E2B {operation} is unavailable")
+    if isinstance(
+        error,
+        (
+            e2b_exceptions.FileNotFoundException,
+            e2b_exceptions.GitUpstreamException,
+            e2b_exceptions.NotEnoughSpaceException,
+            e2b_exceptions.NotFoundException,
+            e2b_exceptions.SandboxException,
+            e2b_exceptions.VolumeException,
+        ),
+    ):
+        return E2BUnavailableError(f"E2B {operation} is unavailable")
     return None
 
 

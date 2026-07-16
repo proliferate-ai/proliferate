@@ -138,6 +138,10 @@ async def test_observe_and_cancel_access_backoff_use_consecutive_failures(
             "workflow_target_unavailable",
         ),
         (
+            operation.CloudMaterializationConfigurationError(),
+            "workflow_provider_configuration_invalid",
+        ),
+        (
             SandboxProviderTargetUnavailableError("sandbox is gone"),
             "workflow_target_unavailable",
         ),

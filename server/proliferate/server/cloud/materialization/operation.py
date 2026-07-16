@@ -19,6 +19,10 @@ class CloudMaterializationTargetUnavailable(CloudMaterializationError):
     """The exact frozen managed target no longer exists."""
 
 
+class CloudMaterializationConfigurationError(CloudMaterializationError):
+    """Durable authority or configuration prevents materialization."""
+
+
 @dataclass(frozen=True)
 class MaterializationContext:
     sandbox: CloudSandboxValue

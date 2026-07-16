@@ -2,19 +2,43 @@
 
 from __future__ import annotations
 
+import asyncio
+from contextlib import asynccontextmanager
+from contextvars import ContextVar
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
+from httpx import AsyncClient
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from proliferate.db.store import github_app as github_app_store
 from proliferate.server.cloud.github_app import repo_authority
 from proliferate.server.cloud.materialization import operation
 from proliferate.server.cloud.materialization.materialize import agent_auth
 from proliferate.server.cloud.materialization.materialize import (
     repo_environment as repo_materializer,
 )
+from tests.integration.cloud_api_helpers import register_and_login
+
+
+def _github_authorization_payload(
+    *,
+    access_token: str,
+    refresh_token: str,
+    expires_at: datetime,
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        expires_at=expires_at,
+        refresh_token_expires_at=expires_at + timedelta(days=30),
+        github_user_id="github-user",
+        github_login="octocat",
+        permissions={"contents": "write"},
+    )
 
 
 @pytest.mark.asyncio
@@ -213,3 +237,139 @@ async def test_agent_auth_releases_transaction_before_sandbox_io(
     )
 
     assert external_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_rotating_github_refresh_serializes_without_postgres_transaction(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_engine: AsyncEngine,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    owner = await register_and_login(client, f"github-refresh-{uuid4()}@example.com")
+    owner_id = UUID(owner["user_id"])
+    expired = datetime.now(UTC) - timedelta(minutes=1)
+    await github_app_store.upsert_github_app_authorization(
+        db_session,
+        user_id=owner_id,
+        authorization=_github_authorization_payload(
+            access_token="expired-access",
+            refresh_token="rotating-refresh",
+            expires_at=expired,
+        ),
+    )
+    await db_session.commit()
+
+    lease = asyncio.Lock()
+    current_session: ContextVar[AsyncSession] = ContextVar("github_refresh_session")
+    refresh_calls = 0
+
+    @asynccontextmanager
+    async def locked(_user_id):  # type: ignore[no-untyped-def]
+        assert not current_session.get().in_transaction()
+        async with lease:
+            yield
+
+    async def refresh(*, refresh_token: str):  # type: ignore[no-untyped-def]
+        nonlocal refresh_calls
+        assert refresh_token == "rotating-refresh"
+        assert not current_session.get().in_transaction()
+        refresh_calls += 1
+        await asyncio.sleep(0.02)
+        return _github_authorization_payload(
+            access_token="rotated-access",
+            refresh_token="rotated-refresh",
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+        )
+
+    monkeypatch.setattr(repo_authority, "_authorization_refresh_lock", locked)
+    monkeypatch.setattr(repo_authority, "refresh_github_app_user_authorization", refresh)
+    factory = async_sessionmaker(test_engine, expire_on_commit=False)
+
+    async def resolve():  # type: ignore[no-untyped-def]
+        async with factory() as db:
+            token = current_session.set(db)
+            try:
+                return await repo_authority.ensure_fresh_github_app_authorization(
+                    db,
+                    user_id=owner_id,
+                )
+            finally:
+                current_session.reset(token)
+
+    first, second = await asyncio.gather(resolve(), resolve())
+
+    assert refresh_calls == 1
+    assert first.access_token == second.access_token == "rotated-access"
+    assert first.refresh_token == second.refresh_token == "rotated-refresh"
+
+
+@pytest.mark.asyncio
+async def test_invalid_rotating_token_cannot_clobber_newer_callback_authorization(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_engine: AsyncEngine,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from proliferate.integrations.github import GitHubAppInvalidGrant
+
+    owner = await register_and_login(client, f"github-cas-{uuid4()}@example.com")
+    owner_id = UUID(owner["user_id"])
+    await github_app_store.upsert_github_app_authorization(
+        db_session,
+        user_id=owner_id,
+        authorization=_github_authorization_payload(
+            access_token="expired-access",
+            refresh_token="stale-refresh",
+            expires_at=datetime.now(UTC) - timedelta(minutes=1),
+        ),
+    )
+    await db_session.commit()
+
+    refresh_started = asyncio.Event()
+    callback_complete = asyncio.Event()
+
+    @asynccontextmanager
+    async def locked(_user_id):  # type: ignore[no-untyped-def]
+        yield
+
+    async def invalid_refresh(*, refresh_token: str):  # type: ignore[no-untyped-def]
+        assert refresh_token == "stale-refresh"
+        refresh_started.set()
+        await callback_complete.wait()
+        raise GitHubAppInvalidGrant("rotated")
+
+    monkeypatch.setattr(repo_authority, "_authorization_refresh_lock", locked)
+    monkeypatch.setattr(
+        repo_authority,
+        "refresh_github_app_user_authorization",
+        invalid_refresh,
+    )
+    factory = async_sessionmaker(test_engine, expire_on_commit=False)
+
+    async def resolve():  # type: ignore[no-untyped-def]
+        async with factory() as db:
+            return await repo_authority.ensure_fresh_github_app_authorization(
+                db,
+                user_id=owner_id,
+            )
+
+    pending = asyncio.create_task(resolve())
+    await asyncio.wait_for(refresh_started.wait(), timeout=5)
+    async with factory() as callback_db:
+        await github_app_store.upsert_github_app_authorization(
+            callback_db,
+            user_id=owner_id,
+            authorization=_github_authorization_payload(
+                access_token="callback-access",
+                refresh_token="callback-refresh",
+                expires_at=datetime.now(UTC) + timedelta(hours=1),
+            ),
+        )
+        await callback_db.commit()
+    callback_complete.set()
+
+    resolved = await asyncio.wait_for(pending, timeout=5)
+    assert resolved.status == "ready"
+    assert resolved.access_token == "callback-access"
+    assert resolved.refresh_token == "callback-refresh"
