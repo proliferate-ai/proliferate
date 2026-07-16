@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CloudRepoActionDialogHost } from "#product/components/workspace/repo-setup/CloudRepoActionDialogHost";
 import { useCloudRepositoryIntentStore } from "#product/stores/cloud/cloud-repository-intent-store";
 import type { CloudRepositoryIntent } from "#product/lib/domain/workspaces/cloud/cloud-repository-intent";
+import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 // The live mutable readiness inputs the host reads. `configured` is what the
 // host derives from `useRepositories`; flipping it mid-flight simulates the
@@ -17,6 +19,8 @@ const state = vi.hoisted(() => ({
   managedCloud: "ready" as string,
   githubAccess: "ready" as string,
   configured: false,
+  reflectSaveInRepositories: true,
+  authorityEnabled: false,
   saveCloudEnvironment: vi.fn((_args?: unknown) => Promise.resolve<unknown>(undefined)),
   createCloudWorkspace: vi.fn((..._args: unknown[]) => Promise.resolve()),
   authorityRefetch: vi.fn(() => Promise.resolve({})),
@@ -47,12 +51,15 @@ function repositoriesData() {
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
   useCloudClient: () => ({ baseUrl: "https://cloud.test" }),
-  useGitHubRepoAuthority: () => ({
+  useGitHubRepoAuthority: (_input: unknown, enabled: boolean) => {
+    state.authorityEnabled = enabled;
+    return ({
     data: { authorized: state.authorized, status: state.authorityStatus },
     isPending: false,
     isError: state.authorityStatus === "error",
     refetch: state.authorityRefetch,
-  }),
+    });
+  },
   useRepositories: () => ({ data: repositoriesData(), isPending: false }),
   useSaveRepoEnvironment: () => ({
     mutateAsync: (args: unknown) => {
@@ -61,6 +68,9 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
       // the host re-renders with a flipped readiness flag while the
       // continuation promise is still in flight.
       return state.saveCloudEnvironment(args).then((result: unknown) => {
+        if (!state.reflectSaveInRepositories) {
+          return result;
+        }
         act(() => {
           state.configured = true;
           bumpRepositories();
@@ -164,6 +174,8 @@ function resetState() {
   state.managedCloud = "ready";
   state.githubAccess = "ready";
   state.configured = false;
+  state.reflectSaveInRepositories = true;
+  state.authorityEnabled = false;
   state.saveCloudEnvironment.mockClear();
   state.saveCloudEnvironment.mockImplementation(() => Promise.resolve());
   state.createCloudWorkspace.mockClear();
@@ -175,11 +187,23 @@ describe("CloudRepoActionDialogHost", () => {
   beforeEach(() => {
     resetState();
     useCloudRepositoryIntentStore.setState({ activeIntent: null });
+    useAddRepoFlowStore.setState({
+      open: false,
+      step: { kind: "entry" },
+      onCompleted: null,
+    });
+    useToastStore.setState({ toasts: [] });
   });
 
   afterEach(() => {
     cleanup();
     useCloudRepositoryIntentStore.setState({ activeIntent: null });
+    useAddRepoFlowStore.setState({
+      open: false,
+      step: { kind: "entry" },
+      onCompleted: null,
+    });
+    useToastStore.setState({ toasts: [] });
   });
 
   it("clears the intent and closes on success even when the readiness flag flips mid-flight (B1)", async () => {
@@ -233,6 +257,78 @@ describe("CloudRepoActionDialogHost", () => {
     expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
     // The intent stays for retry.
     expect(useCloudRepositoryIntentStore.getState().activeIntent).not.toBeNull();
+  });
+
+  it("does not save the environment twice when workspace creation fails before refetch (PR2-RETRY-07)", async () => {
+    state.reflectSaveInRepositories = false;
+    state.createCloudWorkspace
+      .mockRejectedValueOnce(new Error("Workspace create failed"))
+      .mockResolvedValueOnce(undefined);
+
+    let rerender = () => {};
+    function Harness() {
+      const [, setTick] = requireState();
+      bumpRepositories = () => setTick((n) => n + 1);
+      rerender = bumpRepositories;
+      return <CloudRepoActionDialogHost />;
+    }
+
+    render(<Harness />);
+    act(() => {
+      useCloudRepositoryIntentStore.getState().begin(setupIntent);
+    });
+    rerender();
+
+    expect(await screen.findByText("Workspace create failed")).toBeTruthy();
+    expect(state.saveCloudEnvironment).toHaveBeenCalledTimes(1);
+    expect(state.createCloudWorkspace).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      screen.getByRole("button", { name: "Retry" }).click();
+    });
+
+    await waitFor(() => {
+      expect(state.createCloudWorkspace).toHaveBeenCalledTimes(2);
+      expect(useCloudRepositoryIntentStore.getState().activeIntent).toBeNull();
+    });
+    expect(state.saveCloudEnvironment).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not query repository authority while either managed-cloud operator capability is incomplete (PR2-AUTHORITY-06)", () => {
+    state.githubAccess = "operator_configuration_required";
+    render(<CloudRepoActionDialogHost />);
+    act(() => {
+      useCloudRepositoryIntentStore.getState().begin(setupIntent);
+    });
+    expect(state.authorityEnabled).toBe(false);
+  });
+
+  it("completes Add Repository only after the shared readiness host saves the environment", async () => {
+    const onCompleted = vi.fn();
+    useAddRepoFlowStore.setState({
+      open: false,
+      step: { kind: "cloud" },
+      onCompleted,
+    });
+    const intent: CloudRepositoryIntent = {
+      kind: "add_cloud_repository",
+      repo: setupIntent.repo,
+    };
+
+    render(<CloudRepoActionDialogHost />);
+    act(() => {
+      useCloudRepositoryIntentStore.getState().begin(intent);
+    });
+
+    await waitFor(() => {
+      expect(state.saveCloudEnvironment).toHaveBeenCalledTimes(1);
+      expect(onCompleted).toHaveBeenCalledWith({
+        kind: "cloud",
+        repoId: "proliferate-ai/repo-b",
+      });
+      expect(useCloudRepositoryIntentStore.getState().activeIntent).toBeNull();
+    });
+    expect(useAddRepoFlowStore.getState().onCompleted).toBeNull();
   });
 
   it("shows progress, not operator copy, while the environment is being configured (S1)", async () => {

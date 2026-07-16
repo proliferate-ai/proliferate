@@ -12,13 +12,14 @@ describe("cloud repository intent", () => {
   it("maps every cloud intent to the managed_cloud requirement", () => {
     expect(requirementForCloudRepositoryIntent({ kind: "set_up_cloud", repo: REPO }))
       .toBe("managed_cloud");
-    expect(requirementForCloudRepositoryIntent({ kind: "add_cloud_repository" }))
+    expect(requirementForCloudRepositoryIntent({ kind: "add_cloud_repository", repo: REPO }))
       .toBe("managed_cloud");
   });
 
-  it("resolves the target repo, or null for the repo-agnostic add flow", () => {
+  it("resolves the target repo for every intent", () => {
     expect(repoForCloudRepositoryIntent({ kind: "set_up_cloud", repo: REPO })).toEqual(REPO);
-    expect(repoForCloudRepositoryIntent({ kind: "add_cloud_repository" })).toBeNull();
+    expect(repoForCloudRepositoryIntent({ kind: "add_cloud_repository", repo: REPO }))
+      .toEqual(REPO);
   });
 
   it("saves the repo environment BEFORE creating the workspace (setup-and-continue)", async () => {
@@ -77,18 +78,21 @@ describe("cloud repository intent", () => {
     expect(createCloudWorkspace).not.toHaveBeenCalled();
   });
 
-  it("does nothing for the repo-agnostic add intent (picker owns its own save)", async () => {
+  it("saves and completes the selected Add Repository intent through the shared host", async () => {
     const saveCloudEnvironment = vi.fn(async () => {});
     const createCloudWorkspace = vi.fn(async () => {});
+    const onRepositoryRegistered = vi.fn();
 
     await continueCloudRepositoryIntent({
-      intent: { kind: "add_cloud_repository" },
+      intent: { kind: "add_cloud_repository", repo: REPO },
       cloudEnvironmentConfigured: false,
       saveCloudEnvironment,
       createCloudWorkspace,
+      onRepositoryRegistered,
     });
 
-    expect(saveCloudEnvironment).not.toHaveBeenCalled();
+    expect(saveCloudEnvironment).toHaveBeenCalledWith(REPO);
     expect(createCloudWorkspace).not.toHaveBeenCalled();
+    expect(onRepositoryRegistered).toHaveBeenCalledWith(REPO);
   });
 });

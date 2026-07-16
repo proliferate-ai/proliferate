@@ -218,11 +218,11 @@ describe("resolveRepositoryReadiness", () => {
       })).toBe(true);
     });
 
-    it("is false when managed Cloud is ready even if GitHub access is operator-incomplete (that surfaces via the per-repo authority query, not the operator gate)", () => {
+    it("is true when managed Cloud is ready but GitHub repository access is operator-incomplete", () => {
       expect(isManagedCloudOperatorGateUnmet({
         githubRepositoryAccess: "operator_configuration_required",
         managedCloud: "ready",
-      })).toBe(false);
+      })).toBe(true);
     });
 
     it("is false when both capabilities are ready", () => {

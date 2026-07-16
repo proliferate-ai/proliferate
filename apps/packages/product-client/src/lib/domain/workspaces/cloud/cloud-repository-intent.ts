@@ -33,7 +33,7 @@ export type CloudRepositoryIntent =
     repo: CloudRepoIdentity;
     continuation: CreateCloudWorkspaceContinuation;
   }
-  | { kind: "add_cloud_repository" };
+  | { kind: "add_cloud_repository"; repo: CloudRepoIdentity };
 
 /** Every Cloud repository intent depends on managed-Cloud readiness. */
 export function requirementForCloudRepositoryIntent(
@@ -42,11 +42,11 @@ export function requirementForCloudRepositoryIntent(
   return "managed_cloud";
 }
 
-/** The repository an intent targets, or null for the repo-agnostic add flow. */
+/** The repository an intent targets. */
 export function repoForCloudRepositoryIntent(
   intent: CloudRepositoryIntent,
-): CloudRepoIdentity | null {
-  return intent.kind === "add_cloud_repository" ? null : intent.repo;
+): CloudRepoIdentity {
+  return intent.repo;
 }
 
 /**
@@ -67,13 +67,10 @@ export async function continueCloudRepositoryIntent(args: {
     repo: CloudRepoIdentity,
     continuation: CreateCloudWorkspaceContinuation,
   ) => Promise<void>;
+  /** Complete the original Add Repository flow after registration succeeds. */
+  onRepositoryRegistered?: (repo: CloudRepoIdentity) => void;
 }): Promise<void> {
   const { intent } = args;
-
-  if (intent.kind === "add_cloud_repository") {
-    // The repo picker owns its own save; nothing to continue here.
-    return;
-  }
 
   // Ensure the Cloud repo environment exists first. A retry that already has an
   // environment skips the save so it is not recreated.
@@ -83,5 +80,10 @@ export async function continueCloudRepositoryIntent(args: {
 
   if (intent.kind === "create_cloud_workspace") {
     await args.createCloudWorkspace(intent.repo, intent.continuation);
+    return;
+  }
+
+  if (intent.kind === "add_cloud_repository") {
+    args.onRepositoryRegistered?.(intent.repo);
   }
 }

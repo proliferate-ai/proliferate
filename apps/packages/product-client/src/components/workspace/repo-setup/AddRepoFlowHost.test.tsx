@@ -6,6 +6,7 @@ import type { CloudRepoPickerProps } from "@proliferate/product-ui/repos/CloudRe
 import type { AddRepoFlowProps } from "@proliferate/product-ui/repos/AddRepoFlow";
 import { AddRepoFlowHost } from "#product/components/workspace/repo-setup/AddRepoFlowHost";
 import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
+import { useCloudRepositoryIntentStore } from "#product/stores/cloud/cloud-repository-intent-store";
 
 // PR2-GATING-01: Add Repository's cloud path routes through the shared readiness
 // resolver. On an operator-incomplete deployment the cloud step must show the
@@ -21,6 +22,9 @@ const capabilities = vi.hoisted(() => ({
 }));
 
 const auth = vi.hoisted(() => ({ status: "authenticated" as string }));
+const cloudHook = vi.hoisted(() => ({
+  onRepositorySelected: null as null | ((repo: { gitOwner: string; gitRepoName: string }) => void),
+}));
 
 // The OLD prerequisite-model blocker useAddCloudEnvironment produces: a
 // user-auth CTA. If the resolver gate did not take precedence, this is what
@@ -41,17 +45,22 @@ vi.mock("#product/hooks/auth/facade/use-product-auth", () => ({
 }));
 
 vi.mock("@proliferate/product-surfaces/settings/cloud-environments/use-add-cloud-environment", () => ({
-  useAddCloudEnvironment: (): CloudRepoPickerProps => ({
-    query: "",
-    manualValue: "",
-    repositories: [],
-    blocker: OLD_PREREQ_BLOCKER,
-    onQueryChange: vi.fn(),
-    onManualValueChange: vi.fn(),
-    onAddRepository: vi.fn(),
-    onAddManual: vi.fn(),
-    onLoadMore: vi.fn(),
-  }),
+  useAddCloudEnvironment: (input: {
+    onRepositorySelected?: (repo: { gitOwner: string; gitRepoName: string }) => void;
+  }): CloudRepoPickerProps => {
+    cloudHook.onRepositorySelected = input.onRepositorySelected ?? null;
+    return {
+      query: "",
+      manualValue: "",
+      repositories: [],
+      blocker: OLD_PREREQ_BLOCKER,
+      onQueryChange: vi.fn(),
+      onManualValueChange: vi.fn(),
+      onAddRepository: vi.fn(),
+      onAddManual: vi.fn(),
+      onLoadMore: vi.fn(),
+    };
+  },
 }));
 
 vi.mock("#product/hooks/workspaces/workflows/use-add-repo", () => ({
@@ -89,7 +98,9 @@ afterEach(() => {
     githubRepositoryAccessDisplayName: "proliferate-app",
   };
   auth.status = "authenticated";
+  cloudHook.onRepositorySelected = null;
   useAddRepoFlowStore.setState({ open: false, step: { kind: "entry" }, onCompleted: null });
+  useCloudRepositoryIntentStore.setState({ activeIntent: null });
 });
 
 function openCloudStep() {
@@ -147,5 +158,24 @@ describe("AddRepoFlowHost cloud gating (PR2-GATING-01)", () => {
     // Gates 1 and 2 satisfied: the picker (per-repo authority) owns the rest,
     // so its prerequisite blocker is what surfaces.
     expect(screen.getByText(/^blocker:Authorize GitHub App$/)).toBeTruthy();
+  });
+
+  it("hands a selected repository to the shared ordered-readiness host", () => {
+    render(<AddRepoFlowHost />);
+    openCloudStep();
+
+    act(() => {
+      cloudHook.onRepositorySelected?.({ gitOwner: "Acme", gitRepoName: "Rocket" });
+    });
+
+    expect(useAddRepoFlowStore.getState().open).toBe(false);
+    expect(useCloudRepositoryIntentStore.getState().activeIntent).toEqual({
+      kind: "add_cloud_repository",
+      repo: {
+        gitProvider: "github",
+        gitOwner: "Acme",
+        gitRepoName: "Rocket",
+      },
+    });
   });
 });

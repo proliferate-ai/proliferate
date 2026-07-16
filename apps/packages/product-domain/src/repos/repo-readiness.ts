@@ -93,7 +93,12 @@ function requiredOperatorCapability(
     case "github_repository_access":
       return input.githubRepositoryAccess;
     case "managed_cloud":
-      return input.managedCloud;
+      // Managed Cloud depends on both the execution plane and GitHub
+      // repository-access plane. Do not start a per-repo authority query while
+      // either operator-owned capability is unavailable or incomplete.
+      return input.managedCloud === "ready"
+        ? input.githubRepositoryAccess
+        : input.managedCloud;
   }
 }
 

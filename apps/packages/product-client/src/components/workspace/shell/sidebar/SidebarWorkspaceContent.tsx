@@ -38,7 +38,6 @@ interface SidebarWorkspaceContentProps {
     target: CloudWorkspaceRepoTarget,
     repoGroupKeyToExpand: string,
   ) => void;
-  onOpenCloudRepoSettings: (target: CloudWorkspaceRepoTarget) => void;
   onSelectWorkspace: (workspaceId: string) => void;
   onIndicatorAction: (action: SidebarIndicatorAction) => void;
   onOpenPullRequest: (url: string) => void;
@@ -93,7 +92,6 @@ export function SidebarWorkspaceContent({
   onCreateWorktreeWorkspace,
   onCreateLocalWorkspace,
   onCreateCloudWorkspace,
-  onOpenCloudRepoSettings,
   onSelectWorkspace,
   onIndicatorAction,
   onOpenPullRequest,
@@ -199,7 +197,7 @@ export function SidebarWorkspaceContent({
               return;
             }
             if (cloudRepoAction.kind === "configure") {
-              onOpenCloudRepoSettings(cloudRepoTarget);
+              onSetUpCloudForGroup(cloudRepoTarget);
             }
           }
           : undefined}

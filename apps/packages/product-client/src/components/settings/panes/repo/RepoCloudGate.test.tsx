@@ -22,6 +22,12 @@ vi.mock("#product/hooks/capabilities/derived/use-app-capabilities", () => ({
   useAppCapabilities: () => capabilities.value,
 }));
 
+vi.mock("#product/hooks/auth/facade/use-product-auth", () => ({
+  useProductAuthStatus: () => "authenticated",
+}));
+
+vi.mock("react-router-dom", () => ({ useNavigate: () => vi.fn() }));
+
 vi.mock("#product/hooks/organizations/facade/use-active-organization", () => ({
   useActiveOrganization: () => ({
     activeOrganization: { name: "Acme", membership: { role: "member" } },

@@ -18,6 +18,7 @@ import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-aut
 import { describeReadinessBlocker } from "#product/lib/domain/workspaces/cloud/describe-readiness-blocker";
 import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
+import { useCloudRepositoryIntentStore } from "#product/stores/cloud/cloud-repository-intent-store";
 
 /**
  * App-level host for the unified add-repository flow. Entry offers only the
@@ -31,6 +32,8 @@ export function AddRepoFlowHost() {
   const step = useAddRepoFlowStore((state) => state.step);
   const setStep = useAddRepoFlowStore((state) => state.setStep);
   const closeFlow = useAddRepoFlowStore((state) => state.close);
+  const handoffToCloud = useAddRepoFlowStore((state) => state.handoffToCloud);
+  const beginCloudIntent = useCloudRepositoryIntentStore((state) => state.begin);
 
   const { addRepoFromPath, isAddingRepo } = useAddRepo();
   const { activeOrganization, activeOrganizationId } = useActiveOrganization();
@@ -123,6 +126,13 @@ export function AddRepoFlowHost() {
       query: [["source", "github_app_installation_callback"]],
     }),
     onOpenExternalUrl: host.links.openExternal,
+    onRepositorySelected: (repo) => {
+      handoffToCloud();
+      beginCloudIntent({
+        kind: "add_cloud_repository",
+        repo: { gitProvider: "github", ...repo },
+      });
+    },
     onEnvironmentAdded: (repoId) => {
       // Read before closeFlow — close() clears the completion callback.
       const onCompleted = useAddRepoFlowStore.getState().onCompleted;

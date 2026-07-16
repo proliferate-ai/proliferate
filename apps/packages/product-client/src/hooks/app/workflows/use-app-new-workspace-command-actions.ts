@@ -194,11 +194,13 @@ export function useAppNewWorkspaceCommandActions(): AppNewWorkspaceCommandAction
     showToast,
   ]);
 
-  const cloudUnavailableReason = !cloudActive
-    ? "Cloud workspaces are unavailable."
-    : cloudWorkspaceBlocked
-      ? "Cloud workspaces are blocked by billing."
-      : null;
+  // Sign-in, operator capability, repository authority, and environment setup
+  // are actionable readiness gates. Do not disable the command before the
+  // connected dialog can explain/repair them; only billing is a terminal start
+  // block at this surface.
+  const cloudUnavailableReason = cloudWorkspaceBlocked
+    ? "Cloud workspaces are blocked by billing."
+    : null;
   const newCloudCommandTarget = useMemo(() => resolveNewWorkspaceCommandTarget({
     commandKind: "cloud",
     scope: newWorkspaceCommandScope,

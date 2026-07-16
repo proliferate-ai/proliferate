@@ -45,6 +45,9 @@ import { useGitHubAppUserAuthorization } from "#product/hooks/settings/workflows
 import { useGitHubAppInstallation } from "#product/hooks/settings/workflows/use-github-app-installation";
 import { useCreateCloudWorkspace } from "#product/hooks/cloud/workflows/use-create-cloud-workspace";
 import { buildCloudAdminRequestMessage } from "#product/lib/domain/settings/github-app-copy";
+import { formatGitRepoId } from "@proliferate/product-domain/repos/repo-id";
+import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
+import { useToastStore } from "#product/stores/toast/toast-store";
 
 const USER_AUTHORIZATION_RETURN_TO_SOURCE = "github_app_callback";
 
@@ -61,6 +64,8 @@ const USER_AUTHORIZATION_RETURN_TO_SOURCE = "github_app_callback";
 export function CloudRepoActionDialogHost() {
   const intent = useCloudRepositoryIntentStore((state) => state.activeIntent);
   const clearIntent = useCloudRepositoryIntentStore((state) => state.clear);
+  const closeAddRepoFlow = useAddRepoFlowStore((state) => state.close);
+  const showToast = useToastStore((state) => state.show);
   const repo = intent ? repoForCloudRepositoryIntent(intent) : null;
 
   const client = useCloudClient();
@@ -77,9 +82,12 @@ export function CloudRepoActionDialogHost() {
 
   // Live readiness inputs.
   const repoConfigs = useRepositories(open && signedIn);
+  const managedCloudOperatorReady =
+    capabilities.githubRepositoryAccessStatus === "ready"
+    && capabilities.managedCloudStatus === "ready";
   const authority = useGitHubRepoAuthority(
     { gitOwner: repo?.gitOwner, gitRepoName: repo?.gitRepoName },
-    open && signedIn && capabilities.managedCloudStatus !== "disabled" && repo !== null,
+    open && signedIn && managedCloudOperatorReady && repo !== null,
   );
 
   const configuredCloudKeys = useMemo(
@@ -179,6 +187,14 @@ export function CloudRepoActionDialogHost() {
     );
   }, [createCloudWorkspaceAndEnter]);
 
+  const completeRepositoryRegistration = useCallback((target: CloudRepoIdentity) => {
+    const onCompleted = useAddRepoFlowStore.getState().onCompleted;
+    const repoId = formatGitRepoId(target);
+    closeAddRepoFlow();
+    showToast(`Added ${repoId}`, "info");
+    onCompleted?.({ kind: "cloud", repoId });
+  }, [closeAddRepoFlow, showToast]);
+
   // Once every access gate is green, continue the held intent (save env →
   // create). Gate 9 (`set_up_cloud`) is the normal continue point: the resolver
   // has cleared authority and only the Cloud environment save remains, which is
@@ -197,17 +213,23 @@ export function CloudRepoActionDialogHost() {
     cloudEnvironmentConfigured,
     saveCloudEnvironment,
     createCloudWorkspace,
+    completeRepositoryRegistration,
   });
   continuationInputsRef.current = {
     cloudEnvironmentConfigured,
     saveCloudEnvironment,
     createCloudWorkspace,
+    completeRepositoryRegistration,
   };
 
   // The intent instance the continuation has already been started for. Because
   // store intents are stable object references, this guards both against
   // mid-flight readiness churn and against StrictMode's double-invoke.
   const startedForRef = useRef<CloudRepositoryIntent | null>(null);
+  // A successful environment save is part of this intent even if a subsequent
+  // workspace create fails before the repositories refetch becomes visible.
+  // Retaining that fact prevents retry from issuing a second save.
+  const environmentSavedForRef = useRef<CloudRepositoryIntent | null>(null);
   const [continuationError, setContinuationError] = useState<string | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
 
@@ -216,6 +238,7 @@ export function CloudRepoActionDialogHost() {
   useEffect(() => {
     if (!intent) {
       startedForRef.current = null;
+      environmentSavedForRef.current = null;
       setContinuationError(null);
     }
   }, [intent]);
@@ -230,13 +253,23 @@ export function CloudRepoActionDialogHost() {
     }
     startedForRef.current = intent;
     setContinuationError(null);
-    const { cloudEnvironmentConfigured, saveCloudEnvironment, createCloudWorkspace } =
-      continuationInputsRef.current;
-    void continueCloudRepositoryIntent({
-      intent,
+    const {
       cloudEnvironmentConfigured,
       saveCloudEnvironment,
       createCloudWorkspace,
+      completeRepositoryRegistration,
+    } =
+      continuationInputsRef.current;
+    void continueCloudRepositoryIntent({
+      intent,
+      cloudEnvironmentConfigured:
+        cloudEnvironmentConfigured || environmentSavedForRef.current === intent,
+      saveCloudEnvironment: async (target) => {
+        await saveCloudEnvironment(target);
+        environmentSavedForRef.current = intent;
+      },
+      createCloudWorkspace,
+      onRepositoryRegistered: completeRepositoryRegistration,
     })
       .then(() => {
         // Terminal success: clear the intent unconditionally. Nothing should
@@ -286,6 +319,9 @@ export function CloudRepoActionDialogHost() {
       // A held intent cannot survive a route away, so clear it and send the
       // user to the product sign-in flow (PR2-SIGNIN-04). The settings surfaces
       // are the recovery path after sign-in.
+      if (intent.kind === "add_cloud_repository") {
+        closeAddRepoFlow();
+      }
       clearIntent();
       navigate("/login");
     },
@@ -305,8 +341,15 @@ export function CloudRepoActionDialogHost() {
 
   const blocker = readinessBlocker ?? continuationBlocker;
 
+  const closeDialog = () => {
+    if (intent.kind === "add_cloud_repository") {
+      closeAddRepoFlow();
+    }
+    clearIntent();
+  };
+
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) clearIntent(); }}>
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) closeDialog(); }}>
       <DialogContent
         overlayClassName="bg-black/70 backdrop-blur-sm"
         className="max-w-[440px] rounded-xl p-4"
