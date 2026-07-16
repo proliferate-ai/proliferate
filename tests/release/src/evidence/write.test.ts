@@ -1084,7 +1084,10 @@ test("validateReportV4 rejects a green SELFHOST-INSTALL-1 cell with null evidenc
 test("validateReportV4 rejects self-host evidence with an unknown kind", () => {
   const report = validSelfHostReportV4();
   (report.results[0].evidence as { kind: string }).kind = "selfhost_unknown_kind";
-  assert.throws(() => validateReportV4(report), /kind is unknown/);
+  // The per-cell (scenario_id, cell) kind binding (PR7-CONTROL-007) rejects the
+  // mismatch before the kind-dispatch's own "kind is unknown" — either way the
+  // unknown kind is fail-closed, which is what this asserts.
+  assert.throws(() => validateReportV4(report), /kind is unknown|requires "selfhost_install_claim"/);
 });
 
 test("validateReportV4 rejects self-host evidence with an undeclared extra field", () => {

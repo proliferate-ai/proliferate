@@ -869,6 +869,27 @@ const SCENARIO_REQUIRED_EVIDENCE_KIND: Readonly<Record<string, CellEvidenceV1["k
   "T3-CFG-1": "local_config_matrix",
   "T3-SESSION-1": "local_session_tabs",
   "T3-INT-1": "local_mcp_integration",
+  // Single-kind PR 7 scenarios (PR7-CONTROL-007): bind the scenario to its one
+  // legal evidence kind so a green cell cannot carry null or another scenario's
+  // structurally-valid evidence.
+  "SELFHOST-ISOLATION-1": "selfhost_switch_isolation",
+  "SELFHOST-CFN-1": "selfhost_cfn_wrapper",
+};
+
+/**
+ * PR 7's multi-kind scenarios attach a DIFFERENT evidence kind per staged cell,
+ * so their binding is keyed on `(scenario_id, cell-dimension)` rather than
+ * scenario id alone (PR7-CONTROL-007). A green cell whose evidence kind does not
+ * match its cell dimension fails closed.
+ */
+const CELL_REQUIRED_EVIDENCE_KIND: Readonly<Record<string, CellEvidenceV1["kind"]>> = {
+  "SELFHOST-INSTALL-1/SH-INSTALL-CLAIM": "selfhost_install_claim",
+  "SELFHOST-INSTALL-1/SH-DESKTOP-OWNER": "selfhost_desktop_owner",
+  "SELFHOST-INSTALL-1/SH-BASE-TURN": "selfhost_base_turn",
+  "SELFHOST-INSTALL-1/SH-INVITEE": "selfhost_invitee",
+  "SELFHOST-QUAL-1/SH-GITHUB-AUTH": "selfhost_github_auth",
+  "SELFHOST-QUAL-1/SH-GATEWAY": "selfhost_gateway",
+  "SELFHOST-QUAL-1/SH-CLOUD-ADDON": "selfhost_cloud_addon",
 };
 
 /**
@@ -889,6 +910,19 @@ function validateEvidenceCellBinding(
     throw new ReportValidationError(
       `${where}.kind is "${evidence.kind}" but ${result.scenario_id} requires "${requiredKind}".`,
     );
+  }
+
+  // (a2) (scenario_id, cell-dimension) → required kind, for PR 7's multi-kind
+  // scenarios where each staged cell attaches a different evidence kind
+  // (PR7-CONTROL-007).
+  const cellDimension = result.dimensions.cell;
+  if (typeof cellDimension === "string") {
+    const requiredCellKind = CELL_REQUIRED_EVIDENCE_KIND[`${result.scenario_id}/${cellDimension}`];
+    if (requiredCellKind !== undefined && evidence.kind !== requiredCellKind) {
+      throw new ReportValidationError(
+        `${where}.kind is "${evidence.kind}" but ${result.scenario_id} cell "${cellDimension}" requires "${requiredCellKind}".`,
+      );
+    }
   }
 
   // (b) AUTHROUTE dimensions → journey (route=change ⇒ LOCAL-6, else LOCAL-3).
@@ -2460,6 +2494,12 @@ const GREEN_EVIDENCE_REQUIRED_SCENARIOS: ReadonlySet<string> = new Set([
   // CLOUD-PROVISION-1). Enforces the frozen Acceptance rule "Green requires
   // complete evidence" for the optional-capability lane.
   "SELFHOST-QUAL-1",
+  // PR7-CONTROL-007: CFN and isolation were missing here, so either could
+  // validate GREEN with null evidence. Both now require their kind-scoped
+  // evidence on green. (SELFHOST-ISOLATION-1 is fail-closed today, so this only
+  // ever bites if it later greens without evidence — which is exactly the guard.)
+  "SELFHOST-CFN-1",
+  "SELFHOST-ISOLATION-1",
 ]);
 
 function scenarioRequiresGreenEvidence(scenarioId: string): boolean {

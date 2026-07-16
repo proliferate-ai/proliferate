@@ -173,13 +173,40 @@ function cfnWrapperEvidence(overrides: Partial<SelfHostCfnWrapperEvidenceV1> = {
   };
 }
 
+/** The owning scenario id for a PR 7 self-host cell dimension (PR7-CONTROL-007). */
+function scenarioForCell(cell: string | undefined): string {
+  switch (cell) {
+    case "SH-INSTALL-CLAIM":
+    case "SH-DESKTOP-OWNER":
+    case "SH-BASE-TURN":
+    case "SH-INVITEE":
+      return SELFHOST_INSTALL_1_SCENARIO_ID;
+    case "SH-GITHUB-AUTH":
+    case "SH-GATEWAY":
+    case "SH-CLOUD-ADDON":
+      return "SELFHOST-QUAL-1";
+    case "SH-SWITCH-ISOLATION":
+      return "SELFHOST-ISOLATION-1";
+    case "SH-CFN-WRAPPER":
+      return "SELFHOST-CFN-1";
+    default:
+      return SELFHOST_INSTALL_1_SCENARIO_ID;
+  }
+}
+
 function baseReportV3(dimensions: Record<string, string>): TestRunReportV3 {
   const byStatus = Object.fromEntries(ALL_FINAL_STATUSES.map((status) => [status, 0])) as Record<
     FinalTestStatus,
     number
   >;
   byStatus.green = 1;
-  const cellId = canonicalCellId(SELFHOST_INSTALL_1_SCENARIO_ID, "selfhost", dimensions);
+  // Bind each cell to its REAL owning scenario (PR7-CONTROL-007): the per-cell
+  // evidence-kind binding is keyed on (scenario_id, cell), so a report that
+  // filed SH-GATEWAY/SH-CLOUD-ADDON/SH-SWITCH-ISOLATION/SH-CFN-WRAPPER evidence
+  // under SELFHOST-INSTALL-1 (as this helper used to) never exercised the
+  // binding. Derive the owning scenario from the cell dimension.
+  const scenarioId = scenarioForCell(dimensions.cell);
+  const cellId = canonicalCellId(scenarioId, "selfhost", dimensions);
   const report: TestRunReportV3 = {
     schema_version: 3,
     kind: "proliferate.test-run",
@@ -199,8 +226,8 @@ function baseReportV3(dimensions: Record<string, string>): TestRunReportV3 {
     selected_cells: [
       {
         cell_id: cellId,
-        scenario_id: SELFHOST_INSTALL_1_SCENARIO_ID,
-        registry_flow_ref: `specs#${SELFHOST_INSTALL_1_SCENARIO_ID}`,
+        scenario_id: scenarioId,
+        registry_flow_ref: `specs#${scenarioId}`,
         runtime_lane: "selfhost",
         dimensions,
         required_env: [],
@@ -209,8 +236,8 @@ function baseReportV3(dimensions: Record<string, string>): TestRunReportV3 {
     results: [
       {
         cell_id: cellId,
-        scenario_id: SELFHOST_INSTALL_1_SCENARIO_ID,
-        registry_flow_ref: `specs#${SELFHOST_INSTALL_1_SCENARIO_ID}`,
+        scenario_id: scenarioId,
+        registry_flow_ref: `specs#${scenarioId}`,
         runtime_lane: "selfhost",
         dimensions,
         status: "green",
@@ -239,6 +266,62 @@ function reportV4With(dimensions: Record<string, string>, evidence: CellEvidence
   const v3 = baseReportV3(dimensions);
   return { ...v3, schema_version: 4, results: v3.results.map((result) => ({ ...result, evidence })) };
 }
+
+/** Force a specific (scenario_id, cell) pairing to exercise the cross-cell binding. */
+function reportV4Forcing(
+  scenarioId: string,
+  dimensions: Record<string, string>,
+  evidence: CellEvidenceV1,
+): TestRunReportV4 {
+  const v3 = baseReportV3(dimensions);
+  const cellId = canonicalCellId(scenarioId, "selfhost", dimensions);
+  const patch = <T extends { scenario_id: string; registry_flow_ref: string; cell_id: string }>(row: T): T => ({
+    ...row,
+    scenario_id: scenarioId,
+    registry_flow_ref: `specs#${scenarioId}`,
+    cell_id: cellId,
+  });
+  return {
+    ...v3,
+    schema_version: 4,
+    selected_cells: v3.selected_cells.map(patch),
+    results: v3.results.map((result) => ({ ...patch(result), evidence })),
+  };
+}
+
+// ── (scenario_id, cell) → kind binding (PR7-CONTROL-007) ─────────────────────
+
+test("validateReportV4 rejects a SELFHOST-QUAL-1 SH-GATEWAY cell carrying SH-CLOUD-ADDON evidence", () => {
+  // Structurally-valid cloud-addon evidence must not validate under the gateway cell.
+  assert.throws(
+    () => validateReportV4(reportV4Forcing("SELFHOST-QUAL-1", { cell: "SH-GATEWAY", harness: "claude" }, cloudAddonEvidence())),
+    /requires "selfhost_gateway"/,
+  );
+});
+
+test("validateReportV4 rejects a SELFHOST-CFN-1 cell carrying isolation evidence (single-kind binding)", () => {
+  assert.throws(
+    () =>
+      validateReportV4(
+        reportV4Forcing("SELFHOST-CFN-1", { cell: "SH-CFN-WRAPPER", harness: "claude" }, switchIsolationEvidence()),
+      ),
+    /requires "selfhost_cfn_wrapper"/,
+  );
+});
+
+test("validateReportV4 rejects a green SELFHOST-CFN-1 cell with NULL evidence (green-requires-evidence)", () => {
+  assert.throws(
+    () => validateReportV4(reportV4With({ cell: "SH-CFN-WRAPPER", harness: "claude" }, null)),
+    /requires complete evidence/,
+  );
+});
+
+test("validateReportV4 rejects a green SELFHOST-ISOLATION-1 cell with NULL evidence (green-requires-evidence)", () => {
+  assert.throws(
+    () => validateReportV4(reportV4With({ cell: "SH-SWITCH-ISOLATION", harness: "claude" }, null)),
+    /requires complete evidence/,
+  );
+});
 
 // ── selfhost_github_auth ────────────────────────────────────────────────────
 
