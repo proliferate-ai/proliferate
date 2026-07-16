@@ -89,14 +89,15 @@ export const t3Int1: MatrixScenarioDefinition = {
   registryFlowRef: "specs/developing/testing/scenarios.md#T3-INT-1",
   lanes: ["local", "sandbox"],
   kind: "matrix",
-  // The legacy diagnostic path's durable-user/server-URL env is checked
-  // in-branch (below) rather than declared here: a world-backed functional run
-  // never sets those (it authenticates a fresh actor inside its own world), and
-  // a scenario-level requiredEnv is shared across BOTH branches, so declaring
-  // them here would incorrectly block every world-backed cell too. Only the env
-  // genuinely shared by both branches (the integration key + the DB audit-probe
-  // connection string) is declared.
-  requiredEnv: ["RELEASE_E2E_INTEGRATION_API_KEY", "RELEASE_E2E_LOCAL_DATABASE_URL"],
+  // The legacy diagnostic path's durable-user/server-URL AND its static
+  // audit-probe DB URL are checked in-branch (below) rather than declared here:
+  // a world-backed functional run never sets those (it authenticates a fresh
+  // actor inside its own world and derives the audit-probe DSN from
+  // `world.db.databaseUrl` — LQF-002), and a scenario-level requiredEnv is
+  // shared across BOTH branches, so declaring them here would incorrectly
+  // block/cancel every world-backed cell too. Only the integration key — which
+  // both branches genuinely need — is declared.
+  requiredEnv: ["RELEASE_E2E_INTEGRATION_API_KEY"],
   expandCells: async ({ agents }): Promise<ScenarioCellSpec[]> => {
     const harnesses = agents.includes("all") ? await shippedHarnessKinds() : [...agents];
     return harnesses.map((harness) => ({ dimensions: { harness } }));
@@ -154,6 +155,9 @@ async function runLegacyLocalLane(
     ["RELEASE_E2E_DURABLE_USER_EMAIL", durableEmail],
     ["RELEASE_E2E_DURABLE_USER_PASSWORD", durablePassword],
     ["RELEASE_E2E_DURABLE_ORG_ID", organizationId],
+    // Static audit-probe DSN — only the legacy path reads it (the world-backed
+    // path derives its own from world.db.databaseUrl, LQF-002).
+    ["RELEASE_E2E_LOCAL_DATABASE_URL", process.env.RELEASE_E2E_LOCAL_DATABASE_URL],
   ].filter(([, value]) => !value || value.trim().length === 0).map(([name]) => name);
   if (missing.length > 0) {
     return cells.map((cell) => ({

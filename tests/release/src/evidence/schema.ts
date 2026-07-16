@@ -787,8 +787,14 @@ function validateEvidenceCellBinding(
   // (d) artifact_ids → exact candidate identity: every id names a THIS-build
   // artifact. A world-backed report always has a candidate identity here; a
   // diagnostic report (null) never reaches evidence validation with artifacts.
+  // Scoped to the local kinds this binding was authored for (LQF-005): the
+  // `cloud_provision_turn` kind legitimately mixes run-scoped receipts
+  // (`e2b-template/…`, `candidate-api/…` minted DURING the run) into its
+  // artifact_ids, which are not in the pre-run candidate_build map — its own
+  // kind-scoped validator owns those bounds.
   const artifactIds = (evidence as { artifact_ids?: unknown }).artifact_ids;
-  if (candidateArtifactIds !== null && Array.isArray(artifactIds)) {
+  const kindBindsArtifacts = evidence.kind in SCENARIO_ARTIFACT_BOUND_KINDS;
+  if (kindBindsArtifacts && candidateArtifactIds !== null && Array.isArray(artifactIds)) {
     for (const id of artifactIds) {
       if (typeof id === "string" && !candidateArtifactIds.has(id)) {
         throw new ReportValidationError(
@@ -798,6 +804,22 @@ function validateEvidenceCellBinding(
     }
   }
 }
+
+/**
+ * Evidence kinds whose `artifact_ids` are bound to the report's exact
+ * `candidate_build` (LQF-005 rule d). The local-functional kinds only name
+ * pre-built candidate artifacts; `cloud_provision_turn`/`selfhost_*` also carry
+ * run-scoped receipts (templates, candidate-api subdomains, install bundles) not
+ * present in the pre-run map, so they are deliberately excluded and rely on
+ * their own kind-scoped validators.
+ */
+const SCENARIO_ARTIFACT_BOUND_KINDS: Readonly<Record<string, true>> = {
+  local_workspace_turn: true,
+  local_route_turn: true,
+  local_config_matrix: true,
+  local_session_tabs: true,
+  local_mcp_integration: true,
+};
 
 /**
  * Green cells of these local-functional scenarios must carry complete

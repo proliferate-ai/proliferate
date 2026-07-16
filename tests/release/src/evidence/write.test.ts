@@ -118,14 +118,6 @@ const STRICT_CB: TestRunReportV3["candidate_build"] = {
     { artifact_id: "server/linux-amd64", version: "0.3.27", sha256: "4".repeat(64) },
     { artifact_id: "selfhost-bundle/linux-amd64", version: "0.3.27", sha256: "5".repeat(64) },
     { artifact_id: "anyharness/x86_64-unknown-linux-gnu", version: "0.3.27", sha256: "6".repeat(64) },
-    // Cloud-provision (CLOUD-PROVISION-1) receipts referenced by validCloudCellEvidence.
-    { artifact_id: "server/linux/amd64", version: "0.3.27", sha256: "7".repeat(64) },
-    { artifact_id: "anyharness/x86_64-unknown-linux-musl", version: "0.3.27", sha256: "8".repeat(64) },
-    { artifact_id: "worker/x86_64-unknown-linux-musl", version: "0.3.27", sha256: "9".repeat(64) },
-    { artifact_id: "supervisor/x86_64-unknown-linux-musl", version: "0.3.27", sha256: "a".repeat(64) },
-    { artifact_id: "credential-helper/x86_64-unknown-linux-musl", version: "0.3.27", sha256: "b".repeat(64) },
-    { artifact_id: "e2b-template/cloud-run-1", version: "0.3.27", sha256: "c".repeat(64) },
-    { artifact_id: "candidate-api/cloud-run-1.qualification.proliferate.com", version: "0.3.27", sha256: "d".repeat(64) },
   ],
 };
 
