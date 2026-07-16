@@ -43,8 +43,10 @@ import {
   deployCandidateApi,
   defaultSshExec,
   type CandidateApiReceipt,
+  type CandidateCallbackRelayConfig,
   type CandidateE2bConfig,
   type CandidateGithubAppConfig,
+  type CandidateStripeConfig,
   type SshExec,
 } from "./ingress.js";
 import {
@@ -75,6 +77,15 @@ const DEFAULT_AGENT_KINDS = ["claude"];
  *
  * The same TypeScript code runs locally and in GitHub Actions.
  */
+
+/** Handle returned by `registerCleanupIntent`: durably promote intent → real id. */
+export interface CleanupIntentHandle {
+  /** The ledger entry id (for diagnostics/tests). */
+  entryId: string;
+  /** Durably replaces the entry's providerId with the real provider id (post-create). */
+  markAcquired(realProviderId: string): Promise<void>;
+}
+
 export interface ManagedCloudWorld {
   kind: "managed-cloud";
   run: RunIdentityV1;
@@ -150,6 +161,25 @@ export interface ManagedCloudWorld {
   ): Promise<void>;
 
   /**
+   * Two-phase (INTENT → ACQUIRED) durable registration for a resource whose real
+   * provider id is only known AFTER a create call that must be recoverable if the
+   * runner dies mid-create. Unlike `registerCleanup` (which collapses intent +
+   * acquired into one shot), this persists the ledger entry with `intentRef` as
+   * its durable providerId BEFORE the create is issued, and returns
+   * `markAcquired(realProviderId)` to durably replace it the instant the provider
+   * returns. `intentRef` must carry a deterministic run-scoped RECOVERY IDENTITY
+   * (e.g. a clock name or run tag) so a lost runner can locate + delete the
+   * created resource from the reloaded ledger entry ALONE (see
+   * `stripeCleanupReplayHandlers`). Additive seam; absent on PR-2 worlds, whose
+   * callers fall back to the single-shot `registerCleanup`.
+   */
+  registerCleanupIntent?(
+    kind: ManagedCloudCleanupKind,
+    intentRef: string,
+    release: () => Promise<void>,
+  ): Promise<CleanupIntentHandle>;
+
+  /**
    * Enrols the actor's LiteLLM virtual key + user + team for deletion during
    * `close()`, ordered before local teardown so the deterministic alias stays
    * recoverable (reused PR 1 semantics). The actor identity only exists after
@@ -173,6 +203,19 @@ export interface ConstructManagedCloudWorldOptions {
   aws: Ec2ProvisionConfig;
   e2b: E2bBuildConfig & CandidateE2bConfig;
   github: CandidateGithubAppConfig;
+  /**
+   * PR 6 (append-only): Stripe TEST-mode config for the candidate Server,
+   * threaded verbatim into `deployCandidateApi`. Absent (the default) keeps the
+   * candidate Server's no-Stripe 503 checkout posture (CLOUD-PROVISION-1
+   * regression untouched).
+   */
+  stripe?: CandidateStripeConfig;
+  /**
+   * PR 6 (append-only): on-box signed-callback relay config, threaded verbatim
+   * into `deployCandidateApi`. Absent (the default) stages no relay and produces
+   * the byte-identical single-proxy Caddyfile.
+   */
+  callbackRelay?: CandidateCallbackRelayConfig;
   /** Run/shard-scoped root; all world state lives under here. */
   runDir: string;
   /** Agent CLI kinds baked into the template (defaults to `["claude"]`). */
@@ -273,6 +316,23 @@ export async function constructManagedCloudWorld(
     await stack.acquired(entryId, providerId);
   };
 
+  // Two-phase durable registration: `stack.register` writes the intent record
+  // (providerId null) durably, then we `acquired(entryId, intentRef)` so the
+  // recovery identity lands on disk BEFORE the caller's create; the returned
+  // `markAcquired` durably replaces it with the real provider id afterward.
+  const registerCleanupIntent = async (
+    kind: ManagedCloudCleanupKind,
+    intentRef: string,
+    release: () => Promise<void>,
+  ): Promise<CleanupIntentHandle> => {
+    const entryId = await stack.register(kind, release);
+    await stack.acquired(entryId, intentRef);
+    return {
+      entryId,
+      markAcquired: (realProviderId: string) => stack.acquired(entryId, realProviderId),
+    };
+  };
+
   try {
     // Register durable-path + reservation releasers first so they tear down
     // LAST (reverse order), after every cloud/provider resource above them.
@@ -322,6 +382,15 @@ export async function constructManagedCloudWorld(
       litellm: options.litellm,
       github: options.github,
       e2b: options.e2b,
+      // PR 6 (append-only): forwarded verbatim; both undefined by default, so
+      // deployCandidateApi's absent-config path (today's behaviour) runs.
+      stripe: options.stripe,
+      callbackRelay: options.callbackRelay,
+      // Thread the world's own cleanup stack so the relay's process + spool are
+      // registered-before-create in the SAME ledger as every other resource,
+      // released in reverse order by close(). Only invoked when callbackRelay is
+      // present; absent, deployCandidateApi never calls it.
+      registerCleanup: (kind, providerId, release) => register(kind, providerId, release),
       publicOrigin,
       rendererOrigin,
       secretsDir,
@@ -409,6 +478,7 @@ export async function constructManagedCloudWorld(
       }),
       paths: { runDir, secretsDir },
       registerCleanup: register,
+      registerCleanupIntent,
       trackActorSubjects: (actor) => trackActorSubjects(stack, gateway, actor),
       close: () => stack.runAll(),
     };

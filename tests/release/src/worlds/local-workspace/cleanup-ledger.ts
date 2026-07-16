@@ -55,7 +55,26 @@ export type CleanupResourceKind =
   // reverse-order-reconcile; see worlds/managed-cloud/cleanup-kinds.ts for the
   // cloud evidence-category mapping and cleanup stack. ──────────────────────
   | "e2b_template"
-  | "e2b_sandbox";
+  | "e2b_sandbox"
+  // ── Appended for PR 6 (managed-cloud shared fixture layer). Registered-
+  // before-create, reverse-order-reconcile; released by the same cloud cleanup
+  // stack (worlds/managed-cloud/cleanup-kinds.ts). None of these fire unless a
+  // PR-6 fixture (billingThreshold / callback relay / Stripe test clock) or the
+  // append-only relay/Stripe deploy options are actually used, so a run that
+  // touches none of them registers none of them and stays byte-identical. ────
+  //   - billing_fixture_adjustment: the run-tagged BillingGrant/LlmCreditGrant
+  //     the billingThreshold fixture writes on the candidate box; released by
+  //     expiring/deleting it by its UNIQUE source_ref.
+  //   - callback_relay_spool / callback_relay_process: the on-box signed-
+  //     callback relay's spool directory and its single-file http process;
+  //     released by clearing the spool and stopping the process.
+  //   - stripe_test_clock / stripe_customer: the Stripe TEST-mode test clock and
+  //     the customer created on it (deleting the clock cascades its customers).
+  | "billing_fixture_adjustment"
+  | "callback_relay_spool"
+  | "callback_relay_process"
+  | "stripe_test_clock"
+  | "stripe_customer";
 
 export type CleanupPhase = "intent" | "acquired" | "reconciled";
 

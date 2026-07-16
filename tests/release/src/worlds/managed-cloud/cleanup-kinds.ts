@@ -43,6 +43,14 @@ export const MANAGED_CLOUD_CLEANUP_KINDS = [
   "secret_env_file",
   "run_directory",
   "port_registration",
+  // ── Appended for PR 6 (shared fixture layer). Only registered when a PR-6
+  // fixture / deploy option is actually used; absent otherwise (behavior with
+  // the fixtures unused is byte-identical). ────────────────────────────────
+  "billing_fixture_adjustment",
+  "callback_relay_spool",
+  "callback_relay_process",
+  "stripe_test_clock",
+  "stripe_customer",
 ] as const satisfies readonly CleanupResourceKind[];
 
 export type ManagedCloudCleanupKind = (typeof MANAGED_CLOUD_CLEANUP_KINDS)[number];
@@ -67,6 +75,20 @@ export interface ManagedCloudCleanupEvidence {
   virtualKeyDeleted: boolean;
   litellmSubjectsDeleted: boolean;
   localPathsRemoved: boolean;
+  // ── Appended for PR 6 (shared fixture layer). OPTIONAL so every existing
+  // constructor of this evidence shape (e.g. CLOUD-PROVISION-1's fake driver)
+  // stays valid unchanged — `runAll` always populates them, but a caller that
+  // fabricates a summary need not. Each category is vacuously clean (true) on a
+  // run that registers no entry of its kind(s), so a run that uses none of the
+  // PR-6 fixtures reports these `true` exactly as an untouched category always
+  // has (see `categoryClean`). CLOUD-PROVISION-1's evidence mapping ignores
+  // these fields, so the regression is unchanged. ────────────────────────────
+  /** The run-tagged billingThreshold grant adjustment was expired/deleted. */
+  billingFixtureCleared?: boolean;
+  /** The on-box signed-callback relay spool + process were cleared/stopped. */
+  relayStopped?: boolean;
+  /** The Stripe TEST-mode test clock + customer(s) were deleted. */
+  stripeFixturesDeleted?: boolean;
 }
 
 /**
@@ -85,6 +107,10 @@ export const MANAGED_CLOUD_EVIDENCE_CATEGORIES = {
   virtualKeyDeleted: ["litellm_virtual_key"],
   litellmSubjectsDeleted: ["litellm_user", "litellm_team"],
   localPathsRemoved: ["secret_env_file", "run_directory", "port_registration"],
+  // ── Appended for PR 6 (shared fixture layer). ──────────────────────────────
+  billingFixtureCleared: ["billing_fixture_adjustment"],
+  relayStopped: ["callback_relay_spool", "callback_relay_process"],
+  stripeFixturesDeleted: ["stripe_test_clock", "stripe_customer"],
 } satisfies Record<string, CleanupResourceKind[]>;
 
 /** One registered releaser plus the ledger entry that shadows it durably. */
@@ -184,6 +210,9 @@ export class ManagedCloudCleanupStack {
       virtualKeyDeleted: this.categoryClean("virtualKeyDeleted", succeeded),
       litellmSubjectsDeleted: this.categoryClean("litellmSubjectsDeleted", succeeded),
       localPathsRemoved: this.categoryClean("localPathsRemoved", succeeded),
+      billingFixtureCleared: this.categoryClean("billingFixtureCleared", succeeded),
+      relayStopped: this.categoryClean("relayStopped", succeeded),
+      stripeFixturesDeleted: this.categoryClean("stripeFixturesDeleted", succeeded),
     };
   }
 
