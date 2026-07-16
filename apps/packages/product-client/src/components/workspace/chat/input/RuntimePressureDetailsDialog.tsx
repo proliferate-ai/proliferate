@@ -10,10 +10,10 @@ import {
 } from "#product/components/workspace/chat/input/EnvironmentStatusCard";
 
 /**
- * Settings-pane worktree dialog: the same section/row anatomy as the
- * composer's environment card (EnvironmentCardSections), hosted in a modal.
- * The composer itself no longer opens this — the pressure ring anchors the
- * card as a popover (RuntimeEnvironmentControl).
+ * The searchable worktrees modal: the same section/row anatomy as the
+ * workspace-status card's hover lists (EnvironmentCardSections), hosted in a
+ * modal. Opened from the card's Resources row (composer) and from the
+ * settings worktree-storage pane.
  */
 export function RuntimePressureDetailsDialog({
   open,

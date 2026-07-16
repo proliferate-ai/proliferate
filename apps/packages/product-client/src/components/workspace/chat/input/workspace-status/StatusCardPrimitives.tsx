@@ -97,7 +97,10 @@ export function StatusRow({
     return <div className={`${STATUS_ROW_CLASS} opacity-25`}>{body}</div>;
   }
 
-  const interactive = !!onSelect || !!trailing;
+  // Only rows with their own action render as a <button>; rows whose only
+  // affordance lives in `trailing` stay a <div> so a trailing action button
+  // doesn't nest inside another button (invalid DOM, unreliable clicks).
+  const interactive = !!onSelect;
   const row = interactive
     ? (
       <Button

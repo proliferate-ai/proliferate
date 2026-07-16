@@ -8,7 +8,18 @@ import { RuntimePressureDetailsDialog } from "#product/components/workspace/chat
 import {
   WorkspaceStatusComposerControl,
   type WorkspaceStatusActions,
+  type WorkspaceStatusModel,
 } from "./WorkspaceStatusComposerControl";
+
+/** The card renders with just Resources/Advanced while the status feeds are
+ * empty (git status still loading, runtime blocked, non-git workspace) — the
+ * old overflow menu was never gated on the status model, so the advanced
+ * config must not be either. */
+const EMPTY_STATUS_MODEL: WorkspaceStatusModel = {
+  environment: null,
+  subagents: { working: [], done: [] },
+  native: [],
+};
 
 /** The live workspace-status trigger + card: model from the session's git/PR,
  * delegated-work, and native-activity feeds; runtime resources from the
@@ -55,14 +66,14 @@ export function ConnectedWorkspaceStatusComposerControl({
     onOpenAgentSession: openAgentSession ?? undefined,
   }), [compareOpensPr, compareUrl, openAgentSession, openExternal, shellActions]);
 
-  if (!model) {
+  if (!model && !environmentState && advancedControls.length === 0) {
     return null;
   }
 
   return (
     <>
       <WorkspaceStatusComposerControl
-        model={model}
+        model={model ?? EMPTY_STATUS_MODEL}
         actions={actions}
         environmentState={environmentState}
         onOpenWorktrees={environmentState ? () => setWorktreesOpen(true) : undefined}
