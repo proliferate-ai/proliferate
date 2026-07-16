@@ -615,6 +615,7 @@ export async function createCfnStackAndWait(input: {
   // to a 0600 file and pass `--parameters file://<path>` so they never enter
   // argv / the process table / an argv-echoing error (PR7-CONTROL-003).
   const paramFile = await input.writeParameterFile(JSON.stringify(input.parameters));
+  let createError: unknown;
   try {
     await exec.run([
       "cloudformation",
@@ -631,10 +632,31 @@ export async function createCfnStackAndWait(input: {
       region,
     ]);
   } catch (error) {
+    createError = error;
+  }
+  // Remove the 0600 bearer-URL parameter file BEFORE proceeding. A removal
+  // failure is NOT swallowed (PR7-CONTROL-003): leaving a local file that holds
+  // live presigned S3 bearer URLs is a real safety failure, so it fails the cell
+  // — even when create-stack itself succeeded. A create error takes precedence
+  // (it is the root cause); otherwise a removal error is fatal.
+  let removeError: unknown;
+  try {
+    await paramFile.remove();
+  } catch (error) {
+    removeError = error;
+  }
+  if (createError !== undefined) {
     // Scrub in case the aws-cli echoed the file contents or a resolved URL.
-    throw new Error(scrubCfnParameterUrls(`CFN: create-stack ${stackName} failed: ${errText(error)}`));
-  } finally {
-    await paramFile.remove().catch(() => undefined);
+    throw new Error(scrubCfnParameterUrls(`CFN: create-stack ${stackName} failed: ${errText(createError)}`));
+  }
+  if (removeError !== undefined) {
+    throw new Error(
+      scrubCfnParameterUrls(
+        `CFN: failed to remove the 0600 CloudFormation parameter file "${paramFile.path}" holding presigned ` +
+          `bearer URLs after create-stack ${stackName}: ${errText(removeError)}. Refusing to continue with a ` +
+          "leaked bearer-URL file on disk.",
+      ),
+    );
   }
 
   try {

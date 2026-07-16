@@ -176,8 +176,8 @@ function greenEvidenceFor(cellName: string): CellEvidenceNoCleanup {
         transcript_reopened: true,
         byok_route: "api_key",
         byok_key_id_hash: "4".repeat(64),
-        no_litellm_spend: true,
-        no_e2b: true,
+        no_litellm_spend: "unproven",
+        no_e2b: "unproven",
       };
       return evidence;
     }
@@ -454,7 +454,6 @@ function greenBaseTurnOps(closed: { value: boolean }, overrides: Partial<BaseTur
     readAuthSourceKinds: () => ["api_key"],
     detectGatewayEnvVar: () => undefined,
     detectE2bEnvKey: () => undefined,
-    observeProviderContainersAbsent: async () => ({ litellmRunning: false, redisRunning: false, names: [] }),
     ...overrides,
   };
 }
@@ -468,14 +467,16 @@ test("runBaseTurnCell: green through UI create → turn → runtime reopen → p
     model_id: string;
     transcript_reopened: boolean;
     byok_route: string;
-    no_litellm_spend: boolean;
-    no_e2b: boolean;
+    no_litellm_spend: string;
+    no_e2b: string;
   };
   assert.equal(evidence.model_id, "claude-haiku-4-5");
   assert.equal(evidence.transcript_reopened, true);
   assert.equal(evidence.byok_route, "api_key");
-  assert.equal(evidence.no_litellm_spend, true);
-  assert.equal(evidence.no_e2b, true);
+  // Honest claim status: the run-window spend/traffic observation is not
+  // performed by PR 7, so these are "unproven", not a false absence (PR7-CONTROL-010).
+  assert.equal(evidence.no_litellm_spend, "unproven");
+  assert.equal(evidence.no_e2b, "unproven");
   // The owner page is always closed in the finally.
   assert.equal(closed.value, true);
 });
@@ -497,24 +498,13 @@ test("runBaseTurnCell: no launchable model is blocked, not failed", async () => 
   assert.equal(closed.value, true);
 });
 
-test("runBaseTurnCell: a running LiteLLM container fails no_litellm_spend (run-window observation, PR7-CONTROL-010)", async () => {
+test("runBaseTurnCell: records no_litellm_spend/no_e2b as \"unproven\", not a false absence (PR7-CONTROL-010)", async () => {
   const closed = { value: false };
-  const ops = greenBaseTurnOps(closed, {
-    observeProviderContainersAbsent: async () => ({ litellmRunning: true, redisRunning: false, names: ["proliferate-litellm-1"] }),
-  });
-  const result = await runBaseTurnCell(baseTurnWorld(), FAKE_OWNER, ops);
-  assert.equal(result.status, "failed");
-  assert.match(result.reason?.message ?? "", /LiteLLM container is running/);
-});
-
-test("runBaseTurnCell: a running Redis/materializer container fails no_e2b (run-window observation, PR7-CONTROL-010)", async () => {
-  const closed = { value: false };
-  const ops = greenBaseTurnOps(closed, {
-    observeProviderContainersAbsent: async () => ({ litellmRunning: false, redisRunning: true, names: ["proliferate-redis-1"] }),
-  });
-  const result = await runBaseTurnCell(baseTurnWorld(), FAKE_OWNER, ops);
-  assert.equal(result.status, "failed");
-  assert.match(result.reason?.message ?? "", /Redis\/materializer container is running/);
+  const result = await runBaseTurnCell(baseTurnWorld(), FAKE_OWNER, greenBaseTurnOps(closed));
+  assert.equal(result.status, "green", JSON.stringify(result));
+  const ev = result.evidence as { no_litellm_spend: string; no_e2b: string };
+  assert.equal(ev.no_litellm_spend, "unproven");
+  assert.equal(ev.no_e2b, "unproven");
 });
 
 test("runBaseTurnCell: a UI create/turn failure fails the cell with a bounded reason", async () => {

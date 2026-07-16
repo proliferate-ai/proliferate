@@ -277,9 +277,31 @@ export interface SelfHostBaseTurnEvidenceV1 extends SelfHostEvidenceBaseV1 {
   /** BYOK is a direct-provider call — never a gateway/LiteLLM correlation. */
   byok_route: "api_key";
   byok_key_id_hash: string;
-  no_litellm_spend: true;
-  no_e2b: true;
+  /**
+   * The frozen contract's `no_litellm_spend`/`no_e2b` are run-window provider
+   * SPEND/TRAFFIC observations. PR 7 does not perform those observations for a
+   * gateway-OFF base install (there is no LiteLLM admin API to query, and E2B
+   * traffic proof needs the managed-cloud controller PR 7 does not own), so the
+   * claims are recorded HONESTLY as `"unproven"` rather than asserted `true`
+   * (PR7-CONTROL-010: a false `true` from an unavailable/insufficient
+   * observation is worse than an explicit unproven). The cell's green rests on
+   * its REAL BYOK-direct observations — capabilities gateway/cloud both false,
+   * the pushed auth route is `api_key` not `gateway`, and the scrubbed candidate
+   * env carries no LiteLLM/E2B input — which prove the TURN was BYOK-direct, not
+   * that zero provider spend/traffic occurred anywhere. `"observed_absent"` is
+   * reserved for when a real run-window observation is later wired.
+   */
+  no_litellm_spend: SelfHostProviderClaim;
+  no_e2b: SelfHostProviderClaim;
 }
+
+/**
+ * A run-window provider-absence claim (PR7-CONTROL-010). `"unproven"` = the
+ * observation was not performed (recorded honestly, never a false absence);
+ * `"observed_absent"` = a real run-window spend/traffic observation confirmed
+ * absence. Never a bare `true` derived from configuration.
+ */
+export type SelfHostProviderClaim = "unproven" | "observed_absent";
 
 export interface SelfHostInviteeEvidenceV1 extends SelfHostEvidenceBaseV1 {
   kind: "selfhost_invitee";
@@ -2104,6 +2126,18 @@ function requireTrue(where: string, value: unknown): void {
   }
 }
 
+/**
+ * A run-window provider-absence claim (PR7-CONTROL-010): exactly `"unproven"`
+ * (observation not performed) or `"observed_absent"` (a real run-window
+ * spend/traffic observation confirmed absence). A bare `true` — an absence
+ * asserted from configuration/an unavailable observation — is rejected.
+ */
+function requireProviderClaim(where: string, value: unknown): void {
+  if (value !== "unproven" && value !== "observed_absent") {
+    throw new ReportValidationError(`${where} must be "unproven" or "observed_absent".`);
+  }
+}
+
 function requireFalse(where: string, value: unknown): void {
   if (value !== false) {
     throw new ReportValidationError(`${where} must be false.`);
@@ -2209,8 +2243,8 @@ function validateSelfHostCellEvidence(
         throw new ReportValidationError(`${where}.byok_route must be "api_key".`);
       }
       requireEvidenceHash(`${where}.byok_key_id_hash`, e.byok_key_id_hash);
-      requireTrue(`${where}.no_litellm_spend`, e.no_litellm_spend);
-      requireTrue(`${where}.no_e2b`, e.no_e2b);
+      requireProviderClaim(`${where}.no_litellm_spend`, e.no_litellm_spend);
+      requireProviderClaim(`${where}.no_e2b`, e.no_e2b);
       return;
     }
     case "selfhost_invitee": {

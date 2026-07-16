@@ -776,6 +776,10 @@ jobs:
                 *) echo "::error title=Invalid self-host cell::'$c' is not a known cell"; exit 2 ;;
               esac
             done
+            # An EXPLICITLY nonempty cell selector that normalizes to empty (only
+            # commas/whitespace) must FAIL CLOSED (PR7-CONTROL-005), not silently
+            # fall through to "no filter" (which would run every cell).
+            [ -n "$cclean" ] || { echo "::error title=Empty self-host cell selector::selfhost_cells was provided but normalized to empty"; exit 2; }
             cells_arg="$cclean"
           fi
           # Candidate platform: only the two supported docker platforms.
@@ -784,15 +788,27 @@ jobs:
             linux/amd64|linux/arm64) ;;
             *) echo "::error title=Invalid platform::'$platform' must be linux/amd64 or linux/arm64"; exit 2 ;;
           esac
+          # API base URL: optional, but when present it must be EXACTLY the fixed
+          # serial-lane origin (the only origin the SH-GITHUB-AUTH OAuth callback
+          # is registered against). Validate to that literal so a crafted value
+          # cannot reach Make (PR7-CONTROL-002); an unexpected value fails closed.
+          api_base_url="${SELFHOST_API_BASE_URL_INPUT:-}"
+          if [ -n "$api_base_url" ] && \
+             [ "$api_base_url" != "https://selfhost-fixed.qualification.proliferate.com" ]; then
+            echo "::error title=Invalid API base URL::selfhost_api_base_url, when set, must be exactly https://selfhost-fixed.qualification.proliferate.com"
+            exit 2
+          fi
           # SELFHOST_SCENARIOS / SELFHOST_CELLS / SELFHOST_CANDIDATE_PLATFORM are
-          # passed to Make as quoted, already-validated values.
+          # passed to Make as quoted, already-validated values. SELFHOST_API_BASE_URL
+          # is exported into Make's environment (the recipe reads it as a shell env
+          # var, never a Make expansion) so the value stays inert data.
+          export SELFHOST_API_BASE_URL="$api_base_url"
           make qualification-selfhost \
             PROFILE="ci-${{ github.run_id }}-${{ github.run_attempt }}" \
             BEHAVIOR=strict \
             SELFHOST_SCENARIOS="$clean" \
             SELFHOST_CELLS="$cells_arg" \
-            SELFHOST_CANDIDATE_PLATFORM="$platform" \
-            SELFHOST_API_BASE_URL="${SELFHOST_API_BASE_URL_INPUT:-}"
+            SELFHOST_CANDIDATE_PLATFORM="$platform"
 
       - name: Upload V4 report and bounded diagnostic logs
         # Actions-durable (SHR-006): `if: always()` already runs this step on an

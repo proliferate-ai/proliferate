@@ -553,14 +553,6 @@ export interface BaseTurnCellOps {
   detectGatewayEnvVar(): string | undefined;
   /** The E2B key present in the scrubbed candidate child env, if any. */
   detectE2bEnvKey(): string | undefined;
-  /**
-   * SHR-004b/c run-window OBSERVATION (PR7-CONTROL-010): confirm ON THE BOX that
-   * no LiteLLM (gateway) or Redis/materializer (cloud) container is running
-   * during the turn — a positive provider-absence observation rather than a
-   * config/capability assertion. Returns the names of any offending running
-   * containers (empty ⇒ genuinely absent).
-   */
-  observeProviderContainersAbsent(world: ReadySelfHostWorld): Promise<{ litellmRunning: boolean; redisRunning: boolean; names: string[] }>;
 }
 
 /**
@@ -695,23 +687,15 @@ export async function runBaseTurnCell(
       );
     }
 
-    // SHR-004b/c positive run-window observation (PR7-CONTROL-010): the booleans
-    // are not merely "no gateway/E2B was configured" — confirm ON THE BOX that no
-    // LiteLLM or Redis/materializer container is actually running during the
-    // turn. A running provider container is a real red, not a silent green.
-    const providers = await ops.observeProviderContainersAbsent(world);
-    if (providers.litellmRunning) {
-      return failedBaseTurn(
-        `SH-BASE-TURN: a LiteLLM container is running on the box during the turn (${providers.names.join(", ")}); ` +
-          "no_litellm_spend requires the gateway provider be genuinely absent, not just unconfigured.",
-      );
-    }
-    if (providers.redisRunning) {
-      return failedBaseTurn(
-        `SH-BASE-TURN: a Redis/materializer container is running on the box during the turn (${providers.names.join(", ")}); ` +
-          "no_e2b requires the cloud provider plane be genuinely absent, not just unconfigured.",
-      );
-    }
+    // The checks above prove this TURN was BYOK-DIRECT (capabilities gateway/cloud
+    // both false, the pushed auth route is `api_key` not `gateway`, and the
+    // scrubbed candidate env carries no LiteLLM/E2B input). They do NOT constitute
+    // the frozen contract's run-window SPEND/TRAFFIC observation of
+    // `no_litellm_spend`/`no_e2b`, which PR 7 cannot perform for a gateway-OFF
+    // base install. So those two claims are recorded HONESTLY as "unproven"
+    // rather than asserted from configuration or from an unavailable/false
+    // container probe (PR7-CONTROL-010 — an earlier catch-to-empty container
+    // observation could false-green and has been removed).
 
     const evidence: SelfHostBaseTurnEvidenceNoCleanup = {
       kind: "selfhost_base_turn",
@@ -727,8 +711,11 @@ export async function runBaseTurnCell(
       transcript_reopened: true,
       byok_route: "api_key",
       byok_key_id_hash: sha256Hex(selection.apiKeyId),
-      no_litellm_spend: true,
-      no_e2b: true,
+      // Honest claim status (PR7-CONTROL-010): the frozen run-window spend/traffic
+      // observation is not performed by PR 7 for a gateway-OFF base install, so
+      // these are "unproven" rather than a false absence assertion.
+      no_litellm_spend: "unproven",
+      no_e2b: "unproven",
     };
     return { status: "green", evidence };
   } finally {
@@ -782,27 +769,6 @@ export const defaultBaseTurnCellOps: BaseTurnCellOps = {
     );
   },
   detectE2bEnvKey: () => Object.keys(candidateChildEnvironment(process.env)).find((key) => /e2b/i.test(key)),
-  async observeProviderContainersAbsent(world) {
-    // Positive run-window observation over SSH (PR7-CONTROL-010): list running
-    // containers by their compose service label. litellm ⇒ gateway is live;
-    // redis ⇒ the cloud-workspaces materialization plane is live. A BYOK-only
-    // base install must have neither running during the turn.
-    const running = (
-      await world.control.ssh
-        .run(
-          "sudo docker ps --filter 'label=com.docker.compose.service=litellm' " +
-            "--filter 'label=com.docker.compose.service=redis' --format '{{.Names}}' 2>/dev/null | tr '\\n' ' '",
-          { timeoutMs: 60_000 },
-        )
-        .catch(() => "")
-    ).trim();
-    const names = running ? running.split(/\s+/).filter(Boolean) : [];
-    return {
-      litellmRunning: names.some((name) => /litellm/i.test(name)),
-      redisRunning: names.some((name) => /redis/i.test(name)),
-      names,
-    };
-  },
 };
 
 /**

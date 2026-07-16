@@ -448,6 +448,58 @@ test("createCfnStackAndWait: registers stack BEFORE create, passes params, retur
   assert.ok(removed, "the 0600 parameter file is removed after create");
 });
 
+test("createCfnStackAndWait: a parameter-file removal failure is NON-GREEN, not swallowed (PR7-CONTROL-003)", async () => {
+  // create-stack succeeds, but removing the 0600 file holding live presigned
+  // bearer URLs fails — that must fail the cell, not be silently swallowed.
+  const site = "sh-x.qualification.proliferate.com";
+  const exec = new FakeExec((args) => {
+    if (args[1] === "describe-stacks") {
+      return JSON.stringify({
+        Stacks: [
+          {
+            Outputs: [
+              { OutputKey: "BaseUrl", OutputValue: `https://${site}` },
+              { OutputKey: "SiteAddress", OutputValue: site },
+              { OutputKey: "InstanceId", OutputValue: "i-0abc" },
+            ],
+          },
+        ],
+      });
+    }
+    return "";
+  });
+  await assert.rejects(
+    createCfnStackAndWait({
+      exec,
+      stackName: "stk",
+      templatePath: "/t.yaml",
+      parameters: buildCfnParameters({
+        releaseVersion: "run-1",
+        serverImageRepository: "ghcr.io/x/y",
+        deployBundleUrl: "https://s3/b?X-Amz-Signature=SECRET",
+        deployBundleChecksumUrl: "https://s3/s?X-Amz-Signature=SECRET",
+        siteAddress: site,
+        hostedZoneId: "Z1",
+      }),
+      region: "us-east-1",
+      writeParameterFile: async () => ({
+        path: "/tmp/leaky-params.json",
+        remove: async () => {
+          throw new Error("EACCES: permission denied");
+        },
+      }),
+      registerCleanup: async () => undefined,
+    }),
+    (error: Error) => {
+      assert.match(error.message, /failed to remove the 0600 CloudFormation parameter file/);
+      assert.match(error.message, /Refusing to continue/);
+      // The bearer signature must not leak even in this error.
+      assert.ok(!error.message.includes("X-Amz-Signature"));
+      return true;
+    },
+  );
+});
+
 test("createCfnStackAndWait: a create-complete wait failure tails describe-stack-events (bounded)", async () => {
   const exec = new FakeExec((args) => {
     if (args[1] === "wait") {
