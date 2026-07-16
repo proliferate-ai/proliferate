@@ -22,6 +22,9 @@ const SECRET_VALUE_PATTERNS: readonly RegExp[] = [
   /Bearer\s+[A-Za-z0-9._-]+/gi,
   /\bsk-[A-Za-z0-9._-]{6,}/gi,
   /\bvk-[A-Za-z0-9._-]{6,}/gi,
+  // E2B API keys (`e2b_…`) — the self-host cloud-addon diagnostic greps `e2b`
+  // lines, so a bootstrap/preflight line echoing the raw key must be redacted.
+  /\be2b_[A-Za-z0-9._-]{6,}/gi,
   /\beyJ[A-Za-z0-9._-]{10,}/g,
 ];
 

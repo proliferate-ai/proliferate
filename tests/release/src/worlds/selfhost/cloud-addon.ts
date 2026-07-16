@@ -49,8 +49,22 @@ export interface CloudAddonEnvBlock {
   githubAppId: string;
   githubAppClientId: string;
   githubAppClientSecret: string;
+  /**
+   * The App's PEM private key, rendered SINGLE-LINE with `\n`-escaped newlines to
+   * match the server's inline parse (`github_app_private_key()` does
+   * `inline.replace("\\n", "\n")`, integrations/github/app_installations.py) and
+   * `.env.production.example`'s documented "escape newlines as \n" form. A raw
+   * multi-line value would depend on docker-compose env_file multiline parsing
+   * and leave orphan lines the single-line sed strip cannot remove.
+   */
   githubAppPrivateKey: string;
-  /** The box's public API origin, used to build the GitHub App callback base URL. */
+  /**
+   * The box's public API BARE ORIGIN (e.g. `https://box…`). The server treats
+   * `GITHUB_APP_CALLBACK_BASE_URL` as a bare origin — it `rstrip("/")`s it and
+   * appends the full `/auth/github-app/...` route itself
+   * (`_callback_base_url`/`_callback_url`, server/cloud/github_app/service.py), so
+   * a trailing `/auth/` here would double the path and break the App callback.
+   */
   githubAppCallbackBaseUrl: string;
 }
 
@@ -75,9 +89,16 @@ export const CLOUD_ADDON_GITHUB_APP_CLIENT_ID_ENV = "RELEASE_E2E_SELFHOST_CLOUD_
 export const CLOUD_ADDON_GITHUB_APP_CLIENT_SECRET_ENV = "RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_CLIENT_SECRET";
 export const CLOUD_ADDON_GITHUB_APP_PRIVATE_KEY_ENV = "RELEASE_E2E_SELFHOST_CLOUD_GITHUB_APP_PRIVATE_KEY";
 
-/** The GitHub App callback base URL the box serves (prefix covers /auth/{surface}/github-app/callback). */
+/**
+ * The GitHub App callback base URL the box serves. This is a BARE ORIGIN: the
+ * server appends the full `/auth/github-app/...` route itself (it `rstrip("/")`s
+ * this value in `_callback_base_url`), so returning `origin/auth/` here would
+ * double the path (`…/auth/auth/github-app/…`) and never match the App's
+ * registered redirect URI. Mirrors `.env.production.example`
+ * ("defaults to API_BASE_URL when unset").
+ */
 export function githubAppCallbackBaseUrl(apiOrigin: string): string {
-  return `${apiOrigin.replace(/\/+$/, "")}/auth/`;
+  return apiOrigin.replace(/\/+$/, "");
 }
 
 /**
@@ -136,11 +157,19 @@ export function resolveCloudAddonConfig(
  * `E2B_API_KEY` + `E2B_TEMPLATE_NAME` pair is what `common.sh`
  * (`proliferate_enabled_profiles`) gates the `cloud-workspaces` compose profile
  * on; the GITHUB_APP_* keys configure the box's own App for the real product
- * GitHub authorization path. The multi-line PEM private key is written inline the
- * way `.env.production.example` documents (`GITHUB_APP_PRIVATE_KEY`), quoted so a
- * newline-bearing value survives the env file.
+ * GitHub authorization path.
+ *
+ * The PEM is rendered as a SINGLE `.env.static` line with literal `\n` escapes
+ * (any real newlines in the input are escaped), matching the server's inline
+ * parse (`github_app_private_key()` → `inline.replace("\\n", "\n")`) and
+ * `.env.production.example`'s "escape newlines as \n". This keeps every add-on
+ * key on exactly one line so `stripCloudAddonKeysSedProgram`'s `/^KEY=/d`
+ * removes it cleanly on disable/re-enable (a multi-line value would orphan its
+ * body lines). No surrounding quotes: the server reads the raw value and
+ * unescapes it; quotes would become part of the key material.
  */
 export function renderCloudAddonEnvLines(block: CloudAddonEnvBlock): string {
+  const escapedPem = block.githubAppPrivateKey.replace(/\r?\n/g, "\\n");
   return [
     `E2B_API_KEY=${block.e2bApiKey}`,
     `E2B_TEMPLATE_NAME=${block.e2bTemplateName}`,
@@ -148,9 +177,7 @@ export function renderCloudAddonEnvLines(block: CloudAddonEnvBlock): string {
     `GITHUB_APP_CLIENT_ID=${block.githubAppClientId}`,
     `GITHUB_APP_CLIENT_SECRET=${block.githubAppClientSecret}`,
     `GITHUB_APP_CALLBACK_BASE_URL=${block.githubAppCallbackBaseUrl}`,
-    // Inline PEM: single-quoted so the embedded newlines survive the env file
-    // (the shipped example documents GITHUB_APP_PRIVATE_KEY as an inline form).
-    `GITHUB_APP_PRIVATE_KEY='${block.githubAppPrivateKey}'`,
+    `GITHUB_APP_PRIVATE_KEY=${escapedPem}`,
     "",
   ].join("\n");
 }

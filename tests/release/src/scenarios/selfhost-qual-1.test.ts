@@ -570,7 +570,9 @@ function greenCloudAddonOps(): CloudAddonCellOps {
     async configureAndEnableCloudAddon() {
       enabled = true;
     },
-    async provisionAndRunTurn() {
+    async provisionAndRunTurn(_world, _owner, _config, onSandboxCreated) {
+      // A faithful fake announces the sandbox at "create time" via the callback.
+      await onSandboxCreated("e2b-sbx-1");
       return {
         githubAppInstallationId: "inst-1",
         e2bTemplateId: "tmpl-selfhost-1",
@@ -626,39 +628,86 @@ test("runCloudAddonCell: fails when cloudWorkspaces does not flip to true after 
 
 test("runCloudAddonCell: fails closed when provisioning/turn errors", async () => {
   const ops = greenCloudAddonOps();
-  ops.provisionAndRunTurn = async () => ({
-    githubAppInstallationId: "",
-    e2bTemplateId: "",
-    sandboxId: "",
-    workspaceId: "",
-    sessionId: "",
-    providerSandboxId: "e2b-sbx-1",
-    turn: { ended: false, error: "authorization drive not wired" },
-  });
+  ops.provisionAndRunTurn = async (_world, _owner, _config, onSandboxCreated) => {
+    await onSandboxCreated("e2b-sbx-1");
+    return {
+      githubAppInstallationId: "",
+      e2bTemplateId: "",
+      sandboxId: "",
+      workspaceId: "",
+      sessionId: "",
+      providerSandboxId: "e2b-sbx-1",
+      turn: { ended: false, error: "authorization drive not wired" },
+    };
+  };
   const result = await runCloudAddonCell(fakeWorld(), FAKE_OWNER, CLOUD_ADDON_ENV_SOURCE, ops);
   assert.equal(result.status, "failed");
   assert.match(result.reason?.message ?? "", /provisioning\/turn errored/);
 });
 
-test("runCloudAddonCell: registers the provisioned E2B sandbox for reap before judging the turn", async () => {
+test("runCloudAddonCell: registers the sandbox via onSandboxCreated before judging the turn (turn returns an error)", async () => {
   const reaped: string[] = [];
   const ops = greenCloudAddonOps();
   ops.registerSandboxReap = async (_world, providerSandboxId) => {
     reaped.push(providerSandboxId);
   };
-  // Even when the turn later fails, the sandbox must already be registered.
-  ops.provisionAndRunTurn = async () => ({
-    githubAppInstallationId: "inst-1",
-    e2bTemplateId: "tmpl-selfhost-1",
-    sandboxId: "sbx-1",
-    workspaceId: "ws-1",
-    sessionId: "sess-1",
-    providerSandboxId: "e2b-sbx-9",
-    turn: { ended: false, error: "turn timed out" },
-  });
+  // The turn fails, but the sandbox was announced at create time — it must be reaped.
+  ops.provisionAndRunTurn = async (_world, _owner, _config, onSandboxCreated) => {
+    await onSandboxCreated("e2b-sbx-9");
+    return {
+      githubAppInstallationId: "inst-1",
+      e2bTemplateId: "tmpl-selfhost-1",
+      sandboxId: "sbx-1",
+      workspaceId: "ws-1",
+      sessionId: "sess-1",
+      providerSandboxId: "e2b-sbx-9",
+      turn: { ended: false, error: "turn timed out" },
+    };
+  };
   const result = await runCloudAddonCell(fakeWorld(), FAKE_OWNER, CLOUD_ADDON_ENV_SOURCE, ops);
   assert.equal(result.status, "failed");
   assert.deepEqual(reaped, ["e2b-sbx-9"]);
+});
+
+test("runCloudAddonCell: reaps the sandbox even when provisioning THROWS after announcing it (register-before-create)", async () => {
+  const reaped: string[] = [];
+  const ops = greenCloudAddonOps();
+  ops.registerSandboxReap = async (_world, providerSandboxId) => {
+    reaped.push(providerSandboxId);
+  };
+  // Announce at create time, THEN throw mid-provision (network/turn crash). The
+  // cell must have already registered the reap via the callback.
+  ops.provisionAndRunTurn = async (_world, _owner, _config, onSandboxCreated) => {
+    await onSandboxCreated("e2b-sbx-throw");
+    throw new Error("provider connect crashed after sandbox create");
+  };
+  await assert.rejects(() => runCloudAddonCell(fakeWorld(), FAKE_OWNER, CLOUD_ADDON_ENV_SOURCE, ops));
+  assert.deepEqual(reaped, ["e2b-sbx-throw"]);
+});
+
+test("runCloudAddonCell: registers each provider sandbox exactly once (idempotent callback + safety net)", async () => {
+  const reaped: string[] = [];
+  const ops = greenCloudAddonOps();
+  ops.registerSandboxReap = async (_world, providerSandboxId) => {
+    reaped.push(providerSandboxId);
+  };
+  // The op announces via the callback AND returns the same id; it must register once.
+  ops.provisionAndRunTurn = async (_world, _owner, _config, onSandboxCreated) => {
+    await onSandboxCreated("e2b-dup");
+    await onSandboxCreated("e2b-dup");
+    return {
+      githubAppInstallationId: "inst-1",
+      e2bTemplateId: "tmpl-selfhost-1",
+      sandboxId: "sbx-1",
+      workspaceId: "ws-1",
+      sessionId: "sess-1",
+      providerSandboxId: "e2b-dup",
+      turn: { ended: true },
+    };
+  };
+  const result = await runCloudAddonCell(fakeWorld(), FAKE_OWNER, CLOUD_ADDON_ENV_SOURCE, ops);
+  assert.equal(result.status, "green");
+  assert.deepEqual(reaped, ["e2b-dup"]);
 });
 
 test("runCloudAddonCell: fails when the sandbox state does not survive pause/wake", async () => {
@@ -850,7 +899,8 @@ test("resolveCloudAddonConfig: ok with all six inputs; records template + app id
   if (result.ok) {
     assert.equal(result.value.e2bTemplateName, "tmpl-selfhost-1");
     assert.equal(result.value.githubAppId, "123456");
-    assert.equal(result.value.block.githubAppCallbackBaseUrl, "https://box.qualification.proliferate.com/auth/");
+    // Bare origin: the server appends the /auth/github-app/... route itself.
+    assert.equal(result.value.block.githubAppCallbackBaseUrl, "https://box.qualification.proliferate.com");
     assert.equal(result.value.block.e2bApiKey, "e2b-key");
   }
 });
@@ -904,7 +954,7 @@ test("stripCloudAddonKeysSedProgram + append overrides a shipped blank E2B_API_K
   }
 });
 
-test("renderCloudAddonEnvLines: single-quotes the inline PEM so embedded newlines survive", () => {
+test("renderCloudAddonEnvLines: escapes the PEM to a single \\n-escaped line (server unescapes with replace)", () => {
   const lines = renderCloudAddonEnvLines({
     e2bApiKey: "k",
     e2bTemplateName: "t",
@@ -912,9 +962,13 @@ test("renderCloudAddonEnvLines: single-quotes the inline PEM so embedded newline
     githubAppClientId: "c",
     githubAppClientSecret: "s",
     githubAppPrivateKey: "-----BEGIN-----\nmid\n-----END-----",
-    githubAppCallbackBaseUrl: "https://b/auth/",
+    githubAppCallbackBaseUrl: "https://b",
   });
-  assert.match(lines, /GITHUB_APP_PRIVATE_KEY='-----BEGIN-----\nmid\n-----END-----'/);
+  // One line, literal \n escapes, no surrounding quotes (server does inline.replace("\\n","\n")).
+  assert.match(lines, /^GITHUB_APP_PRIVATE_KEY=-----BEGIN-----\\nmid\\n-----END-----$/m);
+  // The PEM must NOT introduce a real newline into .env.static (would orphan lines the sed strip can't remove).
+  const pemLine = lines.split("\n").find((l) => l.startsWith("GITHUB_APP_PRIVATE_KEY="));
+  assert.ok(pemLine && !pemLine.includes("\n"));
 });
 
 test("resolveGithubOauthConfig: names every missing var", () => {

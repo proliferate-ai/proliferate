@@ -30,16 +30,16 @@ function block(overrides: Partial<CloudAddonEnvBlock> = {}): CloudAddonEnvBlock 
     githubAppClientId: "Iv1.x",
     githubAppClientSecret: "sec",
     githubAppPrivateKey: "-----BEGIN-----\npem\n-----END-----",
-    githubAppCallbackBaseUrl: "https://box.example.com/auth/",
+    githubAppCallbackBaseUrl: "https://box.example.com",
     ...overrides,
   };
 }
 
 // ── Pure config/env helpers ──────────────────────────────────────────────────
 
-test("githubAppCallbackBaseUrl: appends /auth/ to the origin, trimming any trailing slash", () => {
-  assert.equal(githubAppCallbackBaseUrl("https://box.example.com"), "https://box.example.com/auth/");
-  assert.equal(githubAppCallbackBaseUrl("https://box.example.com/"), "https://box.example.com/auth/");
+test("githubAppCallbackBaseUrl: returns the BARE origin (server appends the /auth/github-app route)", () => {
+  assert.equal(githubAppCallbackBaseUrl("https://box.example.com"), "https://box.example.com");
+  assert.equal(githubAppCallbackBaseUrl("https://box.example.com/"), "https://box.example.com");
 });
 
 test("resolveCloudAddonConfig: ok when every input is present", () => {
@@ -48,7 +48,7 @@ test("resolveCloudAddonConfig: ok when every input is present", () => {
   if (result.ok) {
     assert.equal(result.value.e2bTemplateName, "tmpl-1");
     assert.equal(result.value.githubAppId, "123");
-    assert.equal(result.value.block.githubAppCallbackBaseUrl, "https://box.example.com/auth/");
+    assert.equal(result.value.block.githubAppCallbackBaseUrl, "https://box.example.com");
   }
 });
 
@@ -79,8 +79,9 @@ test("renderCloudAddonEnvLines: writes the E2B pair, App config, and single-quot
   assert.match(lines, /^E2B_API_KEY=e2b-key$/m);
   assert.match(lines, /^E2B_TEMPLATE_NAME=tmpl-1$/m);
   assert.match(lines, /^GITHUB_APP_ID=123$/m);
-  assert.match(lines, /^GITHUB_APP_CALLBACK_BASE_URL=https:\/\/box\.example\.com\/auth\/$/m);
-  assert.match(lines, /GITHUB_APP_PRIVATE_KEY='-----BEGIN-----\npem\n-----END-----'/);
+  assert.match(lines, /^GITHUB_APP_CALLBACK_BASE_URL=https:\/\/box\.example\.com$/m);
+  // Single-line, \n-escaped, no surrounding quotes (server unescapes with replace).
+  assert.match(lines, /^GITHUB_APP_PRIVATE_KEY=-----BEGIN-----\\npem\\n-----END-----$/m);
 });
 
 test("stripCloudAddonKeysSedProgram: deletes exactly the add-on keys, anchored to line start", () => {
@@ -188,4 +189,30 @@ test("disableCloudAddonProfile: strips the add-on keys and reconverges via boots
   const sedCmd = ssh.runCalls.find((c) => c.includes("sed -i"));
   assert.ok(sedCmd?.includes("/^E2B_API_KEY=/d"), "disable should strip the add-on keys");
   assert.ok(ssh.runCalls.some((c) => c.includes("bootstrap.sh")), "disable should reconverge via bootstrap");
+});
+
+test("disableCloudAddonProfile: a bootstrap failure diagnostic is bounded and secret-free (E2B key redacted)", async () => {
+  const ssh = fakeSsh((command) => {
+    if (command.includes("bootstrap.sh")) {
+      throw new Error("reconverge failed");
+    }
+    if (command.includes("ps --format")) {
+      return "redis:exited:unhealthy";
+    }
+    // Simulate a bootstrap log tail that echoed the raw E2B key on an error line.
+    if (command.includes("cloud-addon-disable.log") || command.includes("cloud-addon-bootstrap.log")) {
+      return "error: bad key e2b_deadbeefdeadbeefdeadbeef|preflight failed";
+    }
+    return "";
+  });
+  const io = fakeIo();
+  await assert.rejects(
+    () => disableCloudAddonProfile(ssh, io),
+    (error: Error) => {
+      assert.match(error.message, /failed to re-converge/);
+      assert.ok(!error.message.includes("e2b_deadbeefdeadbeefdeadbeef"), "E2B key must be redacted from the diagnostic");
+      assert.match(error.message, /\[REDACTED\]/);
+      return true;
+    },
+  );
 });

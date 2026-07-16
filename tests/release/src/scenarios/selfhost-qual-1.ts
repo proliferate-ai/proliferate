@@ -784,11 +784,18 @@ export interface CloudAddonCellOps {
   fetchCloudWorkspacesCapability(world: ReadySelfHostWorld): Promise<{ agentGateway: boolean; cloudWorkspaces: boolean }>;
   /** Write the add-on env block + bootstrap the `cloud-workspaces` profile with --wait. */
   configureAndEnableCloudAddon(world: ReadySelfHostWorld, config: CloudAddonConfig): Promise<void>;
-  /** Authorize the instance GitHub App + provision one personal sandbox/workspace, run one turn. */
+  /**
+   * Authorize the instance GitHub App + provision one personal sandbox/workspace,
+   * run one turn. `onSandboxCreated` MUST be invoked the moment the E2B provider
+   * sandbox exists — BEFORE any later step that could throw — so the durable reap
+   * is registered even if provisioning/turn crashes mid-flight (SHR-006
+   * register-before-create). It is idempotent; calling it more than once is safe.
+   */
   provisionAndRunTurn(
     world: ReadySelfHostWorld,
     owner: SelfHostOwnerActor,
     config: CloudAddonConfig,
+    onSandboxCreated: (providerSandboxId: string) => Promise<void>,
   ): Promise<CloudAddonProvisionResult>;
   /** Register the provisioned E2B sandbox on the durable ledger for reverse-order reap (SHR-006). */
   registerSandboxReap(world: ReadySelfHostWorld, providerSandboxId: string, config: CloudAddonConfig): Promise<void>;
@@ -848,12 +855,24 @@ export async function runCloudAddonCell(
     };
   }
 
-  const provisioned = await ops.provisionAndRunTurn(world, owner, config.value);
-  // Register the provider sandbox for durable reap AS SOON as it exists — before
-  // judging the turn — so a turn/pause failure still tears the sandbox down.
-  if (provisioned.providerSandboxId) {
-    await ops.registerSandboxReap(world, provisioned.providerSandboxId, config.value);
-  }
+  // Register the provider sandbox for durable reap the MOMENT it is created —
+  // before any step that could throw — via the onSandboxCreated callback (SHR-006
+  // register-before-create). Idempotent: guarded so a duplicate id (or a post-hoc
+  // safety net below) registers exactly once.
+  const registeredSandboxIds = new Set<string>();
+  const registerOnce = async (providerSandboxId: string): Promise<void> => {
+    if (!providerSandboxId || registeredSandboxIds.has(providerSandboxId)) {
+      return;
+    }
+    registeredSandboxIds.add(providerSandboxId);
+    await ops.registerSandboxReap(world, providerSandboxId, config.value);
+  };
+
+  const provisioned = await ops.provisionAndRunTurn(world, owner, config.value, registerOnce);
+  // Safety net: if the op returned an id it never announced through the callback
+  // (older/partial implementations), register it now — still before judging the
+  // turn — so a turn/pause failure still tears the sandbox down.
+  await registerOnce(provisioned.providerSandboxId);
   if (provisioned.turn.error) {
     return {
       status: "failed",
@@ -942,13 +961,14 @@ export const defaultCloudAddonCellOps: CloudAddonCellOps = {
   async configureAndEnableCloudAddon(world, config) {
     await configureAndEnableCloudAddonProfile(world.control.ssh, config.block, tmpFileIo());
   },
-  async provisionAndRunTurn(_world, _owner, _config) {
+  async provisionAndRunTurn(_world, _owner, _config, _onSandboxCreated) {
     // Fail closed at the self-host GitHub-App authorization boundary. The product
     // path (instance GitHub App authorize → covered repo_environment → personal
     // sandbox materialize on the self-built template → one turn) has no self-host
     // driver seam yet; returning a bounded turn error keeps this a clean red until
     // that drive + founder inputs land, rather than fabricating a provisioned
-    // workspace.
+    // workspace. When wired, the live impl MUST call `onSandboxCreated(id)` at E2B
+    // create time (before it can throw) so the reap is registered even on a crash.
     return {
       githubAppInstallationId: "",
       e2bTemplateId: "",
@@ -967,21 +987,21 @@ export const defaultCloudAddonCellOps: CloudAddonCellOps = {
   async registerSandboxReap(world, providerSandboxId, config) {
     // Durable reverse-order reap on the shared self-host ledger (SHR-006): the
     // E2B sandbox is a separate-account resource that outlives the EC2 box, so it
-    // is torn down with the box's OWN E2B key (never the harness's), through the
-    // idempotent provider kill (an absent sandbox counts as killed).
+    // is torn down with the box's OWN E2B key (never the harness's). The E2B probe
+    // (`runProbe`) reads its key from RELEASE_E2E_E2B_API_KEY, so the box key is
+    // injected under THAT var — not E2B_API_KEY, which the probe ignores. The
+    // idempotent provider kill treats an absent sandbox as killed.
     await world.registerCleanup?.("e2b_sandbox", providerSandboxId, async () => {
-      await killProviderSandbox(providerSandboxId, {
-        ...process.env,
-        E2B_API_KEY: config.block.e2bApiKey,
-      });
+      await killProviderSandbox(providerSandboxId, boxE2bProbeEnv(config));
     });
   },
   async pauseWakeStateIntact(world, owner, providerSandboxId, config) {
     // Pause via the E2B SDK backdoor (no product pause endpoint), wake through the
     // product's own lever, and re-read a marker to prove the workspace/session
-    // state survived. Bounded fail-closed on any error.
+    // state survived. Bounded fail-closed on any error. The E2B probe env injects
+    // the box's key under RELEASE_E2E_E2B_API_KEY (the var runProbe actually reads).
     try {
-      const e2bEnv = { ...process.env, E2B_API_KEY: config.block.e2bApiKey };
+      const e2bEnv = boxE2bProbeEnv(config);
       const marker = `sh-cloud-addon-${world.run.run_id}`;
       await writeProviderSandboxFile(providerSandboxId, "/home/user/.sh-cloud-addon-marker", marker, e2bEnv);
       await pauseProviderSandbox(providerSandboxId, e2bEnv);
@@ -994,11 +1014,29 @@ export const defaultCloudAddonCellOps: CloudAddonCellOps = {
   },
   async disableAndReassert(world) {
     await disableCloudAddonProfile(world.control.ssh, tmpFileIo());
+    // baseHealthy reflects an OBSERVED /health probe: waitForHealth polls
+    // /health and THROWS if it never returns 2xx within the window, so reaching
+    // the line after it means /health was really observed healthy. A thrown
+    // health failure propagates out and the outer cell catch fails the cell (no
+    // false green). This mirrors the gateway cell's restart-persistence check.
     await waitForHealth(world.api.baseUrl, { timeoutMs: RESTART_HEALTH_TIMEOUT_MS });
+    const baseHealthy = true;
     const capability = await fetchAgentGatewayCapability(world.api.baseUrl);
-    return { cloudWorkspacesFalse: capability.cloudWorkspaces === false, baseHealthy: true };
+    return { cloudWorkspacesFalse: capability.cloudWorkspaces === false, baseHealthy };
   },
 };
+
+/**
+ * The env the E2B `runProbe` reads its key from is `RELEASE_E2E_E2B_API_KEY`
+ * (`requireApiKey`), NOT `E2B_API_KEY` (which it overwrites). A self-host box's
+ * sandbox is created under the INSTANCE's own key, so the reap/pause probes must
+ * run under that key — injected here under the var the probe actually reads, so
+ * the probe hits the box's account (not the harness's sandbox-lane account) and a
+ * real leak is reaped instead of silently 404'ing as "already gone".
+ */
+function boxE2bProbeEnv(config: CloudAddonConfig): NodeJS.ProcessEnv {
+  return { ...process.env, RELEASE_E2E_E2B_API_KEY: config.block.e2bApiKey };
+}
 
 // ── Small shared helpers ────────────────────────────────────────────────────
 
