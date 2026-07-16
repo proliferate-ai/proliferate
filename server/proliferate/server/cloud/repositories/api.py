@@ -9,6 +9,9 @@ from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
+from proliferate.server.cloud.github_app.transactions import (
+    commit_github_app_reauthorization_on_error,
+)
 from proliferate.server.cloud.repos.access import CloudRepoGitHubCredentialsDependency
 from proliferate.server.cloud.repos.models import (
     CloudGitRepositoriesResponse,
@@ -37,10 +40,16 @@ from proliferate.server.cloud.repositories.service import (
     update_repo_config,
 )
 
+_REAUTH_TRANSACTION_DEPENDENCIES = [Depends(commit_github_app_reauthorization_on_error)]
+
 router = APIRouter()
 
 
-@router.get("/repositories/catalog", response_model=CloudGitRepositoriesResponse)
+@router.get(
+    "/repositories/catalog",
+    response_model=CloudGitRepositoriesResponse,
+    dependencies=_REAUTH_TRANSACTION_DEPENDENCIES,
+)
 async def list_repository_catalog_endpoint(
     credentials: CloudRepoGitHubCredentialsDependency,
     db: AsyncSession = Depends(get_async_session),
@@ -79,7 +88,9 @@ async def list_repositories_endpoint(
 
 
 @router.get(
-    "/repositories/{git_owner}/{git_repo_name}/branches", response_model=RepoBranchesResponse
+    "/repositories/{git_owner}/{git_repo_name}/branches",
+    response_model=RepoBranchesResponse,
+    dependencies=_REAUTH_TRANSACTION_DEPENDENCIES,
 )
 async def get_repository_branches_endpoint(
     git_owner: str,
@@ -120,6 +131,7 @@ async def update_repo_config_endpoint(
 @router.put(
     "/repositories/{git_owner}/{git_repo_name}/environment",
     response_model=RepoEnvironmentResponse,
+    dependencies=_REAUTH_TRANSACTION_DEPENDENCIES,
 )
 async def save_repo_environment_endpoint(
     git_owner: str,
