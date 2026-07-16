@@ -19,6 +19,11 @@ import { create } from "zustand";
  * - relink: reuse/adopt (Flow 5) — a new generation that re-materializes onto an
  *   existing clean checkout at the ref if one exists.
  * - recreate: like relink but always cuts a FRESH worktree (never adopts).
+ * - reconcile: PR 6 — open the one reconciliation dialog to diagnose Git/
+ *   materialization drift between the local and Cloud copies and offer the ONE
+ *   safe next action (Push, Open Git panel, Recreate, Relink, Unlink, Retry).
+ *   It NEVER resets/stashes/rebases/merges/force-pushes and never claims two
+ *   different commits are linked. At least one of local/cloud ids is present.
  */
 export type WorkspaceAvailabilityIntent =
   | { kind: "open_on_mac"; cloudWorkspaceId: string }
@@ -30,6 +35,30 @@ export type WorkspaceAvailabilityIntent =
   }
   | { kind: "link_copies"; cloudWorkspaceId: string }
   | { kind: "unlink"; cloudWorkspaceId: string; materializationId: string }
+  | { kind: "relink"; cloudWorkspaceId: string; mode: "relink" | "recreate" }
+  | {
+    kind: "reconcile";
+    localWorkspaceId: string | null;
+    cloudWorkspaceId: string | null;
+    /** The linked materialization id, when an explicit link exists (enables the
+     * Unlink recovery from the dialog). */
+    materializationId: string | null;
+    /** PR6-CONTINUATION-02: the ORIGINATING action this reconciliation was
+     * entered from, serialized so the dialog can RESUME it after the user
+     * resolves the blocking state (commit/push/re-check). `standalone` = entered
+     * directly from the workspace menu, with no action to resume. Serializable
+     * (no functions/refs) per PR 5's intent-store discipline. */
+    continuation: WorkspaceReconcileContinuation;
+  };
+
+/** The action to resume after a successful reconciliation, carrying exactly the
+ * inputs that action needs. A tagged union mirroring the availability intents so
+ * the dialog can `begin()` the original intent again with its own inputs. */
+export type WorkspaceReconcileContinuation =
+  | { kind: "standalone" }
+  | { kind: "add_cloud_copy"; localWorkspaceId: string; gitOwner: string; gitRepoName: string }
+  | { kind: "open_on_mac"; cloudWorkspaceId: string }
+  | { kind: "link_copies"; cloudWorkspaceId: string }
   | { kind: "relink"; cloudWorkspaceId: string; mode: "relink" | "recreate" };
 
 interface WorkspaceAvailabilityIntentState {

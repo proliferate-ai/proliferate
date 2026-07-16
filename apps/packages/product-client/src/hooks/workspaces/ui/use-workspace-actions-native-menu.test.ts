@@ -48,7 +48,7 @@ describe("buildWorkspaceActionsNativeMenuItems", () => {
     expect(onAvailabilityCommand).toHaveBeenCalledWith("add-cloud-copy");
   });
 
-  it("renders an unsupported-git-state blocker as a disabled, non-dispatching item", () => {
+  it("renders reconcile-git-state as an actionable, dispatching item (PR 6)", () => {
     const onAvailabilityCommand = vi.fn();
     const items = buildWorkspaceActionsNativeMenuItems({
       canRename: false,
@@ -59,20 +59,20 @@ describe("buildWorkspaceActionsNativeMenuItems", () => {
       onDismiss: vi.fn(),
       availabilityCommands: [
         {
-          kind: "unsupported-git-state",
-          label: "Unsupported Git state",
+          kind: "reconcile-git-state",
+          label: "Reconcile Git state…",
           blocker: "The workspace has uncommitted changes.",
         },
       ],
       onAvailabilityCommand,
     });
 
-    const blocker = items.find(
-      (item) => "id" in item && item.id === "availability-unsupported-git-state",
+    const item = items.find(
+      (entry) => "id" in entry && entry.id === "availability-reconcile-git-state",
     );
-    expect(blocker).toBeDefined();
-    if (blocker && "enabled" in blocker) expect(blocker.enabled).toBe(false);
-    if (blocker && "onSelect" in blocker) blocker.onSelect?.();
-    expect(onAvailabilityCommand).not.toHaveBeenCalled();
+    expect(item).toBeDefined();
+    if (item && "enabled" in item) expect(item.enabled).toBe(true);
+    if (item && "onSelect" in item) item.onSelect?.();
+    expect(onAvailabilityCommand).toHaveBeenCalledWith("reconcile-git-state");
   });
 });

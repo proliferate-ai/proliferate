@@ -95,9 +95,9 @@ export interface SidebarWorkspaceItemState {
   gitStatus: WorkspaceGitStatus | null;
   /**
    * Workspace-copy availability commands (PR 5): Add Cloud copy / Open on this
-   * Mac / Link / Unlink / Relink / Recreate, or an unsupported-git-state
-   * blocker. Resolved from the shared availability command model so the DOM and
-   * native menus render identically.
+   * Mac / Link / Unlink / Relink / Recreate, or a PR 6 reconcile-git-state entry
+   * into the reconciliation dialog. Resolved from the shared availability command
+   * model so the DOM and native menus render identically.
    */
   availabilityCommands: WorkspaceAvailabilityCommand[];
   /** Ids the availability actions target: the Cloud workspace, this install's
