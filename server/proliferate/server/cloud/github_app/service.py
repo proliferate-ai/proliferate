@@ -36,6 +36,7 @@ from proliferate.server.cloud.github_app.models import (
 )
 from proliferate.server.cloud.github_app.repo_authority import (
     ensure_fresh_github_app_authorization,
+    require_github_app_runtime_configured,
     require_github_cloud_repo_authority,
 )
 from proliferate.server.cloud.materialization import service as materialization_service
@@ -603,6 +604,7 @@ async def list_github_app_accessible_repositories(
     affiliation: str = DEFAULT_REPO_AFFILIATION,
     visibility: str = DEFAULT_REPO_VISIBILITY,
 ) -> CloudGitRepositoriesPageRecord:
+    require_github_app_runtime_configured()
     authorization = await ensure_fresh_github_app_authorization(db, user_id=user.id)
     credentials = CloudRepoGitHubCredentials(
         user_id=user.id,

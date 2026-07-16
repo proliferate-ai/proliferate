@@ -31,20 +31,30 @@ class WorkflowWireModel(BaseModel):
     )
 
 
-class WorkflowInputDefinition(WorkflowWireModel):
+class WorkflowDefinitionWireModel(WorkflowWireModel):
+    """Definition JSON accepts only its canonical camel-case wire aliases."""
+
+    model_config = ConfigDict(
+        populate_by_name=False,
+        validate_by_alias=True,
+        validate_by_name=False,
+    )
+
+
+class WorkflowInputDefinition(WorkflowDefinitionWireModel):
     name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=64)]
     type: Literal["string", "number", "boolean"]
     required: bool
 
 
-class WorkflowGoalDefinition(WorkflowWireModel):
+class WorkflowGoalDefinition(WorkflowDefinitionWireModel):
     objective: Annotated[
         str,
         StringConstraints(strip_whitespace=True, min_length=1, max_length=20_000),
     ]
 
 
-class WorkflowPromptStep(WorkflowWireModel):
+class WorkflowPromptStep(WorkflowDefinitionWireModel):
     kind: Literal["agent.prompt"]
     prompt: Annotated[str, StringConstraints(min_length=1, max_length=100_000)]
     goal: WorkflowGoalDefinition | None = None
@@ -57,7 +67,7 @@ class WorkflowPromptStep(WorkflowWireModel):
         return value
 
 
-class WorkflowHarnessConfig(WorkflowWireModel):
+class WorkflowHarnessConfig(WorkflowDefinitionWireModel):
     agent_kind: Annotated[
         str,
         StringConstraints(strip_whitespace=True, min_length=1, max_length=32),
@@ -78,12 +88,12 @@ class WorkflowHarnessConfig(WorkflowWireModel):
     ) = None
 
 
-class WorkflowStageDefinition(WorkflowWireModel):
+class WorkflowStageDefinition(WorkflowDefinitionWireModel):
     harness_config: WorkflowHarnessConfig
     steps: list[WorkflowPromptStep] = Field(min_length=1, max_length=64)
 
 
-class WorkflowDefinitionDocument(WorkflowWireModel):
+class WorkflowDefinitionDocument(WorkflowDefinitionWireModel):
     inputs: list[WorkflowInputDefinition] = Field(default_factory=list, max_length=64)
     stages: list[WorkflowStageDefinition] = Field(min_length=1, max_length=64)
 
@@ -99,6 +109,14 @@ class WorkflowDefinitionUpdateRequest(WorkflowDefinitionCreateRequest):
 
 
 class WorkflowDefinitionResponse(WorkflowDefinitionDocument):
+    # Internal response projections may use Python field names; strict alias
+    # handling applies to request bodies, not server-owned construction.
+    model_config = ConfigDict(
+        populate_by_name=True,
+        validate_by_alias=True,
+        validate_by_name=True,
+    )
+
     id: UUID
     user_id: UUID
     title: str
@@ -143,6 +161,16 @@ class WorkflowInvocationWireModel(WorkflowWireModel):
     )
 
 
+class WorkflowInvocationRequestWireModel(WorkflowInvocationWireModel):
+    """Invocation requests accept only canonical camel-case wire aliases."""
+
+    model_config = ConfigDict(
+        populate_by_name=False,
+        validate_by_alias=True,
+        validate_by_name=False,
+    )
+
+
 WorkflowInvocationScalar = StrictBool | StrictInt | StrictFloat | StrictStr
 
 
@@ -150,7 +178,7 @@ class ManagedCloudWorkflowTarget(WorkflowInvocationWireModel):
     kind: Literal["managedCloud"]
 
 
-class WorkflowInvocationCreateRequest(WorkflowInvocationWireModel):
+class WorkflowInvocationCreateRequest(WorkflowInvocationRequestWireModel):
     schema_version: Literal[1]
     workflow_definition_id: UUID
     expected_revision: StrictInt = Field(ge=1)

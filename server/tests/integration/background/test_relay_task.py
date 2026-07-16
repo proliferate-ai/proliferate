@@ -15,7 +15,13 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.background import relay as relay_module
-from proliferate.background.config import HEALTH_NOOP_TASK, PERIODIC_DEFAULT_QUEUE
+from proliferate.background.config import (
+    HEALTH_NOOP_TASK,
+    PERIODIC_DEFAULT_QUEUE,
+    WORKFLOW_CANCEL_TASK,
+    WORKFLOW_DELIVER_TASK,
+    WORKFLOW_OBSERVE_TASK,
+)
 from proliferate.background.tasks.relay import relay
 from proliferate.config import settings
 from proliferate.db.store.background_outbox import (
@@ -57,7 +63,12 @@ async def test_relay_task_publishes_committed_health_noop(
     # Scheduler-store/relay liveness heartbeat and the bounded per-family
     # backlog gauge are emitted every tick for the hosted metric plane.
     assert metrics["relay_heartbeat"] == 1
-    assert metrics["supported_pending_by_family"] == {"background_health_noop": 0}
+    assert metrics["supported_pending_by_family"] == {
+        HEALTH_NOOP_TASK.replace(".", "_"): 0,
+        WORKFLOW_DELIVER_TASK.replace(".", "_"): 0,
+        WORKFLOW_OBSERVE_TASK.replace(".", "_"): 0,
+        WORKFLOW_CANCEL_TASK.replace(".", "_"): 0,
+    }
 
     db_session.expire_all()
     row = await load_outbox_task(db_session, task.id)
