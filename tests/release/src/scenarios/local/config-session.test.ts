@@ -138,6 +138,7 @@ function fakeWorld(): ReadyLocalWorld {
     renderer: undefined as never,
     gateway: undefined as never,
     paths: undefined as never,
+    db: { databaseUrl: "postgresql+asyncpg://proliferate:localdev@127.0.0.1:5599/proliferate" },
     trackActorSubjects: async () => undefined,
     close: async () => cleanupEvidence(),
   };
@@ -353,8 +354,8 @@ function makeSessionDriver(
     createEmptyChat: async () => ({ workspaceId: "ws-1", sessionId: "s0", tabId: "tab-0" }),
     switchHarnessEmptyChat: async () => ({ oldSessionId: "s0", newSessionId: "s1", tabId: "tab-0" }),
     sendMessage: async () => ({ sessionId: "s1" }),
-    switchHarnessAfterMessages: async () => ({ preservedTabId: "tab-0", newTabId: "tab-1", newSessionId: "s2" }),
-    changeModelSameHarness: async () => ({ sessionId: "s2", stayedInSession: true }),
+    switchHarnessAfterMessages: async () => ({ preservedTabId: "tab-0", preservedTabHarness: "codex", newTabId: "tab-1", newTabHarness: "claude", newSessionId: "s2" }),
+    changeModelSameHarness: async () => ({ sessionId: "s2", fromModelId: "claude-a", toModelId: "claude-b", stayedInSession: true }),
     reloadAndVerifyTabs: async () => undefined,
     closeWorld: async () => options.cleanup ?? cleanupEvidence(),
     ...overrides,
@@ -405,20 +406,38 @@ test("LOCAL-5: empty-chat switch that does NOT replace the backend session fails
 
 test("LOCAL-5: a same-harness model change that leaves the session fails the cell", async () => {
   const { driver } = makeSessionDriver({
-    changeModelSameHarness: async () => ({ sessionId: "s2", stayedInSession: false }),
+    changeModelSameHarness: async () => ({ sessionId: "s2", fromModelId: "claude-a", toModelId: "claude-b", stayedInSession: false }),
   });
   const outcome = await collectLocal5SessionTabsCell(fakeCtx(), sessionCell(), driver);
   assert.equal(outcome.status, "failed");
   assert.match(outcome.reason?.message ?? "", /did not stay in the session/);
 });
 
+test("LOCAL-5: a same-harness model change that is a no-op (same model id) fails the cell", async () => {
+  const { driver } = makeSessionDriver({
+    changeModelSameHarness: async () => ({ sessionId: "s2", fromModelId: "claude-a", toModelId: "claude-a", stayedInSession: true }),
+  });
+  const outcome = await collectLocal5SessionTabsCell(fakeCtx(), sessionCell(), driver);
+  assert.equal(outcome.status, "failed");
+  assert.match(outcome.reason?.message ?? "", /no-op \(model id unchanged\)/);
+});
+
 test("LOCAL-5: switch-after-messages that reuses the same tab fails the cell", async () => {
   const { driver } = makeSessionDriver({
-    switchHarnessAfterMessages: async () => ({ preservedTabId: "tab-0", newTabId: "tab-0", newSessionId: "s2" }),
+    switchHarnessAfterMessages: async () => ({ preservedTabId: "tab-0", preservedTabHarness: "codex", newTabId: "tab-0", newTabHarness: "claude", newSessionId: "s2" }),
   });
   const outcome = await collectLocal5SessionTabsCell(fakeCtx(), sessionCell(), driver);
   assert.equal(outcome.status, "failed");
   assert.match(outcome.reason?.message ?? "", /did not open a new tab/);
+});
+
+test("LOCAL-5: switch-after-messages that is not a real harness switch (both tabs same harness) fails the cell", async () => {
+  const { driver } = makeSessionDriver({
+    switchHarnessAfterMessages: async () => ({ preservedTabId: "tab-0", preservedTabHarness: "claude", newTabId: "tab-1", newTabHarness: "claude", newSessionId: "s2" }),
+  });
+  const outcome = await collectLocal5SessionTabsCell(fakeCtx(), sessionCell(), driver);
+  assert.equal(outcome.status, "failed");
+  assert.match(outcome.reason?.message ?? "", /was not a real harness switch/);
 });
 
 test("LOCAL-5: a cleanup failure downgrades the green cell to failed but retains evidence", async () => {

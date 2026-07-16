@@ -104,9 +104,20 @@ function withDerivedReasons(report: TestRunReportV3): TestRunReportV3 {
 
 
 // Minimal valid candidate evidence for strict-report tests (strict requires
-// non-null candidate_build per CBH-001).
+// non-null candidate_build per CBH-001). Declares every artifact id the
+// world-backed evidence fixtures below reference, because the V4 cross-field
+// bind (LQF-005) now requires each evidence `artifact_ids` entry to name an
+// artifact of THIS candidate identity.
 const STRICT_CB: TestRunReportV3["candidate_build"] = {
-  artifacts: [{ artifact_id: "anyharness/host", version: "1.0.0", sha256: "e".repeat(64) }],
+  artifacts: [
+    { artifact_id: "anyharness/host", version: "1.0.0", sha256: "e".repeat(64) },
+    { artifact_id: "server/linux-x64", version: "0.3.27", sha256: "1".repeat(64) },
+    { artifact_id: "anyharness/aarch64-apple-darwin", version: "0.3.27", sha256: "2".repeat(64) },
+    { artifact_id: "desktop-renderer/browser", version: "0.3.27", sha256: "3".repeat(64) },
+    { artifact_id: "server/linux-amd64", version: "0.3.27", sha256: "4".repeat(64) },
+    { artifact_id: "selfhost-bundle/linux-amd64", version: "0.3.27", sha256: "5".repeat(64) },
+    { artifact_id: "anyharness/x86_64-unknown-linux-gnu", version: "0.3.27", sha256: "6".repeat(64) },
+  ],
 };
 
 test("validateReport accepts a consistent report", () => {
@@ -854,9 +865,15 @@ test("validateReportV4 rejects transcript_reopened !== true and harness !== clau
   (notReopened.results[0].evidence as unknown as { transcript_reopened: boolean }).transcript_reopened = false;
   assert.throws(() => validateReportV4(notReopened), /transcript_reopened must be true/);
 
+  // The cross-field cell binding (LQF-005) catches an evidence harness that
+  // disagrees with the cell's harness dimension before the kind-scoped
+  // "harness must be claude" structural check; either rejection is correct.
   const wrongHarness = validSmokeReportV4();
   (wrongHarness.results[0].evidence as unknown as { harness: string }).harness = "codex";
-  assert.throws(() => validateReportV4(wrongHarness), /harness must be "claude"/);
+  assert.throws(
+    () => validateReportV4(wrongHarness),
+    /harness is "codex" but the cell's dimensions name harness "claude"/,
+  );
 });
 
 test("sanitizeCellEvidence redacts secrets so validation then rejects the mangled value", () => {
@@ -1159,7 +1176,7 @@ function userKeyRouteTurnEvidence(
     journey: "LOCAL-3",
     route: "user_key",
     gateway_spend: null,
-    user_key_isolation: { litellm_spend_rows: 0, managed_balance_delta_usd: 0 },
+    user_key_isolation: { litellm_spend_rows: 0, managed_balance_read_deferred: true },
     ...overrides,
   });
 }
@@ -1185,7 +1202,9 @@ test("validateReportV4 accepts a valid local_route_turn user-key-route cell (LOC
 test("validateReportV4 accepts a valid local_route_turn LOCAL-6 route-change cell", () => {
   const report = worldBackedLocalReportV4(
     "T3-AUTHROUTE-1",
-    { harness: "claude", journey: "LOCAL-6" },
+    // The canonical LOCAL-6 cell is keyed by the route-change dimension, not a
+    // harness; the binding derives journey=LOCAL-6 from route=change.
+    { route: "change" },
     userKeyRouteTurnEvidence({
       journey: "LOCAL-6",
       route_change: {
@@ -1217,7 +1236,7 @@ test("validateReportV4 rejects local_route_turn gateway route with mismatched sp
   const strayIsolation = worldBackedLocalReportV4(
     "T3-CHAT-1",
     { harness: "codex" },
-    validRouteTurnEvidence({ user_key_isolation: { litellm_spend_rows: 0, managed_balance_delta_usd: 0 } }),
+    validRouteTurnEvidence({ user_key_isolation: { litellm_spend_rows: 0, managed_balance_read_deferred: true } }),
   );
   assert.throws(() => validateReportV4(strayIsolation), /user_key_isolation must be null/);
 });
@@ -1241,27 +1260,29 @@ test("validateReportV4 rejects local_route_turn user-key route with mismatched s
 test("validateReportV4 rejects local_route_turn non-zero user-key isolation counters", () => {
   const nonZeroRows = worldBackedLocalReportV4(
     "T3-AUTHROUTE-1",
-    { harness: "codex", journey: "LOCAL-3" },
+    { harness: "codex" },
     userKeyRouteTurnEvidence({
-      user_key_isolation: { litellm_spend_rows: 1, managed_balance_delta_usd: 0 } as unknown as {
+      user_key_isolation: { litellm_spend_rows: 1, managed_balance_read_deferred: true } as unknown as {
         litellm_spend_rows: 0;
-        managed_balance_delta_usd: 0;
+        managed_balance_read_deferred: true;
       },
     }),
   );
   assert.throws(() => validateReportV4(nonZeroRows), /litellm_spend_rows must be 0/);
 
-  const nonZeroBalance = worldBackedLocalReportV4(
+  // LQF-006: the balance is never read here, so the deferral marker must be
+  // true — a fabricated false (claiming an observed balance read) is rejected.
+  const claimsBalanceRead = worldBackedLocalReportV4(
     "T3-AUTHROUTE-1",
-    { harness: "codex", journey: "LOCAL-3" },
+    { harness: "codex" },
     userKeyRouteTurnEvidence({
-      user_key_isolation: { litellm_spend_rows: 0, managed_balance_delta_usd: 0.01 } as unknown as {
+      user_key_isolation: { litellm_spend_rows: 0, managed_balance_read_deferred: false } as unknown as {
         litellm_spend_rows: 0;
-        managed_balance_delta_usd: 0;
+        managed_balance_read_deferred: true;
       },
     }),
   );
-  assert.throws(() => validateReportV4(nonZeroBalance), /managed_balance_delta_usd must be 0/);
+  assert.throws(() => validateReportV4(claimsBalanceRead), /managed_balance_read_deferred must be true/);
 });
 
 test("validateReportV4 rejects local_route_turn route_change presence mismatched with journey", () => {
@@ -1281,7 +1302,7 @@ test("validateReportV4 rejects local_route_turn route_change presence mismatched
 
   const missingRouteChange = worldBackedLocalReportV4(
     "T3-AUTHROUTE-1",
-    { harness: "claude", journey: "LOCAL-6" },
+    { route: "change" },
     userKeyRouteTurnEvidence({ journey: "LOCAL-6", route_change: null }),
   );
   assert.throws(
@@ -1566,6 +1587,56 @@ test("validateReportV4 rejects local_mcp_integration a malformed audit_event_id_
 test("validateReportV4 rejects a green cell of a LOCAL_FUNCTIONAL_EVIDENCE_SCENARIOS scenario with null evidence in a world-backed run", () => {
   const report = worldBackedLocalReportV4("T3-CFG-1", { harness: "grok" }, null);
   assert.throws(() => validateReportV4(report), /requires complete evidence/);
+});
+
+// ── LQF-005: cross-field evidence↔cell binding ──────────────────────────────
+
+test("LQF-005 (a): structurally valid evidence of the WRONG kind for the scenario is rejected", () => {
+  // A T3-SESSION cell carrying a structurally valid local_route_turn object
+  // (right shape, wrong scenario) must fail closed on the scenario→kind bind.
+  const report = worldBackedLocalReportV4("T3-SESSION-1", { harness: "codex" }, validRouteTurnEvidence({ harness: "codex" }));
+  assert.throws(
+    () => validateReportV4(report),
+    /kind is "local_route_turn" but T3-SESSION-1 requires "local_session_tabs"/,
+  );
+});
+
+test("LQF-005 (b): AUTHROUTE journey must match the cell's route dimension", () => {
+  // A user-key (per-harness, LOCAL-3) cell carrying LOCAL-6 journey evidence.
+  const asL6 = worldBackedLocalReportV4(
+    "T3-AUTHROUTE-1",
+    { harness: "codex" },
+    userKeyRouteTurnEvidence({ journey: "LOCAL-6" }),
+  );
+  assert.throws(() => validateReportV4(asL6), /journey is "LOCAL-6" but the cell's dimensions .* require "LOCAL-3"/);
+
+  // A route-change (LOCAL-6) cell carrying LOCAL-3 journey evidence.
+  const asL3 = worldBackedLocalReportV4(
+    "T3-AUTHROUTE-1",
+    { route: "change" },
+    userKeyRouteTurnEvidence({ journey: "LOCAL-3", route_change: null }),
+  );
+  assert.throws(() => validateReportV4(asL3), /journey is "LOCAL-3" but the cell's dimensions .* require "LOCAL-6"/);
+});
+
+test("LQF-005 (c): evidence harness disagreeing with the cell's harness dimension is rejected", () => {
+  const report = worldBackedLocalReportV4("T3-INT-1", { harness: "opencode" }, validMcpIntegrationEvidence({ harness: "grok" }));
+  assert.throws(
+    () => validateReportV4(report),
+    /harness is "grok" but the cell's dimensions name harness "opencode"/,
+  );
+});
+
+test("LQF-005 (d): artifact_ids naming an artifact outside the report's candidate_build are rejected", () => {
+  const report = worldBackedLocalReportV4(
+    "T3-CHAT-1",
+    { harness: "codex" },
+    validRouteTurnEvidence({ artifact_ids: ["server/linux-x64", "server/some-other-build"] }),
+  );
+  assert.throws(
+    () => validateReportV4(report),
+    /artifact_ids names "server\/some-other-build", which is not an artifact of this report's candidate_build/,
+  );
 });
 
 test("validateReportV4 exempts the diagnostic (non-world-backed) path from complete-evidence requirements", () => {

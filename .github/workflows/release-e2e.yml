@@ -472,32 +472,6 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
-  # ---------------------------------------------------------------------------
-  # Local functional — "Complete Local Workspace Qualification (Functional)"
-  # (~/Vault/Vault/Workspace/Testing/Complete Local Workspace Qualification
-  # (Functional).md; specs/developing/testing/tier-3-scenario-contract.md
-  # §"Local cases" LOCAL-1..7, billing carve-out excepted — see LOCAL-BILL-1..7,
-  # out of scope until PR 4). Same three exact candidates as the smoke job
-  # above (identical build step), but drives the full functional local cell
-  # set — repo-to-workspace, gateway chat, user-key auth route + route change,
-  # config matrix, session tabs, and the MCP integration turn — instead of the
-  # single LOCAL-WORLD-SMOKE-1 infrastructure proof.
-  #
-  # `workflow_dispatch` only, same posture as the smoke job: NOT
-  # `continue-on-error`, `environment: Qualification` (protected — branch
-  # policy gates which refs may run it; the BYOK/integration/LiteLLM secrets
-  # below never see arbitrary pull-request code). Before dispatching this
-  # manually, check the Actions tab for an in-progress/pending release-e2e.yml
-  # run first — every job in this workflow shares the `release-e2e-tier3`
-  # concurrency group (queued, not cancelled, since cancel-in-progress is
-  # false above), so a second dispatch just waits rather than racing the
-  # first one's world.
-  release-e2e-local-functional:
-    name: local-functional (manual, LOCAL-1..7)
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    environment: Qualification
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -555,6 +529,41 @@ jobs:
           name: tier2-billing-evidence
           path: |
             tests/release/.output/tier2/*/*/evidence/
+
+  # ---------------------------------------------------------------------------
+  # Local functional — "Complete Local Workspace Qualification (Functional)"
+  # (~/Vault/Vault/Workspace/Testing/Complete Local Workspace Qualification
+  # (Functional).md; specs/developing/testing/tier-3-scenario-contract.md
+  # §"Local cases" LOCAL-1..7, billing carve-out excepted — see LOCAL-BILL-1..7,
+  # out of scope until PR 4). Same three exact candidates as the smoke job
+  # above (identical build step), but drives the full functional local cell
+  # set — repo-to-workspace, gateway chat, user-key auth route + route change,
+  # config matrix, session tabs, and the MCP integration turn — instead of the
+  # single LOCAL-WORLD-SMOKE-1 infrastructure proof.
+  #
+  # `workflow_dispatch` only, same posture as the smoke job: NOT
+  # `continue-on-error`, `environment: Qualification` (protected — branch
+  # policy gates which refs may run it; the BYOK/integration/LiteLLM secrets
+  # below never see arbitrary pull-request code). Before dispatching this
+  # manually, check the Actions tab for an in-progress/pending release-e2e.yml
+  # run first — every job in this workflow shares the `release-e2e-tier3`
+  # concurrency group (queued, not cancelled, since cancel-in-progress is
+  # false above), so a second dispatch just waits rather than racing the
+  # first one's world.
+  release-e2e-local-functional:
+    name: local-functional (manual, LOCAL-1..7)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: Qualification
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -581,13 +590,14 @@ jobs:
           RELEASE_E2E_BYOK_ANTHROPIC_B_API_KEY: ${{ secrets.RELEASE_E2E_BYOK_ANTHROPIC_B }}
           RELEASE_E2E_BYOK_OPENAI_API_KEY: ${{ secrets.RELEASE_E2E_BYOK_OPENAI }}
           RELEASE_E2E_BYOK_XAI_API_KEY: ${{ secrets.RELEASE_E2E_BYOK_XAI }}
-          # LOCAL-7 MCP integration connect + audit-row assertion.
+          # LOCAL-7 MCP integration connect + audit-row assertion. The audit
+          # probe reads back `cloud_integration_tool_call_event` from THIS run's
+          # own ephemeral local-world Postgres, derived at runtime from the booted
+          # world (`ReadyLocalWorld.db.databaseUrl`) — NOT a static
+          # `RELEASE_E2E_LOCAL_DATABASE_URL` variable, which cannot name a
+          # database created later inside this run.
           RELEASE_E2E_INTEGRATION_NAMESPACE: ${{ vars.RELEASE_E2E_INTEGRATION_NAMESPACE }}
           RELEASE_E2E_INTEGRATION_API_KEY: ${{ secrets.RELEASE_E2E_INTEGRATION_API_KEY }}
-          # Local-profile DB URL the T3-INT-1 audit probe reads
-          # (integration_audit_probe.py, cloud_integration_tool_call_event) —
-          # this run's own ephemeral local-world Postgres, not a shared DB.
-          RELEASE_E2E_LOCAL_DATABASE_URL: ${{ vars.RELEASE_E2E_LOCAL_DATABASE_URL }}
           # Same debug-log sibling-path convention as local-world-smoke-1
           # (outside the run dir the cleanup stack deletes on teardown).
           LOCAL_WORLD_SMOKE_DEBUG_DIR: ${{ github.workspace }}/tests/release/.output/local-world/qlf-ci-${{ github.run_id }}-${{ github.run_attempt }}/debug/logs

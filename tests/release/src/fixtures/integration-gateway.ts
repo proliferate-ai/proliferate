@@ -223,18 +223,26 @@ export interface ToolCallEvent {
 }
 
 /**
- * Runs `tests/release/scripts/integration_audit_probe.py` in-process against
- * the local profile DB (same seam/env contract as `billing.ts`'s
- * `runBillingProbe`). Requires `RELEASE_E2E_LOCAL_DATABASE_URL`.
+ * Runs `tests/release/scripts/integration_audit_probe.py` in-process to read
+ * back the `cloud_integration_tool_call_event` audit row.
+ *
+ * The connection MUST identify the exact database the just-exercised turn wrote
+ * to. World-backed callers (LOCAL-7) pass `options.databaseUrl` derived from the
+ * booted world's own run-scoped Postgres (`ReadyLocalWorld.db.databaseUrl`); a
+ * static ambient `RELEASE_E2E_LOCAL_DATABASE_URL` cannot name a database created
+ * later inside this run, so it is only a legacy fallback for the shared-DB
+ * `t3-int-1` scenario (same seam/env contract as `billing.ts`'s `runBillingProbe`).
  */
 export async function runIntegrationAuditProbe(
   email: string,
-  options: { namespace?: string; sinceSeconds?: number } = {},
+  options: { namespace?: string; sinceSeconds?: number; databaseUrl?: string } = {},
 ): Promise<{ userId: string; events: ToolCallEvent[]; error?: string }> {
-  const databaseUrl = process.env.RELEASE_E2E_LOCAL_DATABASE_URL;
+  const databaseUrl = options.databaseUrl ?? process.env.RELEASE_E2E_LOCAL_DATABASE_URL;
   if (!databaseUrl) {
     throw new Error(
-      "integration_audit_probe: RELEASE_E2E_LOCAL_DATABASE_URL is required (see src/config/env-manifest.ts) — e.g. " +
+      "integration_audit_probe: a databaseUrl is required — world-backed callers pass " +
+        "ReadyLocalWorld.db.databaseUrl; otherwise set RELEASE_E2E_LOCAL_DATABASE_URL " +
+        "(see src/config/env-manifest.ts), e.g. " +
         "postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate_dev_<profile>",
     );
   }

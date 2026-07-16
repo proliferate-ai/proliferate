@@ -138,17 +138,21 @@ export interface LocalSessionTabsDriver {
   /** Send a message so the current session has transcript. */
   sendMessage(world: ReadyLocalWorld, page: ProductPage): Promise<{ sessionId: string }>;
 
-  /** Switch harness AFTER messages: old transcript preserved, a NEW tab created
-   * immediately to the right of the old one. */
-  switchHarnessAfterMessages(world: ReadyLocalWorld, page: ProductPage, toHarness: LocalHarnessKind): Promise<{ preservedTabId: string; newTabId: string; newSessionId: string }>;
+  /** Switch harness AFTER messages: old transcript preserved on its tab, a NEW
+   * tab created immediately to the right on `toHarness`. Returns both tabs'
+   * ids AND their harnesses so the caller can prove the switch was real (the
+   * two tabs are on different harnesses). */
+  switchHarnessAfterMessages(world: ReadyLocalWorld, page: ProductPage, toHarness: LocalHarnessKind): Promise<{ preservedTabId: string; preservedTabHarness: LocalHarnessKind; newTabId: string; newTabHarness: LocalHarnessKind; newSessionId: string }>;
 
-  /** Same harness, change a supported model: assert it stays in the same session
+  /** Same harness, change to a DIFFERENT supported model (excluding the active
+   * one): returns the before/after model ids and whether it stayed in-session
    * where the harness contract permits it. */
-  changeModelSameHarness(world: ReadyLocalWorld, page: ProductPage): Promise<{ sessionId: string; stayedInSession: boolean }>;
+  changeModelSameHarness(world: ReadyLocalWorld, page: ProductPage): Promise<{ sessionId: string; fromModelId: string; toModelId: string; stayedInSession: boolean }>;
 
-  /** Reload and assert tab order, active tab, harness attachment, and transcript
-   * all survive. */
-  reloadAndVerifyTabs(world: ReadyLocalWorld, page: ProductPage, expect: { tabOrder: string[]; activeTabId: string }): Promise<void>;
+  /** Reload and assert tab order, active tab, and — for both the preserved old
+   * tab and the active new tab — the expected harness and its transcript all
+   * survive. */
+  reloadAndVerifyTabs(world: ReadyLocalWorld, page: ProductPage, expect: { tabOrder: string[]; activeTabId: string; preservedTab: { id: string; harness: LocalHarnessKind }; activeTab: { id: string; harness: LocalHarnessKind } }): Promise<void>;
 
   closeWorld(world: ReadyLocalWorld): ReturnType<ReadyLocalWorld["close"]>;
 }
@@ -479,31 +483,54 @@ export async function collectLocal5SessionTabsCell(
     }
     sessionIds.push(emptySwitch.newSessionId);
 
-    // Give the current session transcript, then switch after messages.
+    // Give the current session (now on SESSION_TABS_SWITCH_HARNESS) transcript,
+    // then switch after messages. The after-message switch target MUST differ
+    // from the harness the messaged tab is on — otherwise it is not a switch and
+    // must not create a new tab. Proof 1 left the active tab on
+    // SESSION_TABS_SWITCH_HARNESS, so proof 2 switches back to
+    // SESSION_TABS_START_HARNESS (a genuinely different harness).
     const messaged = await driver.sendMessage(world, page);
     sessionIds.push(messaged.sessionId);
 
-    // Proof 2: switch after messages preserves the old transcript and opens a new
-    // tab immediately to its right.
-    const messagedSwitch = await driver.switchHarnessAfterMessages(world, page, SESSION_TABS_SWITCH_HARNESS);
+    // Proof 2: a REAL harness switch after messages preserves the old tab (with
+    // its harness + transcript intact) and opens a new tab, on the new harness,
+    // immediately to its right.
+    const messagedSwitch = await driver.switchHarnessAfterMessages(world, page, SESSION_TABS_START_HARNESS);
     if (messagedSwitch.preservedTabId === messagedSwitch.newTabId) {
       throw new Error("LOCAL-5: switch-after-messages did not open a new tab beside the preserved one");
     }
+    if (messagedSwitch.preservedTabHarness === messagedSwitch.newTabHarness) {
+      throw new Error(
+        `LOCAL-5: switch-after-messages was not a real harness switch (both tabs on "${messagedSwitch.newTabHarness}")`,
+      );
+    }
+    if (messagedSwitch.newTabHarness !== SESSION_TABS_START_HARNESS) {
+      throw new Error(
+        `LOCAL-5: the new tab is on "${messagedSwitch.newTabHarness}", expected the switched-to "${SESSION_TABS_START_HARNESS}"`,
+      );
+    }
     sessionIds.push(messagedSwitch.newSessionId);
 
-    // Proof 3: same-harness model change stays in-session where the harness
-    // contract permits it.
+    // Proof 3: same-harness model change (on the new tab's harness) selects a
+    // DIFFERENT eligible model and stays in-session where the harness contract
+    // permits it.
     const modelChange = await driver.changeModelSameHarness(world, page);
+    if (modelChange.fromModelId === modelChange.toModelId) {
+      throw new Error("LOCAL-5: same-harness model change was a no-op (model id unchanged)");
+    }
     if (!modelChange.stayedInSession) {
       throw new Error("LOCAL-5: same-harness model change did not stay in the session");
     }
     sessionIds.push(modelChange.sessionId);
 
-    // Proof 4: reload preserves tab order, active tab, harness attachment, and
+    // Proof 4: reload preserves tab order, active tab, and — for BOTH the
+    // preserved old tab and the active new tab — the expected harness and its
     // transcript.
     await driver.reloadAndVerifyTabs(world, page, {
       tabOrder: [messagedSwitch.preservedTabId, messagedSwitch.newTabId],
       activeTabId: messagedSwitch.newTabId,
+      preservedTab: { id: messagedSwitch.preservedTabId, harness: messagedSwitch.preservedTabHarness },
+      activeTab: { id: messagedSwitch.newTabId, harness: messagedSwitch.newTabHarness },
     });
 
     cellData = { workspaceId: empty.workspaceId, sessionIds: dedupe(sessionIds) };
@@ -1027,45 +1054,69 @@ async function switchHarnessAfterMessages(
   world: ReadyLocalWorld,
   page: ProductPage,
   toHarness: LocalHarnessKind,
-): Promise<{ preservedTabId: string; newTabId: string; newSessionId: string }> {
+): Promise<{ preservedTabId: string; preservedTabHarness: LocalHarnessKind; newTabId: string; newTabHarness: LocalHarnessKind; newSessionId: string }> {
   await ensureHarnessReady(world, page, toHarness);
   const p = page.page;
   const activeTab = p.locator('[data-chat-tab][data-chat-tab-active="true"]').first();
   const preservedTabId = await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab", activeTab);
+  const preservedTabHarness = (await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab-harness", activeTab)) as LocalHarnessKind;
+  if (preservedTabHarness === toHarness) {
+    throw new Error(
+      `switchHarnessAfterMessages: the messaged tab is already on "${toHarness}", so switching to it is a no-op ` +
+        "and would not create the required new tab — pick a target harness different from the active one.",
+    );
+  }
   const beforeCount = await p.locator("[data-chat-tab]").count();
   await selectHarnessInComposer(world, page, toHarness);
   // A new session tab appears immediately to the right of the messaged one.
   await p.locator("[data-chat-tab]").nth(beforeCount).waitFor({ state: "visible", timeout: TAB_SETTLE_TIMEOUT_MS });
   const newTab = p.locator('[data-chat-tab][data-chat-tab-active="true"]').first();
   const newTabId = await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab", newTab);
+  const newTabHarness = (await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab-harness", newTab)) as LocalHarnessKind;
   const newSessionId = await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab-session-id", newTab);
-  return { preservedTabId, newTabId, newSessionId };
+  // The preserved (old) tab still exists, on its original harness, with its
+  // transcript intact — it was not mutated by the switch.
+  const preserved = p.locator(`[data-chat-tab][data-chat-tab="${cssAttr(preservedTabId)}"]`).first();
+  const preservedHarnessAfter = await preserved.getAttribute("data-chat-tab-harness").catch(() => null);
+  if (preservedHarnessAfter !== preservedTabHarness) {
+    throw new Error(
+      `switchHarnessAfterMessages: the preserved tab's harness changed from "${preservedTabHarness}" to ` +
+        `"${preservedHarnessAfter}" — the switch mutated the old tab instead of opening a new one.`,
+    );
+  }
+  return { preservedTabId, preservedTabHarness, newTabId, newTabHarness, newSessionId };
 }
 
 async function changeModelSameHarness(
   world: ReadyLocalWorld,
   page: ProductPage,
-): Promise<{ sessionId: string; stayedInSession: boolean }> {
+): Promise<{ sessionId: string; fromModelId: string; toModelId: string; stayedInSession: boolean }> {
   const p = page.page;
   const activeTab = p.locator('[data-chat-tab][data-chat-tab-active="true"]').first();
   const sessionId = await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab-session-id", activeTab);
   const harness = (await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab-harness", activeTab)) as LocalHarnessKind;
+  // The model the composer is currently on — the change must move OFF this one,
+  // otherwise a no-op selection would trivially "stay in session".
+  const fromModelId = await readRequiredAttr(p, "[data-composer-model-trigger]", "data-composer-selected-model");
   const preflight = await world.gateway.preflight();
   const probe = (await world.runtime.client.getGatewayModels(harness).catch(() => [])).map((model) => model.id);
-  const candidates = probe.filter((id) => preflight.eligibleClaudeModels.includes(id));
-  const nextModel = candidates.find((id) => id !== undefined);
-  if (!nextModel) {
-    throw new Error("changeModelSameHarness: no alternate eligible model to select");
+  const candidates = probe.filter((id) => preflight.eligibleClaudeModels.includes(id) && id !== fromModelId);
+  const toModelId = candidates.find((id) => id !== undefined);
+  if (!toModelId) {
+    throw new Error(
+      `changeModelSameHarness: no alternate eligible model for "${harness}" other than the active "${fromModelId}" ` +
+        "— cannot prove an in-session model change without a distinct target.",
+    );
   }
-  await selectModelInComposer(page, nextModel);
+  await selectModelInComposer(page, toModelId);
   const afterSessionId = await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab-session-id", activeTab);
-  return { sessionId, stayedInSession: afterSessionId === sessionId };
+  return { sessionId, fromModelId, toModelId, stayedInSession: afterSessionId === sessionId };
 }
 
 async function reloadAndVerifyTabs(
   world: ReadyLocalWorld,
   page: ProductPage,
-  expect: { tabOrder: string[]; activeTabId: string },
+  expect: { tabOrder: string[]; activeTabId: string; preservedTab: { id: string; harness: LocalHarnessKind }; activeTab: { id: string; harness: LocalHarnessKind } },
 ): Promise<void> {
   const p = page.page;
   await p.reload({ waitUntil: "domcontentloaded" });
@@ -1095,16 +1146,34 @@ async function reloadAndVerifyTabs(
   if (activeId !== expect.activeTabId) {
     throw new Error(`reloadAndVerifyTabs: active tab not preserved (wanted ${expect.activeTabId}, saw ${activeId})`);
   }
-  // Harness attachment + transcript survive: the active tab still names its
-  // harness and an assistant reply is still rendered.
-  await p
-    .locator('[data-chat-tab][data-chat-tab-active="true"][data-chat-tab-harness]')
-    .first()
-    .waitFor({ state: "attached", timeout: 15_000 });
-  await p
-    .locator('[data-assistant-prose][data-assistant-streaming="false"]')
-    .last()
-    .waitFor({ state: "attached", timeout: 20_000 });
+
+  // Verify BOTH tabs — the active new tab first (already focused), then reopen
+  // the preserved old tab — each survives reload on its own expected harness
+  // with its transcript rendered. Checking only the active tab (the round-3
+  // behaviour) never proved the preserved tab kept its harness/transcript.
+  for (const target of [expect.activeTab, expect.preservedTab]) {
+    const tab = p.locator(`[data-chat-tab][data-chat-tab="${cssAttr(target.id)}"]`).first();
+    await tab.waitFor({ state: "visible", timeout: 15_000 });
+    // Activate the tab (the active one is a no-op click; the preserved one gets
+    // reopened) so its pane's transcript renders.
+    await tab.click();
+    await p
+      .locator(`[data-chat-tab][data-chat-tab="${cssAttr(target.id)}"][data-chat-tab-active="true"]`)
+      .first()
+      .waitFor({ state: "attached", timeout: 15_000 });
+    const harnessAfter = await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab-harness", tab);
+    if (harnessAfter !== target.harness) {
+      throw new Error(
+        `reloadAndVerifyTabs: tab ${target.id} came back on "${harnessAfter}", expected "${target.harness}" — ` +
+          "harness attachment did not survive reload.",
+      );
+    }
+    // Its transcript survived: a settled assistant reply is rendered in the pane.
+    await p
+      .locator('[data-assistant-prose][data-assistant-streaming="false"]')
+      .last()
+      .waitFor({ state: "attached", timeout: 20_000 });
+  }
   void world;
 }
 

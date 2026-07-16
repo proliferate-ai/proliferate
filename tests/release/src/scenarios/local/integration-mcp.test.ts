@@ -45,6 +45,7 @@ function fakeWorld(closeImpl?: () => Promise<LocalWorldCleanupEvidence>): ReadyL
     renderer: undefined as never,
     gateway: undefined as never,
     paths: undefined as never,
+    db: { databaseUrl: "postgresql+asyncpg://proliferate:localdev@127.0.0.1:5599/proliferate" },
     close: closeImpl ?? (async () => cleanCleanupEvidence()),
   };
 }
@@ -131,7 +132,7 @@ function greenDriver(closedCount: { value: number }): LocalMcpDriver {
       modelId: "us.anthropic.claude-haiku-4-6",
       toolName: "web_search",
     }),
-    assertAuditRow: async (_actor, _namespace, _toolName) => ({ auditEventId: "audit-1" }),
+    assertAuditRow: async (_world, _actor, _namespace, _toolName) => ({ auditEventId: "audit-1" }),
     closeWorld: async (world) => {
       closedCount.value += 1;
       return world.close();

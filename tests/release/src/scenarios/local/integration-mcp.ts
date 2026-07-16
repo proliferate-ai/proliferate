@@ -74,8 +74,10 @@ export interface LocalMcpDriver {
   runIntegrationTurn(world: ReadyLocalWorld, page: ProductPage, harness: LocalHarnessKind, namespace: string, repoPath: string): Promise<{ workspaceId: string; sessionId: string; modelId: string; toolName: string }>;
 
   /** Read back the `cloud_integration_tool_call_event` audit row via the reused
-   * DB probe seam and assert ok=true for this namespace/tool. Returns its id. */
-  assertAuditRow(actor: AuthenticatedActor, namespace: string, toolName: string): Promise<{ auditEventId: string }>;
+   * DB probe seam and assert ok=true for this namespace/tool. Reads THIS world's
+   * own run-scoped Postgres (`world.db.databaseUrl`), the database the turn wrote
+   * to — never an ambient static DB. Returns its id. */
+  assertAuditRow(world: ReadyLocalWorld, actor: AuthenticatedActor, namespace: string, toolName: string): Promise<{ auditEventId: string }>;
 
   closeWorld(world: ReadyLocalWorld): ReturnType<ReadyLocalWorld["close"]>;
 }
@@ -264,10 +266,14 @@ export const defaultLocalMcpDriver: LocalMcpDriver = {
 
     return { workspaceId, sessionId, modelId, toolName: picked.tool };
   },
-  async assertAuditRow(actor, namespace, toolName) {
+  async assertAuditRow(world, actor, namespace, toolName) {
     const deadline = Date.now() + 15_000;
     for (;;) {
-      const probe = await runIntegrationAuditProbe(actor.session.email, { namespace, sinceSeconds: 3600 });
+      const probe = await runIntegrationAuditProbe(actor.session.email, {
+        namespace,
+        sinceSeconds: 3600,
+        databaseUrl: world.db.databaseUrl,
+      });
       const row = probe.events.find((event) => event.ok && event.toolName === toolName);
       if (row) {
         return { auditEventId: row.id };
@@ -343,7 +349,7 @@ export async function runLocal7McpCellsAgainstWorld(
         await driver.connectIntegration(page, namespace);
         await driver.selectRepoAndWorkLocally(page, repo);
         const turn = await driver.runIntegrationTurn(world, page, harness, namespace, repo.path);
-        const audit = await driver.assertAuditRow(actor, namespace, turn.toolName);
+        const audit = await driver.assertAuditRow(world, actor, namespace, turn.toolName);
         entries.push({
           cell,
           ok: true,

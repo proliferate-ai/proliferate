@@ -130,6 +130,7 @@ function fakeWorld(overrides: Partial<ReadyLocalWorld> = {}): ReadyLocalWorld {
     renderer: undefined as never,
     gateway: undefined as never,
     paths: undefined as never,
+    db: { databaseUrl: "postgresql+asyncpg://proliferate:localdev@127.0.0.1:5599/proliferate" },
     trackActorSubjects: async () => undefined,
     close: async () => cleanupEvidence(),
     ...overrides,
@@ -257,7 +258,7 @@ function fakeDriver(options: FakeDriverOptions = {}): { driver: LocalRouteDriver
       if (options.managedSpendLeak) {
         throw new Error("assertNoManagedSpend: user-key route leaked 1 LiteLLM spend row(s)");
       }
-      return { litellmSpendRows: 0, managedBalanceDeltaUsd: 0 };
+      return { litellmSpendRows: 0, managedBalanceReadDeferred: true };
     },
     closeWorld: (w) => w.close(),
   };
@@ -359,11 +360,11 @@ test("LOCAL-3: a user-key harness is green with route=user_key, zero-isolation, 
   const { driver, calls } = fakeDriver();
   const [outcome] = await collectLocal3UserKeyCells(fakeCtx(), [cell("T3-AUTHROUTE-1", { harness: "claude" })], driver);
   assert.equal(outcome.status, "green");
-  const ev = outcome.evidence as { journey: string; route: string; gateway_spend: unknown; user_key_isolation: { litellm_spend_rows: number; managed_balance_delta_usd: number } | null };
+  const ev = outcome.evidence as { journey: string; route: string; gateway_spend: unknown; user_key_isolation: { litellm_spend_rows: number; managed_balance_read_deferred: boolean } | null };
   assert.equal(ev.journey, "LOCAL-3");
   assert.equal(ev.route, "user_key");
   assert.equal(ev.gateway_spend, null);
-  assert.deepEqual(ev.user_key_isolation, { litellm_spend_rows: 0, managed_balance_delta_usd: 0 });
+  assert.deepEqual(ev.user_key_isolation, { litellm_spend_rows: 0, managed_balance_read_deferred: true });
   // The user key is stored + selected through the UI before the turn, and no
   // managed spend is correlated (isolation asserted, gateway never correlated).
   assert.ok(calls.includes("storeAndSelectUserKeyRoute:claude"));
@@ -520,7 +521,7 @@ test("buildLocalRouteTurnEvidence hashes ids, maps isolation to snake_case, and 
     workspaceId: "workspace-xyz",
     sessionId: "session-xyz",
     gatewaySpend: null,
-    userKeyIsolation: { litellmSpendRows: 0, managedBalanceDeltaUsd: 0 },
+    userKeyIsolation: { litellmSpendRows: 0, managedBalanceReadDeferred: true },
     routeChange: null,
     cleanup,
   });
@@ -530,7 +531,7 @@ test("buildLocalRouteTurnEvidence hashes ids, maps isolation to snake_case, and 
   assert.equal(evidence.transcript_reopened, true);
   assert.equal(evidence.billing_reconcile_deferred, true);
   assert.equal(evidence.gateway_spend, null);
-  assert.deepEqual(evidence.user_key_isolation, { litellm_spend_rows: 0, managed_balance_delta_usd: 0 });
+  assert.deepEqual(evidence.user_key_isolation, { litellm_spend_rows: 0, managed_balance_read_deferred: true });
 });
 
 test("assertOpencodeProviderSource is a no-op for non-opencode harnesses and enforces route-correctness for opencode", () => {

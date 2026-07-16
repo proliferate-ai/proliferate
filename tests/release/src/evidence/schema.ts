@@ -357,8 +357,14 @@ export interface LocalRouteTurnEvidenceV1 {
   transcript_reopened: true;
   /** Non-null iff route === "gateway": correlated LiteLLM spend for the actor key. */
   gateway_spend: LocalLitellmSpendV1 | null;
-  /** Non-null iff route === "user_key": zero managed spend + zero balance move. */
-  user_key_isolation: { litellm_spend_rows: 0; managed_balance_delta_usd: 0 } | null;
+  /**
+   * Non-null iff route === "user_key". Records only the OBSERVED isolation fact —
+   * the user-key actor's managed gateway token has zero LiteLLM spend rows.
+   * `managed_balance_read_deferred` is always true: the product-ledger balance is
+   * NOT read here (hard billing non-goal, LQF-006) — a zero balance move is
+   * inferable from zero LiteLLM rows but is never encoded as an observed number.
+   */
+  user_key_isolation: { litellm_spend_rows: 0; managed_balance_read_deferred: true } | null;
   /** LOCAL-6 only: the retained user-key session and the switched-to gateway session. */
   route_change: {
     original_route: "user_key";
@@ -607,8 +613,84 @@ export function validateReportV4(report: TestRunReportV4): void {
   // qualification path; the legacy diagnostic path omits the map and never
   // requires kind-scoped evidence for its green cells. See BRIEF §"Evidence".
   const worldBacked = report.candidate_build !== null;
+  // The exact bytes this report qualified: every evidence block's artifact_ids
+  // must name artifacts from THIS candidate identity (audit cross-field bind).
+  const candidateArtifactIds =
+    report.candidate_build === null
+      ? null
+      : new Set(report.candidate_build.artifacts.map((artifact) => artifact.artifact_id));
   for (const result of report.results) {
-    validateCellEvidence(result, worldBacked);
+    validateCellEvidence(result, worldBacked, candidateArtifactIds);
+  }
+}
+
+/**
+ * The kind each evidence-bearing local-functional scenario MUST carry (audit
+ * LQF-005). Dispatch on `evidence.kind` alone let a green T3-SESSION cell carry
+ * a structurally valid route/config object from another scenario/harness; this
+ * binds the cell's `scenario_id` to its one legal evidence kind so mismatched
+ * evidence fails closed. `T3-WT-1`/`T3-REPO-1` (LOCAL-1) run no LLM turn and
+ * carry `evidence: null`, so they are intentionally absent.
+ */
+const SCENARIO_REQUIRED_EVIDENCE_KIND: Readonly<Record<string, CellEvidenceV1["kind"]>> = {
+  "T3-CHAT-1": "local_route_turn",
+  "T3-AUTHROUTE-1": "local_route_turn",
+  "T3-CFG-1": "local_config_matrix",
+  "T3-SESSION-1": "local_session_tabs",
+  "T3-INT-1": "local_mcp_integration",
+};
+
+/**
+ * Cross-field binding of a cell's identity to its evidence (audit LQF-005),
+ * run in addition to the kind-scoped structural validator. Prevents a
+ * structurally valid evidence object from a DIFFERENT scenario/harness/journey
+ * or a stale candidate build from validating against this cell.
+ */
+function validateEvidenceCellBinding(
+  result: FinalCellResultV2,
+  evidence: CellEvidenceV1,
+  where: string,
+  candidateArtifactIds: ReadonlySet<string> | null,
+): void {
+  // (a) scenario_id → required kind.
+  const requiredKind = SCENARIO_REQUIRED_EVIDENCE_KIND[result.scenario_id];
+  if (requiredKind !== undefined && evidence.kind !== requiredKind) {
+    throw new ReportValidationError(
+      `${where}.kind is "${evidence.kind}" but ${result.scenario_id} requires "${requiredKind}".`,
+    );
+  }
+
+  // (b) AUTHROUTE dimensions → journey (route=change ⇒ LOCAL-6, else LOCAL-3).
+  if (result.scenario_id === "T3-AUTHROUTE-1" && evidence.kind === "local_route_turn") {
+    const expectedJourney = result.dimensions.route === "change" ? "LOCAL-6" : "LOCAL-3";
+    if (evidence.journey !== expectedJourney) {
+      throw new ReportValidationError(
+        `${where}.journey is "${evidence.journey}" but the cell's dimensions (route=${result.dimensions.route ?? "<harness>"}) require "${expectedJourney}".`,
+      );
+    }
+  }
+
+  // (c) evidence harness → cell harness dimension (when the cell carries one).
+  const cellHarness = result.dimensions.harness;
+  const evidenceHarness = (evidence as { harness?: unknown }).harness;
+  if (typeof cellHarness === "string" && typeof evidenceHarness === "string" && cellHarness !== evidenceHarness) {
+    throw new ReportValidationError(
+      `${where}.harness is "${evidenceHarness}" but the cell's dimensions name harness "${cellHarness}".`,
+    );
+  }
+
+  // (d) artifact_ids → exact candidate identity: every id names a THIS-build
+  // artifact. A world-backed report always has a candidate identity here; a
+  // diagnostic report (null) never reaches evidence validation with artifacts.
+  const artifactIds = (evidence as { artifact_ids?: unknown }).artifact_ids;
+  if (candidateArtifactIds !== null && Array.isArray(artifactIds)) {
+    for (const id of artifactIds) {
+      if (typeof id === "string" && !candidateArtifactIds.has(id)) {
+        throw new ReportValidationError(
+          `${where}.artifact_ids names "${id}", which is not an artifact of this report's candidate_build.`,
+        );
+      }
+    }
   }
 }
 
@@ -994,7 +1076,11 @@ function requireBoolean(where: string, value: unknown): void {
  * representable except on a GREEN `LOCAL-WORLD-SMOKE-1` result, which must
  * carry complete evidence (spec "Aggregate evidence" / BRIEF §6.3).
  */
-function validateCellEvidence(result: FinalCellResultV2, worldBacked = true): void {
+function validateCellEvidence(
+  result: FinalCellResultV2,
+  worldBacked = true,
+  candidateArtifactIds: ReadonlySet<string> | null = null,
+): void {
   // `evidence` is a required field of FinalCellResultV2, but the report
   // ultimately comes from parsed JSON (`writeReportV4`'s caller may pass an
   // externally-constructed object at runtime), so a missing key is still
@@ -1018,6 +1104,11 @@ function validateCellEvidence(result: FinalCellResultV2, worldBacked = true): vo
     throw new ReportValidationError(`Result "${result.cell_id}" evidence must be an object or null.`);
   }
   const where = `Result "${result.cell_id}" evidence`;
+  // Cross-field binding (audit LQF-005): the evidence must belong to THIS cell —
+  // its kind/journey/harness match the scenario_id + dimensions, and its
+  // artifact_ids name this report's exact candidate build. Run before the
+  // kind-scoped structural dispatch, whose per-kind branches return early.
+  validateEvidenceCellBinding(result, evidence as CellEvidenceV1, where, candidateArtifactIds);
   // Kind-scoped dispatch (audit ruling #3 + extension contract). Each kind owns
   // its own validator so no kind can weaken another's checks. The self-host
   // slice owns the whole `selfhost_*` namespace (its green cells require a
@@ -1197,7 +1288,7 @@ function validateLocalEvidenceCommon(
 
 const LOCAL_ROUTE_TURN_JOURNEYS = ["LOCAL-2", "LOCAL-3", "LOCAL-6"] as const;
 const LOCAL_ROUTES = ["gateway", "user_key"] as const;
-const USER_KEY_ISOLATION_KEYS = ["litellm_spend_rows", "managed_balance_delta_usd"] as const;
+const USER_KEY_ISOLATION_KEYS = ["litellm_spend_rows", "managed_balance_read_deferred"] as const;
 const ROUTE_CHANGE_KEYS = ["original_route", "original_session_id_hash", "new_route", "new_session_id_hash"] as const;
 
 /**
@@ -1243,8 +1334,10 @@ function validateLocalRouteTurnEvidence(
     if (evidence.user_key_isolation.litellm_spend_rows !== 0) {
       throw new ReportValidationError(`${where}.user_key_isolation.litellm_spend_rows must be 0.`);
     }
-    if (evidence.user_key_isolation.managed_balance_delta_usd !== 0) {
-      throw new ReportValidationError(`${where}.user_key_isolation.managed_balance_delta_usd must be 0.`);
+    if (evidence.user_key_isolation.managed_balance_read_deferred !== true) {
+      throw new ReportValidationError(
+        `${where}.user_key_isolation.managed_balance_read_deferred must be true (the product balance is not read here — LQF-006).`,
+      );
     }
   }
   if (evidence.journey === "LOCAL-6") {

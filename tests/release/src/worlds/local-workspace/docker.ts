@@ -131,6 +131,19 @@ export function dockerInternalUrls(naming: DockerNaming): { databaseUrl: string;
   };
 }
 
+/**
+ * Host-facing DSN for the run-scoped Postgres this world booted, reachable from
+ * a probe process on the host at the published `127.0.0.1:<hostPort>` mapping
+ * (see `-p 127.0.0.1:${ports.postgres}:5432` in `startPostgres`). This is the
+ * database the world's own Server writes to, so a LOCAL-7 audit probe must read
+ * back through THIS URL — never an ambient static `RELEASE_E2E_LOCAL_DATABASE_URL`
+ * pointing at some other database. Kept out of persisted evidence (it names a
+ * localhost port, not a secret, but it is run-scoped and carries no proof value).
+ */
+export function dockerHostDatabaseUrl(hostPostgresPort: number): string {
+  return `postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${hostPostgresPort}/${POSTGRES_DB}`;
+}
+
 /** Loads the exact Server image archive; returns the local image ref/tag. */
 export async function loadServerImage(archivePath: string, deps: DockerDeps = {}): Promise<string> {
   const exec = deps.exec ?? defaultExec;

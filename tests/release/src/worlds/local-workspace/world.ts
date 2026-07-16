@@ -27,6 +27,7 @@ import {
   type CleanupResourceKind,
 } from "./cleanup-ledger.js";
 import {
+  dockerHostDatabaseUrl,
   dockerInternalUrls,
   startDockerStack,
   type DockerNaming,
@@ -93,6 +94,18 @@ export interface ReadyLocalWorld {
     runDir: string;
     runtimeHome: string;
     repositoriesDir: string;
+  };
+
+  /**
+   * Host-facing DSN for THIS world's own run-scoped Postgres (published at
+   * `127.0.0.1:<ports.postgres>`). Scenario probes that read back product state
+   * the world's own Server wrote (e.g. LOCAL-7's `cloud_integration_tool_call_event`
+   * audit row) MUST use this, not an ambient static `RELEASE_E2E_LOCAL_DATABASE_URL`
+   * that points at some other database. Never persisted to evidence — it names a
+   * run-scoped localhost port, carrying no proof value.
+   */
+  db: {
+    databaseUrl: string;
   };
 
   /**
@@ -328,6 +341,7 @@ export async function constructLocalWorld(options: ConstructLocalWorldOptions): 
       // token at `<paths.runDir>/setup-token`, which the world copied out under
       // `worldRoot`. (Same value as `runDir` for the single-world smoke.)
       paths: { runDir: worldRoot, runtimeHome, repositoriesDir },
+      db: { databaseUrl: dockerHostDatabaseUrl(options.ports.postgres) },
       registerCleanup: register,
       trackActorSubjects: (actor) => trackActorSubjects(stack, gateway, actor),
       close: () => stack.runAll(),

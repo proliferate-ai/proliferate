@@ -132,6 +132,7 @@ function fakeWorld(): ReadyLocalWorld {
     renderer: undefined as never,
     gateway: undefined as never,
     paths: undefined as never,
+    db: { databaseUrl: "postgresql+asyncpg://proliferate:localdev@127.0.0.1:5599/proliferate" },
     close: async () => cleanupEvidence({}),
   };
 }

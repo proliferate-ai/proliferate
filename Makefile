@@ -961,8 +961,10 @@ qualification-tier2:
 #                         PROFILE for two concurrent invocations.
 # BEHAVIOR=diagnostic|strict
 # AGENTS=all|<comma-list>   Harness kinds to fan out over (default: all).
-# SCENARIOS=all|<comma-list>   Default (all): the six functional local cell
-#                         ids below. Override to run a subset while iterating.
+# SCENARIOS=all|<comma-list>   Default (all): the seven functional local cell
+#                         ids below (two of which — T3-WT-1 + T3-REPO-1 — are
+#                         the canonical LOCAL-1 pair). Override to run a subset
+#                         while iterating.
 # REUSE_CANDIDATES=<dir>   Optional fast path: point at a run directory that
 #                         already has candidate-build.json +
 #                         local-world-ports.json (e.g. from a previous
@@ -986,7 +988,12 @@ qualification-tier2:
 # file, by name, with no extra mapping needed here. In GitHub Actions those
 # same names come from the protected `Qualification` environment's
 # vars/secrets, mapped explicitly in release-e2e.yml.
-QUALIFICATION_LOCAL_FUNCTIONAL_SCENARIOS := T3-WT-1,T3-CHAT-1,T3-AUTHROUTE-1,T3-CFG-1,T3-SESSION-1,T3-INT-1
+# Canonical local inventory: LOCAL-1's workspace-from-repo journey is proven by
+# BOTH T3-WT-1 (worktree/creation) and T3-REPO-1 (repo settings take effect) —
+# both fold into the world-backed `runLocal1WorkspaceLeaf`, so `SCENARIOS=all`
+# must plan and report both. Omitting T3-REPO-1 would silently drop a canonical
+# LOCAL-1 cell from the strict contract.
+QUALIFICATION_LOCAL_FUNCTIONAL_SCENARIOS := T3-WT-1,T3-REPO-1,T3-CHAT-1,T3-AUTHROUTE-1,T3-CFG-1,T3-SESSION-1,T3-INT-1
 qualification-local-functional:
 	@test -n "$(PROFILE)" || { \
 		echo "PROFILE=<unique-name> is required, e.g. make qualification-local-functional PROFILE=$$(whoami)-1 BEHAVIOR=diagnostic"; \

@@ -165,6 +165,12 @@ test("constructLocalWorld runs the ordered startup and returns a ready handle", 
     assert.equal(world.api.baseUrl, `http://127.0.0.1:${PORTS.server}`);
     assert.equal(world.runtime.baseUrl, `http://127.0.0.1:${PORTS.anyharness}`);
     assert.equal(world.renderer.baseUrl, `http://127.0.0.1:${PORTS.renderer}`);
+    // Host-facing DB URL points at THIS world's own published Postgres port, so
+    // a LOCAL-7 audit probe reads the database the world's Server wrote to.
+    assert.equal(
+      world.db.databaseUrl,
+      `postgresql+asyncpg://proliferate:localdev@127.0.0.1:${PORTS.postgres}/proliferate`,
+    );
     // Re-hashed materialized copies live under the run dir, marked executable.
     await access(world.artifacts.anyharness.path);
     // Durable ledger written.

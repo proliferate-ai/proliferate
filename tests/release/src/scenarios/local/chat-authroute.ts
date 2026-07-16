@@ -188,11 +188,13 @@ export interface LocalRouteDriver {
   snapshotGatewaySpend(world: ReadyLocalWorld, actor: AuthenticatedActor): ReturnType<ReadyLocalWorld["gateway"]["snapshotSpend"]>;
 
   /** User-key isolation (LOCAL-3): assert NO LiteLLM spend row for the actor/run/
-   * session and NO managed-balance change across the turn window. */
+   * session across the turn window. The product-ledger balance is NOT read
+   * (hard billing non-goal, LQF-006); the returned block records only the
+   * observed zero-LiteLLM-spend fact plus the balance-read-deferred marker. */
   assertNoManagedSpend(
     world: ReadyLocalWorld,
     params: { actor: AuthenticatedActor; windowStartedAt: string; windowFinishedAt: string },
-  ): Promise<{ litellmSpendRows: 0; managedBalanceDeltaUsd: 0 }>;
+  ): Promise<{ litellmSpendRows: 0; managedBalanceReadDeferred: true }>;
 
   closeWorld(world: ReadyLocalWorld): ReturnType<ReadyLocalWorld["close"]>;
 }
@@ -423,9 +425,12 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
   snapshotGatewaySpend: (world, actor) => world.gateway.snapshotSpend(actor.gatewayKey),
   async assertNoManagedSpend(world, params) {
     // A fresh user-key actor never routed through the managed gateway, so its
-    // token has zero LiteLLM spend rows — the isolation proof (LOCAL-3). Because
-    // managed balance moves only on LiteLLM spend, zero rows means zero managed
-    // balance delta; no product-ledger read is performed (billing carve-out).
+    // token has zero LiteLLM spend rows — the observed isolation proof (LOCAL-3).
+    // The product-ledger balance is deliberately NOT read (hard billing
+    // non-goal, LQF-006): while zero LiteLLM rows implies no managed-credit
+    // consumption, an inferred zero balance delta is never encoded as an
+    // observed measurement. The real product balance/debit assertion is deferred
+    // to the billing slice (LOCAL-BILL-*).
     const snapshot = await world.gateway.snapshotSpend(params.actor.gatewayKey);
     if (snapshot.requestIds.length > 0) {
       throw new Error(
@@ -433,7 +438,7 @@ export const defaultLocalRouteDriver: LocalRouteDriver = {
           "for the actor key; the user-key turn must not consume managed credit.",
       );
     }
-    return { litellmSpendRows: 0, managedBalanceDeltaUsd: 0 };
+    return { litellmSpendRows: 0, managedBalanceReadDeferred: true };
   },
   closeWorld: (world) => world.close(),
 };
@@ -497,7 +502,7 @@ interface GreenRoutePayload {
   workspaceId: string;
   sessionId: string;
   gatewaySpend: LocalLitellmSpendV1 | null;
-  userKeyIsolation: { litellmSpendRows: 0; managedBalanceDeltaUsd: 0 } | null;
+  userKeyIsolation: { litellmSpendRows: 0; managedBalanceReadDeferred: true } | null;
   routeChange: LocalRouteTurnEvidenceV1["route_change"];
 }
 
@@ -891,7 +896,7 @@ export function buildLocalRouteTurnEvidence(input: {
   workspaceId: string;
   sessionId: string;
   gatewaySpend: LocalLitellmSpendV1 | null;
-  userKeyIsolation: { litellmSpendRows: 0; managedBalanceDeltaUsd: 0 } | null;
+  userKeyIsolation: { litellmSpendRows: 0; managedBalanceReadDeferred: true } | null;
   routeChange: LocalRouteTurnEvidenceV1["route_change"];
   cleanup: LocalCleanupV1;
 }): LocalRouteTurnEvidenceV1 {
@@ -911,7 +916,7 @@ export function buildLocalRouteTurnEvidence(input: {
     user_key_isolation: input.userKeyIsolation
       ? {
           litellm_spend_rows: input.userKeyIsolation.litellmSpendRows,
-          managed_balance_delta_usd: input.userKeyIsolation.managedBalanceDeltaUsd,
+          managed_balance_read_deferred: input.userKeyIsolation.managedBalanceReadDeferred,
         }
       : null,
     route_change: input.routeChange,

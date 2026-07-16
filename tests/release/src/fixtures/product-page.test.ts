@@ -16,6 +16,7 @@ function fakeWorld(browser: Browser): ReadyLocalWorld {
     renderer: { baseUrl: "http://127.0.0.1:9003", browser },
     gateway: undefined as never,
     paths: undefined as never,
+    db: { databaseUrl: "postgresql+asyncpg://proliferate:localdev@127.0.0.1:5599/proliferate" },
     close: async () => {
       throw new Error("not used in this test");
     },
