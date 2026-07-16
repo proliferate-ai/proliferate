@@ -60,6 +60,7 @@ cowork::create_cowork_thread creation new cowork thread + fresh session
 workspaces::create_workspace creation new workspace
 workspaces_worktrees::create_worktree creation new worktree workspace
 terminals::create_terminal creation workspace terminal, not session execution
+repo_roots::materialize_repo_root creation acquires or registers a repo root; no session controller targets repo-root identity
 
 # ── read-like (mutating verb, no session-execution effect) ──
 replay::export_replay_recording read-like exports a recording artifact
@@ -99,6 +100,7 @@ worktrees::update_worktree_retention_policy workspace-scoped worktree hygiene
 mobility::update_workspace_mobility_runtime_state workspace-scoped mobility state toggle, no session removal
 mobility::install_workspace_mobility_archive workspace-scoped installs NEW sessions from an archive
 repo_roots::prepare_repo_root_mobility_destination workspace-scoped mobility destination preparation
+repo_roots::materialize_workspace_at_ref workspace-scoped exact-ref workspace placement; no session execution mutation or session removal
 cowork::enable_cowork workspace-scoped cowork enablement
 agents::install_agent workspace-scoped agent installer
 agents::reconcile_agents workspace-scoped agent installer
