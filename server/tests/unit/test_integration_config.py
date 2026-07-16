@@ -44,6 +44,25 @@ def test_seed_auth_kinds_are_normalized() -> None:
     assert by_ns["slack"].oauth_client_mode == "static"
 
 
+def test_slack_seed_has_exact_required_oauth_scopes() -> None:
+    slack = next(seed for seed in SEED_DEFINITIONS if seed.namespace == "slack")
+    expected_scopes = (
+        "search:read.public",
+        "search:read.private",
+        "search:read.im",
+        "search:read.mpim",
+        "search:read.files",
+        "search:read.users",
+    )
+
+    assert slack.config.oauth_scopes == expected_scopes
+    assert slack.config.oauth_scopes_required is True
+
+    reparsed = parse_definition_config(serialize_definition_config(slack.config))
+    assert reparsed.oauth_scopes == expected_scopes
+    assert reparsed.oauth_scopes_required is True
+
+
 def test_parse_rejects_malformed_config() -> None:
     with pytest.raises(IntegrationConfigError):
         parse_definition_config("not json at all {")

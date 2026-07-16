@@ -124,8 +124,30 @@ def _status_includes_authorization_url(status: str) -> bool:
     return status == "active"
 
 
-def _requested_scopes_json(challenged_scope: str | None) -> str:
-    return json.dumps(challenged_scope.split() if challenged_scope else [])
+def _resolve_requested_oauth_scope(
+    *,
+    challenged_scope: str | None,
+    configured_scopes: tuple[str, ...],
+    scopes_required: bool,
+) -> str | None:
+    challenge = (challenged_scope or "").strip()
+    if challenge:
+        return challenge
+
+    configured = " ".join(scope.strip() for scope in configured_scopes if scope.strip())
+    if configured:
+        return configured
+
+    if scopes_required:
+        raise IntegrationOAuthProviderError(
+            "missing_oauth_scope",
+            "This integration requires OAuth scopes, but none were provided.",
+        )
+    return None
+
+
+def _requested_scopes_json(requested_scope: str | None) -> str:
+    return json.dumps(requested_scope.split() if requested_scope else [])
 
 
 def _should_drop_cached_oauth_client_on_token_error(error_code: str) -> bool:
@@ -267,6 +289,11 @@ async def start_oauth_flow(
 
     try:
         protected = await discover_protected_resource_metadata(server_url)
+        requested_scope = _resolve_requested_oauth_scope(
+            challenged_scope=protected.challenged_scope,
+            configured_scopes=config.oauth_scopes,
+            scopes_required=config.oauth_scopes_required,
+        )
         issuer = protected.authorization_servers[0]
         auth_metadata = await discover_authorization_server_metadata(issuer)
         resource = normalize_resource_url(protected.resource or server_url)
@@ -287,7 +314,7 @@ async def start_oauth_flow(
             state=state,
             verifier=verifier,
             resource=resource,
-            scope=protected.challenged_scope,
+            scope=requested_scope,
         )
     except IntegrationOAuthProviderError as exc:
         raise CloudApiError(
@@ -307,7 +334,7 @@ async def start_oauth_flow(
         resource=resource,
         client_id=client.client_id,
         token_endpoint=auth_metadata.token_endpoint,
-        requested_scopes=_requested_scopes_json(protected.challenged_scope),
+        requested_scopes=_requested_scopes_json(requested_scope),
         redirect_uri=redirect_uri,
         authorization_url=authorization_url,
         callback_surface=return_target.callback_surface,
