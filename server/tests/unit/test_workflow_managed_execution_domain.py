@@ -26,6 +26,16 @@ def test_run_put_failure_classification_distinguishes_truthful_outcomes() -> Non
     assert (
         delivery_error_action(
             checkpoint="run_put_started",
+            code="workflow_run_put_not_found",
+            retryable=False,
+            authentication=False,
+            previous_code=None,
+        )
+        == "target_lost"
+    )
+    assert (
+        delivery_error_action(
+            checkpoint="run_put_started",
             code="workflow_run_put_rejected",
             retryable=False,
             authentication=False,

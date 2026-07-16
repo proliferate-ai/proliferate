@@ -155,6 +155,7 @@ def delivery_error_action(
     at_run_boundary = checkpoint == DeliveryCheckpoint.RUN_PUT_STARTED
     if at_run_boundary and code in {
         "workflow_execution_store_changed",
+        "workflow_run_put_not_found",
         "workflow_target_destroyed",
     }:
         return "target_lost"
