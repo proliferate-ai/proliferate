@@ -294,8 +294,8 @@ fn wrong_repo_identity_is_remote_mismatch_and_cleans_up() {
 fn preexisting_empty_destination_survives_identity_mismatch() {
     // PR3-PATH-OWNERSHIP-02: the user selected a pre-existing EMPTY directory.
     // A clone into it succeeds but identity verification fails. Cleanup must
-    // delete only the clone-produced CONTENTS and leave the user's directory
-    // itself in place — never remove a path this operation did not create.
+    // leave the directory completely untouched: the earlier empty observation
+    // cannot prove ownership of entries written while clone was running.
     let _lock = GLOBAL_GIT_CONFIG_LOCK.lock().unwrap();
     let bare = make_bare_origin("preexisting-empty-mismatch");
     let dest = Guard::new("preexisting-empty-mismatch-dest");
@@ -346,13 +346,11 @@ fn preexisting_empty_destination_survives_identity_mismatch() {
         dest_target.exists(),
         "pre-existing user directory must not be deleted on cleanup"
     );
-    // The clone-produced contents were removed, so it is empty again.
-    assert_eq!(
-        std::fs::read_dir(&dest_target)
-            .expect("read dest")
-            .count(),
-        0,
-        "clone-produced contents should be cleaned up"
+    // The partial checkout remains for explicit user recovery. In particular,
+    // cleanup never enumerates and deletes a user-owned directory's contents.
+    assert!(
+        dest_target.join(".git").exists(),
+        "pre-existing destination contents must be preserved on failure"
     );
 }
 

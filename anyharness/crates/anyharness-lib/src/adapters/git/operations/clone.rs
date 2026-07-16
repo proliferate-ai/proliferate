@@ -103,37 +103,12 @@ pub fn remove_created_dir_best_effort(path: &Path) {
 ///
 /// - `created_dir == true`: the operation created the destination directory, so
 ///   removing the whole directory tree is owned and safe.
-/// - `created_dir == false`: the user selected a pre-existing directory that the
-///   domain proved EMPTY before cloning (`ensure_empty_clone_destination`
-///   returned false). Every entry now present was therefore produced by this
-///   clone, so we remove the directory's *contents* but leave the user's
-///   directory itself in place — never `remove_dir_all` a path we did not
-///   create. If enumerating the contents fails, we fail closed and leave the
-///   directory untouched rather than risk deleting user data.
+/// - `created_dir == false`: the user selected a pre-existing directory. Leave
+///   it completely untouched. Although the domain observed it empty before the
+///   clone, that observation does not prove ownership of entries written while
+///   the clone was running; a concurrent user write must never be deleted.
 pub fn cleanup_failed_clone_best_effort(path: &Path, created_dir: bool) {
     if created_dir {
         let _ = std::fs::remove_dir_all(path);
-        return;
-    }
-    let Ok(entries) = std::fs::read_dir(path) else {
-        // Fail closed: cannot enumerate what to remove, so touch nothing.
-        return;
-    };
-    for entry in entries.flatten() {
-        let child = entry.path();
-        match entry.file_type() {
-            Ok(file_type) if file_type.is_dir() => {
-                let _ = std::fs::remove_dir_all(&child);
-            }
-            Ok(_) => {
-                let _ = std::fs::remove_file(&child);
-            }
-            // Unknown type (rare): try file removal, then dir removal.
-            Err(_) => {
-                if std::fs::remove_file(&child).is_err() {
-                    let _ = std::fs::remove_dir_all(&child);
-                }
-            }
-        }
     }
 }

@@ -86,8 +86,8 @@ pub(crate) fn acquire_blocking(
         Ok(()) => {}
         Err(CloneError::AuthRequired(detail)) => {
             // Path ownership (PR3-PATH-OWNERSHIP-02): remove the whole dir only if
-            // we created it; for a user-selected pre-existing (proved-empty) dir,
-            // remove just the clone-produced contents and keep the dir.
+            // we created it. A pre-existing destination is left untouched because
+            // an earlier empty check cannot rule out a concurrent user write.
             crate::adapters::git::operations::clone::cleanup_failed_clone_best_effort(
                 &canonical,
                 created_dir,
@@ -106,9 +106,8 @@ pub(crate) fn acquire_blocking(
     // Post-clone identity verification. Reject a mismatch even though the clone
     // succeeded. Path ownership (PR3-PATH-OWNERSHIP-02): if THIS operation
     // created the destination directory, remove the whole tree; if the user
-    // selected a pre-existing directory (which we proved empty before cloning),
-    // delete only the entries this clone produced and leave the user's directory
-    // itself in place — never `remove_dir_all` a path we did not create.
+    // selected a pre-existing directory, leave it completely untouched. The
+    // operation cannot prove ownership of every entry present after the clone.
     if let Err(error) = verify_remote_identity(&canonical_string, expected) {
         crate::adapters::git::operations::clone::cleanup_failed_clone_best_effort(
             &canonical,
