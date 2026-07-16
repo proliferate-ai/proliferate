@@ -71,7 +71,47 @@ describe("workspaceAvailabilityIntentForCommand", () => {
     ).toBeNull();
   });
 
-  it("returns null for the non-actionable blocker", () => {
-    expect(workspaceAvailabilityIntentForCommand("unsupported-git-state", FULL)).toBeNull();
+  it("maps reconcile-git-state (local + cloud) to a reconcile intent resuming Link", () => {
+    expect(workspaceAvailabilityIntentForCommand("reconcile-git-state", FULL)).toEqual({
+      kind: "reconcile",
+      localWorkspaceId: "ws-1",
+      cloudWorkspaceId: "cloud-1",
+      materializationId: "mat-1",
+      // PR6-CONTINUATION-02: a local + Cloud blocked source-mutation resumes Link.
+      continuation: { kind: "link_copies", cloudWorkspaceId: "cloud-1" },
+    });
+  });
+
+  it("carries an add_cloud_copy continuation for a blocked local-only Add Cloud copy", () => {
+    // Local-only source (no Cloud copy): the blocked action to resume is Add Cloud
+    // copy with its exact inputs — never a dead end (PR6-CONTINUATION-02).
+    expect(
+      workspaceAvailabilityIntentForCommand("reconcile-git-state", {
+        ...FULL,
+        cloudWorkspaceId: null,
+        linkedMaterializationId: null,
+      }),
+    ).toEqual({
+      kind: "reconcile",
+      localWorkspaceId: "ws-1",
+      cloudWorkspaceId: null,
+      materializationId: null,
+      continuation: {
+        kind: "add_cloud_copy",
+        localWorkspaceId: "ws-1",
+        gitOwner: "acme",
+        gitRepoName: "rocket",
+      },
+    });
+  });
+
+  it("returns null for reconcile-git-state when neither side is present", () => {
+    expect(
+      workspaceAvailabilityIntentForCommand("reconcile-git-state", {
+        ...FULL,
+        localWorkspaceId: null,
+        cloudWorkspaceId: null,
+      }),
+    ).toBeNull();
   });
 });

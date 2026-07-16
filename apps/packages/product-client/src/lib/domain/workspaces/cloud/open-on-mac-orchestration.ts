@@ -82,19 +82,32 @@ export interface OpenOnMacResult {
   worktreePath: string;
 }
 
+/** The exact source ref + operation id a materialize→report sequence needs. For
+ * a fresh Open/relink it comes from `createIntent()`; for a single-generation
+ * REPLAY it comes verbatim from the interrupted ledger row (`"{rowId}:{gen}"`),
+ * so PR 3's per-step ids are identical and its ledger replays idempotently. */
+export interface MaterializeSequenceContext {
+  operationId: string;
+  materializationId: string;
+  generation: number;
+  repository: MaterializationIntentResponse["source"]["repository"];
+  branchName: string;
+  headSha: string;
+}
+
 /**
- * Run the intent → (clone repo root if needed) → exact-ref materialize →
- * report sequence. Returns the local AnyHarness workspace id so the caller can
- * select/open it. Throws on any step failure; the pending intent is left for a
- * safe retry (same operation id → no duplicate worktree).
+ * Run the (clone repo root if needed) → exact-ref materialize → report steps for
+ * a resolved operation context. Shared by the fresh Open/relink flow and the
+ * reconciliation REPLAY so there is ONE orchestration: replay simply supplies an
+ * existing row's `{rowId}:{generation}` as the context instead of minting a new
+ * intent, guaranteeing identical per-step ids (`:repo-root`/`:workspace`).
  */
-export async function runOpenOnMacFlow(
+export async function runMaterializeAndReportSteps(
+  context: MaterializeSequenceContext,
   source: OpenOnMacRepoRootSource,
-  callbacks: OpenOnMacCallbacks,
+  callbacks: Pick<OpenOnMacCallbacks, "materializeRepoRoot" | "materializeWorkspaceAtRef" | "report">,
 ): Promise<OpenOnMacResult> {
-  const intent = await callbacks.createIntent();
-  const operationId = intent.operationId;
-  const { repository, branchName, headSha } = intent.source;
+  const { operationId, repository, branchName, headSha } = context;
 
   let repoRootId = source.existingRepoRootId;
   if (!repoRootId) {
@@ -102,9 +115,6 @@ export async function runOpenOnMacFlow(
       throw new Error("A destination path is required to clone the repository.");
     }
     const { repoRoot } = await callbacks.materializeRepoRoot({
-      // Derive the repo-root step id from the Cloud operation id so a crash
-      // mid-clone reuses the repo-root materialization rather than cloning twice,
-      // while staying distinct from the workspace step's id (PR5-OPID-05).
       operationId: repoRootOperationId(operationId),
       destinationPath: source.cloneDestinationPath,
       mode: "clone_or_adopt",
@@ -115,7 +125,6 @@ export async function runOpenOnMacFlow(
         cloneUrl: githubHttpsCloneUrl(repository.owner, repository.name),
       },
     });
-    // Guard against adopting the wrong repository.
     const matches = repoRoot.remoteProvider && repoRoot.remoteOwner && repoRoot.remoteRepoName
       && canonicalRepoKey(repoRoot.remoteProvider, repoRoot.remoteOwner, repoRoot.remoteRepoName)
         === canonicalRepoKey(repository.provider, repository.owner, repository.name);
@@ -127,26 +136,15 @@ export async function runOpenOnMacFlow(
     repoRootId = repoRoot.id;
   }
 
-  let materialized: { workspaceId: string; observedHeadSha: string; worktreePath: string };
-  try {
-    materialized = await callbacks.materializeWorkspaceAtRef(repoRootId, {
-      operationId: workspaceOperationId(operationId),
-      branchName,
-      headSha,
-      // Recreate forces a fresh managed worktree at a deterministic per-generation
-      // path; relink/open omit it so PR 3 may reuse/adopt a clean checkout at the
-      // ref (PR5-MODE-03).
-      destinationId: source.forceFreshWorktree ? recreateDestinationId(operationId) : undefined,
-    });
-  } catch (error) {
-    // Leave the intent pending for a safe retry (same operation id reuses the
-    // ledger result). Do not report a failure that would look like a durable
-    // materialization failure to the server.
-    throw error;
-  }
+  const materialized = await callbacks.materializeWorkspaceAtRef(repoRootId, {
+    operationId: workspaceOperationId(operationId),
+    branchName,
+    headSha,
+    destinationId: source.forceFreshWorktree ? recreateDestinationId(operationId) : undefined,
+  });
 
-  await callbacks.report(intent.materialization.id, {
-    generation: intent.materialization.generation,
+  await callbacks.report(context.materializationId, {
+    generation: context.generation,
     state: "hydrated",
     anyharnessWorkspaceId: materialized.workspaceId,
     worktreePath: materialized.worktreePath,
@@ -155,8 +153,33 @@ export async function runOpenOnMacFlow(
   });
 
   return {
-    materializationId: intent.materialization.id,
+    materializationId: context.materializationId,
     anyharnessWorkspaceId: materialized.workspaceId,
     worktreePath: materialized.worktreePath,
   };
+}
+
+/**
+ * Run the intent → (clone repo root if needed) → exact-ref materialize →
+ * report sequence. Returns the local AnyHarness workspace id so the caller can
+ * select/open it. Throws on any step failure; the pending intent is left for a
+ * safe retry (same operation id → no duplicate worktree).
+ */
+export async function runOpenOnMacFlow(
+  source: OpenOnMacRepoRootSource,
+  callbacks: OpenOnMacCallbacks,
+): Promise<OpenOnMacResult> {
+  const intent = await callbacks.createIntent();
+  return runMaterializeAndReportSteps(
+    {
+      operationId: intent.operationId,
+      materializationId: intent.materialization.id,
+      generation: intent.materialization.generation,
+      repository: intent.source.repository,
+      branchName: intent.source.branchName,
+      headSha: intent.source.headSha,
+    },
+    source,
+    callbacks,
+  );
 }

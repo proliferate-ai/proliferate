@@ -59,8 +59,44 @@ export function workspaceAvailabilityIntentForCommand(
           materializationId: target.linkedMaterializationId,
         }
         : null;
-    case "unsupported-git-state":
-      // A truthful, non-actionable blocker (expansion is PR 6).
-      return null;
+    case "reconcile-git-state": {
+      // PR 6: open the one reconciliation dialog. reconcile-git-state is only
+      // offered when a SOURCE-MUTATING action was blocked by Git state (Add Cloud
+      // copy from a local source, or Link a local source), so we resume THAT
+      // action after the user resolves the block — never a dead end
+      // (PR6-CONTINUATION-02). Infer the continuation from the target shape.
+      if (!target.localWorkspaceId && !target.cloudWorkspaceId) {
+        return null;
+      }
+      const continuation = resolveReconcileContinuation(target);
+      return {
+        kind: "reconcile",
+        localWorkspaceId: target.localWorkspaceId,
+        cloudWorkspaceId: target.cloudWorkspaceId,
+        materializationId: target.linkedMaterializationId,
+        continuation,
+      };
+    }
   }
+}
+
+/** Infer the originating (blocked) action to resume after reconciliation. The
+ * reconcile-git-state command replaces a blocked source-mutating action: a
+ * local-only source wanted Add Cloud copy; a local + unlinked Cloud pair wanted
+ * Link. A cloud-only / linked case has no source mutation to resume. */
+function resolveReconcileContinuation(
+  target: WorkspaceAvailabilityActionTarget,
+): NonNullable<Extract<WorkspaceAvailabilityIntent, { kind: "reconcile" }>["continuation"]> {
+  if (target.localWorkspaceId && target.cloudWorkspaceId) {
+    return { kind: "link_copies", cloudWorkspaceId: target.cloudWorkspaceId };
+  }
+  if (target.localWorkspaceId && target.repoOwner && target.repoName) {
+    return {
+      kind: "add_cloud_copy",
+      localWorkspaceId: target.localWorkspaceId,
+      gitOwner: target.repoOwner,
+      gitRepoName: target.repoName,
+    };
+  }
+  return { kind: "standalone" };
 }

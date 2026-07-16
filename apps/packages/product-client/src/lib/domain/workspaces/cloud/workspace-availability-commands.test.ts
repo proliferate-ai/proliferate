@@ -103,7 +103,9 @@ describe("resolveWorkspaceAvailabilityCommands", () => {
     ).toEqual(["relink-existing", "recreate-on-this-mac", "unlink-this-mac"]);
   });
 
-  it("shows a selectable blocker for an unsupported Git state", () => {
+  it("offers an actionable reconcile-git-state entry for an unsupported Git state", () => {
+    // PR 6: no longer a dead-end blocker — it opens the reconciliation dialog,
+    // carrying the truthful note as context.
     const commands = resolveWorkspaceAvailabilityCommands({
       hasLocalWorkspace: true,
       cloudWorkspace: null,
@@ -111,7 +113,7 @@ describe("resolveWorkspaceAvailabilityCommands", () => {
       unsupportedGitBlocker: "The workspace has uncommitted changes.",
     });
     expect(commands).toHaveLength(1);
-    expect(commands[0]!.kind).toBe("unsupported-git-state");
+    expect(commands[0]!.kind).toBe("reconcile-git-state");
     expect(commands[0]!.blocker).toBe("The workspace has uncommitted changes.");
   });
 
@@ -152,7 +154,7 @@ describe("deriveWorkspaceAvailabilityInput", () => {
       localGitStatus: { ...CLEAN_PUBLISHED, dirty: true },
     });
     expect(resolveWorkspaceAvailabilityCommands(input).map((c) => c.kind)).toEqual([
-      "unsupported-git-state",
+      "reconcile-git-state",
     ]);
   });
 
