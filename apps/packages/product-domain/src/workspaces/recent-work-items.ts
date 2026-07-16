@@ -86,6 +86,12 @@ export function buildRecentWorkItems(
   return typeof options.limit === "number" ? sorted.slice(0, options.limit) : sorted;
 }
 
+// repo is null for a repo-less workspace (no repository backing). Fall back to a
+// stable label rather than dereferencing null. See PR4-BASE-02.
+function workspaceRepoName(workspace: CloudWorkspaceSummary): string {
+  return workspace.repo?.name ?? "workspace";
+}
+
 function recentWorkItemForWorkspace(
   workspace: CloudWorkspaceSummary,
   options: { nowMs: number },

@@ -39,7 +39,9 @@ server/proliferate/config.py 619 managed Cloud and GitHub App completeness predi
 server/proliferate/db/models/cloud/agent_gateway.py 504 agent_auth_harness_settings model added for catalog-driven per-harness settings
 server/proliferate/server/cloud/agent_gateway/api.py 405 harness-settings GET/PUT routes added for catalog-driven per-harness settings
 server/proliferate/server/cloud/secrets/api.py 416 existing cloud secrets API pending route split
+server/proliferate/server/cloud/workspaces/service.py 844 workspace materialization ledger service (intent/report/unlink write-path + primary selection + recorded-sandbox reconciliation + repo-less read guards); split on next growth per guides/domains.md
 server/tests/integration/test_agent_gateway_api.py 654 P1 auth rebuild rewrote keys/selections/state coverage for titled-key + selection model
+server/tests/integration/test_cloud_workspace_materialization_service.py 1002 durable materialization ledger service suite (intent/report/unlink transitions, redaction, primary selection, recorded-sandbox reconciliation, repo-less workspace, install-id redaction, generation replay/crash-retry/terminal-reintent)
 server/tests/integration/test_auth_flow.py 2220 existing server oversized integration test plus session-token-revocation coverage + /users/me password rejection test + single-org current_product_user bypass coverage
 server/tests/integration/test_billing_accounting.py 872 existing server oversized integration test
 server/tests/integration/test_billing_api.py 1918 existing server oversized integration test

@@ -1223,6 +1223,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/workspaces/{workspace_id}/materializations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Workspace Materialization Intent Endpoint */
+        post: operations["create_workspace_materialization_intent_endpoint_v1_cloud_workspaces__workspace_id__materializations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/{workspace_id}/materializations/{materialization_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Report Workspace Materialization Endpoint */
+        put: operations["report_workspace_materialization_endpoint_v1_cloud_workspaces__workspace_id__materializations__materialization_id__put"];
+        post?: never;
+        /** Unlink Workspace Materialization Endpoint */
+        delete: operations["unlink_workspace_materialization_endpoint_v1_cloud_workspaces__workspace_id__materializations__materialization_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/workspaces/{workspace_id}/runtime-status": {
         parameters: {
             query?: never;
@@ -4298,6 +4333,16 @@ export interface components {
             /** Source */
             source?: ("desktop" | "web" | "mobile") | null;
         };
+        /** CreateMaterializationIntentRequest */
+        CreateMaterializationIntentRequest: {
+            /**
+             * Targetkind
+             * @constant
+             */
+            targetKind: "local_desktop";
+            /** Desktopinstallid */
+            desktopInstallId: string;
+        };
         /** CurrentTeamCheckoutResponse */
         CurrentTeamCheckoutResponse: {
             intent?: components["schemas"]["TeamCheckoutIntentResponse"] | null;
@@ -4724,6 +4769,21 @@ export interface components {
              * @constant
              */
             kind: "managedCloud";
+        };
+        /** MaterializationIntentResponse */
+        MaterializationIntentResponse: {
+            materialization: components["schemas"]["WorkspaceMaterializationSummary"];
+            /** Operationid */
+            operationId: string;
+            source: components["schemas"]["MaterializationIntentSource"];
+        };
+        /** MaterializationIntentSource */
+        MaterializationIntentSource: {
+            repository: components["schemas"]["RepoRef"];
+            /** Branchname */
+            branchName: string;
+            /** Headsha */
+            headSha: string;
         };
         /** MetaResponse */
         MetaResponse: {
@@ -5498,6 +5558,28 @@ export interface components {
             branch: string;
             /** Basebranch */
             baseBranch: string;
+        };
+        /** ReportMaterializationRequest */
+        ReportMaterializationRequest: {
+            /** Generation */
+            generation: number;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "hydrated" | "missing" | "inconsistent" | "failed";
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId?: string | null;
+            /** Worktreepath */
+            worktreePath?: string | null;
+            /** Observedbranch */
+            observedBranch?: string | null;
+            /** Observedheadsha */
+            observedHeadSha?: string | null;
+            /** Failurecode */
+            failureCode?: string | null;
+            /** Failuredetail */
+            failureDetail?: string | null;
         };
         /** RepositoryWorktreePlacement */
         RepositoryWorktreePlacement: {
@@ -6687,8 +6769,9 @@ export interface components {
             executionTarget?: components["schemas"]["WorkspaceExecutionTargetSummary"];
             /** Selectedmaterializationid */
             selectedMaterializationId?: string | null;
-            /** Primarymaterialization */
-            primaryMaterialization?: null;
+            primaryMaterialization?: components["schemas"]["WorkspaceMaterializationSummary"] | null;
+            /** Materializations */
+            materializations?: components["schemas"]["WorkspaceMaterializationSummary"][];
             cloudAccess?: components["schemas"]["WorkspaceCloudAccessSummary"];
             /** Statusdetail */
             statusDetail?: string | null;
@@ -6767,6 +6850,39 @@ export interface components {
             label?: string | null;
             /** Online */
             online?: boolean | null;
+        };
+        /** WorkspaceMaterializationSummary */
+        WorkspaceMaterializationSummary: {
+            /** Id */
+            id: string;
+            /**
+             * Targetkind
+             * @enum {string}
+             */
+            targetKind: "managed_cloud" | "local_desktop";
+            /** Desktopinstallid */
+            desktopInstallId: string | null;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId: string | null;
+            /** Worktreepath */
+            worktreePath: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "pending" | "hydrating" | "hydrated" | "missing" | "inconsistent" | "failed";
+            /** Generation */
+            generation: number;
+            /** Expectedheadsha */
+            expectedHeadSha: string | null;
+            /** Observedheadsha */
+            observedHeadSha: string | null;
+            /** Observedbranch */
+            observedBranch: string | null;
+            /** Failurecode */
+            failureCode: string | null;
+            /** Lastreportedat */
+            lastReportedAt: string | null;
         };
         /** WorkspaceRuntimeAuthState */
         WorkspaceRuntimeAuthState: {
@@ -6847,8 +6963,9 @@ export interface components {
             executionTarget?: components["schemas"]["WorkspaceExecutionTargetSummary"];
             /** Selectedmaterializationid */
             selectedMaterializationId?: string | null;
-            /** Primarymaterialization */
-            primaryMaterialization?: null;
+            primaryMaterialization?: components["schemas"]["WorkspaceMaterializationSummary"] | null;
+            /** Materializations */
+            materializations?: components["schemas"]["WorkspaceMaterializationSummary"][];
             cloudAccess?: components["schemas"]["WorkspaceCloudAccessSummary"];
             /** Statusdetail */
             statusDetail?: string | null;
@@ -9301,6 +9418,7 @@ export interface operations {
         parameters: {
             query?: {
                 lifecycle?: "active" | "archived" | "all";
+                desktopInstallId?: string | null;
             };
             header?: never;
             path?: never;
@@ -9363,7 +9481,9 @@ export interface operations {
     };
     get_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__get: {
         parameters: {
-            query?: never;
+            query?: {
+                desktopInstallId?: string | null;
+            };
             header?: never;
             path: {
                 workspace_id: string;
@@ -9398,6 +9518,107 @@ export interface operations {
             header?: never;
             path: {
                 workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_workspace_materialization_intent_endpoint_v1_cloud_workspaces__workspace_id__materializations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMaterializationIntentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterializationIntentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_workspace_materialization_endpoint_v1_cloud_workspaces__workspace_id__materializations__materialization_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                materialization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportMaterializationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceMaterializationSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unlink_workspace_materialization_endpoint_v1_cloud_workspaces__workspace_id__materializations__materialization_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                materialization_id: string;
             };
             cookie?: never;
         };

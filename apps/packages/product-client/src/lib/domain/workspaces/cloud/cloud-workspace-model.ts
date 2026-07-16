@@ -33,19 +33,20 @@ export type CloudWorkspaceExecutionTargetKind =
   | "managed_cloud"
   | "ssh"
   | "self_hosted";
+// Mirrors the wire contract emitted by the server's
+// ``WorkspaceMaterializationSummary`` (see the cloud SDK's generated OpenAPI
+// types). Keep these fields in lockstep with that schema — the ledger row is
+// the source of truth.
 export type CloudWorkspaceMaterializationState =
-  | "hydrated"
-  | "dehydrated"
+  | "pending"
   | "hydrating"
-  | "unknown"
-  | "inconsistent";
-export type CloudWorkspaceCleanupStatus =
-  | "idle"
-  | "pruning"
-  | "blocked"
-  | "failed"
-  | "skipped"
-  | "completed";
+  | "hydrated"
+  | "missing"
+  | "inconsistent"
+  | "failed";
+export type CloudWorkspaceMaterializationTargetKind =
+  | "managed_cloud"
+  | "local_desktop";
 export type CloudWorkspaceCloudAccessState =
   | "disabled"
   | "enabled"
@@ -115,16 +116,17 @@ export interface CloudWorkspaceExecutionTargetSummary {
 
 export interface CloudWorkspaceMaterializationSummary {
   id: string;
-  targetId?: string | null;
-  anyharnessWorkspaceId?: string | null;
-  worktreePath?: string | null;
+  targetKind: CloudWorkspaceMaterializationTargetKind;
+  desktopInstallId: string | null;
+  anyharnessWorkspaceId: string | null;
+  worktreePath: string | null;
   state: CloudWorkspaceMaterializationState;
-  desiredState: "hydrated" | "dehydrated";
-  cleanupStatus: CloudWorkspaceCleanupStatus;
-  cleanupLastError?: string | null;
-  blockers?: string[];
   generation: number;
-  storageBytes?: number | null;
+  expectedHeadSha: string | null;
+  observedHeadSha: string | null;
+  observedBranch: string | null;
+  failureCode: string | null;
+  lastReportedAt: string | null;
 }
 
 export interface CloudWorkspaceCloudAccessSummary {

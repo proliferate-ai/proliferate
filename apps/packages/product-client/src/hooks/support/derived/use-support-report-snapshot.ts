@@ -140,7 +140,6 @@ function cloudWorkspaceOption(
   const materialization = workspace.primaryMaterialization;
   const targetId = workspace.targetId
     ?? workspace.executionTarget?.targetId
-    ?? materialization?.targetId
     ?? workspace.directTargetContext?.targetId
     ?? null;
   return {
