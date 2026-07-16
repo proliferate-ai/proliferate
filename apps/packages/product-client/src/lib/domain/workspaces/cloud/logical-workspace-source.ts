@@ -10,7 +10,6 @@ import {
   buildRepoRootLogicalWorkspaceId,
   normalizeLogicalWorkspaceBranchKey,
 } from "#product/lib/domain/workspaces/cloud/logical-workspace-id";
-import { cloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 
 export function workspaceBranchKey(workspace: Workspace): string {
   const originalBranch = workspace.originalBranch?.trim();

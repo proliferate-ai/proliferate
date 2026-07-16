@@ -70,8 +70,16 @@ def _patch_loaders(
     async def _get_repo_environment(*_a: Any, **_k: Any) -> Any:
         return repo_environment
 
+    sandbox = SimpleNamespace(id=uuid.uuid4(), status="ready", runtime_generation=3)
+
     async def _load_sandbox(*_a: Any, **_k: Any) -> Any:
-        return SimpleNamespace(status="ready", runtime_generation=3)
+        return sandbox
+
+    async def _load_sandbox_by_id(*_a: Any, **_k: Any) -> Any:
+        return sandbox
+
+    async def _list_materializations(*_a: Any, **_k: Any) -> list[Any]:
+        return []
 
     monkeypatch.setattr(
         workspaces_service.repositories_store,
@@ -82,6 +90,16 @@ def _patch_loaders(
         workspaces_service.cloud_sandbox_store,
         "load_personal_cloud_sandbox",
         _load_sandbox,
+    )
+    monkeypatch.setattr(
+        workspaces_service.cloud_sandbox_store,
+        "load_cloud_sandbox_by_id",
+        _load_sandbox_by_id,
+    )
+    monkeypatch.setattr(
+        workspaces_service.materialization_store,
+        "list_active_materializations_for_workspace",
+        _list_materializations,
     )
 
 
@@ -127,7 +145,10 @@ async def test_scratch_payload_has_no_fabricated_repo(
         raise AssertionError("scratch payload must not load a repo environment")
 
     async def _load_sandbox(*_a: Any, **_k: Any) -> Any:
-        return SimpleNamespace(status="ready", runtime_generation=3)
+        return SimpleNamespace(id=uuid.uuid4(), status="ready", runtime_generation=3)
+
+    async def _list_materializations(*_a: Any, **_k: Any) -> list[Any]:
+        return []
 
     monkeypatch.setattr(
         workspaces_service.repositories_store,
@@ -138,6 +159,11 @@ async def test_scratch_payload_has_no_fabricated_repo(
         workspaces_service.cloud_sandbox_store,
         "load_personal_cloud_sandbox",
         _load_sandbox,
+    )
+    monkeypatch.setattr(
+        workspaces_service.materialization_store,
+        "list_active_materializations_for_workspace",
+        _list_materializations,
     )
 
     payload = await workspaces_service._workspace_payload(
@@ -153,6 +179,8 @@ async def test_scratch_payload_has_no_fabricated_repo(
     assert dumped["runtime"]["environmentId"] is None
     assert dumped["displayName"] == f"Workflow run {invocation_id}"
     assert dumped["anyharnessWorkspaceId"] == "workspace-scratch-1"
+    assert dumped["materializations"] == []
+    assert dumped["primaryMaterialization"] is None
 
 
 def _permits_null(prop_schema: dict[str, Any]) -> bool:

@@ -216,15 +216,10 @@ async def test_backfill_hydrates_only_workspaces_with_runtime_ids() -> None:
 async def test_backfill_skips_repo_less_scratch_rows_with_anyharness_id() -> None:
     """A repo-less (scratch) workspace carrying an AnyHarness id is NOT backfilled.
 
-    PR4-BASE-02: the merged #1245 store permits
-    ``create_scratch_cloud_workspace(..., anyharness_workspace_id=...)`` — a
-    scratch row CAN carry an AnyHarness id. The backfill therefore must gate on
+    A scratch row can carry an AnyHarness id. The backfill therefore gates on
     the actual repo-identity column (``repo_environment_id IS NOT NULL``), not on
     the AnyHarness id, or it would fabricate a repository materialization for a
-    workspace with no repository. This branch's schema still enforces NOT NULL on
-    ``repo_environment_id``, so we simulate the post-#1245 nullable shape by
-    dropping that constraint before seeding a repo-less row, then assert the
-    guard predicate holds.
+    workspace with no repository.
     """
     async with temporary_database("materialization_ledger_scratch") as (_name, database_url):
         config = build_alembic_config(database_url)
@@ -236,21 +231,14 @@ async def test_backfill_skips_repo_less_scratch_rows_with_anyharness_id() -> Non
         now = datetime.now(UTC)
         try:
             async with engine.begin() as conn:
-                # Simulate #1245: repo_environment_id becomes nullable for scratch.
-                await conn.execute(
-                    text(
-                        "ALTER TABLE cloud_workspace "
-                        "ALTER COLUMN repo_environment_id DROP NOT NULL"
-                    )
-                )
                 # A repo-less scratch workspace that nonetheless carries an
                 # AnyHarness id (creatable via create_scratch_cloud_workspace).
                 await conn.execute(
                     text(
                         "INSERT INTO cloud_workspace "
                         "(id, owner_user_id, repo_environment_id, display_name, git_branch, "
-                        "anyharness_workspace_id, created_at, updated_at) "
-                        "VALUES (:id, :owner, NULL, :name, 'main', :ah, :now, :now)"
+                        "anyharness_workspace_id, workspace_kind, created_at, updated_at) "
+                        "VALUES (:id, :owner, NULL, :name, 'main', :ah, 'scratch', :now, :now)"
                     ),
                     {
                         "id": scratch_ws,

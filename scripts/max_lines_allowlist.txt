@@ -30,7 +30,7 @@ anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight.rs 613 
 anyharness/crates/anyharness-lib/src/live/sessions/probe.rs 613 catalog probe with per-harness model-source fallbacks
 anyharness/crates/anyharness-lib/src/persistence/custom_migrations.rs 1107 custom migration with legacy schema coverage
 anyharness/sdk-react/src/hooks/sessions.ts 723 existing SDK React oversized file
-cloud/sdk/src/types/generated.ts 784 existing generated cloud SDK type surface (+workspaceKind identity migration (5a))
+cloud/sdk/src/types/generated.ts 788 existing generated cloud SDK type surface (+workspaceKind identity migration (5a); materialization types re-derived from OpenAPI with the documented app-extra overlay)
 anyharness/sdk/src/reducer/__tests__/transcript.test.ts 1817 existing SDK oversized test file
 anyharness/sdk/src/reducer/transcript.ts 1542 existing SDK oversized file
 apps/desktop/src-tauri/src/commands/ssh_tunnel.rs 729 existing desktop native oversized file
@@ -39,7 +39,7 @@ server/proliferate/config.py 619 managed Cloud and GitHub App completeness predi
 server/proliferate/db/models/cloud/agent_gateway.py 504 agent_auth_harness_settings model added for catalog-driven per-harness settings
 server/proliferate/server/cloud/agent_gateway/api.py 405 harness-settings GET/PUT routes added for catalog-driven per-harness settings
 server/proliferate/server/cloud/secrets/api.py 416 existing cloud secrets API pending route split
-server/proliferate/server/cloud/workspaces/service.py 844 workspace materialization ledger service (intent/report/unlink write-path + primary selection + recorded-sandbox reconciliation + repo-less read guards); split on next growth per guides/domains.md
+server/proliferate/server/cloud/workspaces/service.py 859 workspace materialization ledger service (intent/report/unlink write-path + primary selection + recorded-sandbox reconciliation + scratch/repo-less read guards); split on next growth per guides/domains.md
 server/tests/integration/test_agent_gateway_api.py 654 P1 auth rebuild rewrote keys/selections/state coverage for titled-key + selection model
 server/tests/integration/test_cloud_workspace_materialization_service.py 1002 durable materialization ledger service suite (intent/report/unlink transitions, redaction, primary selection, recorded-sandbox reconciliation, repo-less workspace, install-id redaction, generation replay/crash-retry/terminal-reintent)
 server/tests/integration/test_auth_flow.py 2220 existing server oversized integration test plus session-token-revocation coverage + /users/me password rejection test + single-org current_product_user bypass coverage

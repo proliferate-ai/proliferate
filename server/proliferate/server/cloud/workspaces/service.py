@@ -649,7 +649,7 @@ async def _workspace_payload(
     # Scratch workspaces have no repository backing: repo and repoEnvironmentId
     # are null (never fabricated) and no repo environment is loaded onto the
     # runtime.
-    if workspace.workspace_kind == "scratch":
+    if workspace.workspace_kind == "scratch" or workspace.repo_environment_id is None:
         repo_environment_id = None
         repo = None
         runtime_environment_id = None
@@ -730,9 +730,12 @@ def _apply_legacy_managed_fallback(
     Reads prefer the ledger row and fall back to the legacy
     ``anyharness_workspace_id`` only when no active managed row exists — e.g. a
     workspace created before this PR whose backfill row was somehow absent, or a
-    pre-migration transient. Null-id workspaces get no synthetic row (they keep
-    ``materializations = []`` and the age-based stall semantics).
+    pre-migration transient. Null-id and scratch/repo-less workspaces get no
+    synthetic row (they keep ``materializations = []`` and the age-based stall
+    semantics).
     """
+    if workspace.workspace_kind == "scratch" or workspace.repo_environment_id is None:
+        return materializations
     if workspace.anyharness_workspace_id is None:
         return materializations
     if any(m.target_kind == "managed_cloud" for m in materializations):
