@@ -31,6 +31,17 @@ describe("parseServerCapabilities", () => {
     expect(parsed?.agentGateway).toBe(true);
     expect(parsed?.support.kind).toBe("operator");
     expect(parsed?.support.email).toBe("it@acme.example.com");
+    expect(parsed?.workflowManagedRuns).toBe(false);
+  });
+
+  it("reads the v3 managed Workflow presentation gate and defaults absent false", () => {
+    const enabled = validRaw();
+    enabled.contractVersion = 3;
+    enabled.workflowManagedRuns = true;
+    expect(parseServerCapabilities(enabled)?.workflowManagedRuns).toBe(true);
+
+    const older = validRaw();
+    expect(parseServerCapabilities(older)?.workflowManagedRuns).toBe(false);
   });
 
   it("returns null when the block is absent or not an object", () => {

@@ -16,6 +16,9 @@ from proliferate.background.celery_app import celery_app
 from proliferate.background.config import (
     BACKGROUND_PUBLISH_TS_HEADER,
     HEALTH_NOOP_TASK,
+    WORKFLOW_CANCEL_TASK,
+    WORKFLOW_DELIVER_TASK,
+    WORKFLOW_OBSERVE_TASK,
 )
 from proliferate.db.store.background_outbox import (
     BackgroundOutboxTaskValue,
@@ -23,6 +26,10 @@ from proliferate.db.store.background_outbox import (
     get_outbox_backlog_snapshot,
     mark_outbox_task_publish_failed,
     mark_outbox_task_published,
+)
+from proliferate.db.store.workflow_managed_observability import (
+    ManagedWorkflowTelemetrySnapshot,
+    get_managed_workflow_telemetry_snapshot,
 )
 
 # Task names the relay is allowed to publish. A committed row for any other name
@@ -34,6 +41,9 @@ from proliferate.db.store.background_outbox import (
 SUPPORTED_OUTBOX_TASKS = frozenset(
     {
         HEALTH_NOOP_TASK,
+        WORKFLOW_DELIVER_TASK,
+        WORKFLOW_OBSERVE_TASK,
+        WORKFLOW_CANCEL_TASK,
     }
 )
 DEFAULT_RELAY_BATCH_SIZE = 50
@@ -177,6 +187,8 @@ class RelayTickResult:
     failed_rows: int
     oldest_due_pending_age_seconds: float
     supported_pending_by_family: dict[str, int]
+    supported_oldest_pending_age_by_family: dict[str, float]
+    managed_workflows: ManagedWorkflowTelemetrySnapshot
 
 
 async def run_relay_tick(
@@ -209,6 +221,7 @@ async def run_relay_tick(
             db,
             supported_task_names=SUPPORTED_OUTBOX_TASKS,
         )
+        managed_workflows = await get_managed_workflow_telemetry_snapshot(db)
     return RelayTickResult(
         claimed=result.claimed,
         published=result.published,
@@ -220,6 +233,10 @@ async def run_relay_tick(
         failed_rows=snapshot.failed_count,
         oldest_due_pending_age_seconds=snapshot.oldest_due_pending_age_seconds,
         supported_pending_by_family=dict(snapshot.supported_pending_by_family),
+        supported_oldest_pending_age_by_family=dict(
+            snapshot.supported_oldest_pending_age_by_family
+        ),
+        managed_workflows=managed_workflows,
     )
 
 

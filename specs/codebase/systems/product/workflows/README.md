@@ -12,3 +12,6 @@
 - [Run Control and Session Admission](run-control.md) — truthful cancellation,
   run-state versioning, interruption vocabulary, and exclusive execution
   mutation admission for workflow-owned sessions.
+- [Managed Cloud Execution](managed-cloud-execution.md) — feature-gated durable
+  delivery, exact target custody, monotonic observation, history, and
+  cancellation without Desktop presence.

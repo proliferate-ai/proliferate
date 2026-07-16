@@ -90,6 +90,12 @@ CREATE TABLE cowork_threads (
     created_at TEXT NOT NULL
 , workspace_delegation_enabled INTEGER NOT NULL DEFAULT 1);
 
+-- table: execution_store_identity
+CREATE TABLE execution_store_identity (
+    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+    execution_store_id TEXT NOT NULL UNIQUE
+);
+
 -- table: feed_bindings
 CREATE TABLE feed_bindings (
     feed_id TEXT PRIMARY KEY,

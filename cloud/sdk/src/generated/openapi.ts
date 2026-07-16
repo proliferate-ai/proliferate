@@ -2135,6 +2135,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workflow-invocations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Workflow Invocation History Endpoint */
+        get: operations["list_workflow_invocation_history_endpoint_v1_workflow_invocations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflow-invocations/{invocation_id}/deliver": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deliver Workflow Invocation Endpoint */
+        post: operations["deliver_workflow_invocation_endpoint_v1_workflow_invocations__invocation_id__deliver_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflow-invocations/{invocation_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Workflow Invocation Endpoint */
+        post: operations["cancel_workflow_invocation_endpoint_v1_workflow_invocations__invocation_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/ai_magic/session-titles/generate": {
         parameters: {
             query?: never;
@@ -4797,6 +4848,224 @@ export interface components {
              */
             kind: "managedCloud";
         };
+        /** ManagedWorkflowCorrelations */
+        ManagedWorkflowCorrelations: {
+            /** Cloudworkspaceid */
+            cloudWorkspaceId: string | null;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId: string | null;
+            /** Sessionid */
+            sessionId: string | null;
+            /** Promptid */
+            promptId: string | null;
+            /** Turnid */
+            turnId: string | null;
+        };
+        /** ManagedWorkflowExecutionResponse */
+        ManagedWorkflowExecutionResponse: {
+            /**
+             * Deliverystatus
+             * @enum {string}
+             */
+            deliveryStatus: "prepared" | "queued" | "delivering" | "accepted" | "delivery_failed" | "delivery_cancelled";
+            /**
+             * Deliverycheckpoint
+             * @enum {string}
+             */
+            deliveryCheckpoint: "none" | "target_plan_frozen" | "target_bound" | "workspace_put_started" | "workspace_ready" | "run_put_started" | "accepted";
+            /**
+             * Desiredstate
+             * @enum {string}
+             */
+            desiredState: "active" | "cancelled";
+            execution: components["schemas"]["ManagedWorkflowRuntimeExecution"] | null;
+            freshness: components["schemas"]["ManagedWorkflowFreshness"];
+            correlations: components["schemas"]["ManagedWorkflowCorrelations"];
+            openTarget: components["schemas"]["ManagedWorkflowOpenTarget"] | null;
+            /** Deliveryerrorcode */
+            deliveryErrorCode: string | null;
+            /** Observationerrorcode */
+            observationErrorCode: string | null;
+            /** Acceptedat */
+            acceptedAt: string | null;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+        };
+        /** ManagedWorkflowExecutionStep */
+        ManagedWorkflowExecutionStep: {
+            /**
+             * Index
+             * @constant
+             */
+            index: 0;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
+            /** Failurecode */
+            failureCode: string | null;
+            /** Interruptioncode */
+            interruptionCode: "runtime_restarted" | null;
+            /** Startedat */
+            startedAt: string | null;
+            /** Finishedat */
+            finishedAt: string | null;
+        };
+        /** ManagedWorkflowFreshness */
+        ManagedWorkflowFreshness: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "live" | "stale" | "unreachable" | "target_lost";
+            /** Latestobservedat */
+            latestObservedAt: string | null;
+        };
+        /** ManagedWorkflowHistoryItem */
+        ManagedWorkflowHistoryItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Workflowdefinitionid
+             * Format: uuid
+             */
+            workflowDefinitionId: string;
+            /** Definitionrevision */
+            definitionRevision: number;
+            /** Title */
+            title: string;
+            /**
+             * Placementkind
+             * @enum {string}
+             */
+            placementKind: "repositoryWorktree" | "scratch";
+            /**
+             * Targetkind
+             * @constant
+             */
+            targetKind: "managedCloud";
+            /**
+             * Deliverystatus
+             * @enum {string}
+             */
+            deliveryStatus: "prepared" | "queued" | "delivering" | "accepted" | "delivery_failed" | "delivery_cancelled";
+            /**
+             * Desiredstate
+             * @enum {string}
+             */
+            desiredState: "active" | "cancelled";
+            /** Executionstatus */
+            executionStatus: ("accepted" | "running" | "completed" | "failed" | "cancelled" | "interrupted") | null;
+            /**
+             * Freshness
+             * @enum {string}
+             */
+            freshness: "pending" | "live" | "stale" | "unreachable" | "target_lost";
+            /** Latestobservedat */
+            latestObservedAt: string | null;
+            /** Cloudworkspaceid */
+            cloudWorkspaceId: string | null;
+            /** Sessionid */
+            sessionId: string | null;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+        };
+        /** ManagedWorkflowHistoryResponse */
+        ManagedWorkflowHistoryResponse: {
+            /** Items */
+            items: components["schemas"]["ManagedWorkflowHistoryItem"][];
+            /** Nextcursor */
+            nextCursor: string | null;
+        };
+        /** ManagedWorkflowInvocationResponse */
+        ManagedWorkflowInvocationResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Schemaversion
+             * @constant
+             */
+            schemaVersion: 1;
+            /**
+             * Workflowdefinitionid
+             * Format: uuid
+             */
+            workflowDefinitionId: string;
+            /** Definitionrevision */
+            definitionRevision: number;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            definition: components["schemas"]["PortableWorkflowDefinition"];
+            /** Arguments */
+            arguments: {
+                [key: string]: boolean | number | string;
+            };
+            /** Placement */
+            placement: components["schemas"]["RepositoryWorktreePlacement"] | components["schemas"]["ScratchPlacement"];
+            target: components["schemas"]["ManagedCloudWorkflowTarget"];
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            managedExecution: components["schemas"]["ManagedWorkflowExecutionResponse"];
+        };
+        /** ManagedWorkflowOpenTarget */
+        ManagedWorkflowOpenTarget: {
+            /**
+             * Cloudworkspaceid
+             * Format: uuid
+             */
+            cloudWorkspaceId: string;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId: string;
+            /** Sessionid */
+            sessionId: string;
+        };
+        /** ManagedWorkflowRuntimeExecution */
+        ManagedWorkflowRuntimeExecution: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "accepted" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
+            /** Stateversion */
+            stateVersion: number;
+            /** Cancelrequestedat */
+            cancelRequestedAt: string | null;
+            /** Failurecode */
+            failureCode: string | null;
+            /** Interruptioncode */
+            interruptionCode: "runtime_restarted" | null;
+            /** Stopreason */
+            stopReason: string | null;
+            /** Startedat */
+            startedAt: string | null;
+            /** Finishedat */
+            finishedAt: string | null;
+            /** Steps */
+            steps: components["schemas"]["ManagedWorkflowExecutionStep"][];
+        };
         /** MaterializationIntentResponse */
         MaterializationIntentResponse: {
             materialization: components["schemas"]["WorkspaceMaterializationSummary"];
@@ -5677,6 +5946,8 @@ export interface components {
             pricing: components["schemas"]["PricingCapability"];
             githubRepositoryAccess: components["schemas"]["GitHubRepositoryAccessCapability"];
             managedCloud: components["schemas"]["ManagedCloudCapability"];
+            /** Workflowmanagedruns */
+            workflowManagedRuns: boolean;
         };
         /** SetIntegrationEnabledRequest */
         SetIntegrationEnabledRequest: {
@@ -11544,7 +11815,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WorkflowInvocationResponse"];
+                    "application/json": components["schemas"]["ManagedWorkflowInvocationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -11589,6 +11860,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowInvocationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_workflow_invocation_history_endpoint_v1_workflow_invocations_get: {
+        parameters: {
+            query: {
+                workflowDefinitionId: string;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedWorkflowHistoryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deliver_workflow_invocation_endpoint_v1_workflow_invocations__invocation_id__deliver_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invocation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedWorkflowInvocationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_workflow_invocation_endpoint_v1_workflow_invocations__invocation_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invocation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedWorkflowInvocationResponse"];
                 };
             };
             /** @description Validation Error */

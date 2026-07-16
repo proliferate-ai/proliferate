@@ -123,10 +123,13 @@ async def load_cloud_sandbox_by_id(
     sandbox_id: UUID,
     *,
     lock_row: bool = False,
+    refresh: bool = False,
 ) -> CloudSandboxValue | None:
     stmt = select(CloudSandbox).where(CloudSandbox.id == sandbox_id)
     if lock_row:
         stmt = stmt.with_for_update()
+    if refresh:
+        stmt = stmt.execution_options(populate_existing=True)
     row = (await db.execute(stmt)).scalar_one_or_none()
     return cloud_sandbox_value(row) if row is not None else None
 

@@ -25,6 +25,7 @@ function contract(
     pricing: { available: false, url: null },
     githubRepositoryAccess: { status: "disabled", provider: null, displayName: null },
     managedCloud: { status: "disabled", repositoryAuthority: null, source: "legacy" },
+    workflowManagedRuns: false,
     ...overrides,
   };
 }

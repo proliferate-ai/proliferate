@@ -12,6 +12,12 @@ from proliferate.db.engine import get_async_session
 from proliferate.server.cloud.github_app.errors import GitHubAppReauthorizationRequired
 
 
+async def release_github_app_transaction(db: AsyncSession) -> None:
+    """End a completed GitHub App read or write phase before remote I/O."""
+
+    await session_ops.commit_session(db)
+
+
 def _reauthorization_error(error: BaseException) -> GitHubAppReauthorizationRequired | None:
     current: BaseException | None = error
     while current is not None:
@@ -27,8 +33,9 @@ async def commit_github_app_reauthorization_on_error(
     """Commit only the permanent auth transition before its structured response.
 
     The GitHub authorization gate runs before request-owned mutations at every
-    HTTP entrypoint using this dependency. It holds the authorization row lock,
-    stages ``needs_reauth``, and raises ``GitHubAppReauthorizationRequired``.
+    HTTP entrypoint using this dependency. It conditionally stages
+    ``needs_reauth`` for the exact authorization revision and raises
+    ``GitHubAppReauthorizationRequired``.
     Committing here preserves that transition without moving transaction
     ownership into a service or store.
     """

@@ -191,7 +191,7 @@ _APP_COMPLETE = {
 def test_capabilities_shape_and_version() -> None:
     caps = build_server_capabilities(_cfg())
 
-    assert caps.contractVersion == 2
+    assert caps.contractVersion == 3
     dumped = caps.model_dump()
     assert set(dumped) == {
         "contractVersion",
@@ -205,7 +205,9 @@ def test_capabilities_shape_and_version() -> None:
         "pricing",
         "githubRepositoryAccess",
         "managedCloud",
+        "workflowManagedRuns",
     }
+    assert caps.workflowManagedRuns is False
     for field, subfields in _CAPABILITY_FIELDS.items():
         if subfields is not None:
             assert set(dumped[field]) == set(subfields)

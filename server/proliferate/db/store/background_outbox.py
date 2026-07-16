@@ -294,6 +294,7 @@ class OutboxBacklogSnapshot:
     # by the caller's supported-task allowlist: only recognized families appear,
     # so this never widens to an unbounded set of arbitrary task names.
     supported_pending_by_family: dict[str, int] = field(default_factory=dict)
+    supported_oldest_pending_age_by_family: dict[str, float] = field(default_factory=dict)
 
 
 async def get_outbox_backlog_snapshot(
@@ -347,17 +348,27 @@ async def get_outbox_backlog_snapshot(
         .where(BackgroundOutboxTask.status == OUTBOX_STATUS_FAILED)
     )
     supported_pending_by_family: dict[str, int] = {name: 0 for name in supported_task_names}
+    supported_oldest_pending_age_by_family: dict[str, float] = {
+        name: 0.0 for name in supported_task_names
+    }
     if supported_pending_by_family:
         family_rows = await db.execute(
-            select(BackgroundOutboxTask.task_name, func.count())
+            select(
+                BackgroundOutboxTask.task_name,
+                func.count(),
+                func.min(BackgroundOutboxTask.created_at),
+            )
             .where(
                 BackgroundOutboxTask.status == OUTBOX_STATUS_PENDING,
                 BackgroundOutboxTask.task_name.in_(list(supported_pending_by_family)),
             )
             .group_by(BackgroundOutboxTask.task_name)
         )
-        for task_name, count in family_rows.all():
+        for task_name, count, oldest_created_at in family_rows.all():
             supported_pending_by_family[task_name] = int(count or 0)
+            supported_oldest_pending_age_by_family[task_name] = max(
+                0.0, (now - oldest_created_at).total_seconds()
+            )
     oldest_age = 0.0 if oldest_due is None else max(0.0, (now - oldest_due).total_seconds())
     return OutboxBacklogSnapshot(
         due_pending_count=int(due_pending or 0),
@@ -366,6 +377,7 @@ async def get_outbox_backlog_snapshot(
         failed_count=int(failed or 0),
         oldest_due_pending_age_seconds=oldest_age,
         supported_pending_by_family=supported_pending_by_family,
+        supported_oldest_pending_age_by_family=supported_oldest_pending_age_by_family,
     )
 
 

@@ -51,6 +51,9 @@ jobs:
       - name: Check session mutation admission
         run: python3 scripts/check_session_mutation_admission.py
 
+      - name: Check managed Workflow legacy-plane boundary
+        run: python3 scripts/check_workflow_managed_boundaries.py
+
       - name: Check documentation integrity
         run: |
           python3 -m unittest scripts/test_check_docs.py

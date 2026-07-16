@@ -102,6 +102,10 @@ async def connect_ready_sandbox(
     # hold or an over-cap compute budget must not be woken by an incoming
     # request. No-op unless CLOUD_BILLING_MODE=enforce.
     await assert_cloud_sandbox_resume_allowed(db, sandbox)
+    # The billing/read phase is complete before provider or runtime I/O. This
+    # keeps the reusable connect seam from carrying an autobegun PostgreSQL
+    # transaction across E2B resume/launch or AnyHarness health requests.
+    await db.commit()
 
     provider = get_sandbox_provider(sandbox.e2b_template_ref)
     provider_sandbox_id = sandbox.e2b_sandbox_id

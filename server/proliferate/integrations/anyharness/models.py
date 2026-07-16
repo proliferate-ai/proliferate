@@ -6,6 +6,21 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
+class RuntimeExecutionStoreIdentity:
+    execution_store_id: str
+
+
+@dataclass(frozen=True)
+class WorkflowWorkspaceAcceptance:
+    workspace_id: str
+
+
+@dataclass(frozen=True)
+class WorkflowRunProjection:
+    value: dict[str, object]
+
+
+@dataclass(frozen=True)
 class RuntimeHealthProbe:
     is_success: bool
     status_code: int

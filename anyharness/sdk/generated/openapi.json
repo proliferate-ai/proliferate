@@ -10997,6 +10997,7 @@
           "status",
           "version",
           "runtimeHome",
+          "executionStoreId",
           "capabilities",
           "agentSeed",
           "agentReconcile"
@@ -11010,6 +11011,9 @@
           },
           "capabilities": {
             "$ref": "#/components/schemas/RuntimeCapabilities"
+          },
+          "executionStoreId": {
+            "type": "string"
           },
           "resourcePressure": {
             "oneOf": [

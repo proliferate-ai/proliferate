@@ -41,6 +41,7 @@ const health = {
     target: null,
   },
   capabilities: { replay: false },
+  executionStoreId: "execution-store-test",
   runtimeHome: "/Users/pablo/.proliferate/anyharness",
   status: "ok",
   version: "0.1.17",

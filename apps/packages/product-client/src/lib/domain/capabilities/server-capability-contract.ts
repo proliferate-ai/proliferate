@@ -79,6 +79,7 @@ export interface ServerCapabilityContract {
   pricing: PricingCapability;
   githubRepositoryAccess: GitHubRepositoryAccessCapability;
   managedCloud: ManagedCloudCapability;
+  workflowManagedRuns: boolean;
 }
 
 const DEPLOYMENT_MODES: readonly DeploymentMode[] = [
@@ -291,5 +292,6 @@ export function parseServerCapabilities(
     },
     githubRepositoryAccess,
     managedCloud,
+    workflowManagedRuns: asBool(raw.workflowManagedRuns),
   };
 }
