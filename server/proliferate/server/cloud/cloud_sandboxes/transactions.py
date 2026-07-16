@@ -24,5 +24,12 @@ def defer_after_commit(
     session_ops.defer_after_commit(db, callback)
 
 
+async def run_after_commit(
+    db: AsyncSession,
+    callback: Callable[[], Awaitable[None]],
+) -> None:
+    await session_ops.run_after_commit(db, callback)
+
+
 async def commit_cloud_sandbox_session(db: AsyncSession) -> None:
     await session_ops.commit_session(db)

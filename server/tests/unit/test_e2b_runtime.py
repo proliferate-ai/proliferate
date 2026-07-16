@@ -1,3 +1,6 @@
+import httpx
+import pytest
+
 from proliferate.integrations.sandbox import e2b as e2b_runtime
 
 
@@ -272,6 +275,100 @@ def test_run_command_passes_background_envs_and_cwd(monkeypatch) -> None:
         "background": True,
         "timeout": 15,
     }
+
+
+def _mount_list_transport(
+    monkeypatch, pages: list[tuple[list[dict], str | None]]
+) -> list[httpx.Request]:
+    """Serve `pages` (items, next_token) from a mocked httpx transport.
+
+    Returns the captured requests so tests can assert the query params sent.
+    """
+    monkeypatch.setattr(e2b_runtime.settings, "e2b_api_key", "e2b_test_key")
+    requests: list[httpx.Request] = []
+    calls = {"n": 0}
+
+    def _handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        items, next_token = pages[calls["n"]]
+        calls["n"] += 1
+        headers = {"x-next-token": next_token} if next_token else {}
+        return httpx.Response(200, json=items, headers=headers)
+
+    real_client = httpx.AsyncClient
+
+    def _fake_client(*args, **kwargs):
+        kwargs["transport"] = httpx.MockTransport(_handler)
+        return real_client(*args, **kwargs)
+
+    monkeypatch.setattr(e2b_runtime.httpx, "AsyncClient", _fake_client)
+    return requests
+
+
+@pytest.mark.asyncio
+async def test_list_sandbox_states_filters_state_and_parses_v2_keys(monkeypatch) -> None:
+    # v2 payload uses camelCase `sandboxID`/`startedAt`/`endAt`.
+    item = {
+        "sandboxID": "sbx-1",
+        "state": "paused",
+        "startedAt": "2026-07-15T00:00:00Z",
+        "endAt": "2026-07-15T01:00:00Z",
+        "metadata": {"proliferate_cloud_sandbox_id": "abc"},
+    }
+    requests = _mount_list_transport(monkeypatch, [([item], None)])
+
+    states = await e2b_runtime.E2BSandboxProvider().list_sandbox_states()
+
+    assert len(states) == 1
+    assert states[0].external_sandbox_id == "sbx-1"
+    assert states[0].state == "paused"
+    assert states[0].started_at is not None
+    assert states[0].metadata == {"proliferate_cloud_sandbox_id": "abc"}
+    # Hits the v2 endpoint with the running+paused state filter.
+    assert requests[0].url.path == "/v2/sandboxes"
+    assert requests[0].url.params.get("state") == "running,paused"
+    assert requests[0].headers["X-API-KEY"] == "e2b_test_key"
+
+
+@pytest.mark.asyncio
+async def test_list_sandbox_states_paginates_via_next_token_header(monkeypatch) -> None:
+    pages = [
+        ([{"sandboxID": "sbx-1", "state": "running"}], "token-2"),
+        ([{"sandboxID": "sbx-2", "state": "paused"}], None),
+    ]
+    requests = _mount_list_transport(monkeypatch, pages)
+
+    states = await e2b_runtime.E2BSandboxProvider().list_sandbox_states()
+
+    assert [s.external_sandbox_id for s in states] == ["sbx-1", "sbx-2"]
+    # First page carries no token; second page passes it back as nextToken.
+    assert "nextToken" not in requests[0].url.params
+    assert requests[1].url.params.get("nextToken") == "token-2"
+
+
+@pytest.mark.asyncio
+async def test_list_sandbox_states_bounds_pagination(monkeypatch) -> None:
+    # Every page returns a token, so the loop must stop at the page bound.
+    infinite = [([{"sandboxID": f"sbx-{i}", "state": "running"}], f"token-{i}") for i in range(60)]
+    requests = _mount_list_transport(monkeypatch, infinite)
+    warnings: list[str] = []
+    monkeypatch.setattr(
+        e2b_runtime.logger, "warning", lambda msg, *a, **k: warnings.append(msg % a if a else msg)
+    )
+
+    states = await e2b_runtime.E2BSandboxProvider().list_sandbox_states()
+
+    assert len(requests) == e2b_runtime._LIST_SANDBOXES_MAX_PAGES
+    assert len(states) == e2b_runtime._LIST_SANDBOXES_MAX_PAGES
+    assert warnings and "page bound" in warnings[0]
+
+
+def test_state_from_payload_accepts_legacy_and_v2_id_keys() -> None:
+    assert e2b_runtime._state_from_payload({"sandboxID": "v2"}).external_sandbox_id == "v2"
+    assert e2b_runtime._state_from_payload({"sandboxId": "legacy"}).external_sandbox_id == "legacy"
+    assert e2b_runtime._state_from_payload({"sandbox_id": "snake"}).external_sandbox_id == "snake"
+    assert e2b_runtime._state_from_payload({"id": "bare"}).external_sandbox_id == "bare"
+    assert e2b_runtime._state_from_payload({"state": "running"}) is None
 
 
 def test_resolve_runtime_context_uses_static_e2b_paths() -> None:
