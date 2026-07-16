@@ -8,15 +8,22 @@ import {
 import {
   archiveCloudWorkspace,
   createCloudWorkspace,
+  createLocalMaterializationIntent,
   getCloudWorkspace,
   listCloudWorkspaces,
+  reportMaterialization,
   restoreCloudWorkspace,
+  unlinkMaterialization,
   type CloudWorkspaceSummary,
   type CloudWorkspaceDetail,
   type CloudWorkspaceListSelection,
   type CloudWorkspaceListScope,
   type CloudWorkspaceLifecycleFilter,
+  type CloudWorkspaceMaterializationSummary,
   type CreateCloudWorkspaceRequest,
+  type CreateMaterializationIntentRequest,
+  type MaterializationIntentResponse,
+  type ReportMaterializationRequest,
 } from "@proliferate/cloud-sdk";
 import {
   cloudRootKey,
@@ -34,6 +41,9 @@ export interface UseCloudWorkspacesOptions {
   organizationId?: string | null;
   scope?: CloudWorkspaceListScope | null;
   lifecycle?: CloudWorkspaceLifecycleFilter | null;
+  /** This install's id, forwarded so the server selects/un-redacts this
+   * device's local materialization instead of defaulting to managed Cloud. */
+  desktopInstallId?: string | null;
 }
 
 export function useCloudWorkspaces(options: UseCloudWorkspacesOptions | boolean = {}) {
@@ -47,12 +57,14 @@ export function useCloudWorkspaces(options: UseCloudWorkspacesOptions | boolean 
   const selection: CloudWorkspaceListSelection = {
     scope: normalizedOptions.scope ?? undefined,
     lifecycle: normalizedOptions.lifecycle ?? undefined,
+    desktopInstallId: normalizedOptions.desktopInstallId ?? undefined,
   };
   return useQuery<CloudWorkspaceSummary[]>({
     queryKey: cloudWorkspacesKey(
       owner,
       normalizedOptions.scope ?? null,
       normalizedOptions.lifecycle ?? null,
+      normalizedOptions.desktopInstallId ?? null,
     ),
     queryFn: () => listCloudWorkspaces(undefined, selection, client),
     enabled: normalizedOptions.enabled ?? true,
@@ -103,12 +115,71 @@ export function invalidateCloudWorkspaceLifecycleQueries(
   }
 }
 
-export function useCloudWorkspace(workspaceId: string | null, enabled = true) {
+export function useCloudWorkspace(
+  workspaceId: string | null,
+  enabled = true,
+  desktopInstallId?: string | null,
+) {
   const client = useCloudClient();
   return useQuery<CloudWorkspaceDetail | undefined>({
-    queryKey: cloudWorkspaceKey(workspaceId),
-    queryFn: () => getCloudWorkspace(workspaceId!, client),
+    queryKey: cloudWorkspaceKey(workspaceId, desktopInstallId ?? null),
+    queryFn: () => getCloudWorkspace(workspaceId!, client, desktopInstallId),
     enabled: enabled && workspaceId !== null,
+  });
+}
+
+/** Create (or reuse) a local materialization intent. The Cloud-issued
+ * operationId in the response is threaded verbatim into the AnyHarness exact-ref
+ * materialization; retries reuse the same id so no second worktree is cut. */
+export function useCreateLocalMaterializationIntent() {
+  const client = useCloudClient();
+  const queryClient = useQueryClient();
+  return useMutation<
+    MaterializationIntentResponse,
+    Error,
+    { workspaceId: string; body: CreateMaterializationIntentRequest }
+  >({
+    mutationFn: ({ workspaceId, body }) =>
+      createLocalMaterializationIntent(workspaceId, body, client),
+    onSuccess(_data, { workspaceId }) {
+      invalidateCloudWorkspaceLifecycleQueries(queryClient, workspaceId);
+    },
+  });
+}
+
+/** Report a local materialization outcome. A hydrated report must carry the
+ * exact observedHeadSha/observedBranch and generation the intent returned. */
+export function useReportMaterialization() {
+  const client = useCloudClient();
+  const queryClient = useQueryClient();
+  return useMutation<
+    CloudWorkspaceMaterializationSummary,
+    Error,
+    { workspaceId: string; materializationId: string; body: ReportMaterializationRequest }
+  >({
+    mutationFn: ({ workspaceId, materializationId, body }) =>
+      reportMaterialization(workspaceId, materializationId, body, client),
+    onSuccess(_data, { workspaceId }) {
+      invalidateCloudWorkspaceLifecycleQueries(queryClient, workspaceId);
+    },
+  });
+}
+
+/** Unlink this install's local materialization (association-only; idempotent on
+ * an already-unlinked row). Deletes no checkout, Cloud workspace, or history. */
+export function useUnlinkMaterialization() {
+  const client = useCloudClient();
+  const queryClient = useQueryClient();
+  return useMutation<
+    void,
+    Error,
+    { workspaceId: string; materializationId: string }
+  >({
+    mutationFn: ({ workspaceId, materializationId }) =>
+      unlinkMaterialization(workspaceId, materializationId, client),
+    onSuccess(_data, { workspaceId }) {
+      invalidateCloudWorkspaceLifecycleQueries(queryClient, workspaceId);
+    },
   });
 }
 

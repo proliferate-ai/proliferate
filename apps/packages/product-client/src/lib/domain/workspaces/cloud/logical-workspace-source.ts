@@ -9,6 +9,7 @@ import {
   buildRepoRootLogicalWorkspaceId,
   normalizeLogicalWorkspaceBranchKey,
 } from "#product/lib/domain/workspaces/cloud/logical-workspace-id";
+import { cloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 
 export function workspaceBranchKey(workspace: Workspace): string {
   const originalBranch = workspace.originalBranch?.trim();
@@ -20,7 +21,7 @@ export function workspaceBranchKey(workspace: Workspace): string {
 }
 
 export function cloudBranchKey(workspace: CloudWorkspaceSummary): string {
-  return normalizeLogicalWorkspaceBranchKey(workspace.repo.branch);
+  return normalizeLogicalWorkspaceBranchKey(workspace.repo?.branch);
 }
 
 export function remoteRepoKey(
@@ -87,6 +88,12 @@ export function compareLocalWorkspaceCanonicalOrder(
 export function buildLogicalWorkspaceIdForCloudWorkspace(
   workspace: CloudWorkspaceSummary,
 ): string {
+  // A repo-less workspace (no repository backing) has no remote coordinates;
+  // key it by its own id so two such rows stay distinct rather than folding onto
+  // a fabricated ``remote::::HEAD`` slot. See PR4-BASE-02.
+  if (!workspace.repo) {
+    return buildPathLogicalWorkspaceId(cloudWorkspaceSyntheticId(workspace.id), "HEAD");
+  }
   return buildRemoteLogicalWorkspaceId(
     workspace.repo.provider,
     workspace.repo.owner,

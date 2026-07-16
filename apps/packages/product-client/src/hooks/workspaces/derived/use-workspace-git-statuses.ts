@@ -35,7 +35,7 @@ function logicalWorkspaceBranch(workspace: LogicalWorkspace): string | null {
   if (localBranch) {
     return localBranch;
   }
-  const cloudBranch = workspace.cloudWorkspace?.repo.branch?.trim();
+  const cloudBranch = workspace.cloudWorkspace?.repo?.branch?.trim();
   return cloudBranch && cloudBranch.length > 0 ? cloudBranch : null;
 }
 

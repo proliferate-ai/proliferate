@@ -112,12 +112,12 @@ function cloudChatForSession(
     "sessionId" | "targetId" | "workspaceId" | "title" | "status"
   >,
 ): MobileCloudChat {
-  const workspaceName = workspace.displayName ?? workspace.repo.name;
+  const workspaceName = workspace.displayName ?? workspace.repo?.name ?? "Workspace";
   return {
     workspaceId: workspace.id,
     workspaceName,
-    repoLabel: `${workspace.repo.owner}/${workspace.repo.name}`,
-    branchLabel: workspace.repo.branch ?? workspace.repo.baseBranch ?? "main",
+    repoLabel: workspace.repo ? `${workspace.repo.owner}/${workspace.repo.name}` : "",
+    branchLabel: workspace.repo?.branch ?? workspace.repo?.baseBranch ?? "main",
     targetId: session.targetId ?? workspace.targetId ?? null,
     workspaceRuntimeId: session.workspaceId ?? null,
     sessionId: session.sessionId,
@@ -141,7 +141,7 @@ function sessionProjectionFromSummary(
     sessionId: session.sessionId,
     targetId: session.targetId,
     workspaceId: session.workspaceId ?? workspace.anyharnessWorkspaceId ?? workspace.id,
-    title: session.title ?? workspace.displayName ?? workspace.repo.name,
+    title: session.title ?? workspace.displayName ?? workspace.repo?.name ?? "Workspace",
     status: session.status,
     lastEventSeq: 0,
     lastEventAt: session.lastEventAt ?? null,

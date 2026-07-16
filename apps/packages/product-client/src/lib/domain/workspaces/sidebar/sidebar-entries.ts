@@ -79,9 +79,9 @@ export function sidebarEntryDisplayName(entry: SidebarWorkspaceEntry): string {
 export function cloudSidebarEntryDefaultDisplayName(
   entry: CloudSidebarWorkspaceEntry,
 ): string {
-  return entry.workspace.repo.branch?.trim()
+  return entry.workspace.repo?.branch?.trim()
     ? humanizeBranchName(entry.workspace.repo.branch)
-    : entry.workspace.repo.name;
+    : entry.workspace.repo?.name ?? "Workspace";
 }
 
 export function sidebarEntryUpdatedAt(entry: SidebarWorkspaceEntry): string {
@@ -97,10 +97,10 @@ export function sidebarEntryGitMetadata(
 ): SidebarEntryGitMetadata {
   if (entry.source === "cloud") {
     return {
-      provider: entry.workspace.repo.provider,
-      owner: entry.workspace.repo.owner,
-      repoName: entry.workspace.repo.name,
-      branchName: entry.workspace.repo.branch,
+      provider: entry.workspace.repo?.provider ?? null,
+      owner: entry.workspace.repo?.owner ?? null,
+      repoName: entry.workspace.repo?.name ?? null,
+      branchName: entry.workspace.repo?.branch ?? null,
     };
   }
 
@@ -124,7 +124,7 @@ export function sidebarEntryIsCloud(
 
 function sidebarEntryGroupName(entry: SidebarWorkspaceEntry): string {
   if (entry.source === "cloud") {
-    return entry.workspace.repo.name;
+    return entry.workspace.repo?.name ?? "Workspace";
   }
 
   return entry.workspace.path.split("/").filter(Boolean).pop()

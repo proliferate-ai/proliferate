@@ -11,8 +11,15 @@ function sortWorkspacesByUpdatedAtDesc<T extends Pick<Workspace, "updatedAt">>(w
 }
 
 export function cloudWorkspaceGroupKey(
-  workspace: { repo: Pick<CloudWorkspaceSummary["repo"], "provider" | "owner" | "name"> },
+  workspace: {
+    repo: Pick<NonNullable<CloudWorkspaceSummary["repo"]>, "provider" | "owner" | "name"> | null;
+  },
 ): string {
+  // A repo-less workspace has no repository backing; group them together.
+  // See PR4-BASE-02.
+  if (!workspace.repo) {
+    return "scratch";
+  }
   return `${workspace.repo.provider}:${workspace.repo.owner}:${workspace.repo.name}`;
 }
 

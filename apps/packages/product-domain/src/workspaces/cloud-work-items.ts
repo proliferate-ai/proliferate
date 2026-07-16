@@ -31,9 +31,11 @@ export function cloudWorkItemForWorkspace(
   workspace: CloudWorkspaceSummary,
   options: { nowMs?: number } = {},
 ): CloudWorkItemView {
-  const repoLabel = `${workspace.repo.owner}/${workspace.repo.name}`;
-  const branchLabel = workspace.repo.branch ?? workspace.repo.baseBranch ?? "main";
-  const title = workspace.displayName ?? workspace.lastSessionSummary?.title ?? workspace.repo.name;
+  // repo is null for a repo-less workspace (no repository backing). See PR4-BASE-02.
+  const repoLabel = workspace.repo ? `${workspace.repo.owner}/${workspace.repo.name}` : "";
+  const branchLabel = workspace.repo?.branch ?? workspace.repo?.baseBranch ?? "main";
+  const title =
+    workspace.displayName ?? workspace.lastSessionSummary?.title ?? workspace.repo?.name ?? "Workspace";
   const sessionTitle = workspace.lastSessionSummary?.title ?? null;
   const sourceAgentKind = cloudWorkSourceAgentKind(workspace);
   const source = cloudWorkSourceForWorkspace(workspace);
