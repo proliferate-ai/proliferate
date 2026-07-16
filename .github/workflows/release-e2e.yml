@@ -736,6 +736,16 @@ jobs:
       - uses: pnpm/action-setup@v6
         with:
           version: 10
+      # The scenario's E2B provider probe and cleanup kill-registration shell
+      # out to `uv run python scripts/e2b_sandbox_probe.py` (e2b-verify.ts) —
+      # without uv the probe dies `spawn uv ENOENT`, which ALSO strands the
+      # provider-sandbox kill (the releaser registers kills from probe
+      # results), leaving the run-scoped template undeletable. Same setup the
+      # tier-3 lanes use.
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:

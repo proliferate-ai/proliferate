@@ -98,6 +98,14 @@ export const EXPECTED_BOT_LOGIN = "proliferate-e2e-bot";
 export const COVERED_REPO_OWNER = "proliferate-e2e";
 export const COVERED_REPO_NAME = "e2e-fixture";
 /**
+ * The covered repo's real default branch, stored on the seeded cloud
+ * repo_environment exactly as the product's save_cloud_environment flow does
+ * (it validates against GitHub then persists). The home target picker's ONLY
+ * base-branch source for a cloud-only repository — without it the composer
+ * send stays disabled at "Choose a base branch".
+ */
+export const COVERED_REPO_DEFAULT_BRANCH = "main";
+/**
  * Where the product materializes cloud repo checkouts:
  * `SANDBOX_REPOS_ROOT = /home/user/workspace/repos`
  * (server materialization/paths.py). The covered repo lands at
@@ -943,6 +951,7 @@ export function createCloudProvision1Driver(
         refreshToken: botSeed.refreshToken,
         coveredRepoOwner: COVERED_REPO_OWNER,
         coveredRepoName: COVERED_REPO_NAME,
+        coveredRepoDefaultBranch: COVERED_REPO_DEFAULT_BRANCH,
         // MCW-004: persist the ROTATED token to whichever of {local file, SSM}
         // are durable for this lane — SSM unconditionally in Actions (the only
         // durable store on an ephemeral runner), the local file otherwise.
@@ -1421,13 +1430,12 @@ export function createCloudProvision1Driver(
     // `ComposerModelSelectorControl.tsx` — so `local-world-smoke-1`'s selectors
     // carry over unchanged. What differs from the local flow: by the time this
     // runs, the cloud sandbox already exists (spec step 3, `completeAndConverge`
-    // already materialized it via the real authorization tail), so this method
-    // does not create a workspace — it opens whichever workspace/session Desktop
-    // has already selected for the authorized covered repo, or explicitly
-    // selects it from the home screen's "cloud" runtime option if Desktop lands
-    // on the home screen instead (`ensureCloudWorkspaceOpen`, disclosed
-    // assumption — Desktop's cloud-runtime auto-selection has not been
-    // empirically observed against a live sandbox; see BRIEF deviations). Turn
+    // already materialized it via the real authorization tail). The browser
+    // lands on the home screen (fresh profile, nothing persisted); the send
+    // itself is the product's real first-turn flow — it creates the cloud
+    // workspace record for the covered repo and dispatches the prompt into the
+    // actor's one personal sandbox (`ensureCloudLaunchTargetSelected` sets the
+    // covered repo + "Cloud" runtime target first). Turn
     // completion is asserted from AnyHarness's own event stream INSIDE the
     // sandbox via `execInProviderSandbox` + an authenticated curl (there is no
     // host-reachable runtime client for the cloud world, unlike the local
@@ -1443,13 +1451,10 @@ export function createCloudProvision1Driver(
     // GATE the browser turn on the sandbox runtime's OWN launch-options
     // listing the harness with models (bounded poll; raw output surfaced under
     // [cloud-launch-options], and a per-agent `GET /v1/agents` readiness dump
-    // on timeout). The composer's model picker is fed by exactly this endpoint
-    // (via the browser's cloud gateway-proxy connection) merged with the cloud
-    // catalog, so opening the browser before the runtime reports the harness
-    // launchable can only produce the empty-picker failure — and, because the
-    // desktop caches the menu per workspace open, a browser retry alone can
-    // spin forever. Waiting here makes the picker deterministic; the reload in
-    // `selectModelInCloudComposer` remains as the client-cache safety net.
+    // on timeout). The home picker with a Cloud launch target reads the cloud
+    // v2 catalog (not this endpoint), but the SEND launches the harness inside
+    // the sandbox — dispatching before the runtime can launch it would fail
+    // the turn. Waiting here makes the send deterministic.
     await waitForSandboxLaunchOptions(
       exec,
       convergence.providerSandboxId,
@@ -1461,14 +1466,68 @@ export function createCloudProvision1Driver(
 
     const page = await productPage(asAuthenticatedActorWorld(world), actor);
     try {
-      await ensureCloudWorkspaceOpen(page);
+      await ensureCloudLaunchTargetSelected(page);
       await selectModelInCloudComposer(page, modelId);
-      const editor = page.page.locator("[data-home-composer-editor]").first();
+      // The home composer's explicit model selection is unpersisted component
+      // state — no navigation/reload may happen between the selection above
+      // and the send below (a reload silently reverts to the preference
+      // default, sending a different model than the one this cell asserts).
+      // Either composer surface is valid: the home composer (first turn from
+      // the home screen) or the in-workspace composer (a prior send/reload
+      // already opened the workspace) — both render the same editor contract.
+      const editor = page.page
+        .locator("[data-home-composer-editor], [data-chat-composer-editor]")
+        .first();
       await editor.waitFor({ state: "visible", timeout: 15_000 });
       await editor.fill(prompt);
       const send = page.page.locator("[data-chat-send-button]:not([disabled])").first();
-      await send.waitFor({ state: "visible", timeout: 15_000 });
+      try {
+        await send.waitFor({ state: "visible", timeout: 15_000 });
+      } catch {
+        // The home composer prints WHY the send is disabled right under the
+        // editor (`submitDisabledReason` — e.g. "Choose a base branch",
+        // "Sign in to use cloud workspaces", "Loading cloud configuration").
+        // Fold that into the failure so a disabled send names its gate
+        // instead of a blind locator timeout.
+        const disabledReason = await page.page
+          .locator("[data-chat-send-button][disabled]")
+          .first()
+          .evaluate((button) => {
+            const container = button.closest("form") ?? document.body;
+            return (container.textContent ?? "").trim().slice(0, 400);
+          })
+          .catch(() => null);
+        throw new Error(
+          "runGatewayTurn: the composer send button never enabled within 15000ms. " +
+            `Composer surface text: ${JSON.stringify(disabledReason ?? "unavailable")}.`,
+        );
+      }
       await send.click();
+
+      // Positive dispatch signal, surfaced for diagnosis (make log, NOT
+      // evidence): the shell's `data-workspace-session-id` goes non-empty the
+      // moment the client optimistically activates the new session — so a
+      // later empty `/v1/sessions` splits into "client never dispatched"
+      // (attribute stayed empty) vs "dispatched but never reached the sandbox
+      // runtime" (attribute set). The real assertion below stays the
+      // sandbox-side session poll.
+      let clientSessionId: string | null = null;
+      const dispatchSignalDeadline = Date.now() + 30_000;
+      while (Date.now() < dispatchSignalDeadline) {
+        clientSessionId = await page.page
+          .locator("[data-workspace-shell]")
+          .first()
+          .getAttribute("data-workspace-session-id")
+          .catch(() => null);
+        if (clientSessionId?.trim()) {
+          break;
+        }
+        await sleep(1_000);
+      }
+      process.stderr.write(
+        `[cloud-composer] post-send client session id: ${clientSessionId?.trim() ? "set" : "EMPTY"} — ` +
+          `${clientSessionId?.trim() ? "the client dispatched a session" : "the client-side send never activated a session"}.\n`,
+      );
 
       const sessionId = await resolveActiveSandboxSessionId(
         exec,
@@ -2029,61 +2088,99 @@ function cssAttr(value: string): string {
 }
 
 /**
- * By the time `runGatewayTurn` runs, the cloud sandbox already exists (spec
- * step 3) — Desktop's `useSelectedCloudRuntimeRehydration` is expected to
- * auto-select the actor's one existing cloud workspace on boot. If instead the
- * app lands on the home screen (e.g. no prior selection persisted for a fresh
- * browser profile), fall back to explicitly choosing the covered repo with the
- * "cloud" runtime option, mirroring `local-world-smoke-1`'s
- * `selectRepoAndWorkLocally` but for `HomeNextRepoLaunchKind = "cloud"`
- * (`HomeTargetPicker.tsx`). Disclosed assumption: this fallback path has not
- * been exercised against a live sandbox; flagged for the integrator to verify
- * during the first local strict run.
+ * Brings the browser to a state where the composer can dispatch a turn into
+ * the actor's cloud sandbox. Two observed states are valid:
+ *
+ *   1. A workspace is already open (Desktop rehydrated a prior selection): the
+ *      in-workspace composer (`data-chat-composer-editor`) is live.
+ *   2. The home screen: select the covered repo + the "Cloud" runtime option
+ *      (`HomeTargetPicker.tsx`). Selecting the runtime sets the launch TARGET
+ *      only — no workspace opens until the send itself, which is the product's
+ *      real first-turn flow: the home send creates the cloud workspace and
+ *      dispatches the prompt into the personal sandbox.
+ *
+ * The prior revision early-returned when `[data-workspace-shell]` with
+ * `data-pending-workspace="false"` was attached — but `StandardWorkspaceShell`
+ * renders that outer div UNCONDITIONALLY (the home screen swaps in as its
+ * CONTENT), so the check passed on the home screen without ever selecting the
+ * Cloud runtime. The composer then sat on the persisted default launch kind
+ * ("worktree" — a LOCAL target, and this world has no local runtime): the
+ * model picker read the empty local launch-options (the observed empty `[]`
+ * picker) and a send dispatched a local launch that never touched the sandbox
+ * (the observed persistently-empty `/v1/sessions`). It also waited for a
+ * workspace shell right after picking the runtime, which never opens one.
  */
-async function ensureCloudWorkspaceOpen(page: ProductPage): Promise<void> {
+async function ensureCloudLaunchTargetSelected(page: ProductPage): Promise<void> {
   const p = page.page;
   const deadline = Date.now() + SANDBOX_READY_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    const shell = p.locator('[data-workspace-shell][data-pending-workspace="false"]').first();
-    if (await shell.count().catch(() => 0)) {
+  for (;;) {
+    if (await p.locator("[data-chat-composer-editor]").first().isVisible().catch(() => false)) {
       return;
     }
-    const homeEditor = p.locator("[data-home-composer-editor]").first();
-    if (await homeEditor.count().catch(() => 0)) {
+    if (await p.locator("[data-home-composer-editor]").first().isVisible().catch(() => false)) {
       break;
+    }
+    if (Date.now() >= deadline) {
+      throw new Error(
+        "ensureCloudLaunchTargetSelected: neither the home composer nor an open workspace composer became " +
+          `visible within ${SANDBOX_READY_TIMEOUT_MS}ms.`,
+      );
     }
     await sleep(1_000);
   }
 
   await clickByRole(p, "button", /^Project:/, "home Project picker trigger");
-  await clickMenuItemByText(p, "e2e-fixture", "covered repository row");
+  await clickMenuItemByText(p, COVERED_REPO_NAME, "covered repository row");
   await clickByRole(p, "button", /^Runtime:/, "home Runtime picker trigger");
   await clickMenuItemByText(p, "Cloud", '"Cloud" runtime option');
-  await p
-    .locator('[data-workspace-shell][data-pending-workspace="false"]')
-    .first()
-    .waitFor({ state: "attached", timeout: SANDBOX_READY_TIMEOUT_MS });
+  // Postcondition: the runtime row must settle on exactly "Runtime: Cloud"
+  // (`homeTargetRuntimeAriaLabel`). The row shows "Cloud unavailable" /
+  // "Configure cloud" when the cloud connection or the repo_environment
+  // precondition is missing — a real product-state gap this run must name
+  // instead of sending into whatever target was previously persisted.
+  try {
+    await p
+      .getByRole("button", { name: /^Runtime: Cloud$/ })
+      .first()
+      .waitFor({ state: "visible", timeout: 15_000 });
+  } catch {
+    const observed = await p
+      .getByRole("button", { name: /^Runtime:/ })
+      .first()
+      .getAttribute("aria-label")
+      .catch(() => null);
+    throw new Error(
+      'ensureCloudLaunchTargetSelected: the home Runtime row did not settle on "Runtime: Cloud" ' +
+        `(observed: ${observed ?? "no Runtime row"}) — the covered repo is not cloud-launchable for this actor.`,
+    );
+  }
 }
 
 /**
  * Selects `modelId` in the composer's model picker; identical DOM contract to
- * `local-world-smoke-1`'s `selectModelInUi`, plus the two things that flow
- * lacked and run #32 needed:
+ * `local-world-smoke-1`'s `selectModelInUi` (`ComposerModelSelectorControl`
+ * renders the same `data-composer-model-trigger`/`data-model-option` hooks on
+ * both the home and in-workspace composers).
  *
- *   1. A ONE-TIME reload-and-reopen midway. The cloud in-workspace composer's
- *      model list is the cloud v2 catalog merged with the sandbox's
- *      `GET /v1/agents/launch-options`, and the desktop fetches that menu once
- *      per workspace open with no refetch interval — so if the gateway route
- *      materialized (or the runtime reported the harness launch-ready) AFTER the
- *      workspace opened, the cached menu is stale and the model is absent until
- *      a refetch. Reloading remounts the query; `ensureCloudWorkspaceOpen`
- *      rehydrates the same cloud workspace.
- *   2. The available `data-model-option` values folded into the failure message
- *      (like `selectModelInUi`), so a genuine mismatch names itself — an EMPTY
- *      list ⇒ the runtime never surfaced the gateway model (materialization /
- *      readiness gap); a NON-EMPTY list without `modelId` ⇒ an id-format
- *      mismatch (e.g. a dated snapshot or provider-prefixed id) rather than the
- *      bare catalog alias — instead of a blind "was not offered".
+ * Source of the menu: with the home Runtime target set to "Cloud"
+ * (`ensureCloudLaunchTargetSelected`), the picker is fed by the cloud v2
+ * catalog registries alone (`use-home-next-model-selection.ts` passes the
+ * local runtime's launch options as `null` for a cloud launch target), so it
+ * populates as soon as `GET /v1/agents/catalog` resolves — it does NOT wait on
+ * the sandbox runtime. The pre-turn `waitForSandboxLaunchOptions` gate still
+ * matters for the SEND (the sandbox must be able to launch the harness), but
+ * the picker itself has no sandbox dependency. A persistent empty `[]` here
+ * now means the cloud catalog itself never listed the model for this actor —
+ * the failure message folds the available `data-model-option` values in so a
+ * genuine mismatch names itself (empty ⇒ catalog gap; non-empty without
+ * `modelId` ⇒ id-format mismatch, e.g. a dated snapshot id vs the bare alias).
+ *
+ * A bounded periodic reload remains as the safety net for a cold catalog
+ * query. IMPORTANT: the home composer's explicit model selection is plain
+ * component state (`HomeNextScreen`'s `modelSelectionOverride`) — a reload
+ * WIPES it — so this function must fully succeed (select + observe the
+ * trigger reflect the selection) with no reload afterwards; the caller sends
+ * immediately after this returns, with no intervening navigation.
  */
 async function selectModelInCloudComposer(page: ProductPage, modelId: string): Promise<void> {
   const p = page.page;
@@ -2091,14 +2188,6 @@ async function selectModelInCloudComposer(page: ProductPage, modelId: string): P
   const deadline = start + MODEL_PICKER_TIMEOUT_MS;
   const optionSelector = `[data-model-option="${cssAttr(modelId)}"]`;
   let lastAvailable: Array<string | null> = [];
-  // The cloud composer's model list is the cloud v2 catalog merged with the
-  // sandbox's launch-options, fetched ONCE per workspace open with no refetch
-  // interval. If the workspace opened before the runtime reported the harness
-  // launch-ready, the cached menu is stale/empty and only a RELOAD re-fetches
-  // it. A single reload (the prior behavior) loses the race when the menu is
-  // still cold at that instant, so reload PERIODICALLY whenever the picker is
-  // still empty — each reload remounts the query and `ensureCloudWorkspaceOpen`
-  // rehydrates the same cloud workspace. Bounded by the same deadline.
   const RELOAD_EVERY_MS = 30_000;
   let lastReloadAt = start;
   let surfacedEmpty = false;
@@ -2125,22 +2214,23 @@ async function selectModelInCloudComposer(page: ProductPage, modelId: string): P
       .evaluateAll((els) => els.map((el) => el.getAttribute("data-model-option")))
       .catch(() => []);
     // Surface an empty picker once to the runner log (make log, NOT evidence):
-    // an [] here with the sandbox launch-options already listing the harness
-    // (waitForSandboxLaunchOptions passed just before) means the BROWSER's
-    // cloud catalog+launch-options merge has not surfaced the model yet — the
-    // disclosed-unverified browser→cloud path, distinct from a sandbox-side gap.
+    // with the Cloud launch target selected this menu comes from the cloud v2
+    // catalog, so an [] means the catalog query has not resolved (or lists
+    // nothing for this actor) — distinct from any sandbox-side gap.
     if (lastAvailable.length === 0 && !surfacedEmpty) {
       surfacedEmpty = true;
       process.stderr.write(
-        "[cloud-composer] model picker empty despite the sandbox listing the harness; reloading to re-fetch " +
-          "the cloud launch-options menu.\n",
+        "[cloud-composer] model picker empty; the cloud catalog query has not surfaced models yet — " +
+          "reloading to remount it.\n",
       );
     }
     await p.keyboard.press("Escape").catch(() => undefined);
     if (Date.now() - lastReloadAt > RELOAD_EVERY_MS) {
       lastReloadAt = Date.now();
       await p.reload({ waitUntil: "domcontentloaded" }).catch(() => undefined);
-      await ensureCloudWorkspaceOpen(page).catch(() => undefined);
+      // A reload resets the home target selection UI state; re-establish the
+      // Cloud launch target before retrying the picker.
+      await ensureCloudLaunchTargetSelected(page).catch(() => undefined);
     }
     await sleep(2_000);
   }
