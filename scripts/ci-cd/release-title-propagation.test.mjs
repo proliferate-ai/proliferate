@@ -48,6 +48,17 @@ test("release coordinators pass the title into the desktop release lane", async 
   assert.match(deployDesktop, /release_title: \$\{\{ inputs\.release_title \}\}/);
 });
 
+test("runtime production builds stamp both version and deterministic source SHA", async () => {
+  const source = await workflow("release-runtime.yml");
+  const resolveStep = source.slice(
+    source.indexOf("- name: Resolve build version"),
+    source.indexOf("- name: Install musl-tools"),
+  );
+
+  assert.match(resolveStep, /PROLIFERATE_BUILD_VERSION=/);
+  assert.match(resolveStep, /PROLIFERATE_BUILD_SHA=\$\(git rev-parse HEAD\)/);
+});
+
 test("desktop updater publication fails closed before overwriting a released version", async () => {
   const [source, infra] = await Promise.all([
     workflow("release-desktop.yml"),
