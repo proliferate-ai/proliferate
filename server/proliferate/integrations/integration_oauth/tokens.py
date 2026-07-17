@@ -10,6 +10,17 @@ from proliferate.integrations.integration_oauth.errors import IntegrationOAuthPr
 from proliferate.integrations.integration_oauth.models import TokenResponse
 
 _SCOPE_SEPARATOR_RE = re.compile(r"[\s,]+")
+_SLACK_TOKEN_ENDPOINT = "https://slack.com/api/oauth.v2.user.access"
+_SLACK_INVALID_CLIENT_ERRORS = frozenset({"bad_client_secret", "invalid_client_id"})
+_SLACK_INVALID_GRANT_ERRORS = frozenset(
+    {
+        "bad_redirect_uri",
+        "invalid_code",
+        "invalid_refresh_token",
+        "token_expired",
+        "token_revoked",
+    }
+)
 
 
 def _granted_scopes(payload: dict[str, Any]) -> tuple[str, ...] | None:
@@ -30,6 +41,21 @@ def _granted_scopes(payload: dict[str, Any]) -> tuple[str, ...] | None:
             normalized.append(scope)
             seen.add(scope)
     return tuple(normalized)
+
+
+def _raise_for_slack_token_error(token_endpoint: str, payload: dict[str, Any]) -> None:
+    """Translate Slack's HTTP-2xx error envelope without exposing its payload."""
+    if token_endpoint != _SLACK_TOKEN_ENDPOINT or payload.get("ok") is not False:
+        return
+    provider_error = payload.get("error")
+    if isinstance(provider_error, str) and provider_error in _SLACK_INVALID_CLIENT_ERRORS:
+        raise IntegrationOAuthProviderError("invalid_client", "OAuth provider rejected client.")
+    if isinstance(provider_error, str) and provider_error in _SLACK_INVALID_GRANT_ERRORS:
+        raise IntegrationOAuthProviderError("invalid_grant", "OAuth grant is no longer valid.")
+    raise IntegrationOAuthProviderError(
+        "token_request_failed",
+        "OAuth provider rejected the token request.",
+    )
 
 
 async def exchange_token(
@@ -130,6 +156,7 @@ async def _token_request(
                 "OAuth provider rejected the token request.",
             ) from exc
         payload = response.json()
+        _raise_for_slack_token_error(token_endpoint, payload)
     expires_in = payload.get("expires_in")
     expires_at = (
         datetime.now(UTC) + timedelta(seconds=int(expires_in))
