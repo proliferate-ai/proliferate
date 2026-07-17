@@ -102,6 +102,13 @@ class CloudRuntimeWorkerEnrollment(Base):
             "ix_cloud_runtime_worker_enrollment_expires_at",
             "expires_at",
         ),
+        Index(
+            "ix_cloud_runtime_worker_enrollment_desktop_fence",
+            "desktop_install_id",
+            "status",
+            "created_at",
+            postgresql_where=("runtime_kind = 'desktop' AND desktop_install_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)

@@ -193,6 +193,13 @@ async def create_desktop_enrollment(
             raise CloudApiError(
                 "organization_not_found", "Organization not found.", status_code=404
             )
+    # Serialize ticket rotation with consumption for this physical install.
+    # An older Worker stranded before its first enrollment must not be able to
+    # enroll after the replacement and take authority back.
+    await store.revoke_pending_desktop_enrollments_for_install(
+        db,
+        desktop_install_id=desktop_install_id,
+    )
     token = secrets.token_urlsafe(_TOKEN_BYTES)
     expires_at = utcnow() + timedelta(seconds=CLOUD_RUNTIME_WORKER_DESKTOP_ENROLLMENT_TTL_SECONDS)
     await store.create_enrollment(

@@ -9,11 +9,15 @@ use std::{
 use tokio::process::Command;
 use tokio::time::{sleep, timeout, Instant};
 
-use super::lifecycle::{lock_for_worker_start, prepare_desktop_dispatch_worker_update};
+use super::lifecycle::{
+    lock_for_worker_start, prepare_desktop_dispatch_worker_update,
+    prepare_existing_worker_for_ensure,
+};
 use super::{
     acquire_worker_database_lock, read_worker_log_tail, startup_watch_window,
-    worker_database_lock_is_held, worker_startup_failure_message, write_worker_config,
-    CloudWorkerProcess, CloudWorkerState, WORKER_LOG_TAIL_MAX_BYTES,
+    worker_database_lock_is_held, worker_paths_in_namespace, worker_startup_failure_message,
+    write_worker_config, CloudWorkerLifecycle, CloudWorkerProcess, CloudWorkerState,
+    LEGACY_WORKER_STATE_NAMESPACE, WORKER_LOG_TAIL_MAX_BYTES, WORKER_STATE_NAMESPACE,
 };
 
 const TEST_WORKER_LOCK_PATH_ENV: &str = "PROLIFERATE_TEST_WORKER_LOCK_PATH";
@@ -92,6 +96,19 @@ async fn update_preparation_only_stops_worker_for_direct_exit_installers() {
     assert!(admitted_start.process.is_some());
     drop(admitted_start);
 
+    {
+        let mut lifecycle = state.lifecycle.lock().await;
+        lifecycle.injected_stop_error = Some("injected owned-child stop failure".to_string());
+    }
+    // A failed first Windows preparation retains the only owned Child handle,
+    // keeps the lock held, and permits the production command to retry.
+    let error = prepare_desktop_dispatch_worker_update(&state, true)
+        .await
+        .expect_err("failed stop must propagate");
+    assert_eq!(error, "injected owned-child stop failure");
+    assert!(state.lifecycle.lock().await.process.is_some());
+    assert!(worker_database_lock_is_held(&database_path).expect("inspect lock after failed stop"));
+
     let lifecycle_guard = state.lifecycle.lock().await;
     let shutdown_state = Arc::clone(&state);
     let shutdown =
@@ -119,6 +136,141 @@ async fn update_preparation_only_stops_worker_for_direct_exit_installers() {
     assert!(state.lifecycle.lock().await.process.is_none());
     assert!(lock_for_worker_start(&state).await.is_none());
 
+    fs::remove_dir_all(root).expect("remove temporary worker root");
+}
+
+#[tokio::test]
+async fn credential_rotation_retains_owned_worker_after_stop_failure_and_retries() {
+    let root = env::temp_dir().join(format!(
+        "proliferate-worker-rotation-lock-{}",
+        uuid::Uuid::new_v4()
+    ));
+    fs::create_dir_all(&root).expect("create temporary worker root");
+    let database_path = root.join("worker.sqlite3");
+    let config_path = root.join("config.toml");
+    let mut child = Command::new(env::current_exe().expect("resolve test executable"))
+        .arg("worker_database_lock_holder_fixture")
+        .arg("--ignored")
+        .env(TEST_WORKER_LOCK_PATH_ENV, &database_path)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .spawn()
+        .expect("spawn rotation lock-holder stand-in");
+
+    let lock_deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        if worker_database_lock_is_held(&database_path).expect("inspect rotation lock") {
+            break;
+        }
+        if let Some(status) = child.try_wait().expect("inspect rotation lock holder") {
+            panic!("rotation lock holder exited before acquiring the lock: {status}");
+        }
+        assert!(
+            Instant::now() < lock_deadline,
+            "rotation lock holder did not start"
+        );
+        sleep(Duration::from_millis(20)).await;
+    }
+
+    let mut lifecycle = CloudWorkerLifecycle {
+        process: Some(CloudWorkerProcess {
+            target_id: "desktop-install".to_string(),
+            child,
+            config_path,
+        }),
+        injected_stop_error: Some("injected rotation stop failure".to_string()),
+    };
+    let error = prepare_existing_worker_for_ensure(&mut lifecycle, "desktop-install", true)
+        .await
+        .expect_err("first credential rotation stop must fail");
+    assert_eq!(error, "injected rotation stop failure");
+    assert!(lifecycle.process.is_some());
+    assert!(worker_database_lock_is_held(&database_path).expect("lock retained after failure"));
+
+    let reused = prepare_existing_worker_for_ensure(&mut lifecycle, "desktop-install", true)
+        .await
+        .expect("credential rotation retry stops the owned Worker");
+    assert!(reused.is_none());
+    assert!(lifecycle.process.is_none());
+    assert!(!worker_database_lock_is_held(&database_path).expect("lock released after retry"));
+
+    fs::remove_dir_all(root).expect("remove temporary worker root");
+}
+
+#[tokio::test]
+async fn v2_worker_namespace_converges_while_a_legacy_worker_holds_its_lock() {
+    let root = env::temp_dir().join(format!(
+        "proliferate-worker-namespace-rollout-{}",
+        uuid::Uuid::new_v4()
+    ));
+    fs::create_dir_all(&root).expect("create temporary worker root");
+    let legacy = worker_paths_in_namespace(&root, LEGACY_WORKER_STATE_NAMESPACE, "install-1");
+    let current = worker_paths_in_namespace(&root, WORKER_STATE_NAMESPACE, "install-1");
+    fs::create_dir_all(legacy.database.parent().expect("legacy Worker parent"))
+        .expect("create legacy Worker namespace");
+    let legacy_config = b"legacy-config-sentinel";
+    let legacy_database = b"legacy-database-sentinel";
+    let legacy_log = b"legacy-log-sentinel";
+    fs::write(&legacy.config, legacy_config).expect("seed legacy Worker config");
+    fs::write(&legacy.database, legacy_database).expect("seed legacy Worker database");
+    fs::write(&legacy.log, legacy_log).expect("seed legacy Worker log");
+
+    let mut legacy_child = Command::new(env::current_exe().expect("resolve test executable"))
+        .arg("worker_database_lock_holder_fixture")
+        .arg("--ignored")
+        .env(TEST_WORKER_LOCK_PATH_ENV, &legacy.database)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .spawn()
+        .expect("spawn legacy lock-holding Worker stand-in");
+
+    let lock_deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        if worker_database_lock_is_held(&legacy.database).expect("inspect legacy Worker lock") {
+            break;
+        }
+        if let Some(status) = legacy_child.try_wait().expect("inspect legacy lock holder") {
+            panic!("legacy lock holder exited before acquiring the lock: {status}");
+        }
+        assert!(
+            Instant::now() < lock_deadline,
+            "legacy lock holder did not start"
+        );
+        sleep(Duration::from_millis(20)).await;
+    }
+
+    assert_ne!(legacy.config, current.config);
+    assert_ne!(legacy.database, current.database);
+    assert_ne!(legacy.log, current.log);
+    let current_lock = acquire_worker_database_lock(&current.database)
+        .expect("v2 credential mutation must not contend with the legacy Worker");
+    write_worker_config(
+        &current.config,
+        "https://cloud.test",
+        Some("v2-enrollment-ticket"),
+        &current.database,
+        &root.join("runtime"),
+        "http://127.0.0.1:8457",
+    )
+    .expect("write isolated v2 Worker config");
+    assert!(worker_database_lock_is_held(&legacy.database).expect("legacy Worker stays isolated"));
+    assert_eq!(
+        fs::read(&legacy.config).expect("read legacy config"),
+        legacy_config
+    );
+    assert_eq!(
+        fs::read(&legacy.database).expect("read legacy database"),
+        legacy_database
+    );
+    assert_eq!(fs::read(&legacy.log).expect("read legacy log"), legacy_log);
+    drop(current_lock);
+
+    legacy_child
+        .kill()
+        .await
+        .expect("stop legacy lock-holder fixture");
     fs::remove_dir_all(root).expect("remove temporary worker root");
 }
 

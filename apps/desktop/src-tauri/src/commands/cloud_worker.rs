@@ -26,6 +26,15 @@ pub(crate) mod lifecycle;
 use launcher::find_proliferate_worker_launcher;
 
 const WORKER_LOG_TAIL_MAX_BYTES: u64 = 64 * 1024;
+// Releases through 0.3.38 used `cloud-worker`. Some of those Desktop processes
+// exited without stopping their child, so the legacy Worker can retain that
+// namespace's credential lock across an app update. The complete v2 namespace
+// lets a freshly enrolled Worker converge without inspecting or killing an
+// unowned process; server enrollment revokes every predecessor for the same
+// desktop install.
+const WORKER_STATE_NAMESPACE: &str = "cloud-worker-v2";
+#[cfg(test)]
+const LEGACY_WORKER_STATE_NAMESPACE: &str = "cloud-worker";
 const WORKER_CREDENTIALS_LOCKED_ERROR: &str =
     "Cannot replace worker credentials while a Proliferate Worker is still running.";
 
@@ -40,6 +49,8 @@ pub type SharedCloudWorkerState = Arc<CloudWorkerState>;
 #[derive(Default)]
 struct CloudWorkerLifecycle {
     process: Option<CloudWorkerProcess>,
+    #[cfg(test)]
+    injected_stop_error: Option<String>,
 }
 
 struct CloudWorkerProcess {
@@ -106,26 +117,18 @@ pub async fn ensure_desktop_dispatch_worker(
             config_path: config_path.to_string_lossy().into_owned(),
         });
     };
-    if let Some(process) = lifecycle.process.as_mut() {
-        match process.child.try_wait() {
-            // A fresh enrollment token is a rotation request (e.g. a different
-            // user signed in on this machine): fall through to kill the tracked
-            // worker and re-enroll instead of keeping the predecessor's worker
-            // + gateway credentials alive under the new user.
-            Ok(None) if process.target_id == target_id && enrollment_token.is_none() => {
-                return Ok(EnsureDesktopDispatchWorkerResult {
-                    target_id,
-                    status: "running",
-                    config_path: process.config_path.to_string_lossy().into_owned(),
-                });
-            }
-            Ok(None) => {
-                let _ = process.child.start_kill();
-                let _ = process.child.wait().await;
-            }
-            Ok(Some(_)) | Err(_) => {}
-        }
-        lifecycle.process = None;
+    if let Some(config_path) = lifecycle::prepare_existing_worker_for_ensure(
+        &mut lifecycle,
+        &target_id,
+        enrollment_token.is_some(),
+    )
+    .await?
+    {
+        return Ok(EnsureDesktopDispatchWorkerResult {
+            target_id,
+            status: "running",
+            config_path: config_path.to_string_lossy().into_owned(),
+        });
     }
 
     let launcher = find_proliferate_worker_launcher()
@@ -299,14 +302,22 @@ struct WorkerPaths {
 }
 
 fn worker_paths(target_id: &str) -> Result<WorkerPaths, String> {
-    let root = app_config::app_dir_path()?
-        .join("cloud-worker")
+    Ok(worker_paths_in_namespace(
+        &app_config::app_dir_path()?,
+        WORKER_STATE_NAMESPACE,
+        target_id,
+    ))
+}
+
+fn worker_paths_in_namespace(app_dir: &Path, namespace: &str, target_id: &str) -> WorkerPaths {
+    let root = app_dir
+        .join(namespace)
         .join(sanitize_path_segment(target_id));
-    Ok(WorkerPaths {
+    WorkerPaths {
         config: root.join("config.toml"),
         database: root.join("worker.sqlite3"),
         log: root.join("worker.log"),
-    })
+    }
 }
 
 fn worker_identity_exists(path: &Path) -> Result<bool, String> {

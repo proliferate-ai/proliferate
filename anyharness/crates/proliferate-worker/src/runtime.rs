@@ -11,8 +11,9 @@ use crate::{
     identity::credentials::WorkerIdentity,
     integration_gateway, lifecycle,
     process_lock::WorkerProcessLock,
-    self_update, supervisor_bridge,
+    self_update,
     store::WorkerStore,
+    supervisor_bridge,
 };
 
 /// Whether the worker loop should keep running or exit cleanly after a tick. The
@@ -34,8 +35,8 @@ pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
     info!(worker_id = %identity.worker_id, "proliferate worker started");
 
     // Write the integration-gateway dotfile on every (re)enroll.
-    if let Some(gateway) = integration_gateway {
-        integration_gateway::write(&config, &gateway)?;
+    if let Some(gateway) = integration_gateway.as_ref() {
+        integration_gateway::write(&config, gateway)?;
         info!(
             path = %integration_gateway::dotfile_path(&config).display(),
             "wrote integration-gateway dotfile"
@@ -43,7 +44,16 @@ pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
     }
 
     let catalog_state = CatalogSyncState::new();
-    if heartbeat_and_converge(&config, &cloud, &store, &identity, &catalog_state, once).await
+    if heartbeat_and_converge(
+        &config,
+        &cloud,
+        &store,
+        &identity,
+        integration_gateway.as_ref(),
+        &catalog_state,
+        once,
+    )
+    .await
         == TickControl::Exit
     {
         return Ok(());
@@ -53,7 +63,16 @@ pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
     }
     loop {
         sleep(lifecycle::heartbeat::interval(&config)).await;
-        if heartbeat_and_converge(&config, &cloud, &store, &identity, &catalog_state, false).await
+        if heartbeat_and_converge(
+            &config,
+            &cloud,
+            &store,
+            &identity,
+            integration_gateway.as_ref(),
+            &catalog_state,
+            false,
+        )
+        .await
             == TickControl::Exit
         {
             return Ok(());
@@ -70,6 +89,7 @@ async fn heartbeat_and_converge(
     cloud: &CloudClient,
     store: &WorkerStore,
     identity: &WorkerIdentity,
+    gateway: Option<&crate::cloud_client::IntegrationGatewayConfig>,
     catalog_state: &CatalogSyncState,
     dry_run: bool,
 ) -> TickControl {
@@ -82,6 +102,21 @@ async fn heartbeat_and_converge(
             return TickControl::Continue;
         }
     };
+
+    // Only the currently authorized Worker receives a successful heartbeat.
+    // Reassert its gateway credential if a delayed predecessor overwrote the
+    // shared runtime dotfile after this Worker enrolled. A revoked Worker
+    // fails above and therefore cannot keep rewriting stale authority.
+    if let Some(gateway) = gateway {
+        match integration_gateway::ensure_current(config, gateway) {
+            Ok(true) => info!(
+                path = %integration_gateway::dotfile_path(config).display(),
+                "repaired integration-gateway dotfile after heartbeat"
+            ),
+            Ok(false) => {}
+            Err(error) => warn!(?error, "failed to repair integration-gateway dotfile"),
+        }
+    }
 
     // Catalog sync: non-fatal, runs first (a worker binary swap exec's and
     // never returns, so anything on this tick must precede it).
@@ -171,7 +206,10 @@ async fn maybe_run_bridge(
         Err(error) => {
             // The bridge did not confirm this tick; the current runtime keeps
             // serving and the next heartbeat resumes it (crash-safe via markers).
-            warn!(?error, "supervisor bridge attempt did not complete; retrying next heartbeat");
+            warn!(
+                ?error,
+                "supervisor bridge attempt did not complete; retrying next heartbeat"
+            );
             TickControl::Continue
         }
     }

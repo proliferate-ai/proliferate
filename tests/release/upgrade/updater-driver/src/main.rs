@@ -5,10 +5,13 @@
 //!
 //!   1. `check()`  — fetch the served `latest.json`, semver-compare, and report
 //!      the available version. Asserted to equal the expected N.
-//!   2. `download_and_install()` — download the real N `.app.tar.gz`, **verify
-//!      its minisign signature against the pubkey the N-1 build trusts** (this
-//!      is where a broken/mismatched signing key surfaces), and swap the
-//!      on-disk `.app` bundle in place.
+//!   2. `download()` — download the real N `.app.tar.gz` and **verify its
+//!      minisign signature against the pubkey the N-1 build trusts** (this is
+//!      where a broken/mismatched signing key surfaces).
+//!   3. An explicit pre-install boundary, matching the production wrapper's
+//!      download -> native Worker preparation -> install ordering. This
+//!      macOS-only driver cannot execute or qualify the Windows-native cleanup.
+//!   4. `install(bytes)` — swap the on-disk `.app` bundle in place.
 //!
 //! The bundle that gets swapped is chosen by `UpdaterBuilder::executable_path`
 //! (a copy of the N-1 build the orchestrator hands us via `--install-app`), so
@@ -70,7 +73,10 @@ fn parse_args() -> Result<Args, String> {
 // from a `.../Contents/MacOS/<bin>` path to the enclosing `.app`, so the
 // updater's install target becomes the `.app` we point at here.
 fn executable_path_for(app_bundle: &std::path::Path) -> PathBuf {
-    app_bundle.join("Contents").join("MacOS").join("Proliferate")
+    app_bundle
+        .join("Contents")
+        .join("MacOS")
+        .join("Proliferate")
 }
 
 #[tokio::main]
@@ -162,11 +168,24 @@ async fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    // Step 2: download + verify signature + swap the bundle in place.
-    match update
-        .download_and_install(|_chunk, _total| {}, || {})
-        .await
-    {
+    // Step 2: download + verify signature. Keep this separate from install to
+    // mirror the production JS wrapper's lifecycle boundary.
+    let bytes = match update.download(|_chunk, _total| {}, || {}).await {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            eprintln!("t4-updater-driver: download/signature verification failed: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    println!("download-ok pre_install_boundary=required");
+
+    // The production wrapper invokes native Worker preparation here. This
+    // driver runs only on macOS, where that command is intentionally a no-op;
+    // Windows direct-exit cleanup remains a separately disclosed coverage gap.
+    println!("pre-install-boundary-ok platform=macos native_cleanup=noop");
+
+    // Step 3: install the already-verified bytes and swap the bundle in place.
+    match update.install(bytes) {
         Ok(()) => {
             println!(
                 "install-ok bundle={} installed_version={}",
@@ -176,7 +195,7 @@ async fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Err(e) => {
-            eprintln!("t4-updater-driver: download_and_install failed: {e}");
+            eprintln!("t4-updater-driver: install failed: {e}");
             ExitCode::FAILURE
         }
     }

@@ -171,4 +171,23 @@ describe("Tauri updater download/install lifecycle", () => {
 
     expect(order).toEqual(["download", "cleanup", "install"]);
   });
+
+  it("does not enter the direct-exit installer when Worker cleanup fails", async () => {
+    const cleanupError = new Error("Worker did not stop");
+    cloudWorkerMocks.prepareDesktopDispatchWorkerUpdate.mockRejectedValue(
+      cleanupError,
+    );
+    const handle = {
+      download: vi.fn(async () => {}),
+      install: vi.fn(async () => {}),
+    };
+
+    await expect(downloadAndInstall(handle)).rejects.toBe(cleanupError);
+
+    expect(handle.download).toHaveBeenCalledTimes(1);
+    expect(
+      cloudWorkerMocks.prepareDesktopDispatchWorkerUpdate,
+    ).toHaveBeenCalledTimes(1);
+    expect(handle.install).not.toHaveBeenCalled();
+  });
 });

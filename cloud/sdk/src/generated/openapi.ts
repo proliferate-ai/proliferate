@@ -4462,6 +4462,12 @@ export interface components {
              * Format: date-time
              */
             expiresAt: string;
+            /**
+             * Pendingticketpolicy
+             * @default newest_wins
+             * @constant
+             */
+            pendingTicketPolicy: "newest_wins";
         };
         /** DesktopWorkerRevokeRequest */
         DesktopWorkerRevokeRequest: {

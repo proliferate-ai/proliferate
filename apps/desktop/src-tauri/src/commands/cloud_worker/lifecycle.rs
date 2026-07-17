@@ -1,4 +1,4 @@
-use std::sync::atomic::Ordering;
+use std::{path::PathBuf, sync::atomic::Ordering};
 
 use tokio::sync::MutexGuard;
 
@@ -15,6 +15,25 @@ pub(super) async fn lock_for_worker_start(
 ) -> Option<MutexGuard<'_, CloudWorkerLifecycle>> {
     let lifecycle = state.lifecycle.lock().await;
     (!state.terminal_shutdown_armed.load(Ordering::Acquire)).then_some(lifecycle)
+}
+
+/// Reuse the matching live Worker when no fresh enrollment is requested;
+/// otherwise stop it through the verified owned-handle path before rotation.
+pub(super) async fn prepare_existing_worker_for_ensure(
+    lifecycle: &mut CloudWorkerLifecycle,
+    target_id: &str,
+    fresh_enrollment: bool,
+) -> Result<Option<PathBuf>, String> {
+    if let Some(process) = lifecycle.process.as_mut() {
+        if matches!(process.child.try_wait(), Ok(None))
+            && process.target_id == target_id
+            && !fresh_enrollment
+        {
+            return Ok(Some(process.config_path.clone()));
+        }
+    }
+    stop_process(lifecycle).await?;
+    Ok(None)
 }
 
 pub(crate) async fn prepare_desktop_dispatch_worker_update(
@@ -51,9 +70,19 @@ pub(crate) async fn stop_tracked_desktop_dispatch_worker(
 }
 
 async fn stop_process(lifecycle: &mut CloudWorkerLifecycle) -> Result<bool, String> {
-    let Some(process) = lifecycle.process.as_mut() else {
+    if lifecycle.process.is_none() {
         return Ok(false);
-    };
+    }
+
+    #[cfg(test)]
+    if let Some(error) = lifecycle.injected_stop_error.take() {
+        return finish_stop_attempt(lifecycle, Err(error));
+    }
+
+    let process = lifecycle
+        .process
+        .as_mut()
+        .expect("process presence checked above");
 
     let stop_result = match process.child.try_wait() {
         Ok(Some(_)) => Ok(()),
@@ -66,7 +95,20 @@ async fn stop_process(lifecycle: &mut CloudWorkerLifecycle) -> Result<bool, Stri
             "Failed to inspect Proliferate Worker shutdown: {error}"
         )),
     };
-    lifecycle.process = None;
+    finish_stop_attempt(lifecycle, stop_result)
+}
+
+/// Clears the owned handle only after shutdown has been verified.
+///
+/// Both credential rotation and a Windows updater retry must still see the
+/// child after a failed `try_wait` or `kill`; otherwise rotation loses its
+/// retry handle or the installer can exit while the Worker still owns its
+/// lock.
+fn finish_stop_attempt(
+    lifecycle: &mut CloudWorkerLifecycle,
+    stop_result: Result<(), String>,
+) -> Result<bool, String> {
     stop_result?;
+    lifecycle.process = None;
     Ok(true)
 }

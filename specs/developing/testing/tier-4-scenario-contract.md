@@ -488,7 +488,10 @@ The agreed contract is not implemented today:
 
 - current Desktop automation builds candidate source twice with version edits,
   stages placeholder sidecars, swaps a bundle without relaunching it, and does
-  not exercise runtime/session/agent convergence;
+  not exercise runtime/session/agent convergence; its macOS-only updater-engine
+  driver now preserves the production pre-install boundary but does not execute
+  the JS wrapper or qualify Windows-native Worker cleanup before the installer's
+  direct process exit;
 - candidate Worker/AnyHarness version identity is not release-stamped end to
   end: current binaries can report the crate's hard-coded `0.1.0`, and the
   existing cloud update prototype expected-fails on that mismatch (#1089).

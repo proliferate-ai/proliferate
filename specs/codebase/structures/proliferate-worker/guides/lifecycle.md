@@ -17,6 +17,14 @@ Cloud derives liveness from an `online` row with a recent `last_seen_at`. The
 Worker reports `online`; current application code does not transition the row
 to the schema's `offline` status.
 
+After a successful heartbeat, a process that freshly enrolled compares its
+in-memory integration-gateway credential with the shared runtime dotfile and
+repairs the file only when it differs. The check is intentionally after
+authentication: once a superseded Worker's heartbeat fails, it cannot keep
+reasserting a revoked gateway token. A success returned immediately before
+revocation can race one final stale write, which the active successor repairs
+on its next successful heartbeat.
+
 ## Catalog Convergence
 
 When `desiredVersions.catalogVersion` differs from AnyHarness's active
